@@ -29,6 +29,8 @@
 #include "Core/Types.h"
 #include "Storages/MergeTree/IMergeTreeDataPart.h"
 #include <Storages/DistributedDataClient.h>
+#include <fmt/core.h>
+#include "Common/Exception.h"
 
 namespace ProfileEvents
 {
@@ -38,6 +40,11 @@ namespace ProfileEvents
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int DISK_CACHE_NOT_USED;
+}
 
 bool MergedReadBufferWithSegmentCache::DualCompressedReadBuffer::initialized() const
 {
@@ -129,16 +136,19 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
     size_t total_segment_count_, MergeTreeMarksLoader& marks_loader_,
     UncompressedCache* uncompressed_cache_,
     const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
-    clockid_t clock_type_):
+    const ProgressCallback & internal_progress_cb_,
+    clockid_t clock_type_, String stream_extension_):
         ReadBuffer(nullptr, 0),
         storage_id(storage_id_), part_name(part_name_), stream_name(stream_name_),
         source_disk(source_disk_), source_file_path(source_file_path_),
         source_data_offset(source_data_offset_), source_data_size(source_data_size_),
         cache_segment_size(cache_segment_size_), segment_cache(segment_cache_),
         settings(settings_), uncompressed_cache(uncompressed_cache_),
-        profile_callback(profile_callback_), clock_type(clock_type_),
+        profile_callback(profile_callback_), internal_progress_callback(internal_progress_cb_),
+        clock_type(clock_type_),
         total_segment_count(total_segment_count_), marks_loader(marks_loader_),
         current_segment_idx(0), current_compressed_offset(std::nullopt), part_host(part_host_),
+        stream_extension(stream_extension_),
         logger(&Poco::Logger::get("MergedReadBufferWithSegmentCache"))
 {
     initialize();
@@ -177,6 +187,8 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
 
             ProfileEvents::increment(ProfileEvents::CnchReadSizeFromDiskCache,
                 buf_size);
+            if (internal_progress_callback)
+                internal_progress_callback({0, 0, 0, 0, buf_size});
 
             return true;
         }
@@ -230,6 +242,8 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
                 ProfileEvents::CnchReadSizeFromDiskCache
                 : ProfileEvents::CnchReadSizeFromRemote,
             buf_size);
+            if (cache_buffer.initialized() && internal_progress_callback)
+                internal_progress_callback({0, 0, 0, 0, buf_size});
 
         if (segment_cache != nullptr && !cache_buffer.initialized())
         {
@@ -307,7 +321,7 @@ void MergedReadBufferWithSegmentCache::seekToPosition(size_t segment_idx,
     // No segment cache, trying to use source reader
     initSourceBufferIfNeeded();
 
-    LOG_TRACE(logger, fmt::format("Seek to {} in part {}, offset {}:{}, base offset {}, limit {}",
+    LOG_TRACE(logger, fmt::format("Seek to remote file {} in part {}, offset {}:{}, base offset {}, limit {}",
         segment_idx, part_name, mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block,
         source_data_offset, source_data_size));
 
@@ -322,11 +336,13 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
 {
     if (segment_cache == nullptr)
     {
+        if (settings.read_settings.disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't find disk cache but set disk mode `FORCE_DISK_CACHE`");
         return false;
     }
 
     String segment_key = PartFileDiskCacheSegment::getSegmentKey(storage_id, part_name,
-        stream_name, segment_idx, DATA_FILE_EXTENSION);
+        stream_name, segment_idx, stream_extension);
 
     // force test steal disk cache feature via DiskCacheMode::FORCE_STEAL_DISK_CACHE mode
     if (settings.read_settings.disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
@@ -347,11 +363,22 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
     std::pair<DiskPtr, String> cache_entry = segment_cache->get(segment_key);
     if (cache_entry.first == nullptr)
     {
+        if (settings.read_settings.disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
+            throw Exception(ErrorCodes::DISK_CACHE_NOT_USED, "Can't find disk cache {} but enable `FORCE_DISK_CACHE`", segment_key);
+
         if ((settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
              || settings.remote_disk_cache_stealing == StealingCacheMode::READ_ONLY)
             && parsed_assign_compute_host.has_value() && parsed_disk_cache_host.has_value()
             && removeBracketsIfIpv6(parsed_assign_compute_host.value()) != removeBracketsIfIpv6(parsed_disk_cache_host.value()))
             return seekToMarkInRemoteSegmentCache(segment_idx, mark_pos, segment_key);
+        LOG_TRACE(
+            logger,
+            "Can't find disk cache key {} and fallback to read from remote fs. (current buffer at {}), segment {}, offset {}:{}",
+            segment_key,
+            cache_buffer.initialized() ? cache_buffer.path() : "Uninitialized",
+            segment_idx,
+            mark_pos.offset_in_compressed_file,
+            mark_pos.offset_in_decompressed_block);
         return false;
     }
 

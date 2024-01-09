@@ -39,7 +39,8 @@ MergeTreeIndexReader::MergeTreeIndexReader(
     size_t marks_count_,
     const MarkRanges & all_mark_ranges_,
     MergeTreeReaderSettings settings,
-    MarkCache * mark_cache)
+    MarkCache * mark_cache,
+    const ProgressCallback & internal_progress_cb_)
     : index(index_)
 {
     switch(part_->info.storage_type)
@@ -140,8 +141,10 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 part_host,
                 &(source_data_part->index_granularity_info),
                 ReadBufferFromFileBase::ProfileCallback{},
+                internal_progress_cb_,
                 CLOCK_MONOTONIC_COARSE,
-                false
+                false,
+                INDEX_FILE_EXTENSION
             );
             break;
         }

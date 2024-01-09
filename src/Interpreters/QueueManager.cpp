@@ -174,7 +174,14 @@ void QueueManager::shutdown()
 
 QueueManager::~QueueManager()
 {
-    shutdown();
+    try
+    {
+        shutdown();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 void QueueManager::trigger()

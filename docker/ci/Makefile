@@ -11,3 +11,5 @@ image:
 
 image_push:
 	docker push byconity/byconity-ci
+image_test:
+	docker run --rm -it byconity/byconity-ci /bin/bash

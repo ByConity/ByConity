@@ -15,7 +15,7 @@ class IStorageCnchFile : public IStorage,
 {
 public:
     IStorageCnchFile(
-        ContextMutablePtr context_,
+        ContextPtr context_,
         const StorageID & table_id_,
         const ColumnsDescription & required_columns_,
         const ConstraintsDescription & constraints_,

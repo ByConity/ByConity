@@ -340,6 +340,17 @@ public:
         Block sample_block; /// Block as it would appear in the BlockList
         BlocksList blocks; /// Blocks of "right" table.
         BlockNullmapList blocks_nullmaps; /// Nullmaps for blocks of "right" table (if needed)
+        // TODO: optimize it, we can encode the block *, and use a flat array to record bools.
+        std::unordered_map<const Block *, std::vector<bool>> used_map; /// bool flags for right table when there is inequal conditions.
+        bthread::Mutex mutex;
+
+        bool checkUsed(const Block* block, size_t row_number) const
+        {
+            if (used_map.empty())
+                return false;
+            
+            return used_map.at(block)[row_number];
+        }
 
         /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
         Arena pool;
@@ -395,6 +406,10 @@ private:
     std::optional<TypeIndex> asof_type;
     ASOF::Inequality asof_inequality;
 
+    ExpressionActionsPtr inequal_condition_actions;
+    String ineuqal_column_name;
+    bool has_inequal_condition {false};
+
     /// Right table data. StorageJoin shares it between many Join objects.
     std::shared_ptr<RightTableData> data;
     /// Flags that indicate that particular row already used in join.
@@ -429,10 +444,19 @@ private:
     /// Modify (structure) right block to save it in block list
     Block structureRightBlock(const Block & stored_block) const;
     void initRightBlockStructure(Block & saved_block_sample);
-
+    
+    /// Join Block imple without inequal condition 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(
         Block & block,
+        const Names & key_names_left,
+        const Block & block_with_columns_to_add,
+        const Maps & maps,
+        bool is_join_get = false) const;
+    
+    /// Join Block imple with inequal condition 
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    void joinBlockImplIneuqalCondition(Block & block,
         const Names & key_names_left,
         const Block & block_with_columns_to_add,
         const Maps & maps,
@@ -444,6 +468,7 @@ private:
 
     bool empty() const;
     bool overDictionary() const;
+    void validateInequalConditions(const ExpressionActionsPtr & inequal_conditions_actions_);
 };
 
 }

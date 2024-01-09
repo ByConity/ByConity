@@ -10,6 +10,7 @@
 #include <Core/Block.h>
 #include <Storages/MergeTree/Index/MergeTreeColumnIndexReader.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularity.h>
+#include <Storages/StorageInMemoryMetadata.h>
 #include <Interpreters/PreparedSets.h>
 #include <Interpreters/ExpressionActions.h>
 #include <QueryPlan/Assignment.h>
@@ -49,7 +50,7 @@ public:
 
     virtual Type getType() const { return type; }
 
-    virtual void buildIndexInfo(const ASTPtr & node, BuildIndexContext & building_context) = 0;
+    virtual void buildIndexInfo(const ASTPtr & node, BuildIndexContext & building_context, const StorageMetadataPtr & metadata_snapshot) = 0;
 
     virtual void setNonRemovableColumn(const String & column) = 0;
 
@@ -159,7 +160,7 @@ public:
 
     void makeProjectionForMaterializedIndex( const ProjectionStep * projection, MergeTreeIndexInfo::BuildIndexContext & building_context);
 
-    static MergeTreeIndexContextPtr buildFromProjection(const Assignments & inline_expressions, MergeTreeIndexInfo::BuildIndexContext & building_context);
+    static MergeTreeIndexContextPtr buildFromProjection(const Assignments & inline_expressions, MergeTreeIndexInfo::BuildIndexContext & building_context, const StorageMetadataPtr & metadata_snapshot);
 
     bool enable_read_bitmap_index = true;
 

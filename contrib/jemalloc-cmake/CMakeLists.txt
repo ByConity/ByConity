@@ -42,7 +42,7 @@ if (OS_LINUX)
     #
     # Since the percpu_arena will increase malloc lock race condition,
     # keep the percpu_arena the default value to leverage 4*CPU cores arena 
-    set (JEMALLOC_CONFIG_MALLOC_CONF "percpu_arena:disabled,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
+    set (JEMALLOC_CONFIG_MALLOC_CONF "metadata_thp:auto,percpu_arena:disabled,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
 else()
     set (JEMALLOC_CONFIG_MALLOC_CONF "oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
 endif()
@@ -135,8 +135,8 @@ endif ()
 target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_PROF=1)
 
 if (USE_UNWIND)
-    target_compile_definitions (jemalloc PRIVATE -DJEMALLOC_PROF_LIBUNWIND=1)
-    target_link_libraries (jemalloc PRIVATE unwind)
+    target_compile_definitions (jemalloc PRIVATE -DJEMALLOC_PROF_LIBUNWIND_OLD=1)
+    target_link_libraries (jemalloc PRIVATE unwind-old)
 endif ()
 
 target_compile_options(jemalloc PRIVATE -Wno-redundant-decls)

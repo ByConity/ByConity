@@ -153,10 +153,7 @@ void CnchServerServiceImpl::commitParts(
                     tpl,
                     binlog);
 
-                TxnTimestamp commit_time
-                    = cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
-
-                rsp->set_commit_timestamp(commit_time);
+                cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
             }
             catch (...)
             {
@@ -600,9 +597,9 @@ void CnchServerServiceImpl::fetchPartitions(
             for (const auto & name : request->column_name_filter())
                 column_names.push_back(name);
             SelectQueryInfo query_info;
-            auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(gc, storage, request->predicate(), query_info);
-
             auto session_context = Context::createCopy(gc);
+            auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(session_context, storage, request->predicate(), query_info);
+
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
             auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
 
@@ -694,7 +691,9 @@ void CnchServerServiceImpl::controlCnchBGThread(
 
             try
             {
-                auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+                StorageID storage_id = StorageID::createEmpty();
+                if (!request->storage_id().table().empty())
+                    storage_id = RPCHelpers::createStorageID(request->storage_id());
                 auto type = CnchBGThreadType(request->type());
                 auto action = CnchBGThreadAction(request->action());
                 global_context.controlCnchBGThread(storage_id, type, action);
@@ -1614,7 +1613,7 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
                 if (auto kv_access_storage = std::dynamic_pointer_cast<KVAccessStorage>(getContext()->getAccessControlManager().getStorage(id)))
                     kv_access_storage->onAccessEntityChanged(type, name);
             }
-                
+
         }
     }
     catch (...)

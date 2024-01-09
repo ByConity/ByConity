@@ -174,7 +174,11 @@ public:
         return isRightOrFull(kind);
     }
 
-    JoinPtr makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterConsumer>&& consumer);
+    JoinPtr makeJoin(
+        ContextPtr context,
+        std::shared_ptr<RuntimeFilterConsumer> && consumer,
+        ExpressionActionsPtr filter_action,
+        String filter_column_name);
 
     bool enforceGraceHashJoin() const;
 

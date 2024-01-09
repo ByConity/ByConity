@@ -18,6 +18,7 @@
 #include <CloudServices/CnchServerResource.h>
 #include <Interpreters/Scheduler.h>
 #include <Interpreters/SegmentScheduler.h>
+#include <Interpreters/profile/ProfileLogHub.h>
 #include <Interpreters/sendPlanSegment.h>
 #include <butil/endpoint.h>
 #include <Common/Exception.h>
@@ -271,6 +272,14 @@ String SegmentScheduler::getCurrentDispatchStatus(const String & query_id)
 
 void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_status)
 {
+    LOG_TRACE(
+        log,
+        "updateQueryStatus, query_id: {}, segment_id: {}, is_succeed: {} is_cancelled:{} cpu:{}",
+        segment_status.query_id,
+        segment_status.segment_id,
+        segment_status.is_succeed,
+        segment_status.is_cancelled,
+        segment_status.metrics.cpu_micros);
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto query_iter = query_status_map.find(segment_status.query_id);
     if (query_iter == query_status_map.end())
@@ -279,7 +288,7 @@ void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_s
         status->query_id = segment_status.query_id;
         status->segment_id = segment_status.segment_id;
         status->is_succeed = segment_status.is_succeed;
-        status->is_canceled = segment_status.is_canceled;
+        status->is_cancelled = segment_status.is_cancelled;
         status->metrics.cpu_micros = segment_status.metrics.cpu_micros;
         query_status_map[segment_status.query_id] = status;
     }
@@ -287,13 +296,21 @@ void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_s
     {
         RuntimeSegmentsStatusPtr status = query_status_map[segment_status.query_id];
         status->is_succeed &= segment_status.is_succeed;
-        status->is_canceled |= segment_status.is_canceled;
+        status->is_cancelled |= segment_status.is_cancelled;
         status->metrics.cpu_micros += segment_status.metrics.cpu_micros;
     }
 }
 
 void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment_status)
 {
+    LOG_TRACE(
+        log,
+        "updateSegmentStatus, query_id: {}, segment_id: {}, is_succeed: {} is_cancelled:{} cpu:{}",
+        segment_status.query_id,
+        segment_status.segment_id,
+        segment_status.is_succeed,
+        segment_status.is_cancelled,
+        segment_status.metrics.cpu_micros);
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto query_iter = segment_status_map.find(segment_status.query_id);
     if (query_iter == segment_status_map.end())
@@ -307,7 +324,7 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
     status->query_id = segment_status.query_id;
     status->segment_id = segment_status.segment_id;
     status->is_succeed = segment_status.is_succeed;
-    status->is_canceled = segment_status.is_canceled;
+    status->is_cancelled = segment_status.is_cancelled;
     status->metrics.cpu_micros += segment_status.metrics.cpu_micros;
     status->message = segment_status.message;
     status->code = segment_status.code;
@@ -368,17 +385,6 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
 
 void SegmentScheduler::updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index)
 {
-    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
-    auto segment_status_counter_iterator = query_status_received_counter_map[query_id].find(segment_id);
-    if (segment_status_counter_iterator == query_status_received_counter_map[query_id].end())
-    {
-        query_status_received_counter_map[query_id][segment_id] = {};
-    }
-    query_status_received_counter_map[query_id][segment_id].insert(parallel_index);
-}
-
-bool SegmentScheduler::explainQueryHasReceivedAllSegmentStatus(const String & query_id) const
-{
     std::shared_ptr<DAGGraph> dag_ptr;
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
@@ -386,70 +392,54 @@ bool SegmentScheduler::explainQueryHasReceivedAllSegmentStatus(const String & qu
         if (all_segments_iterator == query_map.end())
         {
             LOG_INFO(log, "query_id-" + query_id + " is not exist in scheduler query map");
-            return false;
+            return;
         }
 
         dag_ptr = all_segments_iterator->second;
 
         if (dag_ptr == nullptr)
-            return false;
-        if (!dag_ptr->query_context->isExplainQuery())
-            return false;
+            return;
     }
 
-    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
-    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
-
-    if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
-        return true;
-
-    auto received_status_segments_counter = received_status_segments_counter_iterator->second;
-
-    for (auto & parallel : dag_ptr->segment_paralle_size_map)
+    if (dag_ptr->query_context->isExplainQuery())
     {
-        if (parallel.first == 0)
-            continue;
-
-        if (received_status_segments_counter[parallel.first].size() < parallel.second)
+        bool all_received = true;
         {
-            return false;
-        }
-    }
+            // update counter and return
+            std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+            auto segment_status_counter_iterator = query_status_received_counter_map[query_id].find(segment_id);
+            if (segment_status_counter_iterator == query_status_received_counter_map[query_id].end())
+            {
+                query_status_received_counter_map[query_id][segment_id] = {};
+            }
+            query_status_received_counter_map[query_id][segment_id].insert(parallel_index);
 
-    return true;
-}
+            for (auto & parallel : dag_ptr->segment_paralle_size_map)
+            {
+                if (parallel.first == 0)
+                    continue;
 
-bool SegmentScheduler::bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const
-{
-    std::shared_ptr<DAGGraph> dag_ptr;
-    {
-        std::unique_lock<bthread::Mutex> lock(mutex);
-        auto all_segments_iterator = query_map.find(query_id);
-        if (all_segments_iterator == query_map.end())
-        {
-            LOG_INFO(log, "query_id-" + query_id + " is not exist in scheduler query map");
-            return false;
+                if (query_status_received_counter_map[query_id][parallel.first].size() < parallel.second)
+                {
+                    all_received = false;
+                }
+            }
         }
 
-        dag_ptr = all_segments_iterator->second;
-
-        if (dag_ptr == nullptr)
-            return false;
-        if (!dag_ptr->query_context->getSettingsRef().bsp_mode)
-            return false;
+        if (all_received)
+        {
+            ProfileLogHub<ProcessorProfileLogElement>::getInstance().stopConsume(query_id);
+            LOG_DEBUG(log, "Query:{} have received all segment status.", query_id);
+        }
     }
-
-    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
-    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
-
-    if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
+    if (dag_ptr->query_context->getSettingsRef().bsp_mode)
     {
-        return false;
+        std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
+        if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
+        {
+            bsp_scheduler_map_iterator->second->updateSegmentStatusCounter(segment_id, parallel_index);
+        }
     }
-
-    auto received_status_segments_counter = received_status_segments_counter_iterator->second;
-
-    return received_status_segments_counter[segment_id].size() == dag_ptr->segment_paralle_size_map[segment_id];
 }
 
 void SegmentScheduler::onSegmentFinished(const RuntimeSegmentsStatus & status)
@@ -457,7 +447,7 @@ void SegmentScheduler::onSegmentFinished(const RuntimeSegmentsStatus & status)
     std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
     if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(status.query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
     {
-        bsp_scheduler_map_iterator->second->onSegmentFinished(status.segment_id, status.is_succeed, status.is_canceled);
+        bsp_scheduler_map_iterator->second->onSegmentFinished(status.segment_id, status.is_succeed, status.is_cancelled);
     }
 }
 
@@ -717,7 +707,7 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
                                     + " can not be found",
                                 ErrorCodes::LOGICAL_ERROR);
                         if (segment_input->getSourceAddresses().empty())
-                            segment_input->insertSourceAddress(address_it->second);
+                            segment_input->insertSourceAddresses(address_it->second);
                     }
                     else
                     {
@@ -764,7 +754,7 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
                         "Logical error: address of segment " + std::to_string(plan_segment_input->getPlanSegmentId()) + " can not be found",
                         ErrorCodes::LOGICAL_ERROR);
                 if (plan_segment_input->getSourceAddresses().empty())
-                    plan_segment_input->insertSourceAddress(address_it->second);
+                    plan_segment_input->insertSourceAddresses(address_it->second);
             }
             else
             {

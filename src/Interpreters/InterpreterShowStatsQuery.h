@@ -35,6 +35,7 @@ public:
 
 private:
     BlockIO executeTable();
+    BlockIO executeAll();
     BlockIO executeColumn();
     void executeSpecial();
 

@@ -29,6 +29,7 @@
 #include <Storages/MergeTree/MergeTreeIndexGranularity.h>
 #include <Storages/MergeTree/MergedReadBufferWithSegmentCache.h>
 #include <Storages/MergeTree/IMergeTreeReaderStream.h>
+#include "Storages/MergeTree/MergeTreeSuffix.h"
 
 namespace DB
 {
@@ -46,7 +47,8 @@ public:
         IDiskCache* segment_cache_, size_t cache_segment_size_, const PartHostInfo & part_host_, 
         const MergeTreeIndexGranularityInfo* index_granularity_info_,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
-        clockid_t clock_type_, bool is_low_cardinality_dictionary_);
+        const ProgressCallback & internal_progress_cb_,
+        clockid_t clock_type_, bool is_low_cardinality_dictionary_, String stream_extension_ = DATA_FILE_EXTENSION);
 
     virtual void seekToMark(size_t mark) override;
 
@@ -55,6 +57,7 @@ public:
 private:
 
     std::unique_ptr<MergedReadBufferWithSegmentCache> read_buffer_holder;
+    String stream_extension;
 };
 
 }

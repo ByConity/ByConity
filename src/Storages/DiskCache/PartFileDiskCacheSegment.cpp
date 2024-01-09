@@ -101,7 +101,7 @@ String PartFileDiskCacheSegment::getSegmentName() const
 String PartFileDiskCacheSegment::getMarkName() const
 {
     return formatSegmentName(
-        UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, 0, MARKS_FILE_EXTENSION);
+        UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, 0, data_part->getMarksFileExtension());
 }
 
 void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_exception)

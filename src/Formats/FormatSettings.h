@@ -200,6 +200,20 @@ struct FormatSettings
 
     struct
     {
+        bool parse_null_map_as_empty = true;
+        bool skip_null_map_value = true;
+        /**
+         *  Because of the maximum filename length limit (255) of ext4 filesystem and the HTTP encode of map key.
+         *  The maximum key length is approximately 255/3 ~= 85, which, in fact is not abosultely safe after
+         *  accounting the map name and some auxiliary symbols.
+         *
+         *  Pick up a smaller and lucky number, hopes it work at most time.
+         */
+        uint64_t max_map_key_length = 80;
+    } map;
+
+    struct
+    {
         std::string format_schema;
         std::string format_schema_path;
         bool is_server = false;

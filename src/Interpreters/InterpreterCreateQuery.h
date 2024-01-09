@@ -53,9 +53,9 @@ public:
     BlockIO execute() override;
 
     /// List of columns and their types in AST.
-    static ASTPtr formatColumns(const NamesAndTypesList & columns);
-    static ASTPtr formatColumns(const NamesAndTypesList & columns, const NamesAndAliases & alias_columns, ParserSettingsImpl dialect_type);
-    static ASTPtr formatColumns(const ColumnsDescription & columns);
+    static ASTPtr formatColumns(const NamesAndTypesList & columns, ParserSettingsImpl parse_settings);
+    static ASTPtr formatColumns(const NamesAndTypesList & columns, const NamesAndAliases & alias_columns, ParserSettingsImpl parse_settings);
+    static ASTPtr formatColumns(const ColumnsDescription & columns, ParserSettingsImpl parse_settings);
     static ASTPtr formatIndices(const IndicesDescription & indices);
     static ASTPtr formatConstraints(const ConstraintsDescription & constraints);
     static ASTPtr formatForeignKeys(const ForeignKeysDescription & foreign_keys);
@@ -79,7 +79,7 @@ public:
 
     /// Obtain information about columns, their types, default values and column comments,
     ///  for case when columns in CREATE query is specified explicitly.
-    static ColumnsDescription getColumnsDescription(const ASTExpressionList & columns, ContextPtr context, bool attach);
+    static ColumnsDescription getColumnsDescription(const ASTExpressionList & columns, ContextPtr context, bool attach, bool system = false);
     static ConstraintsDescription getConstraintsDescription(const ASTExpressionList * constraints);
     static ForeignKeysDescription getForeignKeysDescription(const ASTExpressionList * foreign_keys);
     static UniqueNotEnforcedDescription getUniqueNotEnforcedDescription(const ASTExpressionList * unique);

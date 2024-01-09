@@ -51,6 +51,8 @@ cppkafka::TopicPartitionList CnchKafkaOffsetManager::createTopicPartitionList(ui
     auto conf = Kafka::createConsumerConfiguration(getContext(), kafka_table->getStorageID(),
                                                    kafka_table->getTopics(), kafka_table->getSettings());
     auto tool_consumer = std::make_shared<KafkaConsumer>(conf);
+    /// Set a longer timeout as it's easy to get timeout while calling `get_metadata` with default setting 1s
+    tool_consumer->set_timeout(std::chrono::milliseconds(5000));
 
     /// Create TopicPartitionList from topic metadata instead of Catalog,
     /// as Catalog may have no data for some newly tables

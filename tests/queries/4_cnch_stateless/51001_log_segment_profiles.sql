@@ -2,6 +2,8 @@ DROP DATABASE IF EXISTS segprofile;
 CREATE DATABASE segprofile;
 USE segprofile;
 
+set enum_replicate_no_stats=0;
+
 SELECT 1 FORMAT Null SETTINGS enable_optimizer=1, log_segment_profiles=0, log_queries=1, log_queries_min_type='QUERY_FINISH';
 SYSTEM FLUSH LOGS;
 WITH ( SELECT query_id FROM system.query_log WHERE current_database = currentDatabase() AND Settings['enable_optimizer']='1' AND Settings['log_segment_profiles']='0' AND Settings['log_queries']='1' AND query like 'SELECT 1%' ORDER BY event_time desc LIMIT 1) AS query_id_ SELECT length(segment_profiles) > 0 FROM system.query_log WHERE query_id = query_id_ UNION SELECT length(segment_profiles) > 0 FROM cnch_system.cnch_query_log WHERE query_id = query_id_;

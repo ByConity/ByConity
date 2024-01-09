@@ -10,7 +10,7 @@ namespace DB
 {
 
 /**
- * change resource path in test.config.h.in.
+ * change resource path in test_config.h.in.
  */
 class BaseDumpPlanTest : public AbstractPlanTestSuite
 {

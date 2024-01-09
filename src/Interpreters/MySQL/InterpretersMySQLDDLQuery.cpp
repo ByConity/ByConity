@@ -452,7 +452,8 @@ ASTs InterpreterCreateImpl::getRewrittenQueries(
             + " cannot be materialized, because there is no primary keys.", ErrorCodes::NOT_IMPLEMENTED);
 
     auto columns = std::make_shared<ASTColumns>();
-    columns->set(columns->columns, InterpreterCreateQuery::formatColumns(columns_description));
+    auto dialect_type = ParserSettings::valueOf(context->getSettingsRef().dialect_type);
+    columns->set(columns->columns, InterpreterCreateQuery::formatColumns(columns_description, dialect_type));
 
     auto storage = std::make_shared<ASTStorage>();
 
@@ -575,6 +576,8 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
     rewritten_alter_query->alter_object = ASTAlterQuery::AlterObjectType::TABLE;
     rewritten_alter_query->set(rewritten_alter_query->command_list, std::make_shared<ASTExpressionList>());
 
+    auto dialect_type = ParserSettings::valueOf(context->getSettingsRef().dialect_type);
+
     String default_after_column;
     for (const auto & command_query : alter_query.command_list->children)
     {
@@ -584,7 +587,7 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
         {
             const auto & additional_columns_name_and_type = getColumnsList(alter_command->additional_columns);
             const auto & additional_columns_description = createColumnsDescription(additional_columns_name_and_type, alter_command->additional_columns);
-            const auto & additional_columns = InterpreterCreateQuery::formatColumns(additional_columns_description);
+            const auto & additional_columns = InterpreterCreateQuery::formatColumns(additional_columns_description, dialect_type);
 
             for (size_t index = 0; index < additional_columns_name_and_type.size(); ++index)
             {
@@ -681,7 +684,7 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
                     modify_columns.front().name = alter_command->old_name;
 
                 const auto & modify_columns_description = createColumnsDescription(modify_columns, alter_command->additional_columns);
-                rewritten_command->col_decl = InterpreterCreateQuery::formatColumns(modify_columns_description)->children[0];
+                rewritten_command->col_decl = InterpreterCreateQuery::formatColumns(modify_columns_description, dialect_type)->children[0];
 
                 if (!alter_command->column_name.empty())
                 {

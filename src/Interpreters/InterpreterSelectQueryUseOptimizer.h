@@ -36,14 +36,22 @@ using AnalysisPtr = std::shared_ptr<Analysis>;
 class InterpreterSelectQueryUseOptimizer : public IInterpreter
 {
 public:
-    InterpreterSelectQueryUseOptimizer(const ASTPtr & query_ptr_, ContextMutablePtr & context_, const SelectQueryOptions & options_)
-        : query_ptr(query_ptr_->clone()), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
+    InterpreterSelectQueryUseOptimizer(const ASTPtr & query_ptr_, ContextMutablePtr context_, const SelectQueryOptions & options_)
+        : query_ptr(query_ptr_->clone())
+        , context(std::move(context_))
+        , options(options_)
+        , log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
     {
         interpret_sub_query = false;
     }
 
-    InterpreterSelectQueryUseOptimizer(PlanNodePtr sub_plan_ptr_, CTEInfo cte_info_, ContextMutablePtr & context_, const SelectQueryOptions & options_)
-        : sub_plan_ptr(sub_plan_ptr_), cte_info(std::move(cte_info_)), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
+    InterpreterSelectQueryUseOptimizer(
+        PlanNodePtr sub_plan_ptr_, CTEInfo cte_info_, ContextMutablePtr context_, const SelectQueryOptions & options_)
+        : sub_plan_ptr(sub_plan_ptr_)
+        , cte_info(std::move(cte_info_))
+        , context(std::move(context_))
+        , options(options_)
+        , log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
     {
         interpret_sub_query = true;
     }
@@ -62,10 +70,11 @@ public:
         elem.query_kind = "Select";
         elem.segment_profiles = segment_profiles;
     }
-
     static void fillContextQueryAccessInfo(ContextPtr context, AnalysisPtr & analysis);
 
     Block getSampleBlock();
+
+    static void setUnsupportedSettings(ContextMutablePtr & context);
 
 private:
     ASTPtr query_ptr;

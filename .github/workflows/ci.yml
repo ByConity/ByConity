@@ -13,7 +13,7 @@ concurrency:
 jobs:
   scm_build:
     name: Build binary and run stateless tests
-    container: byconity/byconity-ci:23Dec12
+    container: byconity/byconity-ci:24Jan08
     runs-on: self-hosted
     steps:
       - name: Set environment variables
@@ -45,6 +45,9 @@ jobs:
       - name: run unit tests
         run: |
           bash $GITHUB_WORKSPACE/unittest.sh
+      - name: glibc_compatibility_check 
+        run: |
+          python3 $GITHUB_WORKSPACE/tests/ci/compatibility_check.py --binary $GITHUB_WORKSPACE/build/programs/clickhouse
       - name: Create ByConity Cluster
         run: |
           mkdir /CI/

@@ -451,7 +451,7 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitPlanNode(PlanNodeBase & node,
 
 PlanNodeStatisticsPtr PlanCardinalityVisitor::visitCTERefNode(CTERefNode & node, CardinalityContext & context)
 {
-    auto step = node.getStep();
+    const auto * step = dynamic_cast<const CTERefStep *>(node.getStep().get());
     cte_helper.accept(step->getId(), *this, context);
 
     if (node.getStatistics().isDerived())

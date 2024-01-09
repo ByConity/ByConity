@@ -12,6 +12,8 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTAssignment.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/parseQuery.h>
 #include <Storages/ColumnsDescription.h>
 #include <Interpreters/Context.h>
 
@@ -55,6 +57,43 @@ TTLAggregateDescription & TTLAggregateDescription::operator=(const TTLAggregateD
 
 namespace
 {
+
+// For compatibility. To convert ttl expression such as "`toDate(p_date)` + toIntervalDay(x)" to "toDate(p_date) + toIntervalDay(x)"
+void normalizeTTLExpression(ASTPtr & ttl_ast, const ColumnsDescription & columns)
+{
+    Names column_names = columns.getNamesOfPhysical();
+    NameSet column_set{column_names.begin(), column_names.end()};
+
+    std::function<void(ASTPtr &)> replace_unexpected_indentifier = [&column_set, &replace_unexpected_indentifier](ASTPtr & ast)
+    {
+        if (!ast)
+            return;
+
+        if (ASTFunction * func = ast->as<ASTFunction>())
+        {
+            for (auto & child : func->arguments->children)
+                replace_unexpected_indentifier(child);
+        }
+        else if (ASTIdentifier * identifier = ast->as<ASTIdentifier>())
+        {
+            String name = identifier->getColumnName();
+            if (!column_set.count(name))
+            {
+                ParserExpression parser;
+                ASTPtr parse_res= parseQuery(parser, name, 0, 0);
+                if (parse_res->as<ASTFunction>())
+                    ast = parse_res;
+            }
+        }
+        else
+        {
+            for (auto & child : ast->children)
+                replace_unexpected_indentifier(child);
+        }
+    };
+
+    replace_unexpected_indentifier(ttl_ast);
+}
 
 void checkTTLExpression(const ExpressionActionsPtr & ttl_expression, const String & result_column_name)
 {
@@ -174,6 +213,7 @@ TTLDescription TTLDescription::getTTLFromAST(
     else /// It's columns TTL without any additions, just copy it
         result.expression_ast = definition_ast->clone();
 
+    normalizeTTLExpression(result.expression_ast, columns);
     auto ttl_ast = result.expression_ast->clone();
     auto syntax_analyzer_result = TreeRewriter(context).analyze(ttl_ast, columns.getAllPhysical());
     result.expression = ExpressionAnalyzer(ttl_ast, syntax_analyzer_result, context).getActions(false);

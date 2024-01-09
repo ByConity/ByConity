@@ -47,7 +47,7 @@ struct RootCauseErrorReceivedEvent
 {
 };
 
-static const Int16 AMBIGUOS_ERROR_MAX_NUM = 20;
+static const Int16 AMBIGUOS_ERROR_MAX_NUM = 10;
 
 // Define mpp query coordinator FSM structure
 class CoordinatorStateMachineDef : public boost::msm::front::state_machine_def<CoordinatorStateMachineDef>
@@ -268,6 +268,14 @@ SummarizedQueryStatus MPPQueryCoordinator::waitUntilFinish(int error_code, const
 
 void MPPQueryCoordinator::updateSegmentInstanceStatus(RuntimeSegmentsStatus status)
 {
+    LOG_TRACE(
+        log,
+        "debug segment_id:{} is_succeed:{} is_cancelled:{} code:{} message:{}",
+        status.segment_id,
+        status.is_succeed,
+        status.is_cancelled,
+        status.code,
+        status.message);
     if (status.is_succeed)
     {
         if (status.segment_id == 0)
@@ -279,18 +287,24 @@ void MPPQueryCoordinator::updateSegmentInstanceStatus(RuntimeSegmentsStatus stat
 
     QueryError query_error{.code = status.code, .message = status.message, .segment_id = status.segment_id};
 
+    tryUpdateRootErrorCause(query_error, status.is_cancelled);
+}
+
+void MPPQueryCoordinator::tryUpdateRootErrorCause(const QueryError & query_error, bool is_canceled)
+{
     if (query_status.status_code.load(std::memory_order_acquire) == MPPQueryStatusCode::INIT)
     {
-        triggerEvent(QueryErrorEvent{.cancel = status.is_canceled, .query_error = query_error});
+        triggerEvent(QueryErrorEvent{.cancel = is_canceled, .query_error = query_error});
     }
 
     std::unique_lock lock(status_mutex);
     if (query_status.success)
         return;
 
-    if (isAmbiguosError(status.code) && query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
+    if (isAmbiguosError(query_error.code) && query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
     {
-        query_status.additional_errors.emplace_back(std::move(query_error));
+        if (query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
+            query_status.additional_errors.emplace_back(std::move(query_error));
         return;
     }
 
@@ -325,6 +339,7 @@ MPPQueryCoordinator::~MPPQueryCoordinator()
     }
     catch (...)
     {
+        tryLogCurrentException(log, fmt::format("~MPPQueryCoordinator exception for query_id:{}", query_id));
     }
 
     MPPQueryManager::instance().clearQuery(query_id);

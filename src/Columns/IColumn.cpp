@@ -41,4 +41,20 @@ bool isColumnConst(const IColumn & column)
     return checkColumn<ColumnConst>(column);
 }
 
+ColumnPtr IColumn::replaceWithDefaultValue(Filter & set_to_null_rows)
+{
+    MutablePtr res = cloneEmpty();
+    size_t num_rows = size();
+    res->reserve(num_rows);
+    size_t pos = 0;
+    while (pos < num_rows)
+    {
+        if (!set_to_null_rows[pos])
+            res->insertFrom(*this, pos);
+        else
+            res->insertDefault();
+        pos++;
+    }
+    return res;
+}
 }

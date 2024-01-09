@@ -273,15 +273,8 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
 
     splitMutationCommands(source_part, metadata_snapshot, commands, for_interpreter, for_file_renames);
 
-    /// Ignore delete_bitmap in case of:
-    /// 1. Only READ_COLUMN:
-    ///     for modify column mutations, the new column data files should contain the same number of rows as before,
-    ///     thus an empty delete bitmap is used for read.
-    /// 2. FAST_DELETE:
-    ///     we need to read the content of old delete_bitmap to generate a new one.
-    bool without_delete_bitmap = isDeleteCommand(commands) || for_interpreter.allOf(MutationCommand::READ_COLUMN);
-
-    auto storage_from_source_part = StorageFromMergeTreeDataPart::create(source_part, without_delete_bitmap);
+    /// We always do mutateSomePartColumns but not mutateAllPartColumns for CnchMergeTree, so no need to read delete_bitmap. 
+    auto storage_from_source_part = StorageFromMergeTreeDataPart::create(source_part, /*without_delete_bitmap*/ true);
 
     UInt64 watch_prev_elapsed = 0;
     MutateStageProgress stage_progress(1.0);

@@ -52,7 +52,8 @@ public:
         const MergeTreeReaderSettings & reader_settings_,
         MergeTreeIndexExecutor * index_executor,
         const ValueSizeMap & avg_value_size_hints,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback) const override;
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+        const ProgressCallback & internal_progress_cb) const override;
 
     MergeTreeWriterPtr getWriter(
         const NamesAndTypesList & columns_list,
@@ -105,6 +106,7 @@ public:
     void preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const;
     void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
 
+    void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr) override {columns_ptr = new_columns_ptr;}
 private:
     /// See #getDeleteBitmap
     const ImmutableDeleteBitmapPtr & getCombinedDeleteBitmapForUniqueTable(bool allow_null = false) const;
@@ -117,11 +119,12 @@ private:
     void checkConsistency(bool require_part_metadata) const override;
 
     void loadIndex() override;
+    IndexPtr loadIndexFromStorage() const;
 
     MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
 
     ChecksumsPtr loadChecksums(bool require) override;
-    ChecksumsPtr loadChecksumsForPart(bool follow_part_chain);
+    ChecksumsPtr loadChecksumsFromRemote(bool follow_part_chain);
 
     UniqueKeyIndexPtr loadUniqueKeyIndex() override;
 
@@ -135,7 +138,7 @@ private:
     void loadMetaInfoFromBuffer(ReadBuffer & buffer, bool load_hint_mutation);
 
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
-    ColumnSize getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const;
+    ColumnSize getColumnSizeImpl(const NameAndTypePair & column, const ChecksumsPtr & checksums, std::unordered_set<String> * processed_substreams) const;
 
     void loadProjections(bool require_columns_checksums, bool check_consistency) override;
 

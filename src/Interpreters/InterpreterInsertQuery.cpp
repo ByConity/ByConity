@@ -38,9 +38,10 @@
 #include <DataStreams/copyData.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <IO/ConnectionTimeoutsContext.h>
+#include <IO/ReadBufferFromS3.h>
+#include <IO/S3Common.h>
 #include <IO/SnappyReadBuffer.h>
 #include <Interpreters/Context.h>
-#include <IO/S3Common.h>
 #include <IO//RAReadBufferFromS3.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
@@ -115,7 +116,7 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
         auto table = DatabaseCatalog::instance().tryGetTable(dependence, local_context);
         if (!table)
         {
-            LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table {} not found", dependence.getNameForLogs());
+            LOG_WARNING(&Poco::Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table {} not found", dependence.getNameForLogs());
             continue;
         }
 
@@ -124,7 +125,7 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
             auto target_table = DatabaseCatalog::instance().tryGetTable(mv->getTargetTableId(), local_context);
             if (!target_table)
             {
-                LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "target table for {} not exist", mv->getStorageID().getNameForLogs());
+                LOG_WARNING(&Poco::Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "target table for {} not exist", mv->getStorageID().getNameForLogs());
                 continue;
             }
 
@@ -132,7 +133,7 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
             auto * target_cnch_merge = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
             if (!target_cnch_merge)
             {
-                LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table type not matched for {}, CnchMergeTree is expected",
+                LOG_WARNING(&Poco::Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table type not matched for {}, CnchMergeTree is expected",
                             target_table->getStorageID().getNameForLogs());
                 continue;
             }
@@ -291,24 +292,25 @@ static bool isTrivialSelect(const ASTPtr & select)
 BlockIO InterpreterInsertQuery::execute()
 {
     const Settings & settings = getContext()->getSettingsRef();
-    auto & query = query_ptr->as<ASTInsertQuery &>();
+    auto & insert_query = query_ptr->as<ASTInsertQuery &>();
 
     BlockIO res;
 
-    StoragePtr table = getTable(query);
+    StoragePtr table = getTable(insert_query);
     auto table_lock = table->lockForShare(getContext()->getInitialQueryId(), settings.lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
-    auto query_sample_block = getSampleBlock(query, table, metadata_snapshot);
-    if (!query.table_function)
-        getContext()->checkAccess(AccessType::INSERT, query.table_id, query_sample_block.getNames());
+    auto query_sample_block = getSampleBlock(insert_query, table, metadata_snapshot);
+    if (!insert_query.table_function)
+        getContext()->checkAccess(AccessType::INSERT, insert_query.table_id, query_sample_block.getNames());
 
     bool is_distributed_insert_select = false;
 
-    if (query.select && table->isRemote() && (settings.parallel_distributed_insert_select || settings.distributed_perfect_shard))
+    if (insert_query.select && table->isRemote() &&
+        (settings.parallel_distributed_insert_select || settings.distributed_perfect_shard))
     {
         // Distributed INSERT SELECT
-        if (auto maybe_pipeline = table->distributedWrite(query, getContext()))
+        if (auto maybe_pipeline = table->distributedWrite(insert_query, getContext()))
         {
             res.pipeline = std::move(*maybe_pipeline);
             is_distributed_insert_select = true;
@@ -318,7 +320,7 @@ BlockIO InterpreterInsertQuery::execute()
 
     StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(table.get());
     /// Directly forward the query to cnch worker if select or infile
-    if (getContext()->getServerType() == ServerType::cnch_server && (query.select || query.in_file) && cnch_merge_tree)
+    if (getContext()->getServerType() == ServerType::cnch_server && (insert_query.select || insert_query.in_file) && cnch_merge_tree)
     {
         /// Handle the insert commit for insert select/infile case in cnch server.
         BlockInputStreamPtr in = cnch_merge_tree->writeInWorker(query_ptr, metadata_snapshot, getContext());
@@ -340,10 +342,10 @@ BlockIO InterpreterInsertQuery::execute()
     }
 
     BlockOutputStreams out_streams;
-    if (!is_distributed_insert_select || query.watch)
+    if (!is_distributed_insert_select || insert_query.watch)
     {
         size_t out_streams_size = 1;
-        if (query.select)
+        if (insert_query.select)
         {
             auto insert_select_context = Context::createCopy(getContext());
             /// Cannot use trySetVirtualWarehouseAndWorkerGroup, because it only works in server node
@@ -354,17 +356,15 @@ BlockIO InterpreterInsertQuery::execute()
                 /// set worker group for select query
                 insert_select_context->initCnchServerResource(insert_select_context->getCurrentTransactionID());
                 LOG_DEBUG(
-                    &Logger::get("VirtualWarehouse"),
-                    "Set worker group {} for table {}",
-                    worker_group->getQualifiedName(),
-                    cloud_table->getStorageID().getNameForLogs());
+                    &Poco::Logger::get("VirtualWarehouse"),
+                    "Set worker group {} for table {}", worker_group->getQualifiedName(), cloud_table->getStorageID().getNameForLogs());
             }
 
             bool is_trivial_insert_select = false;
 
             if (settings.optimize_trivial_insert_select)
             {
-                const auto & select_query = query.select->as<ASTSelectWithUnionQuery &>();
+                const auto & select_query = insert_query.select->as<ASTSelectWithUnionQuery &>();
                 const auto & selects = select_query.list_of_selects->children;
                 const auto & union_modes = select_query.list_of_modes;
 
@@ -405,14 +405,14 @@ BlockIO InterpreterInsertQuery::execute()
                 insert_select_context->setSettings(new_settings);
 
                 InterpreterSelectWithUnionQuery interpreter_select{
-                    query.select, insert_select_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
+                    insert_query.select, insert_select_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
                 res = interpreter_select.execute();
             }
             else
             {
                 /// Passing 1 as subquery_depth will disable limiting size of intermediate result.
                 InterpreterSelectWithUnionQuery interpreter_select{
-                    query.select, insert_select_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
+                    insert_query.select, insert_select_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
                 res = interpreter_select.execute();
             }
 
@@ -448,9 +448,9 @@ BlockIO InterpreterInsertQuery::execute()
                 }
             }
         }
-        else if (query.watch)
+        else if (insert_query.watch)
         {
-            InterpreterWatchQuery interpreter_watch{query.watch, getContext()};
+            InterpreterWatchQuery interpreter_watch{ insert_query.watch, getContext() };
             res = interpreter_watch.execute();
             res.pipeline.init(Pipe(std::make_shared<SourceFromInputStream>(std::move(res.in))));
         }
@@ -475,13 +475,13 @@ BlockIO InterpreterInsertQuery::execute()
             {
                 if (getContext()->getSettingsRef().constraint_skip_violate)
                     constraint_filter_stream = out = std::make_shared<CheckConstraintsFilterBlockOutputStream>(
-                        query.table_id, out, out->getHeader(), metadata_snapshot->getConstraints(), getContext());
+                        insert_query.table_id, out, out->getHeader(), metadata_snapshot->getConstraints(), getContext());
                 else
                     out = std::make_shared<CheckConstraintsBlockOutputStream>(
-                        query.table_id, out, out->getHeader(), metadata_snapshot->getConstraints(), getContext());
+                        insert_query.table_id, out, out->getHeader(), metadata_snapshot->getConstraints(), getContext());
             }
 
-            bool null_as_default = query.select && getContext()->getSettingsRef().insert_null_as_default;
+            bool null_as_default = insert_query.select && getContext()->getSettingsRef().insert_null_as_default;
 
             /// Actually we don't know structure of input blocks from query/table,
             /// because some clients break insertion protocol (columns != header)
@@ -493,7 +493,7 @@ BlockIO InterpreterInsertQuery::execute()
 
             /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
             /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
-            if (!(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !query.watch)
+            if (!(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !insert_query.watch)
             {
                 bool table_prefers_large_blocks = table->prefersLargeBlocks();
 
@@ -520,22 +520,31 @@ BlockIO InterpreterInsertQuery::execute()
     {
         /// Pipeline was already built.
     }
-    else if (query.in_file)
+    else if (insert_query.in_file)
     {
         // read data stream from in_file, and copy it to out
         // Special handling in_file based on url type:
-        String uristr = typeid_cast<const ASTLiteral &>(*query.in_file).value.safeGet<String>();
+        String uristr = typeid_cast<const ASTLiteral &>(*insert_query.in_file).value.safeGet<String>();
         // create Datastream based on Format:
-        String format = query.format;
+        String format = insert_query.format;
         if (format.empty())
             format = getContext()->getDefaultFormat();
 
-        auto input_stream = buildInputStreamFromSource(getContext(), out_streams.at(0)->getHeader(), settings, uristr, format);
+        /// It can be compressed and compression method maybe specified in query
+        String compression_method;
+        if (insert_query.compression)
+        {
+            const auto & compression_method_node = insert_query.compression->as<ASTLiteral &>();
+            compression_method = compression_method_node.value.safeGet<std::string>();
+        }
+
+        auto input_stream = buildInputStreamFromSource(getContext(), out_streams.at(0)->getHeader(),
+            settings, uristr, format, false, compression_method);
 
         res.in = std::make_shared<NullAndDoCopyBlockInputStream>(input_stream, out_streams.at(0));
         res.out = nullptr;
     }
-    else if (query.select || query.watch)
+    else if (insert_query.select || insert_query.watch)
     {
         const auto & header = out_streams.at(0)->getHeader();
         auto actions_dag = ActionsDAG::makeConvertingActions(
@@ -566,7 +575,7 @@ BlockIO InterpreterInsertQuery::execute()
                         "Cannot insert column " + column.name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
-    else if (query.data && !query.has_tail) /// can execute without additional data
+    else if (insert_query.data && !insert_query.has_tail) /// can execute without additional data
     {
         auto pipe = getSourceFromFromASTInsertQuery(query_ptr, nullptr, query_sample_block, getContext(), nullptr);
         res.pipeline.init(std::move(pipe));
@@ -611,7 +620,8 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
     const Settings & settings,
     const String & source_uri,
     const String & format,
-    bool is_enable_squash)
+    bool is_enable_squash,
+    const String & compression_method)
 {
     // Assume no query and fragment in uri, todo, add sanity check
     String fuzzyFileNames;
@@ -628,13 +638,12 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
     }
 
     Poco::URI uri(uriPrefix);
-    String scheme = uri.getScheme();
+    const String & scheme = uri.getScheme();
 
     BlockInputStreams inputs;
     {
-        std::vector<String> fuzzyNameList
-            = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',', 100 /* hard coded max files */);
-        std::vector<std::vector<String>> fileNames;
+        std::vector<String> fuzzyNameList = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',' , 100/* hard coded max files */);
+        std::vector<std::vector<String> > fileNames;
         for (auto fuzzyName : fuzzyNameList)
             fileNames.push_back(parseDescription(fuzzyName, 0, fuzzyName.length(), '|', 100));
 
@@ -665,9 +674,7 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
                         context_ptr->getSettingsRef().s3_ak_id.toString(), context_ptr->getSettingsRef().s3_ak_secret.toString(),
                         "", "", context_ptr->getSettingsRef().s3_use_virtual_hosted_style);
                     const std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
-                    read_buf = std::make_unique<RAReadBufferFromS3>(client, bucket, key, 3,
-                        DBMS_DEFAULT_BUFFER_SIZE, nullptr, 0,
-                        context_ptr->getProcessList().getHDFSDownloadThrottler());
+                    read_buf = std::make_unique<ReadBufferFromS3>(client, bucket, key, context_ptr->getReadSettings());
                 }
 #endif
                 else
@@ -675,25 +682,14 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
                     throw Exception("URI scheme " + scheme + " is not supported with insert statement yet", ErrorCodes::NOT_IMPLEMENTED);
                 }
 
-                // snappy compression suport
-                if (endsWith(name, "snappy"))
-                {
-                    if (settings.snappy_format_blocked)
-                    {
-                        read_buf = std::make_unique<SnappyReadBuffer<true>>(std::move(read_buf));
-                    }
-                    else
-                    {
-                        read_buf = std::make_unique<SnappyReadBuffer<false>>(std::move(read_buf));
-                    }
-                }
-                inputs.emplace_back(std::make_shared<OwningBlockInputStream<ReadBuffer>>(
-                    context_ptr->getInputFormat(
-                        format,
-                        *read_buf,
-                        sample, // sample_block
-                        settings.max_insert_block_size),
-                    std::move(read_buf)));
+                read_buf = wrapReadBufferWithCompressionMethod(std::move(read_buf), chooseCompressionMethod(name, compression_method), settings.snappy_format_blocked);
+
+                inputs.emplace_back(
+                        std::make_shared<OwningBlockInputStream<ReadBuffer>>(
+                            context_ptr->getInputFormat(format, *read_buf,
+                                sample, // sample_block
+                                settings.max_insert_block_size),
+                            std::move(read_buf)));
             }
         }
     }

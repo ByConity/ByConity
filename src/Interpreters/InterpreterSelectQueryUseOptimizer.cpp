@@ -57,7 +57,6 @@ Block InterpreterSelectQueryUseOptimizer::getSampleBlock()
     if (!block)
     {
         auto query_plan = buildQueryPlan();
-        block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
     }
 
     return block;
@@ -78,14 +77,14 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
     context->createOptimizerMetrics();
-    bool enable_plan_cache = context->getSettingsRef().enable_plan_cache &&
-                            (query_ptr->as<ASTSelectQuery>() || query_ptr->as<ASTSelectWithUnionQuery>() || query_ptr->as<ASTSelectIntersectExceptQuery>());
+    // not cache internal query
+    bool enable_plan_cache = !options.is_internal && PlanCacheManager::enableCachePlan(query_ptr, context);
 
     {
         if (enable_plan_cache)
         {
             query_hash = PlanCacheManager::hash(query_ptr, context->getSettingsRef());
-            query_plan = getPlanFromCache(query_hash);
+            query_plan = PlanCacheManager::getPlanFromCache(query_hash, context);
             if (query_plan)
             {
                 query_plan->addInterpreterContext(context);
@@ -118,7 +117,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
                 log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
             if (enable_plan_cache && query_hash && query_plan)
             {
-               if (addPlanToCache(query_hash, query_plan, analysis))
+               if (PlanCacheManager::addPlanToCache(query_hash, query_plan, analysis, context))
                    LOG_INFO(log, "plan cache added");
             }
         }
@@ -134,6 +133,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
 {
     Stopwatch stage_watch, total_watch;
     total_watch.start();
+    setUnsupportedSettings(context);
     QueryPlanPtr query_plan = buildQueryPlan();
 
     query_plan->setResetStepId(false);
@@ -371,79 +371,6 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     return res;
 }
 
-QueryPlanPtr InterpreterSelectQueryUseOptimizer::getPlanFromCache(UInt128 query_hash)
-{
-    if (!context->getPlanCacheManager())
-        throw Exception("plan cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
-
-    auto & cached = context->getPlanCacheManager()->instance();
-    try
-    {
-        auto plan_object = cached.get(query_hash);
-        if (!plan_object || !plan_object->plan_root)
-            return nullptr;
-
-        PlanNodeId max_id;
-        auto root  = PlanCacheManager::getNewPlanNode(plan_object->plan_root, context, false, max_id);
-        CTEInfo cte_tmp;
-        for (auto & cte : plan_object->cte_map)
-            cte_tmp.add(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, false, max_id));
-
-        if (plan_object->query_info && context->hasQueryContext())
-        {
-            for (auto & [database, table_info] : plan_object->query_info->query_access_info)
-            {
-                for (auto & [table, columns] : table_info)
-                    context->addQueryAccessInfo(database, table, columns);
-            }
-        }
-        auto node_id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id+1);
-        return  std::make_unique<QueryPlan>(root, cte_tmp, node_id_allocator);
-
-    }
-    catch (...)
-    {
-        cached.remove(query_hash);
-        return nullptr;
-    }
-}
-
-bool InterpreterSelectQueryUseOptimizer::addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan, AnalysisPtr analysis)
-{
-    if (!context->getPlanCacheManager())
-        throw Exception("plan cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
-
-    auto & cache = context->getPlanCacheManager()->instance();
-    auto root = plan->getPlanNode();
-    UInt32 size = QueryPlan::getPlanNodeCount(root);
-
-    if (size > context->getSettingsRef().max_plannode_count)
-        return false;
-
-    PlanNodeId max_id;
-    PlanCacheManager::PlanObjectValue plan_object{};
-    plan_object.plan_root = PlanCacheManager::getNewPlanNode(root, context, true, max_id);
-
-    for (const auto & cte : plan->getCTEInfo().getCTEs())
-        plan_object.cte_map.emplace(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, true, max_id));
-
-    plan_object.query_info = std::make_shared<PlanCacheManager::QueryInfo>();
-    const auto & used_columns_map = analysis->getUsedColumns();
-    for (const auto & [table_ast, storage_analysis] : analysis->getStorages())
-    {
-        if (!storage_analysis.storage)
-            continue;
-        auto storage_id = storage_analysis.storage->getStorageID();
-        if (auto it = used_columns_map.find(storage_analysis.storage->getStorageID()); it != used_columns_map.end())
-        {
-            for (const auto & column : it->second)
-                plan_object.query_info->query_access_info[backQuoteIfNeed(storage_id.getDatabaseName())][storage_id.getFullTableName()].emplace_back(column);
-        }
-    }
-    cache.add(query_hash, plan_object);
-    return true;
-}
-
 void InterpreterSelectQueryUseOptimizer::setPlanSegmentInfoForExplainAnalyze(PlanSegmentTreePtr & plan_segment_tree)
 {
     auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
@@ -474,6 +401,17 @@ void InterpreterSelectQueryUseOptimizer::fillContextQueryAccessInfo(ContextPtr c
                 required_columns);
         }
     }
+}
+
+void InterpreterSelectQueryUseOptimizer::setUnsupportedSettings(ContextMutablePtr & context)
+{
+    if (!context->getSettingsRef().enable_optimizer)
+        return;
+
+    SettingsChanges setting_changes;
+    setting_changes.emplace_back("distributed_aggregation_memory_efficient", false);
+
+    context->applySettingsChanges(setting_changes);
 }
 
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)

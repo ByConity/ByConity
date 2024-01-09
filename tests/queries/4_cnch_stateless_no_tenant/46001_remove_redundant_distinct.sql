@@ -22,6 +22,7 @@ insert into test_distinct.unique_4 select toDate('2021-01-01') + number, number,
 
 set enable_optimizer=1;
 set enable_distinct_remove=1;
+set enum_replicate_no_stats=0;
 set send_logs_level='warning';
 
 select '---------test union';

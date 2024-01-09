@@ -114,7 +114,7 @@ void CnchTablePartitionMetricsHelper::updateMetrics(
                   return;
 
               auto meta_ptr = mgr->getTableMeta(uuid);
-              if (meta_ptr == nullptr || !meta_ptr->partition_metrics_loaded)
+              if (meta_ptr == nullptr)
                   return;
               meta_ptr->metrics_last_update_time = ts;
               metrics_ptr->update(*model);
@@ -125,13 +125,9 @@ void CnchTablePartitionMetricsHelper::updateMetrics(
     }
 }
 
-void CnchTablePartitionMetricsHelper::shutDown()
+void CnchTablePartitionMetricsHelper::shutDown(PartCacheManager * manager)
 {
-    auto mgr = getContext()->getPartCacheManager();
-    if (mgr == nullptr)
-        return;
-
-    auto tables_snapshot = mgr->getTablesSnapshot();
+    auto tables_snapshot = manager->getTablesSnapshot();
 
     for (auto & [table_uuid, table_meta_ptr] : tables_snapshot)
     {
@@ -196,6 +192,9 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(boo
     for (auto & [table_uuid, meta_ptr] : tables_snapshot)
     {
         LOG_TRACE(log, "recalculateOrSnapshotPartitionsMetrics {}, force: {}", UUIDHelpers::UUIDToString(table_uuid), force);
+
+        if (meta_ptr->loading_metrics || meta_ptr->partition_metrics_loaded)
+            continue;
 
         /// To avoid starvation of tasks, we need to wait indefinitely.
         recalculateOrSnapshotPartitionsMetrics(meta_ptr, current_time, force, std::nullopt);

@@ -124,10 +124,10 @@ struct QueryStatusInfo
 {
     String query;
     double elapsed_seconds;
-    size_t disk_cache_bytes;
     size_t read_rows;
     size_t read_bytes;
     size_t total_rows;
+    size_t disk_cache_read_bytes;
     size_t written_rows;
     size_t written_bytes;
     size_t written_duration;

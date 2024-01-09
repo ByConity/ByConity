@@ -40,6 +40,7 @@
 
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTLiteral.h>
@@ -102,6 +103,9 @@
 #include <Catalog/Catalog.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
+
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
 
 #include <fmt/format.h>
 
@@ -400,7 +404,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 }
 
 
-ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns)
+ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, ParserSettingsImpl parser_settings)
 {
     auto columns_list = std::make_shared<ASTExpressionList>();
 
@@ -409,7 +413,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns)
         const auto column_declaration = std::make_shared<ASTColumnDeclaration>();
         column_declaration->name = column.name;
 
-        ParserDataType type_parser;
+        ParserDataType type_parser(parser_settings);
         String type_name = column.type->getName();
         const char * pos = type_name.data();
         const char * end = pos + type_name.size();
@@ -421,16 +425,17 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns)
     return columns_list;
 }
 
-ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, const NamesAndAliases & alias_columns, ParserSettingsImpl dialect_type)
+ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, const NamesAndAliases & alias_columns, ParserSettingsImpl parser_settings)
 {
-    std::shared_ptr<ASTExpressionList> columns_list = std::static_pointer_cast<ASTExpressionList>(formatColumns(columns));
+    std::shared_ptr<ASTExpressionList> columns_list =
+            std::static_pointer_cast<ASTExpressionList>(formatColumns(columns, parser_settings));
 
     for (const auto & alias_column : alias_columns)
     {
         const auto column_declaration = std::make_shared<ASTColumnDeclaration>();
         column_declaration->name = alias_column.name;
 
-        ParserDataType type_parser;
+        ParserDataType type_parser(parser_settings);
         String type_name = alias_column.type->getName();
         const char * type_pos = type_name.data();
         const char * type_end = type_pos + type_name.size();
@@ -442,7 +447,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, 
         const auto & alias = alias_column.expression;
         const char * alias_pos = alias.data();
         const char * alias_end = alias_pos + alias.size();
-        ParserExpression expression_parser(dialect_type);
+        ParserExpression expression_parser(parser_settings);
         column_declaration->default_expression = parseQuery(expression_parser, alias_pos, alias_end, "expression", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
         columns_list->children.emplace_back(column_declaration);
@@ -451,7 +456,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, 
     return columns_list;
 }
 
-ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns)
+ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns, ParserSettingsImpl parser_settings)
 {
     auto columns_list = std::make_shared<ASTExpressionList>();
 
@@ -462,7 +467,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns)
 
         column_declaration->name = column.name;
 
-        ParserDataType type_parser;
+        ParserDataType type_parser(parser_settings);
         String type_name = column.type->getName();
         const char * type_name_pos = type_name.data();
         const char * type_name_end = type_name_pos + type_name.size();
@@ -543,7 +548,7 @@ ASTPtr InterpreterCreateQuery::formatProjections(const ProjectionsDescription & 
 }
 
 ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
-    const ASTExpressionList & columns_ast, ContextPtr context_, bool attach)
+    const ASTExpressionList & columns_ast, ContextPtr context_, bool attach, bool system)
 {
     /// First, deduce implicit types.
 
@@ -552,7 +557,10 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
 
     ASTPtr default_expr_list = std::make_shared<ASTExpressionList>();
     NamesAndTypesList column_names_and_types;
-    bool make_columns_nullable = !attach && context_->getSettingsRef().data_type_default_nullable;
+    /// Only applies default nullable transform if:
+    /// 1. The query is not a system query, such as: system.query_log, system.query_thread_log
+    /// 2. The query is to create a new table rather than attaching an existed table.
+    bool make_columns_nullable = !system && !attach && context_->getSettingsRef().data_type_default_nullable;
 
     for (const auto & ast : columns_ast.children)
     {
@@ -739,7 +747,7 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
 
         if (create.columns_list->columns)
         {
-            properties.columns = getColumnsDescription(*create.columns_list->columns, getContext(), create.attach);
+            properties.columns = getColumnsDescription(*create.columns_list->columns, getContext(), create.attach, internal);
             check_view_columns_same_with_select(properties.columns);
         }
 
@@ -785,7 +793,17 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     }
     else if (create.select)
     {
-        Block as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), getContext());
+        Block as_select_sample;
+        if (create.is_ordinary_view)
+        {
+            auto cloned_query = create.select->clone();
+            if (QueryUseOptimizerChecker::check(cloned_query, getContext()))
+                as_select_sample = InterpreterSelectQueryUseOptimizer(cloned_query, getContext(), {}).getSampleBlock();
+            else
+                as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(cloned_query, getContext());
+        }
+        else
+            as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), getContext());
         properties.columns = ColumnsDescription(as_select_sample.getNamesAndTypesList());
     }
     else if (create.as_table_function)
@@ -818,7 +836,8 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     if (!create.columns_list)
         create.set(create.columns_list, std::make_shared<ASTColumns>());
 
-    ASTPtr new_columns = formatColumns(properties.columns);
+    ParserSettingsImpl dialect_type = ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type);
+    ASTPtr new_columns = formatColumns(properties.columns, dialect_type);
     ASTPtr new_indices = formatIndices(properties.indices);
     ASTPtr new_constraints = formatConstraints(properties.constraints);
     ASTPtr new_foreign_keys = formatForeignKeys(properties.foreign_keys);

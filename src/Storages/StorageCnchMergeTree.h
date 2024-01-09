@@ -209,7 +209,7 @@ public:
     PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
 
     /// parse bucket number set from where clause, only works for single-key cluster by
-    virtual std::set<Int64> getRequiredBucketNumbers(ASTPtr where_expression, ContextPtr context) const override;
+    std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
     // get all Visible Parts
     ServerDataPartsVector getAllParts(ContextPtr local_context) const;
@@ -266,7 +266,6 @@ private:
 
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
-    std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
     Pipe ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);
 

@@ -153,7 +153,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
         runtime_segment_status.parallel_index = plan_segment->getParallelIndex();
         runtime_segment_status.is_succeed = true;
-        runtime_segment_status.is_canceled = false;
+        runtime_segment_status.is_cancelled = false;
         runtime_segment_status.code = 0;
         runtime_segment_status.message = "execute success";
 
@@ -175,7 +175,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
         runtime_segment_status.parallel_index = plan_segment->getParallelIndex();
         runtime_segment_status.is_succeed = false;
-        runtime_segment_status.is_canceled = false;
+        runtime_segment_status.is_cancelled = false;
         runtime_segment_status.code = exception_code;
         runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
         if (exception_code == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
@@ -200,7 +200,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
                     exception_code));
         }
         if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
-            runtime_segment_status.is_canceled = true;
+            runtime_segment_status.is_cancelled = true;
         sendSegmentStatus(runtime_segment_status);
         return runtime_segment_status;
     }
@@ -229,6 +229,7 @@ void PlanSegmentExecutor::collectSegmentQueryRuntimeMetric(const QueryStatus * q
 
     query_log_element->read_bytes = query_status_info.read_bytes;
     query_log_element->read_rows = query_status_info.read_rows;
+    query_log_element->disk_cache_read_bytes = query_status_info.disk_cache_read_bytes;
     query_log_element->written_bytes = query_status_info.written_bytes;
     query_log_element->written_rows = query_status_info.written_bytes;
     query_log_element->memory_usage = query_status_info.peak_memory_usage > 0 ? query_status_info.peak_memory_usage : 0;
@@ -293,7 +294,12 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 
     QueryStatus * query_status = &process_plan_segment_entry->get();
     context->setProcessListElement(query_status);
+    context->setInternalProgressCallback([query_status_ptr = context->getProcessListElement()](const Progress & value) {
+        if (query_status_ptr)
+            query_status_ptr->updateProgressIn(value);
+    });
     pipeline->setProcessListElement(query_status);
+    pipeline->setInternalProgressCallback(context->getInternalProgressCallback());
 
     auto pipeline_executor = pipeline->execute();
 
@@ -330,13 +336,13 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
             {
                 const auto & key = sender_proxy->getDataKey();
                 sender_metrics.bytes_sent[key->exchange_id].emplace_back(
-                    key->parallel_index, sender_proxy->getSenderMetrics().send_uncompressed_bytes.get_value());
+                    key->partition_id, sender_proxy->getSenderMetrics().send_uncompressed_bytes.get_value());
             }
             else if (const auto writer = dynamic_pointer_cast<DiskPartitionWriter>(sender))
             {
                 const auto & key = writer->getKey();
                 sender_metrics.bytes_sent[key->exchange_id].emplace_back(
-                    key->parallel_index, writer->getSenderMetrics().send_uncompressed_bytes.get_value());
+                    key->partition_id, writer->getSenderMetrics().send_uncompressed_bytes.get_value());
             }
         }
     }
@@ -435,6 +441,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
             BroadcastSenderPtr sender;
             if (settings.bsp_mode)
             {
+                data_key->parallel_index = plan_segment->getParallelIndex();
                 auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key);
                 disk_exchange_mgr->submitWriteTask(writer, thread_group);
                 sender = writer;
@@ -853,7 +860,7 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
         request.set_segment_id(status.segment_id);
         request.set_parallel_index(status.parallel_index);
         request.set_is_succeed(status.is_succeed);
-        request.set_is_canceled(status.is_canceled);
+        request.set_is_canceled(status.is_cancelled);
         status.metrics.setProtos(*request.mutable_metrics());
         request.set_code(status.code);
         request.set_message(status.message);
@@ -885,7 +892,15 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
 
         manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);
-        LOG_TRACE(logger, "PlanSegment-{} send status to coordinator successfully, query id-{} status.cpu_micros-{}.", request.segment_id(), request.query_id(), status.metrics.cpu_micros);
+        LOG_TRACE(
+            logger,
+            "PlanSegment-{} send status to coordinator successfully, query id-{} cpu_micros-{} is_succeed:{} is_cancelled:{} code:{}",
+            request.segment_id(),
+            request.query_id(),
+            status.metrics.cpu_micros,
+            status.is_succeed,
+            status.is_cancelled,
+            status.code);
     }
     catch (...)
     {

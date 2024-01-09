@@ -380,6 +380,7 @@ void OptimizeInput::execute()
             PropertySet actual_input_props;
             std::map<CTEId, std::pair<Property, double>> cte_actual_props;
             bool all_fix_hash = true;
+            size_t single_count = 0;
             for (size_t index = 0; index < group_expr->getChildrenGroups().size(); index++)
             {
                 auto & i_prop = input_props[index];
@@ -391,6 +392,24 @@ void OptimizeInput::execute()
                     cte_actual_props.emplace(item);
 
                 all_fix_hash &= i_prop.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH;
+                if (child_best_expr->getActualProperty().getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::SINGLE)
+                    single_count++;
+            }
+
+            if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Union && single_count > 0 && single_count < group_expr->getChildrenGroups().size())
+            {
+                auto new_child_requires = input_props;
+                for (auto & new_child : new_child_requires)
+                {
+                    new_child.setNodePartitioning(Partitioning{Partitioning::Handle::SINGLE});
+                    new_child.setPreferred(false);
+                }
+                input_properties.emplace_back(new_child_requires);
+                // Reset child idx and total cost
+                prev_child_idx = -1;
+                cur_child_idx = 0;
+                cur_total_cost = 0;
+                continue;
             }
 
             if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Join && all_fix_hash)
@@ -618,7 +637,8 @@ void OptimizeInput::execute()
 void OptimizeInput::initInputProperties()
 {
     // initialize input properties with default required property.
-    auto required_properties = PropertyDeterminer::determineRequiredProperty(group_expr->getStep(), context->getRequiredProp(), *context->getOptimizerContext().getContext());
+    auto required_properties = PropertyDeterminer::determineRequiredProperty(
+        group_expr->getStep(), context->getRequiredProp(), *context->getOptimizerContext().getContext());
     for (auto & properties : required_properties)
     {
         for (size_t i = 0; i < properties.size(); ++i)

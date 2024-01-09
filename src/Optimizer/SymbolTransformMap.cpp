@@ -32,7 +32,7 @@ public:
 
     Void visitAggregatingNode(AggregatingNode & node, Void & context) override
     {
-        auto agg_step = node.getStep();
+        const auto * agg_step = dynamic_cast<const AggregatingStep *>(node.getStep().get());
         for (const auto & aggregate_description : agg_step->getAggregates())
         {
             auto function = Utils::extractAggregateToFunction(aggregate_description);
@@ -45,12 +45,19 @@ public:
 
     Void visitProjectionNode(ProjectionNode & node, Void & context) override
     {
-        auto project_step = node.getStep();
+        const auto * project_step = dynamic_cast<const ProjectionStep *>(node.getStep().get());
         for (const auto & assignment : project_step->getAssignments())
         {
             if (Utils::isIdentity(assignment))
                 continue;
             addSymbolExpressionMapping(assignment.first, assignment.second);
+            // if (const auto * function = dynamic_cast<const ASTFunction *>(assignment.second.get()))
+            // {
+            //     if (function->name == "cast" && TypeCoercion::compatible)
+            //     {
+            //         symbol_to_cast_lossless_expressions.emplace(assignment.first, function->children[0]);
+            //     }
+            // }
         }
         return visitChildren(node, context);
     }
@@ -65,7 +72,7 @@ public:
 
     Void visitTableScanNode(TableScanNode & node, Void &) override
     {
-        auto table_step = node.getStep();
+        auto table_step = dynamic_cast<const TableScanStep *>(node.getStep().get());
         for (const auto & item : table_step->getColumnAlias())
         {
             auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage().get(), node.getId(), item.first);

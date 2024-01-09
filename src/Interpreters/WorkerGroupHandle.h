@@ -103,13 +103,13 @@ public:
         metrics = metrics_;
     }
 
-    const auto & getWorkerClients() const { return worker_clients; }
+    std::vector<CnchWorkerClientPtr> getWorkerClients() const;
     const ShardsInfo & getShardsInfo() const { return shards_info; }
 
-    CnchWorkerClientPtr getWorkerClientByHash(const String & key) const;
     CnchWorkerClientPtr getWorkerClient(bool skip_busy_worker = true) const;
     std::pair<UInt64, CnchWorkerClientPtr> getWorkerClient(UInt64 sequence, bool skip_busy_worker = true) const;
     CnchWorkerClientPtr getWorkerClient(const HostWithPorts & host_ports) const;
+    CnchWorkerClientPtr doGetWorkerClient(const HostWithPorts & host_ports) const;
 
     std::optional<size_t> indexOf(const HostWithPorts & host_ports) const
     {
@@ -145,8 +145,6 @@ private:
     String vw_name;
     HostWithPortsVec hosts;
     WorkerGroupMetrics metrics;
-
-    std::vector<CnchWorkerClientPtr> worker_clients;
 
     /// Description of the cluster shards.
     ShardsInfo shards_info;

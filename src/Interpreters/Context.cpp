@@ -26,7 +26,7 @@
 #include <memory>
 #include <optional>
 #include <set>
-#include <Interpreters/Cache/QueryCache.h>
+#include <unordered_map>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/Credentials.h>
@@ -64,6 +64,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/ActionLocksManager.h>
+#include <Interpreters/Cache/QueryCache.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
@@ -122,6 +123,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/StorageS3Settings.h>
@@ -132,6 +134,7 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Poco/Util/Application.h>
+#include "common/defines.h"
 #include "common/types.h"
 #include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/Config/AbstractConfigurationComparison.h>
@@ -371,6 +374,8 @@ struct ContextSharedPart
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
     /// global checksums cache;
     mutable ChecksumsCachePtr checksums_cache;
+    /// global primary index cache
+    mutable PrimaryIndexCachePtr primary_index_cache;
 
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
@@ -388,7 +393,7 @@ struct ContextSharedPart
     mutable std::unique_ptr<CnchServerClientPool> cnch_server_client_pool;
     mutable std::unique_ptr<CnchWorkerClientPools> cnch_worker_client_pools;
 
-    mutable std::optional<CnchBGThreadsMapArray> cnch_bg_threads_array;
+    mutable std::unique_ptr<CnchBGThreadsMapArray> cnch_bg_threads_array;
 
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
@@ -508,6 +513,42 @@ struct ContextSharedPart
         if (meta_checker)
             meta_checker->deactivate();
 
+        std::unique_ptr<CnchBGThreadsMapArray> delete_cnch_bg_threads_array;
+        std::unique_ptr<TransactionCoordinatorRcCnch> delete_cnch_txn_coordinator;
+        CnchServerManagerPtr delete_server_manager;
+        CnchTopologyMasterPtr delete_topology_master;
+        PartCacheManagerPtr delete_cache_manager;
+        NvmCachePtr delete_nvm_cache;
+        QueueManagerPtr delete_queue_manager;
+        WorkerStatusManagerPtr delete_worker_status_manager;
+        {
+            auto lock = std::lock_guard(mutex);
+            delete_cnch_bg_threads_array = std::move(cnch_bg_threads_array);
+            delete_cnch_txn_coordinator = std::move(cnch_txn_coordinator);
+            delete_server_manager = std::move(server_manager);
+            delete_topology_master = std::move(topology_master);
+            delete_cache_manager = std::move(cache_manager);
+            delete_nvm_cache = std::move(nvm_cache);
+            delete_queue_manager = queue_manager;
+            delete_worker_status_manager = worker_status_manager;
+        }
+        /// do the heavy work w/o context lock
+        delete_cnch_bg_threads_array.reset();
+        delete_cnch_txn_coordinator.reset();
+        if (delete_server_manager)
+            delete_server_manager->shutDown();
+        if (delete_topology_master)
+            delete_topology_master->shutDown();
+        if (delete_cache_manager)
+            delete_cache_manager->shutDown();
+        if (delete_nvm_cache)
+            delete_nvm_cache->shutDown();
+        if (delete_queue_manager)
+            delete_queue_manager->shutdown();
+        if (delete_worker_status_manager)
+            delete_worker_status_manager->shutdown();
+
+
         std::unique_ptr<SystemLogs> delete_system_logs;
         std::unique_ptr<CnchSystemLogs> delete_cnch_system_logs;
         {
@@ -521,28 +562,9 @@ struct ContextSharedPart
                 cache->reset();
 #endif
 
-            if (server_manager)
-                server_manager.reset();
-
-            if (topology_master)
-                topology_master.reset();
-
-            if (global_binding_cache_manager)
-                global_binding_cache_manager.reset();
-
-            if (cache_manager)
-                cache_manager.reset();
+            global_binding_cache_manager.reset();
 
             access_control_manager.stopBgJobForKVStorage();
-
-            if (nvm_cache)
-                nvm_cache->shutDown();
-
-            if (queue_manager)
-                queue_manager->shutdown();
-
-            if (worker_status_manager)
-                worker_status_manager->shutdown();
 
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
@@ -558,9 +580,6 @@ struct ContextSharedPart
             /// but at least they can be preserved for storage termination.
             dictionaries_xmls.reset();
             dictionaries_cnch_catalog.reset();
-
-            cnch_bg_threads_array.reset();
-            cnch_txn_coordinator.reset();
 
             delete_system_logs = std::move(system_logs);
             delete_cnch_system_logs = std::move(cnch_system_logs);
@@ -694,6 +713,7 @@ Context::~Context() = default;
 
 WorkerStatusManagerPtr Context::getWorkerStatusManager()
 {
+    auto lock = getLock();
     if (!shared->worker_status_manager)
         shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
@@ -706,6 +726,7 @@ void Context::updateAdaptiveSchdulerConfig()
 
 WorkerStatusManagerPtr Context::getWorkerStatusManager() const
 {
+    auto lock = getLock();
     if (!shared->worker_status_manager)
         shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
@@ -754,7 +775,7 @@ ReadSettings Context::getReadSettings() const
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
-    res.enable_io_pfra = settings.enable_io_pfra || settings.s3_use_read_ahead;
+    res.enable_io_pfra = settings.enable_io_pfra;
     res.buffer_size = settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
@@ -866,8 +887,20 @@ DiskExchangeDataManagerPtr Context::getDiskExchangeDataManager() const
     if (!shared->disk_exchange_data_manager)
     {
         const auto & bsp_conf = getRootConfig().bulk_synchronous_parallel;
+        String id;
+        if (getServerType() == ServerType::cnch_worker)
+        {
+            id = getenv("WORKER_ID") ? getenv("WORKER_ID") : getHostWithPorts().getTCPAddress();
+        }
+        else
+        {
+            id = getenv("SERVER_ID") ? getenv("SERVER_ID") : getHostWithPorts().getTCPAddress();
+        }
+        chassert(!id.empty());
+        String manager_path = "bsp/" + id + "/v-1.0.0";
+        LOG_DEBUG(&Poco::Logger::get("Context"), "Store exchange data with path {}", manager_path);
         DiskExchangeDataManagerOptions options{
-            .path = "bsp/v-1.0.0",
+            .path = manager_path,
             .storage_policy = bsp_conf.storage_policy,
             .volume = bsp_conf.volume,
             .gc_interval_seconds = bsp_conf.gc_interval_seconds,
@@ -2360,6 +2393,16 @@ void Context::setProgressCallback(ProgressCallback callback)
 ProgressCallback Context::getProgressCallback() const
 {
     return progress_callback;
+}
+
+void Context::setInternalProgressCallback(ProgressCallback callback)
+{
+    internal_progress_callback = callback;
+}
+
+ProgressCallback Context::getInternalProgressCallback() const
+{
+    return internal_progress_callback;
 }
 
 void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)
@@ -4550,6 +4593,18 @@ std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
     return shared->checksums_cache;
 }
 
+void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)
+{
+    if (shared->primary_index_cache)
+        throw Exception("Primary index cache has already been created.", ErrorCodes::LOGICAL_ERROR);
+    shared->primary_index_cache = std::make_shared<PrimaryIndexCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<PrimaryIndexCache> Context::getPrimaryIndexCache() const
+{
+    return shared->primary_index_cache;
+}
+
 void Context::updateQueueManagerConfig() const
 {
     getQueueManager()->loadConfig(getRootConfig().queue_manager);
@@ -4986,7 +5041,8 @@ ResourceManagerClientPtr Context::getResourceManagerClient() const
 
 void Context::initCnchBGThreads()
 {
-    shared->cnch_bg_threads_array.emplace(shared_from_this());
+    auto lock = getLock();
+    shared->cnch_bg_threads_array = std::make_unique<CnchBGThreadsMapArray>(shared_from_this());
 }
 
 CnchBGThreadsMap * Context::getCnchBGThreadsMap(CnchBGThreadType type) const

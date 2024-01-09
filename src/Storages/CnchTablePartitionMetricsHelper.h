@@ -10,6 +10,8 @@
 namespace DB
 {
 
+class PartCacheManager;
+
 /**
  * @class CnchTablePartitionMetricsHelper
  * @brief It's a server level object owned by `PartCacheManager`.
@@ -52,7 +54,7 @@ public:
     /**
      * @brief A hook function gets triggered when shutdown.
      */
-    void shutDown();
+    void shutDown(PartCacheManager * manager);
 
     /**
      * @brief Trigger a  recalculation of both CNCH parts and trash items
@@ -79,7 +81,7 @@ private:
     ThreadPool table_partition_thread_pool{
         getContext()->getSettingsRef().part_cache_manager_thread_pool_size,
         getContext()->getSettingsRef().part_cache_manager_thread_pool_size,
-        100 * getContext()->getSettingsRef().part_cache_manager_thread_pool_size};
+        1000 * getContext()->getSettingsRef().part_cache_manager_thread_pool_size};
     ThreadPool & getTablePartitionThreadPool() { return table_partition_thread_pool; }
 
     Poco::Logger * log;

@@ -201,6 +201,7 @@ class KeeperDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
+class PrimaryIndexCache;
 struct ChecksumsCacheSettings;
 template <class T>
 class RpcClientPool;
@@ -423,6 +424,7 @@ private:
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
     ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
+    ProgressCallback internal_progress_callback;
 
     using FileProgressCallback = std::function<void(const FileProgress & progress)>;
     FileProgressCallback file_progress_callback; /// Callback for tracking progress of file loading.
@@ -1006,7 +1008,6 @@ public:
     }
 
     const Settings & getSettingsRef() const { return settings; }
-    Settings & getSettingsRef() { return settings; }
 
     VWCustomizedSettingsPtr getVWCustomizedSettings() const;
     void setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_settings_ptr_);
@@ -1014,6 +1015,9 @@ public:
     void setProgressCallback(ProgressCallback callback);
     /// Used in InterpreterSelectQuery to pass it to the IBlockInputStream.
     ProgressCallback getProgressCallback() const;
+
+    void setInternalProgressCallback(ProgressCallback callback);
+    ProgressCallback getInternalProgressCallback() const;
 
     void setFileProgressCallback(FileProgressCallback && callback) { file_progress_callback = callback; }
     FileProgressCallback getFileProgressCallback() const { return file_progress_callback; }
@@ -1426,8 +1430,10 @@ public:
 
 
     void setChecksumsCache(const ChecksumsCacheSettings & settings);
-
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
+
+    void setPrimaryIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;
 
     /// client for service discovery
     void initServiceDiscoveryClient();

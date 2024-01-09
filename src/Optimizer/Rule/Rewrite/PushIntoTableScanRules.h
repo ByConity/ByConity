@@ -40,7 +40,7 @@ public:
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 
-    static ASTPtr pushStorageFilter(TableScanStep & table_step, ASTPtr filter, ContextPtr context);
+    static ASTPtr pushStorageFilter(TableScanStep & table_step, ASTPtr filter, PlanNodeStatisticsPtr storage_statistics, ContextMutablePtr context);
 };
 
 
@@ -87,6 +87,7 @@ public:
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
+
 class PushIndexProjectionIntoTableScan : public Rule
 {
 public:

@@ -19,6 +19,7 @@
 #include <CloudServices/CnchDataWriter.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Transaction/Actions/MergeMutateAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/CnchLock.h>
 #include <WorkerTasks/CloudUniqueMergeTreeMergeTask.h>
@@ -310,6 +311,12 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
     dumped_data.bitmaps.push_back(new_dumped_data.bitmaps.front());
 
     cnch_writer.commitDumpedParts(dumped_data);
+    auto commit_time = getContext()->getCurrentTransaction()->commitV2();
+    for (const auto & part : dumped_data.parts)
+    {
+        MergeMutateAction::updatePartData(part, commit_time);
+        part->relative_path = part->info.getPartNameWithHintMutation();
+    }
     /// TODO: make sure txn is rollbacked and lock is released
 
     LOG_INFO(

@@ -99,6 +99,13 @@ public:
         ::DB::Protos::SendPlanSegmentStatusResponse * /*response*/,
         ::google::protobuf::Closure * done) override;
 
+    /// only report plan segment error, used by bsp mode upstream reader
+    void reportPlanSegmentError(
+        ::google::protobuf::RpcController * /*controller*/,
+        const ::DB::Protos::ReportPlanSegmentErrorRequest * request,
+        ::DB::Protos::ReportPlanSegmentErrorResponse * /*response*/,
+        ::google::protobuf::Closure * done) override;
+
     void reportProcessorProfileMetrics(
         ::google::protobuf::RpcController * /*controller*/,
         const ::DB::Protos::ReportProcessorProfileMetricRequest * request,

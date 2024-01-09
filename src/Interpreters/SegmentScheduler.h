@@ -92,26 +92,29 @@ public:
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
     void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
 
-    // Return true if only the query is explain query and it has received statuses of all segment.
-    bool explainQueryHasReceivedAllSegmentStatus(const String & query_id) const;
     void updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index);
     // Return true if only the query runs in bsp mode and all statuses of specified segment has been received.
     bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
     void onSegmentFinished(const RuntimeSegmentsStatus & status);
 
 private:
-    std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
+    // Protect `query_map`.
     mutable bthread::Mutex mutex;
+    std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
+
+    // Protect maps below.
     mutable bthread::Mutex segment_status_mutex;
     mutable SegmentStatusMap segment_status_map;
     mutable std::unordered_map<String, RuntimeSegmentsStatusPtr> query_status_map;
     // record exception when exception occurred
     ConcurrentShardMap<String, ExceptionWithCode> query_to_exception_with_code;
-    Poco::Logger * log;
     std::unordered_map<String, RuntimeSegmentsStatusCounter> query_status_received_counter_map;
 
+    // Protect `bsp_scheduler_map`.
     bthread::Mutex bsp_scheduler_map_mutex;
     BspSchedulerMap bsp_scheduler_map;
+
+    Poco::Logger * log;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
     bool schedule(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);

@@ -16,19 +16,21 @@
 #include "BrpcRemoteBroadcastSender.h"
 #include "WriteBufferFromBrpcBuf.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <Compression/CompressedWriteBuffer.h>
 #include <Compression/CompressionFactory.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/QueryExchangeLog.h>
-#include <Processors/Exchange/DataTrans/DataTransException.h>
-#include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
+#include <Processors/Exchange/DataTrans/DataTransException.h>
+#include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <brpc/protocol.h>
 #include <brpc/stream.h>
@@ -57,7 +59,7 @@ namespace ErrorCodes
  */
 BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(
     ExchangeDataKeyPtr trans_key_, brpc::StreamId stream_id, ContextPtr context_, Block header_)
-    : context(std::move(context_)), header(std::move(header_))
+    : IBroadcastSender(context_->getSettingsRef().log_query_exchange), context(std::move(context_)), header(std::move(header_))
 {
     trans_keys.emplace_back(std::move(trans_key_));
     sender_stream_ids.push_back(stream_id);
@@ -79,8 +81,8 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
             QueryExchangeLogElement element;
             const auto & key = trans_keys.front();
             element.initial_query_id = context->getInitialQueryId();
-            element.exchange_id = std::to_string(key->exchange_id);
-            element.partition_id = std::to_string(key->parallel_index);
+            element.exchange_id = key->exchange_id;
+            element.partition_id = key->partition_id;
             element.event_time =
                 std::chrono::duration_cast<std::chrono::seconds>(
                     std::chrono::system_clock::now().time_since_epoch()).count();
@@ -88,6 +90,7 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
             element.send_rows = sender_metrics.send_rows.get_value();
             element.send_bytes = sender_metrics.send_bytes.get_value();
             element.send_uncompressed_bytes = sender_metrics.send_uncompressed_bytes.get_value();
+            element.num_send_times = sender_metrics.num_send_times.get_value();
             element.ser_time_ms = sender_metrics.ser_time_ms.get_value();
             element.send_retry = sender_metrics.send_retry.get_value();
             element.send_retry_ms = sender_metrics.send_retry_ms.get_value();
@@ -292,6 +295,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
         sender_metrics.finish_code = status_code;
         sender_metrics.is_modifier = 1;
         sender_metrics.message = message;
+        LOG_TRACE(log, "{} finished finish_code:{} message:'{}'", getName(), status_code, message);
         return BroadcastStatus(status_code, true, message);
     }
     else
@@ -319,12 +323,10 @@ void BrpcRemoteBroadcastSender::merge(IBroadcastSender && sender)
 
 String BrpcRemoteBroadcastSender::getName() const
 {
-    String name = "BrpcSender with keys:";
-    for (const auto & trans_key : trans_keys)
-    {
-        name += trans_key->toString() + "\n";
-    }
-    return name;
+    return fmt::format(
+        "BrpcSender with keys:",
+        boost::algorithm::join(
+            trans_keys | boost::adaptors::transformed([](const ExchangeDataKeyPtr & key) { return key->toString(); }), "\n"));
 }
 
 }

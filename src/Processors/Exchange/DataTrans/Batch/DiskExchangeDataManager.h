@@ -20,6 +20,7 @@
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
+#include <Common/Exception.h>
 #include <Common/ThreadPool.h>
 #include <common/types.h>
 
@@ -39,6 +40,7 @@ struct DiskExchangeDataManagerOptions
     size_t file_expire_seconds;
     /// random interval before start gc task
     size_t start_gc_random_wait_seconds = 300;
+    size_t cleanup_thread_pool_size = 200;
     String toString() const;
 };
 
@@ -60,12 +62,12 @@ public:
     ~DiskExchangeDataManager();
 
     /// Submit read exchange data task, the task will be run in global thread pool
-    void submitReadTask(const String & query_id, const ExchangeDataKeyPtr & key, Processors processors);
+    void submitReadTask(const String & query_id, const ExchangeDataKeyPtr & key, Processors processors, const String & addr = "");
     /// Submit write exchange data task, the task will be run in global thread pool
     void submitWriteTask(DiskPartitionWriterPtr writer, ThreadGroupStatusPtr thread_group);
     /// create processors, this executor will read exchange data, and send them through brpc
     Processors createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context) const;
-    /// cancel all exchange data tasks in query_id, exchange_id.
+    /// cancel all exchange read data tasks in query_id, exchange_id.
     void cancel(UInt64 query_unique_id, UInt64 exchange_id);
     void submitCleanupTask(UInt64 query_unique_id);
     void cleanup(UInt64 query_unique_id); /// TODO @lianxuechao make cleanup async for brpc
@@ -87,13 +89,16 @@ public:
         std::unique_lock<bthread::Mutex> lock(mutex);
         this->file_expire_seconds = file_expire_seconds_;
     }
+    /// one round of gc, this method is not thread-safe
+    void gc();
 
 private:
     Protos::AliveQueryInfo readQueryInfo(UInt64 query_unique_id) const;
-    /// one round of gc
-    void gc();
     /// will start a gc bg thread, which runs gc every gc_interval_seconds
     void runGC();
+    /// report error to coordinator
+    void reportError(const String & query_id, const String & coordinator_addr, Int32 code, const String & message);
+
     struct ReadTask
     {
         ReadTask(const String query_id_, ExchangeDataKeyPtr key_, Processors processors_)
@@ -109,11 +114,14 @@ private:
     using ReadTaskPtr = std::shared_ptr<ReadTask>;
     /// finish senders of a specific task, so that downstream wont wait until timeout
     static void finishSenders(const ReadTaskPtr & task, BroadcastStatusCode code, String message);
+    std::vector<std::unique_ptr<ReadBufferFromFileBase>> filterFileBuffers(const ExchangeDataKey & key) const;
 
     Poco::Logger * logger;
     bthread::Mutex mutex;
     std::map<ExchangeDataKeyPtr, ReadTaskPtr, ExchangeDataKeyPtrLess> read_tasks;
     std::map<ExchangeDataKeyPtr, DiskPartitionWriterPtr, ExchangeDataKeyPtrLess> write_tasks;
+    ExceptionHandler write_task_exception_handler;
+    std::set<UInt64> cleanup_tasks;
     /// this controls the life time for disk exchange shuffule files, only deletes from it when cleanup() is called
     /// insert <query unique id, query id> into alive_queries before creating the corresponding directory
     std::map<UInt64, Protos::AliveQueryInfo> alive_queries;
@@ -132,6 +140,7 @@ private:
     /// only used to make sure disk write directory creation is atomic for multiple plansegment with the same query unique id
     /// we used another mutex to avoid any I/O with bthread::Mutex.
     std::mutex disk_mutex;
+    ThreadPool cleanup_thread_pool;
 };
 
 } // namespace DB

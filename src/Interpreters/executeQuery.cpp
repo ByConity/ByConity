@@ -856,7 +856,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             auto vw_name = tryGetVirtualWarehouseName(current_ast, context_ptr);
             if (vw_name != EMPTY_VIRTUAL_WAREHOUSE_NAME)
             {
-                context_ptr->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context_ptr->getSettingsRef());
+                context_ptr->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context_ptr);
             }
         }
     };
@@ -1059,6 +1059,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             query_type = process_list_elem.getType();
             is_unlimited_query = process_list_elem.isUnlimitedQuery();
             context->setProcessListEntry(process_list_entry);
+            context->setInternalProgressCallback([query_state_callback = context->getProgressCallback(), process_list_elem_ptr = context->getProcessListElement()](const Progress & value) {
+                if (query_state_callback)
+                    query_state_callback(value);
+                if (process_list_elem_ptr)
+                    process_list_elem_ptr->updateProgressIn(value);
+            });
         }
 
         /// Calculate the time duration of building query pipeline, start right after creating processing list to make it consistent with the calcuation of query latency.
@@ -1211,6 +1217,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     {
                         QueryPipeline pipeline;
                         pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
+                        for (const auto & processor : res.pipeline.getProcessors())
+                            processor->cancel();
                         res.pipeline = std::move(pipeline);
                         read_result_from_query_cache = true;
                     }
@@ -1253,6 +1261,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             /// Limits apply only to the final result.
             pipeline.setProgressCallback(context->getProgressCallback());
             pipeline.setProcessListElement(context->getProcessListElement());
+            pipeline.setInternalProgressCallback(context->getInternalProgressCallback());
             if (stage == QueryProcessingStage::Complete && !pipeline.isCompleted())
             {
                 pipeline.resize(1);
@@ -1437,6 +1446,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 element.read_rows = info.read_rows;
                 element.read_bytes = info.read_bytes;
+                element.disk_cache_read_bytes = info.disk_cache_read_bytes;
 
                 element.written_rows = info.written_rows;
                 element.written_bytes = info.written_bytes;

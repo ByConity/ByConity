@@ -19,6 +19,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageDistributed.h>

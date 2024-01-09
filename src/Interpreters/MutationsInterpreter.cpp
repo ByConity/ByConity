@@ -20,6 +20,7 @@
  */
 
 #include <Common/RowExistsColumnInfo.h>
+#include "MergeTreeCommon/MergeTreeMetaBase.h"
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/InDepthNodeVisitor.h>
@@ -341,8 +342,8 @@ MutationsInterpreter::MutationsInterpreter(
 
 static NameSet getKeyColumns(const StoragePtr & storage, const StorageMetadataPtr & metadata_snapshot)
 {
-    const MergeTreeData * merge_tree_data = dynamic_cast<const MergeTreeData *>(storage.get());
-    if (!merge_tree_data)
+    const MergeTreeMetaBase * merge_tree_base = dynamic_cast<const MergeTreeMetaBase *>(storage.get());
+    if (!merge_tree_base)
         return {};
 
     NameSet key_columns;
@@ -357,11 +358,11 @@ static NameSet getKeyColumns(const StoragePtr & storage, const StorageMetadataPt
         key_columns.insert(col);
     /// We don't process sample_by_ast separately because it must be among the primary key columns.
 
-    if (!merge_tree_data->merging_params.sign_column.empty())
-        key_columns.insert(merge_tree_data->merging_params.sign_column);
+    if (!merge_tree_base->merging_params.sign_column.empty())
+        key_columns.insert(merge_tree_base->merging_params.sign_column);
 
-    if (!merge_tree_data->merging_params.version_column.empty())
-        key_columns.insert(merge_tree_data->merging_params.version_column);
+    if (!merge_tree_base->merging_params.version_column.empty())
+        key_columns.insert(merge_tree_base->merging_params.version_column);
 
     return key_columns;
 }

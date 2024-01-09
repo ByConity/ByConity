@@ -1,0 +1,4 @@
+#define TEST_STORAGE_XML_FOLDER "${CMAKE_SOURCE_DIR}/src/Storages/DiskCache/tests/"
+#define TEST_DISK_CACHE_NEW_CONFIG_XML "${CMAKE_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_new_config.xml"
+
+#define TEST_DISTRIBUTED_FILE_TXT "${CMAKE_SOURCE_DIR}/src/Storages/tests/distributed_file.txt"

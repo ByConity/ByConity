@@ -431,5 +431,4 @@ CatalogAdaptorPtr createCatalogAdaptorCnch(ContextPtr context)
     return std::make_shared<CatalogAdaptorCnch>(context, std::move(catalog));
 }
 
-
 }

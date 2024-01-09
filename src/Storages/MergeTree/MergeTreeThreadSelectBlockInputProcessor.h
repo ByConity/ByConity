@@ -48,7 +48,6 @@ public:
         const SelectQueryInfo & query_info_,
         ExpressionActionsSettings actions_settings,
         const MergeTreeReaderSettings & reader_settings_,
-
         const Names & virt_column_names_);
 
     String getName() const override { return "MergeTreeThread"; }

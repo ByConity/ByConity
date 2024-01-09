@@ -406,9 +406,14 @@ void GinIndexStore::finalize()
     if (!current_postings.builders.empty())
         writeSegment();
 
-    metadata_file_stream->finalize();
-    dict_file_stream->finalize();
-    postings_file_stream->finalize();
+    if (metadata_file_stream != nullptr)
+        metadata_file_stream->finalize();
+
+    if (dict_file_stream != nullptr)
+        dict_file_stream->finalize();
+
+    if (postings_file_stream != nullptr)
+        postings_file_stream->finalize();
 }
 
 void GinIndexStore::initFileStreams()
@@ -507,14 +512,20 @@ void GinIndexStore::addToChecksums(MergeTreeDataPartChecksums & checksums)
 {
     CityHash_v1_0_2::uint128 file_hash(0, 0);
 
-    checksums.addFile(name + GIN_SEGMENT_ID_FILE_EXTENSION,
-        storage_info->getFileSize(name + GIN_SEGMENT_ID_FILE_EXTENSION), file_hash);
-    checksums.addFile(name + GIN_SEGMENT_METADATA_FILE_EXTENSION,
-        storage_info->getFileSize(name + GIN_SEGMENT_METADATA_FILE_EXTENSION), file_hash);
-    checksums.addFile(name + GIN_DICTIONARY_FILE_EXTENSION,
-        storage_info->getFileSize(name + GIN_DICTIONARY_FILE_EXTENSION), file_hash);
-    checksums.addFile(name + GIN_POSTINGS_FILE_EXTENSION,
-        storage_info->getFileSize(name + GIN_POSTINGS_FILE_EXTENSION), file_hash);
+    std::vector<String> file_names = {
+        name + GIN_SEGMENT_ID_FILE_EXTENSION,
+        name + GIN_SEGMENT_METADATA_FILE_EXTENSION,
+        name + GIN_DICTIONARY_FILE_EXTENSION,
+        name + GIN_POSTINGS_FILE_EXTENSION
+    };
+
+    for (const String& file_name : file_names)
+    {
+        if (storage_info->exists(file_name))
+        {
+            checksums.addFile(file_name, storage_info->getFileSize(file_name), file_hash);
+        }
+    }
 }
 
 GinSegmentDictionaryPtr GinIndexStore::getDictionary(UInt32 segment_id_) const

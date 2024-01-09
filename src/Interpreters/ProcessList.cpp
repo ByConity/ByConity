@@ -760,11 +760,10 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     res.query_rewrite_by_view = query_rewrite_by_view;
     res.elapsed_seconds   = watch.elapsedSeconds();
     res.is_cancelled      = is_killed.load(std::memory_order_relaxed);
-    /// FIXME: Support it after we have disk cache value in Progress
-    // res.disk_cache_bytes  = progress_in.disk_cache_bytes;
     res.read_rows         = progress_in.read_rows;
     res.read_bytes        = progress_in.read_bytes;
     res.total_rows        = progress_in.total_rows_to_read;
+    res.disk_cache_read_bytes  = progress_in.disk_cache_read_bytes;
 
     /// TODO: Use written_rows and written_bytes when real time progress is implemented
     res.written_rows      = progress_out.read_rows;

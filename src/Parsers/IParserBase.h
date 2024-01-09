@@ -68,9 +68,6 @@ struct ParserSettingsImpl
 {
     mutable bool parse_literal_as_decimal;
 
-    /// parse syntax `WITH expr AS alias`
-    bool parse_with_alias;
-
     /// parse outer join with using
     bool parse_outer_join_with_using;
 
@@ -90,22 +87,25 @@ struct ParserSettingsImpl
         apply_adaptive_type_cast = s.apply_adaptive_type_cast;
         parse_literal_as_decimal = s.parse_literal_as_decimal;
     }
+
+    /// demonstrate nullable info with explicit null modifiers (including nested types)
+    bool explicit_null_modifiers;
 };
 
 struct ParserSettings
 {
     const static inline ParserSettingsImpl CLICKHOUSE{
         .parse_literal_as_decimal = false,
-        .parse_with_alias = true,
         .parse_outer_join_with_using = true,
         .apply_adaptive_type_cast = false,
+        .explicit_null_modifiers = false,
     };
 
     const static inline ParserSettingsImpl ANSI{
         .parse_literal_as_decimal = true,
-        .parse_with_alias = false,
         .parse_outer_join_with_using = false,
         .apply_adaptive_type_cast = false,
+        .explicit_null_modifiers = true,
     };
 
     // deprecated. use `valueOf(const Settings & s)` instead

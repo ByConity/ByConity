@@ -82,6 +82,7 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     MergeTreeIndexExecutor* index_executor_,
     const ValueSizeMap & avg_value_size_hints_,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
+    const ProgressCallback & internal_progress_cb_,
     clockid_t clock_type_)
     : IMergeTreeReader(
         data_part_, columns_, metadata_snapshot_, uncompressed_cache_,
@@ -97,7 +98,7 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
         segment_cache_strategy = segment_cache->getStrategy();
     }
 
-    initializeStreams(profile_callback_, clock_type_);
+    initializeStreams(profile_callback_, internal_progress_cb_, clock_type_);
 }
 
 size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_mark,
@@ -176,7 +177,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_
     }
 }
 
-void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::ProfileCallback& profile_callback, clockid_t clock_type)
+void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::ProfileCallback& profile_callback, const ProgressCallback & internal_progress_cb, clockid_t clock_type)
 {
     Stopwatch watch;
     SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchAddStreamsElapsedMilliseconds, watch.elapsedMilliseconds()); });
@@ -187,7 +188,7 @@ void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::Profil
 
         for (const NameAndTypePair& column : columns)
         {
-            initializeStreamForColumnIfNoBurden(column, profile_callback, clock_type, &stream_builders);
+            initializeStreamForColumnIfNoBurden(column, profile_callback, internal_progress_cb, clock_type, &stream_builders);
         }
 
         executeFileStreamBuilders(stream_builders);
@@ -202,6 +203,7 @@ void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::Profil
 void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
     const NameAndTypePair & column,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+    const ProgressCallback & internal_progress_cb,
     clockid_t clock_type,
     FileStreamBuilders * stream_builders)
 {
@@ -235,7 +237,7 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
                         }
                         return data_file_name;
                     },
-                    profile_callback, clock_type, stream_builders
+                    profile_callback, internal_progress_cb, clock_type, stream_builders
                 );
 
                 map_column_keys.insert({column.name, key_name});
@@ -258,7 +260,7 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
                 }
                 return data_file_name;
             },
-            profile_callback, clock_type, stream_builders
+            profile_callback, internal_progress_cb, clock_type, stream_builders
         );
     }
     else if (column.name != "_part_row_number")
@@ -267,7 +269,7 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
             [](const String & stream_name, [[maybe_unused]] const ISerialization::SubstreamPath& substream_path) {
                 return stream_name;
             },
-            profile_callback, clock_type, stream_builders
+            profile_callback, internal_progress_cb, clock_type, stream_builders
         );
     }
 }
@@ -322,6 +324,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
     const NameAndTypePair & name_and_type,
     const std::function<String(const String &, const ISerialization::SubstreamPath &)> & file_name_getter,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+    const ProgressCallback & internal_progress_cb,
     clockid_t clock_type, FileStreamBuilders * stream_builders)
 {
     ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath& substream_path) {
@@ -393,7 +396,10 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
                 segment_cache_strategy == nullptr ? 1 : segment_cache_strategy->getSegmentSize(),
                 part_host,
                 &(source_data_part->index_granularity_info),
-                profile_callback, clock_type, is_lc_dict
+                profile_callback,
+                internal_progress_cb,
+                clock_type,
+                is_lc_dict
             );
             // TODO: here we can use the pointer to source_data_part's index_granularity_info, because *source_data_part will not be destoryed
         };

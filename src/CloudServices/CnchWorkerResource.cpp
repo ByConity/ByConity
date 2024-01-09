@@ -106,7 +106,7 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
 
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
-    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(columns);
+    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(columns, ParserSettings::valueOf(context->getSettingsRef()));
     ASTPtr new_indices = InterpreterCreateQuery::formatIndices(indices);
     ASTPtr new_constraints = InterpreterCreateQuery::formatConstraints(constraints);
     ASTPtr new_foreign_keys = InterpreterCreateQuery::formatForeignKeys(foreign_keys);

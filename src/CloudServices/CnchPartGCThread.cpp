@@ -86,9 +86,8 @@ void CnchPartGCThread::stop()
 
 void CnchPartGCThread::doPhaseOneGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions)
 {
-    bool in_wakeup = inWakeup();
     auto storage_settings = storage.getSettings();
-
+    bool in_wakeup = inWakeup() || static_cast<bool>(storage_settings->gc_ignore_running_transactions_for_test);
     /// Only inspect the parts small than gc_timestamp
     TxnTimestamp gc_timestamp = calculateGCTimestamp(storage_settings->old_parts_lifetime.totalSeconds(), in_wakeup);
     if (gc_timestamp <= last_gc_timestamp) /// Skip unnecessary gc
@@ -200,6 +199,7 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
 
     auto cnch_writer = CnchDataWriter(storage, query_context, ManipulationType::Drop);
     cnch_writer.dumpAndCommitCnchParts(drop_ranges, bitmap_tombstones);
+    txn->commitV2();
 }
 
 TxnTimestamp CnchPartGCThread::calculateGCTimestamp(UInt64 delay_second, bool in_wakeup)
@@ -671,6 +671,9 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
             return !part->getEndTime() || static_cast<UInt64>(now) < TxnTimestamp(part->getEndTime()).toSecond() + old_parts_lifetime;
         });
 
+        if (size_t limit = storage_settings->gc_trash_part_limit; limit && parts_to_gc.size() > limit)
+            parts_to_gc.resize(limit);
+
         if (storage_settings->enable_gc_evict_disk_cache)
         {
             try
@@ -729,6 +732,9 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
             ts,
             LocalDateTime(ts.toSecond()),
             watch.elapsedMicroseconds());
+
+        if (size_t limit = storage_settings->gc_trash_part_limit; limit && staged_parts_to_gc.size() > limit)
+            staged_parts_to_gc.resize(limit);
 
         /// due to its temporary nature, staged parts don't actually have a trash,
         /// `Catalog::moveDataItemsToTrash` will removes its metadata directly.

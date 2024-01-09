@@ -288,7 +288,8 @@ void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & ta
         readStringUntilEOF(statement, in);
     }
 
-    ParserCreateQuery parser(ParserSettings::valueOf(local_context->getSettingsRef()));
+    auto dialect = ParserSettings::valueOf(local_context->getSettingsRef());
+    ParserCreateQuery parser(dialect);
     ASTPtr ast = parseQuery(
         parser,
         statement.data(),
@@ -297,7 +298,7 @@ void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & ta
         0,
         local_context->getSettingsRef().max_parser_depth);
 
-    applyMetadataChangesToCreateQuery(ast, metadata);
+    applyMetadataChangesToCreateQuery(ast, metadata, dialect);
 
     statement = getObjectDefinitionFromCreateQuery(ast);
     {

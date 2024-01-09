@@ -54,7 +54,7 @@ void ExchangeStatusTracker::registerExchangeStatus(
 {
     LOG_TRACE(
         log,
-        "register exchange for query:{} exchange_id:{} parallel_size:{} status_size:{}",
+        "register exchange status for query:{} exchange_id:{} parallel_size:{} status_size:{}",
         query_id,
         exchange_id,
         parallel_index,
@@ -104,11 +104,10 @@ bool ExchangeStatusTracker::checkQueryAlive(const String & query_id)
     return iter != query_exchange_ids.end();
 }
 
-std::vector<AddressInfo>
-ExchangeStatusTracker::getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index)
+std::vector<AddressInfo> ExchangeStatusTracker::getExchangeDataAddrs(
+    PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index, size_t node_num)
 {
     std::vector<AddressInfo> addrs;
-    addrs.reserve(end_parallel_index - start_parallel_index);
     std::unordered_map<UInt64, std::unordered_map<AddressInfo, size_t, AddressInfo::Hash>> acc;
     for (const auto & input : plan_segment->getPlanSegmentInputs())
     {
@@ -141,13 +140,17 @@ ExchangeStatusTracker::getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 s
     std::unordered_set<AddressInfo, AddressInfo::Hash> already_scheduled;
     for (UInt64 i = start_parallel_index; i < end_parallel_index; i++)
     {
+        if (already_scheduled.size() == node_num)
+        {
+            already_scheduled.clear();
+        }
         const auto & partition_acc = acc[i];
         size_t max_size = 0;
         AddressInfo cur_addr;
         bool decided = false;
         for (const auto & [addr, output_size] : partition_acc)
         {
-            if (!already_scheduled.contains(addr) && output_size > max_size)
+            if (!already_scheduled.contains(addr) && output_size >= max_size)
             {
                 max_size = output_size;
                 cur_addr = addr;
@@ -161,14 +164,7 @@ ExchangeStatusTracker::getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 s
         }
     }
 
-    if (already_scheduled.size() == addrs.size())
-    {
-        return addrs;
-    }
-    else
-    {
-        return {};
-    }
+    return addrs;
 }
 
 } // namespace DB

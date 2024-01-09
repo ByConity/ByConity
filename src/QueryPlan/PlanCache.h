@@ -7,6 +7,8 @@
 
 namespace DB
 {
+struct Analysis;
+using AnalysisPtr = std::shared_ptr<Analysis>;
 
 namespace PlanCacheConfig
 {
@@ -22,6 +24,7 @@ public:
     {
         // database_name->table_name->column_names
         std::unordered_map<String, std::unordered_map<String, std::vector<String>>> query_access_info;
+        std::unordered_map<StorageID, Int64> stats_version;
     };
     struct PlanObjectValue
     {
@@ -50,6 +53,11 @@ public:
     static UInt128 hash(const ASTPtr & query_ast, const Settings & settings);
 
     static PlanNodePtr getNewPlanNode(PlanNodePtr node, ContextMutablePtr & context, bool cache_plan, PlanNodeId & max_id);
+
+    static QueryPlanPtr getPlanFromCache(UInt128 query_hash, ContextMutablePtr & context);
+    static bool addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan, AnalysisPtr analysis, ContextMutablePtr & context);
+
+    static bool enableCachePlan(const ASTPtr & query_ast, ContextPtr context);
 private:
     std::unique_ptr<CacheType> cache;
 };
