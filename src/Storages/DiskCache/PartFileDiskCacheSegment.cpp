@@ -25,6 +25,8 @@
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <sys/types.h>
 #include "Common/Exception.h"
+#include "Common/parseAddress.h"
+#include "Common/HostWithPorts.h"
 #include "common/types.h"
 #include "Core/Settings.h"
 #include "Core/SettingsEnums.h"
@@ -177,11 +179,18 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
         }
 
         // cache into remote node
+        std::optional<String> parsed_assign_compute_host;
+        if (!data_part->assign_compute_host_port.empty())
+            parsed_assign_compute_host = parseAddress(data_part->assign_compute_host_port, 0).first;
+        std::optional<String> parsed_disk_cache_host;
+        if (!data_part->disk_cache_host_port.empty())
+            parsed_disk_cache_host = parseAddress(data_part->disk_cache_host_port, 0).first;
+
         if (data_part->disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE
             || ((merge_tree_reader_settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
                  || merge_tree_reader_settings.remote_disk_cache_stealing == StealingCacheMode::WRITE_ONLY)
-                && !data_part->disk_cache_host_port.empty()
-                && parseAddress(data_part->assign_compute_host_port).first != parseAddress(data_part->disk_cache_host_port).first))
+                && parsed_assign_compute_host.has_value() && parsed_disk_cache_host.has_value()
+                && removeBracketsIfIpv6(parsed_assign_compute_host.value()) != removeBracketsIfIpv6(parsed_disk_cache_host.value())))
         {
             std::vector<WriteFile> files{
                 {getMarkName(), data_path, static_cast<UInt64>(mrk_file_pos.file_offset), mrk_file_pos.file_size},
