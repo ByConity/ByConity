@@ -72,7 +72,7 @@ struct RuntimeSegmentsStatus
     int32_t segment_id;
     size_t parallel_index;
     bool is_succeed;
-    bool is_canceled;
+    bool is_cancelled;
     RuntimeSegmentsMetrics metrics;
     String message;
     int32_t code;

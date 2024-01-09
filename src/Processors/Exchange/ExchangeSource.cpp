@@ -125,8 +125,20 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
         return std::make_optional(std::move(chunk));
     }
     const auto & status = std::get<BroadcastStatus>(packet);
+    checkBroadcastStatus(status);
     was_receiver_finished = true;
+    return std::nullopt;
+}
 
+void ExchangeSource::onCancel()
+{
+    LOG_TRACE(logger, "ExchangeSource {} onCancel", getName());
+    was_query_canceled = true;
+    receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
+}
+
+void ExchangeSource::checkBroadcastStatus(const BroadcastStatus & status) const
+{
     if (status.code > BroadcastStatusCode::RECV_REACH_LIMIT)
     {
         if (status.is_modifer)
@@ -151,15 +163,6 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
                 getName() + " will cancel with finish message: " + status.message + " code: " + std::to_string(status.code),
                 ErrorCodes::QUERY_WAS_CANCELLED);
     }
-
-    return std::nullopt;
-}
-
-void ExchangeSource::onCancel()
-{
-    LOG_TRACE(logger, "ExchangeSource {} onCancel", getName());
-    was_query_canceled = true;
-    receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
 }
 
 ExchangeTotalsSource::ExchangeTotalsSource(const Block& header)

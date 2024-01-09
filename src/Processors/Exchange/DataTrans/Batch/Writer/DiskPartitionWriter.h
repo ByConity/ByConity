@@ -65,13 +65,13 @@ private:
     /// data_queue is used here to ensure thread-safety(by background write task) when multiple write/finish are called from different threads
     /// TODO @lianxuechao optimize for single-thread case
     std::shared_ptr<BoundedDataQueue<Chunk>> data_queue;
-    size_t timeout;
     std::atomic_bool finished{false};
     bthread::Mutex done_mutex;
     bthread::ConditionVariable done_cv;
     bool done = false;
     bool low_cardinality_allow_in_native_format;
     bool enable_disk_writer_metrics;
+    size_t query_expiration_ms;
 };
 
 using DiskPartitionWriterPtr = std::shared_ptr<DiskPartitionWriter>;

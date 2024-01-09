@@ -62,7 +62,7 @@ public:
     ~DiskExchangeDataManager();
 
     /// Submit read exchange data task, the task will be run in global thread pool
-    void submitReadTask(const String & query_id, const ExchangeDataKeyPtr & key, Processors processors);
+    void submitReadTask(const String & query_id, const ExchangeDataKeyPtr & key, Processors processors, const String & addr = "");
     /// Submit write exchange data task, the task will be run in global thread pool
     void submitWriteTask(DiskPartitionWriterPtr writer, ThreadGroupStatusPtr thread_group);
     /// create processors, this executor will read exchange data, and send them through brpc
@@ -96,6 +96,9 @@ private:
     Protos::AliveQueryInfo readQueryInfo(UInt64 query_unique_id) const;
     /// will start a gc bg thread, which runs gc every gc_interval_seconds
     void runGC();
+    /// report error to coordinator
+    void reportError(const String & query_id, const String & coordinator_addr, Int32 code, const String & message);
+
     struct ReadTask
     {
         ReadTask(const String query_id_, ExchangeDataKeyPtr key_, Processors processors_)

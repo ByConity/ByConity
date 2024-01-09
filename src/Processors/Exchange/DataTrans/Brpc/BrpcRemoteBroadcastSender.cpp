@@ -16,10 +16,12 @@
 #include "BrpcRemoteBroadcastSender.h"
 #include "WriteBufferFromBrpcBuf.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <Compression/CompressedWriteBuffer.h>
 #include <Compression/CompressionFactory.h>
@@ -38,7 +40,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/time.h>
 #include <common/logger_useful.h>
-#include "Processors/Exchange/DataTrans/IBroadcastSender.h"
 
 namespace DB
 {
@@ -294,6 +295,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
         sender_metrics.finish_code = status_code;
         sender_metrics.is_modifier = 1;
         sender_metrics.message = message;
+        LOG_TRACE(log, "{} finished finish_code:{} message:'{}'", getName(), status_code, message);
         return BroadcastStatus(status_code, true, message);
     }
     else
@@ -321,12 +323,10 @@ void BrpcRemoteBroadcastSender::merge(IBroadcastSender && sender)
 
 String BrpcRemoteBroadcastSender::getName() const
 {
-    String name = "BrpcSender with keys:";
-    for (const auto & trans_key : trans_keys)
-    {
-        name += trans_key->toString() + "\n";
-    }
-    return name;
+    return fmt::format(
+        "BrpcSender with keys:",
+        boost::algorithm::join(
+            trans_keys | boost::adaptors::transformed([](const ExchangeDataKeyPtr & key) { return key->toString(); }), "\n"));
 }
 
 }
