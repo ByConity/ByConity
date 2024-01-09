@@ -42,7 +42,18 @@
 #include <Parsers/queryToString.h>
 #include <Interpreters/executeQuery.h>
 #include <common/logger_useful.h>
+#include <Common/ProfileEvents.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
+
+
+namespace ProfileEvents
+{
+    extern const Event QueryRewriterTime;
+    extern const Event QueryAnalyzerTime;
+    extern const Event QueryPlannerTime;
+    extern const Event QueryOptimizerTime;
+    extern const Event PlanSegmentSplitterTime;
+}
 
 namespace DB
 {
@@ -100,21 +111,27 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
             cloned_query = QueryRewriter().rewrite(cloned_query, context);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Rewrite", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            ProfileEvents::increment(ProfileEvents::QueryRewriterTime, stage_watch.elapsedMilliseconds());
 
             stage_watch.restart();
             AnalysisPtr analysis = QueryAnalyzer::analyze(cloned_query, context);
             fillContextQueryAccessInfo(context, analysis);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            ProfileEvents::increment(ProfileEvents::QueryAnalyzerTime, stage_watch.elapsedMilliseconds());
+
             stage_watch.restart();
             query_plan = QueryPlanner().plan(cloned_query, *analysis, context);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            ProfileEvents::increment(ProfileEvents::QueryPlannerTime, stage_watch.elapsedMilliseconds());
 
             stage_watch.restart();
             PlanOptimizer::optimize(*query_plan, context);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            ProfileEvents::increment(ProfileEvents::QueryOptimizerTime, stage_watch.elapsedMilliseconds());
+
             if (enable_plan_cache && query_hash && query_plan)
             {
                if (PlanCacheManager::addPlanToCache(query_hash, query_plan, analysis, context))
@@ -161,6 +178,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     PlanSegmentSplitter::split(plan, plan_segment_context);
     context->logOptimizerProfile(
         log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+    ProfileEvents::increment(ProfileEvents::PlanSegmentSplitterTime, stage_watch.elapsedMilliseconds());
 
     setPlanSegmentInfoForExplainAnalyze(plan_segment_tree);
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
