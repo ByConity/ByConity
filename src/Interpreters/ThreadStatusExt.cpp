@@ -11,6 +11,7 @@
 #include <Common/TraceCollector.h>
 #include <Common/time.h>
 #include <common/errnoToString.h>
+#include <Common/JeprofControl.h>
 
 #if defined(OS_LINUX)
 #   include <Common/hasLinuxCapability.h>
@@ -281,6 +282,10 @@ void ThreadStatus::finalizePerformanceCounters()
 
 void ThreadStatus::initQueryProfiler()
 {
+    /// Not use profiler when enable jeprof to avoid libunwind's not async signal safe problem
+    if (jeprofEnabled())
+        return;
+
     /// query profilers are useless without trace collector
     auto global_context_ptr = global_context.lock();
     if (!global_context_ptr || !global_context_ptr->hasTraceCollector())
