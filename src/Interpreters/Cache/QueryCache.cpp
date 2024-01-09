@@ -596,4 +596,14 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
     }
     return max_last_modification_time;
 }
+
+void logUsedStorageIDs(Poco::Logger * log, const std::set<StorageID> & storage_ids)
+{
+    LOG_DEBUG(log, "StorageIDs:");
+    for (auto & storage_id : storage_ids)
+        LOG_DEBUG(log, "StorageID {}", storage_id.getNameForLogs());
+}
+
+
+
 }
