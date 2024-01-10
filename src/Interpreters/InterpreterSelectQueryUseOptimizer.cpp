@@ -96,7 +96,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
     {
         if (enable_plan_cache)
         {
-            query_hash = PlanCacheManager::hash(query_ptr, context->getSettingsRef());
+            query_hash = PlanCacheManager::hash(query_ptr, context);
             query_plan = PlanCacheManager::getPlanFromCache(query_hash, context);
             if (query_plan)
             {
