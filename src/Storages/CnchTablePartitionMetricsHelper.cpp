@@ -125,13 +125,9 @@ void CnchTablePartitionMetricsHelper::updateMetrics(
     }
 }
 
-void CnchTablePartitionMetricsHelper::shutDown()
+void CnchTablePartitionMetricsHelper::shutDown(PartCacheManager * manager)
 {
-    auto mgr = getContext()->getPartCacheManager();
-    if (mgr == nullptr)
-        return;
-
-    auto tables_snapshot = mgr->getTablesSnapshot();
+    auto tables_snapshot = manager->getTablesSnapshot();
 
     for (auto & [table_uuid, table_meta_ptr] : tables_snapshot)
     {

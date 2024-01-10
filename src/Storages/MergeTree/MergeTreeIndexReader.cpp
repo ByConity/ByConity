@@ -143,7 +143,8 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 ReadBufferFromFileBase::ProfileCallback{},
                 internal_progress_cb_,
                 CLOCK_MONOTONIC_COARSE,
-                false
+                false,
+                INDEX_FILE_EXTENSION
             );
             break;
         }

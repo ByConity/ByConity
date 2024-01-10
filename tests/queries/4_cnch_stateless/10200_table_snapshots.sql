@@ -7,11 +7,10 @@ drop snapshot if exists s5;
 drop table if exists t1;
 drop table if exists t2;
 
--- disable old_parts_lifetime and ttl_for_trash_items to test gc
 create table t1 (d Date, i Int64, s String) engine = CnchMergeTree partition by d order by i
-settings old_parts_lifetime = 0, ttl_for_trash_items = 0;
+settings old_parts_lifetime = 0, gc_ignore_running_transactions_for_test = 1, ttl_for_trash_items = 0;
 create table t2 (d Date, i Int64, s String) engine = CnchMergeTree partition by d order by i unique key i
-settings old_parts_lifetime = 0, ttl_for_trash_items = 0;
+settings old_parts_lifetime = 0, gc_ignore_running_transactions_for_test = 1, ttl_for_trash_items = 0;
 
 -- prefer manual gc in test, disable bg thread
 system start gc t1;
@@ -68,7 +67,6 @@ drop snapshot if exists nonexist;
 select 'drop s2, s3';
 drop snapshot s2;
 drop snapshot s3;
-select sleep(3); -- need sleep for SYSTEM GC to remove all stale files
 system gc t1;
 select count(), countIf(visible), countIf(outdated) from system.cnch_parts where database = currentDatabase() and table = 't1';
 
@@ -94,9 +92,8 @@ create snapshot s5 to t1 ttl 1 days;
 select 't2 drop 20231101';
 alter table t2 drop partition id '20231101';
 select * from t2 order by d, i settings use_snapshot='s5'; -- { serverError 1152 }
-select sleep(3); -- need sleep for SYSTEM GC to remove all stale files
-system gc t2; -- all parts should be cleared
-select count() from system.cnch_parts where database = currentDatabase() and table = 't2'; -- expect all parts to be removed
+system gc t2; -- normal parts should be cleared
+select count() from system.cnch_parts where database = currentDatabase() and table = 't2'; -- expect only one tombstone part
 select 'drop s5';
 drop snapshot s5;
 
@@ -116,7 +113,6 @@ select 'create s3 to t2';
 create snapshot s3 to t2 ttl 1 days;
 insert into t2 select '2023-11-01', number, 'F' from numbers(100) where number < 10;
 optimize table t2;
-select sleep(3); -- need sleep for SYSTEM GC to remove all stale files
 system gc t2;
 select 'select use s1';
 select s, count(), sum(i) from t2 group by s order by s settings use_snapshot = 's1';

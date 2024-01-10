@@ -266,7 +266,7 @@ enum class DiskCacheMode
     /// use disk cache
     AUTO = 0,          /// depends on storage settings
     USE_DISK_CACHE,    /// use disk cache if cache is available
-    FORCE_CHECKSUMS_DISK_CACHE,  /// if disk cache is not hit, throw an exception
+    FORCE_DISK_CACHE,  /// if disk cache is not hit, throw an exception
     FORCE_STEAL_DISK_CACHE,
 
     /// no disk cache

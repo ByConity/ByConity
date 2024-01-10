@@ -106,6 +106,7 @@ private:
         const brpc::StreamId & sender_stream_id,
         Processors processors,
         const ExchangeDataKeyPtr & key,
+        const String & coordinator_addr,
         bool read_from_disk);
 };
 

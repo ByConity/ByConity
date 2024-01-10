@@ -23,6 +23,7 @@
 
 #include <Core/Names.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/Aliases.h>
@@ -56,6 +57,8 @@ public:
         ASTPtr asof_right_key{};
         bool has_some{false};
         bool ignore_array_join_check_in_join_on_condition{false};
+        ContextPtr context{nullptr};
+        ASTs inequal_conditions {};
 
         void addJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, const std::pair<size_t, size_t> & table_no, bool null_safe_equal);
         void addAsofJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, const std::pair<size_t, size_t> & table_no,
@@ -75,6 +78,8 @@ public:
             return func->name == "and";
         return true;
     }
+
+    static void analyzeJoinOnConditions(Data & data, ASTTableJoin::Kind kind);
 
 private:
     static void visit(const ASTFunction & func, const ASTPtr & ast, Data & data);

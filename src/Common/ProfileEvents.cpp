@@ -76,10 +76,13 @@
     M(TableFunctionExecute, "") \
     M(MarkCacheHits, "") \
     M(MarkCacheMisses, "") \
-    M(PrimaryIndexCacheHits, "") \
-    M(PrimaryIndexCacheMisses, "") \
     M(QueryCacheHits, "") \
     M(QueryCacheMisses, "") \
+    M(PrimaryIndexCacheHits, "") \
+    M(PrimaryIndexCacheMisses, "") \
+    M(PrimaryIndexDiskCacheHits, "") \
+    M(PrimaryIndexDiskCacheMisses, "") \
+    M(LoadPrimaryIndexMicroseconds, "") \
     M(ChecksumsCacheHits, "") \
     M(ChecksumsCacheMisses, "") \
     M(CreatedReadBufferOrdinary, "") \
@@ -277,7 +280,13 @@
     M(PerfInstructionTLBMisses, "Instruction TLB misses") \
     M(PerfLocalMemoryReferences, "Local NUMA node memory reads") \
     M(PerfLocalMemoryMisses, "Local NUMA node memory read misses") \
-    \
+    M(PerfInequalConditionElapsedMicroseconds, "") \
+    M(PerfInequalConditionGetRowMicroseconds, "") \
+    M(PerfInequalConditionExecuteMicroseconds, "") \
+    M(PerfInequalConditionAppendMicroseconds, "") \
+    M(PerfJoinElapsedMicroseconds, "") \
+    M(PerfFilterElapsedMicroseconds, "") \
+\
     M(CreatedHTTPConnections, "Total amount of created HTTP connections (closed or opened).") \
     \
     M(ThreadPoolReaderTaskMicroseconds, "Time spent getting the data in asynchronous reading") \
@@ -978,7 +987,12 @@
     M(GinIndexCacheHit, "Cache hit of gin index") \
     M(GinIndexCacheMiss, "Cache miss of gin index") \
     M(PostingReadBytes, "Readed postings list size in bytes") \
-
+\
+    M(QueryRewriterTime, "Total elapsed time spent on QueryRewriter in milliseconds") \
+    M(QueryAnalyzerTime, "Total elapsed time spent on QueryAnalyzer in milliseconds") \
+    M(QueryPlannerTime, "Total elapsed time spent on QueryPlanner in milliseconds") \
+    M(QueryOptimizerTime, "Total elapsed time spent on QueryOptimizer in milliseconds") \
+    M(PlanSegmentSplitterTime, "Total elapsed time spent on PlanSegmentSplitter in milliseconds")
 
 namespace ProfileEvents
 {

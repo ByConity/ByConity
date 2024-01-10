@@ -65,13 +65,13 @@ protected:
         context->applySettingsChanges(config_settings);
         /// gc_interval_seconds is set to zero for testing
         DB::ContextWeakMutablePtr context_weak = std::weak_ptr<DB::Context>(context);
-        fs::create_directories("tmp/bsp/");
-        auto disk = std::make_shared<DB::DiskLocal>("bsp", "tmp/bsp/", 0);
+        fs::create_directories("tmp_bsp/");
+        auto disk = std::make_shared<DB::DiskLocal>("bsp", "tmp_bsp/", 0);
         DB::DiskExchangeDataManagerOptions options{
             .path = "bsp/v-1.0.0",
             .storage_policy = "default",
-            .volume = "tmp/bsp",
-            .gc_interval_seconds = 0,
+            .volume = "tmp_bsp",
+            .gc_interval_seconds = 1000,
             .file_expire_seconds = 10000,
             .start_gc_random_wait_seconds = 0};
         if (disk->exists(options.path))

@@ -119,6 +119,7 @@ private:
     void checkConsistency(bool require_part_metadata) const override;
 
     void loadIndex() override;
+    IndexPtr loadIndexFromStorage() const;
 
     MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
 

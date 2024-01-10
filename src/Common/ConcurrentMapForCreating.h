@@ -103,6 +103,12 @@ public:
         return cells.erase(key);
     }
 
+    void clear()
+    {
+        std::lock_guard<std::mutex> lock(cells_mutex);
+        cells.clear();
+    }
+
     size_t size() const
     {
         std::lock_guard lock(cells_mutex);

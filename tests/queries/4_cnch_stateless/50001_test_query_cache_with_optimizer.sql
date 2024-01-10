@@ -12,8 +12,7 @@ CREATE TABLE right_table (d Date, id UInt64, a String)
 INSERT INTO left_table values ('2019-01-01', 1, 'a');
 INSERT INTO right_table values ('2019-01-01', 1, 'b');
 --- sleep to make sure insert transaction is commited ---
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
+SELECT sleepEachRow(3) FROM numbers(2) FORMAT Null;
 sELECT a, r.a from left_table as l INNER JOIN right_table as r on l.id = r.id ORDER BY id Settings use_query_cache = 1, enable_optimizer = 1;
 
 SeLECT a, r.a from left_table as l INNER JOIN right_table as r on l.id = r.id ORDER BY id Settings use_query_cache = 1, enable_optimizer = 1; 
@@ -23,8 +22,7 @@ SElECT a, r.a from left_table as l INNER JOIN right_table as r on l.id = r.id OR
 --- miss, hit, hit again ---
 INSERT INTO left_table values ('2019-01-01', 2, 'c');
 --- sleep to make sure insert transaction is commited ---
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
+SELECT sleepEachRow(3) FROM numbers(2) FORMAT Null;
 SELeCT a, r.a from left_table as l INNER JOIN right_table as r on l.id = r.id ORDER BY id Settings use_query_cache = 1, enable_optimizer = 1; 
 
 SELEcT a, r.a from left_table as l INNER JOIN right_table as r on l.id = r.id ORDER BY id Settings use_query_cache = 1, enable_optimizer = 1; 
