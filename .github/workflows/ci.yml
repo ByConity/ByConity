@@ -56,7 +56,7 @@ jobs:
           cp $GITHUB_WORKSPACE/docker/ci-deploy/.env ./
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
-          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" conf/core-site.xml
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" hdfs_config/conf/core-site.xml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/fdb.cluster
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/cnch-config.yml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/daemon-manager.yml
