@@ -48,7 +48,9 @@ jobs:
       - name: glibc_compatibility_check 
         run: |
           python3 $GITHUB_WORKSPACE/tests/ci/compatibility_check.py --binary $GITHUB_WORKSPACE/build/programs/clickhouse
-      - name: Create ByConity Cluster
+    
+      - name: Create Volumns 
+      - name: Create ByConity Cluster HDFS
         run: |
           mkdir /CI/
           cd /CI/
@@ -62,10 +64,10 @@ jobs:
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/daemon-manager.yml
           echo "Create volumes for ByConity Cluster"
           /bin/bash create_docker_volume_ci.sh
-          echo "Bring up ByConity Cluster"
+          echo "Bring up ByConity Cluster HDFS"
           docker-compose up -d
           sleep 10
-          conf/create_users.sh
+          hdfs_config/script/create_users.sh
 
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0) 
           echo "CLICKHOUSE_HOST=${CLICKHOUSE_HOST}" >> $GITHUB_ENV
@@ -233,7 +235,7 @@ jobs:
       - name: Analyse Result
         run:
           /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
-      - name: Cleanup
+      - name: Cleanup docker-compose HDFS
         if: always()
         run: |
           cd /CI/
