@@ -12,15 +12,12 @@ Projection Est. ? rows
             │     Group by: {id}
             └─ Inner Join Est. ? rows
                │     Condition: parent_id == id_1
-               ├─ Repartition Exchange Est. ? rows
-               │  │     Partition by: {parent_id}
-               │  └─ Filter Est. ? rows
-               │     │     Condition: id = 1
-               │     └─ TableScan test.c Est. ? rows
-               │              Where: id = 1
-               │              Outputs: [id, parent_id]
-               └─ Repartition Exchange Est. ? rows
-                  │     Partition by: {id_1}
+               ├─ Filter Est. ? rows
+               │  │     Condition: id = 1
+               │  └─ TableScan test.c Est. ? rows
+               │           Where: id = 1
+               │           Outputs: [id, parent_id]
+               └─ Broadcast Exchange Est. ? rows
                   └─ TableScan test.pp Est. ? rows
                            Outputs: id_1:=id
 1

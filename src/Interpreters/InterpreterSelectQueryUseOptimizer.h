@@ -32,18 +32,27 @@ namespace DB
 {
 struct Analysis;
 using AnalysisPtr = std::shared_ptr<Analysis>;
+struct QueryCacheContext;
 
 class InterpreterSelectQueryUseOptimizer : public IInterpreter
 {
 public:
-    InterpreterSelectQueryUseOptimizer(const ASTPtr & query_ptr_, ContextMutablePtr & context_, const SelectQueryOptions & options_)
-        : query_ptr(query_ptr_->clone()), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
+    InterpreterSelectQueryUseOptimizer(const ASTPtr & query_ptr_, ContextMutablePtr context_, const SelectQueryOptions & options_)
+        : query_ptr(query_ptr_->clone())
+        , context(std::move(context_))
+        , options(options_)
+        , log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
     {
         interpret_sub_query = false;
     }
 
-    InterpreterSelectQueryUseOptimizer(PlanNodePtr sub_plan_ptr_, CTEInfo cte_info_, ContextMutablePtr & context_, const SelectQueryOptions & options_)
-        : sub_plan_ptr(sub_plan_ptr_), cte_info(std::move(cte_info_)), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
+    InterpreterSelectQueryUseOptimizer(
+        PlanNodePtr sub_plan_ptr_, CTEInfo cte_info_, ContextMutablePtr context_, const SelectQueryOptions & options_)
+        : sub_plan_ptr(sub_plan_ptr_)
+        , cte_info(std::move(cte_info_))
+        , context(std::move(context_))
+        , options(options_)
+        , log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
     {
         interpret_sub_query = true;
     }
@@ -54,6 +63,8 @@ public:
     bool addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan, AnalysisPtr analysis);
 
     static void setPlanSegmentInfoForExplainAnalyze(PlanSegmentTreePtr & plan_segment_tree);
+
+    BlockIO readFromQueryCache(ContextPtr local_context, QueryCacheContext & can_use_query_cache);
 
     BlockIO execute() override;
 
@@ -68,6 +79,8 @@ public:
 
     static void setUnsupportedSettings(ContextMutablePtr & context);
 
+    std::optional<std::set<StorageID>> getUsedStorageIds();
+
 private:
     ASTPtr query_ptr;
     PlanNodePtr sub_plan_ptr;
@@ -76,6 +89,7 @@ private:
     SelectQueryOptions options;
     Poco::Logger * log;
     bool interpret_sub_query;
+    PlanSegmentTreePtr plan_segment_tree_ptr;
 
     std::shared_ptr<std::vector<String>> segment_profiles;
 

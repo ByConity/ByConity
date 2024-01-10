@@ -104,6 +104,9 @@
 #include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
 
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
+
 #include <fmt/format.h>
 
 namespace DB
@@ -790,7 +793,17 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     }
     else if (create.select)
     {
-        Block as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), getContext());
+        Block as_select_sample;
+        if (create.is_ordinary_view)
+        {
+            auto cloned_query = create.select->clone();
+            if (QueryUseOptimizerChecker::check(cloned_query, getContext()))
+                as_select_sample = InterpreterSelectQueryUseOptimizer(cloned_query, getContext(), {}).getSampleBlock();
+            else
+                as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(cloned_query, getContext());
+        }
+        else
+            as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), getContext());
         properties.columns = ColumnsDescription(as_select_sample.getNamesAndTypesList());
     }
     else if (create.as_table_function)

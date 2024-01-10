@@ -83,6 +83,16 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
 
 void CnchBGThreadsMap::controlThread(const StorageID & storage_id, CnchBGThreadAction action)
 {
+    if (storage_id.empty())
+    {
+        if (action == CnchBGThreadAction::Remove)
+        {
+            stopAll();
+            clear();
+        }
+        return;
+    }
+
     switch (action)
     {
         case CnchBGThreadAction::Start:
@@ -222,7 +232,7 @@ CnchBGThreadsMapArray::~CnchBGThreadsMapArray()
 {
     try
     {
-        destroy();
+        shutdown();
     }
     catch (...)
     {
@@ -230,7 +240,7 @@ CnchBGThreadsMapArray::~CnchBGThreadsMapArray()
     }
 }
 
-void CnchBGThreadsMapArray::destroy()
+void CnchBGThreadsMapArray::shutdown()
 {
     ThreadPool pool(size_t(CnchBGThreadType::ServerMaxType) - size_t(CnchBGThreadType::ServerMinType) + 1);
 

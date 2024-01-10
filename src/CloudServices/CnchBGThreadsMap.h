@@ -86,7 +86,7 @@ public:
     explicit CnchBGThreadsMapArray(ContextPtr global_context_);
     ~CnchBGThreadsMapArray();
 
-    void destroy();
+    void shutdown();
 
     inline CnchBGThreadsMap * at(size_t type)
     {

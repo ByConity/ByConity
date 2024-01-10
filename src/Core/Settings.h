@@ -235,7 +235,6 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(String, s3_access_key_id, "", "S3 table access key id", 0) \
     M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
-    M(Bool, s3_use_read_ahead, true, "Enable read ahead buffer when read s3, now it is just for CnchS3", 0) \
     M(UInt64, s3_max_list_nums, 1000, "Sets the maximum number of keys returned in the response, now it is just for CnchS3", 0) \
     M(UInt64, s3_max_request_ms, 30000, "Request max timeout ms , now it is just for CnchS3", 0) \
     M(Bool, overwrite_current_file, false, "Enable overwrite current file, now it is just for CnchS3/CnchHDFS", 0) \
@@ -1844,6 +1843,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cascades_pruning, false, "Whether enable cascades pruning", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
     M(Bool, enum_repartition, true, "Enum repartition join", 0) \
+    M(Bool, enum_replicate_no_stats, true, "Enum replicate join when statistics not exists", 0) \
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
@@ -1989,6 +1989,9 @@ enum PreloadLevelSettings : UInt64
     M(String, tos_secret_key, "", "The secret_key set by user when accessing ve tos.", 0) \
     M(String, tos_region, "", "The region set by user when accessing ve tos.", 0) \
     M(String, tos_security_token, "", "The security_key set by user when accessing ve tos with assume role.", 0) \
+    M(String, tos_endpoint, "", "The endpoint set by user when accessing ve tos, which should be compatible with S3.", 0) \
+    M(UInt64, tos_connection_timeout, 10000, "The connection timeout set by user when accessing ve tos.", 0) \
+    M(UInt64, tos_request_timeout, 120000, "The request timeout set by user when accessing ve tos.", 0) \
     M(String, lasfs_session_token, "", "the session_token set by user when accessing lasfs", 0) \
     M(String, lasfs_identity_id, "", "the identity_id set by user when accessing lasfs", 0) \
     M(String, lasfs_identity_type, "", "the identity_type set by user when accessing lasfs", 0) \
@@ -2102,20 +2105,15 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
     M(String, output_format_tsv_null_representation, "\\N", "Custom NULL representation in TSV format", 0) \
-\
-    M(UInt64, \
-      input_format_allow_errors_num, \
-      0, \
-      "Maximum absolute amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative " \
-      "amount of errors is lower than corresponding value, will skip until next line and continue.", \
-      0) \
-    M(Float, \
-      input_format_allow_errors_ratio, \
-      0, \
-      "Maximum relative amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative " \
-      "amount of errors is lower than corresponding value, will skip until next line and continue.", \
-      0) \
-\
+    \
+    /** Settings for Map */ \
+    M(Bool, input_format_parse_null_map_as_empty, true, "Parse null map as empty map. Throw exception if set false.", 0) \
+    M(Bool, input_format_skip_null_map_value, true, "Skip null map value. Throw exception if set false.", 0) \
+    M(UInt64, input_format_max_map_key_long, 80, "The maximum length of map key for input data.", 0) \
+    \
+    M(UInt64, input_format_allow_errors_num, 0, "Maximum absolute amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative amount of errors is lower than corresponding value, will skip until next line and continue.", 0) \
+    M(Float, input_format_allow_errors_ratio, 0, "Maximum relative amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative amount of errors is lower than corresponding value, will skip until next line and continue.", 0) \
+    \
     M(String, format_schema, "", "Schema identifier (used by schema-based formats)", 0) \
     M(String, format_template_resultset, "", "Path to file which contains format string for result set (for Template format)", 0) \
     M(String, format_template_row, "", "Path to file which contains format string for rows (for Template format)", 0) \

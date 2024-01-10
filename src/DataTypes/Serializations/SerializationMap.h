@@ -64,7 +64,7 @@ private:
     void serializeTextImpl(const IColumn & column, size_t row_num, WriteBuffer & ostr, KeyWriter && key_writer, ValueWriter && value_writer) const;
 
     template <typename Reader>
-    void deserializeTextImpl(IColumn & column, ReadBuffer & istr, Reader && reader) const;
+    void deserializeTextImpl(IColumn & column, ReadBuffer & istr, Reader && reader, const FormatSettings & settings) const;
 };
 
 }

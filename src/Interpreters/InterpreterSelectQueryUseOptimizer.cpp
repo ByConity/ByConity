@@ -42,7 +42,19 @@
 #include <Parsers/queryToString.h>
 #include <Interpreters/executeQuery.h>
 #include <common/logger_useful.h>
+#include <Common/ProfileEvents.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
+#include <Interpreters/Cache/QueryCache.h>
+
+
+namespace ProfileEvents
+{
+    extern const Event QueryRewriterTime;
+    extern const Event QueryAnalyzerTime;
+    extern const Event QueryPlannerTime;
+    extern const Event QueryOptimizerTime;
+    extern const Event PlanSegmentSplitterTime;
+}
 
 namespace DB
 {
@@ -50,6 +62,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int TOO_MANY_PLAN_SEGMENTS;
+extern const int LOGICAL_ERROR;
 }
 
 Block InterpreterSelectQueryUseOptimizer::getSampleBlock()
@@ -57,7 +70,6 @@ Block InterpreterSelectQueryUseOptimizer::getSampleBlock()
     if (!block)
     {
         auto query_plan = buildQueryPlan();
-        block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
     }
 
     return block;
@@ -101,21 +113,27 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
             cloned_query = QueryRewriter().rewrite(cloned_query, context);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Rewrite", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            ProfileEvents::increment(ProfileEvents::QueryRewriterTime, stage_watch.elapsedMilliseconds());
 
             stage_watch.restart();
             AnalysisPtr analysis = QueryAnalyzer::analyze(cloned_query, context);
             fillContextQueryAccessInfo(context, analysis);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            ProfileEvents::increment(ProfileEvents::QueryAnalyzerTime, stage_watch.elapsedMilliseconds());
+
             stage_watch.restart();
             query_plan = QueryPlanner().plan(cloned_query, *analysis, context);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            ProfileEvents::increment(ProfileEvents::QueryPlannerTime, stage_watch.elapsedMilliseconds());
 
             stage_watch.restart();
             PlanOptimizer::optimize(*query_plan, context);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            ProfileEvents::increment(ProfileEvents::QueryOptimizerTime, stage_watch.elapsedMilliseconds());
+
             if (enable_plan_cache && query_hash && query_plan)
             {
                if (PlanCacheManager::addPlanToCache(query_hash, query_plan, analysis, context))
@@ -162,6 +180,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     PlanSegmentSplitter::split(plan, plan_segment_context);
     context->logOptimizerProfile(
         log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+    ProfileEvents::increment(ProfileEvents::PlanSegmentSplitterTime, stage_watch.elapsedMilliseconds());
 
     setPlanSegmentInfoForExplainAnalyze(plan_segment_tree);
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
@@ -343,11 +362,62 @@ QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr contex
     return executeQuery(postQuery.str(), context->getQueryContext(), true).pipeline;
 }
 
+BlockIO InterpreterSelectQueryUseOptimizer::readFromQueryCache(ContextPtr local_context, QueryCacheContext & query_cache_context)
+{
+    auto query_cache = local_context->getQueryCache();
+    const Settings & settings = local_context->getSettingsRef();
+    std::optional<std::set<StorageID>> used_storage_ids = getUsedStorageIds();
+    TxnTimestamp & source_update_time_for_query_cache = query_cache_context.source_update_time_for_query_cache;
+    query_cache_context.query_executed_by_optimizer = true;
+
+    if (query_cache_context.can_use_query_cache
+        && settings.enable_reads_from_query_cache
+        && (used_storage_ids.has_value())
+        && (used_storage_ids->size()))
+    {
+        const std::set<StorageID> storage_ids = used_storage_ids.value();
+        logUsedStorageIDs(log, storage_ids);
+        if (settings.enable_transactional_query_cache)
+            source_update_time_for_query_cache = getMaxUpdateTime(storage_ids, context);
+        else
+            source_update_time_for_query_cache = TxnTimestamp::minTS();
+
+        LOG_DEBUG(log, "max update timestamp {}, txn_id {}", source_update_time_for_query_cache, local_context->getCurrentTransactionID().toUInt64());
+        if ((settings.enable_transactional_query_cache == false)
+            || (source_update_time_for_query_cache.toUInt64() != 0))
+        {
+            QueryCache::Key key(
+                query_ptr,
+                block,
+                local_context->getUserName(),
+                /*dummy for is_shared*/ false,
+                /*dummy value for expires_at*/ std::chrono::system_clock::from_time_t(1),
+                /*dummy value for is_compressed*/ false,
+                local_context->getCurrentTransactionID());
+            QueryCache::Reader reader = query_cache->createReader(key, source_update_time_for_query_cache);
+            if (reader.hasCacheEntryForKey())
+            {
+                QueryPipeline pipeline;
+                pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
+                BlockIO res;
+                res.pipeline = std::move(pipeline);
+                query_cache_context.query_cache_usage = QueryCache::Usage::Read;
+                return res;
+            }
+        }
+    }
+
+    return BlockIO{};
+}
+
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
-    std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
-    auto & plan_segment_tree = plan_segment_tree_and_used_storage_ids.first;
-    size_t plan_segment_num = plan_segment_tree->getNodes().size();
+    if (!plan_segment_tree_ptr)
+    {
+        std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
+        plan_segment_tree_ptr = std::move(plan_segment_tree_and_used_storage_ids.first);
+    }
+    size_t plan_segment_num = plan_segment_tree_ptr->getNodes().size();
     UInt64 max_plan_segment_num = context->getSettingsRef().max_plan_segment_num;
     if (max_plan_segment_num != 0 && plan_segment_num > max_plan_segment_num)
         throw Exception(
@@ -358,7 +428,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
                 max_plan_segment_num),
             ErrorCodes::TOO_MANY_PLAN_SEGMENTS);
 
-    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree), context, MPPQueryOptions());
+    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree_ptr), context, MPPQueryOptions());
 
     BlockIO res = coodinator->execute();
 
@@ -367,8 +437,6 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
         if (unlikely(select_union->tealimit))
             res.pipeline = executeTEALimit(res.pipeline, context, query_ptr);
     }
-
-    res.pipeline.addUsedStorageIDs(plan_segment_tree_and_used_storage_ids.second);
     return res;
 }
 
@@ -402,6 +470,19 @@ void InterpreterSelectQueryUseOptimizer::fillContextQueryAccessInfo(ContextPtr c
                 required_columns);
         }
     }
+}
+
+std::optional<std::set<StorageID>> InterpreterSelectQueryUseOptimizer::getUsedStorageIds()
+{
+    if(plan_segment_tree_ptr)
+    {
+        throw Exception("Cannot call this getUsedStorageIds twice", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
+
+    plan_segment_tree_ptr = std::move(plan_segment_tree_and_used_storage_ids.first);
+    return std::optional<std::set<StorageID>>(std::move(plan_segment_tree_and_used_storage_ids.second));
 }
 
 void InterpreterSelectQueryUseOptimizer::setUnsupportedSettings(ContextMutablePtr & context)

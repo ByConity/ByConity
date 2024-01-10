@@ -9,32 +9,27 @@ Projection Est. ? rows
             │     Condition: p_date == expr#toDate(hdfs_par)_2
             ├─ Left Join Est. ? rows
             │  │     Condition: p_date == expr#toDate(hdfs_par)_1, user_id == user_id_2
-            │  ├─ Repartition Exchange Est. ? rows
-            │  │  │     Partition by: {p_date}
-            │  │  └─ Filter Est. ? rows
-            │  │     │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
-            │  │     └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
-            │  │              Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
-            │  │              Outputs: [user_id, channel, p_date]
-            │  └─ Repartition Exchange Est. ? rows
-            │     │     Partition by: {expr#toDate(hdfs_par)_1}
-            │     └─ Filter Est. ? rows
-            │        │     Condition: `expr#toDate(hdfs_par)_1` >= cast(18359, \'Date\')
-            │        └─ CTERef[0] Est. ? rows
-            └─ Repartition Exchange Est. ? rows
-               │     Partition by: {expr#toDate(hdfs_par)_2}
-               └─ CTERef[0] Est. ? rows
+            │  ├─ Filter Est. ? rows
+            │  │  │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
+            │  │  └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
+            │  │           Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
+            │  │           Outputs: [user_id, channel, p_date]
+            │  └─ Filter Est. ? rows
+            │     │     Condition: `expr#toDate(hdfs_par)_1` >= cast(18359, \'Date\')
+            │     └─ CTERef[0] Est. ? rows
+            └─ CTERef[0] Est. ? rows
 CTEDef [0]
-   MergingAggregated Est. ? rows
-   └─ Repartition Exchange Est. ? rows
-      │     Partition by: {user_id_1, expr#toDate(hdfs_par)}
-      └─ Aggregating Est. ? rows
-         │     Group by: {user_id_1, expr#toDate(hdfs_par)}
-         └─ Projection Est. ? rows
-            │     Expressions: [user_id_1], expr#toDate(hdfs_par):=toDate(hdfs_par)
-            └─ Filter Est. ? rows
-               │     Condition: toDate(hdfs_par) >= \'2020-04-07\'
-               └─ TableScan test.idm_ods_ods_inst_user_tags Est. ? rows
-                        Where: toDate(hdfs_par) >= \'2020-04-07\'
-                        Outputs: [hdfs_par], user_id_1:=user_id
+   Broadcast Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {user_id_1, expr#toDate(hdfs_par)}
+         └─ Aggregating Est. ? rows
+            │     Group by: {user_id_1, expr#toDate(hdfs_par)}
+            └─ Projection Est. ? rows
+               │     Expressions: [user_id_1], expr#toDate(hdfs_par):=toDate(hdfs_par)
+               └─ Filter Est. ? rows
+                  │     Condition: toDate(hdfs_par) >= \'2020-04-07\'
+                  └─ TableScan test.idm_ods_ods_inst_user_tags Est. ? rows
+                           Where: toDate(hdfs_par) >= \'2020-04-07\'
+                           Outputs: [hdfs_par], user_id_1:=user_id
 note: CTE(Common Table Expression) is applied for 2 times.

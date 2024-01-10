@@ -980,13 +980,8 @@ CnchWorkerClientPtr MaterializedMySQLSyncThreadManager::selectWorker()
 {
     /// TODO: introduce Resource Manager
     String vw_name = materialized_mysql_ptr->getMaterializeMySQLSettings()->cnch_vw_write.value;
-    if (!worker_pool)
-        worker_pool = getContext()->getCnchWorkerClientPools().getPool({vw_name}, {VirtualWarehouseType::Write, VirtualWarehouseType::Default});
-
-    if (!worker_pool)
-        throw Exception("Failed to initialize worker pool for " + vw_name, ErrorCodes::LOGICAL_ERROR);
-
-    return worker_pool->get();
+    vw_handle = getContext()->getVirtualWarehousePool().get(vw_name);
+    return vw_handle->getWorker();
 }
 
 static void rewriteCreateQuery(String & query, const String & suffix_key, bool is_table)

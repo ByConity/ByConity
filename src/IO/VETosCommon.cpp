@@ -42,8 +42,11 @@ Poco::URI verifyTosURI(const std::string & out_path)
 }
 
 VETosConnectionParams::VETosConnectionParams(
-    std::string region_, std::string access_key_, std::string secret_key_, std::string security_token_)
-    : region(region_), access_key(access_key_), secret_key(secret_key_), security_token(security_token_)
+    std::string region_, std::string access_key_, std::string secret_key_, std::string endpoint_,
+    std::string security_token_, int connect_timeout_ms_, int request_timeout_ms_)
+    : region(region_), access_key(access_key_), secret_key(secret_key_), endpoint(endpoint_),
+    security_token(security_token_), connect_timeout_ms(connect_timeout_ms_),
+    request_timeout_ms(request_timeout_ms_)
 {
 }
 
@@ -55,8 +58,12 @@ VETosConnectionParams VETosConnectionParams::parseVeTosFromConfig(Poco::Util::Ab
         std::string access_key = config.getString("ve_tos_config.access_key", "");
         std::string secret_key = config.getString("ve_tos_config.secret_key", "");
         std::string security_token = config.getString("ve_tos_config.security_token", "");
+        std::string endpoint = config.getString("ve_tos_config.endpoint", "");
+        int connection_timeout = config.getInt("ve_tos_config.tos_connection_timeout", 10000);
+        int request_timeout = config.getInt("ve_tos_config.tos_request_timeout", 120000);
         parseVetosS3EndpointFromConfig(config);
-        return VETosConnectionParams(region, access_key, secret_key, security_token);
+        return VETosConnectionParams(region, access_key, secret_key, endpoint, security_token,
+            connection_timeout, request_timeout);
     }
     return VETosConnectionParams();
 }
@@ -69,7 +76,10 @@ VETosConnectionParams VETosConnectionParams::getVETosSettingsFromContext(const C
             context->getSettingsRef().tos_region.value,
             context->getSettingsRef().tos_access_key.value,
             context->getSettingsRef().tos_secret_key.value,
-            context->getSettingsRef().tos_security_token.value);
+            context->getSettingsRef().tos_endpoint.value,
+            context->getSettingsRef().tos_security_token.value,
+            context->getSettingsRef().tos_connection_timeout,
+            context->getSettingsRef().tos_request_timeout);
     }
     else
     {
@@ -77,7 +87,7 @@ VETosConnectionParams VETosConnectionParams::getVETosSettingsFromContext(const C
     }
 }
 
-void VETosConnectionParams::parseVetosS3EndpointFromConfig(Poco::Util::AbstractConfiguration &config)
+void VETosConnectionParams::parseVetosS3EndpointFromConfig(Poco::Util::AbstractConfiguration & config)
 {
     std::vector<std::string> regions;
     config.keys("ve_tos_config.s3-regions", regions);
@@ -91,12 +101,18 @@ void VETosConnectionParams::parseVetosS3EndpointFromConfig(Poco::Util::AbstractC
     }
 }
 
-S3::S3Config VETosConnectionParams::getS3Config(const VETosConnectionParams &vetos_connect_params, const String &bucket) {
-    String endpoint = tos_s3_endpoint[vetos_connect_params.region];
+S3::S3Config VETosConnectionParams::getS3Config(const VETosConnectionParams & vetos_connect_params, const String & bucket) {
+    String endpoint = vetos_connect_params.endpoint;
 
-    if (endpoint.empty()) {
-        throw Exception("Invalid tos region: " + vetos_connect_params.region + ", please check configuration.",
-                 ErrorCodes::VETOS_CREATE_UPLOAD_ERROR);
+    if (endpoint.empty())
+    {
+        // Try to get endpoint from configuration file(region -> endpoint)
+        endpoint = tos_s3_endpoint[vetos_connect_params.region];
+        if (endpoint.empty())
+        {
+            throw Exception("Invalid tos region: " + vetos_connect_params.region + ", please check configuration.",
+                ErrorCodes::VETOS_CREATE_UPLOAD_ERROR);
+        }
     }
 
     return S3::S3Config(
@@ -107,7 +123,9 @@ S3::S3Config VETosConnectionParams::getS3Config(const VETosConnectionParams &vet
         vetos_connect_params.secret_key,
         "",
         vetos_connect_params.security_token,
-        true);
+        true,
+        vetos_connect_params.connect_timeout_ms,
+        vetos_connect_params.request_timeout_ms);
 }
 
 }

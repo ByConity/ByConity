@@ -27,6 +27,7 @@ public:
     virtual void init() = 0;
     virtual void start() = 0;
     virtual void stop() = 0;
+    virtual bool suspended() const = 0;
     virtual ~IDaemonJob() {}
     void setInterval(unsigned int interval_ms_) { interval_ms = interval_ms_; }
 protected:
@@ -44,6 +45,7 @@ public:
     void init() override;
     void start() override final;
     void stop() override final;
+    bool suspended() const override { return false; }
     CnchBGThreadType getType() const { return type; }
     Poco::Logger * getLog() { return log; }
 

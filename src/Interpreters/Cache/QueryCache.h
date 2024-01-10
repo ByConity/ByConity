@@ -29,6 +29,14 @@ bool astContainsNonDeterministicFunctions(ASTPtr ast, ContextPtr context);
 class QueryCache
 {
 public:
+    enum class Usage
+    {
+        Unknown,  /// we don't know what what happened
+        None,     /// query result neither written nor read into/from query cache
+        Write,    /// query result written into query cache
+        Read,     /// query result read from query cache
+    };
+
     /// Represents a query result in the cache.
     struct Key
     {
@@ -204,4 +212,13 @@ private:
 
 using QueryCachePtr = std::shared_ptr<QueryCache>;
 
+void logUsedStorageIDs(Poco::Logger * log, const std::set<StorageID> & storage_ids);
+
+struct QueryCacheContext
+{
+    bool can_use_query_cache = false;
+    bool query_executed_by_optimizer = false; /// true if query is executed_by_optimizer
+    TxnTimestamp source_update_time_for_query_cache = TxnTimestamp::minTS();
+    QueryCache::Usage query_cache_usage = QueryCache::Usage::None;
+};
 }

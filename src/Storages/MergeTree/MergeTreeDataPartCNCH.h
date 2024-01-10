@@ -119,11 +119,12 @@ private:
     void checkConsistency(bool require_part_metadata) const override;
 
     void loadIndex() override;
+    IndexPtr loadIndexFromStorage() const;
 
     MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
 
     ChecksumsPtr loadChecksums(bool require) override;
-    ChecksumsPtr loadChecksumsForPart(bool follow_part_chain);
+    ChecksumsPtr loadChecksumsFromRemote(bool follow_part_chain);
 
     UniqueKeyIndexPtr loadUniqueKeyIndex() override;
 
@@ -137,7 +138,7 @@ private:
     void loadMetaInfoFromBuffer(ReadBuffer & buffer, bool load_hint_mutation);
 
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
-    ColumnSize getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const;
+    ColumnSize getColumnSizeImpl(const NameAndTypePair & column, const ChecksumsPtr & checksums, std::unordered_set<String> * processed_substreams) const;
 
     void loadProjections(bool require_columns_checksums, bool check_consistency) override;
 

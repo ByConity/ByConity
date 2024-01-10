@@ -3,7 +3,7 @@ COPY fdbmonitor fdbcli fdbserver /opt/tiger/foundationdb/bin/
 RUN chmod +x /opt/tiger/foundationdb/bin/*
 COPY docker-compose /usr/local/bin/docker-compose
 RUN chmod +x /usr/local/bin/docker-compose
-RUN pip install requests
+RUN pip install requests packaging
 
 # Install docker and docker-compose
 RUN install -m 0755 -d /etc/apt/keyrings

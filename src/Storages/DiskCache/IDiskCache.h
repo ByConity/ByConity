@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <exception>
 #include <vector>
 #include <Core/BackgroundSchedulePool.h>
 #include <Disks/IDisk.h>
@@ -98,7 +99,7 @@ public:
 
     virtual IDiskCacheStrategyPtr getStrategy() { return strategy; }
 
-    using CacheSegmentsCallback = std::function<void(const String &, const int &)>;
+    using CacheSegmentsCallback = std::function<void(std::exception_ptr, const int &)>;
     void cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments, CacheSegmentsCallback callback = {});
     void cacheBitmapIndexToLocalDisk(const IDiskCacheSegmentPtr & bitmap_segment);
 
@@ -128,7 +129,7 @@ public:
         }
     }
 
-    DiskCacheSettings getSettings() const { return settings;} 
+    DiskCacheSettings getSettings() const { return settings;}
 
 protected:
     VolumePtr volume;
@@ -160,7 +161,7 @@ class MultiDiskCache : public IDiskCache
 {
 public:
     MultiDiskCache(
-        const String & name_, 
+        const String & name_,
         const VolumePtr & volume_,
         const ThrottlerPtr & throttler_,
         const DiskCacheSettings & settings_,
@@ -171,12 +172,12 @@ public:
     {
     }
 
-private:  
+private:
     IDiskCachePtr meta;
     IDiskCachePtr data;
 
 public:
-    std::shared_ptr<IDiskCache> getMetaCache() override { 
+    std::shared_ptr<IDiskCache> getMetaCache() override {
       if (!meta)
         throw Exception("MultiDiskCache `meta cache` is nullptr", ErrorCodes::LOGICAL_ERROR);
       return meta;
@@ -188,7 +189,7 @@ public:
         return data;
     }
 
-    virtual size_t drop(const String & part_base_path) override { 
+    virtual size_t drop(const String & part_base_path) override {
         if (!meta || !data)
             throw Exception("MultiDiskCache `meta or data` cache is nullptr", ErrorCodes::LOGICAL_ERROR);
 

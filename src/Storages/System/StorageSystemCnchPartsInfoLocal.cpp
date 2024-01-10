@@ -147,36 +147,52 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
     std::vector<PartitionData> metrics_collection{filtered_index_column->size(), PartitionData{}};
     std::atomic_size_t task_index {0};
     std::size_t total_task_size = filtered_index_column->size();
+    std::atomic_bool need_abort = false;
 
-    for (size_t i=0; i<max_threads; i++)
+    try
     {
-        collect_metrics_pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]() {
-            DB::ThreadStatus thread_status;
+        for (size_t i = 0; i < max_threads; i++)
+        {
+            collect_metrics_pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]() {
+                DB::ThreadStatus thread_status;
 
-            if (thread_group)
-                CurrentThread::attachTo(thread_group);
+                if (thread_group)
+                    CurrentThread::attachTo(thread_group);
 
-            size_t current_task;
-            while ( (current_task = task_index++) < total_task_size)
-            {
-                StoragePtr storage = nullptr;
-                try
+                size_t current_task;
+                while ((current_task = task_index++) < total_task_size && !need_abort)
                 {
-                    auto entry = active_tables[(*filtered_index_column)[current_task].get<UInt64>()];
-                    PartitionData & metrics_data = metrics_collection[current_task];
-                    storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
-                    if (storage)
-                        cache_manager->getPartsInfoMetrics(*storage, metrics_data, require_partition_info);
+                    StoragePtr storage = nullptr;
+                    try
+                    {
+                        auto entry = active_tables[(*filtered_index_column)[current_task].get<UInt64>()];
+                        PartitionData & metrics_data = metrics_collection[current_task];
+                        storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
+                        if (storage)
+                            cache_manager->getPartsInfoMetrics(*storage, metrics_data, require_partition_info);
+                    }
+                    catch (Exception & e)
+                    {
+                        if (e.code() == ErrorCodes::CANNOT_GET_TABLE_LOCK && storage)
+                            LOG_WARNING(
+                                &Poco::Logger::get("PartsInfoLocal"),
+                                "Failed to get parts info for table {} because cannot get table lock, skip it.",
+                                storage->getStorageID().getFullTableName());
+                    }
+                    catch (...)
+                    {
+                    }
                 }
-                catch (Exception & e)
-                {
-                    if (e.code() == ErrorCodes::CANNOT_GET_TABLE_LOCK && storage)
-                        LOG_WARNING(&Poco::Logger::get("PartsInfoLocal"), "Failed to get parts info for table {} because cannot get table lock, skip it.", storage->getStorageID().getFullTableName());
-                }
-                catch (...) {}
-            }
-        });
+            });
+        }
     }
+    catch (...)
+    {
+        need_abort = true;
+        collect_metrics_pool.wait();
+        throw;
+    }
+
     collect_metrics_pool.wait();
 
     MutableColumns res_columns = res_block.cloneEmptyColumns();

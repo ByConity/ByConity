@@ -124,6 +124,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START MERGES";
         case Type::REMOVE_MERGES:
             return "REMOVE MERGES";
+        case Type::RESUME_ALL_MERGES:
+            return "RESUME_ALL MERGES";
+        case Type::SUSPEND_ALL_MERGES:
+            return "SUSPEND_ALL MERGES";
         case Type::GC:
             return "GC";
         case Type::START_GC:
@@ -132,6 +136,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "STOP GC";
         case Type::FORCE_GC:
             return "FORCE GC";
+        case Type::RESUME_ALL_GC:
+            return "RESUME_ALL GC";
+        case Type::SUSPEND_ALL_GC:
+            return "SUSPEND_ALL GC";
         case Type::STOP_TTL_MERGES:
             return "STOP TTL MERGES";
         case Type::START_TTL_MERGES:

@@ -109,10 +109,8 @@ PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, Void & v)
         right_name_to_type[right.name] = right.type;
     }
 
-    bool has_outer_join_semantic = isAny(join_step.getStrictness()) || isAll(join_step.getStrictness())
-        || join_step.getStrictness() == ASTTableJoin::Strictness::RightAny || isAsof(join_step.getStrictness());
-    bool make_nullable_for_left = has_outer_join_semantic && isRightOrFull(join_step.getKind());
-    bool make_nullable_for_right = has_outer_join_semantic && isLeftOrFull(join_step.getKind());
+    bool make_nullable_for_left = isRightOrFull(join_step.getKind());
+    bool make_nullable_for_right = isLeftOrFull(join_step.getKind());
 
     auto update_symbol_type = [&output_set_null](const std::unordered_map<String, DataTypePtr> & type_provider, bool make_nullable) {
         std::transform(
