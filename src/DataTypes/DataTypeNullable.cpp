@@ -2,6 +2,7 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <DataTypes/Serializations/SerializationTupleElement.h>
 #include <Columns/ColumnNullable.h>
@@ -13,8 +14,8 @@
 #include <IO/WriteHelpers.h>
 #include <IO/ConcatReadBuffer.h>
 #include <Parsers/IAST.h>
-#include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+#include <Common/typeid_cast.h>
 
 
 namespace DB
@@ -124,6 +125,20 @@ DataTypePtr removeNullable(const DataTypePtr & type)
     if (type->isNullable())
         return static_cast<const DataTypeNullable &>(*type).getNestedType();
     return type;
+}
+
+DataTypePtr makeNullableOrLowCardinalityNullable(const DataTypePtr & type)
+{
+    if (isNullableOrLowCardinalityNullable(type))
+        return type;
+
+    if (type->lowCardinality())
+    {
+        const auto & dictionary_type = assert_cast<const DataTypeLowCardinality &>(*type).getDictionaryType();
+        return std::make_shared<DataTypeLowCardinality>(makeNullable(dictionary_type));
+    }
+
+    return std::make_shared<DataTypeNullable>(type);
 }
 
 }

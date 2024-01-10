@@ -217,5 +217,6 @@ private:
 };
 
 ColumnPtr makeNullable(const ColumnPtr & column);
+ColumnPtr makeNullableOrLowCardinalityNullable(const ColumnPtr & column);
 
 }
