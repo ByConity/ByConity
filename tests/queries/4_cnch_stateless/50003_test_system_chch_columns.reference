@@ -6,7 +6,7 @@
 -- test single table query --
 test_cnch_tb2	tb1	a
 test_cnch_tb2	tb1	b
-test_cnch_tb2	tb1	c
+test_cnch_tb2	tb1	d
 test_cnch_tb2	tb1	id
 -- test multiple tables or query --
 test_cnch_tb1	tb1	a
@@ -26,7 +26,7 @@ test_cnch_tb2	tb2	c
 test_cnch_tb2	tb2	d
 test_cnch_tb2	tb2	id
 test_cnch_tb3	tb3	a
-test_cnch_tb3	tb3	b
+test_cnch_tb3	tb3	d
 test_cnch_tb3	tb3	g
 test_cnch_tb3	tb3	id
 -- test mixed or query with regex --
