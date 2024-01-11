@@ -14,7 +14,7 @@ jobs:
   scm_build:
     name: Build binary and run stateless tests
     container: byconity/byconity-ci:24Jan08
-    runs-on: self-hosted
+    runs-on: id1
     steps:
       - name: Set environment variables
         run: |
@@ -33,6 +33,8 @@ jobs:
           echo "HMS_PORT=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           echo "HIVE_NAMENODE_PORT=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
       - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Check out repository code2
         uses: actions/checkout@v3
       - name: Build binary with build_bin.sh
         env:
