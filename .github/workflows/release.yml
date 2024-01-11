@@ -1,0 +1,57 @@
+name: Auto Release
+on:
+  push:
+    tags:
+      - "*.*.*"
+jobs:
+  build:
+    name: Build & Uploads Binaries & Images
+    container: byconity/byconity-ci:24Jan08
+    runs-on: self-hosted
+    steps:
+      - name: Setup Git Proxy.
+        if: ${{ runner.name != 'ec2-aws-id4-10.10.129.157' }}
+        run: |
+          git config --global http.proxy http://${{ secrets.HTTP_PROXY }}
+      - name: Setup Environment Varialbes
+        run: |
+          export PROJECT_NAME=byconity-$(cat /etc/hostname)
+          echo "SRC_VOL=${PROJECT_NAME}_src_volume" >> $GITHUB_ENV
+          echo "OUTPUT_VOL=${PROJECT_NAME}_output_volume" >> $GITHUB_ENV
+          echo "DUMMY_CONTAINER=dummy-${PROJECT_NAME}" >> $GITHUB_ENV
+      - name: Checkout ByConity Repo.
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # Will be copied to volume's `/` path.
+          path: ByConity
+      - name: Prepare for Build Binaries.
+        run: |
+          mkdir -p release-binary/output
+          docker container create --name ${DUMMY_CONTAINER} -v ${SRC_VOL}:/build hello-world
+          docker cp ./ByConity/. ${DUMMY_CONTAINER}:/build/
+          docker rm ${DUMMY_CONTAINER}
+      - name: Build All Bianries.
+        run: |
+          ./ByConity/docker/packager/packager --output-dir /output --package-type deb --ccache_dir=${HOME}/.ccache_for_docker --additional-pkgs --version ${{ github.ref_name }} --build-type release --dind-mode
+      - name: Copy Binaries out.
+        run: |
+          docker container create --name ${DUMMY_CONTAINER} -v ${OUTPUT_VOL}:/output hello-world
+          docker cp ${DUMMY_CONTAINER}:/output/. release-binary/output/
+          docker rm ${DUMMY_CONTAINER}
+          ls -al release-binary/output/
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: release-binary/output/byconity-*
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+      - name: Cleanup Data.
+        if: always()
+        run: |
+          docker ps --filter="name=${DUMMY_CONTAINER}" -qa | xargs -I {} docker rm {}
+          docker volume rm ${SRC_VOL}
+          docker volume rm ${OUTPUT_VOL}
+          docker volume prune -f
