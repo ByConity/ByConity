@@ -2,7 +2,7 @@
 -- construct test db2 and tables --
 -- construct test db3 and tables --
 -- test count --
-6
+23
 -- test single table query --
 test_cnch_db2	tb1	a
 test_cnch_db2	tb1	b
