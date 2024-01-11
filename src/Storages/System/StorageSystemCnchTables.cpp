@@ -41,6 +41,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+#define GET_ALL_TABLES_LIMIT (10)
 
 StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
     : IStorage(table_id_)
@@ -201,7 +202,7 @@ Pipe StorageSystemCnchTables::read(
     std::vector<std::pair<String, String>> db_table_pairs;
     auto predicates = parsePredicatesFromWhere(query_info, context);
     bool get_db_tables_ok = getDBTablesFromPredicates(predicates, db_table_pairs);
-    if (get_db_tables_ok)
+    if (get_db_tables_ok && (db_table_pairs.size() <= GET_ALL_TABLES_LIMIT))
     {        
         auto table_ids = cnch_catalog->getTableIDsByNames(db_table_pairs);
         if (table_ids)

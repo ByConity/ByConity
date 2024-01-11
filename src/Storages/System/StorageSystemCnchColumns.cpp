@@ -28,6 +28,9 @@
 
 namespace DB
 {
+
+#define GET_ALL_TABLES_LIMIT (10)
+
 NamesAndTypesList StorageSystemCnchColumns::getNamesAndTypes()
 {
     return {
@@ -129,7 +132,7 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
         std::vector<std::pair<String, String>> db_table_pairs;
         auto predicates = parsePredicatesFromWhere(query_info, context);
         bool get_db_tables_ok = getDBTablesFromPredicates(predicates, db_table_pairs);
-        if (get_db_tables_ok)
+        if (get_db_tables_ok && (db_table_pairs.size() <= GET_ALL_TABLES_LIMIT))
         {        
             auto table_ids = cnch_catalog->getTableIDsByNames(db_table_pairs);
             if (table_ids)
