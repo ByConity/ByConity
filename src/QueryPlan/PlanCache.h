@@ -50,7 +50,7 @@ public:
     // invalidate cache on current server
     void invalidate(ContextMutablePtr context);
 
-    static UInt128 hash(const ASTPtr & query_ast, const Settings & settings);
+    static UInt128 hash(const ASTPtr & query_ast, ContextMutablePtr & context);
 
     static PlanNodePtr getNewPlanNode(PlanNodePtr node, ContextMutablePtr & context, bool cache_plan, PlanNodeId & max_id);
 

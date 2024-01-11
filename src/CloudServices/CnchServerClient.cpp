@@ -647,6 +647,8 @@ void CnchServerClient::controlCnchBGThread(const StorageID & storage_id, CnchBGT
     brpc::Controller cntl;
     Protos::ControlCnchBGThreadReq request;
     Protos::ControlCnchBGThreadResp response;
+    if (storage_id.empty())
+        cntl.set_timeout_ms(360 * 1000);
 
     RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
     request.set_type(uint32_t(type));

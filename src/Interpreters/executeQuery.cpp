@@ -988,7 +988,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     setQuerySpecificSettings(ast, context);
 
-    bool can_use_query_cache = settings.use_query_cache && !internal && !ast->as<ASTExplainQuery>();
+    auto query_cache = context->getQueryCache();
+    QueryCacheContext query_cache_context{};
+    query_cache_context.can_use_query_cache = (query_cache != nullptr)
+        && settings.use_query_cache
+        && !internal
+        && client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY
+        && (ast->as<ASTSelectQuery>() || ast->as<ASTSelectWithUnionQuery>());
 
     auto txn = prepareCnchTransaction(context, ast);
     if (txn)
@@ -1133,8 +1139,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         // if fallback by optimizer, write the ExceptionMessage to query_log
         String fallback_reason;
 
-        bool read_result_from_query_cache = false; /// a query must not read from *and* write to the query cache at the same time
-        TxnTimestamp source_update_time_for_query_cache = TxnTimestamp::minTS();
         {
             OpenTelemetrySpanHolder span("IInterpreter::execute()");
             try
@@ -1148,7 +1152,17 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     res.in = std::make_shared<OneBlockInputStream>(block);
                 }
                 else
-                    res = interpreter->execute();
+                {
+                    InterpreterSelectQueryUseOptimizer * optimizer_interpret = typeid_cast<InterpreterSelectQueryUseOptimizer *>(&*interpreter);
+                    if (optimizer_interpret)
+                    {
+                        res = optimizer_interpret->readFromQueryCache(context, query_cache_context);
+                        if (query_cache_context.query_cache_usage != QueryCache::Usage::Read)
+                            res = interpreter->execute();
+                    }
+                    else
+                        res = interpreter->execute();
+                }
             }
             catch (...)
             {
@@ -1165,6 +1179,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                             session_resource->cleanResource();
                         auto retry_interpreter = InterpreterFactory::get(ast, context, stage);
                         res = retry_interpreter->execute();
+                        query_cache_context.query_executed_by_optimizer = false;
 
                         fallback_reason = getCurrentExceptionMessage(true);
                     }
@@ -1189,36 +1204,43 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
             }
 
-            const std::set<StorageID> storage_ids = res.pipeline.getUsedStorageIDs();
-            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "pipeline has all used StorageIDs: {}", res.pipeline.hasAllUsedStorageIDs());
-            auto query_cache = context->getQueryCache();
-            if (query_cache != nullptr
-                && (can_use_query_cache && settings.enable_reads_from_query_cache)
-                && (res.pipeline.getNumStreams() > 0) && (res.pipeline.hasAllUsedStorageIDs()) && (!storage_ids.empty()))
+            if (query_cache_context.can_use_query_cache
+                && settings.enable_reads_from_query_cache
+                && (!query_cache_context.query_executed_by_optimizer))
             {
-                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "StorageIDs:");
-                for (auto & storage_id : storage_ids)
-                    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "StorageID {}", storage_id.getNameForLogs());
-                if (settings.enable_transactional_query_cache)
-                    source_update_time_for_query_cache = getMaxUpdateTime(storage_ids, context);
-                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "max update timestamp {}", source_update_time_for_query_cache);
-                if (source_update_time_for_query_cache.toUInt64() != 0)
+                const std::set<StorageID> storage_ids = res.pipeline.getUsedStorageIDs();
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"),
+                        "pipeline has all used StorageIDs: {}", res.pipeline.hasAllUsedStorageIDs());
+                if (res.pipeline.hasAllUsedStorageIDs()
+                    && (!storage_ids.empty()))
                 {
-                    QueryCache::Key key(
-                        ast,
-                        res.pipeline.getHeader(),
-                        context->getUserName(),
-                        /*dummy for is_shared*/ false,
-                        /*dummy value for expires_at*/ std::chrono::system_clock::from_time_t(1),
-                        /*dummy value for is_compressed*/ false,
-                        context->getCurrentTransactionID());
-                    QueryCache::Reader reader = query_cache->createReader(key, source_update_time_for_query_cache);
-                    if (reader.hasCacheEntryForKey())
+                    logUsedStorageIDs(&Poco::Logger::get("executeQuery"), storage_ids);
+                    TxnTimestamp & source_update_time_for_query_cache =
+                        query_cache_context.source_update_time_for_query_cache;
+                    if (settings.enable_transactional_query_cache)
+                        source_update_time_for_query_cache = getMaxUpdateTime(storage_ids, context);
+                    else
+                        source_update_time_for_query_cache = TxnTimestamp::minTS();
+                    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "max update timestamp {}", source_update_time_for_query_cache);
+                    if ((settings.enable_transactional_query_cache == false)
+                        || (source_update_time_for_query_cache.toUInt64() != 0))
                     {
-                        QueryPipeline pipeline;
-                        pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
-                        res.pipeline = std::move(pipeline);
-                        read_result_from_query_cache = true;
+                        QueryCache::Key key(
+                            ast,
+                            res.pipeline.getHeader(),
+                            context->getUserName(),
+                            /*dummy for is_shared*/ false,
+                            /*dummy value for expires_at*/ std::chrono::system_clock::from_time_t(1),
+                            /*dummy value for is_compressed*/ false,
+                            context->getCurrentTransactionID());
+                        QueryCache::Reader reader = query_cache->createReader(key, source_update_time_for_query_cache);
+                        if (reader.hasCacheEntryForKey())
+                        {
+                            QueryPipeline pipeline;
+                            pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
+                            res.pipeline = std::move(pipeline);
+                            query_cache_context.query_cache_usage = QueryCache::Usage::Read;
+                        }
                     }
                 }
             }
@@ -1302,11 +1324,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             /// - active (write) use of the query cache is enabled
             /// then add a processor on top of the pipeline which stores the result in the query cache.
 
-            auto query_cache = context->getQueryCache();
-            if (!read_result_from_query_cache
-                && query_cache != nullptr
-                && can_use_query_cache && settings.enable_writes_to_query_cache
-                && (res.pipeline.getNumStreams() > 0)
+            if ((query_cache_context.query_cache_usage != QueryCache::Usage::Read)
+                && query_cache_context.can_use_query_cache
+                && settings.enable_writes_to_query_cache
                 && (!astContainsNonDeterministicFunctions(ast, context) || settings.query_cache_store_results_of_queries_with_nondeterministic_functions))
             {
                 QueryCache::Key key(
@@ -1326,9 +1346,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                      settings.max_block_size,
                                      settings.query_cache_max_size_in_bytes,
                                      settings.query_cache_max_entries,
-                                     source_update_time_for_query_cache));
+                                     query_cache_context.source_update_time_for_query_cache));
                     res.pipeline.writeResultIntoQueryCache(query_cache_writer);
+                    query_cache_context.query_cache_usage = QueryCache::Usage::Write;
                 }
+            }
+            else
+            {
+                LOG_INFO(&Poco::Logger::get("executeQuery"), "not write to cache");
             }
         }
 
@@ -1467,9 +1492,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                      context,
                      query,
                      ast,
-                     my_can_use_query_cache = can_use_query_cache,
-                     enable_writes_to_query_cache = settings.enable_writes_to_query_cache,
-                     query_cache_store_results_of_queries_with_nondeterministic_functions = settings.query_cache_store_results_of_queries_with_nondeterministic_functions,
+                     query_cache_usage = query_cache_context.query_cache_usage,
                      log_queries,
                      log_queries_min_type = settings.log_queries_min_type,
                      log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
@@ -1478,7 +1501,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                      query_id,
                      finish_current_transaction,
                      complex_query,
-                     pulling_pipeline = (res.pipeline.getNumStreams() > 0),
                      init_time](
                         IBlockInputStream * stream_in,
                         IBlockOutputStream * stream_out,
@@ -1486,14 +1508,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         UInt64 runtime_latency) mutable {
                         /// If active (write) use of the query cache is enabled and the query is eligible for result caching, then store the query
                         /// result buffered in the special-purpose cache processor (added on top of the pipeline) into the cache.
-                        auto query_cache = context->getQueryCache();
-                        if (query_cache != nullptr
-                            && pulling_pipeline
-                            && my_can_use_query_cache && enable_writes_to_query_cache
-                            && (!astContainsNonDeterministicFunctions(ast, context) || query_cache_store_results_of_queries_with_nondeterministic_functions))
-                        {
+                        if (query_cache_usage == QueryCache::Usage::Write)
                             query_pipeline->finalizeWriteInQueryCache();
-                        }
 
                         finish_current_transaction(context);
                         QueryStatus * process_list_elem = context->getProcessListElement();

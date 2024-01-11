@@ -121,6 +121,7 @@ public:
 
     IBGJobStatusPersistentStoreProxy & getStatusPersistentStore() const { return *status_persistent_store; }
     std::vector<String> updateServerStartTimeAndFindRestartServers(const std::map<String, UInt64> &);
+    bool suspended() const override;
 
 protected:
     bool executeImpl() override;
@@ -132,6 +133,9 @@ protected:
     std::map<String, UInt64> server_start_times;
     size_t counter_for_liveness_check = 1;
     size_t liveness_check_interval = LIVENESS_CHECK_INTERVAL;
+    bool is_suspended = false;
+    mutable std::mutex suspended_mutex;
+
 private:
     StorageTraitCache * cache = nullptr;
     std::unique_ptr<IBGJobStatusPersistentStoreProxy> status_persistent_store{};

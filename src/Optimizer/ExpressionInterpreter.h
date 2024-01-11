@@ -75,6 +75,7 @@ public:
         IdentifierValues identifier_values;  // any identifiers may occur in the expression, with its substituted value
         bool enable_null_simplify = false;
         bool enable_function_simplify = false;
+        bool enable_array_element_to_map_element = true;
     };
 
     struct InterpretResult

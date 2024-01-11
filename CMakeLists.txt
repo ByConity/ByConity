@@ -451,6 +451,8 @@ elseif (OS_FREEBSD)
     include(cmake/freebsd/default_libs.cmake)
 endif ()
 
+include (cmake/find/unwind-old.cmake)
+
 # Determine whether to use community map implementation
 option (USE_COMMUNITY_MAP "Use clickhouse community map implmentation"  OFF)
 if (USE_COMMUNITY_MAP)

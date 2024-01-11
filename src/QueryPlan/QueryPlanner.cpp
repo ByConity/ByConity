@@ -192,7 +192,7 @@ private:
 
 namespace
 {
-    PlanNodePtr planOutput(const RelationPlan & plan, ASTPtr & query, Analysis & analysis, ContextMutablePtr context)
+    PlanNodePtr planOutput(const RelationPlan & plan, ASTPtr & query, Analysis & analysis, ContextMutablePtr context, InsertAnalysis * insert = nullptr)
     {
         const auto & output_desc = analysis.getOutputDescription(*query);
         const auto & field_symbol_infos = plan.getFieldSymbolInfos();
@@ -225,30 +225,42 @@ namespace
 
         assert(output_desc.size() == field_symbol_infos.size());
 
-        bool has_global_low_cardinality = false;
         for (size_t i = 0; i < output_desc.size(); ++i)
         {
             String input_column = field_symbol_infos[i].getPrimarySymbol();
             String output_name = get_uniq_output_name(output_desc[i].name);
+            if (insert != nullptr && context->getSettingsRef().insert_null_as_default)
+            {
+                auto & columns = insert->columns;
+                if (isNullableOrLowCardinalityNullable(input_types[input_column]) && !isNullableOrLowCardinalityNullable(columns[i].type))
+                {
+                    auto column_default = insert->storage->getInMemoryMetadataPtr()->getColumns().getDefault(columns[i].name);
+                    ASTPtr default_expr;
+                    if (column_default)
+                    {
+                        default_expr = column_default->expression->clone();
+                    }
+                    else
+                    {
+                        auto default_value = columns[i].type->getDefault();
+                        default_expr = std::make_shared<ASTLiteral>(default_value);
+                    }
+                    auto expr = makeASTFunction("CAST", default_expr, std::make_shared<ASTLiteral>(columns[i].type->getName()));
+                    expr = makeASTFunction("ifNull", std::make_shared<ASTIdentifier>(input_column), std::move(expr));
+
+                    assignments.emplace_back(output_name, expr);
+                    output_types[output_name] = columns[i].type;
+                    continue;
+                }
+            }
+
             assignments.emplace_back(output_name, toSymbolRef(input_column));
             output_types[output_name] = input_types[input_column];
-            // TODO global low card
-            // if (output_types[output_name]->globalLowCardinality())
-            // has_global_low_cardinality = true;
         }
-
-        PlanNodePtr secondary_newness_node = nullptr;
-        if (has_global_low_cardinality)
-        {
-            // auto global_decode = std::make_shared<GlobalDecodeStep>(old_root->getCurrentDataStream());
-            // secondary_newness_node = old_root->addStep(context->nextNodeId(), std::move(global_decode));
-        }
-        else
-            secondary_newness_node = old_root;
 
         auto output_step
-            = std::make_shared<ProjectionStep>(secondary_newness_node->getCurrentDataStream(), assignments, output_types, true);
-        auto new_root = secondary_newness_node->addStep(context->nextNodeId(), std::move(output_step));
+            = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types, true);
+        auto new_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
         PRINT_PLAN(new_root, plan_output);
         return new_root;
     }
@@ -271,7 +283,7 @@ QueryPlanPtr QueryPlanner::plan(ASTPtr & query, Analysis & analysis, ContextMuta
     CTERelationPlans cte_plans;
     RelationPlan relation_plan = planQuery(query, nullptr, analysis, context, cte_plans);
     planExtremes(relation_plan, context);
-    PlanNodePtr plan_root = planOutput(relation_plan, query, analysis, context);
+    PlanNodePtr plan_root = planOutput(relation_plan, query, analysis, context, nullptr);
     CTEInfo cte_info;
     for (const auto & cte_plan : cte_plans)
         cte_info.add(cte_plan.first, cte_plan.second.getRoot());
@@ -291,7 +303,7 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
 
     auto & insert = *analysis.getInsert();
     auto select_plan = process(insert_query.select);
-    select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context));
+    select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context, &insert));
 
     auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns);
 

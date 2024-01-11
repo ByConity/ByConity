@@ -40,6 +40,6 @@ create table `10027_test_query_map`(
 insert into `10027_test_query_map` values (1, {'1': '1'}, {'1': ['1']}, {'1': 1}, {'1': [1, null]}) (2, {'2': '1'}, {'2': ['1']}, {'2': 1}, {'2': [1, null]}) (3, {'3': '1'}, {'3': ['1']}, {'3': 1}, {'3': [1, null]});
 
 -- test reading map sequentially
-select * from `10027_test_query_map`;
+select * from `10027_test_query_map` order by id;
 
 drop table `10027_test_query_map`;

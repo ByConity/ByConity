@@ -63,7 +63,11 @@ MultiPathReceiver::~MultiPathReceiver()
 {
     try
     {
-        finish(BroadcastStatusCode::RECV_UNKNOWN_ERROR, "MultiPathReceiver destroyed");
+        auto status = finish(BroadcastStatusCode::RECV_UNKNOWN_ERROR, "MultiPathReceiver destroyed");
+        if (status.is_modifer && status.code > 0 && status.code != BroadcastStatusCode::RECV_CANCELLED)
+        {
+            LOG_ERROR(logger, "MultiPathReceiver unexpected error, status.code {} status.message {}", status.code, status.message);
+        }
 
         /// Wait all brpc register rpc done
         for (auto & res : async_results)
@@ -316,15 +320,21 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
     {
         bool is_modifer = false;
         BroadcastStatus old_status(BroadcastStatusCode::RUNNING);
+        std::vector<std::pair<String, BroadcastStatus>> err_status;
         for (auto & receiver : sub_receivers)
         {
             auto res = receiver->finish(status_code, message);
             if (res.is_modifer)
                 is_modifer = true;
-            // obtain the max exception errorcode if any subreceiver is abnormal.
-            // if all subreceivers run normally, the status code comes to BroadcastStatusCode::RUNNING.
             else if (static_cast<int>(old_status.code) < static_cast<int>(res.code))
+            {
+                // obtain the max exception errorcode if any subreceiver is abnormal.
+                // if all subreceivers run normally, the status code comes to BroadcastStatusCode::RUNNING.
                 old_status = std::move(res);
+            }
+
+            if (res.code > BroadcastStatusCode::RUNNING && res.code != BroadcastStatusCode::RECV_CANCELLED)
+                err_status.push_back({receiver->getName(), res});
         }
         /// Wakeup all pending receivers;
         collector->close();
@@ -333,7 +343,7 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
             logger,
             fmt::format(
                 "{} change finish status from {} to {} with message: {}, is_modifer: {}, subreceiver status: {}",
-                name,
+                getName(),
                 current_status_ptr->code,
                 status_code,
                 message,
@@ -345,6 +355,13 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
             auto res = *new_status_ptr;
             receiver_metrics.finish_code.store(new_status_ptr->code, std::memory_order_relaxed);
             res.is_modifer = true;
+            if (old_status.code > 0)
+            {
+                String err_status_summary;
+                for (auto & err : err_status)
+                    err_status_summary += (fmt::format("[code:{} msg:{} name:{}]", err.second.code, err.second.message, err.first) + ",");
+                res.message = fmt::format("{} received subreiver error, summary: ", getName(), err_status_summary);
+            }
             return res;
         }
         receiver_metrics.finish_code.store(old_status.code, std::memory_order_relaxed);

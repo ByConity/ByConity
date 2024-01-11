@@ -56,12 +56,13 @@ void BrpcExchangeReceiverRegistryService::registry(
     auto key = std::make_shared<ExchangeDataKey>(request->query_unique_id(), request->exchange_id(), request->parallel_id());
     BroadcastSenderProxyPtr sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(key);
     auto query_id = request->query_id();
+    auto coordinator_addr = request->coordinator_address();
     /// SCOPE_EXIT wrap logic which run after done->Run(),
     /// since host socket of the accpeted stream is set in done->Run()
     SCOPE_EXIT({
         /// request is already released in done_guard, so all parameters have to be copied.
         if (sender_proxy && sender_stream_id != brpc::INVALID_STREAM_ID)
-            registerSenderToProxy(cntl, nullptr, sender_proxy, query_id, sender_stream_id, {}, key, false);
+            registerSenderToProxy(cntl, nullptr, sender_proxy, query_id, sender_stream_id, {}, key, coordinator_addr, false);
     });
 
     /// this done_guard guarantee to call done->Run() in any situation
@@ -103,12 +104,13 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
         client_info.initial_query_start_time_microseconds = initial_query_start_time_microseconds;
         query_context->setQueryExpirationTimeStamp();
         auto query_id = request->registry().query_id();
+        auto coordinator_addr = request->registry().coordinator_address();
         BroadcastSenderProxyPtr sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(key);
         sender_proxy->accept(query_context, header);
         auto processors = mgr->createProcessors(sender_proxy, std::move(header), std::move(query_context));
         SCOPE_EXIT({
             if (sender_proxy && sender_stream_id != brpc::INVALID_STREAM_ID)
-                registerSenderToProxy(cntl, mgr, sender_proxy, query_id, sender_stream_id, processors, key, true);
+                registerSenderToProxy(cntl, mgr, sender_proxy, query_id, sender_stream_id, processors, key, coordinator_addr, true);
         });
 
         /// this done_guard guarantee to call done->Run() in any situation
@@ -132,6 +134,7 @@ void BrpcExchangeReceiverRegistryService::registerSenderToProxy(
     const brpc::StreamId & sender_stream_id,
     Processors processors,
     const ExchangeDataKeyPtr & key,
+    const String & coordinator_addr,
     bool read_from_disk)
 {
     try
@@ -142,7 +145,7 @@ void BrpcExchangeReceiverRegistryService::registerSenderToProxy(
         /// submit executor task
         if (read_from_disk)
         {
-            mgr->submitReadTask(query_id, sender_proxy->getDataKey(), std::move(processors));
+            mgr->submitReadTask(query_id, sender_proxy->getDataKey(), std::move(processors), coordinator_addr);
             LOG_TRACE(log, fmt::format("Submit read task for query {} key {} successfully", query_id, *key));
         }
     }
@@ -221,12 +224,13 @@ void BrpcExchangeReceiverRegistryService::cleanupExchangeData(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
+        LOG_TRACE(log, "submit cleanup task for query_unique_id:{} successfully", request->query_unique_id());
         auto mgr = context->getDiskExchangeDataManager();
-        mgr->cleanup(request->query_unique_id());
+        mgr->submitCleanupTask(request->query_unique_id());
     }
     catch (...)
     {
-        auto error_msg = fmt::format("Cleanup exchange data failed for query_unique_id:{}", request->query_unique_id());
+        auto error_msg = fmt::format("submit cleanup exchange data failed for query_unique_id:{}", request->query_unique_id());
         tryLogCurrentException(log, error_msg);
         cntl->SetFailed(error_msg);
     }

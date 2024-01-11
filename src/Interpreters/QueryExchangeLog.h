@@ -28,8 +28,9 @@ namespace DB
 struct QueryExchangeLogElement
 {
     String initial_query_id{"-1"};
-    String exchange_id{"-1"};
-    String partition_id{"-1"};
+    UInt64 exchange_id{std::numeric_limits<UInt64>::max()};
+    UInt64 partition_id{std::numeric_limits<UInt64>::max()};
+    UInt64 parallel_index{std::numeric_limits<UInt64>::max()};
     String coordinator_address{};
     time_t event_time{};
 

@@ -82,6 +82,15 @@ void ASTInsertQuery::formatImpl(const FormatSettings & settings, FormatState & s
                 settings.ostr << (settings.hilite ? hilite_keyword : "") << " INFILE " << (settings.hilite ? hilite_none : "");
                 in_file->formatImpl(settings, state, frame);
             }
+
+            if (compression)
+            {
+                settings.ostr
+                    << (settings.hilite ? hilite_keyword : "")
+                    << " COMPRESSION "
+                    << (settings.hilite ? hilite_none : "");
+                compression->formatImpl(settings, state, frame);
+            }
         }
         else
         {
@@ -89,6 +98,15 @@ void ASTInsertQuery::formatImpl(const FormatSettings & settings, FormatState & s
             {
                 settings.ostr << (settings.hilite ? hilite_keyword : "") << " INFILE " << (settings.hilite ? hilite_none : "");
                 in_file->formatImpl(settings, state, frame);
+
+                if (compression)
+                {
+                    settings.ostr
+                        << (settings.hilite ? hilite_keyword : "")
+                        << " COMPRESSION "
+                        << (settings.hilite ? hilite_none : "");
+                    compression->formatImpl(settings, state, frame);
+                }
             }
             else
             {

@@ -365,7 +365,7 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
                 auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
                 sender_proxy->accept(context, exchange_header);
                 auto processors = disk_mgr->createProcessors(std::move(sender_proxy), exchange_header, context);
-                disk_mgr->submitReadTask(query_id, data_key, std::move(processors));
+                disk_mgr->submitReadTask(query_id, data_key, std::move(processors), coordinator_address);
             }
         }
         else
@@ -391,7 +391,8 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
                 name,
                 std::move(queue),
                 register_mode,
-                query_exchange_log);
+                query_exchange_log,
+                coordinator_address);
             brpc_receiver->setEnableReceiverMetrics(enable_metrics);
             receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
         }
@@ -418,7 +419,8 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
             name,
             std::move(queue),
             register_mode,
-            query_exchange_log);
+            query_exchange_log,
+            coordinator_address);
         brpc_receiver->setEnableReceiverMetrics(enable_metrics);
         receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
     }

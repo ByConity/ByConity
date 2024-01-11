@@ -438,7 +438,7 @@ void GlobalThreadPool::initialize(size_t max_threads)
     }
 
     the_instance.reset(new GlobalThreadPool(max_threads,
-        1000 /*max_free_threads*/, 10000 /*max_queue_size*/,
+        1000 /*max_free_threads*/, max_threads /*max_queue_size*/,
         false /*shutdown_on_exception*/));
 }
 

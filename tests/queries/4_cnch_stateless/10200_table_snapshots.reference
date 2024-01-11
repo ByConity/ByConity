@@ -16,8 +16,7 @@ select use s3
 2023-10-01	4	4
 2023-10-01	5	5
 drop s2, s3
-0
-2	1	0
+1	1	0
 delete i = 4
 create s4
 delete i = 6
@@ -32,8 +31,7 @@ select use s4
 insert into t2
 create s5 to t1
 t2 drop 20231101
-0
-0
+1
 drop s5
 upsert t2
 A	80	3960
@@ -42,7 +40,6 @@ C	10	45
 create s1 to t2
 create s2 to t2
 create s3 to t2
-0
 select use s1
 A	80	3960
 B	10	945
