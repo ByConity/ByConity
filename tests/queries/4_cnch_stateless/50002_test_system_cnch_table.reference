@@ -9,10 +9,6 @@ test_cnch_db2	tb1
 test_cnch_db1	tb1
 test_cnch_db3	tb2
 -- test db and db_table mixed query --
-test_cnch_db2	tb1
-test_cnch_db2	tb2
-test_cnch_db3	tb3
--- test mixed or query with regex --
 test_cnch_db1	tb1
 test_cnch_db2	tb1
 test_cnch_db2	tb2

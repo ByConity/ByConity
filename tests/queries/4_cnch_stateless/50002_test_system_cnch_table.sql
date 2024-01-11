@@ -48,9 +48,9 @@ SELECT COUNT(*) FROM system.cnch_tables where database like '%test_cnch_db%';
 SELECT '-- test single table query --';
 SELECT database, name FROM system.cnch_tables where database='test_cnch_db2' AND name='tb1';
 SELECT '-- test multiple tables or query --';
-SELECT database, name FROM system.cnch_tables where (database='test_cnch_db1' AND name='tb1') OR (database='test_cnch_db3' AND name='tb2') ORDER BY database;
+SELECT database, name FROM system.cnch_tables where (database='test_cnch_db1' AND name='tb1') OR (database='test_cnch_db3' AND name='tb2') ORDER BY database, name;
 SELECT '-- test db and db_table mixed query --';
-SELECT database, name FROM system.cnch_tables where (database like '%test_cnch_db%') OR (database='test_cnch_db3' AND name='tb3') ORDER BY database;
+SELECT database, name FROM system.cnch_tables where (database like '%test_cnch_db%') OR (database='test_cnch_db3' AND name='tb3') ORDER BY database, name;
 
 SELECT '-- clean --';
 DROP DATABASE test_cnch_db1;
