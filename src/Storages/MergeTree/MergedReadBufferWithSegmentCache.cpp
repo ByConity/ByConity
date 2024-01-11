@@ -24,6 +24,8 @@
 #include "Compression/CachedCompressedReadBuffer.h"
 #include "Compression/CompressedReadBufferFromFile.h"
 #include "Core/SettingsEnums.h"
+#include "Common/parseAddress.h"
+#include "Common/HostWithPorts.h"
 #include "Core/Types.h"
 #include "Storages/MergeTree/IMergeTreeDataPart.h"
 #include <Storages/DistributedDataClient.h>
@@ -346,8 +348,19 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
     if (settings.read_settings.disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
         return seekToMarkInRemoteSegmentCache(segment_idx, mark_pos, segment_key);
 
+    std::optional<String> parsed_assign_compute_host;
+    if (!part_host.assign_compute_host_port.empty())
+        parsed_assign_compute_host = parseAddress(part_host.assign_compute_host_port, 0).first;
+    std::optional<String> parsed_disk_cache_host;
+    if (!part_host.disk_cache_host_port.empty())
+        parsed_disk_cache_host = parseAddress(part_host.disk_cache_host_port, 0).first;
+    LOG_TRACE(
+        &Poco::Logger::get(__func__),
+        "Current node host vs disk cache host: {} vs {}", 
+        parsed_assign_compute_host.has_value() ? removeBracketsIfIpv6(parsed_assign_compute_host.value()) : "",
+        parsed_disk_cache_host.has_value() ? removeBracketsIfIpv6(parsed_disk_cache_host.value()) : "");
+
     std::pair<DiskPtr, String> cache_entry = segment_cache->get(segment_key);
-    LOG_TRACE(&Poco::Logger::get(__func__), "Current node host vs disk cache host: {} vs {}", getHostFromHostPort(part_host.assign_compute_host_port), getHostFromHostPort(part_host.disk_cache_host_port));
     if (cache_entry.first == nullptr)
     {
         if (settings.read_settings.disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
@@ -355,7 +368,8 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
 
         if ((settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
              || settings.remote_disk_cache_stealing == StealingCacheMode::READ_ONLY)
-            && !part_host.disk_cache_host_port.empty() && getHostFromHostPort(part_host.assign_compute_host_port) != getHostFromHostPort(part_host.disk_cache_host_port))
+            && parsed_assign_compute_host.has_value() && parsed_disk_cache_host.has_value()
+            && removeBracketsIfIpv6(parsed_assign_compute_host.value()) != removeBracketsIfIpv6(parsed_disk_cache_host.value()))
             return seekToMarkInRemoteSegmentCache(segment_idx, mark_pos, segment_key);
         LOG_TRACE(
             logger,
