@@ -69,7 +69,6 @@ struct SDKVConfiguration final : public SDKVConfigurationData
     M(UInt64, port, "", 9000, ConfigFlag::Default, "desc: rpc port") \
     M(UInt64, tso_window_ms, "", 3000, ConfigFlag::Default, "") \
     M(UInt64, tso_max_retry_count, "", 3, ConfigFlag::Default, "") \
-    M(Bool, use_fallback, "", true, ConfigFlag::Default, "") \
 
 DECLARE_CONFIG_DATA(TSOConfigurationData, TSO_CONFIG_FIELDS_LIST)
 struct TSOConfiguration final: public TSOConfigurationData

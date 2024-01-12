@@ -239,7 +239,10 @@ message CleanTransactionResp { optional string exception = 1; }
 
 message GetServerStartTimeReq {}
 
-message GetServerStartTimeResp { required uint64 server_start_time = 1; }
+message GetServerStartTimeResp
+{
+  optional uint64 server_start_time = 1;
+}
 
 message AcquireLockReq { required DataModelLockInfo lock = 1; }
 
@@ -557,6 +560,6 @@ service CnchServerService {
 
   rpc forceRecalculateMetrics(ForceRecalculateMetricsReq)
       returns(ForceRecalculateMetricsResp);
-  
+
   rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
 };

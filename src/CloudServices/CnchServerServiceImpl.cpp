@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <CloudServices/CnchServerServiceImpl.h>
 
 #include <Catalog/Catalog.h>
@@ -61,11 +62,22 @@ namespace ErrorCodes
 }
 namespace AutoStats = Statistics::AutoStats;
 
+namespace
+{
+    UInt64 getTS(ContextMutablePtr & context)
+    {
+        TxnTimestamp ts = context->tryGetTimestamp();
+        /// TSO server is unavailable now
+        if (ts == TxnTimestamp::fallbackTS())
+            ts = TxnTimestamp::fromUnixTimestamp(time(nullptr)).toUInt64();
+        return ts;
+    }
+}
+
 CnchServerServiceImpl::CnchServerServiceImpl(ContextMutablePtr global_context)
     : WithMutableContext(global_context),
-      server_start_time(global_context->getTimestamp()),
+      server_start_time(getTS(global_context)),
       global_gc_manager(global_context),
-
       log(&Poco::Logger::get("CnchServerService"))
 {
 }
@@ -881,8 +893,8 @@ void CnchServerServiceImpl::reportCnchLockHeartBeat(
 }
 
 void CnchServerServiceImpl::getServerStartTime(
-    google::protobuf::RpcController * cntl,
-    const Protos::GetServerStartTimeReq * request,
+    google::protobuf::RpcController *,
+    const Protos::GetServerStartTimeReq *,
     Protos::GetServerStartTimeResp * response,
     google::protobuf::Closure * done)
 {
