@@ -1440,9 +1440,8 @@ void HashJoin::joinBlockImplIneuqalCondition(
 
             if (join_feature.need_replication)
                 right_keys_to_replicate.push_back(block.getPositionByName(right_key.name));
-
-            row_filter.swap(null_map_filter.getData());
         }
+        row_filter.swap(null_map_filter.getData());
     }
 
     if constexpr (join_feature.need_replication)

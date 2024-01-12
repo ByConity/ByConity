@@ -1038,6 +1038,11 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
     return createScope(output_fields);
 }
 
+static constexpr int table_deps(int a, int b)
+{
+    return (a << 16) + b;
+};
+
 ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr left_scope, ScopePtr right_scope, const String & right_table_qualifier)
 {
     ScopePtr output_scope;
@@ -1183,10 +1188,20 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
                     is_join_expr = true;
                 };
 
-                if (table_for_left == 1 && table_for_right == 2)
-                    add_join_exprs(left_arg, right_arg, getInequality(func->name));
-                else if (table_for_left == 2 && table_for_right == 1)
-                    add_join_exprs(right_arg, left_arg, reverseInequality(getInequality(func->name)));
+                switch (table_deps(table_for_left, table_for_right))
+                {
+                    case table_deps(1, 2):
+                    case table_deps(1, -1):
+                    case table_deps(-1, 2):
+                    case table_deps(-1, -1):
+                        add_join_exprs(left_arg, right_arg, getInequality(func->name));
+                        break;
+                    case table_deps(2, 1):
+                    case table_deps(2, -1):
+                    case table_deps(-1, 1):
+                        add_join_exprs(right_arg, left_arg, reverseInequality(getInequality(func->name)));
+                        break;
+                }
             }
 
             if (!is_join_expr)
