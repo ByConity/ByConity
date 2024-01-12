@@ -3471,6 +3471,7 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
             {
                 result += " broadcast";
             }
+            result += " " + std::to_string(join_step->hash());
         }
         if (expr->getStep()->getType() == IQueryPlanStep::Type::CTERef)
         {
@@ -3505,26 +3506,36 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
         out << "<TR><TD COLSPAN=\"3\">" << dynamic_cast<const FilterStep *>(head_step)->getFilterColumnName() << "</TD></TR>";
     }
 
+    if (group.isJoinRoot())
+    {
+        out << "<TR><TD COLSPAN=\"3\">JoinRoot</TD></TR>";
+    }
+
+    if (group.getJoinRootId() != 0)
+    {
+        out << "<TR><TD COLSPAN=\"3\">Join Root Id: " << group.getJoinRootId() << "</TD></TR>";
+    }
+
     if (group.isMagic())
     {
         out << "<TR><TD COLSPAN=\"3\">MagicSet</TD></TR>";
     }
 
-    for (const auto & join_set : group.getJoinSets())
-    {
-        if (join_set.getGroups().size() <= 1)
-            continue;
+    // for (const auto & join_set : group.getJoinSets())
+    // {
+    //     if (join_set.getGroups().size() <= 1)
+    //         continue;
 
-        out << "<TR><TD COLSPAN=\"3\">JoinSet: ";
-        for (size_t i = 0; i < join_set.getGroups().size(); i++)
-        {
-            if (i != 0)
-                out << ",";
-            out << join_set.getGroups()[i];
-        }
-        out << "; ";
-        out << "</TD></TR>";
-    }
+    //     out << "<TR><TD COLSPAN=\"3\">JoinSet: ";
+    //     for (size_t i = 0; i < join_set.getGroups().size(); i++)
+    //     {
+    //         if (i != 0)
+    //             out << ",";
+    //         out << join_set.getGroups()[i];
+    //     }
+    //     out << "; ";
+    //     out << "</TD></TR>";
+    // }
 
     if (group.isStatsDerived())
     {

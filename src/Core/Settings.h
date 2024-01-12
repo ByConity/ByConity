@@ -1767,6 +1767,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_inner_join_associate, true, "Whether to enable InnerJoinAssociate rule", 0) \
     M(Bool, enable_inner_join_commutation, true, "Whether to enable InnerJoinCommutation rule", 0) \
     M(Bool, enable_join_enum_on_graph, true, "Whether to enable JoinEnumOnGraph rule", 0) \
+    M(Bool, enable_join_to_multi_join, true, "Whether to enable JoinToMultiJoin rule", 0) \
+    M(Bool, enable_cardinality_based_join_reorder, true, "Whether to enable CardinalityBasedJoinReorder rule", 0) \
+    M(Bool, enable_selectivity_based_join_reorder, true, "Whether to enable SelectivityBasedJoinReorder rule", 0) \
     M(Bool, enable_left_join_to_right_join, true, "Whether to enable LeftJoinToRightJoin rule", 0) \
     M(Bool, enable_magic_set_push_through_projection, true, "Whether to enable MagicSetPushThroughProject rule", 0) \
     M(Bool, enable_magic_set_push_through_join, true, "Whether to enable MagicSetPushThroughJoin rule", 0) \
@@ -1790,6 +1793,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
     M(Bool, enable_cascades_optimizer, true, "Whether to enable CascadesOptimizer", 0) \
     M(Bool, enable_iterative_rewriter, true, "Whether to enable InterativeRewriter", 0) \
+    M(Float, multi_join_keys_correlated_coefficient, 0.8, "Coefficient about multi join keys, the smaller the value, the smaller the estimated join cardnlity, do nothing when equals 1.0", 0) \
+    M(Float, multi_agg_keys_correlated_coefficient, 0.9, "Coefficient about multi agg keys, the smaller the value, the smaller the estimated agg cardnlity, do nothing when equals 1.0", 0) \
     M(Bool, enable_common_expression_sharing, true, "Whether to share common expression between steps", 0) \
     M(Bool, enable_common_expression_sharing_for_prewhere, true, "Whether to share common expression between steps and PREWHERE", 0) \
     M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
@@ -1819,7 +1824,7 @@ enum PreloadLevelSettings : UInt64
     M(Float, cost_calculator_join_build_weight, 2, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_join_output_weight, 0.5, "Join output weight for cost calculator", 0) \
     M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
-    M(Float, cost_calculator_cte_weight_for_join_build_side, 1.8, "Join build side weight for cost calculator", 0) \
+    M(Float, cost_calculator_cte_weight_for_join_build_side, 1.3, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
@@ -1829,6 +1834,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
     M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
     M(UInt64 , max_graph_reorder_size, 6, "Max tables join order enum on graph", 0) \
+    M(UInt64 , heuristic_join_reorder_enumeration_times, 3, "Heuristic times in CardinalityBased Join Reorder algorithm", 0) \
     M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
     M(Bool, enable_cascades_pruning, false, "Whether enable cascades pruning", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
@@ -1851,7 +1857,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
     M(Float, magic_set_filter_factor, 0.5, "The minimum filter factor of magic set, used for early pruning", 0) \
-    M(UInt64, magic_set_max_search_tree, 4, "The maximum table scans in magic set, used for early pruning", 0) \
+    M(UInt64, magic_set_max_search_tree, 2, "The maximum table scans in magic set, used for early pruning", 0) \
     M(UInt64, magic_set_source_min_rows, 10000, "The minimum rows of source node in magic set, used for early pruning", 0) \
     M(Float, magic_set_rows_factor, 0.6, "The minimum rows of source node in magic set, used for early pruning", 0) \
     M(CTEMode, cte_mode, CTEMode::AUTO, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \

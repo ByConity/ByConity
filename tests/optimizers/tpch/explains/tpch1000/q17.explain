@@ -5,7 +5,7 @@ Projection Est. 1 rows
       └─ Aggregating Est. 1 rows
          │     Group by: {}
          │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
-         └─ Inner Join Est. 5976434 rows
+         └─ Inner Join Est. 6004189 rows
             │     Condition: l_partkey == l_partkey_1
             │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)`)
             ├─ Repartition Exchange Est. 5999989709 rows
@@ -28,9 +28,9 @@ Projection Est. 1 rows
                └─ Aggregating Est. 200140 rows
                   │     Group by: {l_partkey_1}
                   │     Aggregates: expr#avg(l_quantity):=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
-                  └─ Projection Est. 5976434 rows
+                  └─ Projection Est. 6004189 rows
                      │     Expressions: [l_partkey_1, l_quantity_1], build_side_non_null_symbol:=1
-                     └─ Inner Join Est. 5976434 rows
+                     └─ Inner Join Est. 6004189 rows
                         │     Condition: l_partkey_1 == p_partkey_1
                         │     Runtime Filters Builder: {p_partkey_1}
                         ├─ Repartition Exchange Est. 5999989709 rows

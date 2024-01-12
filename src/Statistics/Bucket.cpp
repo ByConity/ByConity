@@ -496,13 +496,6 @@ OverlappedRange Bucket::makeBucketIntersect(const Bucket & right) const
     }
 }
 
-Bucket Bucket::makeBucketCopy() const
-{
-    auto bucket
-        = Bucket(this->lower_bound, this->upper_bound, this->ndv, this->count, this->lower_bound_inclusive, this->upper_bound_inclusive);
-    return bucket;
-}
-
 //		Merges with another bucket. Returns merged bucket that should be part
 //		of the output. It also returns what is leftover from the merge.
 //		E.g.

@@ -5,26 +5,26 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {w_warehouse_name ASC NULLS LAST, i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 157439 rows
+      └─ Gather Exchange Est. 141695 rows
          └─ Sorting Est. 100 rows
             │     Order by: {w_warehouse_name ASC NULLS LAST, i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ Filter Est. 157439 rows
+            └─ Filter Est. 141695 rows
                │     Condition: (multiIf(`expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` > 0, `expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` / `expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))`, NULL) >= '0.666666') AND (multiIf(`expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` > 0, `expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` / `expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))`, NULL) <= '1.500000')
-               └─ MergingAggregated Est. 174933 rows
-                  └─ Repartition Exchange Est. 174933 rows
+               └─ MergingAggregated Est. 157439 rows
+                  └─ Repartition Exchange Est. 157439 rows
                      │     Partition by: {w_warehouse_name, i_item_id}
-                     └─ Aggregating Est. 174933 rows
+                     └─ Aggregating Est. 157439 rows
                         │     Group by: {w_warehouse_name, i_item_id}
                         │     Aggregates: expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)):=AggNull(sum)(expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)), expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)):=AggNull(sum)(expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))
-                        └─ Projection Est. 10827899 rows
+                        └─ Projection Est. 10890810 rows
                            │     Expressions: [i_item_id, w_warehouse_name], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), inv_quantity_on_hand, 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), inv_quantity_on_hand, 0)
-                           └─ Inner Join Est. 10827899 rows
+                           └─ Inner Join Est. 10890810 rows
                               │     Condition: inv_warehouse_sk == w_warehouse_sk
-                              ├─ Inner Join Est. 10827899 rows
+                              ├─ Inner Join Est. 10890810 rows
                               │  │     Condition: inv_date_sk == d_date_sk
                               │  │     Runtime Filters Builder: {d_date_sk}
-                              │  ├─ Inner Join Est. 47899692 rows
+                              │  ├─ Inner Join Est. 48177990 rows
                               │  │  │     Condition: inv_item_sk == i_item_sk
                               │  │  │     Runtime Filters Builder: {i_item_sk}
                               │  │  ├─ Filter Est. 783000000 rows

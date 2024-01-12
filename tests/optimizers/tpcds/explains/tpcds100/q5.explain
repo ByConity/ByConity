@@ -5,16 +5,16 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_1 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 20613 rows
+      └─ Gather Exchange Est. 17321 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_1 ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 20613 rows
-               └─ Repartition Exchange Est. 20613 rows
+            └─ MergingAggregated Est. 17321 rows
+               └─ Repartition Exchange Est. 15587 rows
                   │     Partition by: {expr#'store channel'_1, expr#concat('store', s_store_id)_1, __grouping_set}
-                  └─ Union Est. 20613 rows
+                  └─ Union Est. 15587 rows
                      │     OutputToInputs: expr#sum(profit)_3 = [expr#sum(profit)_3,expr#sum(profit)_3,expr#sum(profit)_3], expr#'store channel'_1 = [expr#'store channel',expr#'catalog channel',expr#'web channel'], expr#sum(returns) = [expr#sum(returns),expr#sum(returns),expr#sum(returns)], expr#sum(sales) = [expr#sum(sales),expr#sum(sales),expr#sum(sales)], expr#concat('store', s_store_id)_1 = [expr#concat('store', s_store_id),expr#concat('catalog_page', cp_catalog_page_id),expr#concat('web_site', web_site_id)], __grouping_set = [__grouping_set,__grouping_set,__grouping_set]
-                     ├─ Aggregating Est. 201 rows
+                     ├─ Aggregating Est. 180 rows
                      │  │     Group by: {expr#'store channel', expr#concat('store', s_store_id)}
                      │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss))
                      │  └─ Projection Est. 201 rows
@@ -59,18 +59,18 @@ Projection Est. 100 rows
                      │                 └─ Broadcast Exchange Est. 402 rows
                      │                    └─ TableScan tpcds100.store Est. 402 rows
                      │                             Outputs: [s_store_sk, s_store_id]
-                     ├─ Aggregating Est. 20400 rows
+                     ├─ Aggregating Est. 15397 rows
                      │  │     Group by: {expr#'catalog channel', expr#concat('catalog_page', cp_catalog_page_id)}
                      │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)_1), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)_1), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss)_1)
-                     │  └─ Projection Est. 20400 rows
+                     │  └─ Projection Est. 17108 rows
                      │     │     Expressions: [expr#sum(return_amt)_1, expr#sum(sales_price)_1], expr#'catalog channel':='catalog channel', expr#concat('catalog_page', cp_catalog_page_id):=concat('catalog_page', cp_catalog_page_id), expr#minus(profit, profit_loss)_1:=`expr#sum(profit)_1` - `expr#sum(net_loss)_1`
-                     │     └─ MergingAggregated Est. 20400 rows
-                     │        └─ Repartition Exchange Est. 20400 rows
+                     │     └─ MergingAggregated Est. 17108 rows
+                     │        └─ Repartition Exchange Est. 17108 rows
                      │           │     Partition by: {cp_catalog_page_id}
-                     │           └─ Aggregating Est. 20400 rows
+                     │           └─ Aggregating Est. 17108 rows
                      │              │     Group by: {cp_catalog_page_id}
                      │              │     Aggregates: expr#sum(sales_price)_1:=AggNull(sum)(cs_ext_sales_price_1), expr#sum(profit)_1:=AggNull(sum)(cs_net_profit_1), expr#sum(return_amt)_1:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_18), expr#sum(net_loss)_1:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_19)
-                     │              └─ Inner Join Est. 465328 rows
+                     │              └─ Inner Join Est. 523175 rows
                      │                 │     Condition: cs_catalog_page_sk_1 == cp_catalog_page_sk
                      │                 ├─ Repartition Exchange Est. 523175 rows
                      │                 │  │     Partition by: {cs_catalog_page_sk_1}
@@ -107,7 +107,7 @@ Projection Est. 100 rows
                      │                    │     Partition by: {cp_catalog_page_sk}
                      │                    └─ TableScan tpcds100.catalog_page Est. 20400 rows
                      │                             Outputs: [cp_catalog_page_sk, cp_catalog_page_id]
-                     └─ Aggregating Est. 12 rows
+                     └─ Aggregating Est. 10 rows
                         │     Group by: {expr#'web channel', expr#concat('web_site', web_site_id)}
                         │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)_2), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)_2), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss)_2)
                         └─ Projection Est. 12 rows
@@ -118,7 +118,7 @@ Projection Est. 100 rows
                                  └─ Aggregating Est. 12 rows
                                     │     Group by: {web_site_id}
                                     │     Aggregates: expr#sum(sales_price)_2:=AggNull(sum)(ws_ext_sales_price_1), expr#sum(profit)_2:=AggNull(sum)(ws_net_profit_1), expr#sum(return_amt)_2:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_28), expr#sum(net_loss)_2:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_29)
-                                    └─ Inner Join Est. 257232 rows
+                                    └─ Inner Join Est. 514465 rows
                                        │     Condition: ws_web_site_sk_2 == web_site_sk
                                        ├─ Inner Join Est. 514465 rows
                                        │  │     Condition: ws_sold_date_sk_1 == d_date_sk_2

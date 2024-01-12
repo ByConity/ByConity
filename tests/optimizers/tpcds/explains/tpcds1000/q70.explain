@@ -5,21 +5,21 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) DESC NULLS LAST, expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL) ASC NULLS LAST, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 513 rows
+      └─ Gather Exchange Est. 461 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) DESC NULLS LAST, expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL) ASC NULLS LAST, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 513 rows
+            └─ Projection Est. 461 rows
                │     Expressions: [expr#plus(grouping(s_state), grouping(s_county)), expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC), expr#sum(ss_net_profit)_1, s_county, s_state], expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL):=multiIf(`expr#plus(grouping(s_state), grouping(s_county))` = 0, s_state, NULL)
-               └─ Window Est. 513 rows
-                  └─ Repartition Exchange Est. 513 rows
+               └─ Window Est. 461 rows
+                  └─ Repartition Exchange Est. 461 rows
                      │     Partition by: {expr#plus(grouping(s_state), grouping(s_county)), expr#multiIf(equals(grouping(s_county), 0), s_state, NULL)}
-                     └─ Projection Est. 513 rows
+                     └─ Projection Est. 461 rows
                         │     Expressions: [expr#sum(ss_net_profit)_1, s_county, s_state], expr#multiIf(equals(grouping(s_county), 0), s_state, NULL):=multiIf(`expr#grouping(s_county)` = 0, s_state, NULL), expr#plus(grouping(s_state), grouping(s_county)):=`expr#grouping(s_state)` + `expr#grouping(s_county)`
-                        └─ MergingAggregated Est. 513 rows
-                           └─ Repartition Exchange Est. 513 rows
+                        └─ MergingAggregated Est. 461 rows
+                           └─ Repartition Exchange Est. 461 rows
                               │     Partition by: {s_state, s_county, __grouping_set}
-                              └─ Aggregating Est. 513 rows
+                              └─ Aggregating Est. 461 rows
                                  │     Group by: {s_state, s_county}
                                  │     Aggregates: expr#sum(ss_net_profit)_1:=AggNull(sum)(ss_net_profit)
                                  └─ Inner Join Est. 526075701 rows

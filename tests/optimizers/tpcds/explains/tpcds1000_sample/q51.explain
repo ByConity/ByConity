@@ -5,24 +5,24 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) ASC NULLS LAST, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 14465821012 rows
+      └─ Gather Exchange Est. 10613891125 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) ASC NULLS LAST, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) ASC NULLS LAST}
             │     Limit: 100
-            └─ Filter Est. 14465821012 rows
+            └─ Filter Est. 10613891125 rows
                │     Condition: `expr#max(web_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)` > `expr#max(store_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`
-               └─ Window Est. 16073134458 rows
-                  └─ Repartition Exchange Est. 16073134458 rows
+               └─ Window Est. 11793212362 rows
+                  └─ Repartition Exchange Est. 11793212362 rows
                      │     Partition by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk)}
-                     └─ Projection Est. 16073134458 rows
+                     └─ Projection Est. 11793212362 rows
                         │     Expressions: [expr#sum(sum(ss_sales_price)) OVER (PARTITION BY ss_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), expr#sum(sum(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)], expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date):=multiIf(isNotNull(d_date), d_date, d_date_1), expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk):=multiIf(isNotNull(ws_item_sk), ws_item_sk, ss_item_sk)
-                        └─ Full (PARALLEL_HASH) Join Est. 16073134458 rows
+                        └─ Full (PARALLEL_HASH) Join Est. 11793212362 rows
                            │     Condition: d_date == d_date_1, ws_item_sk == ss_item_sk
-                           ├─ Window Est. 110221668 rows
-                           │  └─ MergingAggregated Est. 110221668 rows
-                           │     └─ Repartition Exchange Est. 110221668 rows
+                           ├─ Window Est. 89857849 rows
+                           │  └─ MergingAggregated Est. 89857849 rows
+                           │     └─ Repartition Exchange Est. 89857849 rows
                            │        │     Partition by: {ws_item_sk}
-                           │        └─ Aggregating Est. 110221668 rows
+                           │        └─ Aggregating Est. 89857849 rows
                            │           │     Group by: {ws_item_sk, d_date}
                            │           │     Aggregates: expr#sum(ws_sales_price):=AggNull(sum)(ws_sales_price)
                            │           └─ Inner Join Est. 131914495 rows
@@ -39,11 +39,11 @@ Projection Est. 100 rows
                            │                    └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                            │                             Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                            │                             Outputs: [d_date_sk, d_date, d_month_seq]
-                           └─ Window Est. 46014606 rows
-                              └─ MergingAggregated Est. 46014606 rows
-                                 └─ Repartition Exchange Est. 46014606 rows
+                           └─ Window Est. 41413144 rows
+                              └─ MergingAggregated Est. 41413144 rows
+                                 └─ Repartition Exchange Est. 41413144 rows
                                     │     Partition by: {ss_item_sk}
-                                    └─ Aggregating Est. 46014606 rows
+                                    └─ Aggregating Est. 41413144 rows
                                        │     Group by: {ss_item_sk, d_date_1}
                                        │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
                                        └─ Inner Join Est. 527655508 rows

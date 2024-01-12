@@ -14,7 +14,7 @@ Projection Est. 1 rows
             │     └─ Aggregating Est. 1 rows
             │        │     Group by: {}
             │        │     Aggregates: expr#count():=AggNull(count)()
-            │        └─ Inner Join Est. 11416 rows
+            │        └─ Inner Join Est. 11470 rows
             │           │     Condition: ws_sold_time_sk == t_time_sk
             │           │     Runtime Filters Builder: {t_time_sk}
             │           ├─ Repartition Exchange Est. 137649 rows
@@ -55,7 +55,7 @@ Projection Est. 1 rows
                      └─ Aggregating Est. 1 rows
                         │     Group by: {}
                         │     Aggregates: expr#count()_1:=AggNull(count)()
-                        └─ Inner Join Est. 11416 rows
+                        └─ Inner Join Est. 11470 rows
                            │     Condition: ws_sold_time_sk_1 == t_time_sk_1
                            │     Runtime Filters Builder: {t_time_sk_1}
                            ├─ Repartition Exchange Est. 137649 rows

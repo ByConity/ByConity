@@ -94,12 +94,19 @@ public:
     size_t getOutputSizeInBytes();
 
     void setNdv(UInt64 ndv_) { ndv = ndv_; }
-    void setType(const DataTypePtr & type_) { type = type_; }
+    void setType(const DataTypePtr & type_)
+    {
+        type = type_;
+        normalize();
+    }
     void setDbTableColumn(String db_table_column_) { db_table_column = db_table_column_; }
 
     bool isNullable() const { return isNullableOrLowCardinalityNullable(type); }
     bool isNumber() const;
     bool isString() const;
+
+    void normalize();
+
 
     bool isImplicitConvertableFromString();
 
@@ -138,8 +145,8 @@ public:
     SymbolStatisticsPtr createNot(SymbolStatisticsPtr & origin);
 
     // adjust other symbols statistics while they don't participation in filter/join/aggregate.
-    SymbolStatisticsPtr applySelectivity(double selectivity);
-    SymbolStatisticsPtr applySelectivity(double rowcount_selectivity, double ndv_selectivity);
+    SymbolStatisticsPtr applySelectivity(double selectivity) const;
+    SymbolStatisticsPtr applySelectivity(double rowcount_selectivity, double ndv_selectivity) const;
 
     void emplaceBackBucket(Bucket bucket) { histogram.emplaceBackBucket(std::move(bucket)); }
 

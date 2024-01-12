@@ -51,23 +51,7 @@ public:
 
     const String & getDefaultDatabase() const { return database_name; }
 
-    static std::unordered_map<String, Field> getDefaultOptimizerSettings()
-    {
-        std::unordered_map<std::string, DB::Field> settings;
-#ifndef NDEBUG
-        // debug mode may time out.
-        settings.emplace("iterative_optimizer_timeout", "30000000");
-        settings.emplace("cascades_optimizer_timeout", "30000000");
-#endif
-        settings.emplace("dialect_type", "ANSI");
-        settings.emplace("enable_sharding_optimize", 1);
-        settings.emplace("enable_group_by_keys_pruning", true);
-        settings.emplace("enable_eliminate_join_by_fk", true);
-        settings.emplace("enable_eliminate_complicated_pk_fk_join", true);
-        settings.emplace("enable_eliminate_complicated_pk_fk_join_without_top_join", true);
-        settings.emplace("cost_calculator_cte_weight_for_join_build_side", 1.7);
-        return settings;
-    }
+    static std::unordered_map<String, Field> getDefaultOptimizerSettings();
 
     ContextMutablePtr getSessionContext() { return session_context; }
     std::string getDatabaseName() { return database_name; }

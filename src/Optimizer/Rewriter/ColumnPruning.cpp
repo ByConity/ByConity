@@ -206,6 +206,11 @@ PlanNodePtr ColumnPruningVisitor::visitIntersectOrExceptNode(IntersectOrExceptNo
     return intersect_except_node;
 }
 
+PlanNodePtr ColumnPruningVisitor::visitMultiJoinNode(MultiJoinNode &, NameSet &)
+{
+    throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
+}
+
 PlanNodePtr ColumnPruningVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode & node, NameSet & require)
 {
     return visitDefault<false>(node, require);

@@ -15,7 +15,7 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 149640 rows
                      │     Group by: {i_item_id, s_state}
                      │     Aggregates: expr#avg(ss_quantity):=AggNull(avg)(ss_quantity), expr#avg(ss_list_price):=AggNull(avg)(ss_list_price), expr#avg(ss_coupon_amt):=AggNull(avg)(ss_coupon_amt), expr#avg(ss_sales_price):=AggNull(avg)(ss_sales_price)
-                     └─ Inner Join Est. 668378 rows
+                     └─ Inner Join Est. 672262 rows
                         │     Condition: ss_item_sk == i_item_sk
                         ├─ Repartition Exchange Est. 672262 rows
                         │  │     Partition by: {ss_item_sk}

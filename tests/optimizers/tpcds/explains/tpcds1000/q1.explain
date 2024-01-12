@@ -62,52 +62,50 @@ Projection Est. 100 rows
                   └─ Inner Join Est. 41 rows
                      │     Condition: sr_store_sk_2 == s_store_sk
                      │     Runtime Filters Builder: {s_store_sk}
-                     ├─ Repartition Exchange Est. 41 rows
-                     │  │     Partition by: {sr_store_sk_2}
-                     │  └─ MergingAggregated Est. 41 rows
-                     │     └─ Repartition Exchange Est. 41 rows
-                     │        │     Partition by: {sr_store_sk_2}
-                     │        └─ Aggregating Est. 41 rows
-                     │           │     Group by: {sr_store_sk_2}
-                     │           │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(sr_return_amt)_2,build_side_non_null_symbol)
-                     │           └─ Projection Est. 4294871 rows
-                     │              │     Expressions: [expr#sum(sr_return_amt)_2, sr_store_sk_2], build_side_non_null_symbol:=1
-                     │              └─ MergingAggregated Est. 4294871 rows
-                     │                 └─ Repartition Exchange Est. 4294871 rows
-                     │                    │     Partition by: {sr_customer_sk_4, sr_store_sk_2}
-                     │                    └─ Aggregating Est. 4294871 rows
-                     │                       │     Group by: {sr_customer_sk_4, sr_store_sk_2}
-                     │                       │     Aggregates: expr#sum(sr_return_amt)_2:=AggNull(sum)(sr_return_amt_2)
-                     │                       └─ Inner Join Est. 4294871 rows
-                     │                          │     Condition: sr_returned_date_sk_2 == d_date_sk_2
-                     │                          │     Runtime Filters Builder: {d_date_sk_2}
-                     │                          ├─ Inner Join Est. 23568842 rows
-                     │                          │  │     Condition: sr_store_sk_2 == s_store_sk_2
-                     │                          │  │     Runtime Filters Builder: {s_store_sk_2}
-                     │                          │  ├─ Filter Est. 287999764 rows
-                     │                          │  │  │     Condition: Runtime Filters: {sr_returned_date_sk_2, sr_store_sk_2}
-                     │                          │  │  └─ TableScan tpcds1000.store_returns Est. 287999764 rows
-                     │                          │  │           Where: Runtime Filters: {sr_returned_date_sk, sr_store_sk}
-                     │                          │  │           Outputs: sr_returned_date_sk_2:=sr_returned_date_sk, sr_customer_sk_4:=sr_customer_sk, sr_store_sk_2:=sr_store_sk, sr_return_amt_2:=sr_return_amt
-                     │                          │  └─ Broadcast Exchange Est. 41 rows
-                     │                          │     └─ MergingAggregated Est. 41 rows
-                     │                          │        └─ Repartition Exchange Est. 41 rows
-                     │                          │           │     Partition by: {s_store_sk_2}
-                     │                          │           └─ Aggregating Est. 41 rows
-                     │                          │              │     Group by: {s_store_sk_2}
-                     │                          │              └─ Projection Est. 41 rows
-                     │                          │                 │     Expressions: s_store_sk_2:=s_store_sk
-                     │                          │                 └─ Filter Est. 41 rows
-                     │                          │                    │     Condition: s_state = 'TN'
-                     │                          │                    └─ TableScan tpcds1000.store Est. 1002 rows
-                     │                          │                             Where: s_state = 'TN'
-                     │                          │                             Outputs: [s_store_sk, s_state]
-                     │                          └─ Broadcast Exchange Est. 366 rows
-                     │                             └─ Filter Est. 366 rows
-                     │                                │     Condition: d_year_2 = 2000
-                     │                                └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                     │                                         Where: d_year = 2000
-                     │                                         Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                     ├─ MergingAggregated Est. 41 rows
+                     │  └─ Repartition Exchange Est. 41 rows
+                     │     │     Partition by: {sr_store_sk_2}
+                     │     └─ Aggregating Est. 41 rows
+                     │        │     Group by: {sr_store_sk_2}
+                     │        │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(sr_return_amt)_2,build_side_non_null_symbol)
+                     │        └─ Projection Est. 4294871 rows
+                     │           │     Expressions: [expr#sum(sr_return_amt)_2, sr_store_sk_2], build_side_non_null_symbol:=1
+                     │           └─ MergingAggregated Est. 4294871 rows
+                     │              └─ Repartition Exchange Est. 4294871 rows
+                     │                 │     Partition by: {sr_customer_sk_4, sr_store_sk_2}
+                     │                 └─ Aggregating Est. 4294871 rows
+                     │                    │     Group by: {sr_customer_sk_4, sr_store_sk_2}
+                     │                    │     Aggregates: expr#sum(sr_return_amt)_2:=AggNull(sum)(sr_return_amt_2)
+                     │                    └─ Inner Join Est. 4294871 rows
+                     │                       │     Condition: sr_returned_date_sk_2 == d_date_sk_2
+                     │                       │     Runtime Filters Builder: {d_date_sk_2}
+                     │                       ├─ Inner Join Est. 23568842 rows
+                     │                       │  │     Condition: sr_store_sk_2 == s_store_sk_2
+                     │                       │  │     Runtime Filters Builder: {s_store_sk_2}
+                     │                       │  ├─ Filter Est. 287999764 rows
+                     │                       │  │  │     Condition: Runtime Filters: {sr_returned_date_sk_2, sr_store_sk_2}
+                     │                       │  │  └─ TableScan tpcds1000.store_returns Est. 287999764 rows
+                     │                       │  │           Where: Runtime Filters: {sr_returned_date_sk, sr_store_sk}
+                     │                       │  │           Outputs: sr_returned_date_sk_2:=sr_returned_date_sk, sr_customer_sk_4:=sr_customer_sk, sr_store_sk_2:=sr_store_sk, sr_return_amt_2:=sr_return_amt
+                     │                       │  └─ Broadcast Exchange Est. 41 rows
+                     │                       │     └─ MergingAggregated Est. 41 rows
+                     │                       │        └─ Repartition Exchange Est. 41 rows
+                     │                       │           │     Partition by: {s_store_sk_2}
+                     │                       │           └─ Aggregating Est. 41 rows
+                     │                       │              │     Group by: {s_store_sk_2}
+                     │                       │              └─ Projection Est. 41 rows
+                     │                       │                 │     Expressions: s_store_sk_2:=s_store_sk
+                     │                       │                 └─ Filter Est. 41 rows
+                     │                       │                    │     Condition: s_state = 'TN'
+                     │                       │                    └─ TableScan tpcds1000.store Est. 1002 rows
+                     │                       │                             Where: s_state = 'TN'
+                     │                       │                             Outputs: [s_store_sk, s_state]
+                     │                       └─ Broadcast Exchange Est. 366 rows
+                     │                          └─ Filter Est. 366 rows
+                     │                             │     Condition: d_year_2 = 2000
+                     │                             └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                     │                                      Where: d_year = 2000
+                     │                                      Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
                      └─ Repartition Exchange Est. 41 rows
                         │     Partition by: {s_store_sk}
                         └─ Filter Est. 41 rows

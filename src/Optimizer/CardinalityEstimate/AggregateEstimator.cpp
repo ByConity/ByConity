@@ -18,21 +18,30 @@
 namespace DB
 {
 static double estimateGroupBy(
-    std::unordered_map<String, SymbolStatisticsPtr> & symbol_statistics, PlanNodeStatisticsPtr & child_stats, const Names & group_keys)
+    std::unordered_map<String, SymbolStatisticsPtr> & symbol_statistics, PlanNodeStatisticsPtr & child_stats, const Names & group_keys, const NameSet & keys_not_hashed, double multi_agg_keys_correlated_coefficient)
 {
     double row_count = 1;
     bool all_unknown = true;
-    for (const auto & key : group_keys)
+    for (size_t i = 0; i < group_keys.size(); i++)
     {
+        const auto & key = group_keys[i];
         if (child_stats->getSymbolStatistics().contains(key) && !child_stats->getSymbolStatistics(key)->isUnknown())
         {
             auto key_stats = child_stats->getSymbolStatistics(key)->copy();
-            int null_rows
-                = child_stats->getRowCount() == 0 || (double(key_stats->getNullsCount()) / child_stats->getRowCount() == 0.0) ? 0 : 1;
-            if (key_stats->getNdv() > 0)
+            if (!keys_not_hashed.contains(key)) // `keys not hashed` don't affect the calculation result of agg and should be ignored when estimating the cardinality.
             {
-                row_count *= static_cast<double>(key_stats->getNdv()) + null_rows;
+                int null_rows
+                    = child_stats->getRowCount() == 0 || (double(key_stats->getNullsCount()) / child_stats->getRowCount() == 0.0) ? 0 : 1;
+                if (key_stats->getNdv() > 0)
+                {
+                    double cndv = static_cast<double>(key_stats->getNdv()) + null_rows;
+                    if (i != 0)
+                        row_count *= std::max(1.0, multi_agg_keys_correlated_coefficient * cndv);
+                    else
+                        row_count *= cndv;
+                }
             }
+
             symbol_statistics[key] = key_stats;
             all_unknown = false;
         }
@@ -55,16 +64,19 @@ static double estimateGroupBy(
     return row_count;
 }
 
-PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const AggregatingStep & step)
+PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const AggregatingStep & step, ContextMutablePtr context)
 {
     if (!child_stats)
     {
         return nullptr;
     }
     std::unordered_map<String, SymbolStatisticsPtr> symbol_statistics;
-    const Names & group_keys = step.getKeys();
+    
+    Names group_keys;
+    for (const auto & key : step.getKeys())
+        group_keys.push_back(key);
 
-    double row_count = estimateGroupBy(symbol_statistics, child_stats, group_keys);
+    double row_count = estimateGroupBy(symbol_statistics, child_stats, group_keys, step.getKeysNotHashed(), context->getSettingsRef().multi_agg_keys_correlated_coefficient);
 
     std::unordered_map<String, DataTypePtr> name_to_type;
     for (const auto & item : step.getOutputStream().header)
@@ -81,7 +93,7 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
     return std::make_shared<PlanNodeStatistics>(row_count, std::move(symbol_statistics));
 }
 
-PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const MergingAggregatedStep & step)
+PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const MergingAggregatedStep & step, ContextMutablePtr)
 {
     if (!child_stats)
     {
@@ -90,7 +102,7 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
 
     std::unordered_map<String, SymbolStatisticsPtr> symbol_statistics;
     const Names & group_keys = step.getKeys();
-    double row_count = estimateGroupBy(symbol_statistics, child_stats, group_keys);
+    double row_count = estimateGroupBy(symbol_statistics, child_stats, group_keys, {}, 1.0);
 
     const AggregateDescriptions & agg_descs = step.getAggregates();
     std::unordered_map<String, DataTypePtr> name_to_type;
@@ -107,7 +119,7 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
     return std::make_shared<PlanNodeStatistics>(row_count, std::move(symbol_statistics));
 }
 
-PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const DistinctStep & step)
+PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const DistinctStep & step, ContextMutablePtr)
 {
     if (!child_stats)
     {
@@ -117,7 +129,7 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
     std::unordered_map<String, SymbolStatisticsPtr> symbol_statistics;
     const auto & columns = step.getColumns();
     UInt64 limit = step.getSetSizeLimits().max_rows;
-    double row_count = estimateGroupBy(symbol_statistics, child_stats, columns);
+    double row_count = estimateGroupBy(symbol_statistics, child_stats, columns, {}, 1.0);
 
     // distinct limit
     if (limit != 0)

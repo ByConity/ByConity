@@ -37,12 +37,14 @@ Projection Est. ? rows
 └─ Inner Join Est. ? rows
    │     Condition: expr#rand(1)_1 == expr#rand(1)_2
    ├─ Inner Join Est. ? rows
-   │  │     Condition: expr#rand(2)_1 == expr#rand(1)_1
-   │  ├─ CTERef[1] Est. 1 rows
+   │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
+   │  ├─ Buffer Est. 1 rows
+   │  │  └─ CTERef[0] Est. 1 rows
    │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[0] Est. 1 rows
+   │     └─ CTERef[1] Est. 1 rows
    └─ Broadcast Exchange Est. 1 rows
-      └─ CTERef[0] Est. 1 rows
+      └─ Buffer Est. 1 rows
+         └─ CTERef[0] Est. 1 rows
 CTEDef [1]
    Projection Est. 1 rows
    │     Expressions: expr#rand(2):=rand(2)
@@ -58,14 +60,12 @@ Projection Est. ? rows
 └─ Inner Join Est. ? rows
    │     Condition: expr#rand(1)_1 == expr#rand(2)_2
    ├─ Inner Join Est. ? rows
-   │  │     Condition: expr#rand(2)_1 == expr#rand(1)_1
-   │  ├─ Buffer Est. 1 rows
-   │  │  └─ CTERef[1] Est. 1 rows
+   │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
+   │  ├─ CTERef[0] Est. 1 rows
    │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[0] Est. 1 rows
+   │     └─ CTERef[1] Est. 1 rows
    └─ Broadcast Exchange Est. 1 rows
-      └─ Buffer Est. 1 rows
-         └─ CTERef[1] Est. 1 rows
+      └─ CTERef[1] Est. 1 rows
 CTEDef [1]
    Projection Est. 1 rows
    │     Expressions: expr#rand(2):=rand(2)
@@ -127,15 +127,15 @@ Projection Est. ? rows
 └─ Union Est. ? rows
    │     OutputToInputs: expr#rand(1)_3 = [expr#rand(1)_1,expr#rand(1)_2]
    ├─ Inner Join Est. ? rows
-   │  │     Condition: expr#rand(2)_1 == expr#rand(1)_1
-   │  ├─ CTERef[1] Est. 1 rows
+   │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
+   │  ├─ CTERef[0] Est. 1 rows
    │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[0] Est. 1 rows
+   │     └─ CTERef[1] Est. 1 rows
    └─ Inner Join Est. ? rows
-      │     Condition: expr#rand(2)_2 == expr#rand(1)_2
-      ├─ CTERef[1] Est. 1 rows
+      │     Condition: expr#rand(1)_2 == expr#rand(2)_2
+      ├─ CTERef[0] Est. 1 rows
       └─ Broadcast Exchange Est. 1 rows
-         └─ CTERef[0] Est. 1 rows
+         └─ CTERef[1] Est. 1 rows
 CTEDef [1]
    Projection Est. 1 rows
    │     Expressions: expr#rand(2):=rand(2)
@@ -151,19 +151,19 @@ Projection Est. ? rows
 └─ Union Est. ? rows
    │     OutputToInputs: expr#rand(1)_3 = [expr#rand(1)_1,expr#rand(2)_2]
    ├─ Inner Join Est. ? rows
-   │  │     Condition: expr#rand(2)_1 == expr#rand(1)_1
+   │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ Buffer Est. 1 rows
-   │  │  └─ CTERef[1] Est. 1 rows
+   │  │  └─ CTERef[0] Est. 1 rows
    │  └─ Broadcast Exchange Est. 1 rows
    │     └─ Buffer Est. 1 rows
-   │        └─ CTERef[0] Est. 1 rows
+   │        └─ CTERef[1] Est. 1 rows
    └─ Inner Join Est. ? rows
-      │     Condition: expr#rand(1)_2 == expr#rand(2)_2
+      │     Condition: expr#rand(2)_2 == expr#rand(1)_2
       ├─ Buffer Est. 1 rows
-      │  └─ CTERef[0] Est. 1 rows
+      │  └─ CTERef[1] Est. 1 rows
       └─ Broadcast Exchange Est. 1 rows
          └─ Buffer Est. 1 rows
-            └─ CTERef[1] Est. 1 rows
+            └─ CTERef[0] Est. 1 rows
 CTEDef [1]
    Projection Est. 1 rows
    │     Expressions: expr#rand(2):=rand(2)
@@ -179,18 +179,18 @@ Projection Est. ? rows
 └─ Inner Join Est. ? rows
    │     Condition: expr#rand(1)_1 == expr#rand(1)_2
    ├─ Inner Join Est. ? rows
-   │  │     Condition: expr#rand(2)_1 == expr#rand(1)_1
+   │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ Buffer Est. 1 rows
-   │  │  └─ CTERef[1] Est. 1 rows
+   │  │  └─ CTERef[0] Est. 1 rows
    │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[0] Est. 1 rows
+   │     └─ CTERef[1] Est. 1 rows
    └─ Broadcast Exchange Est. ? rows
       └─ Inner Join Est. ? rows
-         │     Condition: expr#rand(1)_2 == expr#rand(2)_2
-         ├─ CTERef[0] Est. 1 rows
+         │     Condition: expr#rand(2)_2 == expr#rand(1)_2
+         ├─ CTERef[1] Est. 1 rows
          └─ Broadcast Exchange Est. 1 rows
             └─ Buffer Est. 1 rows
-               └─ CTERef[1] Est. 1 rows
+               └─ CTERef[0] Est. 1 rows
 CTEDef [1]
    Projection Est. 1 rows
    │     Expressions: expr#rand(2):=rand(2)
@@ -206,17 +206,17 @@ Projection Est. ? rows
 └─ Union Est. ? rows
    │     OutputToInputs: expr#rand(1)_2 = [expr#rand(1)_1,expr#rand(2)_2]
    ├─ Inner Join Est. ? rows
-   │  │     Condition: expr#rand(2)_1 == expr#rand(1)_1
-   │  ├─ Buffer Est. 1 rows
-   │  │  └─ CTERef[1] Est. 1 rows
+   │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
+   │  ├─ CTERef[0] Est. 1 rows
    │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[0] Est. 1 rows
+   │     └─ Buffer Est. 1 rows
+   │        └─ CTERef[1] Est. 1 rows
    └─ Inner Join Est. ? rows
-      │     Condition: expr#rand(3)_1 == expr#rand(2)_2
-      ├─ CTERef[2] Est. 1 rows
+      │     Condition: expr#rand(2)_2 == expr#rand(3)_1
+      ├─ Buffer Est. 1 rows
+      │  └─ CTERef[1] Est. 1 rows
       └─ Broadcast Exchange Est. 1 rows
-         └─ Buffer Est. 1 rows
-            └─ CTERef[1] Est. 1 rows
+         └─ CTERef[2] Est. 1 rows
 CTEDef [2]
    Projection Est. 1 rows
    │     Expressions: expr#rand(3):=rand(3)
@@ -236,18 +236,16 @@ Projection Est. ? rows
 └─ Inner Join Est. ? rows
    │     Condition: expr#rand(1)_1 == expr#rand(2)_2
    ├─ Inner Join Est. ? rows
-   │  │     Condition: expr#rand(2)_1 == expr#rand(1)_1
-   │  ├─ Buffer Est. 1 rows
-   │  │  └─ CTERef[1] Est. 1 rows
+   │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
+   │  ├─ CTERef[0] Est. 1 rows
    │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[0] Est. 1 rows
+   │     └─ CTERef[1] Est. 1 rows
    └─ Broadcast Exchange Est. ? rows
       └─ Inner Join Est. ? rows
-         │     Condition: expr#rand(3)_1 == expr#rand(2)_2
-         ├─ CTERef[2] Est. 1 rows
+         │     Condition: expr#rand(2)_2 == expr#rand(3)_1
+         ├─ CTERef[1] Est. 1 rows
          └─ Broadcast Exchange Est. 1 rows
-            └─ Buffer Est. 1 rows
-               └─ CTERef[1] Est. 1 rows
+            └─ CTERef[2] Est. 1 rows
 CTEDef [2]
    Projection Est. 1 rows
    │     Expressions: expr#rand(3):=rand(3)

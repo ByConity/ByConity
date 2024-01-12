@@ -14,6 +14,7 @@
  */
 
 #include <Optimizer/Property/SymbolEquivalencesDeriver.h>
+
 #include <Optimizer/Utils.h>
 
 namespace DB
@@ -22,7 +23,21 @@ SymbolEquivalencesPtr
 SymbolEquivalencesDeriver::deriveEquivalences(QueryPlanStepPtr step, std::vector<SymbolEquivalencesPtr> children_equivalences)
 {
     static SymbolEquivalencesDeriverVisitor derive;
-    return VisitorUtil::accept(step, derive, children_equivalences);
+    auto output_set = step->getOutputStream().header.getNameSet();
+
+    // size_t index = 0;
+    // if (step->getInputStreams().size() == children_equivalences.size())
+    // {
+    //     for (auto & item : children_equivalences)
+    //     {
+    //         auto symbols_set = step->getInputStreams()[index++].header.getNameSet();
+    //         item = item->translate(symbols_set);
+    //     }
+    // }
+
+    auto result = VisitorUtil::accept(step, derive, children_equivalences);
+    result->createRepresentMap(output_set);
+    return result;
 }
 
 SymbolEquivalencesPtr SymbolEquivalencesDeriverVisitor::visitStep(const IQueryPlanStep &, std::vector<SymbolEquivalencesPtr> &)

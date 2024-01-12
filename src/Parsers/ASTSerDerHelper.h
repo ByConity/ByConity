@@ -17,8 +17,6 @@
 
 #include <Parsers/IAST.h>
 
-class WriteBuffer;
-class ReadBuffer;
 
 namespace DB
 {

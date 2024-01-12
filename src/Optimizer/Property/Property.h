@@ -266,7 +266,7 @@ class CTEDescription
 {
 public:
     explicit CTEDescription()
-        : CTEDescription(Partitioning(Partitioning::Handle::ARBITRARY), Partitioning(Partitioning::Handle::ARBITRARY), {})
+        : CTEDescription(Partitioning(Partitioning::Handle::ARBITRARY), false)
     {
     }
 
@@ -279,25 +279,22 @@ public:
     CTEDescription translate(const std::unordered_map<String, String> & identities) const;
     const Partitioning & getNodePartitioning() const { return node_partitioning; }
     Partitioning & getNodePartitioningRef() { return node_partitioning; }
+    bool isPreferred() const { return preferred; }
 
     static Property createCTEDefGlobalProperty(const Property & property, CTEId cte_id);
     static Property
     createCTEDefLocalProperty(const Property & property, CTEId cte_id, const std::unordered_map<String, String> & identities_mapping);
 
 private:
-    explicit CTEDescription(Partitioning node_partitioning_, Partitioning stream_partitioning_, Sorting sorting_)
-        : node_partitioning(std::move(node_partitioning_))
-        , stream_partitioning(std::move(stream_partitioning_))
-        , sorting(std::move(sorting_))
+    explicit CTEDescription(Partitioning node_partitioning_, bool preferred_) : node_partitioning(std::move(node_partitioning_)), preferred(preferred_)
     {
     }
-
+    
     // Description of the partitioning of the data across nodes
     Partitioning node_partitioning;
-    // Description of the partitioning of the data across streams
-    Partitioning stream_partitioning;
-    // Description of the sort order of the columns
-    Sorting sorting;
+
+    // Description whether the property is required or preferred.
+    bool preferred;
 };
 
 class CTEDescriptions
