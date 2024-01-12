@@ -26,7 +26,10 @@
 #include <Optimizer/Rule/Transformation/MagicSetForAggregation.h>
 #include <Optimizer/Rule/Transformation/MagicSetPushDown.h>
 #include <Optimizer/Rule/Transformation/PullOuterJoin.h>
-#include <QueryPlan/AnyStep.h>
+#include <Optimizer/Rule/Transformation/CardinalityBasedJoinReorder.h>
+#include <Optimizer/Rule/Transformation/SelectivityBasedJoinReorder.h>
+#include <Optimizer/Rule/Transformation/JoinToMultiJoin.h>
+#include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/PlanPattern.h>
@@ -100,10 +103,16 @@ WinnerPtr CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & c
         // timeout limit
         auto now = std::chrono::system_clock::now();
         UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-        if (elapsed >= context.getTaskExecutionTimeout() || context.getTaskStack().size() > 100000)
+        if (elapsed >= context.getTaskExecutionTimeout())
         {
             throw Exception(
                 "Cascades exhausted the time limit of " + std::to_string(context.getTaskExecutionTimeout()) + " ms",
+                ErrorCodes::OPTIMIZER_TIMEOUT);
+        }
+        if (context.getTaskStack().size() > 100000)
+        {
+            throw Exception(
+                "Cascades exhausted the task limit of " + std::to_string(100000) + ", there are " + std::to_string(context.getTaskStack().size()) + " tasks",
                 ErrorCodes::OPTIMIZER_TIMEOUT);
         }
     }
@@ -211,17 +220,24 @@ CascadesContext::CascadesContext(
     , support_filter(context->getSettingsRef().enable_join_graph_support_filter)
     , task_execution_timeout(context->getSettingsRef().cascades_optimizer_timeout)
     , enable_cbo(enable_cbo_ && context->getSettingsRef().enable_cbo)
+    , max_join_size(max_join_size_)
     , log(&Poco::Logger::get("CascadesOptimizer"))
 {
     LOG_DEBUG(log, "max join size: {}", max_join_size_);
 
-
-    if (enable_cbo)
+    if (context->getSettingsRef().enable_join_reorder)
     {
-        implementation_rules.emplace_back(std::make_shared<SetJoinDistribution>());
         transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
         transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
+        if (context->getSettingsRef().heuristic_join_reorder_enumeration_times > 0)
+            transformation_rules.emplace_back(std::make_shared<CardinalityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
+        transformation_rules.emplace_back(std::make_shared<SelectivityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
+        transformation_rules.emplace_back(std::make_shared<JoinToMultiJoin>());
+    }
 
+    implementation_rules.emplace_back(std::make_shared<SetJoinDistribution>());
+    if (enable_cbo)
+    {
         // left join inner join reorder q78, 80
         transformation_rules.emplace_back(std::make_shared<PullLeftJoinThroughInnerJoin>());
         transformation_rules.emplace_back(std::make_shared<PullLeftJoinProjectionThroughInnerJoin>());

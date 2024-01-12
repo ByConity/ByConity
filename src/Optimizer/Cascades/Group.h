@@ -23,7 +23,6 @@
 #include <Optimizer/Property/SymbolEquivalencesDeriver.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
 #include <Optimizer/DataDependency/DataDependency.h>
-
 #include <memory>
 #include <string>
 
@@ -51,19 +50,17 @@ public:
     bool isSimpleChildren() const { return simple_children; }
     bool isTableScan() const { return is_table_scan; }
     bool isMagic() const { return is_magic; }
-    UInt64 getMaxTableScans() const
-    {
-        return max_table_scans;
-    }
-    UInt64 getMaxTableScanRows() const
-    {
-        return max_table_scan_rows;
-    }
+    bool isJoinRoot() const { return is_join_root; }
+    UInt64 getMaxTableScans() const { return max_table_scans; }
+    UInt64 getMaxTableScanRows() const { return max_table_scan_rows; }
 
     void setMagic(bool is_magic_) { is_magic = is_magic_; }
 
     void addExpression(const GroupExprPtr & expression, CascadesContext & context);
     double getCostLowerBound() const { return cost_lower_bound; }
+    
+    void makeRootJoinInfo(CascadesContext & context);
+    void makeRootJoinInfo(GroupExpression & expression, CascadesContext & context);
 
     void deleteExpression(const GroupExprPtr & expression);
     void deleteAllExpression();
@@ -143,6 +140,7 @@ public:
     const SymbolEquivalencesPtr & getEquivalences() const { return equivalences; }
 
     const std::unordered_set<CTEId> & getCTESet() const { return cte_set; }
+    UInt32 getJoinRootId() const { return join_root_id; }
 private:
     GroupId id = UNDEFINED_GROUP;
 
@@ -189,6 +187,8 @@ private:
     bool simple_children = true;
     bool is_table_scan = false;
     bool is_magic = false;
+    bool is_join_root = false;
+    UInt32 join_root_id = 0;
 };
 
 }

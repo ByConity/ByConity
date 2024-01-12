@@ -62,7 +62,8 @@ public:
         bool is_left_base_table = false,
         bool is_right_base_table = false,
         ConstASTPtr filter = nullptr,
-        const InclusionDependency & inclusion_dependency = {});
+        const InclusionDependency & inclusion_dependency = {},
+        bool only_cardinality = false);
 
 private:
     static bool matchPKFK(UInt64 left_rows, UInt64 right_rows, UInt64 left_ndv, UInt64 right_ndv);
@@ -81,7 +82,8 @@ private:
         String pk_key,
         bool is_left_base_table,
         bool is_right_base_table,
-        std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics);
+        std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,
+        bool only_cardinality = false);
 
     static UInt64 computeCardinalityByHistogram(
         PlanNodeStatistics & left_stats,
@@ -91,7 +93,8 @@ private:
         ASTTableJoin::Kind kind,
         String left_key,
         String right_key,
-        std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics);
+        std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,
+        bool only_cardinality = false);
 
     static UInt64 computeCardinalityByNDV(
         PlanNodeStatistics & left_stats,
@@ -101,7 +104,8 @@ private:
         ASTTableJoin::Kind kind,
         String left_key,
         String right_key,
-        std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics);
+        std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,
+        bool only_cardinality = false);
 };
 
 }

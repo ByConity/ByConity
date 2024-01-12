@@ -10,13 +10,13 @@ Projection Est. 1 rows
             └─ Aggregating Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#count():=AggNull(count)()
-               └─ Inner Join Est. 2714881 rows
+               └─ Inner Join Est. 2714939 rows
                   │     Condition: ss_store_sk == s_store_sk
                   │     Runtime Filters Builder: {s_store_sk}
-                  ├─ Inner Join Est. 10794886 rows
+                  ├─ Inner Join Est. 10795117 rows
                   │  │     Condition: ss_hdemo_sk == hd_demo_sk
                   │  │     Runtime Filters Builder: {hd_demo_sk}
-                  │  ├─ Inner Join Est. 110089496 rows
+                  │  ├─ Inner Join Est. 110091848 rows
                   │  │  │     Condition: ss_sold_time_sk == t_time_sk
                   │  │  │     Runtime Filters Builder: {t_time_sk}
                   │  │  ├─ Filter Est. 2879987999 rows

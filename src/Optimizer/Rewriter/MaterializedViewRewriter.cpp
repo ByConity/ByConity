@@ -179,7 +179,8 @@ public:
     static ASTPtr rewrite(ASTPtr & expression, const ExpressionEquivalences & expression_equivalences)
     {
         EquivalencesRewriter rewriter;
-        return ASTVisitorUtil::accept(expression, rewriter, expression_equivalences.representMap());
+        const auto map = expression_equivalences.representMap();
+        return ASTVisitorUtil::accept(expression, rewriter, map);
     }
 
     ASTPtr visitNode(ASTPtr & node, const ConstASTMap & context) override

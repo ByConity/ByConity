@@ -31,7 +31,9 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
-#include "Common/ErrorCodes.h"
+#include <Common/ErrorCodes.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {

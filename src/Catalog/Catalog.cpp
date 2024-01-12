@@ -3851,14 +3851,33 @@ namespace Catalog
     {
         runWithMetricSupport(
             [&] {
+                String target_database;
                 String table_uuid = meta_proxy->getTrashTableUUID(name_space, database, name, ts);
+
+                /// The trash table may created by drop database. The trash key has database name with commit ts.
+                if (table_uuid.empty())
+                {
+                    target_database = database + '_' + toString(ts);
+                    table_uuid = meta_proxy->getTrashTableUUID(name_space, database + '_' + toString(ts), name, ts);
+                }
+                else
+                {
+                    target_database = database;
+                }
+
+                if (table_uuid.empty())
+                {
+                    LOG_WARNING(log, "Cannot find trashed table ID by name {}.{}, ts: {}", database, name, ts);
+                    return;
+                }
+
                 auto table = tryGetTableFromMetastore(table_uuid, ts, false, true);
 
                 Strings dependencies;
                 if (table)
                     dependencies = tryGetDependency(parseCreateQuery(table->definition()));
 
-                meta_proxy->clearTableMeta(name_space, database, name, table_uuid, dependencies, ts);
+                meta_proxy->clearTableMeta(name_space, target_database, name, table_uuid, dependencies, ts);
 
                 if (!table_uuid.empty() && context.getPartCacheManager())
                 {

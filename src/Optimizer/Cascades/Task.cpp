@@ -16,6 +16,7 @@
 #include <Optimizer/Cascades/Task.h>
 
 #include <Optimizer/Cascades/CascadesOptimizer.h>
+#include <Optimizer/Cascades/Group.h>
 #include <Optimizer/CostModel/CostCalculator.h>
 #include <Optimizer/CostModel/PlanNodeCost.h>
 #include <Optimizer/Property/Constants.h>
@@ -34,7 +35,7 @@ namespace ErrorCodes
 }
 void OptimizeGroup::execute()
 {
-    //    LOG_DEBUG(context->getOptimizerContext().getLog(), "Optimize Group " << group->getId());
+    // LOG_DEBUG(context->getOptimizerContext().getLog(), "Optimize Group " + std::to_string(group->getId()));
 
     if (group->getCostLowerBound() > context->getCostUpperBound() || // Cost LB > Cost UB
         group->hasWinner(context->getRequiredProp())) // Has optimized given the context
@@ -191,10 +192,11 @@ void ApplyRule::execute()
         {
             GroupExprPtr new_group_expr = nullptr;
             auto g_id = group_expr->getGroupId();
-            if (context->getOptimizerContext().recordPlanNodeIntoGroup(new_expr, new_group_expr, rule->getType(), g_id))
+            auto logical_rule = new_expr->getStep()->isLogical() ? rule->getType() : group_expr->getProduceRule();
+            if (context->getOptimizerContext().recordPlanNodeIntoGroup(new_expr, new_group_expr, logical_rule, g_id))
             {
                 // LOG_DEBUG(context->getOptimizerContext().getLog(), "Success Apply Rule For Expression In Group "
-                //              << group_expr->getGroupId() << "; Rule Type: " << static_cast<int>(rule->getType()));
+                // + std::to_string(group_expr->getGroupId()) + "; Rule Type: " + rule->getName());
 
                 for (auto type : rule->blockRules())
                 {
@@ -422,11 +424,26 @@ void OptimizeInput::execute()
                     match = true;
                     auto left_equivalences = context->getMemo().getGroupById(group_expr->getChildrenGroups()[0])->getEquivalences();
                     auto right_equivalences = context->getMemo().getGroupById(group_expr->getChildrenGroups()[1])->getEquivalences();
+
+                    auto left_output_symbols = context->getMemo()
+                                                   .getGroupById(group_expr->getChildrenGroups()[0])
+                                                   ->getStep()
+                                                   ->getOutputStream()
+                                                   .header.getNameSet();
+                    auto right_output_symbols = context->getMemo()
+                                                    .getGroupById(group_expr->getChildrenGroups()[1])
+                                                    ->getStep()
+                                                    ->getOutputStream()
+                                                    .header.getNameSet();
+
                     NameToNameSetMap right_join_key_to_left;
+                    DefaultTMap<String> before_left_rep_map, before_right_rep_map;
                     if (const auto * join_step = dynamic_cast<const JoinStep *>(group_expr->getStep().get()))
                     {
                         auto left_rep_map = left_equivalences->representMap();
                         auto right_rep_map = right_equivalences->representMap();
+                        before_left_rep_map = left_rep_map;
+                        before_right_rep_map = right_rep_map;
                         for (size_t join_key_index = 0; join_key_index < join_step->getLeftKeys().size(); ++join_key_index)
                         {
                             auto left_key = join_step->getLeftKeys()[join_key_index];
@@ -444,6 +461,7 @@ void OptimizeInput::execute()
 
                     for (size_t actual_prop_index = 1; actual_prop_index < actual_input_props.size(); ++actual_prop_index)
                     {
+                        auto before_transformed_partition_cols = actual_input_props[actual_prop_index].getNodePartitioning().getPartitioningColumns();
                         auto translated_prop = actual_input_props[actual_prop_index].normalize(*right_equivalences);
                         if (translated_prop.getNodePartitioning().getPartitioningHandle() != first_handle
                             || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count)

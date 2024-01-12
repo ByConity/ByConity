@@ -5,14 +5,14 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {w_state ASC NULLS LAST, i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 50480 rows
+      └─ Gather Exchange Est. 45431 rows
          └─ Sorting Est. 100 rows
             │     Order by: {w_state ASC NULLS LAST, i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 50480 rows
-               └─ Repartition Exchange Est. 50480 rows
+            └─ MergingAggregated Est. 45431 rows
+               └─ Repartition Exchange Est. 45431 rows
                   │     Partition by: {w_state, i_item_id}
-                  └─ Aggregating Est. 50480 rows
+                  └─ Aggregating Est. 45431 rows
                      │     Group by: {w_state, i_item_id}
                      │     Aggregates: expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)):=AggNull(sum)(expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)), expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)):=AggNull(sum)(expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0))
                      └─ Projection Est. 285982 rows

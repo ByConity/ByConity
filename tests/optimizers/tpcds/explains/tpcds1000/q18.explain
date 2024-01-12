@@ -5,19 +5,19 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {ca_country ASC NULLS LAST, ca_state ASC NULLS LAST, ca_county ASC NULLS LAST, i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 3430270 rows
+      └─ Gather Exchange Est. 3450200 rows
          └─ Sorting Est. 100 rows
             │     Order by: {ca_country ASC NULLS LAST, ca_state ASC NULLS LAST, ca_county ASC NULLS LAST, i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 3430270 rows
-               └─ Repartition Exchange Est. 3430270 rows
+            └─ MergingAggregated Est. 3450200 rows
+               └─ Repartition Exchange Est. 3450200 rows
                   │     Partition by: {i_item_id, ca_country, ca_state, ca_county, __grouping_set}
-                  └─ Aggregating Est. 3430270 rows
+                  └─ Aggregating Est. 3450200 rows
                      │     Group by: {i_item_id, ca_country, ca_state, ca_county}
                      │     Aggregates: expr#avg(CAST(cs_quantity, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_quantity, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_list_price, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_list_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(c_birth_year, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(c_birth_year, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))'))
-                     └─ Projection Est. 3430270 rows
+                     └─ Projection Est. 3450200 rows
                         │     Expressions: [ca_country, ca_county, ca_state, i_item_id], expr#CAST(c_birth_year, 'Nullable(Decimal(12, 2))'):=CAST(c_birth_year, 'Nullable(Decimal(12, 2))'), expr#CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))'):=CAST(cd_dep_count, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))'):=CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_list_price, 'Nullable(Decimal(12, 2))'):=CAST(cs_list_price, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_net_profit, 'Nullable(Decimal(12, 2))'):=CAST(cs_net_profit, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_quantity, 'Nullable(Decimal(12, 2))'):=CAST(cs_quantity, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_sales_price, 'Nullable(Decimal(12, 2))'):=CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')
-                        └─ Inner Join Est. 3430270 rows
+                        └─ Inner Join Est. 3450200 rows
                            │     Condition: cs_item_sk == i_item_sk
                            ├─ Repartition Exchange Est. 3450200 rows
                            │  │     Partition by: {cs_item_sk}

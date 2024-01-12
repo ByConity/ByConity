@@ -30,6 +30,11 @@ namespace DB
 {
 void SimpleReorderJoin::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
+    if (context->getSettingsRef().heuristic_join_reorder_enumeration_times != 10)
+        return;
+    if (!context->getSettingsRef().enable_join_reorder)
+        return;
+
     auto join_size = PlanPattern::maxJoinSize(plan, context);
     if (join_size <= context->getSettingsRef().max_graph_reorder_size)
         return;
@@ -65,7 +70,7 @@ PlanNodePtr SimpleReorderJoinVisitor::visitJoinNode(JoinNode & node, Void & v)
         }
 
         join_ptr = buildJoinTree(output_symbols, join_graph, join_order, context);
-        for (auto & id : join_graph.getNodes())
+        for (const auto & id : join_graph.getNodes())
         {
             reordered.insert(id->getId());
         }
@@ -78,7 +83,7 @@ PlanNodePtr SimpleReorderJoinVisitor::visitJoinNode(JoinNode & node, Void & v)
 PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
 {
     std::unordered_map<PlanNodeId, PlanNodePtr> id_to_node;
-    for (auto & node : graph.getNodes())
+    for (const auto & node : graph.getNodes())
     {
         id_to_node[node->getId()] = node;
     }
@@ -151,6 +156,7 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
     PlanNodePtr result;
     std::set<PlanNodeId> joined_nodes;
     const auto & edges = graph.getEdges();
+    
     while (!selectivities.empty())
     {
         auto selectivity = selectivities.top();
@@ -207,6 +213,7 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
                 left_keys,
                 right_keys);
             new_join_step->setSimpleReordered(true);
+            
             auto new_join_node
                 = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(new_join_step), PlanNodes{left_join_node, right_join_node});
 
@@ -313,7 +320,7 @@ PlanNodePtr SimpleReorderJoinVisitor::buildJoinTree(
     std::vector<String> & expected_output_symbols, JoinGraph & graph, PlanNodePtr join_node, ContextMutablePtr & context_ptr)
 {
     PlanNodePtr result = std::move(join_node);
-    auto filters = graph.getFilters();
+    const auto & filters = graph.getFilters();
     ASTPtr predicate = PredicateUtils::combineConjuncts(filters);
     if (!PredicateUtils::isTruePredicate(predicate))
     {

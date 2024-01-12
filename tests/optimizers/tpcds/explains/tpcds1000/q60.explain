@@ -20,12 +20,12 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 149640 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                  │        └─ Inner (PARALLEL_HASH) Join Est. 3433584 rows
+                  │        └─ Inner (PARALLEL_HASH) Join Est. 3463638 rows
                   │           │     Condition: ss_addr_sk == ca_address_sk
                   │           │     Runtime Filters Builder: {ca_address_sk}
-                  │           ├─ Repartition Exchange Est. 9154697 rows
+                  │           ├─ Repartition Exchange Est. 9207886 rows
                   │           │  │     Partition by: {ss_addr_sk}
-                  │           │  └─ Inner Join Est. 9154589 rows
+                  │           │  └─ Inner Join Est. 9207778 rows
                   │           │     │     Condition: ss_item_sk == i_item_sk
                   │           │     │     Runtime Filters Builder: {i_item_sk}
                   │           │     ├─ Inner Join Est. 45814400 rows
@@ -80,9 +80,9 @@ Projection Est. 100 rows
                   │        └─ Inner (PARALLEL_HASH) Join Est. 2256960 rows
                   │           │     Condition: cs_bill_addr_sk == ca_address_sk_1
                   │           │     Runtime Filters Builder: {ca_address_sk_1}
-                  │           ├─ Repartition Exchange Est. 4544895 rows
+                  │           ├─ Repartition Exchange Est. 4571301 rows
                   │           │  │     Partition by: {cs_bill_addr_sk}
-                  │           │  └─ Inner Join Est. 4544841 rows
+                  │           │  └─ Inner Join Est. 4571247 rows
                   │           │     │     Condition: cs_item_sk == i_item_sk_1
                   │           │     │     Runtime Filters Builder: {i_item_sk_1}
                   │           │     ├─ Inner Join Est. 22744788 rows
@@ -137,9 +137,9 @@ Projection Est. 100 rows
                            └─ Inner (PARALLEL_HASH) Join Est. 2256960 rows
                               │     Condition: ws_bill_addr_sk == ca_address_sk_2
                               │     Runtime Filters Builder: {ca_address_sk_2}
-                              ├─ Repartition Exchange Est. 2288684 rows
+                              ├─ Repartition Exchange Est. 2301982 rows
                               │  │     Partition by: {ws_bill_addr_sk}
-                              │  └─ Inner Join Est. 2288658 rows
+                              │  └─ Inner Join Est. 2301955 rows
                               │     │     Condition: ws_item_sk == i_item_sk_2
                               │     │     Runtime Filters Builder: {i_item_sk_2}
                               │     ├─ Inner Join Est. 11453653 rows

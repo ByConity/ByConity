@@ -15,21 +15,21 @@
 
 #pragma once
 
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <memory>
 
 namespace DB
 {
-template<typename V>
+template <typename V>
 using DefaultTMap = std::unordered_map<std::string, V>;
 // forward declaration
 
-template <typename T, template<typename V> typename TMap = DefaultTMap>
+template <typename T, template <typename V> typename TMap = DefaultTMap>
 class Equivalences;
 
-template <typename T, template<typename V> typename TMap = DefaultTMap>
+template <typename T, template <typename V> typename TMap = DefaultTMap>
 struct UnionFind
 {
     mutable TMap<T> parent;
@@ -59,12 +59,9 @@ struct UnionFind
             parent[b] = a;
     }
 
-    bool isConnected(T a, T b) const
-    {
-        return find(a) == find(b);
-    }
+    bool isConnected(T a, T b) const { return find(a) == find(b); }
 
-    std::vector<std::unordered_set<T>> getSets()
+    std::vector<std::unordered_set<T>> getSets() const
     {
         static_assert(std::is_same_v<T, std::string>);
         std::vector<std::unordered_set<T>> result;
@@ -85,20 +82,21 @@ struct UnionFind
     }
 };
 
-template <typename T, template<typename V> typename TMap>
+template <typename T, template <typename V> typename TMap>
 class Equivalences
 {
     using EquivalencesType = Equivalences<T, TMap>;
     using Ptr = std::shared_ptr<EquivalencesType>;
     using Map = TMap<T>;
+
 public:
     Equivalences() = default;
     Equivalences(const EquivalencesType & left, const EquivalencesType & right) : union_find(left.union_find, right.union_find) { }
 
-    Equivalences(const Equivalences&) = delete;
-    Equivalences& operator=(const Equivalences&) = delete;
+    Equivalences(const Equivalences &) = delete;
+    Equivalences & operator=(const Equivalences &) = delete;
     Equivalences(Equivalences &&) noexcept = default;
-    Equivalences& operator=(Equivalences &&)  noexcept = default;
+    Equivalences & operator=(Equivalences &&) noexcept = default;
 
     void add(T first, T second)
     {
@@ -106,10 +104,7 @@ public:
         union_find.add(std::move(first), std::move(second));
     }
 
-    bool isEqual(T first, T second) const
-    {
-        return union_find.isConnected(first, second);
-    }
+    bool isEqual(T first, T second) const { return union_find.isConnected(first, second); }
 
     Ptr translate(std::unordered_map<T, T> & identities) const
     {
@@ -165,7 +160,7 @@ public:
         return result;
     }
 
-    const Map & representMap() const
+    Map representMap() const
     {
         if (map)
             return *map;
@@ -173,7 +168,7 @@ public:
         TMap<std::unordered_set<T>> str_to_set;
         for (auto & item : union_find.parent)
         {
-            str_to_set[item.second].insert(item.first);
+            str_to_set[union_find.find(item.second)].insert(item.first);
         }
 
         map = std::make_unique<Map>();
@@ -189,8 +184,35 @@ public:
         return *map;
     }
 
+    void createRepresentMap(const std::unordered_set<T> & output_symbols) const
+    {
+        TMap<std::unordered_set<T>> str_to_set;
+        for (auto & item : union_find.parent)
+        {
+            str_to_set[union_find.find(item.second)].insert(item.first);
+        }
+
+        map = std::make_unique<Map>();
+        for (auto & item : str_to_set)
+        {
+            decltype(item.second) set;
+            for (const auto & v : item.second)
+                if (output_symbols.empty() || output_symbols.contains(v))
+                    set.insert(v);
+
+            if (set.empty())
+                set = item.second;
+
+            auto min = *std::min_element(set.begin(), set.end());
+            for (auto & str : item.second)
+            {
+                (*map)[str] = min;
+            }
+        }
+    }
+
 private:
     UnionFind<T, TMap> union_find;
-    mutable std::unique_ptr<Map> map {}; // cache
+    mutable std::unique_ptr<Map> map{}; // cache
 };
 }

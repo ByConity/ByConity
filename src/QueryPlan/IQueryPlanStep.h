@@ -161,7 +161,8 @@ public:
     MM(FinalSample, final_sample) \
     MM(Offset, offset) \
     MM(FinishSorting, finish_sorting) \
-    MM(TotalsHaving, totals_having)
+    MM(TotalsHaving, totals_having) \
+    MM(MultiJoin, multi_join)
 
 // macro helpers to convert MM(x, y) to M(x)
 #define IMPL_TUPLE_TO_FIRST(_x, _y) (_x)

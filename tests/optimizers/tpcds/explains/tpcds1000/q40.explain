@@ -5,19 +5,19 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {w_state ASC NULLS LAST, i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 119691 rows
+      └─ Gather Exchange Est. 107721 rows
          └─ Sorting Est. 100 rows
             │     Order by: {w_state ASC NULLS LAST, i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 119691 rows
-               └─ Repartition Exchange Est. 119691 rows
+            └─ MergingAggregated Est. 107721 rows
+               └─ Repartition Exchange Est. 107721 rows
                   │     Partition by: {w_state, i_item_id}
-                  └─ Aggregating Est. 119691 rows
+                  └─ Aggregating Est. 107721 rows
                      │     Group by: {w_state, i_item_id}
                      │     Aggregates: expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)):=AggNull(sum)(expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)), expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)):=AggNull(sum)(expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0))
-                     └─ Projection Est. 2830784 rows
+                     └─ Projection Est. 2847231 rows
                         │     Expressions: [i_item_id, w_state], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), cs_sales_price - coalesce(cr_refunded_cash, 0), 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), cs_sales_price - coalesce(cr_refunded_cash, 0), 0)
-                        └─ Right (PARALLEL_HASH) Join Est. 4308185 rows
+                        └─ Right (PARALLEL_HASH) Join Est. 4333215 rows
                            │     Condition: cr_item_sk == cs_item_sk, cr_order_number == cs_order_number
                            │     Runtime Filters Builder: {cs_item_sk,cs_order_number}
                            ├─ Repartition Exchange Est. 143996756 rows
@@ -27,11 +27,11 @@ Projection Est. 100 rows
                            │     └─ TableScan tpcds1000.catalog_returns Est. 143996756 rows
                            │              Where: Runtime Filters: {cr_item_sk, cr_order_number}
                            │              Outputs: [cr_item_sk, cr_order_number, cr_refunded_cash]
-                           └─ Repartition Exchange Est. 2830784 rows
+                           └─ Repartition Exchange Est. 2847231 rows
                               │     Partition by: {cs_item_sk, cs_order_number}
-                              └─ Inner Join Est. 2830784 rows
+                              └─ Inner Join Est. 2847231 rows
                                  │     Condition: cs_warehouse_sk == w_warehouse_sk
-                                 ├─ Inner Join Est. 2830784 rows
+                                 ├─ Inner Join Est. 2847231 rows
                                  │  │     Condition: cs_item_sk == i_item_sk
                                  │  │     Runtime Filters Builder: {i_item_sk}
                                  │  ├─ Inner Join Est. 46273880 rows

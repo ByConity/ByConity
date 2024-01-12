@@ -1,21 +1,21 @@
-Projection Est. 137088 rows
+Projection Est. 99937 rows
 │     Expressions: [t_hour, t_minute], brand:=i_brand, brand_id:=i_brand_id, ext_price:=`expr#sum(ext_price)`
-└─ Sorting Est. 137088 rows
+└─ Sorting Est. 99937 rows
    │     Order by: {expr#sum(ext_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
-   └─ Gather Exchange Est. 137088 rows
-      └─ Sorting Est. 137088 rows
+   └─ Gather Exchange Est. 99937 rows
+      └─ Sorting Est. 99937 rows
          │     Order by: {expr#sum(ext_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
-         └─ MergingAggregated Est. 137088 rows
-            └─ Repartition Exchange Est. 137088 rows
+         └─ MergingAggregated Est. 99937 rows
+            └─ Repartition Exchange Est. 99937 rows
                │     Partition by: {i_brand, i_brand_id, t_hour, t_minute}
-               └─ Aggregating Est. 137088 rows
+               └─ Aggregating Est. 99937 rows
                   │     Group by: {i_brand, i_brand_id, t_hour, t_minute}
                   │     Aggregates: expr#sum(ext_price):=AggNull(sum)(ws_ext_sales_price_1)
-                  └─ Inner Join Est. 160837 rows
+                  └─ Inner Join Est. 429289 rows
                      │     Condition: ws_sold_time_sk_1 == t_time_sk
-                     ├─ Repartition Exchange Est. 589486 rows
+                     ├─ Repartition Exchange Est. 616727 rows
                      │  │     Partition by: {ws_sold_time_sk_1}
-                     │  └─ Inner Join Est. 589486 rows
+                     │  └─ Inner Join Est. 616727 rows
                      │     │     Condition: ws_item_sk_1 == i_item_sk
                      │     │     Runtime Filters Builder: {i_item_sk}
                      │     ├─ Union Est. 80012841 rows

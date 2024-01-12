@@ -694,6 +694,11 @@ std::shared_ptr<TableFinishStep> SymbolMapper::map(const TableFinishStep & step)
     return std::make_shared<TableFinishStep>(map(step.getInputStreams()[0]), step.getTarget(), step.getOutputAffectedRowCountSymbol());
 }
 
+std::shared_ptr<MultiJoinStep> SymbolMapper::map(const MultiJoinStep & step)
+{
+    return std::make_shared<MultiJoinStep>(map(step.getOutputStream()), step.getGraph());
+}
+
 std::shared_ptr<TotalsHavingStep> SymbolMapper::map(const TotalsHavingStep & step)
 {
     return std::make_shared<TotalsHavingStep>(map(step.getInputStreams()[0]), step.isOverflowRow(), map(step.getHavingFilter()), step.getTotalsMode(), step.getAutoIncludeThreshols(), step.isFinal());

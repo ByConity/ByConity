@@ -10,11 +10,11 @@ Projection Est. 1 rows
             └─ Aggregating Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#uniqExact(ws_order_number):=AggNull(uniqExact)(ws_order_number), expr#sum(ws_ext_ship_cost):=AggNull(sum)(ws_ext_ship_cost), expr#sum(ws_net_profit):=AggNull(sum)(ws_net_profit)
-               └─ Projection Est. 971595 rows
+               └─ Projection Est. 974402 rows
                   │     Expressions: [ws_ext_ship_cost, ws_net_profit, ws_order_number]
-                  └─ Filter Est. 971595 rows
+                  └─ Filter Est. 974402 rows
                      │     Condition: NOT cast(coalesce(build_side_non_null_symbol_1, 0), 'UInt8')
-                     └─ Right Join Est. 1079550 rows
+                     └─ Right Join Est. 1082669 rows
                         │     Condition: wr_order_number == ws_order_number
                         │     Runtime Filters Builder: {ws_order_number}
                         ├─ Projection Est. 42258802 rows
@@ -29,14 +29,14 @@ Projection Est. 1 rows
                         │              └─ TableScan tpcds1000.web_returns Est. 71997522 rows
                         │                       Where: Runtime Filters: {wr_order_number}
                         │                       Outputs: [wr_order_number]
-                        └─ Filter Est. 1079550 rows
+                        └─ Filter Est. 1082669 rows
                            │     Condition: count_non_null_value > 0
-                           └─ Aggregating Est. 1199501 rows
+                           └─ Aggregating Est. 1202966 rows
                               │     Group by: {ca_state, d_date_sk, ws_net_profit, ca_address_sk, d_date, ws_ext_ship_cost, ws_order_number, ws_warehouse_sk, web_company_name, web_site_sk, ws_web_site_sk, ws_ship_addr_sk, ws_ship_date_sk, assign_unique_id_symbol}
                               │     Aggregates: count_non_null_value:=AggNull(countIf)(build_side_non_null_symbol)
-                              └─ Projection Est. 1199501 rows
+                              └─ Projection Est. 1202966 rows
                                  │     Expressions: [assign_unique_id_symbol, ca_address_sk, ca_state, d_date, d_date_sk, web_company_name, web_site_sk, ws_ext_ship_cost, ws_net_profit, ws_order_number, ws_ship_addr_sk, ws_ship_date_sk, ws_warehouse_sk, ws_web_site_sk], build_side_non_null_symbol:=cast(multiIf(if((ws_warehouse_sk != ws_warehouse_sk_1) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, if((ws_warehouse_sk != ws_warehouse_sk_1) AND (build_side_non_null_symbol = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
-                                 └─ Right Join Est. 1199501 rows
+                                 └─ Right Join Est. 1202966 rows
                                     │     Condition: ws_order_number_1 == ws_order_number
                                     │     Runtime Filters Builder: {ws_order_number}
                                     ├─ Repartition Exchange Est. 720000376 rows
@@ -48,13 +48,13 @@ Projection Est. 1 rows
                                     │        └─ TableScan tpcds1000.web_sales Est. 720000376 rows
                                     │                 Where: Runtime Filters: {ws_order_number}
                                     │                 Outputs: ws_warehouse_sk_1:=ws_warehouse_sk, ws_order_number_1:=ws_order_number
-                                    └─ AssignUniqueId Est. 99696 rows
-                                       └─ Repartition Exchange Est. 99696 rows
+                                    └─ AssignUniqueId Est. 99984 rows
+                                       └─ Repartition Exchange Est. 99984 rows
                                           │     Partition by: {ws_order_number}
-                                          └─ Inner Join Est. 99696 rows
+                                          └─ Inner Join Est. 99984 rows
                                              │     Condition: ws_web_site_sk == web_site_sk
                                              │     Runtime Filters Builder: {web_site_sk}
-                                             ├─ Inner Join Est. 672949 rows
+                                             ├─ Inner Join Est. 674895 rows
                                              │  │     Condition: ws_ship_addr_sk == ca_address_sk
                                              │  │     Runtime Filters Builder: {ca_address_sk}
                                              │  ├─ Inner Join Est. 21459415 rows

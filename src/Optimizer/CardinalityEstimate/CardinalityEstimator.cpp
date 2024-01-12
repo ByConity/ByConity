@@ -177,7 +177,7 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitArrayJoinStep(const ArrayJoinStep
 PlanNodeStatisticsPtr CardinalityVisitor::visitAggregatingStep(const AggregatingStep & step, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
-    PlanNodeStatisticsPtr stats = AggregateEstimator::estimate(child_stats, step);
+    PlanNodeStatisticsPtr stats = AggregateEstimator::estimate(child_stats, step, context.context);
     return stats;
 }
 
@@ -191,7 +191,7 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitWindowStep(const WindowStep & ste
 PlanNodeStatisticsPtr CardinalityVisitor::visitMergingAggregatedStep(const MergingAggregatedStep & step, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
-    PlanNodeStatisticsPtr stats = AggregateEstimator::estimate(child_stats, step);
+    PlanNodeStatisticsPtr stats = AggregateEstimator::estimate(child_stats, step, context.context);
     return stats;
 }
 
@@ -313,7 +313,7 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitPartitionTopNStep(const Partition
 PlanNodeStatisticsPtr CardinalityVisitor::visitDistinctStep(const DistinctStep & step, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
-    PlanNodeStatisticsPtr stats = AggregateEstimator::estimate(child_stats, step);
+    PlanNodeStatisticsPtr stats = AggregateEstimator::estimate(child_stats, step, context.context);
     return stats;
 }
 
@@ -376,6 +376,12 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitExplainAnalyzeStep(const ExplainA
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitTopNFilteringStep(const TopNFilteringStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitMultiJoinStep(const MultiJoinStep & , CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
     return child_stats;

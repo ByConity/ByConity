@@ -13,11 +13,11 @@ Projection Est. 729 rows
                   └─ Aggregating Est. 729 rows
                      │     Group by: {expr#toYear(o_orderdate)}
                      │     Aggregates: expr#sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)):=AggNull(sum)(expr#multiIf(equals(nation, 'BRAZIL'), volume, 0)), expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-                     └─ Projection Est. 3986769 rows
+                     └─ Projection Est. 805596 rows
                         │     Expressions: [expr#multiply(l_extendedprice, minus(1, l_discount))], expr#multiIf(equals(nation, 'BRAZIL'), volume, 0):=multiIf(n_name = 'BRAZIL', `expr#multiply(l_extendedprice, minus(1, l_discount))`, 0), expr#toYear(o_orderdate):=toYear(o_orderdate)
-                        └─ Projection Est. 3986769 rows
+                        └─ Projection Est. 805596 rows
                            │     Expressions: [n_name, o_orderdate], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                           └─ Inner Join Est. 3986769 rows
+                           └─ Inner Join Est. 3994488 rows
                               │     Condition: l_suppkey == s_suppkey
                               ├─ Repartition Exchange Est. 3994488 rows
                               │  │     Partition by: {l_suppkey}

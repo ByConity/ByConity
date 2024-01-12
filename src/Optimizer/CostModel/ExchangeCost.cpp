@@ -27,8 +27,13 @@ PlanNodeCost ExchangeCost::calculate(const ExchangeStep & step, CostContext & co
 
     // more shuffle keys is better than less shuffle keys.
     // todo data skew
-    if (!step.getSchema().getPartitioningColumns().empty() && step.getSchema().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH)
+    if (!step.getSchema().getPartitioningColumns().empty()
+        && (step.getSchema().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH
+            || step.getSchema().getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE))
         base_cost += 1.0 / step.getSchema().getPartitioningColumns().size();
+
+    if (step.getSchema().getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE)
+        base_cost *= 1.1;
 
     if (!context.stats)
         return PlanNodeCost::netCost(base_cost);
