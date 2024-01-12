@@ -53,6 +53,7 @@ public:
         const Aliases & aliases;
         const bool is_asof{false};
         bool is_nest_loop_join{false};
+        bool enable_join_on_1_equals_1{false};
         ASTPtr asof_left_key{};
         ASTPtr asof_right_key{};
         bool has_some{false};
