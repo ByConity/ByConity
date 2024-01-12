@@ -1,8 +1,10 @@
 version: "3"
 services:
+# image use digest to avoid network issue
 # hdfs / remote fs
   hdfs:
-    image: gchq/hdfs:3.3
+    # image: gchq/hdfs:3.3
+    image: gchq/hdfs@sha256:36b33f72247310f0785f535b20427fba4f2454938b84476cdd749ef038d551ad
     command: namenode
     container_name: "${COMPOSE_PROJECT_NAME}-hdfs-namenode"
     environment:
@@ -18,7 +20,8 @@ services:
   hdfs-datanode:
     depends_on:
       - hdfs
-    image: gchq/hdfs:3.3
+    # image: gchq/hdfs:3.3
+    image: gchq/hdfs@sha256:36b33f72247310f0785f535b20427fba4f2454938b84476cdd749ef038d551ad
     command: datanode
     container_name: "${COMPOSE_PROJECT_NAME}-hdfs-datanode"
     environment:
@@ -31,7 +34,8 @@ services:
 
 # foundation db / catalog
   fdb:
-    image: foundationdb/foundationdb:7.1.24
+    # image: foundationdb/foundationdb:7.1.24
+    image: foundationdb/foundationdb@sha256:43e6a4e51e181e4ec65161ec57d538196b1b9101c913fccba2867bfc480acadd
     environment:
       FDB_NETWORKING_MODE: container
       FDB_COORDINATOR_PORT: 4550
@@ -40,7 +44,8 @@ services:
 
 # byconity:
   tso:
-    image: byconity/debian:buster-runit-fdb7.1.27
+    # image: byconity/debian:buster-runit-fdb7.1.27
+    image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/; fdbcli -C /config/fdb.cluster --exec \"configure new single memory\"; tso-server --config-file /config/tso.yml"
     depends_on:
       - fdb
@@ -54,7 +59,8 @@ services:
       - SYS_PTRACE
 
   resource-manager:
-    image: byconity/debian:buster-runit-fdb7.1.27
+    # image: byconity/debian:buster-runit-fdb7.1.27
+    image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_tso-0:18845 && resource-manager --config-file /config/resource-manager.yml"
@@ -68,7 +74,8 @@ services:
       - SYS_PTRACE
 
   server:
-    image: byconity/debian:buster-runit-fdb7.1.27
+    # image: byconity/debian:buster-runit-fdb7.1.27
+    image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
       - CI_JOB_NAME=github 
@@ -87,7 +94,8 @@ services:
       - SYS_PTRACE
 
   worker-write:
-    image: byconity/debian:buster-runit-fdb7.1.27
+    # image: byconity/debian:buster-runit-fdb7.1.27
+    image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w0 clickhouse-server --config-file /config/worker.yml"
@@ -103,7 +111,8 @@ services:
       - SYS_PTRACE
 
   worker-default-0:
-    image: byconity/debian:buster-runit-fdb7.1.27
+    # image: byconity/debian:buster-runit-fdb7.1.27
+    image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r0 clickhouse-server --config-file /config/worker.yml"
@@ -117,7 +126,8 @@ services:
       - SYS_PTRACE
 
   worker-default-1:
-    image: byconity/debian:buster-runit-fdb7.1.27
+    # image: byconity/debian:buster-runit-fdb7.1.27
+    image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r1 clickhouse-server --config-file /config/worker.yml"
@@ -131,7 +141,8 @@ services:
       - SYS_PTRACE
 
   daemon-manager:
-    image: byconity/debian:buster-runit-fdb7.1.27
+    # image: byconity/debian:buster-runit-fdb7.1.27
+    image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && daemon-manager --config-file ./config/daemon-manager.yml"

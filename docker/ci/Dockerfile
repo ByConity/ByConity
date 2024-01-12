@@ -18,3 +18,5 @@ ADD install.sh /data/ci/
 RUN bash /data/ci/install.sh
 RUN curl https://clickhouse.com/ | sh
 RUN apt-get install -y gdb
+RUN mkdir /docker_image_archive
+COPY preload_gchq-hdfs_3_3.tar preload_foundationdb-foundationdb_7_1_24.tar preload_byconity-debian_buster_runit_fdb7_1_27.tar /docker_image_archive/
