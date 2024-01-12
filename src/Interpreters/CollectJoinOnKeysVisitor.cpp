@@ -54,6 +54,8 @@ void CollectJoinOnKeysMatcher::Data::addJoinKeys(const ASTPtr & left_ast, const 
         analyzed_join.addOnKeys(left, right, null_safe_equal);
     else if (table_no.first == 2 || table_no.second == 1)
         analyzed_join.addOnKeys(right, left, null_safe_equal);
+    else if (enable_join_on_1_equals_1)
+        analyzed_join.addOnKeys(left, right, null_safe_equal);
     else
         throw Exception("Cannot detect left and right JOIN keys. JOIN ON section is ambiguous.",
                         ErrorCodes::AMBIGUOUS_COLUMN_NAME);
@@ -106,7 +108,7 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
     {
         ASTPtr left = func.arguments->children.at(0);
         ASTPtr right = func.arguments->children.at(1);
-        if (left->as<ASTLiteral>() || right->as<ASTLiteral>())
+        if ((left->as<ASTLiteral>() || right->as<ASTLiteral>()) && !(left->as<ASTLiteral>() && right->as<ASTLiteral>()))
             data.inequal_conditions.push_back(ast);
         else
         {
@@ -118,7 +120,7 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
     {
         ASTPtr left = func.arguments->children.at(0);
         ASTPtr right = func.arguments->children.at(1);
-        if (left->as<ASTLiteral>() || right->as<ASTLiteral>())
+        if ((left->as<ASTLiteral>() || right->as<ASTLiteral>()) && !(left->as<ASTLiteral>() && right->as<ASTLiteral>()))
             data.inequal_conditions.push_back(ast);
         else
         {
@@ -267,7 +269,7 @@ std::pair<size_t, size_t> CollectJoinOnKeysMatcher::getTableNumbers(const ASTPtr
     getIdentifiers(left_ast, left_identifiers, data.ignore_array_join_check_in_join_on_condition);
     getIdentifiers(right_ast, right_identifiers);
 
-    if (left_identifiers.empty() || right_identifiers.empty())
+    if (!data.enable_join_on_1_equals_1 && (left_identifiers.empty() || right_identifiers.empty()))
     {
         throw Exception("Not equi-join ON expression: " + queryToString(expr) + ". No columns in one of equality side.",
                         ErrorCodes::INVALID_JOIN_ON_EXPRESSION);

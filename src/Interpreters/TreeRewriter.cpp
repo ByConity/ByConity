@@ -636,7 +636,8 @@ void collectJoinedColumns(TableJoin & analyzed_join, const ASTTableJoin & table_
                           const TablesWithColumns & tables, const Aliases & aliases,
                           bool join_using_null_safe,
                           bool ignore_array_join_check_in_join_on_condition,
-                          const ContextPtr & context)
+                          const ContextPtr & context,
+                          bool enable_join_on_1_equals_1)
 {
     assert(tables.size() >= 2);
 
@@ -657,7 +658,7 @@ void collectJoinedColumns(TableJoin & analyzed_join, const ASTTableJoin & table_
     {
         bool is_asof = (table_join.strictness == ASTTableJoin::Strictness::Asof);
 
-        CollectJoinOnKeysVisitor::Data data{analyzed_join, tables[0], tables[1], aliases, is_asof, false,  {}, {}, false, ignore_array_join_check_in_join_on_condition, context};
+        CollectJoinOnKeysVisitor::Data data{analyzed_join, tables[0], tables[1], aliases, is_asof, false, enable_join_on_1_equals_1, {}, {}, false, ignore_array_join_check_in_join_on_condition, context};
         CollectJoinOnKeysVisitor(data).visit(table_join.on_expression);
         CollectJoinOnKeysMatcher::analyzeJoinOnConditions(data, table_join.kind);
         
@@ -1231,7 +1232,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
             replaceAliasColumnsInQuery(table_join_ast.using_expression_list, result.metadata_snapshot->getColumns(), result.array_join_result_to_source, getContext());
         if (table_join_ast.on_expression && result.metadata_snapshot)
             replaceAliasColumnsInQuery(table_join_ast.on_expression, result.metadata_snapshot->getColumns(), result.array_join_result_to_source, getContext());
-        collectJoinedColumns(*result.analyzed_join, table_join_ast, tables_with_columns, result.aliases, settings.join_using_null_safe, settings.ignore_array_join_check_in_join_on_condition, getContext());
+        collectJoinedColumns(*result.analyzed_join, table_join_ast, tables_with_columns, result.aliases, settings.join_using_null_safe, settings.ignore_array_join_check_in_join_on_condition, getContext(), settings.enable_join_on_1_equals_1);
     }
 
     result.aggregates = getAggregates(query, *select_query);

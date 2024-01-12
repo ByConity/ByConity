@@ -53,7 +53,7 @@ select
   e.name,
   max(e.salary)
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   left join department_inequal_join_all_12233 as d on e.department_id = d.department_id
   and e.salary > 3000
   and e.name != 'Jones'
@@ -67,7 +67,7 @@ select
   e.name,
   max(e.salary)
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   right join department_inequal_join_all_12233 as d on e.department_id = d.department_id
   and e.salary > 3000
   and e.name != 'Jones'
@@ -80,7 +80,7 @@ select '-----------SQL-7---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   left join department_inequal_join_all_12233 as d on e.department_id = d.department_id
   and e.salary > 1000
   and e.name != 'Jones'
@@ -91,7 +91,7 @@ select '-----------SQL-8---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   right join department_inequal_join_all_12233 as d on e.department_id = d.department_id
   and e.salary > 1000
   and e.name != 'Jones'
@@ -102,7 +102,7 @@ select '-----------SQL-9---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   left join department_inequal_join_all_12233 as d on (e.department_id = d.department_id)
   and (e.salary > 3000)
   and (e.salary < 5000)
@@ -112,7 +112,7 @@ select '-----------SQL-10---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   right join department_inequal_join_all_12233 as d on (e.department_id = d.department_id)
   and (e.salary > 3000)
   and (e.salary < 5000)
@@ -137,7 +137,7 @@ select
   e.name,
   max(e.salary)
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   left join department_inequal_join_all_12233 as d on e.department_id = d.department_id
   and e.salary > 3000
   and e.name != 'Jones'
@@ -151,7 +151,7 @@ select
   e.name,
   max(e.salary)
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   right join department_inequal_join_all_12233 as d on e.department_id = d.department_id
   and e.salary > 3000
   and e.name != 'Jones'
@@ -164,7 +164,7 @@ select '-----------SQL-17---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   left join department_inequal_join_all_12233 as d on e.department_id = d.department_id
   and e.salary > 1000
   and e.name != 'Jones'
@@ -175,7 +175,7 @@ select '-----------SQL-18---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   right join department_inequal_join_all_12233 as d on e.department_id = d.department_id
   and e.salary > 1000
   and e.name != 'Jones'
@@ -186,7 +186,7 @@ select '-----------SQL-19---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   left join department_inequal_join_all_12233 as d on (e.department_id = d.department_id)
   and (e.salary > 3000)
   and (e.salary < 5000)
@@ -196,7 +196,7 @@ select '-----------SQL-20---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   left join department_inequal_join_all_12233 as d on (e.department_id = d.department_id)
   and (e.salary > 3000)
   and (d.department_name = 'Sales') order by e.name;
@@ -205,11 +205,18 @@ select '-----------SQL-21---------';
 select
   *
 from
-  employee_inequal_join_all_12233 as e 
+  employee_inequal_join_all_12233 as e
   right join department_inequal_join_all_12233 as d on (e.department_id = d.department_id)
   and (e.salary > 3000)
   and (e.salary < 5000)
   and (d.department_name != 'Sales') order by e.department_id, d.region;
+
+select '-----------SQL-22---------';
+SELECT *
+FROM employee_inequal_join_all_12233 AS e
+LEFT JOIN department_inequal_join_all_12233 AS d ON (e.department_id = d.department_id) AND (e.salary > 3000) AND (d.department_name = e.name)
+ORDER BY e.name ASC;
+
 drop table if exists test_inequal_join_all_12233;
 drop table if exists department_inequal_join_all_12233;
 drop table if exists employee_inequal_join_all_12233;
