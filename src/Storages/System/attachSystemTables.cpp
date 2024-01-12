@@ -149,6 +149,7 @@
 #endif
 #include <Storages/System/StorageSystemMaterializedMySQL.h>
 #include <Storages/System/StorageSystemCnchMaterializedMySQL.h>
+#include <Storages/System/StorageSystemCnchTransactionCleanTasks.h>
 
 namespace DB
 {
@@ -285,6 +286,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemExternalDatabases>(system_database, "external_databases");
     attach<StorageSystemExternalTables>(system_database, "external_tables");
 #endif
+    attach<StorageSystemCnchTransactionCleanTasks>(system_database, "cnch_transaction_clean_tasks");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)
