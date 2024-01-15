@@ -89,9 +89,10 @@ void TSOImpl::GetTimestamp(
             return;
         }
 
-        UInt64 cur_ts = fetchAddLogical(1);
+        UInt64 cur_ts = ts.load(std::memory_order_acquire);
         if (ts_to_physical(cur_ts) == 0)
             throw Exception("Timestamp has not been initialized in TSO yet. Timestamp will initialized in a few seconds. Please retry request in a few seconds.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
+        cur_ts = fetchAddLogical(1);
 
         response->set_timestamp(cur_ts);
         response->set_is_leader(true);

@@ -252,6 +252,7 @@ Poco::Net::SocketAddress TSOServer::socketBindListen(Poco::Net::ServerSocket & s
 
 bool TSOServer::onLeader()
 {
+    tso_service->setPhysicalTime(0);
     syncTSO();
     if (update_tso_task)
         update_tso_task->activateAndSchedule();
@@ -265,6 +266,8 @@ bool TSOServer::onFollower()
     num_yielded_leadership++;
     if (update_tso_task)
         update_tso_task->deactivate();
+
+    tso_service->setPhysicalTime(0);
 
     LOG_INFO(log, "Current node {} become follower", host_port);
     return true;
