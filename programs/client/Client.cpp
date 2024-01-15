@@ -54,6 +54,7 @@
 #include <Columns/ColumnString.h>
 #include <common/find_symbols.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/Config/configReadClient.h>
 #include <Common/Exception.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Core/Types.h>
@@ -117,6 +118,7 @@
 #include <common/LineReader.h>
 #include <common/argsToConfig.h>
 #include <filesystem>
+#include <AggregateFunctions/registerAggregateFunctions.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config_version.h>
