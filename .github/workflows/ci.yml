@@ -58,6 +58,7 @@ jobs:
         run: sleep 200s
         shell: bash
       - name: Retry 3rd time checking out repository code  
+        continue-on-error: true
         id: checkout_3rd_time
         if: steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
         uses: actions/checkout@v3
