@@ -66,7 +66,7 @@ public:
         String env;
         if(const char* env_p = std::getenv(env_variable.c_str()))
             env = env_p;
-        return result_type->createColumnConst(input_rows_count, env);
+        return result_type->createColumnConst(input_rows_count, env)->convertToFullColumnIfConst();
     }
 
 private:

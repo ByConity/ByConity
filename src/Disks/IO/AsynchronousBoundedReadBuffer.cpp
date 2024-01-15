@@ -123,6 +123,7 @@ void AsynchronousBoundedReadBuffer::setReadUntilPosition(size_t position)
                     getPosition());
             }
         }
+
         read_until_position = position;
 
         /// We must wait on future and reset the prefetch here, because otherwise there might be
