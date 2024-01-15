@@ -256,6 +256,7 @@ UndoResourceNames integrateResources(const UndoResources & resources)
         }
         else if (resource.type() == UndoResourceType::S3AttachPart
             || resource.type() == UndoResourceType::S3DetachPart
+            || resource.type() == UndoResourceType::S3DetachStagedPart
             || resource.type() == UndoResourceType::S3AttachMeta
             || resource.type() == UndoResourceType::S3DetachDeleteBitmap
             || resource.type() == UndoResourceType::S3AttachDeleteBitmap)

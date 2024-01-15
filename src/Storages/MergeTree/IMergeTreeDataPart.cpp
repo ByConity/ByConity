@@ -1743,6 +1743,11 @@ String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix)
     return "detached/" + getRelativePathForPrefix(prefix);
 }
 
+String IMergeTreeDataPart::getRelativePathToDiskForDetachedPart(const String & prefix) const
+{
+    return fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
+}
+
 void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 {
     renameTo(getRelativePathForDetachedPart(prefix), true);
@@ -1750,7 +1755,7 @@ void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 
 void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
 {
-    String destination_path = fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
+    String destination_path = getRelativePathToDiskForDetachedPart(prefix);
 
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);

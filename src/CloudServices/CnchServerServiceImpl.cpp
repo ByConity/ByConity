@@ -1214,7 +1214,10 @@ void CnchServerServiceImpl::redirectAttachDetachedS3Parts(
                     if (!to_table)
                         throw Exception("Cannot get table by UUID " + to_table_uuid, ErrorCodes::UNKNOWN_TABLE);
                     throw_if_non_host(to_table);
-                    global_context->getCnchCatalog()->attachDetachedPartsRaw(to_table, detached_part_names, detached_bitmap_names);
+                    size_t detached_visible_part_size = request->detached_visible_part_size();
+                    size_t detached_staged_part_size = request->detached_staged_part_size();
+                    global_context->getCnchCatalog()->attachDetachedPartsRaw(
+                        to_table, detached_part_names, detached_visible_part_size, detached_staged_part_size, detached_bitmap_names);
                     break;
                 }
                 default:

@@ -252,6 +252,7 @@ enum UndoResourceType {
   S3VolatilePart = 8;
   S3AttachDeleteBitmap = 9;
   S3DetachDeleteBitmap = 10;
+  S3DetachStagedPart = 11;
 }
 
 message DataModelUndoBuffer {

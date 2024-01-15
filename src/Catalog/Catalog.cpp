@@ -1412,9 +1412,9 @@ namespace Catalog
         return res;
     }
 
-    DataPartsVector Catalog::getStagedParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    DataPartsVector Catalog::getStagedParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
-        auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
+        const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get());
         if (!storage)
             throw Exception("Table is not a merge tree", ErrorCodes::BAD_ARGUMENTS);
 
@@ -1422,12 +1422,12 @@ namespace Catalog
         return CnchPartsHelper::toMergeTreeDataPartsCNCHVector(createPartVectorFromServerParts(*storage, staged_server_parts));
     }
 
-    ServerDataPartsVector Catalog::getStagedServerDataParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
             [&] {
-                auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
+                const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get());
                 if (!storage)
                     throw Exception("Table is not a merge tree", ErrorCodes::BAD_ARGUMENTS);
                 String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
@@ -5692,9 +5692,21 @@ namespace Catalog
                     log,
                     "Redirect attachDetachedParts request to remote host : {} for table {}"
                         , target_host.toDebugString(), to_tbl->getStorageID().getNameForLogs());
-                context.getCnchServerClientPool().get(target_host)->redirectAttachDetachedS3Parts(
-                    to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), parts, staged_parts, detached_part_names, {}, detached_bitmaps, bitmaps,
-                    DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS);
+                context.getCnchServerClientPool()
+                    .get(target_host)
+                    ->redirectAttachDetachedS3Parts(
+                        to_tbl,
+                        from_tbl->getStorageUUID(),
+                        to_tbl->getStorageUUID(),
+                        parts,
+                        staged_parts,
+                        detached_part_names,
+                        parts.size(),
+                        detached_part_names.size(),
+                        {},
+                        detached_bitmaps,
+                        bitmaps,
+                        DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS);
                 return;
             }
             catch (Exception & e)
@@ -5839,7 +5851,11 @@ namespace Catalog
     }
 
     void Catalog::attachDetachedPartsRaw(
-        const StoragePtr & tbl, const std::vector<String> & part_names, const std::vector<String> & bitmap_names)
+        const StoragePtr & tbl,
+        const std::vector<String> & part_names,
+        size_t detached_visible_part_size,
+        size_t detached_staged_part_size,
+        const std::vector<String> & bitmap_names)
     {
         if (part_names.empty())
         {
@@ -5860,9 +5876,21 @@ namespace Catalog
                     log,
                     "Redirect attachDetachedPartsRaw request to remote host : {} for table {}"
                         , target_host.toDebugString(), tbl->getStorageID().getNameForLogs());
-                context.getCnchServerClientPool().get(target_host)->redirectAttachDetachedS3Parts(
-                    tbl, UUIDHelpers::Nil, tbl->getStorageUUID(), {}, {}, part_names, bitmap_names, {}, {}
-                    , DB::Protos::DetachAttachType::ATTACH_DETACHED_RAW);
+                context.getCnchServerClientPool()
+                    .get(target_host)
+                    ->redirectAttachDetachedS3Parts(
+                        tbl,
+                        UUIDHelpers::Nil,
+                        tbl->getStorageUUID(),
+                        {},
+                        {},
+                        part_names,
+                        detached_visible_part_size,
+                        detached_staged_part_size,
+                        bitmap_names,
+                        {},
+                        {},
+                        DB::Protos::DetachAttachType::ATTACH_DETACHED_RAW);
                 return;
             }
             catch (Exception & e)
@@ -5878,6 +5906,8 @@ namespace Catalog
             name_space,
             UUIDHelpers::UUIDToString(tbl->getStorageUUID()),
             part_names,
+            detached_visible_part_size,
+            detached_staged_part_size,
             bitmap_names,
             max_commit_size_one_batch,
             max_drop_size_one_batch);

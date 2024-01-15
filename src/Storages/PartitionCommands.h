@@ -84,6 +84,9 @@ struct PartitionCommand
     /// true for DROP/DETACH PARTITION [WHERE]
     bool cascading = false;
 
+    /// true for DETACH/DROP STAGED PARTITION/PART, only used by unique table
+    bool staging_area = false;
+
     /// For ATTACH PARTITION partition FROM db.table
     String from_database;
     String from_table;

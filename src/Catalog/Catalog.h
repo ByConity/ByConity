@@ -249,8 +249,8 @@ public:
     DeleteBitmapMetaPtrVector getAllDeleteBitmaps(const MergeTreeMetaBase & storage);
 
     // return table's committed staged parts. if partitions != null, ignore staged parts not belong to `partitions`.
-    DataPartsVector getStagedParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
-    ServerDataPartsVector getStagedServerDataParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
+    DataPartsVector getStagedParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
+    ServerDataPartsVector getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
 
     /////////////////////////////
     /// Delete bitmaps API (UNIQUE KEY)
@@ -729,7 +729,12 @@ public:
         const DeleteBitmapMetaPtrVector & bitmaps);
     // Rename part's meta for `tbl`, from detached to active
     // Rename delete bitmap's meta for `tbl`, from detached to active
-    void attachDetachedPartsRaw(const StoragePtr & tbl, const std::vector<String> & part_names, const std::vector<String> & bitmap_names);
+    void attachDetachedPartsRaw(
+        const StoragePtr & tbl,
+        const std::vector<String> & part_names,
+        size_t detached_visible_part_size,
+        size_t detached_staged_part_size,
+        const std::vector<String> & bitmap_names);
     // Rename part's meta from `from_tbl` with attached_part_names, and write to `to_uuid`'s detached parts,
     // first element of `detached_part_metas` is detached part name, second element of `detached_part_metas` is detached part meta
     // Rename bitmap's meta from `from_tbl` with attached_bitmap_names, and write to `to_uuid`'s detached bitmaps,

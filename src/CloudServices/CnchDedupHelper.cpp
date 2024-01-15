@@ -239,4 +239,21 @@ bool checkBucketParts(
     return checkIfBucketPartValid(visible_parts) && checkIfBucketPartValid(staged_parts);
 }
 
+void DedupScope::filterParts(MergeTreeDataPartsCNCHVector & parts) const
+{
+    if (!isBucketLock())
+        return;
+    parts.erase(
+        std::remove_if(
+            parts.begin(),
+            parts.end(),
+            [&](const MergeTreeDataPartCNCHPtr & part) {
+                if (isTableDedup())
+                    return !buckets.count(part->bucket_number);
+                else
+                    return !bucket_with_partition_set.count({part->info.partition_id, part->bucket_number});
+            }),
+        parts.end());
+}
+
 }
