@@ -39,6 +39,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     size_t max_total_size_to_merge,
     bool aggressive,
     bool enable_batch_select,
+    bool final,
     bool merge_with_ttl_allowed,
     Poco::Logger * log);
 

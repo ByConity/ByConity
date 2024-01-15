@@ -51,7 +51,7 @@ VirtualWarehouseHandleImpl::VirtualWarehouseHandleImpl(
 {
 }
 
-size_t VirtualWarehouseHandleImpl::empty(UpdateMode update_mode)
+bool VirtualWarehouseHandleImpl::empty(UpdateMode update_mode)
 {
     tryUpdateWorkerGroups(update_mode);
 
@@ -65,6 +65,17 @@ VirtualWarehouseHandleImpl::Container VirtualWarehouseHandleImpl::getAll(UpdateM
 
     std::lock_guard lock(state_mutex);
     return worker_groups;
+}
+
+size_t VirtualWarehouseHandleImpl::getNumWorkers(UpdateMode update_mode)
+{
+    tryUpdateWorkerGroups(update_mode);
+
+    size_t res = 0;
+    std::lock_guard lock(state_mutex);
+    for (auto const & [_, worker_group] : worker_groups)
+        res += worker_group->size();
+    return res;
 }
 
 WorkerGroupHandle VirtualWarehouseHandleImpl::getWorkerGroup(const String & worker_group_id, UpdateMode update_mode)
