@@ -31,6 +31,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     size_t max_total_size_to_merge,
     bool aggressive,
     bool enable_batch_select,
+    bool final,
     [[maybe_unused]] bool merge_with_ttl_allowed,
     Poco::Logger * log)
 {
@@ -208,8 +209,12 @@ ServerSelectPartsDecision selectPartsToMerge(
         merge_settings.max_parts_to_merge_base = data_settings->max_parts_to_merge_at_once;
         merge_settings.max_total_rows_to_merge = data_settings->cnch_merge_max_total_rows_to_merge;
         merge_settings.enable_batch_select = enable_batch_select;
+        /// NOTE: Here final is different from aggressive.
+        /// The selector may not allow to merge [p1, p2] even though there are only two parts and aggressive is set.
+        /// When final is set, we will skip some check for range [0, max_end) so that is can be a candidate result.
         if (aggressive)
             merge_settings.min_parts_to_merge_base = 1;
+        merge_settings.final = final;
         merge_selector = std::make_unique<DanceMergeSelector>(data, merge_settings);
     }
     else

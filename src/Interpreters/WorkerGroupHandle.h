@@ -89,6 +89,7 @@ public:
     auto getQualifiedName() const { return backQuoteIfNeed(vw_name) + '.' + backQuoteIfNeed(id); }
     auto & getHostWithPortsVec() const { return hosts; }
     auto empty() const { return hosts.empty(); }
+    auto size() const { return hosts.size(); }
 
     /// TODO: (zuochuang.zema) consider reduce the size of WorkerGroupMetrics.
     auto getMetrics() const
