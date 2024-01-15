@@ -746,6 +746,9 @@ SettingsChanges StorageCloudKafka::createSettingsAdjustments()
     if (!settings.schema.value.empty())
         result.emplace_back("format_schema", settings.schema.value);
 
+    if (!settings.avro_schema_registry_url.value.empty())
+        result.emplace_back("format_avro_schema_registry_url", settings.avro_schema_registry_url.value);
+
     /// Forbidden parallel parsing for Kafka in case of global setting.
     /// Kafka cannot support parallel parsing due to virtual column
     result.emplace_back("input_format_parallel_parsing", false);

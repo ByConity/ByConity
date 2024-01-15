@@ -28,6 +28,9 @@ namespace Nested
 
     /// Check that sizes of arrays - elements of nested data structures - are equal.
     void validateArraySizes(const Block & block);
+
+    /// Extract all column names that are nested for specifying table.
+    Names getAllNestedColumnsForTable(const Block & block, const std::string & table_name);
 }
 
 }

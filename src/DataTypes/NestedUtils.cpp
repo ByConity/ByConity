@@ -211,6 +211,17 @@ void validateArraySizes(const Block & block)
     }
 }
 
+Names getAllNestedColumnsForTable(const Block & block, const std::string & table_name)
+{
+    Names names;
+    for (const auto & name: block.getNames())
+    {
+        if (extractTableName(name) == table_name)
+            names.push_back(name);
+    }
+    return names;
+}
+
 }
 
 }

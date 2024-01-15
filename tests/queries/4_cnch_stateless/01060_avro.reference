@@ -1,0 +1,11 @@
+===test primitive types===
+0	-1	9223372036854775807	3.00004	0.00001		
+1	1	2	3.4	5.6	b1	s1
+===test complex types===
+C	f	[]	[]	\N	123	79cd909892d7e7ade1987cc7422628ba
+A	t	['s1','s2']	[['a1'],['a2']]	s1	\N	79cd909892d7e7ade1987cc7422628ba
+===test nested types===
+1	b1	2.2	2.3	c3
+===test map type===
+0	{'key1':'value1'}	{'k1':0}
+1	{'key1':'value3','key2':'value2'}	{'k2':1}

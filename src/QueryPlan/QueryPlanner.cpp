@@ -192,7 +192,7 @@ private:
 
 namespace
 {
-    PlanNodePtr planOutput(const RelationPlan & plan, ASTPtr & query, Analysis & analysis, ContextMutablePtr context, InsertAnalysis * insert = nullptr)
+    PlanNodePtr planOutput(const RelationPlan & plan, ASTPtr & query, Analysis & analysis, ContextMutablePtr context)
     {
         const auto & output_desc = analysis.getOutputDescription(*query);
         const auto & field_symbol_infos = plan.getFieldSymbolInfos();
@@ -229,31 +229,6 @@ namespace
         {
             String input_column = field_symbol_infos[i].getPrimarySymbol();
             String output_name = get_uniq_output_name(output_desc[i].name);
-            if (insert != nullptr && context->getSettingsRef().insert_null_as_default)
-            {
-                auto & columns = insert->columns;
-                if (isNullableOrLowCardinalityNullable(input_types[input_column]) && !isNullableOrLowCardinalityNullable(columns[i].type))
-                {
-                    auto column_default = insert->storage->getInMemoryMetadataPtr()->getColumns().getDefault(columns[i].name);
-                    ASTPtr default_expr;
-                    if (column_default)
-                    {
-                        default_expr = column_default->expression->clone();
-                    }
-                    else
-                    {
-                        auto default_value = columns[i].type->getDefault();
-                        default_expr = std::make_shared<ASTLiteral>(default_value);
-                    }
-                    auto expr = makeASTFunction("CAST", default_expr, std::make_shared<ASTLiteral>(columns[i].type->getName()));
-                    expr = makeASTFunction("ifNull", std::make_shared<ASTIdentifier>(input_column), std::move(expr));
-
-                    assignments.emplace_back(output_name, expr);
-                    output_types[output_name] = columns[i].type;
-                    continue;
-                }
-            }
-
             assignments.emplace_back(output_name, toSymbolRef(input_column));
             output_types[output_name] = input_types[input_column];
         }
@@ -283,7 +258,7 @@ QueryPlanPtr QueryPlanner::plan(ASTPtr & query, Analysis & analysis, ContextMuta
     CTERelationPlans cte_plans;
     RelationPlan relation_plan = planQuery(query, nullptr, analysis, context, cte_plans);
     planExtremes(relation_plan, context);
-    PlanNodePtr plan_root = planOutput(relation_plan, query, analysis, context, nullptr);
+    PlanNodePtr plan_root = planOutput(relation_plan, query, analysis, context);
     CTEInfo cte_info;
     for (const auto & cte_plan : cte_plans)
         cte_info.add(cte_plan.first, cte_plan.second.getRoot());
@@ -303,7 +278,7 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
 
     auto & insert = *analysis.getInsert();
     auto select_plan = process(insert_query.select);
-    select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context, &insert));
+    select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context));
 
     auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns);
 
