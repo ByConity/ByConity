@@ -35,6 +35,7 @@ struct Settings;
     /** How many rows correspond to one primary key value. */ \
     M(UInt64, index_granularity, 8192, "", 0) \
     M(String, cnch_vw_default, "vw_default", "read vw", 0) \
+    M(String, cnch_vw_read, "vw_read", "deprecated read settings, use cnch_vw_default instead", 0) \
     M(String, cnch_vw_write, "vw_write", "Not used for hive", 0) \
     /** Parquet skip useless row group */ \
     M(Bool, enable_skip_row_group, false, "", 0) \
