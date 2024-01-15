@@ -1239,7 +1239,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeArrayJoin(ASTArrayJoin & array_join, ASTSe
             throw Exception("Duplicate alias in ARRAY JOIN: " + output_name, ErrorCodes::MULTIPLE_EXPRESSIONS_FOR_ALIAS);
 
         auto array_join_expr_type = ExprAnalyzer::analyze(array_join_expr, source_scope, context, analysis, expr_options);
-        auto array_type = getArrayJoinDataType(array_join_expr_type);
+        const auto array_type = getArrayJoinDataType(array_join_expr_type);
         if (!array_type)
             throw Exception("ARRAY JOIN requires array argument", ErrorCodes::TYPE_MISMATCH);
 
