@@ -5259,11 +5259,15 @@ TransactionCnchPtr Context::getCurrentTransaction() const
 
 TxnTimestamp Context::tryGetCurrentTransactionID() const
 {
+    auto lock = getLock();
+
     return current_cnch_txn ? current_cnch_txn->getTransactionID() : TxnTimestamp{};
 }
 
 TxnTimestamp Context::getCurrentTransactionID() const
 {
+    auto lock = getLock();
+
     if (!current_cnch_txn)
         throw Exception("Transaction is not set (empty)", ErrorCodes::LOGICAL_ERROR);
 
@@ -5276,6 +5280,8 @@ TxnTimestamp Context::getCurrentTransactionID() const
 
 TxnTimestamp Context::getCurrentCnchStartTime() const
 {
+    auto lock = getLock();
+
     if (!current_cnch_txn)
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 
