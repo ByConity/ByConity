@@ -92,7 +92,7 @@ WinnerPtr CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & c
     auto root_group = context.getMemo().getGroupById(root_group_id);
     context.getTaskStack().push(std::make_shared<OptimizeGroup>(root_group, root_context));
 
-    auto start_time = std::chrono::system_clock::now();
+    Stopwatch watch{CLOCK_THREAD_CPUTIME_ID};
     while (!context.getTaskStack().empty())
     {
         auto task = context.getTaskStack().top();
@@ -101,9 +101,8 @@ WinnerPtr CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & c
 
         // Check to see if we have at least one plan, and if we have exceeded our
         // timeout limit
-        auto now = std::chrono::system_clock::now();
-        UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-        if (elapsed >= context.getTaskExecutionTimeout())
+        double duration = watch.elapsedMillisecondsAsDouble();
+        if (duration >= context.getTaskExecutionTimeout() || context.getTaskStack().size() > 100000)
         {
             throw Exception(
                 "Cascades exhausted the time limit of " + std::to_string(context.getTaskExecutionTimeout()) + " ms",

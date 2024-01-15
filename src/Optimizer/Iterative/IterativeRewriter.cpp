@@ -65,11 +65,9 @@ void IterativeRewriter::rewrite(QueryPlan & plan, ContextMutablePtr ctx) const
     IterativeRewriterContext context{
         .globalContext = ctx,
         .cte_info = plan.getCTEInfo(),
-        .start_time = std::chrono::system_clock::now(),
         .optimizer_timeout = ctx->getSettingsRef().iterative_optimizer_timeout,
         .excluded_rules_map = &ctx->getExcludedRulesMap(),
         .plan = plan};
-
     for (auto & item : plan.getCTEInfo().getCTEs())
         explorePlan(item.second, context);
     explorePlan(plan.getPlanNode(), context);
@@ -184,10 +182,9 @@ bool IterativeRewriter::exploreChildren(PlanNodePtr & plan, IterativeRewriterCon
 
 void IterativeRewriter::checkTimeoutNotExhausted(const String & rule_name, const IterativeRewriterContext & context)
 {
-    auto now = std::chrono::system_clock::now();
-    UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - context.start_time).count();
+    double duration = context.watch.elapsedMillisecondsAsDouble();
 
-    if (elapsed >= context.optimizer_timeout)
+    if (duration >= context.optimizer_timeout)
     {
         throw Exception(
             "The optimizer with rule [ " + rule_name + " ] exhausted the time limit of " + std::to_string(context.optimizer_timeout)

@@ -35,10 +35,9 @@ struct IterativeRewriterContext
 {
     ContextMutablePtr globalContext;
     CTEInfo & cte_info;
-    std::chrono::time_point<std::chrono::system_clock> start_time;
     UInt64 optimizer_timeout;
     ExcludedRulesMap * excluded_rules_map;
-
+    Stopwatch watch{CLOCK_THREAD_CPUTIME_ID};
     // for debugging
     QueryPlan & plan;
     int rule_apply_count = 0;
