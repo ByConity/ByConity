@@ -268,10 +268,50 @@ inline uint64_t bitshift(char const* p, char const* q) {
 }
 
 // get a uint_64_t number from a string type
-inline uint64_t bitshift2(std::string const& value) {
-    char const* p = value.c_str();
-    char const* q = p + value.size();
-    return bitshift(p, q);
+inline std::pair<uint64_t, bool> digitShift(ReadBuffer & buf)
+{
+    if (unlikely(buf.eof()))
+        throwReadAfterEOF();
+
+    bool is_negative = false;
+    uint64_t res = 0;
+    auto * begin = buf.position();
+
+    if (*buf.position() == '-')
+    {
+        ++buf.position();
+        is_negative = true;
+        if (unlikely(buf.eof()))
+            throwReadAfterEOF();
+    }
+
+    while (!buf.eof())
+    {
+        auto c = *buf.position();
+        /// digit char
+        if ((c & 0xF0) == 0x30 && c < 0x3A) /// It makes sense to have this condition inside loop.
+        {
+            res *= 10;
+            res += c & 0x0F;
+            ++buf.position();
+        }
+        else
+            break;
+    }
+
+    size_t digit_cnt = buf.position() - begin;
+    if (!digit_cnt || (digit_cnt == 1 && is_negative))
+        return {0, false};
+    else if (is_negative)
+        res = static_cast<uint64_t>(-res);
+
+    return {res, true};
+}
+
+inline void skipCommaIfAny(ReadBuffer & buf)
+{
+    while (!buf.eof() && ',' == *buf.position())
+        ++buf.position();
 }
 
 void SerializationBitMap64::deserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
@@ -279,7 +319,7 @@ void SerializationBitMap64::deserializeWholeText(IColumn & column, ReadBuffer & 
     if (istr.eof())
         throwReadAfterEOF();
 
-    auto peekAndMoveIfSame =  [&](char c) -> bool {
+    auto peek_and_move_if_same = [&](char c) -> bool {
         if (*istr.position() == c)
         {
             ++istr.position();
@@ -288,57 +328,60 @@ void SerializationBitMap64::deserializeWholeText(IColumn & column, ReadBuffer & 
         return false;
     };
 
-    bool double_quoted = peekAndMoveIfSame('\"');
-    bool single_quoted = peekAndMoveIfSame('\'');
-    assertChar('[', istr);
+    bool double_quoted = peek_and_move_if_same('\"');
+    bool single_quoted = peek_and_move_if_same('\'');
+
+    bool square_brackets = checkChar('[', istr);
+    bool curly_brackets = checkChar('{', istr);
+
+    /// only support `[]` or `{}`
+    if (!square_brackets && !curly_brackets)
+    {
+        const char * err = "[ or {";
+        throwAtAssertionFailed(err, istr);
+    }
 
     BitMap64 x;
-    uint64_t source = 0;
+    bool is_unexpected = false;
     while (!istr.eof())
     {
         skipWhitespaceIfAny(istr);
+        skipCommaIfAny(istr);
 
-        char * next_pos = find_first_symbols<' ', ',', ']'>(istr.position(), istr.buffer().end());
+        auto [num, got] = digitShift(istr);
+        if (got)
+            x.add(num);
 
-        if (next_pos > istr.position())
-        {
-            uint64_t temp = bitshift(istr.position(), next_pos);
-            if (next_pos != istr.buffer().end() && (*next_pos == ' ' || *next_pos == ',' || *next_pos == ']'))
-            {
-                if (source > 0) {
-                    temp = source * std::pow(10, (next_pos - istr.position())) + temp;
-                    source = 0;
-                }
-                x.add(temp);
-            } else {
-                if (source > 0)
-                    source = source * std::pow(10, (next_pos - istr.position())) + temp;
-                else
-                    source = temp;
-            }
-        }
-
-        istr.position() = next_pos;
-
-        while (istr.hasPendingData() && *istr.position() == ' ')
-            ++istr.position();
-
-        if (!istr.hasPendingData())
+        /// skip whitespace or comma at the beginning of loop
+        if (*(istr.position()) == ',' || *(istr.position()) == ' ')
             continue;
-
-        if (*istr.position() == ',')
-        {
-            ++istr.position();
-        }
-
-        if (*istr.position() == ']')
+        else if (*istr.position() == ']' || *istr.position() == '}') // closing bracket
         {
             static_cast<ColumnBitMap64 &>(column).insert(x);
             break;
         }
+        else
+        {
+            is_unexpected = true;
+            break;
+        }
     }
 
-    assertChar(']', istr);
+    if (is_unexpected)
+    {
+        char * next_pos = find_first_symbols<' ', ',', ']', '}'>(istr.position(), istr.buffer().end());
+        String sample = String(istr.position(), static_cast<size_t>(next_pos - istr.position()));
+        throw Exception(
+            "Unexpected ascii code character: " + std::to_string(static_cast<UInt16>(*istr.position()))
+                + ". More buffer information: " + sample + ". Only digit('0' - '9') and negative('-') is allowed",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (square_brackets)
+        assertChar(']', istr);
+    else
+        assertChar('}', istr);
+
     if (double_quoted)
         assertChar('\"', istr);
     if (single_quoted)
