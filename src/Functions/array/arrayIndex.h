@@ -374,7 +374,10 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        const DataTypeArray * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
+        const auto * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
+        const auto * nullable_type = checkAndGetDataType<DataTypeNullable>(arguments[0].get());
+        if (nullable_type)
+            array_type = checkAndGetDataType<DataTypeArray>(nullable_type->getNestedType().get());
 
         if (!array_type)
             throw Exception("First argument for function " + getName() + " must be an array.",
@@ -386,7 +389,28 @@ public:
                 "numeric types, or Enum and numeric type. Passed: {} and {}.",
                 getName(), arguments[0]->getName(), arguments[1]->getName());
 
+        if (nullable_type)
+            return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
+        
         return std::make_shared<DataTypeNumber<ResultType>>();
+    }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    {
+        /// Execute on nested columns and wrap results with nullable
+        auto * nullable_col = checkAndGetColumn<ColumnNullable>(arguments[0].column.get());
+        auto * const_col = checkAndGetColumn<ColumnConst>(arguments[0].column.get());
+        if (const_col)
+            nullable_col = checkAndGetColumn<ColumnNullable>(const_col->getDataColumn());
+
+        if (nullable_col)
+        {
+            ColumnsWithTypeAndName tmp_args = {{nullable_col->getNestedColumnPtr(), removeNullable(arguments[0].type), arguments[0].name}, arguments[1]};
+            auto res = executeInternalImpl(tmp_args, removeNullable(result_type), input_rows_count);
+            return wrapInNullable(res, arguments, result_type, input_rows_count);
+        }
+
+        return executeInternalImpl(arguments, result_type, input_rows_count);
     }
 
     /**
@@ -403,7 +427,7 @@ public:
       * (they are vectors of Fields, which may represent the NULL value),
       * they do not require any preprocessing.
       */
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
+    ColumnPtr executeInternalImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const
     {
         const ColumnPtr & ptr = arguments[0].column;
 

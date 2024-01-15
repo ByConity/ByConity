@@ -117,7 +117,7 @@ public:
      * @param snapshot_ts If not zero, specify the snapshot to use
      */
     ServerDataPartsVector
-    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0) const;
+    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0, bool staging_area = false) const;
 
     /// Return all base parts and delete bitmap metas in the given partitions.
     /// If `partitions` is empty, return meta for all partitions.
@@ -234,8 +234,12 @@ private:
     /**
      * @param snapshot_ts If not zero, specify the snapshot to use
      */
-    ServerDataPartsVector
-    getAllPartsInPartitions(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0) const;
+    ServerDataPartsVector getAllPartsInPartitions(
+        const Names & column_names_to_return,
+        ContextPtr local_context,
+        const SelectQueryInfo & query_info,
+        UInt64 snapshot_ts = 0,
+        bool staging_area = false) const;
 
     Strings selectPartitionsByPredicate(
         const SelectQueryInfo & query_info,
@@ -250,7 +254,7 @@ private:
         const Names & column_names_to_return) const;
 
     void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context, size_t max_threads);
+        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context, size_t max_threads, bool staging_area = false);
 
     void collectResource(
         ContextPtr local_context,

@@ -134,6 +134,10 @@ std::optional<String> StorageCnchHive::getVirtualWarehouseName(VirtualWarehouseT
     {
         if (vw_type == VirtualWarehouseType::Default)
         {
+            /// deprecated
+            if (storage_settings->cnch_vw_read.changed)
+                return storage_settings->cnch_vw_read;
+
             return storage_settings->cnch_vw_default;
         }
         else if (vw_type == VirtualWarehouseType::Write)

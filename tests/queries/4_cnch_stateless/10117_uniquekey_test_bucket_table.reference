@@ -157,3 +157,47 @@ insert some values and query
 \'2023-06-26\'	0	10004485993488261590
 \'2023-06-26\'	1	10004485993488261590
 \'2023-06-27\'	0	10004485993488261590
+
+test dedup correct staged parts in write process in table level
+insert some values and query
+2023-10-18	1	1a
+2023-06-26	2	2a
+2023-10-18	3	3a
+stop dedup worker and let part into staging area, write process will handle all staged parts in table level lock
+2023-10-18	1	1a
+2023-06-26	2	2a
+2023-10-18	3	3a
+2023-06-26	4	4a
+use bucket level lock and try again, write process will only handle bucket-related staged parts
+2023-10-18	3	3a
+2023-06-26	4	4a
+start dedup worker and all staged parts to be visible
+2023-10-18	1	1a
+2023-06-26	2	2a
+2023-10-18	3	3a
+2023-06-26	4	4a
+
+test dedup correct staged parts in write process in partition level
+insert some values and query
+2023-06-26	1	1a
+2023-10-18	1	1a
+2023-06-26	2	2a
+2023-10-18	2	2a
+2023-06-26	3	3a
+2023-10-18	3	3a
+stop dedup worker and let part into staging area, write process will handle all staged parts in partition level lock
+2023-06-26	1	1a
+2023-06-26	2	2a
+2023-06-26	3	3a
+2023-06-26	4	4a
+use bucket level lock and try again, write process will only handle bucket-related staged parts
+2023-06-26	3	3a
+2023-06-26	4	4a
+start dedup worker and all staged parts to be visible
+2023-06-26	1	1a
+2023-10-18	1	1a
+2023-06-26	2	2a
+2023-10-18	2	2a
+2023-06-26	3	3a
+2023-10-18	3	3a
+2023-06-26	4	4a

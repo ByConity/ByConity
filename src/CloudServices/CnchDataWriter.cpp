@@ -571,6 +571,8 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             auto action = txn->createAction<DropRangeAction>(txn->getTransactionRecord(), storage_ptr);
             for (const auto & part : dumped_data.parts)
                 action->as<DropRangeAction &>().appendPart(part);
+            for (const auto & part : dumped_data.staged_parts)
+                action->as<DropRangeAction &>().appendStagedPart(part);
             for (const auto & bitmap : dumped_data.bitmaps)
                 action->as<DropRangeAction &>().appendDeleteBitmap(bitmap);
 

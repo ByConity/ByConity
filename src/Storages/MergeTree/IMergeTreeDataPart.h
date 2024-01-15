@@ -436,7 +436,12 @@ public:
 
     /// Moves a part to detached/ directory and adds prefix to its name
     void renameToDetached(const String & prefix) const;
+
+    /// Generate unique path to detach part based on table path
     String getRelativePathForDetachedPart(const String & prefix) const;
+
+    /// Generate unique path to detach part based on disk path
+    String getRelativePathToDiskForDetachedPart(const String & prefix) const;
 
     void createDeleteBitmapForDetachedPart() const;
 

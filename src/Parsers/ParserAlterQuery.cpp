@@ -91,11 +91,17 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_attach_part("ATTACH PART");
     ParserKeyword s_detach_partition("DETACH PARTITION");
     ParserKeyword s_detach_part("DETACH PART");
+    ParserKeyword s_detach_staged_partition_where("DETACH STAGED PARTITION WHERE");
+    ParserKeyword s_detach_staged_partition("DETACH STAGED PARTITION");
+    ParserKeyword s_detach_staged_part("DETACH STAGED PART");
     ParserKeyword s_detach_partition_where("DETACH PARTITION WHERE");
     ParserKeyword s_recluster_partition("RECLUSTER PARTITION");
     ParserKeyword s_drop_partition("DROP PARTITION");
     ParserKeyword s_drop_part("DROP PART");
     ParserKeyword s_drop_partition_where("DROP PARTITION WHERE");
+    ParserKeyword s_drop_staged_partition_where("DROP STAGED PARTITION WHERE");
+    ParserKeyword s_drop_staged_partition("DROP STAGED PARTITION");
+    ParserKeyword s_drop_staged_part("DROP STAGED PART");
     ParserKeyword s_move_partition("MOVE PARTITION");
     ParserKeyword s_move_part("MOVE PART");
     ParserKeyword s_drop_detached_partition("DROP DETACHED PARTITION");
@@ -266,6 +272,34 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
                 command->type = ASTAlterCommand::DROP_PARTITION;
                 command->part = true;
+            }
+            else if (s_drop_staged_partition_where.ignore(pos, expected))
+            {
+                /// Only used by unique table to clear staged parts
+                if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                    return false;
+
+                command->type = ASTAlterCommand::DROP_PARTITION_WHERE;
+                command->staging_area = true;
+            }
+            else if (s_drop_staged_partition.ignore(pos, expected))
+            {
+                /// Only used by unique table to clear staged parts
+                if (!parser_partition.parse(pos, command->partition, expected))
+                    return false;
+
+                command->type = ASTAlterCommand::DROP_PARTITION;
+                command->staging_area = true;
+            }
+            else if (s_drop_staged_part.ignore(pos, expected))
+            {
+                /// Only used by unique table to clear staged parts
+                if (!parser_string_literal.parse(pos, command->partition, expected))
+                    return false;
+
+                command->part = true;
+                command->staging_area = true;
+                command->type = ASTAlterCommand::DROP_PARTITION;
             }
             else if (s_drop_detached_partition.ignore(pos, expected))
             {
@@ -628,6 +662,34 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 command->type = ASTAlterCommand::DROP_PARTITION;
                 command->part = true;
                 command->detach = true;
+            }
+            else if (s_detach_staged_partition_where.ignore(pos, expected))
+            {
+                if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                    return false;
+
+                command->type = ASTAlterCommand::DROP_PARTITION_WHERE;
+                command->detach = true;
+                command->staging_area = true;
+            }
+            else if (s_detach_staged_partition.ignore(pos, expected))
+            {
+                if (!parser_partition.parse(pos, command->partition, expected))
+                    return false;
+
+                command->type = ASTAlterCommand::DROP_PARTITION;
+                command->detach = true;
+                command->staging_area = true;
+            }
+            else if (s_detach_staged_part.ignore(pos, expected))
+            {
+                if (!parser_string_literal.parse(pos, command->partition, expected))
+                    return false;
+
+                command->part = true;
+                command->detach = true;
+                command->staging_area = true;
+                command->type = ASTAlterCommand::DROP_PARTITION;
             }
             else if (s_attach_detached_partition.ignore(pos, expected))
             {

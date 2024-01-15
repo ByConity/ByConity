@@ -32,6 +32,11 @@ void DropRangeAction::appendPart(MutableMergeTreeDataPartCNCHPtr part)
     parts.push_back(std::move(part));
 }
 
+void DropRangeAction::appendStagedPart(MutableMergeTreeDataPartCNCHPtr part)
+{
+    staged_parts.push_back(std::move(part));
+}
+
 void DropRangeAction::appendDeleteBitmap(DeleteBitmapMetaPtr delete_bitmap)
 {
     delete_bitmaps.push_back(std::move(delete_bitmap));
@@ -69,14 +74,14 @@ void DropRangeAction::executeV2()
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
 
     auto catalog = global_context.getCnchCatalog();
-    catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, false, /*preallocate_mode=*/ false);
+    catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, false, /*preallocate_mode=*/ false);
 }
 
 /// Post progressing
 void DropRangeAction::postCommit(TxnTimestamp commit_time)
 {
     /// set commit time for part
-    global_context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
+    global_context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, commit_time);
 
     ServerPartLog::addNewParts(getContext(), ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
 }
@@ -84,7 +89,7 @@ void DropRangeAction::postCommit(TxnTimestamp commit_time)
 void DropRangeAction::abort()
 {
     // clear parts in kv
-    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps,  /*staged_parts*/ {}});
+    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps,  {staged_parts.begin(), staged_parts.end()}});
 
     ServerPartLog::addNewParts(getContext(), ServerPartLogElement::DROP_RANGE, parts, txn_id, true);
 }
