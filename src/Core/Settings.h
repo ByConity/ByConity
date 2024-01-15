@@ -1981,6 +1981,13 @@ enum PreloadLevelSettings : UInt64
     /* Outfile related Settings */ \
     M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
+    /** OSS related settings */ \
+    M(String, oss_access_key, "", "The access_key set by user when accessing oss.", 0) \
+    M(String, oss_secret_key, "", "The secret_key set by user when accessing oss.", 0) \
+    M(String, oss_region, "", "The region set by user when accessing oss.", 0) \
+    M(String, oss_security_token, "", "The security_key set by user when accessing oss with assume role.", 0) \
+    M(String, oss_endpoint, "", "The endpoint set by user when accessing oss.", 0) \
+    /* VE-TOS related settings */ \
     M(String, tos_access_key, "", "The access_key set by user when accessing ve tos.", 0) \
     M(String, tos_secret_key, "", "The secret_key set by user when accessing ve tos.", 0) \
     M(String, tos_region, "", "The region set by user when accessing ve tos.", 0) \
@@ -1989,6 +1996,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, tos_connection_timeout, 10000, "The connection timeout set by user when accessing ve tos.", 0) \
     M(UInt64, tos_request_timeout, 120000, "The request timeout set by user when accessing ve tos.", 0) \
     M(String, lasfs_session_token, "", "the session_token set by user when accessing lasfs", 0) \
+    /* LASFS related settings */ \
     M(String, lasfs_identity_id, "", "the identity_id set by user when accessing lasfs", 0) \
     M(String, lasfs_identity_type, "", "the identity_type set by user when accessing lasfs", 0) \
     M(String, lasfs_access_key, "", "the access_key set by user when accessing lasfs", 0) \

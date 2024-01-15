@@ -301,6 +301,7 @@ class VWCustomizedSettings;
 using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
 
 class VETosConnectionParams;
+class OSSConnectionParams;
 
 class NvmCache;
 using NvmCachePtr = std::shared_ptr<NvmCache>;
@@ -664,6 +665,9 @@ public:
 
     void setVETosConnectParams(const VETosConnectionParams & connect_params);
     const VETosConnectionParams & getVETosConnectParams() const;
+
+    void setOSSConnectParams(const OSSConnectionParams & connect_params);
+    const OSSConnectionParams & getOSSConnectParams() const;
 
     /// create backgroud task to synchronize metadata table by table
     void setMetaChecker();

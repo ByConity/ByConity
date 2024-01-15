@@ -53,19 +53,9 @@
 #include <Processors/QueryPipeline.h>
 #include <Columns/ColumnString.h>
 #include <common/find_symbols.h>
-#include <common/LineReader.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
-#include <Common/ShellCommand.h>
-#include <Common/UnicodeBar.h>
-#include <Common/formatReadable.h>
-#include <Common/NetException.h>
-#include <Common/Throttler.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <Common/typeid_cast.h>
-#include <Common/clearPasswordFromCommandLine.h>
 #include <Common/Config/ConfigProcessor.h>
-#include <Common/PODArray.h>
 #include <Core/Types.h>
 #include <Core/QueryProcessingStage.h>
 #include <Core/ExternalTable.h>
@@ -74,21 +64,22 @@
 #include <Formats/FormatFactory.h>
 #include <Formats/registerFormats.h>
 #include <Functions/registerFunctions.h>
+#include <IO/OSSCommon.h>
 #include <IO/Operators.h>
-#include <IO/VETosCommon.h>
 #include <IO/OutfileCommon.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/OutfileCommon.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
-#include <IO/ZlibDeflatingWriteBuffer.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/Operators.h>
 #include <IO/UseSSL.h>
+#include <IO/VETosCommon.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromOStream.h>
+#include <IO/WriteHelpers.h>
+#include <IO/ZlibDeflatingWriteBuffer.h>
+#include <IO/Operators.h>
 #include <Processors/Transforms/AddingDefaultsTransform.h>
 #include <DataStreams/InternalTextLogsRowOutputStream.h>
 #include <DataStreams/NullBlockOutputStream.h>
@@ -110,25 +101,30 @@
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Client/Connection.h>
 #include <Common/InterruptListener.h>
-#include <Functions/registerFunctions.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Formats/registerFormats.h>
-#include <Formats/FormatFactory.h>
-#include <Common/Config/configReadClient.h>
-#include <Storages/ColumnsDescription.h>
-#include <common/argsToConfig.h>
-#include <Common/TerminalSize.h>
-#include <Common/UTF8Helpers.h>
+#include <Common/NetException.h>
+#include <Common/PODArray.h>
 #include <Common/ProgressIndication.h>
-#include <filesystem>
+#include <Common/ShellCommand.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/TerminalSize.h>
+#include <Common/Throttler.h>
+#include <Common/Trace/TCPCarrier.h>
+#include <Common/UTF8Helpers.h>
+#include <Common/UnicodeBar.h>
+#include <Common/clearPasswordFromCommandLine.h>
 #include <Common/filesystemHelpers.h>
+#include <Common/formatReadable.h>
+#include <Common/typeid_cast.h>
+#include <common/LineReader.h>
+#include <common/argsToConfig.h>
+#include <filesystem>
 
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config_version.h>
 #endif
 
 #ifndef __clang__
-#pragma GCC optimize("-fno-var-tracking-assignments")
+#    pragma GCC optimize("-fno-var-tracking-assignments")
 #endif
 
 #ifndef VERSION_MAJOR
@@ -190,8 +186,8 @@ public:
 
 private:
     using StringSet = std::unordered_set<String>;
-    StringSet exit_strings{"exit", "quit", "logout", "учше", "йгше", "дщпщге", "exit;", "quit;", "logout;", "учшеж",
-                           "йгшеж", "дщпщгеж", "q", "й", "\\q", "\\Q", "\\й", "\\Й", ":q", "Жй"};
+    StringSet exit_strings{"exit",  "quit",    "logout", "учше", "йгше", "дщпщге", "exit;", "quit;", "logout;", "учшеж",
+                           "йгшеж", "дщпщгеж", "q",      "й",    "\\q",  "\\Q",    "\\й",   "\\Й",   ":q",      "Жй"};
     bool is_interactive = true; /// Use either interactive line editing interface or batch mode.
     bool echo_queries = false; /// Print queries before execution in batch mode.
     bool ignore_error
@@ -346,6 +342,8 @@ private:
 #endif
         auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
         context->setVETosConnectParams(vetos_params);
+        auto oss_params = OSSConnectionParams::parseOSSFromConfig(config());
+        context->setOSSConnectParams(oss_params);
     }
 
 
@@ -448,10 +446,9 @@ private:
         time_t current_time = time(nullptr);
 
         if (chineseNewYearTimeZoneIndicators + M
-            == std::find_if(chineseNewYearTimeZoneIndicators, chineseNewYearTimeZoneIndicators + M, [&local_tz](const char * tz)
-                            {
-                                return tz == local_tz;
-                            }))
+            == std::find_if(chineseNewYearTimeZoneIndicators, chineseNewYearTimeZoneIndicators + M, [&local_tz](const char * tz) {
+                   return tz == local_tz;
+               }))
             return false;
 
         /// It's bad to be intrusive.
@@ -888,8 +885,7 @@ private:
 
         if (!queries_files.empty())
         {
-            auto process_file = [&](const std::string & file)
-            {
+            auto process_file = [&](const std::string & file) {
                 connection->setDefaultDatabase(connection_parameters.default_database);
                 ReadBufferFromFile in(file);
                 readStringUntilEOF(text, in);
@@ -1335,8 +1331,7 @@ private:
         }
         catch (const Exception & e)
         {
-            if (e.code() != ErrorCodes::SYNTAX_ERROR &&
-                e.code() != ErrorCodes::TOO_DEEP_RECURSION)
+            if (e.code() != ErrorCodes::SYNTAX_ERROR && e.code() != ErrorCodes::TOO_DEEP_RECURSION)
                 throw;
         }
 
@@ -1408,7 +1403,9 @@ private:
 
                     fmt::print(
                         stderr,
-                        "Found error: IAST::clone() is broken for some AST node. This is a bug. The original AST ('dump before fuzz') and its cloned copy ('dump of cloned AST') refer to the same nodes, which must never happen. This means that their parent node doesn't implement clone() correctly.");
+                        "Found error: IAST::clone() is broken for some AST node. This is a bug. The original AST ('dump before fuzz') and "
+                        "its cloned copy ('dump of cloned AST') refer to the same nodes, which must never happen. This means that their "
+                        "parent node doesn't implement clone() correctly.");
 
                     exit(1);
                 }
@@ -1450,7 +1447,8 @@ private:
             if (have_error)
             {
                 if (likely(ast_to_process))
-                    fmt::print(stderr, "Error on processing query '{}': {}\n", ast_to_process->formatForErrorMessage(), exception->message());
+                    fmt::print(
+                        stderr, "Error on processing query '{}': {}\n", ast_to_process->formatForErrorMessage(), exception->message());
 
                 // Try to reconnect after errors, for two reasons:
                 // 1. We might not have realized that the server died, e.g. if
@@ -1465,7 +1463,8 @@ private:
                 catch (...)
                 {
                     // Just report it, we'll terminate below.
-                    fmt::print(stderr,
+                    fmt::print(
+                        stderr,
                         "Error while reconnecting to the server: Code: {}: {}\n",
                         getCurrentExceptionCode(),
                         getCurrentExceptionMessage(true));
@@ -1524,13 +1523,11 @@ private:
                 {
                     const auto * tmp_pos = query_to_send.c_str();
 
-                    ast_2 = parseQuery(tmp_pos, tmp_pos + query_to_send.size(),
-                        false /* allow_multi_statements */);
+                    ast_2 = parseQuery(tmp_pos, tmp_pos + query_to_send.size(), false /* allow_multi_statements */);
                 }
                 catch (Exception & e)
                 {
-                    if (e.code() != ErrorCodes::SYNTAX_ERROR &&
-                        e.code() != ErrorCodes::TOO_DEEP_RECURSION)
+                    if (e.code() != ErrorCodes::SYNTAX_ERROR && e.code() != ErrorCodes::TOO_DEEP_RECURSION)
                         throw;
                 }
 
@@ -1538,8 +1535,7 @@ private:
                 {
                     const auto text_2 = ast_2->formatForErrorMessage();
                     const auto * tmp_pos = text_2.c_str();
-                    const auto ast_3 = parseQuery(tmp_pos, tmp_pos + text_2.size(),
-                        false /* allow_multi_statements */);
+                    const auto ast_3 = parseQuery(tmp_pos, tmp_pos + text_2.size(), false /* allow_multi_statements */);
                     const auto text_3 = ast_3->formatForErrorMessage();
                     if (text_3 != text_2)
                     {
@@ -1547,9 +1543,12 @@ private:
 
                         printChangedSettings();
 
-                        fmt::print(stderr,
-                            "Got the following (different) text after formatting the fuzzed query and parsing it back:\n'{}'\n, expected:\n'{}'\n",
-                            text_3, text_2);
+                        fmt::print(
+                            stderr,
+                            "Got the following (different) text after formatting the fuzzed query and parsing it back:\n'{}'\n, "
+                            "expected:\n'{}'\n",
+                            text_3,
+                            text_2);
                         fmt::print(stderr, "In more detail:\n");
                         fmt::print(stderr, "AST-1 (generated by fuzzer):\n'{}'\n", parsed_query->dumpTree());
                         fmt::print(stderr, "Text-1 (AST-1 formatted):\n'{}'\n", query_to_send);
@@ -1667,8 +1666,7 @@ private:
                 if (old_settings)
                     context->setSettings(*old_settings);
             });
-            auto apply_query_settings = [&](const IAST & settings_ast)
-            {
+            auto apply_query_settings = [&](const IAST & settings_ast) {
                 if (!old_settings)
                     old_settings.emplace(context->getSettingsRef());
                 context->applySettingsChanges(settings_ast.as<ASTSetQuery>()->changes);
@@ -1953,8 +1951,7 @@ private:
 
         if (columns_description.hasDefaults())
         {
-            pipe.addSimpleTransform([&](const Block & header)
-            {
+            pipe.addSimpleTransform([&](const Block & header) {
                 return std::make_shared<AddingDefaultsTransform>(header, columns_description, *source, context);
             });
         }
@@ -2005,7 +2002,7 @@ private:
             pager_cmd->wait();
         }
         pager_cmd = nullptr;
-        
+
         if (out_logs_buf)
         {
             out_logs_buf->next();
@@ -2356,7 +2353,7 @@ private:
         written_first_block = true;
 
         /// If does not upload result to local file/hdfs, then received data block is immediately displayed to the user.
-        if(!out_path)
+        if (!out_path)
             block_out_stream->flush();
 
         /// Restore progress bar after data block.
@@ -2403,10 +2400,7 @@ private:
     }
 
 
-    void writeFinalProgress()
-    {
-        progress_indication.writeFinalProgress();
-    }
+    void writeFinalProgress() { progress_indication.writeFinalProgress(); }
 
 
     void onReceiveExceptionFromServer(std::unique_ptr<Exception> && e)
@@ -2428,7 +2422,8 @@ private:
     {
         progress_indication.clearProgressOutput();
 
-        if (block_out_stream) {
+        if (block_out_stream)
+        {
             block_out_stream->writeSuffix();
 
             if (outfile_target)
@@ -2452,14 +2447,14 @@ private:
     static void showClientVersion()
     {
         std::cout << R"(
-            ______       _       _   _                      
-            | ___ \     | |     | | | |                     
-            | |_/ /_   _| |_ ___| |_| | ___  _   _ ___  ___ 
+            ______       _       _   _
+            | ___ \     | |     | | | |
+            | |_/ /_   _| |_ ___| |_| | ___  _   _ ___  ___
             | ___ \ | | | __/ _ \  _  |/ _ \| | | / __|/ _ \
             | |_/ / |_| | ||  __/ | | | (_) | |_| \__ \  __/
             \____/ \__, |\__\___\_| |_/\___/ \__,_|___/\___|
-                    __/ |                                   
-                    |___/                                                                                                                                                                                                                                        
+                    __/ |
+                    |___/
             )" << std::endl;
 
         std::cout << DBMS_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
@@ -2629,10 +2624,11 @@ public:
 
         /// Commandline options related to external tables.
         po::options_description external_description = createOptionsDescription("External tables options", terminal_width);
-        external_description.add_options()("file", po::value<std::string>(), "data file or - for stdin")(
-            "name",
-            po::value<std::string>()->default_value("_data"),
-            "name of the table")("format", po::value<std::string>()->default_value("TabSeparated"), "data format")("structure", po::value<std::string>(), "structure")("types", po::value<std::string>(), "types");
+        external_description.add_options()
+            ("file", po::value<std::string>(), "data file or - for stdin")
+            ("name", po::value<std::string>()->default_value("_data"), "name of the table")
+            ("format", po::value<std::string>()->default_value("TabSeparated"), "data format")
+            ("structure", po::value<std::string>(), "structure")("types", po::value<std::string>(), "types");
 
         /// Parse main commandline options.
         po::parsed_options parsed = po::command_line_parser(common_arguments).options(main_description).run();

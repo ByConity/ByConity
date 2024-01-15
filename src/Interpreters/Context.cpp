@@ -176,12 +176,12 @@
 
 #include <ExternalCatalog/CnchExternalCatalogMgr.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
+#include <IO/VETosCommon.h>
+#include <IO/OSSCommon.h>
 #include <Interpreters/TemporaryDataOnDisk.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/StorageS3Settings.h>
-
-#include <IO/VETosCommon.h>
 
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Statistics/AutoStatisticsManager.h>
@@ -314,6 +314,7 @@ struct ContextSharedPart
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
 
     VETosConnectionParams vetos_connection_params;
+    OSSConnectionParams oss_connection_params;
 
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
@@ -4451,6 +4452,16 @@ const VETosConnectionParams & Context::getVETosConnectParams() const
 {
     auto lock = getLock();
     return shared->vetos_connection_params;
+}
+
+void Context::setOSSConnectParams(const OSSConnectionParams & connect_params)
+{
+    shared->oss_connection_params = connect_params;
+}
+
+const OSSConnectionParams & Context::getOSSConnectParams() const
+{
+    return shared->oss_connection_params;
 }
 
 void Context::setUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)

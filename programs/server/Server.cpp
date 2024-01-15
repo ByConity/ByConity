@@ -172,6 +172,7 @@
 #endif
 
 #include <IO/VETosCommon.h>
+#include <IO/OSSCommon.h>
 
 namespace CurrentMetrics
 {
@@ -1170,6 +1171,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
     auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
     global_context->setVETosConnectParams(vetos_params);
+    auto oss_connection_params = OSSConnectionParams::parseOSSFromConfig(config());
+    global_context->setOSSConnectParams(oss_connection_params);
 
     // Clear old store data in the background
     ThreadFromGlobalPool clear_old_data;
