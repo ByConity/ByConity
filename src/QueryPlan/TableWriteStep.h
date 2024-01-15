@@ -51,7 +51,7 @@ private:
     BlockOutputStreams createOutputStream(
         StoragePtr target_table,
         const BuildQueryPipelineSettings & settings,
-        Block header,
+        Block & header,
         size_t max_threads,
         bool no_destination,
         bool no_squash);
