@@ -5240,8 +5240,7 @@ void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
 
 TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id, bool with_check)
 {
-    auto lock = getLock();
-
+    TransactionCnchPtr cnch_txn;
     if (shared->server_type == ServerType::cnch_server)
     {
         std::optional<TransactionRecord> txn_record = with_check ? getCnchCatalog()->tryGetTransactionRecord((txn_id)) : std::nullopt;
@@ -5253,11 +5252,13 @@ TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id,
             txn_record->read_only = true;
         }
 
-        current_cnch_txn = std::make_shared<CnchServerTransaction>(getGlobalContext(), std::move(*txn_record));
+        cnch_txn = std::make_shared<CnchServerTransaction>(getGlobalContext(), std::move(*txn_record));
     }
     else
-        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(getGlobalContext(), txn_id, primary_txn_id);
+        cnch_txn = std::make_shared<CnchWorkerTransaction>(getGlobalContext(), txn_id, primary_txn_id);
 
+    auto lock = getLock();
+    std::swap(current_cnch_txn, cnch_txn);
     return current_cnch_txn;
 }
 
