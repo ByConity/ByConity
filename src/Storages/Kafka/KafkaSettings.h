@@ -79,6 +79,7 @@ class ASTStorage;
     M(Bool, json_aggregate_function_type_base64_encode, false, "Indicate whether the json data of aggregate function type is encoded by base64.", 0) \
     M(Bool, protobuf_enable_multiple_message, true, "Same as 'input_format_protobuf_enable_multiple_message' in settings", 0) \
     M(Bool, protobuf_default_length_parser, false, "Same as 'input_format_protobuf_default_length_parser' in settings", 0) \
+    M(String, avro_schema_registry_url, "", "Same as 'format_avro_schema_registry_url' in Settings", 0) \
     M(String, api_version_request, "true", "Librdkafka config: request broker's supported API versions to adjust functionality to available protocol features", 0) \
     M(String, broker_version_fallback, "", "Librdkafka config: older broker versions", 0) \
     M(String, auto_offset_reset, "", "Librdkafka config: action to take when there is no initial offset in offset store or the desired offset is out of range", 0) \
