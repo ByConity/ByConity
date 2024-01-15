@@ -108,7 +108,6 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TerminalSize.h>
 #include <Common/Throttler.h>
-#include <Common/Trace/TCPCarrier.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/UnicodeBar.h>
 #include <Common/clearPasswordFromCommandLine.h>
