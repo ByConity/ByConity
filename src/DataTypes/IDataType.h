@@ -62,8 +62,8 @@ using DataTypesWithConstInfo = std::vector<DataTypeWithConstInfo>;
 
 #define TYPE_MAP_KV_STORE_FLAG      0x01
 #define TYPE_BITENGINE_ENCODE_FLAG  0x02
-// #define TYPE_SECURITY_FLAG          0x04  /// unused
-// #define TYPE_ENCRYPT_FLAG           0x08  /// unused
+#define TYPE_SECURITY_FLAG          0x04
+#define TYPE_ENCRYPT_FLAG           0x08
 #define TYPE_BLOOM_FLAG             0x10
 #define TYPE_COMPRESSION_FLAG       0x20
 #define TYPE_BITMAP_INDEX_FLAG          0x40
