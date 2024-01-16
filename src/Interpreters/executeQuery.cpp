@@ -1347,7 +1347,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                      settings.query_cache_max_size_in_bytes,
                                      settings.query_cache_max_entries,
                                      query_cache_context.source_update_time_for_query_cache));
-                    res.pipeline.writeResultIntoQueryCache(query_cache_writer);
+                    res.pipeline.writeResultIntoQueryCache(std::move(query_cache_writer));
                     query_cache_context.query_cache_usage = QueryCache::Usage::Write;
                 }
             }
@@ -2134,9 +2134,9 @@ void executeQuery(
 
             /// NOTE Progress callback takes shared ownership of 'out'.
             streams.in->setProgressCallback(
-                [out, previous_progress_callback](const Progress & progress) {
-                if (previous_progress_callback)
-                    previous_progress_callback(progress);
+                [out, cb = std::move(previous_progress_callback)](const Progress & progress) {
+                if (cb)
+                    cb(progress);
                 out->onProgress(progress);
             });
 

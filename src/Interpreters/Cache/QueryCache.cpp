@@ -129,8 +129,8 @@ QueryCache::Key::Key(
     std::chrono::time_point<std::chrono::system_clock> expires_at_,
     bool is_compressed_,
     TxnTimestamp cnch_txn_)
-    : ast(removeQueryCacheSettings(ast_))
-    , header(header_)
+    : ast(removeQueryCacheSettings(std::move(ast_)))
+    , header(std::move(header_))
     , user_name(user_name_)
     , is_shared(is_shared_)
     , expires_at(expires_at_)

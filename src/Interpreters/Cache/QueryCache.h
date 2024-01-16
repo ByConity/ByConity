@@ -131,6 +131,7 @@ public:
     public:
 
         Writer(const Writer & other);
+        Writer & operator=(const Writer & other) = delete;
 
         enum class ChunkType {Result, Totals, Extremes};
         void buffer(Chunk && chunk, ChunkType chunk_type);
