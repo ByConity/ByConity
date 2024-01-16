@@ -38,6 +38,7 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
+#include <Columns/ColumnNullable.h>
 
 namespace DB
 {
@@ -711,6 +712,7 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
                 if (isNullableOrLowCardinalityNullable(origin_output.type))
                 {
                     output.type = JoinCommon::tryConvertTypeToNullable(output.type);
+                    output.column = makeNullableOrLowCardinalityNullable(output.column);
                 }
             }
     }

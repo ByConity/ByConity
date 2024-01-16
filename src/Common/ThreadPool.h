@@ -118,6 +118,7 @@ private:
 
     size_t scheduled_jobs = 0;
     bool shutdown = false;
+    bool threads_remove_themselves = true;
     const bool shutdown_on_exception = true;
 
     struct JobWithPriority

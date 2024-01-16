@@ -53,7 +53,8 @@ public:
         size_t max_batch_size,
         size_t poll_timeout_,
         size_t expire_timeout_,
-        std::atomic_bool *run_)
+        std::atomic_bool *run_,
+        bool enable_skip_offsets_hole_)
         : ReadBuffer(nullptr, 0)
         , consumer(consumer_)
         , log(&Poco::Logger::get(logger_name))
@@ -62,6 +63,7 @@ public:
         , expire_timeout(expire_timeout_)
         , run(run_)
         , create_time(time(nullptr))
+        , enable_skip_offsets_hole(enable_skip_offsets_hole_)
     {
     }
 
@@ -96,6 +98,9 @@ public:
     auto currentPartition() const {return current.get_partition();}
     String currentContent() const {return current.get_payload();}
 
+    const std::vector<String> & getSkippedOffsetsHole() const { return skipped_ofsets_hole; }
+    size_t getSkippedMsgsInHoles() const { return skipped_msgs_in_holes; }
+
 private:
     ConsumerPtr consumer;
     Poco::Logger * log;
@@ -109,6 +114,11 @@ private:
     bool stalled = false;
 
     Message current;
+
+    /// skip the holes in the kafka if enabled
+    bool enable_skip_offsets_hole = false;
+    size_t skipped_msgs_in_holes{0};
+    std::vector<String> skipped_ofsets_hole;
 
     size_t read_messages {0};
     size_t empty_messages {0};
