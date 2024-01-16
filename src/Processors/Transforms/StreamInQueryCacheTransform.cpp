@@ -8,7 +8,7 @@ StreamInQueryCacheTransform::StreamInQueryCacheTransform(
     std::shared_ptr<QueryCache::Writer> query_cache_writer_,
     QueryCache::Writer::ChunkType chunk_type_)
     : ISimpleTransform(header_, header_, false)
-    , query_cache_writer(query_cache_writer_)
+    , query_cache_writer(std::move(query_cache_writer_))
     , chunk_type(chunk_type_)
 {
 }

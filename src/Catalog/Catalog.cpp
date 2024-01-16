@@ -1134,7 +1134,7 @@ namespace Catalog
                     throw Exception(
                         "Cannot get metadata of table " + from_database + "." + from_table + " by UUID : " + table_uuid,
                         ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
-                
+
                 if (table->commit_time() >= ts.toUInt64())
                     throw Exception("Cannot rename table with an earlier timestamp", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
 
@@ -3221,7 +3221,7 @@ namespace Catalog
     }
 
     Catalog::UndoBufferIterator::UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter_, Poco::Logger * log_)
-        : metastore_iter{metastore_iter_}, log{log_}
+        : metastore_iter{std::move(metastore_iter_)}, log{log_}
     {}
 
     bool Catalog::UndoBufferIterator::next()
@@ -3266,7 +3266,7 @@ namespace Catalog
         runWithMetricSupport(
             [&] {
                 auto it = meta_proxy->getAllUndoBuffer(name_space);
-                ret = UndoBufferIterator{it, log};
+                ret = UndoBufferIterator{std::move(it), log};
             },
             ProfileEvents::GetUndoBufferIteratorSuccess,
             ProfileEvents::GetUndoBufferIteratorFailed);

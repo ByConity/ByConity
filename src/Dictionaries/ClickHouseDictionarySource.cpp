@@ -96,7 +96,7 @@ namespace
         ConnectionPoolPtrs pools;
         if (configuration.host.empty())
         {
-            pools = createPoolsToCnchServer(context, configuration);
+            pools = createPoolsToCnchServer(std::move(context), configuration);
         }
         else
         {
