@@ -171,6 +171,8 @@ public:
     /// Return information about column size on disk for all columns in part
     ColumnSize getTotalColumnsSize() const { return total_columns_size; }
 
+    ColumnSize getColumnSkipIndicesSize(const NameAndTypePair & pair) const;
+
     virtual String getFileNameForColumn(const NameAndTypePair & column) const = 0;
 
     virtual ~IMergeTreeDataPart();

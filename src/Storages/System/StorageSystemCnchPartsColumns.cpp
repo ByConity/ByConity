@@ -3,6 +3,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <Interpreters/Context.h>
@@ -42,9 +43,12 @@ NamesAndTypesList StorageSystemCnchPartsColumns::getNamesAndTypes()
         {"partition", std::make_shared<DataTypeString>()},
         {"column", std::make_shared<DataTypeString>()},
         {"type", std::make_shared<DataTypeString>()},
-        {"column_bytes_on_disk", std::make_shared<DataTypeUInt64>()},
+        {"column_data_bytes_on_disk", std::make_shared<DataTypeUInt64>()},
         {"column_data_compressed_bytes", std::make_shared<DataTypeUInt64>()},
         {"column_data_uncompressed_bytes", std::make_shared<DataTypeUInt64>()},
+        {"column_skip_indice_bytes_on_disk", std::make_shared<DataTypeUInt64>()},
+        {"column_skip_indice_compressed_bytes", std::make_shared<DataTypeUInt64>()},
+        {"column_skip_indice_uncompressed_bytes", std::make_shared<DataTypeUInt64>()},
     };
 }
 
@@ -126,10 +130,15 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
                 res_columns[index++]->insert(column.name);
                 res_columns[index++]->insert(column.type->getName());
 
-                ColumnSize column_size = part->getColumnSize(column.name, *column.type);
-                res_columns[index++]->insert(column_size.data_compressed + column_size.marks);
-                res_columns[index++]->insert(column_size.data_compressed);
-                res_columns[index++]->insert(column_size.data_uncompressed);
+                ColumnSize data_column_size = part->getColumnSize(column.name, *column.type);
+                res_columns[index++]->insert(data_column_size.data_compressed + data_column_size.marks);
+                res_columns[index++]->insert(data_column_size.data_compressed);
+                res_columns[index++]->insert(data_column_size.data_uncompressed);
+
+                ColumnSize skip_indice_size = part->getColumnSkipIndicesSize(column);
+                res_columns[index++]->insert(skip_indice_size.data_compressed + skip_indice_size.marks);
+                res_columns[index++]->insert(skip_indice_size.data_compressed);
+                res_columns[index++]->insert(skip_indice_size.data_uncompressed);
             }
         }
 

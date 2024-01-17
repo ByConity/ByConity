@@ -1993,6 +1993,59 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
     }
 }
 
+ColumnSize IMergeTreeDataPart::getColumnSkipIndicesSize(const NameAndTypePair & pair) const
+{
+    ColumnSize size;
+
+    auto checksums = getChecksums();
+
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    for (const auto & index_item : metadata_snapshot->getSecondaryIndices())
+    {
+        auto index_helper = MergeTreeIndexFactory::instance().get(index_item);
+        auto index_columns = index_helper->getColumnsRequiredForIndexCalc();
+        if (!std::count(index_columns.begin(), index_columns.end(), pair.name))
+            continue;
+
+        auto index_file_name = index_helper->getFileName();
+
+        static const std::vector<String> idx_extension = {
+            INDEX_FILE_EXTENSION, 
+            GIN_SEGMENT_ID_FILE_EXTENSION, 
+            GIN_SEGMENT_METADATA_FILE_EXTENSION, 
+            GIN_DICTIONARY_FILE_EXTENSION, 
+            GIN_POSTINGS_FILE_EXTENSION
+        };
+
+        std::for_each(idx_extension.begin(), idx_extension.end(), [&](const String & ext) {
+            auto elem_iter = checksums->files.find(index_file_name+ ext);
+            if (elem_iter != checksums->files.end())
+            {
+                if (elem_iter->second.is_compressed)
+                {
+                    size.data_compressed += elem_iter->second.file_size;
+                    size.data_uncompressed += elem_iter->second.uncompressed_size;
+                }
+                else
+                {
+                    size.data_compressed += elem_iter->second.file_size;
+                    size.data_uncompressed += elem_iter->second.file_size;
+                }
+
+                LOG_DEBUG(storage.log, "checksum file name {} hit index", elem_iter->first);
+            }
+        });
+
+        auto mark_iter = checksums->files.find(index_file_name + index_granularity_info.marks_file_extension);
+        if (mark_iter != checksums->files.end())
+        {
+            size.marks += mark_iter->second.file_size;
+            LOG_DEBUG(storage.log, "checksum file name {} hit mark", mark_iter->first);
+        }
+    }
+
+    return size;
+}
 
 bool IMergeTreeDataPart::checkAllTTLCalculated(const StorageMetadataPtr & metadata_snapshot) const
 {
