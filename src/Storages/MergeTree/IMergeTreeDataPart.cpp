@@ -2018,7 +2018,7 @@ ColumnSize IMergeTreeDataPart::getColumnSkipIndicesSize(const NameAndTypePair & 
         };
 
         std::for_each(idx_extension.begin(), idx_extension.end(), [&](const String & ext) {
-            auto elem_iter = checksums->files.find(index_file_name+ ext);
+            auto elem_iter = checksums->files.find(index_file_name + ext);
             if (elem_iter != checksums->files.end())
             {
                 if (elem_iter->second.is_compressed)
