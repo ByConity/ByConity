@@ -186,7 +186,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             break;
         }
         default: {
-    if (disk->exists(new_part_rel_path))
+            if (disk->exists(new_part_rel_path))
             {
                 remove_existing_directory = true;
             }
