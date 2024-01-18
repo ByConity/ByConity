@@ -120,7 +120,7 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
                 partition = out.str();
             }
 
-            const auto & skipindices_size = part->getColumnsSkipIndicesSize();
+            auto skipindices_size = part->getColumnsSkipIndicesSize();
 
             for (auto & column : columns)
             {
