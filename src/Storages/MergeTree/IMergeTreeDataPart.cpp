@@ -1993,58 +1993,79 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
     }
 }
 
-ColumnSize IMergeTreeDataPart::getColumnSkipIndicesSize(const NameAndTypePair & pair) const
+const IMergeTreeDataPart::ColumnSizeByName & IMergeTreeDataPart::getColumnsSkipIndicesSize() const
 {
-    ColumnSize size;
+    std::lock_guard<std::mutex> lock(columns_skipindices_sizes_mutex);
+    if (!columns_skipindices_sizes.has_value())
+        const_cast<IMergeTreeDataPart *>(this)->loadColumnsSkipIndicesSize();
 
-    auto checksums = getChecksums();
+    return columns_skipindices_sizes.value();
+}
 
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
-    for (const auto & index_item : metadata_snapshot->getSecondaryIndices())
-    {
-        auto index_helper = MergeTreeIndexFactory::instance().get(index_item);
-        auto index_columns = index_helper->getColumnsRequiredForIndexCalc();
-        if (!std::count(index_columns.begin(), index_columns.end(), pair.name))
+void IMergeTreeDataPart::loadColumnsSkipIndicesSize()
+{
+    auto process_indice = [&](const IndexDescription & index_desc, ColumnSizeByName & indices_size) {
+        auto checksums = getChecksums();
+        auto index_helper = MergeTreeIndexFactory::instance().get(index_desc);
+        if (!checksums->files.contains(index_helper->getFileName() + ".idx"))
             continue;
 
-        auto index_file_name = index_helper->getFileName();
+        auto index_columns = index_helper->getColumnsRequiredForIndexCalc();
+        auto column_names = columns_ptr->getNames();
 
-        static const std::vector<String> idx_extension = {
-            INDEX_FILE_EXTENSION, 
-            GIN_SEGMENT_ID_FILE_EXTENSION, 
-            GIN_SEGMENT_METADATA_FILE_EXTENSION, 
-            GIN_DICTIONARY_FILE_EXTENSION, 
-            GIN_POSTINGS_FILE_EXTENSION
-        };
-
-        std::for_each(idx_extension.begin(), idx_extension.end(), [&](const String & ext) {
-            auto elem_iter = checksums->files.find(index_file_name + ext);
-            if (elem_iter != checksums->files.end())
-            {
-                if (elem_iter->second.is_compressed)
-                {
-                    size.data_compressed += elem_iter->second.file_size;
-                    size.data_uncompressed += elem_iter->second.uncompressed_size;
-                }
-                else
-                {
-                    size.data_compressed += elem_iter->second.file_size;
-                    size.data_uncompressed += elem_iter->second.file_size;
-                }
-
-                LOG_DEBUG(storage.log, "column {} checksum file name {} hit index", pair.name, elem_iter->first);
-            }
-        });
-
-        auto mark_iter = checksums->files.find(index_file_name + index_granularity_info.marks_file_extension);
-        if (mark_iter != checksums->files.end())
+        for (auto & index_column : index_columns)
         {
-            size.marks += mark_iter->second.file_size;
-            LOG_DEBUG(storage.log, "column {} checksum file name {} hit mark", pair.name, mark_iter->first);
+            if (std::find(column_names.begin(), column_names.end(), index_column) == column_names.end())
+                continue;
+
+            auto & size = indices_size[index_column];
+
+            auto index_file_name = index_helper->getFileName();
+            static const std::vector<String> idx_extension = {
+                INDEX_FILE_EXTENSION, 
+                GIN_SEGMENT_ID_FILE_EXTENSION, 
+                GIN_SEGMENT_METADATA_FILE_EXTENSION, 
+                GIN_DICTIONARY_FILE_EXTENSION, 
+                GIN_POSTINGS_FILE_EXTENSION
+            };
+            std::for_each(idx_extension.begin(), idx_extension.end(), [&](const String & ext) {
+                auto elem_iter = checksums->files.find(index_file_name + ext);
+                if (elem_iter != checksums->files.end())
+                {
+                    if (elem_iter->second.is_compressed)
+                    {
+                        size.data_compressed += elem_iter->second.file_size;
+                        size.data_uncompressed += elem_iter->second.uncompressed_size;
+                    }
+                    else
+                    {
+                        size.data_compressed += elem_iter->second.file_size;
+                        size.data_uncompressed += elem_iter->second.file_size;
+                    }
+
+                    LOG_DEBUG(storage.log, "column name {} checksum file name {} hit index", index_column, elem_iter->first);
+                }
+            });
+
+            auto mark_iter = checksums->files.find(index_file_name + index_granularity_info.marks_file_extension);
+            if (mark_iter != checksums->files.end())
+            {
+                size.marks += mark_iter->second.file_size;
+                LOG_DEBUG(storage.log, "column name {} checksum file name {} hit mark", index_column, mark_iter->first);
+            }
         }
+    };
+
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    ColumnSizeByName skip_indices_size;
+    for (const auto & index_item : metadata_snapshot->getSecondaryIndices())
+    {
+        process_indice(index_item, skip_indices_size);
     }
 
-    return size;
+    columns_skipindices_sizes = skip_indices_size;
+    
+    return ;
 }
 
 bool IMergeTreeDataPart::checkAllTTLCalculated(const StorageMetadataPtr & metadata_snapshot) const

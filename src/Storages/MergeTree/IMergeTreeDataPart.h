@@ -171,7 +171,7 @@ public:
     /// Return information about column size on disk for all columns in part
     ColumnSize getTotalColumnsSize() const { return total_columns_size; }
 
-    ColumnSize getColumnSkipIndicesSize(const NameAndTypePair & pair) const;
+    const ColumnSizeByName & getColumnsSkipIndicesSize() const;
 
     virtual String getFileNameForColumn(const NameAndTypePair & column) const = 0;
 
@@ -635,6 +635,10 @@ protected:
     /// Size for each column, calculated once in calculateColumnSizesOnDisk
     ColumnSizeByName columns_sizes;
 
+    /// SkipIndice Size for each column
+    std::optional<ColumnSizeByName> columns_skipindices_sizes;
+    mutable std::mutex columns_skipindices_sizes_mutex;
+
     /// Columns description. Cannot be changed, after part initialization.
     /// It could be shared between parts. This can help reduce memory usage during query execution.
     NamesAndTypesListPtr columns_ptr = std::make_shared<NamesAndTypesList>();
@@ -678,6 +682,7 @@ protected:
 
     virtual void setChecksumsPtrIfNeed(const ChecksumsPtr & checksums);
 
+    virtual void loadColumnsSkipIndicesSize();
 private:
     /// In compact parts order of columns is necessary
     NameToNumber column_name_to_position;

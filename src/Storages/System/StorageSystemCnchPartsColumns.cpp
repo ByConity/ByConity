@@ -120,6 +120,8 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
                 partition = out.str();
             }
 
+            const auto & skipindices_size = part->getColumnsSkipIndicesSize();
+
             for (auto & column : columns)
             {
                 int index = 0;
@@ -135,10 +137,19 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
                 res_columns[index++]->insert(data_column_size.data_compressed);
                 res_columns[index++]->insert(data_column_size.data_uncompressed);
 
-                ColumnSize skip_indice_size = part->getColumnSkipIndicesSize(column);
-                res_columns[index++]->insert(skip_indice_size.data_compressed + skip_indice_size.marks);
-                res_columns[index++]->insert(skip_indice_size.data_compressed);
-                res_columns[index++]->insert(skip_indice_size.data_uncompressed);
+                auto skipindices_size_iter = skipindices_size.find(column.name);
+                if (skipindices_size_iter != skipindices_size.end())
+                {
+                    res_columns[index++]->insert(skipindices_size_iter->second.data_compressed + skipindices_size_iter->second.marks);
+                    res_columns[index++]->insert(skipindices_size_iter->second.data_compressed);
+                    res_columns[index++]->insert(skipindices_size_iter->second.data_uncompressed);
+                }
+                else
+                {
+                    res_columns[index++]->insert(0);
+                    res_columns[index++]->insert(0);
+                    res_columns[index++]->insert(0);
+                }
             }
         }
 
