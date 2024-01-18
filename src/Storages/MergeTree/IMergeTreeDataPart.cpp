@@ -1995,15 +1995,6 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
 
 const IMergeTreeDataPart::ColumnSizeByName & IMergeTreeDataPart::getColumnsSkipIndicesSize() const
 {
-    std::lock_guard<std::mutex> lock(columns_skipindices_sizes_mutex);
-    if (!columns_skipindices_sizes.has_value())
-        const_cast<IMergeTreeDataPart *>(this)->loadColumnsSkipIndicesSize();
-
-    return columns_skipindices_sizes.value();
-}
-
-void IMergeTreeDataPart::loadColumnsSkipIndicesSize()
-{
     auto process_indice = [&](const IndexDescription & index_desc, ColumnSizeByName & indices_size) {
         auto checksums = getChecksums();
         auto index_helper = MergeTreeIndexFactory::instance().get(index_desc);
@@ -2057,9 +2048,7 @@ void IMergeTreeDataPart::loadColumnsSkipIndicesSize()
         process_indice(index_item, skip_indices_size);
     }
 
-    columns_skipindices_sizes = skip_indices_size;
-    
-    return ;
+    return skip_indices_size;
 }
 
 bool IMergeTreeDataPart::checkAllTTLCalculated(const StorageMetadataPtr & metadata_snapshot) const
