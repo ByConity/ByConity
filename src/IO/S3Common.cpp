@@ -563,8 +563,6 @@ namespace S3
 
     bool S3Util::exists(const String & key) const
     {
-        // auto res = listObjectsWithPrefix(key, std::nullopt, 1);
-        // return !res.object_names.empty() && res.object_names.front() == key;
         Aws::S3::Model::HeadObjectRequest request;
         request.SetBucket(bucket);
         request.SetKey(key);

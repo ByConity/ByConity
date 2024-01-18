@@ -278,7 +278,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     }
 
     /// Write data file
-    String data_file_rel_path = joinPaths({new_part_rel_path, "data"});
     CNCHDataMeta meta;
     {
         /// When we write part, we will attach generator's id into this part.
