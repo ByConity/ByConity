@@ -2008,7 +2008,7 @@ void IMergeTreeDataPart::loadColumnsSkipIndicesSize()
         auto checksums = getChecksums();
         auto index_helper = MergeTreeIndexFactory::instance().get(index_desc);
         if (!checksums->files.contains(index_helper->getFileName() + ".idx"))
-            continue;
+            return;
 
         ColumnSize size;
         auto index_file_name = index_helper->getFileName();
