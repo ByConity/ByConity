@@ -123,6 +123,8 @@ public:
     std::shared_ptr<Aws::S3::S3Client> getS3Client() const { return s3_util.getClient(); }
     const S3::S3Util& getS3Util() const { return s3_util; }
 
+    bool existsFile(const String & path_file) const;
+
 private:
     bool tryReserve(UInt64 bytes);
 

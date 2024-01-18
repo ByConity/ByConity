@@ -16,6 +16,7 @@
 #include "Storages/MergeTree/MergeTreeCNCHDataDumper.h"
 
 #include <Disks/HDFS/DiskHDFS.h>
+#include <Disks/DiskByteS3.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
@@ -172,7 +173,26 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     }
     new_part->fromLocalPart(*local_part);
     String new_part_rel_path = new_part->getFullRelativePath();
+    String data_file_rel_path = joinPaths({new_part_rel_path, "data"});
+    bool remove_existing_directory = false;
+    switch(disk->getType())
+    {
+        case DiskType::Type::ByteS3: {
+            // use DiskByteS3::existsFile instead, this method runs faster than DiskByteS3::exists
+            if (std::static_pointer_cast<DiskByteS3>(disk)->existsFile(data_file_rel_path))
+            {
+                remove_existing_directory = true;
+            }
+            break;
+        }
+        default: {
     if (disk->exists(new_part_rel_path))
+            {
+                remove_existing_directory = true;
+            }
+        }
+    }
+    if (remove_existing_directory)
     {
         LOG_WARNING(log, "Removing old temporary directory  {}", disk->getPath() + new_part_rel_path);
         disk->removeRecursive(new_part_rel_path);
