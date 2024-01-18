@@ -141,7 +141,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             /// Clean s3 meta file
             S3AttachMetaFileAction::commitByUndoBuffer(global_context, resources);
 
-            auto intermediate_parts = catalog->getDataPartsByNames(names.parts, table, 0);
+            auto intermediate_parts = catalog->getDataPartsByNames(names.parts, table, 0, txn_record.txnID().toUInt64());
             auto undo_bitmaps = catalog->getDeleteBitmapByKeys(table, names.bitmaps);
             auto staged_parts = catalog->getStagedDataPartsByNames(names.staged_parts, table, 0);
 
@@ -149,7 +149,18 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
                 || undo_bitmaps.size() != names.bitmaps.size()
                 || staged_parts.size() != names.staged_parts.size())
             {
-                 throw Exception("the metadata size in kv is not matched with the record size in undo buffer", ErrorCodes::LOGICAL_ERROR);
+                // todo could not find the root cause of dangling parts left on the undo buffer after a successful transaction
+                LOG_WARN(
+                    log, 
+                    "the metadata size in kv is not matched with the record size in undo buffer, intermediate_parts size: {}, undo_bitmaps size: {}, staged_parts size: {}, names.parts size: {}, names.bitmaps size: {}, names.staged_parts size: {}", 
+                    intermediate_parts.size(),
+                    undo_bitmaps.size(),
+                    staged_parts.size(),
+                    names.parts.size(),
+                    names.bitmaps.size(),
+                    names.staged_parts.size()
+                );
+                // throw Exception("the metadata size in kv is not matched with the record size in undo buffer", ErrorCodes::LOGICAL_ERROR);
             }
 
             {

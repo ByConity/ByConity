@@ -11,12 +11,12 @@ if (VERSION_EXTRA)
     string(CONCAT VERSION_STRING ${VERSION_STRING} "." ${VERSION_EXTRA})
 endif ()
 
-set (VERSION_NAME "${PROJECT_NAME}")
+set (VERSION_NAME ByConity)
 set (VERSION_FULL "${VERSION_NAME} ${VERSION_STRING}")
 set (VERSION_SO "${VERSION_STRING}")
 set (VERSION_STRING_SHORT "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-set (VERSION_SCM 1.0.0.0)
+set (VERSION_SCM test)
 set (KERNEL_VERSION "")
 
 # Get the latest abbreviated commit hash of the working branch
