@@ -172,7 +172,7 @@ public:
     /// Return information about column size on disk for all columns in part
     ColumnSize getTotalColumnsSize() const { return total_columns_size; }
 
-    const ColumnSizeByName & getColumnsSkipIndicesSize() const;
+    ColumnSizeByName getColumnsSkipIndicesSize() const;
 
     virtual String getFileNameForColumn(const NameAndTypePair & column) const = 0;
 

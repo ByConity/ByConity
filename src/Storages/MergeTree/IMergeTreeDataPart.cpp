@@ -1990,7 +1990,7 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
     }
 }
 
-const IMergeTreeDataPart::ColumnSizeByName & IMergeTreeDataPart::getColumnsSkipIndicesSize() const
+IMergeTreeDataPart::ColumnSizeByName IMergeTreeDataPart::getColumnsSkipIndicesSize() const
 {
     auto process_indice = [&](const IndexDescription & index_desc, ColumnSizeByName & indices_size) {
         auto checksums = getChecksums();
