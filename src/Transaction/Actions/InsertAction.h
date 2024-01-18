@@ -60,7 +60,7 @@ public:
 
     static UInt32 collectNewParts(MutableMergeTreeDataPartsCNCHVector const& parts_);
 
-    UInt32 getSize() const override { return parts.size() + delete_bitmaps.size(); }
+    UInt32 getSize() const override { return parts.size() + delete_bitmaps.size() + staged_parts.size(); }
 
 private:
     const StoragePtr table;

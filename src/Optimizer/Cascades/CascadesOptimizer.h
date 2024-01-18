@@ -105,6 +105,8 @@ public:
     bool isEnableWhatIfMode() const { return enable_what_if_mode;}
     bool isEnableCbo() const { return enable_cbo; }
 
+    size_t getMaxJoinSize() const { return max_join_size; }
+
 private:
     ContextMutablePtr context;
     CTEInfo & cte_info;
@@ -119,6 +121,8 @@ private:
     bool enable_pruning;
     bool enable_what_if_mode = false;
     bool enable_cbo;
+    size_t max_join_size;
+    
     Poco::Logger * log;
 };
 

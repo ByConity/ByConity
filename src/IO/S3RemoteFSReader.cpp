@@ -38,10 +38,10 @@ namespace ErrorCodes {
 
 S3TrivialReader::S3TrivialReader(const std::shared_ptr<Aws::S3::S3Client>& client,
     const String& bucket, const String& key):
-        client_(client), bucket_(bucket), key_(key), current_offset_(0) {}
+        client_(client), bucket_(bucket), key_(key), current_offset_(0), finished_(false) {}
 
 uint64_t S3TrivialReader::read(char* buffer, uint64_t size) {
-    if (size == 0) {
+    if (size == 0 || finished_) {
         return 0;
     }
 
@@ -76,6 +76,7 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
         size_t last_read_count = stream.gcount();
         if (!last_read_count) {
             if (stream.eof()) {
+                finished_ = true;
                 all_data_read = true;
                 return 0;
             }
@@ -85,6 +86,9 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
             }
 
             throw Exception("Unexpected state of istream", ErrorCodes::S3_ERROR);
+        }
+        if (stream.eof()) {
+            finished_ = true;
         }
         /// Read remaining bytes after the end of the payload for chunked encoding
         stream.ignore(INT64_MAX);
@@ -99,6 +103,9 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
 }
 
 uint64_t S3TrivialReader::seek(uint64_t offset) {
+    if (finished_ && offset < current_offset_) {
+        finished_ = false;
+    }
     current_offset_ = offset;
     return offset;
 }

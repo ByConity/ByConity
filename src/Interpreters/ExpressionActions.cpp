@@ -799,7 +799,7 @@ ExpressionActionsChain::ArrayJoinStep::ArrayJoinStep(ArrayJoinActionPtr array_jo
 
         if (array_join->columns.count(column.name) > 0)
         {
-            auto array_type = getArrayJoinDataType(column.type);
+            const auto array_type = getArrayJoinDataType(column.type);
             column.type = array_type->getNestedType();
             /// Arrays are materialized
             column.column = nullptr;

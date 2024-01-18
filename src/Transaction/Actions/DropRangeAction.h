@@ -37,6 +37,7 @@ public:
     ~DropRangeAction() override = default;
 
     void appendPart(MutableMergeTreeDataPartCNCHPtr part);
+    void appendStagedPart(MutableMergeTreeDataPartCNCHPtr part);
     void appendDeleteBitmap(DeleteBitmapMetaPtr delete_bitmap);
 
     /// v1 APIs
@@ -47,13 +48,14 @@ public:
     void postCommit(TxnTimestamp commit_time) override;
     void abort() override;
 
-    UInt32 getSize() const override { return parts.size() + delete_bitmaps.size(); }
+    UInt32 getSize() const override { return parts.size() + delete_bitmaps.size() + staged_parts.size(); }
 private:
     TransactionRecord txn_record;
     const StoragePtr table;
     Poco::Logger * log;
 
     MutableMergeTreeDataPartsCNCHVector parts;
+    MutableMergeTreeDataPartsCNCHVector staged_parts;
     DeleteBitmapMetaPtrVector delete_bitmaps;
     bool executed{false};
 };

@@ -6,7 +6,7 @@ namespace DB
 
 void Rewriter::rewritePlan(QueryPlan & plan, ContextMutablePtr context) const
 {
-    Stopwatch watch;
+    Stopwatch watch{CLOCK_THREAD_CPUTIME_ID};
     watch.restart();
 
     if (isEnabled(context))

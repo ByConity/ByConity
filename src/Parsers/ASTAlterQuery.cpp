@@ -292,14 +292,14 @@ void ASTAlterCommand::formatImpl(
     else if (type == ASTAlterCommand::DROP_PARTITION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (cascading ? "CASCADING " : "")
-                      << (detach ? "DETACH" : "DROP") << (part ? " PART " : " PARTITION ")
+                      << (detach ? "DETACH" : "DROP") << (staging_area ? " STAGED " : "") << (part ? " PART " : " PARTITION ")
                       << (settings.hilite ? hilite_none : "");
         partition->formatImpl(settings, state, frame);
     }
     else if (type == ASTAlterCommand::DROP_PARTITION_WHERE)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (cascading ? "CASCADING " : "")
-                      << (detach ? "DETACH" : "DROP") << " PARTITION WHERE "
+                      << (detach ? "DETACH" : "DROP") << (staging_area ? " STAGED " : "") << " PARTITION WHERE "
                       << (settings.hilite ? hilite_none : "");
         predicate->formatImpl(settings, state, frame);
     }

@@ -18,11 +18,15 @@
 #include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Cascades/GroupExpression.h>
+#include <Optimizer/DataDependency/DataDependencyDeriver.h>
+#include <Optimizer/Property/ConstantsDeriver.h>
+#include <Optimizer/Rule/Rule.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
+#include <Optimizer/Rule/Transformation/JoinToMultiJoin.h>
 #include <QueryPlan/AnyStep.h>
 #include <QueryPlan/CTERefStep.h>
-#include <Optimizer/Property/ConstantsDeriver.h>
-#include <Optimizer/DataDependency/DataDependencyDeriver.h>
+#include <QueryPlan/MultiJoinStep.h>
+#include "Optimizer/Rule/Transformation/JoinToMultiJoin.h"
 
 namespace DB
 {
@@ -38,16 +42,30 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
     if (expression->isLogical())
     {
         logical_expressions.emplace_back(expression);
-        if (!(expression->getStep()->getType() == IQueryPlanStep::Type::Join
-              && dynamic_cast<const JoinStep &>(*expression->getStep()).supportReorder(context.isSupportFilter())
-              && !dynamic_cast<const JoinStep &>(*expression->getStep()).isOrdered()))
+        if (!((expression->getStep()->getType() == IQueryPlanStep::Type::Join
+               && dynamic_cast<const JoinStep &>(*expression->getStep()).supportReorder(context.isSupportFilter())
+               && !dynamic_cast<const JoinStep &>(*expression->getStep()).isOrdered())
+              || expression->getStep()->getType() == IQueryPlanStep::Type::MultiJoin))
         {
             join_sets.insert(JoinSet(id));
+            // if this is the top node of one join root.
+            for (auto child : expression->getChildrenGroups())
+            {
+                context.getMemo().getGroupById(child)->is_join_root = true;
+                context.getMemo().getGroupById(child)->makeRootJoinInfo(context);
+            }
         }
 
-        if (expression->getStep()->getType() == IQueryPlanStep::Type::Join)
+        if (expression->getStep()->getType() == IQueryPlanStep::Type::Join
+            || expression->getStep()->getType() == IQueryPlanStep::Type::MultiJoin)
         {
             simple_children = false;
+        }
+
+
+        if (expression->getStep()->getType() == IQueryPlanStep::Type::MultiJoin)
+        {
+            makeRootJoinInfo(*expression, context);
         }
 
         if (expression->getStep()->getType() == IQueryPlanStep::Type::TableScan)
@@ -97,12 +115,20 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
         std::vector<bool> is_table_scans;
         for (const auto & child : expression->getChildrenGroups())
         {
-            inclusion_dependency = inclusion_dependency | context.getMemo().getGroupById(child)->getDataDependency().value_or(DataDependency{}).getInclusionDependencyRef();
+            inclusion_dependency = inclusion_dependency
+                | context.getMemo().getGroupById(child)->getDataDependency().value_or(DataDependency{}).getInclusionDependencyRef();
             children_stats.emplace_back(context.getMemo().getGroupById(child)->getStatistics().value_or(nullptr));
             simple_children &= context.getMemo().getGroupById(child)->isSimpleChildren();
             is_table_scans.emplace_back(context.getMemo().getGroupById(child)->isTableScan());
         }
-        statistics = CardinalityEstimator::estimate(expression->getStep(), context.getCTEInfo(), children_stats, context.getContext(), simple_children, is_table_scans, inclusion_dependency);
+        statistics = CardinalityEstimator::estimate(
+            expression->getStep(),
+            context.getCTEInfo(),
+            children_stats,
+            context.getContext(),
+            simple_children,
+            is_table_scans,
+            inclusion_dependency);
 
         if (expression->getStep()->getType() == IQueryPlanStep::Type::TableScan)
         {
@@ -147,7 +173,55 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
         {
             children.emplace_back(context.getMemo().getGroupById(child)->getDataDependency().value_or(DataDependency{}));
         }
-        data_dependency = DataDependencyDeriver::deriveDataDependency(expression->getStep(), children, context.getCTEInfo(), context.getContext());
+        data_dependency
+            = DataDependencyDeriver::deriveDataDependency(expression->getStep(), children, context.getCTEInfo(), context.getContext());
+    }
+
+    if (context.getMaxJoinSize() > 10 && expression->isLogical())
+    {
+        if (expression->getStep()->getType() == IQueryPlanStep::Type::Join)
+        {
+            auto * step = dynamic_cast<JoinStep *>(expression->getStep().get());
+            if (JoinToMultiJoin::isSupport(*step) && !expression->hasRuleExplored(RuleType::JOIN_TO_MULTI_JOIN))
+            {
+                for (const auto & multi_join : JoinToMultiJoin::createMultiJoin(
+                         context.getContext(), context, step, id, expression->getChildrenGroups()[0], expression->getChildrenGroups()[1]))
+                {
+                    GroupExprPtr new_group_expr = nullptr;
+                    context.recordPlanNodeIntoGroup(multi_join, new_group_expr, RuleType::JOIN_TO_MULTI_JOIN, id);
+                }
+                expression->setRuleExplored(RuleType::JOIN_TO_MULTI_JOIN);
+            }
+        }
+    }
+}
+
+void Group::makeRootJoinInfo(CascadesContext & context)
+{
+    for (auto & expression : logical_expressions)
+    {
+        makeRootJoinInfo(*expression, context);
+    }
+}
+
+void Group::makeRootJoinInfo(GroupExpression & expression, CascadesContext & context)
+{
+    if (is_join_root && expression.getStep()->getType() == IQueryPlanStep::Type::MultiJoin
+        && expression.getChildrenGroups().size() > context.getContext()->getSettingsRef().max_graph_reorder_size)
+    {
+        if (join_root_id == 0)
+        {
+            join_root_id = context.getMemo().nextJoinRootId();
+            if (join_root_id >= Memo::MAX_JOIN_ROOT_ID)
+            {
+                return;
+            }
+        }
+        auto * s = dynamic_cast<MultiJoinStep *>(expression.getStep().get());
+        for (auto child_id : s->getGraph().getNodes())
+        {
+            context.getMemo().setJoinRootId(child_id, join_root_id);
+        }
     }
 }
 

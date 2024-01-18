@@ -25,9 +25,9 @@ namespace DB
 class AggregateEstimator
 {
 public:
-    static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const AggregatingStep &);
-    static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const MergingAggregatedStep &);
-    static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const DistinctStep &);
+    static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const AggregatingStep &, ContextMutablePtr context);
+    static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const MergingAggregatedStep &, ContextMutablePtr context);
+    static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const DistinctStep &, ContextMutablePtr context);
 
 private:
     static SymbolStatisticsPtr estimateAggFun(AggregateFunctionPtr agg_function, UInt64 row_count, DataTypePtr);

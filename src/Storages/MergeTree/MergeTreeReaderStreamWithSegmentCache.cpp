@@ -45,12 +45,13 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     const MergeTreeIndexGranularityInfo* index_granularity_info_,
     const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
     const ProgressCallback & internal_progress_cb_,
-    clockid_t clock_type_, bool is_low_cardinality_dictionary_):
+    clockid_t clock_type_, bool is_low_cardinality_dictionary_, String stream_extension_):
         IMergeTreeReaderStream(disk_, mark_cache_, mark_path_,
             stream_name_, marks_count_, *index_granularity_info_,
             settings_.save_marks_in_cache, mark_offset_, mark_size_,
             settings_, data_size_, is_low_cardinality_dictionary_, part_host_,
-            1, segment_cache_ ? segment_cache_->getMetaCache().get() : nullptr, storage_id_.uuid, part_name_)
+            1, segment_cache_ ? segment_cache_->getMetaCache().get() : nullptr, storage_id_.uuid, part_name_),
+         stream_extension(stream_extension_)
 {
     size_t max_mark_range_bytes = 0;
     size_t sum_mark_range_bytes = 0;
@@ -82,7 +83,7 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
         storage_id_, part_name_, stream_name_, disk_, data_path_, data_offset_,
         data_size_, cache_segment_size_, part_host_, segment_cache_ ? segment_cache_->getDataCache().get() : nullptr, settings_,
         total_segment_count, marks_loader, uncompressed_cache_, profile_callback_, internal_progress_cb_,
-        clock_type_
+        clock_type_, stream_extension_
     );
     data_buffer = read_buffer_holder.get();
 }

@@ -24,6 +24,12 @@
 #include <Interpreters/CollectJoinOnKeysVisitor.h>
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/TableJoin.h>
+#include "Core/NamesAndTypes.h"
+#include "DataTypes/Serializations/ISerialization.h"
+#include "Interpreters/asof.h"
+#include "Parsers/ASTFunction.h"
+#include "Parsers/ASTIdentifier.h"
+#include <Parsers/ASTLiteral.h>
 
 namespace DB
 {
@@ -48,6 +54,8 @@ void CollectJoinOnKeysMatcher::Data::addJoinKeys(const ASTPtr & left_ast, const 
         analyzed_join.addOnKeys(left, right, null_safe_equal);
     else if (table_no.first == 2 || table_no.second == 1)
         analyzed_join.addOnKeys(right, left, null_safe_equal);
+    else if (enable_join_on_1_equals_1)
+        analyzed_join.addOnKeys(left, right, null_safe_equal);
     else
         throw Exception("Cannot detect left and right JOIN keys. JOIN ON section is ambiguous.",
                         ErrorCodes::AMBIGUOUS_COLUMN_NAME);
@@ -100,15 +108,25 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
     {
         ASTPtr left = func.arguments->children.at(0);
         ASTPtr right = func.arguments->children.at(1);
-        auto table_numbers = getTableNumbers(ast, left, right, data);
-        data.addJoinKeys(left, right, table_numbers, false);
+        if ((left->as<ASTLiteral>() || right->as<ASTLiteral>()) && !(left->as<ASTLiteral>() && right->as<ASTLiteral>()))
+            data.inequal_conditions.push_back(ast);
+        else
+        {
+            auto table_numbers = getTableNumbers(ast, left, right, data);
+            data.addJoinKeys(left, right, table_numbers, false);
+        }
     }
     else if (func.name == "bitEquals")
     {
         ASTPtr left = func.arguments->children.at(0);
         ASTPtr right = func.arguments->children.at(1);
-        auto table_numbers = getTableNumbers(ast, left, right, data);
-        data.addJoinKeys(left, right, table_numbers, true);
+        if ((left->as<ASTLiteral>() || right->as<ASTLiteral>()) && !(left->as<ASTLiteral>() && right->as<ASTLiteral>()))
+            data.inequal_conditions.push_back(ast);
+        else
+        {
+            auto table_numbers = getTableNumbers(ast, left, right, data);
+            data.addJoinKeys(left, right, table_numbers, true);
+        }
     }
     else if (inequality != ASOF::Inequality::None && data.is_asof)
     {
@@ -123,13 +141,103 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
 
         data.addAsofJoinKeys(left, right, table_numbers, inequality);
     }
+    else if (inequality != ASOF::Inequality::None)
+    {
+        data.inequal_conditions.push_back(ast);
+    }
+    else if (func.name == "notEquals")
+    {
+        data.inequal_conditions.push_back(ast);
+    }
     else
     {
-        ASTPtr left = func.arguments->children.at(0);
-        ASTPtr right = func.arguments->children.at(1);
-        auto table_numbers = getTableNumbers(ast, left, right, data);
-        data.addJoinKeys(left, right, table_numbers, func.name == "bitNotEquals");
-        data.is_nest_loop_join = true;
+        throw Exception(fmt::format("JOIN ON condition {} is not support", queryToString(ast)), ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
+    }
+}
+
+/**
+* collect join on keys, if there is "equal + nonequal + join", then we apply Non-equal join.
+* Otherwise we apply nestloop join.
+*
+*/
+void CollectJoinOnKeysMatcher::analyzeJoinOnConditions(Data & data, ASTTableJoin::Kind kind)
+{
+    if (data.inequal_conditions.empty())
+        return;
+
+    auto left_keys = data.analyzed_join.leftKeysList();
+    if (left_keys && !left_keys->children.empty() && (kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Inner))
+    {
+        auto columns_for_join = data.left_table.columns;
+        std::map<size_t, std::map<String, NameAndTypePair>> join_columns_map;
+        std::for_each(data.left_table.columns.begin(), data.left_table.columns.end(), 
+                        [&](const NameAndTypePair & column){ join_columns_map[1].emplace(column.name, column); });
+        std::for_each(data.right_table.columns.begin(), data.right_table.columns.end(), 
+                        [&](const NameAndTypePair & column){ join_columns_map[2].emplace(column.name, column); });
+
+
+        std::map<String, NameAndTypePair> columns_for_conditions_map;
+
+        auto add_cond_identifier = [&](const ASTIdentifier * identifier, size_t table_number)
+        {
+            if (auto it = join_columns_map[table_number].find(identifier->shortName()); it != join_columns_map[table_number].end())
+            {
+                if (identifier->isShort())
+                    columns_for_conditions_map.emplace(it->first, it->second);
+                else
+                {
+                    NameAndTypePair column = it->second;
+                    column.name = identifier->name();
+                    columns_for_conditions_map.emplace(column.name, column);
+                }
+            }
+        };
+
+        for (const auto & condition : data.inequal_conditions)
+        {
+            std::vector<const ASTIdentifier *> left_identifiers;
+            std::vector<const ASTIdentifier *> right_identifiers;
+
+            auto * func = condition->as<ASTFunction>(); 
+            getIdentifiers(func->arguments->children.at(0), left_identifiers);
+            getIdentifiers(func->arguments->children.at(1), right_identifiers);
+
+            size_t left_idents_table = getTableForIdentifiers(left_identifiers, data);
+            size_t right_idents_table = getTableForIdentifiers(right_identifiers, data);
+
+            if (left_idents_table && left_idents_table == right_idents_table)
+            {
+                auto left_name = queryToString(*left_identifiers[0]);
+                auto right_name = queryToString(*right_identifiers[0]);
+
+                throw Exception("In expression " + queryToString(condition) + " columns " + left_name + " and " + right_name
+                    + " are from the same table but from different arguments of equal function", ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
+            }
+
+            for (const auto & identifier : left_identifiers)
+                add_cond_identifier(identifier, left_idents_table);
+            for (const auto & identifier : right_identifiers)
+                add_cond_identifier(identifier, right_idents_table);
+        }
+        
+        columns_for_join.clear();
+        for (const auto & item : columns_for_conditions_map)
+            columns_for_join.emplace_back(item.second);
+
+        //LOG_DEBUG(&Poco::Logger::get("CollectJoinOnKeysMatcher"), "columns_for_join: {}", columns_for_join.toString());
+        data.analyzed_join.addInequalConditions(data.inequal_conditions, columns_for_join, data.context);
+    }
+    else
+    {
+        for (const auto & condition : data.inequal_conditions)
+        {
+            const auto & func = condition->as<ASTFunction>();
+            ASTPtr left = func->arguments->children.at(0);
+            ASTPtr right = func->arguments->children.at(1);
+            auto table_numbers = getTableNumbers(condition, left, right, data);
+            data.addJoinKeys(left, right, table_numbers, func->name == "bitNotEquals");
+            data.is_nest_loop_join = true;
+        }
     }
 }
 
@@ -161,7 +269,7 @@ std::pair<size_t, size_t> CollectJoinOnKeysMatcher::getTableNumbers(const ASTPtr
     getIdentifiers(left_ast, left_identifiers, data.ignore_array_join_check_in_join_on_condition);
     getIdentifiers(right_ast, right_identifiers);
 
-    if (left_identifiers.empty() || right_identifiers.empty())
+    if (!data.enable_join_on_1_equals_1 && (left_identifiers.empty() || right_identifiers.empty()))
     {
         throw Exception("Not equi-join ON expression: " + queryToString(expr) + ". No columns in one of equality side.",
                         ErrorCodes::INVALID_JOIN_ON_EXPRESSION);

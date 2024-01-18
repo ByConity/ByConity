@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <CloudServices/CnchServerServiceImpl.h>
 
 #include <Catalog/Catalog.h>
@@ -61,11 +62,22 @@ namespace ErrorCodes
 }
 namespace AutoStats = Statistics::AutoStats;
 
+namespace
+{
+    UInt64 getTS(ContextMutablePtr & context)
+    {
+        TxnTimestamp ts = context->tryGetTimestamp();
+        /// TSO server is unavailable now
+        if (ts == TxnTimestamp::fallbackTS())
+            ts = TxnTimestamp::fromUnixTimestamp(time(nullptr)).toUInt64();
+        return ts;
+    }
+}
+
 CnchServerServiceImpl::CnchServerServiceImpl(ContextMutablePtr global_context)
     : WithMutableContext(global_context),
-      server_start_time(global_context->getTimestamp()),
+      server_start_time(getTS(global_context)),
       global_gc_manager(global_context),
-
       log(&Poco::Logger::get("CnchServerService"))
 {
 }
@@ -691,7 +703,9 @@ void CnchServerServiceImpl::controlCnchBGThread(
 
             try
             {
-                auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+                StorageID storage_id = StorageID::createEmpty();
+                if (!request->storage_id().table().empty())
+                    storage_id = RPCHelpers::createStorageID(request->storage_id());
                 auto type = CnchBGThreadType(request->type());
                 auto action = CnchBGThreadAction(request->action());
                 global_context.controlCnchBGThread(storage_id, type, action);
@@ -879,8 +893,8 @@ void CnchServerServiceImpl::reportCnchLockHeartBeat(
 }
 
 void CnchServerServiceImpl::getServerStartTime(
-    google::protobuf::RpcController * cntl,
-    const Protos::GetServerStartTimeReq * request,
+    google::protobuf::RpcController *,
+    const Protos::GetServerStartTimeReq *,
     Protos::GetServerStartTimeResp * response,
     google::protobuf::Closure * done)
 {
@@ -1200,7 +1214,10 @@ void CnchServerServiceImpl::redirectAttachDetachedS3Parts(
                     if (!to_table)
                         throw Exception("Cannot get table by UUID " + to_table_uuid, ErrorCodes::UNKNOWN_TABLE);
                     throw_if_non_host(to_table);
-                    global_context->getCnchCatalog()->attachDetachedPartsRaw(to_table, detached_part_names, detached_bitmap_names);
+                    size_t detached_visible_part_size = request->detached_visible_part_size();
+                    size_t detached_staged_part_size = request->detached_staged_part_size();
+                    global_context->getCnchCatalog()->attachDetachedPartsRaw(
+                        to_table, detached_part_names, detached_visible_part_size, detached_staged_part_size, detached_bitmap_names);
                     break;
                 }
                 default:

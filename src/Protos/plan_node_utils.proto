@@ -276,3 +276,17 @@ message WindowDescription {
   required WindowFrame frame = 5;
   repeated WindowFunctionDescription window_functions = 6;
 }
+
+message Edge {
+  required uint64 from = 1;
+  required uint64 to = 2;
+  required string source = 3;
+  required string target = 4;
+}
+
+message Graph {
+  repeated uint64 node = 1;
+  repeated Edge edges = 2;
+  required AST filter = 3;
+}
+

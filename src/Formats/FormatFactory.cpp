@@ -128,6 +128,9 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.orc.allow_missing_columns = settings.input_format_orc_allow_missing_columns;
     format_settings.protobuf.enable_multiple_message = settings.input_format_protobuf_enable_multiple_message;
     format_settings.protobuf.default_length_parser = settings.input_format_protobuf_default_length_parser;
+    format_settings.map.parse_null_map_as_empty = settings.input_format_parse_null_map_as_empty;
+    format_settings.map.skip_null_map_value = settings.input_format_skip_null_map_value;
+    format_settings.map.max_map_key_length = settings.input_format_max_map_key_long;
 
     /// Validate avro_schema_registry_url with RemoteHostFilter when non-empty and in Server context
     if (format_settings.schema.is_server)

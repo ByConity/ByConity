@@ -99,6 +99,9 @@ public:
 
     const BucketWithPartitionSet & getBucketWithPartitionSet() const { return bucket_with_partition_set; }
 
+    /// Filter parts if lock scope is bucket level
+    void filterParts(MergeTreeDataPartsCNCHVector & parts) const;
+
 private:
     DedupScope(DedupMode dedup_mode_, LockMode lock_mode_ = LockMode::NORMAL) : dedup_mode(dedup_mode_), lock_mode(lock_mode_) { }
 

@@ -40,6 +40,7 @@ public:
     ASTPtr watch;
     ASTPtr table_function;
     ASTPtr in_file;
+    ASTPtr compression;
     ASTPtr partition_by;
     ASTPtr settings_ast;
 

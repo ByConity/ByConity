@@ -55,7 +55,7 @@ static std::vector<Cluster::Addresses> lookupWorkerAddress(const Context & conte
         {
             Cluster::Address address(client->getTCPAddress(), user_password.first, user_password.second, context.getTCPPort(), false);
             // assume there are only one replica in each shard
-            addresses.push_back({address});
+            addresses.push_back({std::move(address)});
         }
     }
 
@@ -179,7 +179,7 @@ StoragePtr TableFunctionCnch::executeImpl(const ASTPtr & /*ast_function*/, Conte
     auto mutable_context = std::const_pointer_cast<Context>(context);
     mutable_context->enableWorkerFaultTolerance();
     mutable_context->setSetting("skip_unavailable_shards", Field{true});
-    
+
     if (cached_columns.empty())
         cached_columns = getActualTableStructure(context);
 
@@ -212,7 +212,7 @@ StoragePtr TableFunctionCnch::executeImpl(const ASTPtr & /*ast_function*/, Conte
 ColumnsDescription TableFunctionCnch::getActualTableStructure(ContextPtr context) const
 {
     assert(cluster);
-    return getStructureOfRemoteTable(*cluster, remote_table_id, context); 
+    return getStructureOfRemoteTable(*cluster, remote_table_id, std::move(context));
 }
 
 void registerTableFunctionCnch(TableFunctionFactory & factory)

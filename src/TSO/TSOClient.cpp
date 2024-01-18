@@ -87,11 +87,10 @@ GetTimestampsResp TSOClient::getTimestamps(UInt32 size)
 UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
 {
     const auto & config = context.getRootConfig();
-    int tos_max_retry = config.tso_service.tso_max_retry_count;
-    bool use_tso_fallback = config.tso_service.use_fallback;
+    int tso_max_retry = config.tso_service.tso_max_retry_count;
 
-    std::string new_leader;
-    int retry = tos_max_retry;
+    int retry = tso_max_retry;
+    bool try_update_leader = true;
 
     while (retry--)
     {
@@ -120,30 +119,28 @@ UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
 
             context.updateTSOLeaderHostPort();
         }
-        catch (Exception & e)
+        catch (...)
         {
             ProfileEvents::increment(ProfileEvents::TSOError);
-            if (use_tso_fallback && e.code() != ErrorCodes::BRPC_TIMEOUT)
+            if (getCurrentExceptionCode() != ErrorCodes::BRPC_TIMEOUT)
             {
                 /// old leader may be unavailable
                 context.updateTSOLeaderHostPort();
-                throw;
+                try_update_leader = false;
             }
 
-            const auto error_string = fmt::format(
-                    "TSO request: {} failed. Retries: {}/{}, Error message: {}",
-                    typeToString(type),
-                    std::to_string(tos_max_retry - retry),
-                    std::to_string(tos_max_retry),
-                    e.displayText());
-
-            tryLogCurrentException(__PRETTY_FUNCTION__, error_string);
+            LOG_ERROR(
+                &Poco::Logger::get("getTSOResponse"),
+                "TSO request: {} failed. Retries: {}/{}, Error message: {}",
+                typeToString(type), tso_max_retry - retry, tso_max_retry, getCurrentExceptionMessage(false));
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(30));
     }
 
-    context.updateTSOLeaderHostPort();
+    if (try_update_leader)
+        context.updateTSOLeaderHostPort();
+
     throw Exception(ErrorCodes::TSO_OPERATION_ERROR, "Can't get process TSO request, type: {}", typeToString(type));
 }
 

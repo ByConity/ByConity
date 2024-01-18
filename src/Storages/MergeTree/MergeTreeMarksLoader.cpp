@@ -29,6 +29,8 @@
 #include <boost/algorithm/string/split.hpp>
 #include "common/getFQDNOrHostName.h"
 #include "Core/SettingsEnums.h"
+#include "Common/parseAddress.h"
+#include "Common/HostWithPorts.h"
 #include "IO/ReadBufferFromRpcStreamFile.h"
 #include "IO/ReadBufferFromRpcStreamFile.h"
 #include "Storages/DistributedDataClient.h"
@@ -141,11 +143,18 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
 
     if (!index_granularity_info.is_adaptive)
     {
+        std::optional<String> parsed_assign_compute_host;
+        if (!part_host.assign_compute_host_port.empty())
+            parsed_assign_compute_host = parseAddress(part_host.assign_compute_host_port, 0).first;
+        std::optional<String> parsed_disk_cache_host;
+        if (!part_host.disk_cache_host_port.empty())
+            parsed_disk_cache_host = parseAddress(part_host.disk_cache_host_port, 0).first;
+
         LOG_TRACE(
             &Poco::Logger::get(__func__),
             "Current node host vs disk cache host: {} vs {}",
-            getHostFromHostPort(part_host.assign_compute_host_port),
-            getHostFromHostPort(part_host.disk_cache_host_port));
+            parsed_assign_compute_host.has_value() ? removeBracketsIfIpv6(parsed_assign_compute_host.value()) : "",
+            parsed_disk_cache_host.has_value() ? removeBracketsIfIpv6(parsed_disk_cache_host.value()) : "");
         auto buffer = [&, this]() -> std::unique_ptr<ReadBufferFromFileBase> {
             if (disk_cache)
             {
@@ -170,8 +179,8 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                         return local_cache_disk->readFile(local_cache_path, load_mark_read_settings);
                     }
                     else if (
-                        (!part_host.disk_cache_host_port.empty()
-                         && getHostFromHostPort(part_host.assign_compute_host_port) != getHostFromHostPort(part_host.disk_cache_host_port)
+                        (parsed_assign_compute_host.has_value() && parsed_disk_cache_host.has_value()
+                         && removeBracketsIfIpv6(parsed_assign_compute_host.value()) != removeBracketsIfIpv6(parsed_disk_cache_host.value())
                          && (settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
                              || settings.remote_disk_cache_stealing == StealingCacheMode::READ_ONLY))
                         || settings.read_settings.disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)

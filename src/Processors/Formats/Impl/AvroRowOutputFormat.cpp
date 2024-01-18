@@ -16,15 +16,19 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeTuple.h>
 
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnByteMap.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/ColumnTuple.h>
 
 #include <avro/Compiler.hh>
 #include <avro/DataFile.hh>
@@ -75,7 +79,7 @@ private:
 };
 
 
-AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeFn(DataTypePtr data_type, size_t & type_name_increment)
+AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeFn(DataTypePtr data_type, size_t & type_name_increment, const String & column_name)
 {
     ++type_name_increment;
 
@@ -223,7 +227,7 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
         case TypeIndex::Array:
         {
             const auto & array_type = assert_cast<const DataTypeArray &>(*data_type);
-            auto nested_mapping = createSchemaWithSerializeFn(array_type.getNestedType(), type_name_increment);
+            auto nested_mapping = createSchemaWithSerializeFn(array_type.getNestedType(), type_name_increment, column_name);
             auto schema = avro::ArraySchema(nested_mapping.schema);
             return {schema, [nested_mapping](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
@@ -249,7 +253,7 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
         case TypeIndex::Nullable:
         {
             auto nested_type = removeNullable(data_type);
-            auto nested_mapping = createSchemaWithSerializeFn(nested_type, type_name_increment);
+            auto nested_mapping = createSchemaWithSerializeFn(nested_type, type_name_increment, column_name);
             if (nested_type->getTypeId() == TypeIndex::Nothing)
             {
                 return nested_mapping;
@@ -278,7 +282,7 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
         case TypeIndex::LowCardinality:
         {
             const auto & nested_type = removeLowCardinality(data_type);
-            auto nested_mapping = createSchemaWithSerializeFn(nested_type, type_name_increment);
+            auto nested_mapping = createSchemaWithSerializeFn(nested_type, type_name_increment, column_name);
             return {nested_mapping.schema, [nested_mapping](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
                 const auto & col = assert_cast<const ColumnLowCardinality &>(column);
@@ -287,6 +291,71 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
         }
         case TypeIndex::Nothing:
             return {avro::NullSchema(), [](const IColumn &, size_t, avro::Encoder & encoder) { encoder.encodeNull(); }};
+        case TypeIndex::Tuple:
+        {
+            const auto & tuple_type = assert_cast<const DataTypeTuple &>(*data_type);
+            const auto & nested_types = tuple_type.getElements();
+            const auto & nested_names = tuple_type.getElementNames();
+            std::vector<SerializeFn> nested_serializers;
+            nested_serializers.reserve(nested_types.size());
+            auto schema = avro::RecordSchema(column_name);
+            for (size_t i = 0; i != nested_types.size(); ++i)
+            {
+                auto nested_mapping = createSchemaWithSerializeFn(nested_types[i], type_name_increment, nested_names[i]);
+                schema.addField(nested_names[i], nested_mapping.schema);
+                nested_serializers.push_back(nested_mapping.serialize);
+            }
+
+            return {schema, [nested_serializers](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                const ColumnTuple & column_tuple = assert_cast<const ColumnTuple &>(column);
+                const auto & nested_columns = column_tuple.getColumns();
+                for (size_t i = 0; i != nested_serializers.size(); ++i)
+                    nested_serializers[i](*nested_columns[i], row_num, encoder);
+            }};
+        }
+        case TypeIndex::Map:
+        {
+            const auto & map_type = assert_cast<const DataTypeByteMap &>(*data_type);
+            const auto & keys_type = map_type.getKeyType();
+            if (!isStringOrFixedString(keys_type))
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Avro Maps support only keys with type String, got {}", keys_type->getName());
+
+            auto keys_serializer = [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                const StringRef & s = column.getDataAt(row_num);
+                encoder.encodeString(s.toString());
+            };
+
+            const auto & values_type = map_type.getValueType();
+            auto values_mapping = createSchemaWithSerializeFn(values_type, type_name_increment, column_name + ".value");
+            auto schema = avro::MapSchema(values_mapping.schema);
+
+            return {schema, [keys_serializer, values_mapping](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                const ColumnByteMap & column_map = assert_cast<const ColumnByteMap &>(column);
+                const ColumnByteMap::Offsets & offsets = column_map.getOffsets();
+
+                size_t offset = row_num == 0 ? 0 : offsets[row_num - 1];
+                size_t next_offset = offsets[row_num];
+
+                const IColumn& keys_column = column_map.getKey();
+                const IColumn& values_column = column_map.getValue();
+
+                size_t row_count = next_offset - offset;
+
+                encoder.mapStart();
+                if (row_count > 0)
+                    encoder.setItemCount(row_count);
+
+                for (size_t i = offset; i < next_offset; ++i)
+                {
+                    keys_serializer(keys_column, i, encoder);
+                    values_mapping.serialize(values_column, i, encoder);
+                }
+                encoder.mapEnd();
+            }};
+        }
         default:
             break;
     }
@@ -303,7 +372,7 @@ AvroSerializer::AvroSerializer(const ColumnsWithTypeAndName & columns)
     {
         try
         {
-            auto field_mapping = createSchemaWithSerializeFn(column.type, type_name_increment);
+            auto field_mapping = createSchemaWithSerializeFn(column.type, type_name_increment, column.name);
             serialize_fns.push_back(field_mapping.serialize);
             //TODO: verify name starts with A-Za-z_
             record_schema.addField(column.name, field_mapping.schema);

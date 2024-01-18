@@ -192,26 +192,51 @@ bool CnchReadBufferFromKafkaConsumer::nextImpl()
 
     while (!hasExpired() && read_messages < batch_size && run->load(std::memory_order_relaxed))
     {
+        /// the api `poll` will check the error if it gets a message, and it will throw an exception if there is an error;
+        /// thus here we don't need to check if the message has some error;
+        /// Of course, we may get no message, e.g there are no more messages in the topic-partition now.
         auto new_message = consumer->poll(std::chrono::milliseconds(poll_timeout));
         if (!new_message)
             continue;
-
-        if (auto err = new_message.get_error())
-        {
-            /// TODO: should throw exception instead
-            LOG_ERROR(log, "Consumer error: {}", err.to_string());
-            stalled = true;
-            throw Exception(err.to_string(), ErrorCodes::RDKAFKA_EXCEPTION);
-        }
 
         /// Get an available message, save it for committing
         current = std::move(new_message);
         read_messages += 1;
 
+        auto & offset = offsets[{current.get_topic(), current.get_partition()}];
+        if (offset > 0 && current.get_offset() != offset)
+        {
+            if (current.get_offset() > offset)
+            {
+                String msg = "Poll skipped message in " + current.get_topic() + '#' + std::to_string(current.get_partition())
+                             + ": expected " + std::to_string(offset) + " but got " + std::to_string(current.get_offset());
+                if (enable_skip_offsets_hole)
+                {
+                    /// It seems the offsets hole produced by kafka producer can not be skipped by `auto.reset.offset` policy
+                    ///  as it does not belong to 'out of range' exception;
+                    /// So we need to hand it specially if you indeed produce a topic with offsets holes
+                    LOG_WARNING(log, msg + ". We will skip this hole as you have enabled `enable_skip_offsets_hole`");
+
+                    skipped_msgs_in_holes += (current.get_offset() - offset);
+                    skipped_ofsets_hole.emplace_back(current.get_topic() + "#" + std::to_string(current.get_partition())
+                                                     + ": [" + std::to_string(offset) + ", " + std::to_string(current.get_offset()) + ")");
+                }
+                else
+                    throw Exception(
+                        msg + ". This may be caused by kafka retention policy with a long time lag",
+                        ErrorCodes::RDKAFKA_EXCEPTION);
+            }
+            else if (current.get_offset() < offset)
+                LOG_WARNING(
+                    log,
+                    "Poll duplicated message in {}#{}: : expected {} but got {}",
+                    current.get_topic(), current.get_partition(), offset, current.get_offset());
+        }
+
         /// The term `position` gives the offset of the next message (i.e. offset of current message + 1)
         /// Record or update this `position` for later committing,
         /// Once committed, the `postition` and the `committed position` would be equal
-        offsets[{current.get_topic(), current.get_partition()}] = current.get_offset() + 1;
+        offset = current.get_offset() + 1;
 
         const auto & payload = current.get_payload();
 
@@ -246,6 +271,8 @@ void CnchReadBufferFromKafkaConsumer::reset()
     read_bytes = 0;
     empty_messages = 0;
     stalled = false;
+    skipped_msgs_in_holes = 0;
+    skipped_ofsets_hole.clear();
 }
 
 bool CnchReadBufferFromKafkaConsumer::hasExpired()

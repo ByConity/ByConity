@@ -35,6 +35,8 @@ public:
     //TODO: redefine RuntimeSegmentsStatus
     void updateSegmentInstanceStatus(RuntimeSegmentsStatus status);
 
+    void tryUpdateRootErrorCause(const QueryError & query_error, bool is_canceled);
+
     ContextPtr getContext() { return query_context; }
 
     ~MPPQueryCoordinator();

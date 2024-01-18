@@ -373,7 +373,11 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
             continue;
         }
         else
+        {
+            /// Filter staged parts if lock scope is bucket level
+            scope.filterParts(staged_parts);
             break;
+        }
     } while (true);
 
     MergeTreeDataDeduper deduper(*cnch_table, context);

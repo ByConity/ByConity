@@ -129,12 +129,15 @@ void DaemonManagerServiceImpl::ControlDaemonJob(
             brpc::ClosureGuard done_guard(done);
             try
             {
-                StorageID storage_id = RPCHelpers::createStorageID(request->storage_id());
+                StorageID storage_id = StorageID::createEmpty();
+                if (!request->storage_id().table().empty())
+                    storage_id = RPCHelpers::createStorageID(request->storage_id());
+
                 CnchBGThreadAction action = static_cast<CnchBGThreadAction>(request->action());
                 thread_status.setQueryID(request->query_id());
 
                 LOG_INFO(log, "Receive ControlDaemonJob RPC request for storage: {} job type: {} action: {}"
-                    , storage_id.getNameForLogs()
+                    , storage_id.empty() ? "empty storage" : storage_id.getNameForLogs()
                     , toString(CnchBGThreadType(request->job_type()))
                     , toString(action));
 
@@ -144,7 +147,6 @@ void DaemonManagerServiceImpl::ControlDaemonJob(
                         "No daemon job found for {}, this may always be caused by lack of config",
                         toString(CnchBGThreadType(request->job_type())));
                 auto daemon_job = daemon_jobs[CnchBGThreadType(request->job_type())];
-
                 Result res = daemon_job->executeJobAction(storage_id, action);
                 if (!res.res)
                     throw Exception(res.error_str, ErrorCodes::LOGICAL_ERROR);

@@ -46,8 +46,10 @@ ColumnPtr getArrayJoinColumn(ColumnPtr column)
 
     if (typeid_cast<const ColumnArray *>(column.get()))
         return column;
-    else if (const auto * map = typeid_cast<const ColumnMap *>(column.get()))
+    else if (const auto* map = typeid_cast<const ColumnMap *>(column.get()))
         return map->getNestedColumnPtr();
+    else if (const auto* null_col = typeid_cast<const ColumnNullable *>(column.get()))
+        return getArrayJoinColumn(null_col->getNestedColumnPtr());
 
     return nullptr;
 }

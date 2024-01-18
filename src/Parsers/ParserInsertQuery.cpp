@@ -56,6 +56,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_watch("WATCH");
     ParserKeyword s_with("WITH");
     ParserKeyword s_infile("INFILE");
+    ParserKeyword s_compression("COMPRESSION");
     ParserKeyword s_partition_by("PARTITION BY");
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
@@ -64,6 +65,8 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserFunction table_function_p{dt, false};
     ParserExpressionWithOptionalAlias exp_elem_p(false, ParserSettings::CLICKHOUSE);
 
+    /// create ASTPtr variables (result of parsing will be put in them).
+    /// They will be used to initialize ASTInsertQuery's fields.
     ASTPtr database;
     ASTPtr table;
     ASTPtr columns;
@@ -72,20 +75,28 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr watch;
     ASTPtr table_function;
     ASTPtr in_file;
+    ASTPtr compression;
     ASTPtr settings_ast;
     ASTPtr partition_by_expr;
     /// Insertion data
     const char * data = nullptr;
 
+    // Check for key words `INSERT INTO`. If it isn't found, the query can't be parsed as insert query.
     if (!s_insert_into.ignore(pos, expected))
         return false;
 
+    // try to find 'TABLE'
     s_table.ignore(pos, expected);
 
+    /// Search for 'FUNCTION'. If this key word is in query, read fields for insertion into 'TABLE FUNCTION'.
+    /// Word table is optional for table functions. (for example, s3 table function)
+    /// Otherwise fill 'TABLE' fields.
     if (s_function.ignore(pos, expected))
     {
+        /// Read function name
         if (!table_function_p.parse(pos, table_function, expected))
             return false;
+
         /// Support insertion values with partition by.
         if (s_partition_by.ignore(pos, expected))
         {
@@ -95,9 +106,12 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
     else
     {
+        /// Read one word. It can be table or database name.
         if (!name_p.parse(pos, table, expected))
             return false;
 
+        /// If there is a dot, previous name was database name, 
+        /// so read table name after dot.
         if (s_dot.ignore(pos, expected))
         {
             database = table;
@@ -122,10 +136,12 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// VALUES or FORMAT or SELECT
     if (s_values.ignore(pos, expected))
     {
+        /// If VALUES is defined in query, everything except setting will be parsed as data
         data = pos->begin;
     }
     else if (s_format.ignore(pos, expected))
     {
+        /// If FORMAT is defined, read format name
         if (!name_p.parse(pos, format, expected))
             return false;
 
@@ -134,9 +150,20 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (!ParserStringLiteral().parse(pos, in_file, expected))
                 return false;
         }
+
+        /// Check for 'COMPRESSION' parameter (optional)
+        if (s_compression.ignore(pos, expected))
+        {
+            /// Read compression name. Create parser for this purpose.
+            ParserStringLiteral compression_p;
+            if (!compression_p.parse(pos, compression, expected))
+                return false;
+        }
     }
     else if (s_select.ignore(pos, expected) || s_with.ignore(pos,expected))
     {
+        /// If SELECT is defined, return to position before select and parse
+        /// rest of query as SELECT query.
         pos = before_values;
         ParserSelectWithUnionQuery select_p(dt);
         select_p.parse(pos, select, expected);
@@ -145,10 +172,21 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (s_format.ignore(pos, expected) && !name_p.parse(pos, format, expected))
             return false;
     }
+    /// Check if file is a source of data.
     else if (s_infile.ignore(pos, expected))
     {
+        /// Read file name to process it later
         if (!ParserStringLiteral().parse(pos, in_file, expected))
             return false;
+
+        /// Check for 'COMPRESSION' parameter (optional)
+        if (s_compression.ignore(pos, expected))
+        {
+            /// Read compression name. Create parser for this purpose.
+            ParserStringLiteral compression_p;
+            if (!compression_p.parse(pos, compression, expected))
+                return false;
+        }
     }
     else if (s_watch.ignore(pos, expected))
     {
@@ -162,11 +200,14 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
     else
     {
+        /// If all previous conditions were false, query is incorrect
         return false;
     }
 
+    /// Read SETTINGS if they are defined
     if (s_settings.ignore(pos, expected))
     {
+        /// Settings are written like SET query, so parse them with ParserSetQuery
         ParserSetQuery parser_settings(true);
         if (!parser_settings.parse(pos, settings_ast, expected))
             return false;
@@ -179,13 +220,14 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         InsertQuerySettingsPushDownVisitor(visitor_data).visit(select);
     }
 
-
+    /// In case of defined format, data follows it.
     if (!in_file && format)
     {
         Pos last_token = pos;
         --last_token;
         data = last_token->end;
 
+        /// If format name is followed by ';' (end of query symbol) there is no data to insert.
         if (data < end && *data == ';')
             throw Exception("You have excessive ';' symbol before data for INSERT.\n"
                                     "Example:\n\n"
@@ -208,6 +250,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             ++data;
     }
 
+    /// Create query and fill its fields.
     auto query = std::make_shared<ASTInsertQuery>();
     node = query;
 
@@ -230,10 +273,19 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->settings_ast = settings_ast;
     query->data = data != end ? data : nullptr;
     query->end = end;
-    query->in_file = in_file;
 
     if (in_file)
+    {
+        query->in_file = in_file;
         query->data = nullptr;
+
+        query->children.push_back(in_file);
+        if (compression)
+        {
+            query->compression = compression;
+            query->children.push_back(compression);
+        }
+    }
 
     if (columns)
         query->children.push_back(columns);

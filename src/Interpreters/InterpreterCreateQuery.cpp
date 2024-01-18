@@ -1803,7 +1803,7 @@ ASTPtr convertMergeTreeToCnchEngine(ASTPtr query_ptr)
         return query_ptr;
 
     String new_engine_name = "Cnch" + engine_name;
-    engine->name = new_engine_name;
+    engine->name = std::move(new_engine_name);
     return query_ptr;
 }
 

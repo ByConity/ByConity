@@ -38,6 +38,7 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
+#include <Columns/ColumnNullable.h>
 
 namespace DB
 {
@@ -204,6 +205,11 @@ PlanNodePtr ColumnPruningVisitor::visitIntersectOrExceptNode(IntersectOrExceptNo
     auto intersect_except_step = std::make_shared<IntersectOrExceptStep>(children_streams, step->getOperator(), step->getMaxThreads());
     auto intersect_except_node = IntersectOrExceptNode::createPlanNode(context->nextNodeId(), std::move(intersect_except_step), children, node.getStatistics());
     return intersect_except_node;
+}
+
+PlanNodePtr ColumnPruningVisitor::visitMultiJoinNode(MultiJoinNode &, NameSet &)
+{
+    throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 PlanNodePtr ColumnPruningVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode & node, NameSet & require)
@@ -706,6 +712,7 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
                 if (isNullableOrLowCardinalityNullable(origin_output.type))
                 {
                     output.type = JoinCommon::tryConvertTypeToNullable(output.type);
+                    output.column = makeNullableOrLowCardinalityNullable(output.column);
                 }
             }
     }

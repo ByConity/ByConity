@@ -32,3 +32,29 @@ using repair command to dedup data
 u10108_pl_helper table detach partition without bitmap
 attach detached partition 2023-01-01 from u10108_pl_helper without dedup, it will not has duplicated data because part to be attached does not have bitmap
 2023-01-01	1	100	4950
+
+2021-01-01	1	100	4950
+2021-01-01	2	100	4950
+2021-01-02	1	100	4950
+2021-01-02	2	100	4950
+2021-01-03	1	100	4950
+2021-01-03	2	100	4950
+\'2021-01-01\'	2
+\'2021-01-02\'	2
+\'2021-01-03\'	2
+test detach staged partition: 
+\'2021-01-02\'	2
+\'2021-01-03\'	2
+\'2021-01-01\'	2
+\'2021-01-02\'	2
+\'2021-01-03\'	2
+test drop staged partition: 
+\'2021-01-02\'	2
+\'2021-01-03\'	2
+\'2021-01-02\'	2
+\'2021-01-03\'	2
+start dedup worker and all staged parts to be visible
+2021-01-02	1	100	4950
+2021-01-02	2	100	4950
+2021-01-03	1	100	4950
+2021-01-03	2	100	4950

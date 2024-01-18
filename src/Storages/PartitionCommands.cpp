@@ -53,6 +53,7 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.detach = command_ast->detach;
         res.cascading = command_ast->cascading;
         res.part = command_ast->part;
+        res.staging_area = command_ast->staging_area;
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::DROP_DETACHED_PARTITION)

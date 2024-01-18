@@ -17,6 +17,7 @@
 
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <QueryPlan/AnyStep.h>
+#include <QueryPlan/MultiJoinStep.h>
 
 namespace DB
 {
@@ -48,8 +49,6 @@ GroupExprPtr Memo::insertGroupExpr(GroupExprPtr group_expr, CascadesContext & co
         return *it;
     }
 
-    group_expressions.insert(group_expr);
-
     // New expression, so try to insert into an existing group or
     // create a new group if none specified
     GroupId group_id;
@@ -66,6 +65,9 @@ GroupExprPtr Memo::insertGroupExpr(GroupExprPtr group_expr, CascadesContext & co
 
     auto group = getGroupById(group_id);
     group->addExpression(group_expr, context);
+
+    // must after group.addexpression because this function can change step
+    group_expressions.insert(group_expr);
     return group_expr;
 }
 

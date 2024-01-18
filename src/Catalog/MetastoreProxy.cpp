@@ -2512,10 +2512,20 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(
     const String & name_space,
     const String & tbl_uuid,
     const std::vector<String> & part_names,
+    size_t detached_visible_part_size,
+    size_t detached_staged_part_size,
     const std::vector<String> & bitmap_names,
     size_t batch_write_size,
     size_t batch_delete_size)
 {
+    if (part_names.size() != detached_visible_part_size + detached_staged_part_size)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "(Detached visible part size {} plus detached staged part size {}) and parts count {} mismatch",
+            detached_visible_part_size,
+            detached_staged_part_size,
+            part_names.size());
+
     if (part_names.empty())
     {
         return {};
@@ -2535,8 +2545,15 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(
         {
             if (!metas[i].first.empty())
             {
-                String part_key = dataPartKey(name_space, tbl_uuid, part_names[i]);
-                LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedPartsRaw] Write part meta record {}",
+                String part_key;
+                if (i < detached_visible_part_size)
+                    part_key = dataPartKey(name_space, tbl_uuid, part_names[i]);
+                else
+                    part_key = stagedDataPartKey(name_space, tbl_uuid, part_names[i]);
+                LOG_TRACE(
+                    &Poco::Logger::get("MetaStore"),
+                    "[attachDetachedPartsRaw] Write {} part meta record {}",
+                    i < detached_visible_part_size ? "" : "staged ",
                     part_key);
 
                 batch_writer.addPut(part_key, metas[i].first);

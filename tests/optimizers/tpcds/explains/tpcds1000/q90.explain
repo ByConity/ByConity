@@ -14,10 +14,10 @@ Projection Est. 1 rows
             │     └─ Aggregating Est. 1 rows
             │        │     Group by: {}
             │        │     Aggregates: expr#count():=AggNull(count)()
-            │        └─ Inner Join Est. 121428 rows
+            │        └─ Inner Join Est. 122000 rows
             │           │     Condition: ws_ship_hdemo_sk == hd_demo_sk
             │           │     Runtime Filters Builder: {hd_demo_sk}
-            │           ├─ Inner Join Est. 1214280 rows
+            │           ├─ Inner Join Est. 1220000 rows
             │           │  │     Condition: ws_sold_time_sk == t_time_sk
             │           │  │     Runtime Filters Builder: {t_time_sk}
             │           │  ├─ Inner Join Est. 14640007 rows
@@ -52,10 +52,10 @@ Projection Est. 1 rows
                      └─ Aggregating Est. 1 rows
                         │     Group by: {}
                         │     Aggregates: expr#count()_1:=AggNull(count)()
-                        └─ Inner Join Est. 121428 rows
+                        └─ Inner Join Est. 122000 rows
                            │     Condition: ws_ship_hdemo_sk_1 == hd_demo_sk_1
                            │     Runtime Filters Builder: {hd_demo_sk_1}
-                           ├─ Inner Join Est. 1214280 rows
+                           ├─ Inner Join Est. 1220000 rows
                            │  │     Condition: ws_sold_time_sk_1 == t_time_sk_1
                            │  │     Runtime Filters Builder: {t_time_sk_1}
                            │  ├─ Inner Join Est. 14640007 rows

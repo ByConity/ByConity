@@ -39,6 +39,14 @@ public:
 
     void recordCTEDefGroupId(size_t cte_id, GroupId group_id) { cte_group_id_map[cte_id] = group_id;}
 
+    UInt32 nextJoinRootId() { return ++join_root_index; }
+    void setJoinRootId(GroupId source_id, UInt32 root_id) 
+    {
+        source_to_join_root[source_id].set(root_id, true);
+    }
+
+    const auto & getSourceToJoinRoot() { return source_to_join_root; }
+    static const UInt32 MAX_JOIN_ROOT_ID = 64;
 private:
     GroupId addNewGroup()
     {
@@ -61,5 +69,7 @@ private:
      * Group owns GroupExpressions, not the memo
      */
     std::unordered_set<GroupExprPtr, GroupExprPtrHash, GroupExprPtrEq> group_expressions;
+    std::unordered_map<GroupId, std::bitset<MAX_JOIN_ROOT_ID>> source_to_join_root;
+    UInt32 join_root_index = 0;
 };
 }

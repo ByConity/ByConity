@@ -19,7 +19,7 @@ Projection Est. 100 rows
                │  │     └─ Aggregating Est. 149640 rows
                │  │        │     Group by: {i_item_id_1}
                │  │        │     Aggregates: expr#sum(cr_return_quantity):=AggNull(sum)(cr_return_quantity)
-               │  │        └─ Inner Join Est. 1357657 rows
+               │  │        └─ Inner Join Est. 1365545 rows
                │  │           │     Condition: cr_item_sk == i_item_sk_1
                │  │           ├─ Repartition Exchange Est. 1365545 rows
                │  │           │  │     Partition by: {cr_item_sk}
@@ -76,7 +76,7 @@ Projection Est. 100 rows
                │        └─ Aggregating Est. 149640 rows
                │           │     Group by: {i_item_id}
                │           │     Aggregates: expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity)
-               │           └─ Inner Join Est. 2853373 rows
+               │           └─ Inner Join Est. 2869952 rows
                │              │     Condition: sr_item_sk == i_item_sk
                │              ├─ Repartition Exchange Est. 2869952 rows
                │              │  │     Partition by: {sr_item_sk}
@@ -133,7 +133,7 @@ Projection Est. 100 rows
                      └─ Aggregating Est. 149640 rows
                         │     Group by: {i_item_id_2}
                         │     Aggregates: expr#sum(wr_return_quantity):=AggNull(sum)(wr_return_quantity)
-                        └─ Inner Join Est. 654011 rows
+                        └─ Inner Join Est. 657811 rows
                            │     Condition: wr_item_sk == i_item_sk_2
                            ├─ Repartition Exchange Est. 657811 rows
                            │  │     Partition by: {wr_item_sk}

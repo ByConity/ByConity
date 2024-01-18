@@ -20,7 +20,7 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 149640 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                  │        └─ Inner (PARALLEL_HASH) Join Est. 3409576 rows
+                  │        └─ Inner (PARALLEL_HASH) Join Est. 3416800 rows
                   │           │     Condition: ss_addr_sk == ca_address_sk
                   │           │     Runtime Filters Builder: {ca_address_sk}
                   │           ├─ Repartition Exchange Est. 9207886 rows
@@ -134,7 +134,7 @@ Projection Est. 100 rows
                         └─ Aggregating Est. 149640 rows
                            │     Group by: {i_item_id_4}
                            │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                           └─ Inner (PARALLEL_HASH) Join Est. 2028615 rows
+                           └─ Inner (PARALLEL_HASH) Join Est. 2239511 rows
                               │     Condition: ca_address_sk_2 == ws_bill_addr_sk
                               │     Runtime Filters Builder: {ws_bill_addr_sk}
                               ├─ Repartition Exchange Est. 2256960 rows
@@ -144,9 +144,9 @@ Projection Est. 100 rows
                               │     └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
                               │              Where: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
                               │              Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
-                              └─ Repartition Exchange Est. 2001183 rows
+                              └─ Repartition Exchange Est. 2209227 rows
                                  │     Partition by: {ws_bill_addr_sk}
-                                 └─ Inner Join Est. 2086389 rows
+                                 └─ Inner Join Est. 2303291 rows
                                     │     Condition: ws_item_sk == i_item_sk_2
                                     │     Runtime Filters Builder: {i_item_sk_2}
                                     ├─ Inner Join Est. 11453653 rows

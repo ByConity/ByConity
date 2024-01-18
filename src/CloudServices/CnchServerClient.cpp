@@ -300,6 +300,8 @@ void CnchServerClient::redirectAttachDetachedS3Parts(
         const IMergeTreeDataPartsVector & commit_parts,
         const IMergeTreeDataPartsVector & commit_staged_parts,
         const Strings & detached_part_names,
+        size_t detached_visible_part_size,
+        size_t detached_staged_part_size,
         const Strings & detached_bitmap_names,
         const DeleteBitmapMetaPtrVector & detached_bitmaps,
         const DeleteBitmapMetaPtrVector & bitmaps,
@@ -342,6 +344,8 @@ void CnchServerClient::redirectAttachDetachedS3Parts(
     }
 
     request.set_type(type);
+    request.set_detached_visible_part_size(detached_visible_part_size);
+    request.set_detached_staged_part_size(detached_staged_part_size);
 
     stub->redirectAttachDetachedS3Parts(&cntl, &request, &response, nullptr);
 
@@ -647,6 +651,8 @@ void CnchServerClient::controlCnchBGThread(const StorageID & storage_id, CnchBGT
     brpc::Controller cntl;
     Protos::ControlCnchBGThreadReq request;
     Protos::ControlCnchBGThreadResp response;
+    if (storage_id.empty())
+        cntl.set_timeout_ms(360 * 1000);
 
     RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
     request.set_type(uint32_t(type));

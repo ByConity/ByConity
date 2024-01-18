@@ -11,7 +11,7 @@ Projection
             │     Limit: 100
             └─ Projection
                │     Expressions: [d_year_4, d_year_5, expr#sum(sales_cnt)_1, expr#sum(sales_cnt)_2, i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4], expr#minus(curr_yr.sales_amt, prev_yr.sales_amt):=`expr#sum(sales_amt)_1` - `expr#sum(sales_amt)_2`, expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt):=`expr#sum(sales_cnt)_1` - `expr#sum(sales_cnt)_2`
-               └─ Inner (PARALLEL_HASH) Join
+               └─ Inner Join
                   │     Condition: i_brand_id_4 == i_brand_id_5, i_category_id_4 == i_category_id_5, i_class_id_4 == i_class_id_5, i_manufact_id_4 == i_manufact_id_5
                   │     Filter: (`expr#sum(sales_cnt)_1` / `expr#sum(sales_cnt)_2`) < '0.9'
                   │     Runtime Filters Builder: {i_brand_id_5,i_category_id_5,i_class_id_5,i_manufact_id_5}
@@ -40,13 +40,13 @@ CTEDef [0]
          │     │     Expressions: [d_year, i_brand_id, i_category_id, i_class_id, i_manufact_id], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0')):=cs_ext_sales_price - coalesce(cr_return_amount, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0)):=cs_quantity - coalesce(cr_return_quantity, 0)
          │     └─ Right (PARALLEL_HASH) Join
          │        │     Condition: cr_item_sk == cs_item_sk, cr_order_number == cs_order_number
-         │        │     Runtime Filters Builder: {cs_item_sk,cs_order_number}
+         │        │     Runtime Filters Builder: {cs_item_sk}
          │        ├─ Repartition Exchange
          │        │  │     Partition by: {cr_item_sk, cr_order_number}
          │        │  └─ Filter
-         │        │     │     Condition: Runtime Filters: {cr_item_sk, cr_order_number}
+         │        │     │     Condition: Runtime Filters: {cr_item_sk}
          │        │     └─ TableScan tpcds1000.catalog_returns
-         │        │              Where: Runtime Filters: {cr_item_sk, cr_order_number}
+         │        │              Where: Runtime Filters: {cr_item_sk}
          │        │              Outputs: [cr_item_sk, cr_order_number, cr_return_quantity, cr_return_amount]
          │        └─ Repartition Exchange
          │           │     Partition by: {cs_item_sk, cs_order_number}
@@ -153,5 +153,5 @@ CTEDef [0]
                               └─ TableScan tpcds1000.date_dim
                                        Where: d_year IN (2001, 2002)
                                        Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
-note: Runtime Filter is applied for 16 times.
+note: Runtime Filter is applied for 15 times.
 note: CTE(Common Table Expression) is applied for 2 times.
