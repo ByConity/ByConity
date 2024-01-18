@@ -2042,8 +2042,6 @@ void IMergeTreeDataPart::loadColumnsSkipIndicesSize()
                         size.data_compressed += elem_iter->second.file_size;
                         size.data_uncompressed += elem_iter->second.file_size;
                     }
-
-                    LOG_DEBUG(storage.log, "column name {} checksum file name {} hit index", index_column, elem_iter->first);
                 }
             });
 
@@ -2051,7 +2049,6 @@ void IMergeTreeDataPart::loadColumnsSkipIndicesSize()
             if (mark_iter != checksums->files.end())
             {
                 size.marks += mark_iter->second.file_size;
-                LOG_DEBUG(storage.log, "column name {} checksum file name {} hit mark", index_column, mark_iter->first);
             }
         }
     };
