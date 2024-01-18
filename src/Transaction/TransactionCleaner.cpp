@@ -150,7 +150,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
                 || staged_parts.size() != names.staged_parts.size())
             {
                 // todo could not find the root cause of dangling parts left on the undo buffer after a successful transaction
-                LOG_WARN(
+                LOG_ERROR(
                     log, 
                     "the metadata size in kv is not matched with the record size in undo buffer, intermediate_parts size: {}, undo_bitmaps size: {}, staged_parts size: {}, names.parts size: {}, names.bitmaps size: {}, names.staged_parts size: {}, transaction id: {}", 
                     intermediate_parts.size(),
