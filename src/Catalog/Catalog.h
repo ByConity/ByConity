@@ -239,12 +239,12 @@ public:
     /// Data parts API
     /////////////////////////////
 
-    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible,  const UInt64 tx_id = 0);
+    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
 
     ServerDataPartsVector getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
 
     ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
-    DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts, const UInt64 tx_id = 0);
+    DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DataPartsVector getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DeleteBitmapMetaPtrVector getAllDeleteBitmaps(const MergeTreeMetaBase & storage);
 

@@ -141,7 +141,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             /// Clean s3 meta file
             S3AttachMetaFileAction::commitByUndoBuffer(global_context, resources);
 
-            auto intermediate_parts = catalog->getDataPartsByNames(names.parts, table, 0, txn_record.txnID().toUInt64());
+            auto intermediate_parts = catalog->getDataPartsByNames(names.parts, table, 0);
             auto undo_bitmaps = catalog->getDeleteBitmapByKeys(table, names.bitmaps);
             auto staged_parts = catalog->getStagedDataPartsByNames(names.staged_parts, table, 0);
 

@@ -1491,7 +1491,7 @@ namespace Catalog
     }
 
     DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility, const UInt64 tx_id)
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         String source;
@@ -1593,14 +1593,13 @@ namespace Catalog
 
                 LOG_DEBUG(
                     log,
-                    "Elapsed {}ms to get {} parts in {} partitions for table : {} , source : {}, ts : {}, tx id : {}"
+                    "Elapsed {}ms to get {} parts in {} partitions for table : {} , source : {}, ts : {}"
                     ,watch.elapsedMilliseconds()
                     ,res.size()
                     ,partitions.size()
                     ,storage->getStorageID().getNameForLogs()
                     ,source
-                    ,ts.toString()
-                    ,tx_id);
+                    ,ts.toString());
             },
             ProfileEvents::GetServerDataPartsInPartitionsSuccess,
             ProfileEvents::GetServerDataPartsInPartitionsFailed);
@@ -1660,7 +1659,7 @@ namespace Catalog
         return res;
     }
 
-    DataPartsVector Catalog::getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts, const UInt64 tx_id)
+    DataPartsVector Catalog::getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts)
     {
         DataPartsVector res;
         runWithMetricSupport(
@@ -1686,7 +1685,7 @@ namespace Catalog
                 /// find the wanted parts partition by partition could help reduce memory usage
                 for (const auto & [partition, p_names] : partition_names)
                 {
-                    auto parts_from_partitions = getServerDataPartsInPartitions(table, {partition}, ts, nullptr, VisibilityLevel::Visible, tx_id);
+                    auto parts_from_partitions = getServerDataPartsInPartitions(table, {partition}, ts, nullptr);
                     for (const auto & part : parts_from_partitions)
                     {
                         if (p_names.count(part->info().getPartNameWithHintMutation()))
