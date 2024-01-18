@@ -306,6 +306,8 @@ namespace ProfileEvents
     extern const Event GetAllTablesIDFailed;
     extern const Event GetTableIDByNameSuccess;
     extern const Event GetTableIDByNameFailed;
+    extern const Event GetTableIDsByNamesSuccess;
+    extern const Event GetTableIDsByNamesFailed;
     extern const Event GetAllWorkerGroupsSuccess;
     extern const Event GetAllWorkerGroupsFailed;
     extern const Event GetAllDictionariesSuccess;
@@ -3783,6 +3785,16 @@ namespace Catalog
             [&] { res = meta_proxy->getTableID(name_space, db, table); },
             ProfileEvents::GetTableIDByNameSuccess,
             ProfileEvents::GetTableIDByNameFailed);
+        return res;
+    }
+
+    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> Catalog::getTableIDsByNames(const std::vector<std::pair<String, String>> & db_table_pairs)
+    {
+        std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getTableIDs(name_space, db_table_pairs); },
+            ProfileEvents::GetTableIDsByNamesSuccess,
+            ProfileEvents::GetTableIDsByNamesFailed);
         return res;
     }
 

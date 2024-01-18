@@ -510,6 +510,7 @@ public:
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getAllTablesID(const String & db = "");
 
     std::shared_ptr<Protos::TableIdentifier> getTableIDByName(const String & db, const String & table);
+    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> getTableIDsByNames(const std::vector<std::pair<String, String>> & db_table_pairs);
 
     DataModelWorkerGroups getAllWorkerGroups();
 

@@ -41,6 +41,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+#define GET_ALL_TABLES_LIMIT (10)
 
 StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
     : IStorage(table_id_)
@@ -91,17 +92,69 @@ static std::unordered_set<std::string> columns_require_storage =
     "engine"
 };
 
-std::optional<StorageID> parseStorageIDFromWhere(SelectQueryInfo & query_info)
+static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromWhere(const SelectQueryInfo & query_info, const ContextPtr & context)
 {
-    ASTPtr where_expression = query_info.query->as<ASTSelectQuery &>().where();
-    std::map<String,String> predicates;
-    collectWhereClausePredicate(where_expression, predicates);
+    ASTPtr where_expression = query_info.query->as<const ASTSelectQuery &>().where();
+    std::vector<std::map<String,Field>> predicates;
+    predicates = collectWhereORClausePredicate(where_expression, context, true);
 
-    std::optional<StorageID> storage_id;
-    if (predicates.count("database") && predicates.count("name"))
-        storage_id = StorageID(predicates["database"], predicates["name"]);
+    std::optional<std::vector<std::map<String, String>>> res;
+    std::vector<std::map<String, String>> tmp_res;
+    for (auto & item: predicates)
+    {
+        std::map<String, String> tmp_map;
+        if (item.count("database") && item["database"].getType() == Field::Types::String)
+        {
+            tmp_map["database"] = item["database"].get<String>();
+        }
+        
+        if (item.count("name") && item["name"].getType() == Field::Types::String)
+        {
+            tmp_map["name"] = item["name"].get<String>();
+        }
 
-    return storage_id;
+        tmp_res.push_back(tmp_map);
+    }
+
+    if (!tmp_res.empty())
+        res = tmp_res;
+
+    return res;
+}
+
+static bool getDBTablesFromPredicates(const std::optional<std::vector<std::map<String, String>>> & predicates, 
+        std::vector<std::pair<String, String>> & db_table_pairs)
+{
+    if (!predicates)
+        return false;
+    
+    for (const auto & item : predicates.value())
+    {
+        if (!item.count("database") || !item.count("name"))
+            return false;
+        
+        db_table_pairs.push_back(std::make_pair(item.at("database"), item.at("name")));
+    }
+
+    return true;
+}
+
+static bool matchAnyPredicate(const std::optional<std::vector<std::map<String, String>>> & predicates, 
+        const Protos::DataModelTable & table_model)
+{
+    if (!predicates)
+        return true;
+
+    for (const auto & item : predicates.value())
+    {
+        if ((!item.count("database") || (item.at("database") == table_model.database()))
+             && (!item.count("name") ||(item.at("name") == table_model.name())))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 Pipe StorageSystemCnchTables::read(
@@ -146,13 +199,14 @@ Pipe StorageSystemCnchTables::read(
 
     Catalog::Catalog::DataModelTables table_models;
 
-    auto required_table = parseStorageIDFromWhere(query_info);
-
-    if (required_table)
+    std::vector<std::pair<String, String>> db_table_pairs;
+    auto predicates = parsePredicatesFromWhere(query_info, context);
+    bool get_db_tables_ok = getDBTablesFromPredicates(predicates, db_table_pairs);
+    if (get_db_tables_ok && (db_table_pairs.size() <= GET_ALL_TABLES_LIMIT))
     {        
-        auto table_id = cnch_catalog->getTableIDByName(required_table->getDatabaseName(), required_table->getTableName());
-        if (table_id)
-            table_models = cnch_catalog->getTablesByIDs(std::vector<std::shared_ptr<Protos::TableIdentifier>>{std::move(table_id)});
+        auto table_ids = cnch_catalog->getTableIDsByNames(db_table_pairs);
+        if (table_ids)
+            table_models = cnch_catalog->getTablesByIDs(*table_ids);
     }
     else
         table_models = cnch_catalog->getAllTables();
@@ -193,7 +247,7 @@ Pipe StorageSystemCnchTables::read(
     for (size_t i = 0; i<filtered_index_column->size(); i++)
     {
         auto table_model = table_models[(*filtered_index_column)[i].get<UInt64>()];
-        if (Status::isDeleted(table_model.status()))
+        if (Status::isDeleted(table_model.status()) || !matchAnyPredicate(predicates, table_model))
             continue;
 
         StoragePtr storage;
