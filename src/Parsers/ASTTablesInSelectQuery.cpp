@@ -97,6 +97,46 @@ ASTPtr ASTTableExpression::deserialize(ReadBuffer & buf)
     return expression;
 }
 
+String kindToString(ASTTableJoin::Kind kind)
+{
+    switch(kind)
+    {
+        case ASTTableJoin::Kind::Comma:
+            return "COMMA";
+        case ASTTableJoin::Kind::Cross:
+            return "CROSS";
+        case ASTTableJoin::Kind::Full:
+            return "FULL";
+        case ASTTableJoin::Kind::Inner:
+            return "INNER";
+        case ASTTableJoin::Kind::Left:
+            return "LEFT";
+        case ASTTableJoin::Kind::Right:
+            return "RIGHT";
+    }
+}
+
+String strictnessToString(ASTTableJoin::Strictness strictness)
+{
+    switch(strictness)
+    {
+        case ASTTableJoin::Strictness::All:
+            return "ALL";
+        case ASTTableJoin::Strictness::Anti:
+            return "ANTI";
+        case ASTTableJoin::Strictness::Any:
+            return "ANY";
+        case ASTTableJoin::Strictness::Asof:
+            return "ASOF";
+        case ASTTableJoin::Strictness::RightAny:
+            return "RIGHTANY";
+        case ASTTableJoin::Strictness::Semi:
+            return "SIMI";
+        case ASTTableJoin::Strictness::Unspecified:
+            return "UNSPECIFIED";
+    }
+}
+
 void ASTTableJoin::updateTreeHashImpl(SipHash & hash_state) const
 {
     hash_state.update(locality);

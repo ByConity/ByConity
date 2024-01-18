@@ -584,30 +584,33 @@ void IMergeTreeDataPart::removeIfNeeded()
     }
 }
 
-
 IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
 {
+    ChecksumsPtr res;
     {
         std::lock_guard lock(checksums_mutex);
-        if (checksums_ptr)
-            return checksums_ptr;
+        res = checksums_ptr;
     }
 
-    ChecksumsPtr res;
-
-    auto cache = storage.getContext()->getChecksumsCache();
-    if (cache && !is_temp)
+    if (!res)
     {
-        const String storage_unique_id = storage.getStorageUniqueID();
-        auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
-        res = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
+        auto cache = storage.getContext()->getChecksumsCache();
+        std::lock_guard lock(checksums_mutex);
+        if (!checksums_ptr)
+        {
+            if (cache && !is_temp)
+            {
+                const String storage_unique_id = storage.getStorageUniqueID();
+                auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
+                checksums_ptr = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
+            }
+            else
+            {
+                checksums_ptr = const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true);
+            }
+        }
+        res = checksums_ptr;
     }
-    else
-    {
-        res = const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true);
-    }
-
-    const_cast<IMergeTreeDataPart *>(this)->setChecksumsPtrIfNeed(res);
 
     return res;
 }
@@ -851,7 +854,10 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
 
     loadUUID();
     loadColumns(require_columns_checksums);
-    loadChecksums(require_columns_checksums);
+    {
+        std::lock_guard lock(checksums_mutex);
+        checksums_ptr = loadChecksums(require_columns_checksums);
+    }
     loadIndexGranularity();
     calculateColumnsSizesOnDisk();
     loadIndex();     /// Must be called after loadIndexGranularity as it uses the value of `index_granularity`
@@ -1138,21 +1144,7 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::loadChecksums(bool require)
         bytes_on_disk = checksums->getTotalSizeOnDisk();
     }
 
-    setChecksumsPtrIfNeed(checksums);
-
     return checksums;
-}
-
-void IMergeTreeDataPart::setChecksumsPtrIfNeed(const ChecksumsPtr & checksums)
-{
-    if (checksums_ptr)
-        return;
-
-    if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
-    {
-        std::lock_guard lock(checksums_mutex);
-        checksums_ptr = checksums;
-    }
 }
 
 void IMergeTreeDataPart::loadRowsCount()
@@ -1735,7 +1727,7 @@ bool IMergeTreeDataPart::enableDiskCache() const
         return storage.getSettings()->enable_local_disk_cache;
     else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
         return false;
-    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
+    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
         return true;
     else
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown disk cache mode");
@@ -1751,6 +1743,11 @@ String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix)
     return "detached/" + getRelativePathForPrefix(prefix);
 }
 
+String IMergeTreeDataPart::getRelativePathToDiskForDetachedPart(const String & prefix) const
+{
+    return fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
+}
+
 void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 {
     renameTo(getRelativePathForDetachedPart(prefix), true);
@@ -1758,7 +1755,7 @@ void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 
 void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
 {
-    String destination_path = fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
+    String destination_path = getRelativePathToDiskForDetachedPart(prefix);
 
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);

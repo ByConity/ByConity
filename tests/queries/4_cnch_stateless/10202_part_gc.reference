@@ -1,0 +1,14 @@
+after part gc and drop cache
+1
+2
+after first gc
+#tombstones	2
+after second gc
+#tombstones	0
+1
+2
+after insert and drop
+after first gc
+#tombstones	2
+after second gc
+#tombstones	0

@@ -16,25 +16,33 @@
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
 
 #include <Optimizer/Cascades/CascadesOptimizer.h>
+#include <Optimizer/Cascades/Task.h>
 #include <Optimizer/EqualityInference.h>
+#include <Optimizer/Graph.h>
 #include <Optimizer/Rule/Pattern.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/Utils.h>
 #include <QueryPlan/AnyStep.h>
-
+#include <QueryPlan/MultiJoinStep.h>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/algorithm/copy.hpp>
+#include "Optimizer/Rule/Rule.h"
 
 namespace DB
 {
 PatternPtr JoinEnumOnGraph::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) { return s.supportReorder(support_filter) && !s.isSimpleReordered() && !s.isOrdered(); })
-        .with(Patterns::tree(), Patterns::tree()).result();
+    (void)support_filter;
+    // return Patterns::join()
+    //     .matchingStep<JoinStep>(
+    //         [&](const JoinStep & s) { return s.supportReorder(support_filter) && !s.isSimpleReordered() && !s.isOrdered(); })
+    //     .with(Patterns::tree(), Patterns::tree())
+    //     .result();
+    return Patterns::multiJoin()
+        .result();
 }
 
-static std::pair<Names, Names> createJoinCondition(UnionFind<String> & union_find, const std::vector<std::pair<String, String>> & edges)
+static std::pair<Names, Names> createJoinCondition(const UnionFind<String> & union_find, const std::vector<std::pair<String, String>> & edges)
 {
     // extract equivalent map{representative symbol, all the symbols in the same equivalent set}
     std::unordered_map<String, std::vector<String>> left_set_to_symbols;
@@ -151,7 +159,7 @@ static std::set<String> createPossibleSymbols(const std::vector<GroupId> & group
 }
 
 
-static ASTPtr getJoinFilter(const ASTPtr & all_filter, std::set<String> & left_symbols, std::set<String> & right_symbols, ContextMutablePtr & context)
+ASTPtr JoinEnumOnGraph::getJoinFilter(const ASTPtr & all_filter, std::set<String> & left_symbols, std::set<String> & right_symbols, ContextMutablePtr & context)
 {
     auto all_filter_inference = EqualityInference::newInstance(all_filter, context);
     auto non_inferrable_conjuncts = EqualityInference::nonInferrableConjuncts(all_filter, context);
@@ -183,8 +191,8 @@ static ASTPtr getJoinFilter(const ASTPtr & all_filter, std::set<String> & left_s
 static GroupId buildJoinNode(
     OptContextPtr & context,
     std::vector<GroupId> groups,
-    UnionFind<String> & union_find,
-    Graph & graph,
+    const UnionFind<String> & union_find,
+    const Graph & graph,
     const std::set<String> & require_names,
     const ASTPtr & all_filter)
 {
@@ -202,7 +210,7 @@ static GroupId buildJoinNode(
     auto right_possible_output = createPossibleSymbols(right_groups, context);
     // create join filter
     ContextMutablePtr ptr = context->getOptimizerContext().getContext();
-    auto filter = getJoinFilter(all_filter, left_possible_output, right_possible_output, ptr);
+    auto filter = JoinEnumOnGraph::getJoinFilter(all_filter, left_possible_output, right_possible_output, ptr);
     auto filter_symbols = SymbolsExtractor::extract(filter);
 
     // build left node, using first group
@@ -232,22 +240,24 @@ static GroupId buildJoinNode(
     auto join_node = createJoinNode(context, left_id, right_id, join_keys, require_names, filter);
     GroupExprPtr join_expr;
     context->getOptimizerContext().recordPlanNodeIntoGroup(join_node, join_expr, RuleType::JOIN_ENUM_ON_GRAPH);
+    join_expr->setRuleExplored(RuleType::INNER_JOIN_COMMUTATION);
+
+    join_node = createJoinNode(context, right_id, left_id, {join_keys.second, join_keys.first}, require_names, filter);
+    context->getOptimizerContext().recordPlanNodeIntoGroup(join_node, join_expr, RuleType::JOIN_ENUM_ON_GRAPH, join_expr->getGroupId());
+    join_expr->setRuleExplored(RuleType::INNER_JOIN_COMMUTATION);
 
     return join_expr->getGroupId();
 }
 
 TransformResult JoinEnumOnGraph::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
-    auto group_id = context.group_id;
-    auto group = context.optimization_context->getOptimizerContext().getMemo().getGroupById(group_id);
+    auto group = context.optimization_context->getOptimizerContext().getMemo().getGroupById(context.group_id);
 
-    auto left_group_id = dynamic_cast<const AnyStep *>(node->getChildren()[0]->getStep().get())->getGroupId();
-    auto right_group_id = dynamic_cast<const AnyStep *>(node->getChildren()[1]->getStep().get())->getGroupId();
 
-    auto left_group = context.optimization_context->getOptimizerContext().getMemo().getGroupById(left_group_id);
-    auto right_group = context.optimization_context->getOptimizerContext().getMemo().getGroupById(right_group_id);
-
-    const auto * join_step = dynamic_cast<const JoinStep *>(node->getStep().get());
+    const auto * join_step = dynamic_cast<const MultiJoinStep *>(node->getStep().get());
+    
+    if (join_step->getGraph().getNodes().size() > context.context->getSettingsRef().max_graph_reorder_size)
+        return {};
 
     std::set<String> output_names;
     for (const auto & item : group->getStep()->getOutputStream().header)
@@ -256,108 +266,78 @@ TransformResult JoinEnumOnGraph::transformImpl(PlanNodePtr node, const Captures 
     }
 
     PlanNodes result;
-    for (const auto & left_join_set : left_group->getJoinSets())
+    std::bitset<Memo::MAX_JOIN_ROOT_ID> intersection;
+    const auto & source_to_root = context.optimization_context->getMemo().getSourceToJoinRoot();
+    intersection.flip();
+    bool found_root = true;
+    for (auto group_id : join_step->getGraph().getNodes())
     {
-        for (const auto & right_join_set : right_group->getJoinSets())
+        if (!source_to_root.contains(group_id))
         {
-            if (left_join_set.getGroups().size() + right_join_set.getGroups().size() > context.context->getSettingsRef().max_graph_reorder_size)
-                continue;
-            std::vector<ConstASTPtr> conjuncts;
-            if (join_step->getFilter() && !PredicateUtils::isTruePredicate(join_step->getFilter()))
+            found_root = false;
+            break;
+        }
+        intersection &= source_to_root.at(group_id);
+    }
+
+    if (intersection.count() && found_root)
+    {
+        return {};
+    }
+
+    const auto & graph = join_step->getGraph();
+    for (auto & partition : graph.cutPartitions())
+    {
+        auto left_groups = graph.getDFSOrder(partition.left);
+        std::reverse(left_groups.begin(), left_groups.end());
+        auto right_groups = graph.getDFSOrder(partition.right);
+        std::reverse(right_groups.begin(), right_groups.end());
+
+        // create join keys
+        auto join_keys = createJoinCondition(graph.getUnionFind(), graph.bridges(left_groups, right_groups));
+
+        auto left_possible_output = createPossibleSymbols(left_groups, context.optimization_context);
+        auto right_possible_output = createPossibleSymbols(right_groups, context.optimization_context);
+        // create join filter
+        auto filter = PredicateUtils::combineConjuncts(std::vector<ASTPtr>{
+            getJoinFilter(graph.getFilter(), left_possible_output, right_possible_output, context.context)});
+        auto filter_symbols = SymbolsExtractor::extract(filter);
+
+        // build left node
+        std::set<String> require_left = output_names;
+        require_left.insert(join_keys.first.begin(), join_keys.first.end());
+        for (const auto & symbol : filter_symbols)
+        {
+            if (left_possible_output.contains(symbol))
             {
-                conjuncts.emplace_back(join_step->getFilter());
-            }
-            if (left_join_set.getFilter() && !PredicateUtils::isTruePredicate(left_join_set.getFilter()))
-            {
-                conjuncts.emplace_back(left_join_set.getFilter());
-            }
-            if (right_join_set.getFilter() && !PredicateUtils::isTruePredicate(right_join_set.getFilter()))
-            {
-                conjuncts.emplace_back(right_join_set.getFilter());
-            }
-
-
-            JoinSet merged_join_set{
-                left_join_set,
-                right_join_set,
-                join_step->getLeftKeys(),
-                join_step->getRightKeys(),
-                PredicateUtils::combineConjuncts(conjuncts)};
-            if (!group->containsJoinSet(merged_join_set))
-            {
-                group->addJoinSet(merged_join_set);
-                auto graph = Graph::fromJoinSet(context, merged_join_set);
-                for (auto & partition : graph.cutPartitions())
-                {
-                    auto left_groups = graph.getDFSOrder(partition.left);
-                    std::reverse(left_groups.begin(), left_groups.end());
-                    auto right_groups = graph.getDFSOrder(partition.right);
-                    std::reverse(right_groups.begin(), right_groups.end());
-
-                    // create join keys
-                    auto join_keys = createJoinCondition(merged_join_set.getUnionFind(), graph.bridges(left_groups, right_groups));
-
-                    auto left_possible_output = createPossibleSymbols(left_groups, context.optimization_context);
-                    auto right_possible_output = createPossibleSymbols(right_groups, context.optimization_context);
-                    // create join filter
-                    auto filter = getJoinFilter(merged_join_set.getFilter(), left_possible_output, right_possible_output, context.context);
-                    auto filter_symbols = SymbolsExtractor::extract(filter);
-
-                    // build left node
-                    std::set<String> require_left = output_names;
-                    require_left.insert(join_keys.first.begin(), join_keys.first.end());
-                    for (const auto & symbol : filter_symbols)
-                    {
-                        if (left_possible_output.contains(symbol))
-                        {
-                            require_left.insert(symbol);
-                        }
-                    }
-                    auto new_left_id = buildJoinNode(
-                        context.optimization_context,
-                        left_groups,
-                        merged_join_set.getUnionFind(),
-                        graph,
-                        require_left,
-                        merged_join_set.getFilter());
-
-                    // build right node
-                    std::set<String> require_right = output_names;
-                    require_right.insert(join_keys.second.begin(), join_keys.second.end());
-                    for (const auto & symbol : filter_symbols)
-                    {
-                        if (right_possible_output.contains(symbol))
-                        {
-                            require_right.insert(symbol);
-                        }
-                    }
-                    auto new_right_id = buildJoinNode(
-                        context.optimization_context,
-                        right_groups,
-                        merged_join_set.getUnionFind(),
-                        graph,
-                        require_right,
-                        merged_join_set.getFilter());
-
-
-                    if (new_left_id != left_group_id)
-                    {
-                        result.emplace_back(
-                            createJoinNode(context.optimization_context, new_left_id, new_right_id, join_keys, output_names, filter));
-                    }
-                    if (new_left_id != right_group_id)
-                    {
-                        result.emplace_back(createJoinNode(
-                            context.optimization_context,
-                            new_right_id,
-                            new_left_id,
-                            std::make_pair(join_keys.second, join_keys.first),
-                            output_names,
-                            filter));
-                    }
-                }
+                require_left.insert(symbol);
             }
         }
+        auto new_left_id = buildJoinNode(
+            context.optimization_context, left_groups, graph.getUnionFind(), graph, require_left, graph.getFilter());
+
+        // build right node
+        std::set<String> require_right = output_names;
+        require_right.insert(join_keys.second.begin(), join_keys.second.end());
+        for (const auto & symbol : filter_symbols)
+        {
+            if (right_possible_output.contains(symbol))
+            {
+                require_right.insert(symbol);
+            }
+        }
+        auto new_right_id = buildJoinNode(
+            context.optimization_context, right_groups, graph.getUnionFind(), graph, require_right, graph.getFilter());
+
+
+        result.emplace_back(createJoinNode(context.optimization_context, new_left_id, new_right_id, join_keys, output_names, filter));
+        result.emplace_back(createJoinNode(
+            context.optimization_context,
+            new_right_id,
+            new_left_id,
+            std::make_pair(join_keys.second, join_keys.first),
+            output_names,
+            filter));
     }
 
     return TransformResult{result};
@@ -369,168 +349,40 @@ const std::vector<RuleType> & JoinEnumOnGraph::blockRules() const
     return block;
 }
 
+// Graph Graph::fromJoinSet(RuleContext & context, JoinSet & join_set)
+// {
+//     Graph graph;
 
-Graph Graph::fromJoinSet(RuleContext & context, JoinSet & join_set)
-{
-    Graph graph;
+//     std::unordered_map<String, GroupId> symbol_to_group_id;
+//     for (auto group_id : join_set.getGroups())
+//     {
+//         for (const auto & symbol : context.optimization_context->getMemo().getGroupById(group_id)->getStep()->getOutputStream().header)
+//         {
+//             assert(!symbol_to_group_id.contains(symbol.name)); // duplicate symbol
+//             symbol_to_group_id[symbol.name] = group_id;
+//         }
+//         graph.nodes.emplace_back(group_id);
+//     }
 
-    std::unordered_map<String, GroupId> symbol_to_group_id;
-    for (auto group_id : join_set.getGroups())
-    {
-        for (const auto & symbol : context.optimization_context->getMemo().getGroupById(group_id)->getStep()->getOutputStream().header)
-        {
-            assert(!symbol_to_group_id.contains(symbol.name)); // duplicate symbol
-            symbol_to_group_id[symbol.name] = group_id;
-        }
-        graph.nodes.emplace_back(group_id);
-    }
+//     for (auto & sets : join_set.getUnionFind().getSets())
+//     {
+//         for (const auto & source_symbol : sets)
+//         {
+//             for (const auto & target_symbol : sets)
+//             {
+//                 Utils::checkState(symbol_to_group_id.contains(source_symbol));
+//                 Utils::checkState(symbol_to_group_id.contains(target_symbol));
+//                 auto source_id = symbol_to_group_id.at(source_symbol);
+//                 auto target_id = symbol_to_group_id.at(target_symbol);
+//                 if (source_id != target_id)
+//                 {
+//                     graph.edges[source_id][target_id].emplace_back(source_symbol, target_symbol);
+//                 }
+//             }
+//         }
+//     }
 
-    for (auto & sets : join_set.getUnionFind().getSets())
-    {
-        for (const auto & source_symbol : sets)
-        {
-            for (const auto & target_symbol : sets)
-            {
-                assert(symbol_to_group_id.contains(source_symbol));
-                assert(symbol_to_group_id.contains(target_symbol));
-                auto source_id = symbol_to_group_id.at(source_symbol);
-                auto target_id = symbol_to_group_id.at(target_symbol);
-                if (source_id != target_id)
-                {
-                    graph.edges[source_id][target_id].emplace_back(source_symbol, target_symbol);
-                }
-            }
-        }
-    }
-
-    return graph;
-}
-std::vector<Graph::Partition> Graph::cutPartitions() const
-{
-    MinCutBranchAlg alg(*this);
-    alg.partition();
-    return alg.getPartitions();
-}
-
-void MinCutBranchAlg::partition()
-{
-    auto min_node = *std::min_element(graph.getNodes().begin(), graph.getNodes().end());
-    auto bit_size = *std::max_element(graph.getNodes().begin(), graph.getNodes().end()) + 1;
-
-    BitSet s{bit_size};
-    for (const auto & group_id : graph.getNodes())
-        s[group_id] = true;
-
-    BitSet c{bit_size};
-    c[min_node] = true;
-    minCutBranch(s, c, BitSet{s.size()}, c);
-}
-
-BitSet MinCutBranchAlg::minCutBranch(const BitSet & s, const BitSet & c, const BitSet & x, const BitSet & l)
-{
-    BitSet r{s.size()};
-    BitSet r_tmp{s.size()};
-    BitSet neighbor_l = neighbor(l);
-    BitSet n_l = ((neighbor_l & s) - c) - x;
-    BitSet n_x = ((neighbor_l & s) - c) & x;
-    BitSet n_b = (((neighbor(c) & s) - c) - n_l) - x;
-
-    BitSet x_tmp{s.size()};
-    GroupId v;
-    while (n_l.any() || n_x.any() || (n_b & r_tmp).any())
-    {
-        if (((n_b | n_l) & r_tmp).any())
-        {
-            v = ((n_b | n_l) & r_tmp).find_first();
-            BitSet new_c = c;
-            new_c[v] = true;
-            BitSet new_l{s.size()};
-            new_l[v] = true;
-            minCutBranch(s, new_c, x_tmp, new_l);
-            n_l[v] = false;
-            n_b[v] = false;
-        }
-        else
-        {
-            x_tmp = x;
-            if (n_l.any())
-            {
-                v = n_l.find_first();
-
-                BitSet new_c = c;
-                new_c[v] = true;
-                BitSet new_l{s.size()};
-                new_l[v] = true;
-
-                r_tmp = minCutBranch(s, new_c, x_tmp, new_l);
-                n_l[v] = false;
-            }
-            else
-            {
-                v = n_x.find_first();
-
-                BitSet new_c = c;
-                new_c[v] = true;
-                BitSet new_l{s.size()};
-                new_l[v] = true;
-
-                r_tmp = reachable(new_c, new_l);
-            }
-            n_x = n_x - r_tmp;
-            if ((r_tmp & x).any())
-            {
-                n_x = n_x | (n_l - r_tmp);
-                n_l = n_l & r_tmp;
-                n_b = n_b & r_tmp;
-            }
-            if (((s - r_tmp) & x).any())
-            {
-                n_l = n_l - r_tmp;
-                n_b = n_b - r_tmp;
-            }
-            else
-            {
-                partitions.emplace_back(s - r_tmp, r_tmp);
-            }
-            r = r | r_tmp;
-        }
-        x_tmp[v] = true;
-    }
-
-    return r | l;
-}
-
-BitSet MinCutBranchAlg::neighbor(const BitSet & nodes)
-{
-    BitSet res{nodes.size()};
-    auto pos = nodes.find_first();
-    while (pos != boost::dynamic_bitset<>::npos)
-    {
-        if (!graph.getEdges().contains(pos))
-        {
-            throw Exception("Not found edge in graph", DB::ErrorCodes::LOGICAL_ERROR);
-        }
-        for (const auto & item : graph.getEdges().at(pos))
-        {
-            res[item.first] = true;
-        }
-        pos = nodes.find_next(pos);
-    }
-    return res - nodes;
-}
-
-BitSet MinCutBranchAlg::reachable(const BitSet & c, const BitSet & l)
-{
-    BitSet r = l;
-
-    BitSet n = neighbor(l) - c;
-    while (n.any())
-    {
-        r = r | n;
-        n = neighbor(n) - r - c;
-    }
-    return r;
-}
-
+//     return graph;
+// }
 
 }

@@ -717,11 +717,18 @@ void CnchWorkerServiceImpl::removeWorkerResource(
     Protos::RemoveWorkerResourceResp * response,
     google::protobuf::Closure * done)
 {
-    SUBMIT_THREADPOOL({
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
         auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
         /// remove resource in worker
         session->release();
-    })
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
 }
 
 #if defined(__clang__)

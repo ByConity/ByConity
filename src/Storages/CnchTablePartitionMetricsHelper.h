@@ -10,6 +10,8 @@
 namespace DB
 {
 
+class PartCacheManager;
+
 /**
  * @class CnchTablePartitionMetricsHelper
  * @brief It's a server level object owned by `PartCacheManager`.
@@ -52,7 +54,7 @@ public:
     /**
      * @brief A hook function gets triggered when shutdown.
      */
-    void shutDown();
+    void shutDown(PartCacheManager * manager);
 
     /**
      * @brief Trigger a  recalculation of both CNCH parts and trash items

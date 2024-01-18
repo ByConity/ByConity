@@ -403,6 +403,14 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         {
             LOG_DEBUG(log, "Prefetcher is disabled as there is some Map column in merging_columns");
         }
+        else if (std::any_of(gathering_columns.cbegin(), gathering_columns.cend(), [](auto & c) { return isBitEngineDataType(c.type); }))
+        {
+            LOG_DEBUG(log, "Prefetcher is disabled as there is some BitEngine column in gathering_columns");
+        }
+        else if (data.canUseAdaptiveGranularity())
+        {
+            LOG_DEBUG(log, "Prefetcher is disabled as adaptive_granularity is enabled for storage.");
+        }
         else
         {
             prefetcher = std::make_unique<CnchMergePrefetcher>(*context, data, params.task_id);

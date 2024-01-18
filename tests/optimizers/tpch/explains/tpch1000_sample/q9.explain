@@ -1,19 +1,19 @@
-Projection Est. 60150 rows
+Projection Est. 54134 rows
 │     Expressions: nation:=n_name, o_year:=`expr#toYear(o_orderdate)`, sum_profit:=`expr#sum(amount)`
-└─ Sorting Est. 60150 rows
+└─ Sorting Est. 54134 rows
    │     Order by: {n_name ASC NULLS LAST, expr#toYear(o_orderdate) DESC NULLS LAST}
-   └─ Gather Exchange Est. 60150 rows
-      └─ Sorting Est. 60150 rows
+   └─ Gather Exchange Est. 54134 rows
+      └─ Sorting Est. 54134 rows
          │     Order by: {n_name ASC NULLS LAST, expr#toYear(o_orderdate) DESC NULLS LAST}
-         └─ MergingAggregated Est. 60150 rows
-            └─ Repartition Exchange Est. 60150 rows
+         └─ MergingAggregated Est. 54134 rows
+            └─ Repartition Exchange Est. 54134 rows
                │     Partition by: {n_name, expr#toYear(o_orderdate)}
-               └─ Aggregating Est. 60150 rows
+               └─ Aggregating Est. 54134 rows
                   │     Group by: {n_name, expr#toYear(o_orderdate)}
                   │     Aggregates: expr#sum(amount):=AggNull(sum)(expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)))
                   └─ Projection Est. 21973569100 rows
                      │     Expressions: [n_name], expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)):=(l_extendedprice * (1 - l_discount)) - (ps_supplycost * l_quantity), expr#toYear(o_orderdate):=toYear(o_orderdate)
-                     └─ Inner (PARALLEL_HASH) Join Est. 23521208311 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 18839280086 rows
                         │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
                         ├─ Repartition Exchange Est. 6133567069 rows
                         │  │     Partition by: {l_suppkey}
@@ -27,7 +27,7 @@ Projection Est. 60150 rows
                         │        │     Partition by: {o_orderkey}
                         │        └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
                         │                 Outputs: [o_orderkey, o_orderdate]
-                        └─ Inner (PARALLEL_HASH) Join Est. 716372153 rows
+                        └─ Inner (PARALLEL_HASH) Join Est. 717221627 rows
                            │     Condition: ps_suppkey == s_suppkey
                            ├─ Repartition Exchange Est. 718401386 rows
                            │  │     Partition by: {ps_suppkey}

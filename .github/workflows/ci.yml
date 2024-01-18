@@ -13,9 +13,13 @@ concurrency:
 jobs:
   scm_build:
     name: Build binary and run stateless tests
-    container: byconity/byconity-ci:23Dec12
+    # Use digest instead of tag to avoid network issue, original image byconity/byconity-ci:24Jan11
+    container: byconity/byconity-ci@sha256:8f1068c9c52140d9d704915f4d402727176c715dcef8c08aaa2e8b0b9db14c82
     runs-on: self-hosted
     steps:
+      - name: Preload docker images
+        run: |
+          cd /docker_image_archive && ls -1 *.tar | xargs --no-run-if-empty -L 1 docker image load -i
       - name: Set environment variables
         run: |
           export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
@@ -33,19 +37,57 @@ jobs:
           echo "HMS_PORT=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           echo "HIVE_NAMENODE_PORT=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
       - name: Check out repository code
+        id: checkout_1st_time
+        continue-on-error: true
         uses: actions/checkout@v3
+        with:
+          submodules: true  
+      - name: Preparing retry 2nd time checking out repository code
+        if: steps.checkout_1st_time.outcome != 'success'
+        run: sleep 30s
+        shell: bash
+      - name: Retry 2nd time checking out repository code  
+        id: checkout_2nd_time
+        if: steps.checkout_1st_time.outcome != 'success'
+        uses: actions/checkout@v3
+        with:
+          submodules: true  
+        continue-on-error: true
+      - name: Preparing retry 3rd time checking out repository code
+        if: steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
+        run: sleep 200s
+        shell: bash
+      - name: Retry 3rd time checking out repository code  
+        continue-on-error: true
+        id: checkout_3rd_time
+        if: steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
+        uses: actions/checkout@v3
+        with:
+          submodules: true  
+      - name: Preparing retry 4th time checking out repository code
+        if: steps.checkout_3rd_time.outcome != 'success' && steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
+        run: sleep 200s
+        shell: bash
+      - name: Retry 4th time checking out repository code  
+        if: steps.checkout_3rd_time.outcome != 'success' && steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
+        uses: actions/checkout@v3
+        with:
+          submodules: true  
       - name: Build binary with build_bin.sh
         env:
           CUSTOM_CMAKE_BUILD_TYPE: "Release"
         run: |
           git config --global --add safe.directory /__w/ByConity/ByConity
-          git -C "$GITHUB_WORKSPACE" submodule sync
-          git -C "$GITHUB_WORKSPACE" submodule update --init --recursive --force
+          # git -C "$GITHUB_WORKSPACE" submodule sync
+          # git -C "$GITHUB_WORKSPACE" submodule update --init --recursive --force
           ./build_bin.sh
       - name: run unit tests
         run: |
           bash $GITHUB_WORKSPACE/unittest.sh
-      - name: Create ByConity Cluster
+      - name: glibc_compatibility_check 
+        run: |
+          python3 $GITHUB_WORKSPACE/tests/ci/compatibility_check.py --binary $GITHUB_WORKSPACE/build/programs/clickhouse
+      - name: Create ByConity Cluster HDFS
         run: |
           mkdir /CI/
           cd /CI/
@@ -53,16 +95,16 @@ jobs:
           cp $GITHUB_WORKSPACE/docker/ci-deploy/.env ./
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
-          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" conf/core-site.xml
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" hdfs_config/conf/core-site.xml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/fdb.cluster
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/cnch-config.yml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/daemon-manager.yml
           echo "Create volumes for ByConity Cluster"
           /bin/bash create_docker_volume_ci.sh
-          echo "Bring up ByConity Cluster"
+          echo "Bring up ByConity Cluster HDFS"
           docker-compose up -d
           sleep 10
-          conf/create_users.sh
+          hdfs_config/script/create_users.sh
 
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0) 
           echo "CLICKHOUSE_HOST=${CLICKHOUSE_HOST}" >> $GITHUB_ENV
@@ -230,7 +272,7 @@ jobs:
       - name: Analyse Result
         run:
           /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
-      - name: Cleanup
+      - name: Cleanup docker-compose HDFS
         if: always()
         run: |
           cd /CI/

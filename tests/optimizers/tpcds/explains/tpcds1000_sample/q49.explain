@@ -5,35 +5,35 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#'web'_1 ASC NULLS LAST, expr#rank() OVER (ORDER BY return_ratio ASC)_3 ASC NULLS LAST, expr#rank() OVER (ORDER BY currency_ratio ASC)_3 ASC NULLS LAST, ws_item_sk_1 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 228324 rows
+      └─ Gather Exchange Est. 217530 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#'web'_1 ASC NULLS LAST, expr#rank() OVER (ORDER BY return_ratio ASC)_3 ASC NULLS LAST, expr#rank() OVER (ORDER BY currency_ratio ASC)_3 ASC NULLS LAST, ws_item_sk_1 ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 228324 rows
-               └─ Repartition Exchange Est. 228324 rows
+            └─ MergingAggregated Est. 217530 rows
+               └─ Repartition Exchange Est. 217530 rows
                   │     Partition by: {expr#'web'_1, ws_item_sk_1, expr#divide(CAST(sum(coalesce(wr.wr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_quantity, 0)), 'decimal(15, 4)'))_1, expr#rank() OVER (ORDER BY return_ratio ASC)_3, expr#rank() OVER (ORDER BY currency_ratio ASC)_3}
-                  └─ Union Est. 228324 rows
+                  └─ Union Est. 217530 rows
                      │     OutputToInputs: expr#rank() OVER (ORDER BY currency_ratio ASC)_3 = [expr#rank() OVER (ORDER BY currency_ratio ASC),expr#rank() OVER (ORDER BY currency_ratio ASC)_1,expr#rank() OVER (ORDER BY currency_ratio ASC)_2], expr#rank() OVER (ORDER BY return_ratio ASC)_3 = [expr#rank() OVER (ORDER BY return_ratio ASC),expr#rank() OVER (ORDER BY return_ratio ASC)_1,expr#rank() OVER (ORDER BY return_ratio ASC)_2], expr#divide(CAST(sum(coalesce(wr.wr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_quantity, 0)), 'decimal(15, 4)'))_1 = [expr#divide(CAST(sum(coalesce(wr.wr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_quantity, 0)), 'decimal(15, 4)')),expr#divide(CAST(sum(coalesce(cr.cr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(cs.cs_quantity, 0)), 'decimal(15, 4)')),expr#divide(CAST(sum(coalesce(sr.sr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(sts.ss_quantity, 0)), 'decimal(15, 4)'))], ws_item_sk_1 = [ws_item_sk,cs_item_sk,ss_item_sk], expr#'web'_1 = [expr#'web',expr#'catalog',expr#'store']
-                     ├─ Aggregating Est. 114634 rows
+                     ├─ Aggregating Est. 103840 rows
                      │  │     Group by: {expr#'web', ws_item_sk, expr#divide(CAST(sum(coalesce(wr.wr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_quantity, 0)), 'decimal(15, 4)')), expr#rank() OVER (ORDER BY return_ratio ASC), expr#rank() OVER (ORDER BY currency_ratio ASC)}
-                     │  └─ Projection Est. 114634 rows
+                     │  └─ Projection Est. 103840 rows
                      │     │     Expressions: [expr#divide(CAST(sum(coalesce(wr.wr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_quantity, 0)), 'decimal(15, 4)')), expr#rank() OVER (ORDER BY currency_ratio ASC), expr#rank() OVER (ORDER BY return_ratio ASC), ws_item_sk], expr#'web':='web'
-                     │     └─ Filter Est. 114634 rows
+                     │     └─ Filter Est. 103840 rows
                      │        │     Condition: (`expr#rank() OVER (ORDER BY return_ratio ASC)` <= 10) OR (`expr#rank() OVER (ORDER BY currency_ratio ASC)` <= 10)
-                     │        └─ Window Est. 127372 rows
-                     │           └─ Window Est. 127372 rows
-                     │              └─ Gather Exchange Est. 127372 rows
-                     │                 └─ Projection Est. 127372 rows
+                     │        └─ Window Est. 115378 rows
+                     │           └─ Window Est. 115378 rows
+                     │              └─ Gather Exchange Est. 115378 rows
+                     │                 └─ Projection Est. 115378 rows
                      │                    │     Expressions: [ws_item_sk], expr#divide(CAST(sum(coalesce(wr.wr_return_amt, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_net_paid, 0)), 'decimal(15, 4)')):=CAST(`expr#sum(coalesce(wr.wr_return_amt, 0))`, 'decimal(15, 4)') / CAST(`expr#sum(coalesce(ws.ws_net_paid, 0))`, 'decimal(15, 4)'), expr#divide(CAST(sum(coalesce(wr.wr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_quantity, 0)), 'decimal(15, 4)')):=CAST(`expr#sum(coalesce(wr.wr_return_quantity, 0))`, 'decimal(15, 4)') / CAST(`expr#sum(coalesce(ws.ws_quantity, 0))`, 'decimal(15, 4)')
-                     │                    └─ MergingAggregated Est. 127372 rows
-                     │                       └─ Repartition Exchange Est. 127372 rows
+                     │                    └─ MergingAggregated Est. 115378 rows
+                     │                       └─ Repartition Exchange Est. 115378 rows
                      │                          │     Partition by: {ws_item_sk}
-                     │                          └─ Aggregating Est. 127372 rows
+                     │                          └─ Aggregating Est. 115378 rows
                      │                             │     Group by: {ws_item_sk}
                      │                             │     Aggregates: expr#sum(coalesce(wr.wr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(wr.wr_return_quantity, 0)), expr#sum(coalesce(ws.ws_quantity, 0)):=AggNull(sum)(expr#coalesce(ws.ws_quantity, 0)), expr#sum(coalesce(wr.wr_return_amt, 0)):=AggNull(sum)(expr#coalesce(wr.wr_return_amt, 0)), expr#sum(coalesce(ws.ws_net_paid, 0)):=AggNull(sum)(expr#coalesce(ws.ws_net_paid, 0))
-                     │                             └─ Projection Est. 326358 rows
+                     │                             └─ Projection Est. 261571 rows
                      │                                │     Expressions: [ws_item_sk], expr#coalesce(wr.wr_return_amt, 0):=coalesce(wr_return_amt, 0), expr#coalesce(wr.wr_return_quantity, 0):=coalesce(wr_return_quantity, 0), expr#coalesce(ws.ws_net_paid, 0):=coalesce(ws_net_paid, 0), expr#coalesce(ws.ws_quantity, 0):=coalesce(ws_quantity, 0)
-                     │                                └─ Inner Join Est. 636671 rows
+                     │                                └─ Inner Join Est. 509336 rows
                      │                                   │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
                      │                                   │     Runtime Filters Builder: {wr_item_sk,wr_order_number}
                      │                                   ├─ Repartition Exchange Est. 11857413 rows
@@ -76,9 +76,9 @@ Projection Est. 100 rows
                      │                          └─ Aggregating Est. 90983 rows
                      │                             │     Group by: {cs_item_sk}
                      │                             │     Aggregates: expr#sum(coalesce(cr.cr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(cr.cr_return_quantity, 0)), expr#sum(coalesce(cs.cs_quantity, 0)):=AggNull(sum)(expr#coalesce(cs.cs_quantity, 0)), expr#sum(coalesce(cr.cr_return_amount, 0)):=AggNull(sum)(expr#coalesce(cr.cr_return_amount, 0)), expr#sum(coalesce(cs.cs_net_paid, 0)):=AggNull(sum)(expr#coalesce(cs.cs_net_paid, 0))
-                     │                             └─ Projection Est. 538904 rows
+                     │                             └─ Projection Est. 431123 rows
                      │                                │     Expressions: [cs_item_sk], expr#coalesce(cr.cr_return_amount, 0):=coalesce(cr_return_amount, 0), expr#coalesce(cr.cr_return_quantity, 0):=coalesce(cr_return_quantity, 0), expr#coalesce(cs.cs_net_paid, 0):=coalesce(cs_net_paid, 0), expr#coalesce(cs.cs_quantity, 0):=coalesce(cs_quantity, 0)
-                     │                                └─ Inner Join Est. 1275539 rows
+                     │                                └─ Inner Join Est. 1020431 rows
                      │                                   │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
                      │                                   │     Runtime Filters Builder: {cr_item_sk,cr_order_number}
                      │                                   ├─ Repartition Exchange Est. 23539963 rows
@@ -121,9 +121,9 @@ Projection Est. 100 rows
                                                 └─ Aggregating Est. 35340 rows
                                                    │     Group by: {ss_item_sk}
                                                    │     Aggregates: expr#sum(coalesce(sr.sr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(sr.sr_return_quantity, 0)), expr#sum(coalesce(sts.ss_quantity, 0)):=AggNull(sum)(expr#coalesce(sts.ss_quantity, 0)), expr#sum(coalesce(sr.sr_return_amt, 0)):=AggNull(sum)(expr#coalesce(sr.sr_return_amt, 0)), expr#sum(coalesce(sts.ss_net_paid, 0)):=AggNull(sum)(expr#coalesce(sts.ss_net_paid, 0))
-                                                   └─ Projection Est. 830016 rows
+                                                   └─ Projection Est. 664013 rows
                                                       │     Expressions: [ss_item_sk], expr#coalesce(sr.sr_return_amt, 0):=coalesce(sr_return_amt, 0), expr#coalesce(sr.sr_return_quantity, 0):=coalesce(sr_return_quantity, 0), expr#coalesce(sts.ss_net_paid, 0):=coalesce(ss_net_paid, 0), expr#coalesce(sts.ss_quantity, 0):=coalesce(ss_quantity, 0)
-                                                      └─ Inner Join Est. 1009447 rows
+                                                      └─ Inner Join Est. 807557 rows
                                                          │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                                                          │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
                                                          ├─ Repartition Exchange Est. 47419001 rows

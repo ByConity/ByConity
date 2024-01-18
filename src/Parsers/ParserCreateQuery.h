@@ -162,6 +162,8 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_compression{"COMPRESSION"};
     ParserKeyword s_bloom{"BLOOM"};
     ParserKeyword s_bitmap_index{"BitmapIndex"};
+    ParserKeyword s_security{"SECURITY"}; /// just for compatible
+    ParserKeyword s_encrypt{"ENCRYPT"};   /// just for compatible
     // ParserKeyword s_segment_bitmap_index{"SegmentBitmapIndex"};
     ParserKeyword s_kv{"KV"};
     ParserKeyword s_bitengine_encode{"BitEngineEncode"};
@@ -218,7 +220,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         return res;
     };
 
-    if (!null_check_without_moving() 
+    if (!null_check_without_moving()
         && !s_default.checkWithoutMoving(pos, expected)
         && !s_materialized.checkWithoutMoving(pos, expected)
         && !s_alias.checkWithoutMoving(pos, expected)
@@ -291,6 +293,10 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             inner_flags |= TYPE_BITMAP_INDEX_FLAG;
         // if (s_segment_bitmap_index.ignore(pos, expected))
         //     inner_flags |= TYPE_SEGMENT_BITMAP_INDEX_FLAG;
+        if (s_security.ignore(pos, expected))
+            inner_flags |= TYPE_SECURITY_FLAG;
+        if (s_encrypt.ignore(pos, expected))
+            inner_flags |= TYPE_ENCRYPT_FLAG;
 
         if (!inner_flags)
             break;

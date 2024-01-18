@@ -32,6 +32,7 @@ namespace DB
 {
 struct Analysis;
 using AnalysisPtr = std::shared_ptr<Analysis>;
+struct QueryCacheContext;
 
 class InterpreterSelectQueryUseOptimizer : public IInterpreter
 {
@@ -63,6 +64,8 @@ public:
 
     static void setPlanSegmentInfoForExplainAnalyze(PlanSegmentTreePtr & plan_segment_tree);
 
+    BlockIO readFromQueryCache(ContextPtr local_context, QueryCacheContext & can_use_query_cache);
+
     BlockIO execute() override;
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override
@@ -76,6 +79,8 @@ public:
 
     static void setUnsupportedSettings(ContextMutablePtr & context);
 
+    std::optional<std::set<StorageID>> getUsedStorageIds();
+
 private:
     ASTPtr query_ptr;
     PlanNodePtr sub_plan_ptr;
@@ -84,6 +89,7 @@ private:
     SelectQueryOptions options;
     Poco::Logger * log;
     bool interpret_sub_query;
+    PlanSegmentTreePtr plan_segment_tree_ptr;
 
     std::shared_ptr<std::vector<String>> segment_profiles;
 

@@ -144,6 +144,16 @@ message ReportProcessorProfileMetricResponse {
   optional string message = 1;
 }
 
+message ReportPlanSegmentErrorRequest {
+  optional string query_id = 1;
+  optional int32 code = 2;
+  optional string message = 3;
+}
+
+message ReportPlanSegmentErrorResponse {
+  optional string message = 1;
+}
+
 service PlanSegmentManagerService {
 
   rpc executeQuery(ExecutePlanSegmentRequest) returns (ExecutePlanSegmentResponse);
@@ -151,6 +161,8 @@ service PlanSegmentManagerService {
   rpc cancelQuery(CancelQueryRequest) returns (CancelQueryResponse);
 
   rpc sendPlanSegmentStatus(SendPlanSegmentStatusRequest) returns (SendPlanSegmentStatusResponse);
+
+  rpc reportPlanSegmentError(ReportPlanSegmentErrorRequest) returns (ReportPlanSegmentErrorResponse) ;
 
   rpc reportProcessorProfileMetrics(ReportProcessorProfileMetricRequest) returns (ReportProcessorProfileMetricResponse);
 

@@ -140,6 +140,17 @@ void ColumnNullable::insertData(const char * pos, size_t length)
     }
 }
 
+void ColumnNullable::setNullAt(IColumn::Filter & offsets_set_to_null)
+{
+    auto & null_map_data = typeid_cast<ColumnUInt8 &>(*null_map).getData();
+    auto s = size();
+    for (size_t row = 0; row < s; ++row)
+    {
+        if (offsets_set_to_null[row])
+            null_map_data[row] = 1; 
+    }
+}
+
 StringRef ColumnNullable::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
 {
     const auto & arr = getNullMapData();
@@ -732,6 +743,23 @@ ColumnPtr makeNullable(const ColumnPtr & column)
 
     if (isColumnConst(*column))
         return ColumnConst::create(makeNullable(assert_cast<const ColumnConst &>(*column).getDataColumnPtr()), column->size());
+
+    return ColumnNullable::create(column, ColumnUInt8::create(column->size(), 0));
+}
+
+ColumnPtr makeNullableOrLowCardinalityNullable(const ColumnPtr & column)
+{
+    if (isColumnNullable(*column))
+        return column;
+
+    if (isColumnLowCardinalityNullable(*column))
+        return column;
+
+    if (isColumnConst(*column))
+        return ColumnConst::create(makeNullable(assert_cast<const ColumnConst &>(*column).getDataColumnPtr()), column->size());
+
+    if (column->lowCardinality())
+        return assert_cast<const ColumnLowCardinality &>(*column).cloneNullable();
 
     return ColumnNullable::create(column, ColumnUInt8::create(column->size(), 0));
 }

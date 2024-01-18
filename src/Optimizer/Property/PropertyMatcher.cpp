@@ -158,65 +158,79 @@ Sorting PropertyMatcher::matchSorting(const Context &, const SortDescription & r
 }
 
 
+template <typename T>
+static std::vector<T> findCommonPrefix(const std::vector<std::vector<T>> & input)
+{
+    if (input.empty())
+        return {};
+
+    std::vector<T> prefix = input[0];
+    for (size_t i = 1; i < input.size(); i++)
+    {
+        const auto & current = input[i];
+
+        size_t j = 0;
+        while (j < prefix.size() && j < current.size() && prefix[j] == current[j])
+            j++;
+
+        prefix.resize(j);
+    }
+
+    return prefix;
+}
+
 Property PropertyMatcher::compatibleCommonRequiredProperty(const std::unordered_set<Property, PropertyHash> & required_properties)
 {
     if (required_properties.empty())
         return Property{};
     if (required_properties.size() == 1)
-        return Property{required_properties.begin()->getNodePartitioning()};
+        return *required_properties.begin();
 
-    Property res;
-    bool is_all_broadcast = !required_properties.empty();
-    auto it = required_properties.begin();
-    for (; it != required_properties.end(); ++it)
+    // check if all requries are broadcast
+    bool all_broadcast = std::all_of(required_properties.begin(), required_properties.end(), [](const auto & property) {
+        return property.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::FIXED_BROADCAST;
+    });
+    if (all_broadcast)
     {
-        auto partition_handle = it->getNodePartitioning().getPartitioningHandle();
-        is_all_broadcast &= partition_handle == Partitioning::Handle::FIXED_BROADCAST;
-        if (partition_handle == Partitioning::Handle::ARBITRARY || partition_handle == Partitioning::Handle::FIXED_ARBITRARY
-            || partition_handle == Partitioning::Handle::FIXED_BROADCAST)
-            continue;
-        res = *it;
-        break;
+        bool all_preferred = std::all_of(
+            required_properties.begin(), required_properties.end(), [](const auto & property) { return property.isPreferred(); });
+        Property common_property{Partitioning{Partitioning::Handle::FIXED_BROADCAST}};
+        common_property.setPreferred(all_preferred);
+        return common_property;
     }
 
-    const auto & node_partition = res.getNodePartitioning();
-    const auto handle = node_partition.getPartitioningHandle();
-    std::unordered_set<String> columns_set;
-    for (const auto & item : node_partition.getPartitioningColumns())
-        columns_set.emplace(item);
-
-    for (; it != required_properties.end(); ++it)
+    // find common partition_handle && partition_columns ignore ARBITRARY / FIXED_ARBITRARY / FIXED_BROADCAST
+    bool all_preferred = true;
+    bool has_partition_columns = false;
+    std::vector<Partitioning::Handle> partition_handles;
+    std::vector<std::vector<String>> partition_columns;
+    for (const auto & property : required_properties)
     {
-        auto partition_handle = it->getNodePartitioning().getPartitioningHandle();
-        is_all_broadcast &= partition_handle == Partitioning::Handle::FIXED_BROADCAST;
+        auto partition_handle = property.getNodePartitioning().getPartitioningHandle();
         if (partition_handle == Partitioning::Handle::ARBITRARY || partition_handle == Partitioning::Handle::FIXED_ARBITRARY
             || partition_handle == Partitioning::Handle::FIXED_BROADCAST)
             continue;
 
-        if (partition_handle != handle)
+        partition_handles.emplace_back(partition_handle);
+        all_preferred &= property.isPreferred();
+        has_partition_columns |= !property.getNodePartitioning().getPartitioningColumns().empty();
+        partition_columns.emplace_back(property.getNodePartitioning().getPartitioningColumns());
+    }
+
+    if (partition_handles.empty())
+        return Property{};
+    Partitioning::Handle common_partition_handle = partition_handles[0];
+    for (size_t i = 1; i < partition_handles.size(); i++)
+        if (partition_handles[i] != common_partition_handle)
             return Property{};
 
-        if (partition_handle == Partitioning::Handle::FIXED_HASH)
-        {
-            std::unordered_set<String> intersection;
-            const auto & partition_columns = it->getNodePartitioning().getPartitioningColumns();
-            std::copy_if(
-                partition_columns.begin(),
-                partition_columns.end(),
-                std::inserter(intersection, intersection.begin()),
-                [&columns_set](const auto & e) { return columns_set.contains(e); });
-            if (intersection.empty())
-                return Property{}; // no common property
-            columns_set.swap(intersection);
-        }
-    }
+    // find common prefix partition columns
+    std::vector<String> common_prefix_partition_columns = findCommonPrefix(partition_columns);
+    if (has_partition_columns && common_prefix_partition_columns.empty())
+        return Property{};
 
-    if (is_all_broadcast)
-        return Property{Partitioning{Partitioning::Handle::FIXED_BROADCAST}};
-
-    Names partition_columns{columns_set.begin(), columns_set.end()};
-
-    // no need to consider require_handle / buckets / enforce_round_robin for required property
-    return Property{Partitioning{handle, std::move(partition_columns)}};
+    Property common_property{Partitioning{common_partition_handle, common_prefix_partition_columns}};
+    common_property.setPreferred(all_preferred);
+    return common_property;
 }
 }

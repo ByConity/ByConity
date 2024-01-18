@@ -31,7 +31,9 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
-#include "Common/ErrorCodes.h"
+#include <Common/ErrorCodes.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {
@@ -41,12 +43,19 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterConsumer> && consumer)
+JoinPtr JoinStep::makeJoin(
+    ContextPtr context,
+    std::shared_ptr<RuntimeFilterConsumer> && consumer,
+    ExpressionActionsPtr filter_action,
+    String filter_column_name)
 {
     const auto & settings = context->getSettingsRef();
     auto table_join = std::make_shared<TableJoin>(settings, context->getTemporaryVolume());
     if (consumer)
         table_join->setRuntimeFilterConsumer(std::move(consumer));
+
+    if (kind != ASTTableJoin::Kind::Inner && kind != ASTTableJoin::Kind::Cross)
+        table_join->setInequalCondition(filter_action, filter_column_name);
 
     // todo support storage join
     //    if (table_to_join.database_and_table_name)
@@ -230,8 +239,23 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input steps");
 
     bool need_build_runtime_filter = false;
+    ExpressionActionsPtr filter_action;
     if (!join)
     {
+        if (filter && !PredicateUtils::isTruePredicate(filter))
+        {
+            Names output;
+            auto header = input_streams[0].header;
+            for (const auto & col : input_streams[1].header)
+                header.insert(col);
+            for (const auto & item : header)
+                output.emplace_back(item.name);
+            output.emplace_back(filter->getColumnName());
+
+            auto actions_dag = createExpressionActions(settings.context, header.getNamesAndTypesList(), output, filter->clone());
+            filter_action = std::make_shared<ExpressionActions>(actions_dag, settings.getActionsSettings());
+        }
+
         if (!runtime_filter_builders.empty() && settings.distributed_settings.is_distributed)
         {
             auto builder = createRuntimeFilterBuilder(settings.context);
@@ -244,11 +268,11 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
                 settings.distributed_settings.coordinator_address,
                 settings.distributed_settings.current_address);
 
-            join = makeJoin(settings.context, std::move(consumer));
+            join = makeJoin(settings.context, std::move(consumer), filter_action, filter->getColumnName());
             need_build_runtime_filter = true;
         }
         else
-            join = makeJoin(settings.context, nullptr);
+            join = makeJoin(settings.context, nullptr, filter_action, filter->getColumnName());
         max_block_size = settings.context->getSettingsRef().max_block_size;
     }
 
@@ -264,7 +288,8 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         need_build_runtime_filter);
 
     // if NestLoopJoin is choose, no need to add filter stream.
-    if (filter && !PredicateUtils::isTruePredicate(filter) && join->getType() != JoinType::NestedLoop)
+    if (filter && !PredicateUtils::isTruePredicate(filter) && join->getType() != JoinType::NestedLoop
+        && (kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross))
     {
         Names output;
         auto header = pipeline->getHeader();
@@ -289,9 +314,8 @@ bool JoinStep::enforceNestLoopJoin() const
 {
     if (filter && !PredicateUtils::isTruePredicate(filter))
     {
-        bool strictness_join = strictness != ASTTableJoin::Strictness::Unspecified && strictness != ASTTableJoin::Strictness::All;
-        bool outer_join = kind != ASTTableJoin::Kind::Inner && kind != ASTTableJoin::Kind::Cross;
-        return strictness_join || outer_join;
+        bool strictness_join = strictness == ASTTableJoin::Strictness::Any || strictness == ASTTableJoin::Strictness::Asof;
+        return strictness_join || (left_keys.empty() && isLeftOrRightOuterJoin());
     }
     return false;
 }

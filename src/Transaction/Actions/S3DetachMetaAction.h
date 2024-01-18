@@ -30,6 +30,7 @@ public:
         const TxnTimestamp & txn_id_,
         const StoragePtr & tbl_,
         const MergeTreeDataPartsCNCHVector & parts_,
+        const MergeTreeDataPartsCNCHVector & staged_parts_,
         const DeleteBitmapMetaPtrVector & bitmaps_);
 
     virtual void executeV1(TxnTimestamp commit_time) override;
@@ -43,6 +44,7 @@ public:
 private:
     StoragePtr tbl;
     IMergeTreeDataPartsVector parts;
+    IMergeTreeDataPartsVector staged_parts;
     DeleteBitmapMetaPtrVector bitmaps;
 
     bool executed{false};

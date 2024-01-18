@@ -24,6 +24,11 @@
 #include <Common/ThreadPool.h>
 #include <common/defines.h>
 
+namespace DB
+{
+std::atomic<UInt64> MinimumDataPart::increment = 0;
+}
+
 namespace DB::CnchPartsHelper
 {
 LoggingOption getLoggingOption(const Context & c)
@@ -53,8 +58,6 @@ namespace
 {
     struct ServerDataPartOperation
     {
-        static Int64 getMinBlockNumber(const ServerDataPartPtr & part) { return part->get_info().min_block; }
-
         static Int64 getMaxBlockNumber(const ServerDataPartPtr & part) { return part->get_info().max_block; }
 
         static UInt64 getCommitTime(const ServerDataPartPtr & part) { return part->get_commit_time(); }
@@ -90,8 +93,6 @@ namespace
 
     struct MinimumDataPartOperation
     {
-        static Int64 getMinBlockNumber(const MinimumDataPartPtr & part) { return part->info.min_block; }
-
         static Int64 getMaxBlockNumber(const MinimumDataPartPtr & part) { return part->info.max_block; }
 
         static UInt64 getCommitTime(const MinimumDataPartPtr & part) { return part->commit_time; }
@@ -127,8 +128,6 @@ namespace
 
     struct DeleteBitmapOperation
     {
-        static Int64 getMinBlockNumber(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getModel()->part_min_block(); }
-
         static Int64 getMaxBlockNumber(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getModel()->part_max_block(); }
 
         static UInt64 getCommitTime(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getCommitTime(); }
@@ -174,12 +173,27 @@ namespace
         if (all_items.empty())
             return;
 
+        auto output = [&](auto & elem)
+        {
+            if (out_to_gc)
+            {
+                for (auto item = elem; item; item = Operation::tryGetPrevious(item))
+                {
+                    if (Operation::getEndTime(item))
+                        out_to_gc->push_back(item);
+                }
+            }
+            if (out_visible_items)
+                out_visible_items->push_back(elem);
+        };
+
         if (all_items.size() == 1)
         {
-            if (out_to_gc && Operation::getEndTime(all_items.front()))
-                out_to_gc->push_back(all_items.front());
-            if (out_visible_items)
-                out_visible_items->push_back(all_items.front());
+            auto & item = all_items.front();
+            /// set end time for alone tombstone
+            if (Operation::isTombstone(item) && !Operation::getEndTime(item))
+                Operation::setEndTime(item, Operation::getCommitTime(item));
+            output(item);
             return;
         }
 
@@ -189,82 +203,76 @@ namespace
         auto curr_it = std::next(prev_it);
         auto end = all_items.end();
 
+        /// if non-end, point to the first and last + 1 range tombstone item for a particular partition
         auto range_tombstone_beg_it = end;
         auto range_tombstone_end_it = end;
+        /// if non-zero, it's the smallest max_block_number of non-tombstone items for a particular partition
+        Int64 min_visible_block_number = 0;
 
         while (prev_it != end)
         {
-            bool reach_partition_end = false;
             auto & prev = *prev_it;
-
             chassert(Operation::getCommitTime(prev));
+            bool reach_partition_end = (curr_it == end || !Operation::isSamePartition(prev, *curr_it));
+            const auto max_block_number = Operation::getMaxBlockNumber(prev);
 
-            if (curr_it != end && Operation::isPreviousOf(prev, (*curr_it)))
+            /// update min_visible_block_number
+            if (!Operation::isRangeTombstone(prev))
+                min_visible_block_number = min_visible_block_number ? std::min(min_visible_block_number, max_block_number) : max_block_number;
+
+            if (Operation::isRangeTombstone(prev))
+            {
+                /// Sort will place range tombstones consecutively at the beginning of each partition.
+                /// We'll record theri boundaries during iteration and process them when reaching partition end
+                if (range_tombstone_beg_it == end)
+                    range_tombstone_beg_it = prev_it;
+                range_tombstone_end_it = std::next(prev_it);
+            }
+            /// find the latest version of MVCC items
+            else if (curr_it != end && Operation::isPreviousOf(prev, (*curr_it)))
             {
                 Operation::setPrevious((*curr_it), prev);
             }
-            /// last part OR latest version of mvcc parts
+            /// single tombstone
+            else if (Operation::isTombstone(prev))
+            {
+                if (auto covered = Operation::tryGetPrevious(prev))
+                    Operation::setEndTime(covered, Operation::getCommitTime(prev));
+                else
+                    Operation::setEndTime(prev, Operation::getCommitTime(prev));
+                output(prev);
+            }
+            /// latest version of non-tombstone item
             else
             {
-                UInt64 end_ts = 0;
-                if (curr_it == end || !Operation::isSamePartition(prev, *curr_it))
-                    reach_partition_end = true;
-
-                /// drop range part
-                if (Operation::isRangeTombstone(prev))
+                /// find the first covering range tombstone for prev
+                for (auto it = range_tombstone_beg_it; it != range_tombstone_end_it; ++it)
                 {
-                    if (range_tombstone_beg_it == end)
-                        range_tombstone_beg_it = prev_it;
-                    range_tombstone_end_it = std::next(prev_it);
-                    /// curr_part is also a DROP RANGE mark in the same partition, must be the bigger one
-                    if (!reach_partition_end && Operation::isRangeTombstone(*curr_it))
-                        end_ts = Operation::getCommitTime(*curr_it);
-                }
-                /// drop part
-                else if (Operation::isTombstone(prev))
-                {
-                    /// for trash cleaner, it's ok to remove tombstone before its predecessor
-                    /// because we use both commit ts and end ts to determine visibility
-                    end_ts = Operation::getCommitTime(prev);
-                }
-                /// normal part
-                else
-                {
-                    /// skip range tombstones that won't cover further item
-                    while (range_tombstone_beg_it != range_tombstone_end_it
-                           && Operation::getMinBlockNumber(prev) > Operation::getMaxBlockNumber(*range_tombstone_beg_it))
+                    if (max_block_number <= Operation::getMaxBlockNumber(*it))
                     {
-                        range_tombstone_beg_it++;
-                    }
-                    /// find the first covering range tombstone for prev
-                    for (auto it = range_tombstone_beg_it; it != range_tombstone_end_it; ++it)
-                    {
-                        if (Operation::getMaxBlockNumber(prev) <= Operation::getMaxBlockNumber(*it))
-                        {
-                            end_ts = Operation::getCommitTime(*it);
-                            break;
-                        }
+                        Operation::setEndTime(prev, Operation::getCommitTime(*it));
+                        break;
                     }
                 }
-
-                Operation::setEndTime(prev, end_ts);
-                if (out_to_gc)
-                {
-                    for (auto item = prev; item; item = Operation::tryGetPrevious(item))
-                    {
-                        if (Operation::getEndTime(item))
-                            out_to_gc->push_back(item);
-                    }
-                }
-                if (out_visible_items)
-                    out_visible_items->push_back(prev);
+                output(prev);
             }
 
             prev_it = curr_it;
             if (curr_it != end)
                 ++curr_it;
+
             if (reach_partition_end)
+            {
+                for (auto it = range_tombstone_beg_it; it != range_tombstone_end_it; ++it)
+                {
+                    /// set end time for range tombstone iff all covered items have been moved to trash
+                    if (!min_visible_block_number || min_visible_block_number > Operation::getMaxBlockNumber(*it))
+                        Operation::setEndTime(*it, Operation::getCommitTime(*it));
+                    output(*it);
+                }
                 range_tombstone_beg_it = range_tombstone_end_it = end;
+                min_visible_block_number = 0;
+            }
         }
     }
 

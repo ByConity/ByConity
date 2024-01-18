@@ -54,7 +54,8 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
     bool is_left_base_table,
     bool is_right_base_table,
     ConstASTPtr filter,
-    const InclusionDependency & inclusion_dependency)
+    const InclusionDependency & inclusion_dependency,
+    bool only_cardinality)
 {
     UInt64 left_rows = left_stats.getRowCount();
     UInt64 right_rows = right_stats.getRowCount();
@@ -62,14 +63,16 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
     // init join card, and output column statistics.
     UInt64 join_card = left_rows * right_rows;
     std::unordered_map<String, SymbolStatisticsPtr> join_output_statistics;
-    for (auto & item : left_stats.getSymbolStatistics())
-    {
-        join_output_statistics[item.first] = item.second->copy();
-    }
-    for (auto & item : right_stats.getSymbolStatistics())
-    {
-        join_output_statistics[item.first] = item.second->copy();
-    }
+    if (!only_cardinality)
+        for (auto & item : left_stats.getSymbolStatistics())
+        {
+            join_output_statistics[item.first] = item.second->copy();
+        }
+    if (!only_cardinality)
+        for (auto & item : right_stats.getSymbolStatistics())
+        {
+            join_output_statistics[item.first] = item.second->copy();
+        }
 
     // cross join
     if (kind == ASTTableJoin::Kind::Cross)
@@ -139,7 +142,15 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         if (left_db_table_column == right_db_table_column)
         {
             pre_key_join_card = computeCardinalityByNDV(
-                left_stats, right_stats, left_key_stats, right_key_stats, kind, left_key, right_key, pre_key_join_output_statistics);
+                left_stats,
+                right_stats,
+                left_key_stats,
+                right_key_stats,
+                kind,
+                left_key,
+                right_key,
+                pre_key_join_output_statistics,
+                only_cardinality);
         }
 
         // case 2 : PK join FK
@@ -158,7 +169,8 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
                 left_key,
                 is_right_base_table,
                 is_left_base_table,
-                pre_key_join_output_statistics);
+                pre_key_join_output_statistics,
+                only_cardinality);
         }
 
         // case 3 : FK join PK
@@ -177,20 +189,37 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
                 right_key,
                 is_left_base_table,
                 is_right_base_table,
-                pre_key_join_output_statistics);
+                pre_key_join_output_statistics,
+                only_cardinality);
         }
 
         // case 4 : normal join cases, with histogram exist.
         else if (!left_key_stats.getHistogram().getBuckets().empty() && !right_key_stats.getHistogram().getBuckets().empty())
         {
             pre_key_join_card = computeCardinalityByHistogram(
-                left_stats, right_stats, left_key_stats, right_key_stats, kind, left_key, right_key, pre_key_join_output_statistics);
+                left_stats,
+                right_stats,
+                left_key_stats,
+                right_key_stats,
+                kind,
+                left_key,
+                right_key,
+                pre_key_join_output_statistics,
+                only_cardinality);
         }
         else
         {
             // case 4 : normal join cases, with histogram not exist.
             pre_key_join_card = computeCardinalityByNDV(
-                left_stats, right_stats, left_key_stats, right_key_stats, kind, left_key, right_key, pre_key_join_output_statistics);
+                left_stats,
+                right_stats,
+                left_key_stats,
+                right_key_stats,
+                kind,
+                left_key,
+                right_key,
+                pre_key_join_output_statistics,
+                only_cardinality);
         }
 
         // we choose the smallest one.
@@ -206,6 +235,14 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         return nullptr;
 
     // Adjust the number of output rows by join kind.
+
+    // Consider correlated with multi join keys.
+    if (kind == ASTTableJoin::Kind::Inner && left_keys.size() > 1)
+    {
+        double adjust_correlated_coefficient
+            = std::pow(context.getSettingsRef().multi_join_keys_correlated_coefficient, left_keys.size() - 1);
+        join_card *= adjust_correlated_coefficient;
+    }
 
     // All rows from left side should be in the result.
     if (kind == ASTTableJoin::Kind::Left)
@@ -314,7 +351,8 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
     String pk_key,
     bool is_fk_base_table,
     bool is_pk_base_table,
-    std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics)
+    std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,
+    bool only_cardinality)
 {
     // if FK side ndv less then FK side ndv.
     // it means all FKs can be joined, but only part of PK can be joined.
@@ -331,35 +369,36 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
     {
         join_card = fk_rows;
 
-        for (auto & item : fk_stats.getSymbolStatistics())
-        {
-            join_output_statistics[item.first] = item.second->copy();
-        }
+        if (!only_cardinality)
+            for (auto & item : fk_stats.getSymbolStatistics())
+            {
+                join_output_statistics[item.first] = item.second->copy();
+            }
 
         // PK side partial match, adjust statistics;
         double adjust_rowcount = join_card / pk_stats.getRowCount();
         double adjust_ndv = double(fk_ndv) / pk_ndv;
-        for (auto & item : pk_stats.getSymbolStatistics())
-        {
-            if (item.first == pk_key)
+        if (!only_cardinality)
+            for (auto & item : pk_stats.getSymbolStatistics())
             {
-                auto new_pk_key_stats = pk_key_stats.copy();
-                new_pk_key_stats = new_pk_key_stats->applySelectivity(adjust_rowcount, adjust_ndv);
-                new_pk_key_stats->setNdv(fk_ndv);
-                join_output_statistics[item.first] = new_pk_key_stats;
-            }
-            else
-            {
-                if (double(item.second->getNdv()) / pk_stats.getRowCount() > 0.8)
+                if (item.first == pk_key)
                 {
-                    join_output_statistics[item.first] = item.second->applySelectivity(adjust_rowcount, adjust_ndv);
+                    auto new_pk_key_stats = pk_key_stats.applySelectivity(adjust_rowcount, adjust_ndv);
+                    new_pk_key_stats->setNdv(fk_ndv);
+                    join_output_statistics[item.first] = new_pk_key_stats;
                 }
                 else
                 {
-                    join_output_statistics[item.first] = item.second->applySelectivity(adjust_rowcount, 1);
+                    if (double(item.second->getNdv()) / pk_stats.getRowCount() > 0.8)
+                    {
+                        join_output_statistics[item.first] = item.second->applySelectivity(adjust_rowcount, adjust_ndv);
+                    }
+                    else
+                    {
+                        join_output_statistics[item.first] = item.second->applySelectivity(adjust_rowcount, 1);
+                    }
                 }
             }
-        }
     }
 
     // if FK side ndv large then PK side ndv.
@@ -370,33 +409,34 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
 
         double adjust_fk_rowcount = join_card / fk_stats.getRowCount();
         double adjust_fk_ndv = static_cast<double>(pk_ndv) / fk_ndv;
-        for (auto & item : fk_stats.getSymbolStatistics())
-        {
-            if (item.first == fk_key)
+        if (!only_cardinality)
+            for (auto & item : fk_stats.getSymbolStatistics())
             {
-                auto new_fk_key_stats = fk_key_stats.copy();
-                new_fk_key_stats = new_fk_key_stats->applySelectivity(adjust_fk_rowcount, adjust_fk_ndv);
-                new_fk_key_stats->setNdv(pk_ndv);
-                join_output_statistics[item.first] = new_fk_key_stats;
-            }
-            else
-            {
-                if (double(item.second->getNdv()) / fk_stats.getRowCount() > 0.8)
+                if (item.first == fk_key)
                 {
-                    join_output_statistics[item.first] = item.second->applySelectivity(adjust_fk_rowcount, adjust_fk_ndv);
+                    auto new_fk_key_stats = fk_key_stats.applySelectivity(adjust_fk_rowcount, adjust_fk_ndv);
+                    new_fk_key_stats->setNdv(pk_ndv);
+                    join_output_statistics[item.first] = new_fk_key_stats;
                 }
                 else
                 {
-                    join_output_statistics[item.first] = item.second->applySelectivity(adjust_fk_rowcount, 1);
+                    if (double(item.second->getNdv()) / fk_stats.getRowCount() > 0.8)
+                    {
+                        join_output_statistics[item.first] = item.second->applySelectivity(adjust_fk_rowcount, adjust_fk_ndv);
+                    }
+                    else
+                    {
+                        join_output_statistics[item.first] = item.second->applySelectivity(adjust_fk_rowcount, 1);
+                    }
                 }
             }
-        }
 
         double adjust_pk_rowcount = join_card / pk_stats.getRowCount();
-        for (auto & item : pk_stats.getSymbolStatistics())
-        {
-            join_output_statistics[item.first] = item.second->applySelectivity(adjust_pk_rowcount, 1.0);
-        }
+        if (!only_cardinality)
+            for (auto & item : pk_stats.getSymbolStatistics())
+            {
+                join_output_statistics[item.first] = item.second->applySelectivity(adjust_pk_rowcount, 1.0);
+            }
     }
 
     if (is_fk_base_table && !is_pk_base_table)
@@ -415,7 +455,8 @@ UInt64 JoinEstimator::computeCardinalityByHistogram(
     ASTTableJoin::Kind kind,
     String left_key,
     String right_key,
-    std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics)
+    std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,
+    bool only_cardinality)
 {
     // Choose the maximum of two min values, and the minimum of two max values.
     double min = std::max(left_key_stats.getMin(), right_key_stats.getMin());
@@ -437,40 +478,42 @@ UInt64 JoinEstimator::computeCardinalityByHistogram(
     }
 
     double adjust_left_rowcount = join_card / left_stats.getRowCount();
-    for (auto & item : left_stats.getSymbolStatistics())
-    {
-        if (item.first == left_key)
+    if (!only_cardinality)
+        for (auto & item : left_stats.getSymbolStatistics())
         {
-            auto new_left_key_stats = left_key_stats.createJoin(join_buckets);
-            if (kind == ASTTableJoin::Kind::Inner)
+            if (item.first == left_key)
             {
-                new_left_key_stats->setNdv(min_ndv);
+                auto new_left_key_stats = left_key_stats.createJoin(join_buckets);
+                if (kind == ASTTableJoin::Kind::Inner)
+                {
+                    new_left_key_stats->setNdv(min_ndv);
+                }
+                join_output_statistics[left_key] = new_left_key_stats;
             }
-            join_output_statistics[left_key] = new_left_key_stats;
+            else
+            {
+                join_output_statistics[item.first] = item.second->applySelectivity(adjust_left_rowcount, 1);
+            }
         }
-        else
-        {
-            join_output_statistics[item.first] = item.second->applySelectivity(adjust_left_rowcount, 1);
-        }
-    }
 
     double adjust_right_rowcount = join_card / right_stats.getRowCount();
-    for (auto & item : right_stats.getSymbolStatistics())
-    {
-        if (item.first == right_key)
+    if (!only_cardinality)
+        for (auto & item : right_stats.getSymbolStatistics())
         {
-            auto new_right_key_stats = right_key_stats.createJoin(join_buckets);
-            if (kind == ASTTableJoin::Kind::Inner)
+            if (item.first == right_key)
             {
-                new_right_key_stats->setNdv(min_ndv);
+                auto new_right_key_stats = right_key_stats.createJoin(join_buckets);
+                if (kind == ASTTableJoin::Kind::Inner)
+                {
+                    new_right_key_stats->setNdv(min_ndv);
+                }
+                join_output_statistics[right_key] = new_right_key_stats;
             }
-            join_output_statistics[right_key] = new_right_key_stats;
+            else
+            {
+                join_output_statistics[item.first] = item.second->applySelectivity(adjust_right_rowcount, 1);
+            }
         }
-        else
-        {
-            join_output_statistics[item.first] = item.second->applySelectivity(adjust_right_rowcount, 1);
-        }
-    }
 
     return join_card;
 }
@@ -483,7 +526,8 @@ UInt64 JoinEstimator::computeCardinalityByNDV(
     ASTTableJoin::Kind kind,
     String left_key,
     String right_key,
-    std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics)
+    std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,
+    bool only_cardinality)
 {
     UInt64 multiply_card = left_stats.getRowCount() * right_stats.getRowCount();
     UInt64 max_ndv = std::max(left_key_stats.getNdv(), right_key_stats.getNdv());
@@ -492,23 +536,25 @@ UInt64 JoinEstimator::computeCardinalityByNDV(
     double join_card = max_ndv == 0 ? 1 : multiply_card / max_ndv;
 
     double adjust_left_rowcount = join_card / left_stats.getRowCount();
-    for (auto & item : left_stats.getSymbolStatistics())
-    {
-        join_output_statistics[item.first] = item.second->applySelectivity(adjust_left_rowcount, 1.0);
-        if (item.first == left_key && kind == ASTTableJoin::Kind::Inner)
+    if (!only_cardinality)
+        for (auto & item : left_stats.getSymbolStatistics())
         {
-            join_output_statistics[item.first]->setNdv(min_ndv);
+            join_output_statistics[item.first] = item.second->applySelectivity(adjust_left_rowcount, 1.0);
+            if (item.first == left_key && kind == ASTTableJoin::Kind::Inner)
+            {
+                join_output_statistics[item.first]->setNdv(min_ndv);
+            }
         }
-    }
     double adjust_right_rowcount = join_card / right_stats.getRowCount();
-    for (auto & item : right_stats.getSymbolStatistics())
-    {
-        join_output_statistics[item.first] = item.second->applySelectivity(adjust_right_rowcount, 1.0);
-        if (item.first == right_key && kind == ASTTableJoin::Kind::Inner)
+    if (!only_cardinality)
+        for (auto & item : right_stats.getSymbolStatistics())
         {
-            join_output_statistics[item.first]->setNdv(min_ndv);
+            join_output_statistics[item.first] = item.second->applySelectivity(adjust_right_rowcount, 1.0);
+            if (item.first == right_key && kind == ASTTableJoin::Kind::Inner)
+            {
+                join_output_statistics[item.first]->setNdv(min_ndv);
+            }
         }
-    }
     return join_card;
 }
 

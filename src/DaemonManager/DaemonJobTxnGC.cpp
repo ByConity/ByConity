@@ -218,9 +218,9 @@ void DaemonJobTxnGC::cleanUndoBuffers(const TransactionRecords & txn_records)
         auto missing_records = catalog->getTransactionRecords(missing_id_small_batch);
         for (auto & record : missing_records)
         {
-            if (record.status() == CnchTransactionStatus::Unknown)
+            if (record.status() == CnchTransactionStatus::Inactive || record.status() == CnchTransactionStatus::Unknown)
             {
-                // clean process for UNKNOWN is the same as ABORTED
+                // clean process for Inactive and UNKNOWN is the same as ABORTED
                 count++;
                 record.setStatus(CnchTransactionStatus::Aborted);
 

@@ -659,4 +659,9 @@ Property DeriverVisitor::visitTableFinishStep(const TableFinishStep &, DeriverCo
 {
     return context.getInput()[0];
 }
+
+Property DeriverVisitor::visitMultiJoinStep(const MultiJoinStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
 }

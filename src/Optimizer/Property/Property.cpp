@@ -122,6 +122,11 @@ Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalen
         if (!mapping.contains(item))
         {
             mapping[item] = item;
+
+            // if (!output_symbols.contains(item))
+            // {
+            //     return Partitioning{};
+            // }
         }
     }
     return this->translate(mapping);
@@ -260,6 +265,11 @@ Sorting Sorting::normalize(const SymbolEquivalences & symbol_equivalences) const
         if (!mapping.contains(item.getName()))
         {
             mapping[item.getName()] = item.getName();
+
+            // if (!output_symbols.contains(item.getName()))
+            // {
+            //     return Sorting{};
+            // }
         }
     }
     return translate(mapping);
@@ -289,10 +299,7 @@ String CTEDescription::toString() const
 {
     std::stringstream output;
     output << node_partitioning.toString();
-    if (stream_partitioning.getPartitioningHandle() != Partitioning::Handle::ARBITRARY)
-        output << "/" << stream_partitioning.toString();
-    if (!sorting.empty())
-        output << " " << sorting.toString();
+    output << (preferred ? "?" : "");
     return output.str();
 }
 
@@ -404,19 +411,18 @@ void CTEDescriptions::filter(const std::unordered_set<CTEId> & allowed)
 size_t CTEDescription::hash() const
 {
     size_t hash = node_partitioning.hash();
-    hash = MurmurHash3Impl64::combineHashes(hash, stream_partitioning.hash());
-    hash = MurmurHash3Impl64::combineHashes(hash, sorting.hash());
+    hash = MurmurHash3Impl64::combineHashes(hash, preferred);
     return hash;
 }
 
 CTEDescription::CTEDescription(const Property & property)
-    : CTEDescription(property.getNodePartitioning(), property.getStreamPartitioning(), property.getSorting())
+    : CTEDescription(property.getNodePartitioning(), property.isPreferred())
 {
 }
 
 bool CTEDescription::operator==(const CTEDescription & other) const
 {
-    return node_partitioning == other.node_partitioning && stream_partitioning == other.stream_partitioning && sorting == other.sorting;
+    return node_partitioning == other.node_partitioning && preferred == other.preferred;
 }
 
 Property CTEDescription::createCTEDefGlobalProperty(const Property & property, CTEId cte_id)
@@ -431,7 +437,8 @@ Property CTEDescription::createCTEDefGlobalProperty(const Property & property, C
 
     const auto & cte_description = property.getCTEDescriptions().getSharedDescription(cte_id);
     // no need to translate.
-    Property res{cte_description.node_partitioning, cte_description.stream_partitioning, cte_description.sorting};
+    Property res{cte_description.node_partitioning};
+    res.setPreferred(cte_description.preferred);
     // copy other cte descriptions.
     res.setCTEDescriptions(property.getCTEDescriptions());
     res.getCTEDescriptions().erase(cte_id);
@@ -448,8 +455,7 @@ Property CTEDescription::createCTEDefLocalProperty(
 
 CTEDescription CTEDescription::translate(const std::unordered_map<String, String> & identities) const
 {
-    return CTEDescription{
-        node_partitioning.translate(identities), stream_partitioning.translate(identities), sorting.translate(identities)};
+    return CTEDescription{node_partitioning.translate(identities), preferred};
 }
 
 CTEDescriptions CTEDescriptions::translate(const std::unordered_map<String, String> & identities) const

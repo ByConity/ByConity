@@ -20,6 +20,7 @@
 #include <Optimizer/Cascades/Memo.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <QueryPlan/AnyStep.h>
+#include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <Common/Exception.h>
 

@@ -131,7 +131,7 @@ Projection Est. 100 rows
                      └─ Aggregating Est. 149640 rows
                         │     Group by: {i_item_id_2}
                         │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                        └─ Inner Join Est. 2066873 rows
+                        └─ Inner Join Est. 2281746 rows
                            │     Condition: ws_item_sk == i_item_sk_2
                            ├─ Repartition Exchange Est. 2377546 rows
                            │  │     Partition by: {ws_item_sk}

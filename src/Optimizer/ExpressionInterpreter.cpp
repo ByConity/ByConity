@@ -20,10 +20,12 @@
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnSet.h>
 #include <Columns/IColumn.h>
+#include <Core/Types.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
+#include <DataTypes/IDataType.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsLogical.h>
@@ -36,6 +38,7 @@
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/formatAST.h>
+#include <Statistics/TypeUtils.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 
 namespace DB
@@ -290,6 +293,34 @@ bool simplifyIf(
     }
 
     return false;
+}
+
+bool simplifyArrayElement(
+    const ASTFunction & function,
+    const ASTPtr &,
+    const InterpretIMResults & argument_results,
+    InterpretIMResult & simplify_result,
+    const ContextMutablePtr & context)
+{
+    // this is to rewrite array element to map element
+    // for any map type
+    if (function.name != "arrayElement" || argument_results.size() != 2)
+    {
+        return false;
+    }
+
+    DataTypePtr map_type = Statistics::decayDataType(argument_results[0].type);
+    if (!(map_type->getTypeId() == TypeIndex::ByteMap || map_type->getTypeId() == TypeIndex::Map))
+    {
+        return false; 
+    }
+
+    auto new_func_name = "mapElement";
+    auto function_builder = FunctionFactory::instance().get(new_func_name, context);
+    FunctionBasePtr function_base = function_builder->build(convertToFunctionBuilderParams(argument_results));
+
+    simplify_result = {function_base->getResultType(), makeFunction(new_func_name, argument_results, context)};
+    return true;
 }
 
 bool simplifyMultiIf(
@@ -617,6 +648,11 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
             || simplifyTrivialEquals(function, simplified_node, argument_results, simplify_result)
             || simplifyIf(function, simplified_node, argument_results, simplify_result, reevaluate)
             || simplifyMultiIf(function, simplified_node, argument_results, simplify_result, context);
+    }
+
+    if (setting.enable_array_element_to_map_element) 
+    {
+        simplified = simplified || simplifyArrayElement(function, simplified_node, argument_results, simplify_result, context);
     }
 
     if (!simplified)

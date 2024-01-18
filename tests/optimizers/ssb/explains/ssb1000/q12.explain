@@ -1,14 +1,14 @@
-Projection Est. 86616 rows
+Projection Est. 70158 rows
 │     Expressions: [P_CATEGORY, S_NATION], d_year:=`expr#toYear(LO_ORDERDATE)`, profit:=`expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST))`
-└─ Sorting Est. 86616 rows
+└─ Sorting Est. 70158 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_NATION ASC NULLS LAST, P_CATEGORY ASC NULLS LAST}
-   └─ Gather Exchange Est. 86616 rows
-      └─ Sorting Est. 86616 rows
+   └─ Gather Exchange Est. 70158 rows
+      └─ Sorting Est. 70158 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_NATION ASC NULLS LAST, P_CATEGORY ASC NULLS LAST}
-         └─ MergingAggregated Est. 86616 rows
-            └─ Repartition Exchange Est. 86616 rows
+         └─ MergingAggregated Est. 70158 rows
+            └─ Repartition Exchange Est. 70158 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), S_NATION, P_CATEGORY}
-               └─ Aggregating Est. 86616 rows
+               └─ Aggregating Est. 70158 rows
                   │     Group by: {expr#toYear(LO_ORDERDATE), S_NATION, P_CATEGORY}
                   │     Aggregates: expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST)):=AggNull(sum)(expr#minus(LO_REVENUE, LO_SUPPLYCOST))
                   └─ Projection Est. 206480600 rows

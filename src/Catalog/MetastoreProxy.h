@@ -1063,6 +1063,8 @@ public:
         const String & name_space,
         const String & tbl_uuid,
         const std::vector<String> & part_names,
+        size_t detached_visible_part_size,
+        size_t detached_staged_part_size,
         const std::vector<String> & bitmap_names,
         size_t batch_write_size,
         size_t batch_delete_size);

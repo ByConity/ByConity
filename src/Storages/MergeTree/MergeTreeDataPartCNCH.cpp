@@ -29,12 +29,14 @@
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/MergeTreeReaderCNCH.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
-#include <Common/Priority.h>
-#include <common/logger_useful.h>
+#include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Common/Exception.h>
+#include <Common/Priority.h>
 #include <Common/RowExistsColumnInfo.h>
+#include <common/logger_useful.h>
 #include <Core/Settings.h>
 #include <Core/SettingsEnums.h>
 #include <DataTypes/DataTypeByteMap.h>
@@ -42,6 +44,9 @@
 
 namespace ProfileEvents
 {
+    extern const Event LoadPrimaryIndexMicroseconds;
+    extern const Event PrimaryIndexDiskCacheHits;
+    extern const Event PrimaryIndexDiskCacheMisses;
 }
 
 namespace DB
@@ -259,6 +264,9 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair & column) const
 
 void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)
 {
+    if (index_granularities.empty())
+        index_granularity_info.setNonAdaptive();
+
     /// init once
     if (index_granularity.isInitialized())
         return;
@@ -345,7 +353,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
     }
 
     MergeTreeDataPartChecksum meta_info_pos;
-    auto checksums_ptr = loadChecksumsForPart(false);
+    auto checksums_ptr = loadChecksumsFromRemote(false);
     meta_info_pos = checksums_ptr->files["metainfo.txt"];
 
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
@@ -640,6 +648,23 @@ void MergeTreeDataPartCNCH::loadIndex()
         return;
     }
 
+    if (auto cache = storage.getContext()->getPrimaryIndexCache())
+    {
+        UUIDAndPartName cache_key(storage.getStorageUUID(), getUniquePartName());
+        auto load_func = [this] { return loadIndexFromStorage(); };
+        index = cache->getOrSet(cache_key, std::move(load_func)).first;
+    }
+    else
+    {
+        index = loadIndexFromStorage();
+    }
+}
+
+IMergeTreeDataPart::IndexPtr MergeTreeDataPartCNCH::loadIndexFromStorage() const
+{
+    ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::LoadPrimaryIndexMicroseconds);
+    IndexPtr res = std::make_shared<Columns>();
+
     /// It can be empty in case of mutations
     if (!index_granularity.isInitialized())
         throw Exception("Index granularity is not loaded before index loading", ErrorCodes::LOGICAL_ERROR);
@@ -647,13 +672,11 @@ void MergeTreeDataPartCNCH::loadIndex()
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     if (parent_part)
         metadata_snapshot = metadata_snapshot->projections.get(name).metadata;
-
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
-    size_t key_size = primary_key.column_names.size();
+    if (primary_key.column_names.empty())
+        return res;
 
-    if (!key_size)
-        return;
-
+    /// first try to load index from local disk cache
     if (enableDiskCache())
     {
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
@@ -666,34 +689,41 @@ void MergeTreeDataPartCNCH::loadIndex()
             {
                 LOG_DEBUG(storage.log, "has index disk cache {}", segment_path);
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
-                index = loadIndexFromBuffer(*cache_buf, primary_key);
-                return;
+                res = loadIndexFromBuffer(*cache_buf, primary_key);
+                ProfileEvents::increment(ProfileEvents::PrimaryIndexDiskCacheHits);
+                return res;
             }
             catch (...)
             {
                 tryLogCurrentException("Could not load index from disk cache");
             }
         }
-        else if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        else
         {
-            throw Exception(
-                ErrorCodes::DISK_CACHE_NOT_USED, "Index {} of part has no disk cache {} and 'FORCE_DISK_CACHE' is set", name, segment_path);
+            ProfileEvents::increment(ProfileEvents::PrimaryIndexDiskCacheMisses);
+            if (disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
+                throw Exception(
+                    ErrorCodes::DISK_CACHE_NOT_USED,
+                    "Index of part {} has no disk cache {} and 'FORCE_DISK_CACHE' is set",
+                    name,
+                    segment_path);
         }
     }
 
+    /// load index from remote disk
     auto checksums = getChecksums();
     auto [file_offset, file_size] = getFileOffsetAndSize(*this, "primary.idx");
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
     auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size);
     LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
-    index = loadIndexFromBuffer(buf, primary_key);
-
+    res = loadIndexFromBuffer(buf, primary_key);
     if (enableDiskCache())
     {
         auto index_seg = std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this());
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         disk_cache->cacheSegmentsToLocalDisk({std::move(index_seg)});
     }
+    return res;
 }
 
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_unused]] bool require)
@@ -716,11 +746,6 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
                 if (checksums->read(*cache_buf))
                     assertEOF(*cache_buf);
-                if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
-                {
-                    std::lock_guard lock(checksums_mutex);
-                    checksums_ptr = checksums;
-                }
                 return checksums;
             }
             catch (...)
@@ -728,32 +753,19 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
                 tryLogCurrentException("Could not load checksums from disk");
             }
         }
-        else if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        else if (disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
         {
             throw Exception(
                 ErrorCodes::DISK_CACHE_NOT_USED,
-                "Checksums {} of part has no disk cache {} and 'FORCE_DISK_CACHE' is set",
+                "Checksums of part {} has no disk cache {} and 'FORCE_DISK_CACHE' is set",
                 name,
                 segment_path);
         }
     }
-
-    checksums = loadChecksumsForPart(true);
-
-    setChecksumsPtrIfNeed(checksums);
-
-    /// store in disk cache
-    if (enableDiskCache())
-    {
-        auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
-        disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
-    }
-
-    return checksums;
+    return loadChecksumsFromRemote(true);
 }
 
-IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsForPart(bool follow_part_chain)
+IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(bool follow_part_chain)
 {
     ChecksumsPtr checksums = std::make_shared<Checksums>();
     checksums->storage_type = StorageType::ByteHDFS;
@@ -818,14 +830,8 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsForPart(boo
             ++it;
     }
 
-    if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
-    {
-        std::lock_guard lock(checksums_mutex);
-        checksums_ptr = checksums;
-    }
-
     /// store in disk cache
-    if (enableDiskCache())
+    if (enableDiskCache() && follow_part_chain)
     {
         auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
@@ -992,10 +998,11 @@ void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_h
 void MergeTreeDataPartCNCH::calculateEachColumnSizes(
     [[maybe_unused]] ColumnSizeByName & each_columns_size, [[maybe_unused]] ColumnSize & total_size) const
 {
+    auto checksums = getChecksums();
     std::unordered_set<String> processed_substreams;
     for (const NameAndTypePair & column : *columns_ptr)
     {
-        ColumnSize size = getColumnSizeImpl(column, &processed_substreams);
+        ColumnSize size = getColumnSizeImpl(column, checksums, &processed_substreams);
         each_columns_size[column.name] = size;
         total_size.add(size);
 
@@ -1020,10 +1027,9 @@ void MergeTreeDataPartCNCH::calculateEachColumnSizes(
     }
 }
 
-ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const
+ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & column, const ChecksumsPtr & checksums, std::unordered_set<String> * processed_substreams) const
 {
     ColumnSize size;
-    auto checksums = getChecksums();
     if (checksums->empty())
         return size;
 
@@ -1279,7 +1285,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
         segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this(), preload_level));
     }
 
-    IDiskCache::CacheSegmentsCallback callback;
+    std::function<void(const String &, const int &)> callback;
 
     if (auto part_log = storage.getContext()->getPartLog(storage.getDatabaseName()))
     {

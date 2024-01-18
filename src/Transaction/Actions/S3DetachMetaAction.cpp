@@ -24,10 +24,12 @@ S3DetachMetaAction::S3DetachMetaAction(
     const TxnTimestamp & txn_id_,
     const StoragePtr & tbl_,
     const MergeTreeDataPartsCNCHVector & parts_,
+    const MergeTreeDataPartsCNCHVector & staged_parts_,
     const DeleteBitmapMetaPtrVector & bitmaps_)
     : IAction(context_, txn_id_), tbl(tbl_), bitmaps(bitmaps_)
 {
     parts = CnchPartsHelper::toIMergeTreeDataPartsVector(parts_);
+    staged_parts = CnchPartsHelper::toIMergeTreeDataPartsVector(staged_parts_);
 }
 
 void S3DetachMetaAction::executeV1(TxnTimestamp)
@@ -40,7 +42,8 @@ void S3DetachMetaAction::executeV2()
     if (executed)
         return;
 
-    global_context.getCnchCatalog()->detachAttachedParts(tbl, tbl, parts, {}, parts, {}, bitmaps);
+    /// In current impl, either parts or staged parts is empty.
+    global_context.getCnchCatalog()->detachAttachedParts(tbl, tbl, parts, staged_parts, parts.empty() ? staged_parts : parts, {}, bitmaps);
     executed = true;
 }
 
@@ -52,8 +55,12 @@ void S3DetachMetaAction::abort()
     {
         detached_names.push_back(part->info.getPartName());
     }
+    for (const auto & part : staged_parts)
+    {
+        detached_names.push_back(part->info.getPartName());
+    }
 
-    global_context.getCnchCatalog()->attachDetachedParts(tbl, tbl, detached_names, parts, {}, bitmaps, {});
+    global_context.getCnchCatalog()->attachDetachedParts(tbl, tbl, detached_names, parts, staged_parts, bitmaps, {});
 
     /// Since bitmaps are all new base bitmap that have been regenerated, simply delete it
     for (const auto & bitmap: bitmaps)
@@ -79,6 +86,16 @@ void S3DetachMetaAction::abortByUndoBuffer(const Context & ctx, const StoragePtr
             part_names.push_back(resource.placeholders(0));
         }
     });
+    size_t detached_part_size = part_names.size();
+
+    /// We need to obey the rule that all detached visible parts are before detached staged parts
+    std::for_each(resources.begin(), resources.end(), [&part_names](const UndoResource & resource) {
+        if (resource.type() == UndoResourceType::S3DetachStagedPart)
+        {
+            part_names.push_back(resource.placeholders(0));
+        }
+    });
+    size_t detached_staged_part_size = part_names.size() - detached_part_size;
 
     std::vector<String> bitmap_names;
     std::for_each(resources.begin(), resources.end(), [&bitmap_names](const UndoResource & resource) {
@@ -88,7 +105,7 @@ void S3DetachMetaAction::abortByUndoBuffer(const Context & ctx, const StoragePtr
         }
     });
 
-    ctx.getCnchCatalog()->attachDetachedPartsRaw(tbl, part_names, bitmap_names);
+    ctx.getCnchCatalog()->attachDetachedPartsRaw(tbl, part_names, detached_part_size, detached_staged_part_size, bitmap_names);
 }
 
 }

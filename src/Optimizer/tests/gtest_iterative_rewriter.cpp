@@ -211,7 +211,13 @@ struct SleepRule : public Rule
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
         ++runs;
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep));
+        Stopwatch watch{CLOCK_THREAD_CPUTIME_ID};
+        while (true)
+        {
+            double duration = watch.elapsedMilliseconds();
+            if (duration >= sleep)
+                break;
+        }
         return node;
     }
 };

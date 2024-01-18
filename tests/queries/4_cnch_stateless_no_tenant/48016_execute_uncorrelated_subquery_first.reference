@@ -128,25 +128,22 @@ Projection Est. 1000 rows, cost 2.341600e+02
                └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
                         Where: date = cast(19551, \'Date\')
                         Outputs: [date, followed_counter_td, user_id]
-Projection Est. 1000 rows, cost 2.349600e+02
+Projection Est. 1000 rows, cost 2.344800e+02
 │     Expressions: [user_id]
-└─ Limit Est. 1000 rows, cost 1.609600e+02
+└─ Limit Est. 1000 rows, cost 1.604800e+02
    │     Limit: 1000
-   └─ Sorting Est. 1000 rows, cost 1.609600e+02
+   └─ Sorting Est. 1000 rows, cost 1.604800e+02
       │     Order by: {followed_counter_td DESC NULLS LAST}
       │     Limit: 1000
-      └─ Gather Exchange Est. 1000 rows, cost 1.609600e+02
-         └─ Sorting Est. 1000 rows, cost 8.000000e-01
+      └─ Gather Exchange Est. 1000 rows, cost 1.604800e+02
+         └─ Sorting Est. 1000 rows, cost 3.200000e-01
             │     Order by: {followed_counter_td DESC NULLS LAST}
             │     Limit: 1000
-            └─ Inner Join Est. ? rows, cost 8.000000e-01
+            └─ Inner Join Est. ? rows, cost 3.200000e-01
                │     Condition: date == expr#max(date)_1
-               ├─ Repartition Exchange Est. ? rows, cost 3.200000e-01
-               │  │     Partition by: {date}
-               │  └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
-               │           Outputs: [date, followed_counter_td, user_id]
-               └─ Repartition Exchange Est. ? rows, cost 4.800000e-01
-                  │     Partition by: {expr#max(date)_1}
+               ├─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
+               │        Outputs: [date, followed_counter_td, user_id]
+               └─ Broadcast Exchange Est. ? rows, cost 3.200000e-01
                   └─ Projection Est. ? rows, cost 1.600000e-01
                      │     Expressions: expr#max(date)_1:=cast(`expr#max(date)`, \'Nullable(Date)\')
                      └─ MergingAggregated Est. ? rows, cost 1.600000e-01

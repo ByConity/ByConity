@@ -215,7 +215,7 @@ void MergeTreeCloudData::loadDataParts(MutableDataPartsVector & parts, UInt64)
     // else
     //     std::for_each(parts.begin(), parts.end(), [](auto & part) { part->checkBitmapIndex(); });
 
-    LOG_DEBUG(log, "Loaded data parts ({} items)", data_parts_indexes.size());
+    LOG_DEBUG(log, "Loaded {} data parts in {} ms", data_parts_indexes.size(), stopwatch.elapsedMilliseconds());
 }
 
 void MergeTreeCloudData::unloadOldPartsByTimestamp(Int64 expired_ts)

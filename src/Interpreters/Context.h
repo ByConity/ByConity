@@ -201,6 +201,7 @@ class KeeperDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
+class PrimaryIndexCache;
 struct ChecksumsCacheSettings;
 template <class T>
 class RpcClientPool;
@@ -300,6 +301,7 @@ class VWCustomizedSettings;
 using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
 
 class VETosConnectionParams;
+class OSSConnectionParams;
 
 class NvmCache;
 using NvmCachePtr = std::shared_ptr<NvmCache>;
@@ -663,6 +665,9 @@ public:
 
     void setVETosConnectParams(const VETosConnectionParams & connect_params);
     const VETosConnectionParams & getVETosConnectParams() const;
+
+    void setOSSConnectParams(const OSSConnectionParams & connect_params);
+    const OSSConnectionParams & getOSSConnectParams() const;
 
     /// create backgroud task to synchronize metadata table by table
     void setMetaChecker();
@@ -1429,8 +1434,10 @@ public:
 
 
     void setChecksumsCache(const ChecksumsCacheSettings & settings);
-
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
+
+    void setPrimaryIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;
 
     /// client for service discovery
     void initServiceDiscoveryClient();

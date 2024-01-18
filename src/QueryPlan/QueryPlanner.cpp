@@ -225,30 +225,17 @@ namespace
 
         assert(output_desc.size() == field_symbol_infos.size());
 
-        bool has_global_low_cardinality = false;
         for (size_t i = 0; i < output_desc.size(); ++i)
         {
             String input_column = field_symbol_infos[i].getPrimarySymbol();
             String output_name = get_uniq_output_name(output_desc[i].name);
             assignments.emplace_back(output_name, toSymbolRef(input_column));
             output_types[output_name] = input_types[input_column];
-            // TODO global low card
-            // if (output_types[output_name]->globalLowCardinality())
-            // has_global_low_cardinality = true;
         }
-
-        PlanNodePtr secondary_newness_node = nullptr;
-        if (has_global_low_cardinality)
-        {
-            // auto global_decode = std::make_shared<GlobalDecodeStep>(old_root->getCurrentDataStream());
-            // secondary_newness_node = old_root->addStep(context->nextNodeId(), std::move(global_decode));
-        }
-        else
-            secondary_newness_node = old_root;
 
         auto output_step
-            = std::make_shared<ProjectionStep>(secondary_newness_node->getCurrentDataStream(), assignments, output_types, true);
-        auto new_root = secondary_newness_node->addStep(context->nextNodeId(), std::move(output_step));
+            = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types, true);
+        auto new_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
         PRINT_PLAN(new_root, plan_output);
         return new_root;
     }

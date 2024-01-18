@@ -26,6 +26,7 @@
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
 #include <IO/ReadBufferFromRpcStreamFile.h>
+#include "Storages/MergeTree/MergeTreeSuffix.h"
 
 namespace DB
 {
@@ -44,7 +45,8 @@ public:
         UncompressedCache* uncompressed_cache_ = nullptr,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback_ = {},
         const ProgressCallback & internal_progress_cb_ = {},
-        clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE);
+        clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE,
+        String stream_extension_ = DATA_FILE_EXTENSION);
 
     virtual size_t readBig(char* to, size_t n) override;
     virtual bool nextImpl() override;
@@ -130,6 +132,8 @@ private:
     DualCompressedReadBuffer source_buffer;
 
     PartHostInfo part_host;
+
+    String stream_extension;
 
     Poco::Logger* logger;
 

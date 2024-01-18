@@ -35,6 +35,9 @@
 #include <Core/ColumnsWithTypeAndName.h>
 
 #include <Common/StringUtils/StringUtils.h>
+#include "Interpreters/ExpressionAnalyzer.h"
+#include "Interpreters/TreeRewriter.h"
+#include "Parsers/ASTFunction.h"
 
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeHelper.h>
@@ -109,6 +112,27 @@ void TableJoin::addOnKeys(ASTPtr & left_table_ast, ASTPtr & right_table_ast, boo
     key_ids_null_safe.push_back(null_safe);
 }
 
+void TableJoin::addInequalConditions(const ASTs & inequal_conditions, const NamesAndTypesList & columns_for_join, ContextPtr context)
+{
+    if (inequal_conditions.empty())
+        return;
+
+    ASTPtr mixed_inequal_condition = inequal_conditions[0];
+    for (size_t i = 1; i < inequal_conditions.size(); ++i)
+    {
+        mixed_inequal_condition = makeASTFunction("and", mixed_inequal_condition, inequal_conditions[i]);
+    }
+
+    /**
+    * generate actions for inequal conditions that used for filtering rows in join.
+    */
+    inequal_column_name = mixed_inequal_condition->getColumnName();
+    auto syntax_result = TreeRewriter(context).analyze(mixed_inequal_condition, columns_for_join);
+    inequal_condition_actions = ExpressionAnalyzer(mixed_inequal_condition, syntax_result, context).getActions(false);
+    LOG_DEBUG(&Poco::Logger::get("TableJoin"), fmt::format("addInequalConditions: mixed_inequal_condition: {}", 
+        queryToString(mixed_inequal_condition)));
+}
+
 /// @return how many times right key appears in ON section.
 size_t TableJoin::rightKeyInclusion(const String & name) const
 {
@@ -149,6 +173,12 @@ void TableJoin::deduplicateAndQualifyColumnNames(
     }
 
     columns_from_joined_table.swap(dedup_columns);
+}
+
+void TableJoin::setInequalCondition(ExpressionActionsPtr inequal_condition_actions_, String inequal_column_name_)
+{
+    inequal_condition_actions = inequal_condition_actions_; 
+    inequal_column_name = inequal_column_name_; 
 }
 
 NamesWithAliases TableJoin::getNamesWithAliases(const NameSet & required_columns) const
@@ -348,6 +378,16 @@ bool TableJoin::allowParallelHashJoin() const
     if (isSpecialStorage() || !oneDisjunct())
         return false;
     return true;
+}
+
+bool TableJoin::forceNullableRight() const
+{
+    return (join_use_nulls && isLeftOrFull(table_join.kind));
+}
+
+bool TableJoin::forceNullableLeft() const
+{
+    return join_use_nulls && isRightOrFull(table_join.kind);
 }
 
 bool TableJoin::needStreamWithNonJoinedRows() const

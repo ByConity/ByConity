@@ -166,6 +166,10 @@ inline bool isSemi(ASTTableJoin::Strictness strictness) { return strictness == A
 inline bool isAnti(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Anti; }
 inline bool isAsof(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Asof; }
 
+String kindToString(ASTTableJoin::Kind kind);
+
+String strictnessToString(ASTTableJoin::Strictness strictness);
+
 /// Specification of ARRAY JOIN.
 struct ASTArrayJoin : public IAST
 {

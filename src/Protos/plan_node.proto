@@ -350,6 +350,11 @@ message BufferStep {
 
 message ExplainAnalyzeStep {}
 
+
+message MultiJoinStep {
+  required Graph graph = 1;
+}
+
 // this must be identical to APPLY_STEP_PROTOBUF_TYPES_AND_NAMES
 //    with Step/_step postfix
 //    in src/QueryPlan/IQueryPlanStep.h
@@ -399,6 +404,7 @@ message QueryPlanStep {
     ApplyStep apply_step = 39;
     ExplainAnalyzeStep explain_analyze_step = 44;
     TotalsHavingStep totals_having_step = 50;
+    MultiJoinStep multi_join_step = 55;
   }
 }
 

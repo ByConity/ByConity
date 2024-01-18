@@ -129,28 +129,36 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments,
 
     // Notes: split to more tasks?
     bool success = scheduleCacheTask([this, segments = std::move(hit_segments), cb = callback] {
-        String last_exception{};
-        for (const auto & hit_segment : segments)
+        try
         {
-            try
+            std::exception_ptr first_exception;
+            for (const auto & hit_segment : segments)
             {
-                String mark_name = hit_segment->getMarkName();
-                String segment_name = hit_segment->getSegmentName();
-                if ((!mark_name.empty() && !getMetaCache()->get(mark_name).second.empty())
-                    && !getDataCache()->get(segment_name).second.empty())
-                    continue;
+                try
+                {
+                    String mark_name = hit_segment->getMarkName();
+                    String segment_name = hit_segment->getSegmentName();
+                    if ((!mark_name.empty() && !getMetaCache()->get(mark_name).second.empty())
+                        && !getDataCache()->get(segment_name).second.empty())
+                        continue;
 
-                hit_segment->cacheToDisk(*this);
+                    hit_segment->cacheToDisk(*this);
+                }
+                catch (...)
+                {
+                    if (!first_exception)
+                        first_exception = std::current_exception();
+                    tryLogCurrentException(log, "Failed to cache segment " + hit_segment->getSegmentName());
+                }
             }
-            catch (const Exception & e)
-            {
-                last_exception = e.message();
-                tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            }
+
+            if (cb)
+                cb(first_exception, segments.size());
         }
-
-        if (cb)
-            cb(last_exception, segments.size());
+        catch (...)
+        {
+            tryLogCurrentException(log);
+        }
     });
 
     if (!success)

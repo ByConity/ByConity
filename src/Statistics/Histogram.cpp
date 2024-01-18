@@ -559,12 +559,7 @@ Histogram Histogram::applySelectivity(double rowcount_selectivity, double ndv_se
 
 Histogram Histogram::copy() const
 {
-    Buckets new_buckets;
-    for (const auto & bucket : buckets)
-    {
-        new_buckets.emplace_back(bucket.makeBucketCopy());
-    }
-    return Histogram{new_buckets};
+    return Histogram{buckets};
 }
 
 bool Histogram::subsumes(const Bucket & origin_bucket) const

@@ -227,9 +227,6 @@ public:
     //------------------------------------------------------------------------
     OverlappedRange makeBucketIntersect(const Bucket & bucket) const;
 
-    // return copy of bucket
-    Bucket makeBucketCopy() const;
-
     //		Merges with another bucket. Returns merged bucket that should be part
     //		of the output. It also returns what is leftover from the merge.
     //		E.g.

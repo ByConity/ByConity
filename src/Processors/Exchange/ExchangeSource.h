@@ -68,6 +68,7 @@ private:
     std::atomic<bool> was_query_canceled {false};
     std::atomic<bool> was_receiver_finished {false};
     Poco::Logger * logger;
+    void checkBroadcastStatus(const BroadcastStatus & status) const;
 };
 
 class ExchangeTotalsSource : public ISource

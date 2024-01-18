@@ -123,6 +123,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/StorageS3Settings.h>
@@ -175,12 +176,12 @@
 
 #include <ExternalCatalog/CnchExternalCatalogMgr.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
+#include <IO/VETosCommon.h>
+#include <IO/OSSCommon.h>
 #include <Interpreters/TemporaryDataOnDisk.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/StorageS3Settings.h>
-
-#include <IO/VETosCommon.h>
 
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Statistics/AutoStatisticsManager.h>
@@ -313,6 +314,7 @@ struct ContextSharedPart
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
 
     VETosConnectionParams vetos_connection_params;
+    OSSConnectionParams oss_connection_params;
 
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
@@ -373,6 +375,8 @@ struct ContextSharedPart
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
     /// global checksums cache;
     mutable ChecksumsCachePtr checksums_cache;
+    /// global primary index cache
+    mutable PrimaryIndexCachePtr primary_index_cache;
 
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
@@ -390,7 +394,7 @@ struct ContextSharedPart
     mutable std::unique_ptr<CnchServerClientPool> cnch_server_client_pool;
     mutable std::unique_ptr<CnchWorkerClientPools> cnch_worker_client_pools;
 
-    mutable std::optional<CnchBGThreadsMapArray> cnch_bg_threads_array;
+    mutable std::unique_ptr<CnchBGThreadsMapArray> cnch_bg_threads_array;
 
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
@@ -510,6 +514,42 @@ struct ContextSharedPart
         if (meta_checker)
             meta_checker->deactivate();
 
+        std::unique_ptr<CnchBGThreadsMapArray> delete_cnch_bg_threads_array;
+        std::unique_ptr<TransactionCoordinatorRcCnch> delete_cnch_txn_coordinator;
+        CnchServerManagerPtr delete_server_manager;
+        CnchTopologyMasterPtr delete_topology_master;
+        PartCacheManagerPtr delete_cache_manager;
+        NvmCachePtr delete_nvm_cache;
+        QueueManagerPtr delete_queue_manager;
+        WorkerStatusManagerPtr delete_worker_status_manager;
+        {
+            auto lock = std::lock_guard(mutex);
+            delete_cnch_bg_threads_array = std::move(cnch_bg_threads_array);
+            delete_cnch_txn_coordinator = std::move(cnch_txn_coordinator);
+            delete_server_manager = std::move(server_manager);
+            delete_topology_master = std::move(topology_master);
+            delete_cache_manager = std::move(cache_manager);
+            delete_nvm_cache = std::move(nvm_cache);
+            delete_queue_manager = queue_manager;
+            delete_worker_status_manager = worker_status_manager;
+        }
+        /// do the heavy work w/o context lock
+        delete_cnch_bg_threads_array.reset();
+        delete_cnch_txn_coordinator.reset();
+        if (delete_server_manager)
+            delete_server_manager->shutDown();
+        if (delete_topology_master)
+            delete_topology_master->shutDown();
+        if (delete_cache_manager)
+            delete_cache_manager->shutDown();
+        if (delete_nvm_cache)
+            delete_nvm_cache->shutDown();
+        if (delete_queue_manager)
+            delete_queue_manager->shutdown();
+        if (delete_worker_status_manager)
+            delete_worker_status_manager->shutdown();
+
+
         std::unique_ptr<SystemLogs> delete_system_logs;
         std::unique_ptr<CnchSystemLogs> delete_cnch_system_logs;
         {
@@ -523,28 +563,9 @@ struct ContextSharedPart
                 cache->reset();
 #endif
 
-            if (server_manager)
-                server_manager.reset();
-
-            if (topology_master)
-                topology_master.reset();
-
-            if (global_binding_cache_manager)
-                global_binding_cache_manager.reset();
-
-            if (cache_manager)
-                cache_manager.reset();
+            global_binding_cache_manager.reset();
 
             access_control_manager.stopBgJobForKVStorage();
-
-            if (nvm_cache)
-                nvm_cache->shutDown();
-
-            if (queue_manager)
-                queue_manager->shutdown();
-
-            if (worker_status_manager)
-                worker_status_manager->shutdown();
 
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
@@ -560,9 +581,6 @@ struct ContextSharedPart
             /// but at least they can be preserved for storage termination.
             dictionaries_xmls.reset();
             dictionaries_cnch_catalog.reset();
-
-            cnch_bg_threads_array.reset();
-            cnch_txn_coordinator.reset();
 
             delete_system_logs = std::move(system_logs);
             delete_cnch_system_logs = std::move(cnch_system_logs);
@@ -696,6 +714,7 @@ Context::~Context() = default;
 
 WorkerStatusManagerPtr Context::getWorkerStatusManager()
 {
+    auto lock = getLock();
     if (!shared->worker_status_manager)
         shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
@@ -708,6 +727,7 @@ void Context::updateAdaptiveSchdulerConfig()
 
 WorkerStatusManagerPtr Context::getWorkerStatusManager() const
 {
+    auto lock = getLock();
     if (!shared->worker_status_manager)
         shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
@@ -756,7 +776,7 @@ ReadSettings Context::getReadSettings() const
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
-    res.enable_io_pfra = settings.enable_io_pfra || settings.s3_use_read_ahead;
+    res.enable_io_pfra = settings.enable_io_pfra;
     res.buffer_size = settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
@@ -4434,6 +4454,16 @@ const VETosConnectionParams & Context::getVETosConnectParams() const
     return shared->vetos_connection_params;
 }
 
+void Context::setOSSConnectParams(const OSSConnectionParams & connect_params)
+{
+    shared->oss_connection_params = connect_params;
+}
+
+const OSSConnectionParams & Context::getOSSConnectParams() const
+{
+    return shared->oss_connection_params;
+}
+
 void Context::setUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
 {
     auto lock = getLock();
@@ -4572,6 +4602,18 @@ void Context::setChecksumsCache(const ChecksumsCacheSettings & settings)
 std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
 {
     return shared->checksums_cache;
+}
+
+void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)
+{
+    if (shared->primary_index_cache)
+        throw Exception("Primary index cache has already been created.", ErrorCodes::LOGICAL_ERROR);
+    shared->primary_index_cache = std::make_shared<PrimaryIndexCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<PrimaryIndexCache> Context::getPrimaryIndexCache() const
+{
+    return shared->primary_index_cache;
 }
 
 void Context::updateQueueManagerConfig() const
@@ -5010,7 +5052,8 @@ ResourceManagerClientPtr Context::getResourceManagerClient() const
 
 void Context::initCnchBGThreads()
 {
-    shared->cnch_bg_threads_array.emplace(shared_from_this());
+    auto lock = getLock();
+    shared->cnch_bg_threads_array = std::make_unique<CnchBGThreadsMapArray>(shared_from_this());
 }
 
 CnchBGThreadsMap * Context::getCnchBGThreadsMap(CnchBGThreadType type) const
@@ -5197,8 +5240,7 @@ void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
 
 TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id, bool with_check)
 {
-    auto lock = getLock();
-
+    TransactionCnchPtr cnch_txn;
     if (shared->server_type == ServerType::cnch_server)
     {
         std::optional<TransactionRecord> txn_record = with_check ? getCnchCatalog()->tryGetTransactionRecord((txn_id)) : std::nullopt;
@@ -5210,11 +5252,13 @@ TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id,
             txn_record->read_only = true;
         }
 
-        current_cnch_txn = std::make_shared<CnchServerTransaction>(getGlobalContext(), std::move(*txn_record));
+        cnch_txn = std::make_shared<CnchServerTransaction>(getGlobalContext(), std::move(*txn_record));
     }
     else
-        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(getGlobalContext(), txn_id, primary_txn_id);
+        cnch_txn = std::make_shared<CnchWorkerTransaction>(getGlobalContext(), txn_id, primary_txn_id);
 
+    auto lock = getLock();
+    std::swap(current_cnch_txn, cnch_txn);
     return current_cnch_txn;
 }
 
@@ -5227,11 +5271,15 @@ TransactionCnchPtr Context::getCurrentTransaction() const
 
 TxnTimestamp Context::tryGetCurrentTransactionID() const
 {
+    auto lock = getLock();
+
     return current_cnch_txn ? current_cnch_txn->getTransactionID() : TxnTimestamp{};
 }
 
 TxnTimestamp Context::getCurrentTransactionID() const
 {
+    auto lock = getLock();
+
     if (!current_cnch_txn)
         throw Exception("Transaction is not set (empty)", ErrorCodes::LOGICAL_ERROR);
 
@@ -5244,6 +5292,8 @@ TxnTimestamp Context::getCurrentTransactionID() const
 
 TxnTimestamp Context::getCurrentCnchStartTime() const
 {
+    auto lock = getLock();
+
     if (!current_cnch_txn)
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 
