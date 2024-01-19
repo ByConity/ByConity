@@ -398,7 +398,17 @@ public:
         assertNoParameters(getName(), params_);
     }
 
-    String getName() const override { return "sumMap"; }
+    String getName() const override 
+    { 
+        if constexpr (overflow)
+        {
+            return "sumMapWithOverflow";
+        }
+        else
+        {
+            return "sumMap";
+        }
+    }
 
     bool keepKey(const T &) const { return true; }
 };
@@ -449,8 +459,16 @@ public:
     }
 
     String getName() const override
-    { return overflow ? "sumMapFilteredWithOverflow" : "sumMapFiltered"; }
-
+    {
+        if constexpr (overflow)
+        {
+            return "sumMapFilteredWithOverflow";
+        }
+        else
+        {
+            return "sumMapFiltered";
+        }
+    }
     bool keepKey(const T & key) const { return keys_to_keep.count(key); }
 };
 
@@ -466,7 +484,7 @@ private:
     template <typename FieldType>
     bool compareImpl(FieldType & x) const
     {
-        auto val = get<FieldType>(rhs);
+        auto val = rhs.get<FieldType>();
         if (val > x)
         {
             x = val;
@@ -479,7 +497,12 @@ private:
 public:
     explicit FieldVisitorMax(const Field & rhs_) : rhs(rhs_) {}
 
-    bool operator() (Null &) const { throw Exception("Cannot compare Nulls", ErrorCodes::LOGICAL_ERROR); }
+    bool operator() (Null &) const
+    {
+        /// Do not update current value, skip nulls
+        return false;
+    }
+
     bool operator() (NegativeInfinity &) const { throw Exception("Cannot compare -Inf", ErrorCodes::LOGICAL_ERROR); }
     bool operator() (PositiveInfinity &) const { throw Exception("Cannot compare +Inf", ErrorCodes::LOGICAL_ERROR); }
     bool operator() (AggregateFunctionStateData &) const { throw Exception("Cannot compare AggregateFunctionStates", ErrorCodes::LOGICAL_ERROR); }
@@ -504,7 +527,7 @@ private:
     template <typename FieldType>
     bool compareImpl(FieldType & x) const
     {
-        auto val = get<FieldType>(rhs);
+        auto val = rhs.get<FieldType>();
         if (val < x)
         {
             x = val;
@@ -517,7 +540,12 @@ private:
 public:
     explicit FieldVisitorMin(const Field & rhs_) : rhs(rhs_) {}
 
-    bool operator() (Null &) const { throw Exception("Cannot compare Nulls", ErrorCodes::LOGICAL_ERROR); }
+    bool operator() (Null &) const
+    {
+        /// Do not update current value, skip nulls
+        return false;
+    }
+
     bool operator() (NegativeInfinity &) const { throw Exception("Cannot compare -Inf", ErrorCodes::LOGICAL_ERROR); }
     bool operator() (PositiveInfinity &) const { throw Exception("Cannot compare +Inf", ErrorCodes::LOGICAL_ERROR); }
     bool operator() (AggregateFunctionStateData &) const { throw Exception("Cannot sum AggregateFunctionStates", ErrorCodes::LOGICAL_ERROR); }

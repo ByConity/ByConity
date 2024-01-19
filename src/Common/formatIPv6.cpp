@@ -103,7 +103,7 @@ static void printInteger(char *& out, T value)
 
 void formatIPv6(const unsigned char * src, char *& dst, uint8_t zeroed_tail_bytes_count)
 {
-    struct { int base, len; } best{-1, 0}, cur{-1, 0};
+    struct { Int64 base, len; } best{-1, 0}, cur{-1, 0};
     std::array<UInt16, IPV6_BINARY_LENGTH / sizeof(UInt16)> words{};
 
     /** Preprocess:
@@ -145,14 +145,18 @@ void formatIPv6(const unsigned char * src, char *& dst, uint8_t zeroed_tail_byte
         best.base = -1;
 
     /// Format the result.
-    for (const int i : collections::range(0, words.size()))
+    for (const size_t i : collections::range(0, words.size()))
     {
         /// Are we inside the best run of 0x00's?
-        if (best.base != -1 && i >= best.base && i < (best.base + best.len))
+        if (best.base != -1)
         {
-            if (i == best.base)
-                *dst++ = ':';
-            continue;
+            size_t best_base = static_cast<size_t>(best.base);
+            if (i >= best_base && i < (best_base + best.len))
+            {
+                if (i == best_base)
+                    *dst++ = ':';
+                continue;
+            }
         }
 
         /// Are we following an initial run of 0x00s or any real hex?
@@ -165,8 +169,9 @@ void formatIPv6(const unsigned char * src, char *& dst, uint8_t zeroed_tail_byte
             uint8_t ipv4_buffer[IPV4_BINARY_LENGTH] = {0};
             memcpy(ipv4_buffer, src + 12, IPV4_BINARY_LENGTH);
             // Due to historical reasons formatIPv4() takes ipv4 in BE format, but inside ipv6 we store it in LE-format.
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
             std::reverse(std::begin(ipv4_buffer), std::end(ipv4_buffer));
-
+#endif
             formatIPv4(ipv4_buffer, dst, std::min(zeroed_tail_bytes_count, static_cast<uint8_t>(IPV4_BINARY_LENGTH)), "0");
             // formatIPv4 has already added a null-terminator for us.
             return;
@@ -176,7 +181,7 @@ void formatIPv6(const unsigned char * src, char *& dst, uint8_t zeroed_tail_byte
     }
 
     /// Was it a trailing run of 0x00's?
-    if (best.base != -1 && size_t(best.base) + size_t(best.len) == words.size())
+    if (best.base != -1 && static_cast<size_t>(best.base) + static_cast<size_t>(best.len) == words.size())
         *dst++ = ':';
 
     *dst++ = '\0';

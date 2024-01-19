@@ -178,6 +178,8 @@ namespace
             for (const auto & arg : arguments)
             {
                 ColumnPtr col = arg.column;
+                if (arg.column->onlyNull())
+                    continue;
                 if (!isStringOrFixedString(arg.type))
                     col = convert->executeImpl({arg}, type_string, input_rows_count);
                 args.emplace_back(col, type_string, arg.name);
@@ -188,11 +190,11 @@ namespace
             res->reserve(input_rows_count);
 
             const ColumnPtr col_separator = arguments[0].column;
-            size_t arg_size = arguments.size();
+            size_t arg_size = args.size();
             // extract data columns and null maps if exist
             const UInt8 * nullable_args_map[arg_size];
             ColumnPtr raw_column_maps[arg_size];
-            extractNullMapAndNestedCol(arguments, raw_column_maps, nullable_args_map);
+            extractNullMapAndNestedCol(args, raw_column_maps, nullable_args_map);
 
             for (size_t r = 0; r < input_rows_count; ++r)
             {

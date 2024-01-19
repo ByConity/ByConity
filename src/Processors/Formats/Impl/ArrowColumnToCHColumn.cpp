@@ -33,6 +33,7 @@
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <common/DateLUTImpl.h>
 #include <common/types.h>
 #include <Core/Block.h>
@@ -391,6 +392,36 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
         }
     }
 
+    static void fillIPv6ColumnFromBinaryData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    {
+        size_t total_size = 0;
+        for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
+        {
+            auto & chunk = dynamic_cast<arrow::BinaryArray &>(*(arrow_column->chunk(chunk_i)));
+            const size_t chunk_length = chunk.length();
+
+            for (size_t i = 0; i != chunk_length; ++i)
+            {
+                /// If at least one value size is not 16 bytes, fallback to reading String column and further cast to IPv6.
+                if (chunk.value_length(i) != sizeof(IPv6))
+                    return fillColumnWithStringData(arrow_column, internal_column);
+            }
+            total_size += chunk_length;
+        }
+
+        auto & data = assert_cast<ColumnIPv6 &>(internal_column).getData();
+        data.reserve(total_size * sizeof(IPv6));
+
+        for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
+        {
+            auto & chunk = dynamic_cast<arrow::BinaryArray &>(*(arrow_column->chunk(chunk_i)));
+            std::shared_ptr<arrow::Buffer> buffer = chunk.value_data();
+            const auto * raw_data = reinterpret_cast<const IPv6 *>(buffer->data());
+            data.insert_assume_reserved(raw_data, raw_data + chunk.length());
+        }
+        return;
+    }
+
     static void readColumnFromArrowColumn(
         std::shared_ptr<arrow::ChunkedArray> & arrow_column,
         IColumn & internal_column,
@@ -423,9 +454,12 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
         {
             case arrow::Type::STRING:
             case arrow::Type::BINARY:
-                //case arrow::Type::FIXED_SIZE_BINARY:
-                fillColumnWithStringData(arrow_column, internal_column);
+            {
+                if (WhichDataType(internal_column.getDataType()).isIPv6())
+                    fillIPv6ColumnFromBinaryData(arrow_column, internal_column);
+                else fillColumnWithStringData(arrow_column, internal_column);
                 break;
+            }
             case arrow::Type::FIXED_SIZE_BINARY:
                 fillColumnWithFixedStringData(arrow_column, internal_column);
                 break;

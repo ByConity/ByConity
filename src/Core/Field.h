@@ -35,6 +35,7 @@
 #include <Protos/enum.pb.h>
 #include <Common/AllocatorWithMemoryTracking.h>
 #include <Common/Exception.h>
+#include <common/IPv4andIPv6.h>
 #include <common/DayNum.h>
 #include <common/strong_typedef.h>
 
@@ -247,6 +248,8 @@ template <> struct NearestFieldTypeImpl<Map> { using Type = Map; };
 template <> struct NearestFieldTypeImpl<bool> { using Type = UInt64; };
 template <> struct NearestFieldTypeImpl<Null> { using Type = Null; };
 template <> struct NearestFieldTypeImpl<ByteMap> { using Type = ByteMap; };
+template <> struct NearestFieldTypeImpl<IPv4> { using Type = IPv4; };
+template <> struct NearestFieldTypeImpl<IPv6> { using Type = IPv6; };
 template <> struct NearestFieldTypeImpl<NegativeInfinity> { using Type = NegativeInfinity; };
 template <> struct NearestFieldTypeImpl<PositiveInfinity> { using Type = PositiveInfinity; };
 
@@ -304,6 +307,8 @@ public:
             (ByteMap, 28),
             (BitMap64, 29),
             (SketchBinary, 30),
+            (IPv4, 31),
+            (IPv6, 32),
             // Special types for index analysis
             (NegativeInfinity, 254),
             (PositiveInfinity, 255));
@@ -509,6 +514,8 @@ public:
             case Types::Int128:  return get<Int128>()  < rhs.get<Int128>();
             case Types::Int256:  return get<Int256>()  < rhs.get<Int256>();
             case Types::UUID:    return get<UUID>()    < rhs.get<UUID>();
+            case Types::IPv4:    return get<IPv4>()    < rhs.get<IPv4>();
+            case Types::IPv6:    return get<IPv6>()    < rhs.get<IPv6>();
             case Types::Float64: return get<Float64>() < rhs.get<Float64>();
             case Types::String:  return get<String>()  < rhs.get<String>();
             case Types::SketchBinary:  return get<String>()  < rhs.get<String>();
@@ -552,6 +559,8 @@ public:
             case Types::Int128:  return get<Int128>()  <= rhs.get<Int128>();
             case Types::Int256:  return get<Int256>()  <= rhs.get<Int256>();
             case Types::UUID:    return get<UUID>().toUnderType() <= rhs.get<UUID>().toUnderType();
+            case Types::IPv4:    return get<IPv4>()    <= rhs.get<IPv4>();
+            case Types::IPv6:    return get<IPv6>()    <= rhs.get<IPv6>();
             case Types::Float64: return get<Float64>() <= rhs.get<Float64>();
             case Types::String:  return get<String>()  <= rhs.get<String>();
             case Types::SketchBinary:  return get<String>()  <= rhs.get<String>();
@@ -596,6 +605,8 @@ public:
                 return reinterpret<UInt64>() == rhs.reinterpret<UInt64>();
             }
             case Types::UUID:    return get<UUID>()    == rhs.get<UUID>();
+            case Types::IPv4:    return get<IPv4>()    == rhs.get<IPv4>();
+            case Types::IPv6:    return get<IPv6>()    == rhs.get<IPv6>();
             case Types::String:  return get<String>()  == rhs.get<String>();
             case Types::SketchBinary:  return get<String>()  == rhs.get<String>();
             case Types::Array:   return get<Array>()   == rhs.get<Array>();
@@ -644,6 +655,8 @@ public:
             case Types::Int128:  return f(field.template get<Int128>());
             case Types::Int256:  return f(field.template get<Int256>());
             case Types::UUID:    return f(field.template get<UUID>());
+            case Types::IPv4:    return f(field.template get<IPv4>());
+            case Types::IPv6:    return f(field.template get<IPv6>());
             case Types::Float64: return f(field.template get<Float64>());
             case Types::String:  return f(field.template get<String>());
             case Types::SketchBinary:  return f(field.template get<String>());
@@ -722,6 +735,10 @@ public:
                 return f.template operator()<AggregateFunctionStateData>();
             case Types::BitMap64:
                 return f.template operator()<BitMap64>();
+            case Types::IPv4:
+                return f.template operator()<IPv4>();
+            case Types::IPv6:
+                return f.template operator()<IPv6>();
 #if !defined(__clang__)
 #    pragma GCC diagnostic pop
 #endif
@@ -773,7 +790,7 @@ public:
 
 private:
     std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which),
-        Null, UInt64, UInt128, UInt256, Int64, Int128, Int256, UUID, Float64, String, Array, Tuple, Map,
+        Null, UInt64, UInt128, UInt256, Int64, Int128, Int256, UUID, IPv4, IPv6, Float64, String, Array, Tuple, Map,
         DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>,
         AggregateFunctionStateData, BitMap64
         > storage;
@@ -911,6 +928,8 @@ template <> struct Field::TypeToEnum<Int64>   { static const Types::Which value 
 template <> struct Field::TypeToEnum<Int128>  { static const Types::Which value = Types::Int128; };
 template <> struct Field::TypeToEnum<Int256>  { static const Types::Which value = Types::Int256; };
 template <> struct Field::TypeToEnum<UUID>    { static const Types::Which value = Types::UUID; };
+template <> struct Field::TypeToEnum<IPv4>    { static constexpr Types::Which value = Types::IPv4; };
+template <> struct Field::TypeToEnum<IPv6>    { static constexpr Types::Which value = Types::IPv6; };
 template <> struct Field::TypeToEnum<Float64> { static const Types::Which value = Types::Float64; };
 template <> struct Field::TypeToEnum<String>  { static const Types::Which value = Types::String; };
 template <> struct Field::TypeToEnum<Array>   { static const Types::Which value = Types::Array; };
@@ -935,6 +954,8 @@ template <> struct Field::EnumToType<Field::Types::Int64>   { using Type = Int64
 template <> struct Field::EnumToType<Field::Types::Int128>  { using Type = Int128; };
 template <> struct Field::EnumToType<Field::Types::Int256>  { using Type = Int256; };
 template <> struct Field::EnumToType<Field::Types::UUID>    { using Type = UUID; };
+template <> struct Field::EnumToType<Field::Types::IPv4>    { using Type = IPv4; };
+template <> struct Field::EnumToType<Field::Types::IPv6>    { using Type = IPv6; };
 template <> struct Field::EnumToType<Field::Types::Float64> { using Type = Float64; };
 template <> struct Field::EnumToType<Field::Types::String>  { using Type = String; };
 template <> struct Field::EnumToType<Field::Types::Array>   { using Type = Array; };
@@ -1129,9 +1150,9 @@ __attribute__ ((noreturn)) inline void writeText(const AggregateFunctionStateDat
 }
 
 template <typename T>
-inline void writeText(const DecimalField<T> & value, WriteBuffer & buf)
+inline void writeText(const DecimalField<T> & value, WriteBuffer & buf, bool trailing_zeros = false)
 {
-    writeText(value.getValue(), value.getScale(), buf);
+    writeText(value.getValue(), value.getScale(), buf, trailing_zeros);
 }
 
 void readBinary(BitMap64 & x, ReadBuffer & buf);

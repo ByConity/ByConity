@@ -157,7 +157,11 @@ public:
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { pipe.addQueryPlan(std::move(plan)); }
     void setLimits(const StreamLocalLimits & limits) { pipe.setLimits(limits); }
     void setLeafLimits(const SizeLimits & limits) { pipe.setLeafLimits(limits); }
-    void setQuota(const std::shared_ptr<const EnabledQuota> & quota) { pipe.setQuota(quota); }
+    void setQuota(const std::shared_ptr<const EnabledQuota> & quota_)
+    {
+        pipe.setQuota(quota_);
+        quota = quota_;
+    }
 
     /// For compatibility with IBlockInputStream.
     void setProgressCallback(const ProgressCallback & callback);
@@ -171,6 +175,12 @@ public:
         std::unique_ptr<SourceFromChunks> source_extremes);
 
     void finalizeWriteInQueryCache();
+
+    /// Create progress callback from limits and quotas.
+    std::unique_ptr<ReadProgressCallback> getReadProgressCallback() const;
+    /// Skip updating profile events.
+    /// For merges in mutations it may need special logic, it's done inside ProgressCallback.
+    void disableProfileEventUpdate() { update_profile_events = false; }
 
     /// Recommend number of threads for pipeline execution.
     size_t getNumThreads() const
@@ -201,6 +211,10 @@ public:
     /// Convert query pipeline to pipe.
     static Pipe getPipe(QueryPipeline pipeline) { return std::move(pipeline.pipe); }
 
+    Processors & getPipeProcessors() { return pipe.processors; }
+
+    void complete(std::shared_ptr<IOutputFormat> format);
+
     /// use for query cache
     void addUsedStorageIDs(const std::set<StorageID> & storage_id);
     std::set<StorageID> getUsedStorageIDs() const;
@@ -210,6 +224,10 @@ private:
 
     Pipe pipe;
     IOutputFormat * output_format = nullptr;
+
+    ProgressCallback progress_callback;
+    std::shared_ptr<const EnabledQuota> quota;
+    bool update_profile_events = true;
 
     /// Limit on the number of threads. Zero means no limit.
     /// Sometimes, more streams are created then the number of threads for more optimal execution.
@@ -231,6 +249,7 @@ private:
     void setCollectedProcessors(Processors * processors);
 
     friend class QueryPipelineProcessorsCollector;
+    friend class CompletedPipelineExecutor;
 };
 
 /// This is a small class which collects newly added processors to QueryPipeline.

@@ -13,8 +13,8 @@
 #include <Functions/JSONPath/ASTs/ASTJSONPath.h>
 #include <Functions/JSONPath/Generator/GeneratorJSONPath.h>
 #include <Functions/JSONPath/Parsers/ParserJSONPath.h>
-#include <Functions/RapidJSONParser.h>
-#include <Functions/SimdJSONParser.h>
+#include <Common/JSONParsers/RapidJSONParser.h>
+#include <Common/JSONParsers/SimdJSONParser.h>
 #include <Interpreters/Context.h>
 #include <Parsers/IParser.h>
 #include <Parsers/Lexer.h>

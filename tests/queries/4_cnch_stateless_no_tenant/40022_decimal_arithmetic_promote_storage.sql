@@ -15,7 +15,7 @@ SELECT 1.2::Decimal128(20) * 0.6::Decimal128(19) SETTINGS decimal_check_overflow
 SELECT 1.2::Decimal128(20) * 0.6::Decimal128(19) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 1;
 SELECT 1.2::Decimal128(2) / 0.6::Decimal128(1), toTypeName(1.2::Decimal128(2) / 0.6::Decimal128(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
 SELECT 1.2::Decimal128(2) / 0.6::Decimal128(1), toTypeName(1.2::Decimal128(2) / 0.6::Decimal128(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
-SELECT 1.2::Decimal128(20) / 0.6::Decimal128(19) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 0;  -- { wrong answer }
+SELECT 1.2::Decimal128(20) / 0.6::Decimal128(19) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 0;  -- { serverError 407 }
 SELECT 1.2::Decimal128(20) / 0.6::Decimal128(19) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 1;
 
 -- Decimal op Decimal, storage promotion doesn't happens

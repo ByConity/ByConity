@@ -430,9 +430,136 @@ struct ToStartOfSecondImpl
     using FactorTransform = ZeroTransform;
 };
 
-struct ToStartOfFiveMinuteImpl
+struct ToStartOfMillisecondImpl
 {
-    static constexpr auto name = "toStartOfFiveMinute";
+    static constexpr auto name = "toStartOfMillisecond";
+
+    static inline DateTime64 execute(const DateTime64 & datetime64, Int64 scale_multiplier, const DateLUTImpl &)
+    {
+        // given that scale is 6, scale_multiplier is 1000000
+        // for DateTime64 value of 123.456789:
+        // 123456789 - 789 = 123456000
+        // for DateTime64 value of -123.456789:
+        // -123456789 - (1000 + (-789)) = -123457000
+
+        if (scale_multiplier == 1000)
+        {
+            return datetime64;
+        }
+        else if (scale_multiplier <= 1000)
+        {
+            return datetime64 * (1000 / scale_multiplier);
+        }
+        else
+        {
+        auto droppable_part_with_sign = DecimalUtils::getFractionalPartWithScaleMultiplier<DateTime64, true>(datetime64, scale_multiplier / 1000);
+
+        if (droppable_part_with_sign < 0)
+            droppable_part_with_sign += scale_multiplier;
+
+        return datetime64 - droppable_part_with_sign;
+        }
+    }
+
+    static inline UInt32 execute(UInt32, const DateLUTImpl &)
+    {
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type DateTime of argument for function {}", name);
+    }
+    static inline UInt32 execute(Int32, const DateLUTImpl &)
+    {
+        throwDateTimeIsNotSupported(name);
+    }
+    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    {
+        throwDateTimeIsNotSupported(name);
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
+struct ToStartOfMicrosecondImpl
+{
+    static constexpr auto name = "toStartOfMicrosecond";
+
+    static inline DateTime64 execute(const DateTime64 & datetime64, Int64 scale_multiplier, const DateLUTImpl &)
+    {
+        // @see ToStartOfMillisecondImpl
+
+        if (scale_multiplier == 1000000)
+        {
+            return datetime64;
+        }
+        else if (scale_multiplier <= 1000000)
+        {
+            return datetime64 * (1000000 / scale_multiplier);
+        }
+        else
+        {
+            auto droppable_part_with_sign = DecimalUtils::getFractionalPartWithScaleMultiplier<DateTime64, true>(datetime64, scale_multiplier / 1000000);
+
+            if (droppable_part_with_sign < 0)
+                droppable_part_with_sign += scale_multiplier;
+
+            return datetime64 - droppable_part_with_sign;
+        }
+    }
+
+    static inline UInt32 execute(UInt32, const DateLUTImpl &)
+    {
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type DateTime of argument for function {}", name);
+    }
+    static inline UInt32 execute(Int32, const DateLUTImpl &)
+    {
+        throwDateTimeIsNotSupported(name);
+    }
+    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    {
+        throwDateTimeIsNotSupported(name);
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
+struct ToStartOfNanosecondImpl
+{
+    static constexpr auto name = "toStartOfNanosecond";
+
+    static inline DateTime64 execute(const DateTime64 & datetime64, Int64 scale_multiplier, const DateLUTImpl &)
+    {
+        // @see ToStartOfMillisecondImpl
+        if (scale_multiplier == 1000000000)
+        {
+            return datetime64;
+        }
+        else if (scale_multiplier <= 1000000000)
+        {
+            return datetime64 * (1000000000 / scale_multiplier);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type of argument for function {}, DateTime64 expected", name);
+        }
+    }
+
+    static inline UInt32 execute(UInt32, const DateLUTImpl &)
+    {
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type DateTime of argument for function {}", name);
+    }
+    static inline UInt32 execute(Int32, const DateLUTImpl &)
+    {
+        throwDateTimeIsNotSupported(name);
+    }
+    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    {
+        throwDateTimeIsNotSupported(name);
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
+struct ToStartOfFiveMinutesImpl
+{
+    static constexpr auto name = "toStartOfFiveMinutes";
 
     static inline UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
     {
@@ -626,6 +753,56 @@ struct ToYearImpl
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toYear(DayNum(d));
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
+struct ToWeekYearImpl
+{
+    static constexpr auto name = "toWeekYear";
+
+    static constexpr Int8 week_mode = 3;
+
+    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toYearWeek(t, week_mode).first;
+    }
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toYearWeek(t, week_mode).first;
+    }
+    static inline UInt16 execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toYearWeek(ExtendedDayNum(d), week_mode).first;
+    }
+    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toYearWeek(DayNum(d), week_mode).first;
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
+struct ToWeekOfWeekYearImpl
+{
+    static constexpr auto name = "toWeekOfWeekYear";
+
+    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toISOWeek(t);
+    }
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toISOWeek(t);
+    }
+    static inline UInt16 execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toISOWeek(ExtendedDayNum(d));
+    }
+    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toISOWeek(DayNum(d));
     }
 
     using FactorTransform = ZeroTransform;
@@ -1194,21 +1371,39 @@ struct ToISOWeekImpl
     using FactorTransform = ToISOYearImpl;
 };
 
+enum class ResultPrecision
+{
+    Standard,
+    Extended
+};
+
+/// Standard precision results (precision_ == ResultPrecision::Standard) potentially lead to overflows when returning values.
+/// This mode is used by SQL functions "toRelative*Num()" which cannot easily be changed due to backward compatibility.
+/// According to documentation, these functions merely need to compute the time difference to a deterministic, fixed point in the past.
+/// As a future TODO, we should fix their behavior in a backwards-compatible way.
+/// See https://github.com/ClickHouse/ClickHouse/issues/41977#issuecomment-1267536814.
+template <ResultPrecision precision_>
 struct ToRelativeYearNumImpl
 {
     static constexpr auto name = "toRelativeYearNum";
 
-    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    static inline auto execute(Int64 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toYear(t);
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int16>(time_zone.toYear(t));
+        else
+            return static_cast<UInt16>(time_zone.toYear(t));
     }
     static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toYear(static_cast<time_t>(t));
     }
-    static inline UInt16 execute(Int32 d, const DateLUTImpl & time_zone)
+    static inline auto execute(Int32 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toYear(ExtendedDayNum(d));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int16>(time_zone.toYear(ExtendedDayNum(d)));
+        else
+            return static_cast<UInt16>(time_zone.toYear(ExtendedDayNum(d)));
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
@@ -1218,21 +1413,28 @@ struct ToRelativeYearNumImpl
     using FactorTransform = ZeroTransform;
 };
 
+template <ResultPrecision precision_>
 struct ToRelativeQuarterNumImpl
 {
     static constexpr auto name = "toRelativeQuarterNum";
 
-    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    static inline auto execute(Int64 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeQuarterNum(t);
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int32>(time_zone.toRelativeQuarterNum(t));
+        else
+            return static_cast<UInt16>(time_zone.toRelativeQuarterNum(t));
     }
     static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeQuarterNum(static_cast<time_t>(t));
     }
-    static inline UInt16 execute(Int32 d, const DateLUTImpl & time_zone)
+    static inline auto execute(Int32 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeQuarterNum(ExtendedDayNum(d));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int32>(time_zone.toRelativeQuarterNum(ExtendedDayNum(d)));
+        else
+            return static_cast<UInt16>(time_zone.toRelativeQuarterNum(ExtendedDayNum(d)));
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
@@ -1242,21 +1444,28 @@ struct ToRelativeQuarterNumImpl
     using FactorTransform = ZeroTransform;
 };
 
+template <ResultPrecision precision_>
 struct ToRelativeMonthNumImpl
 {
     static constexpr auto name = "toRelativeMonthNum";
 
-    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    static inline auto execute(Int64 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMonthNum(t);
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int32>(time_zone.toRelativeMonthNum(t));
+        else
+            return static_cast<UInt16>(time_zone.toRelativeMonthNum(t));
     }
     static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeMonthNum(static_cast<time_t>(t));
     }
-    static inline UInt16 execute(Int32 d, const DateLUTImpl & time_zone)
+    static inline auto execute(Int32 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMonthNum(ExtendedDayNum(d));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int32>(time_zone.toRelativeMonthNum(ExtendedDayNum(d)));
+        else
+            return static_cast<UInt16>(time_zone.toRelativeMonthNum(ExtendedDayNum(d)));
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
@@ -1266,21 +1475,28 @@ struct ToRelativeMonthNumImpl
     using FactorTransform = ZeroTransform;
 };
 
+template <ResultPrecision precision_>
 struct ToRelativeWeekNumImpl
 {
     static constexpr auto name = "toRelativeWeekNum";
 
-    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    static inline auto execute(Int64 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeWeekNum(t);
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int32>(time_zone.toRelativeWeekNum(t));
+        else
+            return static_cast<UInt16>(time_zone.toRelativeWeekNum(t));
     }
     static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeWeekNum(static_cast<time_t>(t));
     }
-    static inline UInt16 execute(Int32 d, const DateLUTImpl & time_zone)
+    static inline auto execute(Int32 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeWeekNum(ExtendedDayNum(d));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int32>(time_zone.toRelativeWeekNum(ExtendedDayNum(d)));
+        else
+            return static_cast<UInt16>(time_zone.toRelativeWeekNum(ExtendedDayNum(d)));
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
@@ -1290,21 +1506,28 @@ struct ToRelativeWeekNumImpl
     using FactorTransform = ZeroTransform;
 };
 
+template <ResultPrecision precision_>
 struct ToRelativeDayNumImpl
 {
     static constexpr auto name = "toRelativeDayNum";
 
-    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    static inline auto execute(Int64 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toDayNum(t);
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int64>(time_zone.toDayNum(t));
+        else
+            return static_cast<UInt16>(time_zone.toDayNum(t));
     }
     static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toDayNum(static_cast<time_t>(t));
     }
-    static inline UInt16 execute(Int32 d, const DateLUTImpl &)
+    static inline auto execute(Int32 d, const DateLUTImpl &)
     {
-        return static_cast<DayNum>(d);
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int32>(static_cast<ExtendedDayNum>(d));
+        else
+            return static_cast<UInt16>(static_cast<ExtendedDayNum>(d));
     }
     static inline UInt16 execute(UInt16 d, const DateLUTImpl &)
     {
@@ -1314,55 +1537,75 @@ struct ToRelativeDayNumImpl
     using FactorTransform = ZeroTransform;
 };
 
-
+template <ResultPrecision precision_>
 struct ToRelativeHourNumImpl
 {
     static constexpr auto name = "toRelativeHourNum";
 
-    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
+    static inline auto execute(Int64 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeHourNum(t);
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int64>(time_zone.toStableRelativeHourNum(t));
+        else
+            return static_cast<UInt32>(time_zone.toRelativeHourNum(t));
     }
     static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeHourNum(static_cast<time_t>(t));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<UInt32>(time_zone.toStableRelativeHourNum(static_cast<DateLUTImpl::Time>(t)));
+        else
+            return static_cast<UInt32>(time_zone.toRelativeHourNum(static_cast<DateLUTImpl::Time>(t)));
     }
-    static inline UInt32 execute(Int32 d, const DateLUTImpl & time_zone)
+    static inline auto execute(Int32 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeHourNum(ExtendedDayNum(d));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int64>(time_zone.toStableRelativeHourNum(ExtendedDayNum(d)));
+        else
+            return static_cast<UInt32>(time_zone.toRelativeHourNum(ExtendedDayNum(d)));
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeHourNum(DayNum(d));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<UInt32>(time_zone.toStableRelativeHourNum(DayNum(d)));
+        else
+            return static_cast<UInt32>(time_zone.toRelativeHourNum(DayNum(d)));
     }
 
     using FactorTransform = ZeroTransform;
 };
 
+template <ResultPrecision precision_>
 struct ToRelativeMinuteNumImpl
 {
     static constexpr auto name = "toRelativeMinuteNum";
 
-    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
+    static inline auto execute(Int64 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMinuteNum(t);
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int64>(time_zone.toRelativeMinuteNum(t));
+        else
+            return static_cast<UInt32>(time_zone.toRelativeMinuteNum(t));
     }
     static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMinuteNum(static_cast<time_t>(t));
+        return static_cast<UInt32>(time_zone.toRelativeMinuteNum(static_cast<DateLUTImpl::Time>(t)));
     }
-    static inline UInt32 execute(Int32 d, const DateLUTImpl & time_zone)
+    static inline auto execute(Int32 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMinuteNum(ExtendedDayNum(d));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int64>(time_zone.toRelativeMinuteNum(ExtendedDayNum(d)));
+        else
+            return static_cast<UInt32>(time_zone.toRelativeMinuteNum(ExtendedDayNum(d)));
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.toRelativeMinuteNum(DayNum(d));
+        return static_cast<UInt32>(time_zone.toRelativeMinuteNum(DayNum(d)));
     }
 
     using FactorTransform = ZeroTransform;
 };
 
+template <ResultPrecision precision_>
 struct ToRelativeSecondNumImpl
 {
     static constexpr auto name = "toRelativeSecondNum";
@@ -1375,13 +1618,16 @@ struct ToRelativeSecondNumImpl
     {
         return t;
     }
-    static inline UInt32 execute(Int32 d, const DateLUTImpl & time_zone)
+    static inline auto execute(Int32 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(ExtendedDayNum(d));
+        if constexpr (precision_ == ResultPrecision::Extended)
+            return static_cast<Int64>(time_zone.fromDayNum(ExtendedDayNum(d)));
+        else
+            return static_cast<UInt32>(time_zone.fromDayNum(ExtendedDayNum(d)));
     }
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
-        return time_zone.fromDayNum(ExtendedDayNum(d));
+        return static_cast<UInt32>(time_zone.fromDayNum(DayNum(d)));
     }
 
     using FactorTransform = ZeroTransform;
@@ -1500,6 +1746,29 @@ struct ToLastDayOfMonthImpl
     using FactorTransform = ZeroTransform;
 };
 
+struct ToDateTimeComponentsImpl
+{
+    static constexpr auto name = "toDateTimeComponents";
+
+    static inline DateLUTImpl::DateTimeComponents execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toDateTimeComponents(t);
+    }
+    static inline DateLUTImpl::DateTimeComponents execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toDateTimeComponents(static_cast<DateLUTImpl::Time>(t));
+    }
+    static inline DateLUTImpl::DateTimeComponents execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toDateTimeComponents(ExtendedDayNum(d));
+    }
+    static inline DateLUTImpl::DateTimeComponents execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toDateTimeComponents(DayNum(d));
+    }
+
+    using FactorTransform = ZeroTransform;
+};
 
 template <typename FromType, typename ToType, typename Transform, bool is_extended_result = false>
 struct Transformer
@@ -1578,6 +1847,7 @@ struct DateTimeTransformImpl
     }
 };
 
+/**TODO:@lianwenlong just used for toDateOrNull(DateTime)*/
 template <typename FromDataType, typename ToDataType, typename Transform>
 struct DateTimeTransformForNullImpl
 {
@@ -1588,7 +1858,7 @@ struct DateTimeTransformForNullImpl
         auto nested_result_type = removeNullable(result_type);
 
         using Op = Transformer<typename FromDataType::FieldType, typename ToDataType::FieldType, Transform>;
-        
+
         ColumnPtr source_col = arguments[0].column;
 
         if (checkAndGetColumn<ColumnString>(source_col.get()))

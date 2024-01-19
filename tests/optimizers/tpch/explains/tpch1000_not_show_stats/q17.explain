@@ -1,5 +1,5 @@
 Projection
-│     Expressions: avg_yearly:=`expr#sum(l_extendedprice)` / '7.0'
+│     Expressions: avg_yearly:=`expr#sum(l_extendedprice)` / '7'
 └─ MergingAggregated
    └─ Gather Exchange
       └─ Aggregating

@@ -44,18 +44,18 @@ Projection Est. 2 rows, cost 3.070000e+00
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
 └─ Gather Exchange Est. 2 rows, cost 2.922000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
-      │     Condition: datetime64 = cast(\'1664226000.010\', \'DateTime64(3)\')
+      │     Condition: datetime64 = cast(\'1664226000.01\', \'DateTime64(3)\')
       └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
-               Where: datetime64 = cast(\'1664226000.010\', \'DateTime64(3)\')
+               Where: datetime64 = cast(\'1664226000.01\', \'DateTime64(3)\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test datetime without timezone
 Projection Est. 2 rows, cost 3.070000e+00
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
 └─ Gather Exchange Est. 2 rows, cost 2.922000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
-      │     Condition: datetimewotz = cast(\'1664236800.010\', \'DateTime64(3, \\\'UTC\\\')\')
+      │     Condition: datetimewotz = cast(\'1664236800.01\', \'DateTime64(3, \\\'UTC\\\')\')
       └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
-               Where: datetimewotz = cast(\'1664236800.010\', \'DateTime64(3, \\\'UTC\\\')\')
+               Where: datetimewotz = cast(\'1664236800.01\', \'DateTime64(3, \\\'UTC\\\')\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test time
 Projection Est. 2 rows, cost 3.070000e+00
@@ -112,18 +112,18 @@ Projection Est. 2 rows, cost 3.070000e+00
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
 └─ Gather Exchange Est. 2 rows, cost 2.922000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
-      │     Condition: datetime64 = cast(\'1664226000.010\', \'DateTime64(3)\')
+      │     Condition: datetime64 = cast(\'1664226000.01\', \'DateTime64(3)\')
       └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
-               Where: datetime64 = cast(\'1664226000.010\', \'DateTime64(3)\')
+               Where: datetime64 = cast(\'1664226000.01\', \'DateTime64(3)\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test datetime without timezone
 Projection Est. 2 rows, cost 3.070000e+00
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
 └─ Gather Exchange Est. 2 rows, cost 2.922000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
-      │     Condition: datetimewotz = cast(\'1664236800.010\', \'DateTime64(3, \\\'UTC\\\')\')
+      │     Condition: datetimewotz = cast(\'1664236800.01\', \'DateTime64(3, \\\'UTC\\\')\')
       └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
-               Where: datetimewotz = cast(\'1664236800.010\', \'DateTime64(3, \\\'UTC\\\')\')
+               Where: datetimewotz = cast(\'1664236800.01\', \'DateTime64(3, \\\'UTC\\\')\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test time
 Projection Est. 2 rows, cost 3.070000e+00

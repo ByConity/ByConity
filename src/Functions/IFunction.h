@@ -242,6 +242,8 @@ public:
       */
     virtual bool hasInformationAboutMonotonicity() const { return false; }
 
+    virtual bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const { return false; }
+
     /// The property of monotonicity for a certain range.
     struct Monotonicity
     {
@@ -426,6 +428,8 @@ public:
       * Counterexample: modulo(0, 0)
       */
     virtual bool canBeExecutedOnDefaultArguments() const { return true; }
+
+    virtual bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const { return false; }
 
     /// Properties from IFunctionBase (see IFunction.h)
     virtual bool isSuitableForConstantFolding() const { return true; }

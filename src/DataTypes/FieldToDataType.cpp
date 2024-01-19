@@ -30,6 +30,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <DataTypes/DataTypeBitMap64.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -105,6 +106,16 @@ DataTypePtr FieldToDataType::operator() (const Int256 &) const
 DataTypePtr FieldToDataType::operator() (const UUID &) const
 {
     return std::make_shared<DataTypeUUID>();
+}
+
+DataTypePtr FieldToDataType::operator() (const IPv4 &) const
+{
+    return std::make_shared<DataTypeIPv4>();
+}
+
+DataTypePtr FieldToDataType::operator() (const IPv6 &) const
+{
+    return std::make_shared<DataTypeIPv6>();
 }
 
 DataTypePtr FieldToDataType::operator() (const String &) const

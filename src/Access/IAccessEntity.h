@@ -98,6 +98,7 @@ protected:
 
 using AccessEntityPtr = std::shared_ptr<const IAccessEntity>;
 using AccessEntityModel = Protos::DataModelAccessEntity;
+using AccessEntityType = IAccessEntity::Type;
 
 
 inline const IAccessEntity::TypeInfo & IAccessEntity::TypeInfo::get(Type type_)

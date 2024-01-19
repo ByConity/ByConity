@@ -28,6 +28,7 @@ struct ModuloByConstantImpl
     using BaseType = BinaryOperation<A, B, ModuloImpl<A, B>>;
     using ResultType = typename Op::ResultType;
     static const constexpr bool allow_fixed_string = false;
+    static const constexpr bool allow_string_integer = false;
 
     template <OpCase op_case>
     static void NO_INLINE process(const A * __restrict a, const B * __restrict b, ResultType * __restrict c, size_t size, const NullMap * right_nullmap, UInt8 * res_nullmap)
@@ -97,7 +98,7 @@ struct ModuloByConstantImpl
             || (std::is_signed_v<A> && std::is_signed_v<B> && b < std::numeric_limits<A>::lowest())))
         {
             for (size_t i = 0; i < size; ++i)
-                dst[i] = src[i];
+                dst[i] = static_cast<ResultType>(src[i]);
             return;
         }
 
@@ -118,16 +119,19 @@ struct ModuloByConstantImpl
 
         if (b & (b - 1))
         {
-            libdivide::divider<A> divider(b);
+            libdivide::divider<A> divider(static_cast<A>(b));
             for (size_t i = 0; i < size; ++i)
-                dst[i] = src[i] - (src[i] / divider) * b; /// NOTE: perhaps, the division semantics with the remainder of negative numbers is not preserved.
+            {
+                /// NOTE: perhaps, the division semantics with the remainder of negative numbers is not preserved.
+                dst[i] = static_cast<ResultType>(src[i] - (src[i] / divider) * b);
+            }
         }
         else
         {
             // gcc libdivide doesn't work well for pow2 division
             auto mask = b - 1;
             for (size_t i = 0; i < size; ++i)
-                dst[i] = src[i] & mask;
+                dst[i] = static_cast<ResultType>(src[i] & mask);
         }
     }
 
@@ -183,7 +187,6 @@ REGISTER_FUNCTION(Modulo)
 {
     factory.registerFunction<FunctionModulo>();
     factory.registerAlias("mod", "modulo", FunctionFactory::CaseInsensitive);
-    factory.registerAlias("pmod", "modulo", FunctionFactory::CaseInsensitive);
 }
 
 struct NameModuloLegacy { static constexpr auto name = "moduloLegacy"; };
@@ -192,6 +195,38 @@ using FunctionModuloLegacy = BinaryArithmeticOverloadResolver<ModuloLegacyImpl, 
 REGISTER_FUNCTION(ModuloLegacy)
 {
     factory.registerFunction<FunctionModuloLegacy>();
+}
+
+struct NameBucket {static constexpr auto name = "bucket"; };
+using FunctionBucket = BinaryArithmeticOverloadResolver<ModuloImpl, NameBucket, false>;
+
+REGISTER_FUNCTION(Bucket)
+{
+    factory.registerFunction<FunctionBucket>();
+}
+
+struct NamePositiveModulo
+{
+    static constexpr auto name = "positiveModulo";
+};
+using FunctionPositiveModulo = BinaryArithmeticOverloadResolver<PositiveModuloImpl, NamePositiveModulo, false>;
+
+REGISTER_FUNCTION(PositiveModulo)
+{
+    factory.registerFunction<FunctionPositiveModulo>(
+        {
+            R"(
+Calculates the remainder when dividing `a` by `b`. Similar to function `modulo` except that `positiveModulo` always return non-negative number.
+Returns the difference between `a` and the nearest integer not greater than `a` divisible by `b`.
+In other words, the function returning the modulus (modulo) in the terms of Modular Arithmetic.
+        )",
+            Documentation::Examples{{"positiveModulo", "SELECT positiveModulo(-1, 10);"}},
+            Documentation::Categories{"Arithmetic"}},
+        FunctionFactory::CaseInsensitive);
+
+    factory.registerAlias("positive_modulo", "positiveModulo", FunctionFactory::CaseInsensitive);
+    /// Compatibility with Spark:
+    factory.registerAlias("pmod", "positiveModulo", FunctionFactory::CaseInsensitive);
 }
 
 }

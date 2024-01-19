@@ -41,6 +41,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 
 #include <QueryPlan/PlanSerDerHelper.h>
 
@@ -98,6 +99,10 @@ DataTypePtr createBaseDataTypeFromTypeIndex(TypeIndex index)
             return std::make_shared<DataTypeString>();
         case TypeIndex::UUID:
             return std::make_shared<DataTypeUUID>();
+        case TypeIndex::IPv4:
+            return std::make_shared<DataTypeIPv4>();
+        case TypeIndex::IPv6:
+            return std::make_shared<DataTypeIPv6>();
         case TypeIndex::Set:
             return std::make_shared<DataTypeSet>();
         case TypeIndex::BitMap64:

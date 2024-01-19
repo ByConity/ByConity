@@ -223,6 +223,7 @@ enum class AccessType
       ALL) /* allows to execute functions dictGet(), dictHas(), dictGetHierarchy(), dictIsIn() */ \
 \
     M(addressToLine, "", GLOBAL, INTROSPECTION) /* allows to execute function addressToLine() */ \
+    M(addressToLineWithInlines, "", GLOBAL, INTROSPECTION) /* allows to execute function addressToLineWithInlines() */\
     M(addressToSymbol, "", GLOBAL, INTROSPECTION) /* allows to execute function addressToSymbol() */ \
     M(demangle, "", GLOBAL, INTROSPECTION) /* allows to execute function demangle() */ \
     M(INTROSPECTION, \

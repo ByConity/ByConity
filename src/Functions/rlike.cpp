@@ -1,7 +1,7 @@
 #include "FunctionsStringSearch.h"
 #include "FunctionFactory.h"
 #include "MatchImpl.h"
-#include "EscapeMatchImpl.h"
+#include "EscapeLike.h"
 
 namespace DB
 {
@@ -13,16 +13,10 @@ struct NameRLike
     static constexpr auto name = "rlike";
 };
 
-struct NameEscapeRLike
-{
-    static constexpr auto name = "escapeRLike";
-};
+using RLikeImpl = MatchImpl<NameRLike, MatchTraits::Syntax::Re2, MatchTraits::Case::Sensitive, MatchTraits::Result::DontNegate>;
+using FunctionRLike = FunctionsStringSearch<RLikeImpl>;
 
-using RLikeImpl = MatchImpl</*SQL LIKE */ false, /*revert*/false>;
-using FunctionRLike = FunctionsStringSearch<RLikeImpl, NameRLike>;
-
-using EscapeRLikeImpl = EscapeMatchImpl</*SQL LIKE */ false, /*revert*/false>;
-using FunctionEscapeRLike = FunctionsStringSearch<EscapeRLikeImpl, NameEscapeRLike>;
+using FunctionEscapeRLike = FunctionsStringSearch<EscapeRLikeImpl>;
 
 }
 

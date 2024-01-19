@@ -78,12 +78,12 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &result_type, size_t cnt) const override
     {
         #define V(TYPE) \
         if (checkColumn<ColumnVector<TYPE>>(arguments[0].column.get())) \
         { \
-            return execute<TYPE>(arguments); \
+            return execute<TYPE>(arguments, result_type, cnt); \
         }
         APPLY_FOR_EACH_NUMERIC_TYPE(V)
         #undef V
@@ -92,7 +92,7 @@ public:
     }
 private:
     template <typename T>
-    ColumnPtr execute(const ColumnsWithTypeAndName & arguments) const
+    ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &/*result_type*/, size_t cnt) const
     {
         ColumnPtr bits_col = arguments[0].column;
         ColumnPtr length_col = arguments[4].column;
@@ -102,21 +102,21 @@ private:
         if (!isString(arguments[1].type))
         {
             ColumnsWithTypeAndName args_i {arguments[1]};
-            on_column = ConvertImplGenericToString::execute(args_i);
+            on_column = ConvertImplGenericToString<ColumnString>::execute(args_i, std::make_shared<DataTypeString>(), cnt);
         }
 
         ColumnPtr off_column = arguments[2].column;
         if (!isString(arguments[2].type))
         {
             ColumnsWithTypeAndName args_i {arguments[2]};
-            off_column = ConvertImplGenericToString::execute(args_i);
+            off_column = ConvertImplGenericToString<ColumnString>::execute(args_i, std::make_shared<DataTypeString>(), cnt);
         }
 
         ColumnPtr separator_column = arguments[3].column;
         if (!isString(arguments[3].type))
         {
             ColumnsWithTypeAndName args_i {arguments[3]};
-            separator_column = ConvertImplGenericToString::execute(args_i);
+            separator_column = ConvertImplGenericToString<ColumnString>::execute(args_i, std::make_shared<DataTypeString>(), cnt);
         }
 
         auto col_res = ColumnString::create();
@@ -149,9 +149,12 @@ private:
             UInt8 * src_data = reinterpret_cast<UInt8 *>(&res_data[prev_res_offset]);
             for (size_t k = 0; k < length_val; k++)
             {
-                int mask =  1 << k;
+                // Since length_val can be up to 64, k can be up to 64 here
+                // 1 is a 32 bit integer so shifting it by 32 bits or more will result in undefined behavior
+                // The intended behavior is to circular shift the bits when we shift it by more than its precision
+                int mask =  1 << (k % 32);
                 int masked_val = bits_val & mask;
-                int curr_bit = masked_val >> k;
+                int curr_bit = masked_val >> (k % 32);
                 if (curr_bit)
                 {
                     memcpy(src_data + res_size, reinterpret_cast<const UInt8 *>(on_str.data), on_str.size);

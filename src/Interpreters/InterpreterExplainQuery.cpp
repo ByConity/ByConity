@@ -879,8 +879,12 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)
     column_databases->insert(databases_array);
     column_functions->insert(functions_array);
     auto col_arr_arr = ColumnArray::create(std::move(column_columns_list), std::move(column_lists_off));
-    ColumnPtr settings_column = ColumnMap::create(std::move(key_column), std::move(value_column), std::move(settings_offset_column));
-    ColumnPtr func_args_column = ColumnMap::create(std::move(func_column), std::move(args_column), std::move(func_args_offset_column));
+    ColumnPtr settings_column = ColumnMap::create(ColumnArray::create(
+            ColumnTuple::create(Columns{std::move(key_column), std::move(value_column)}),
+            std::move(settings_offset_column)));
+    ColumnPtr func_args_column = ColumnMap::create(ColumnArray::create(
+            ColumnTuple::create(Columns{std::move(func_column), std::move(args_column)}),
+            std::move(func_args_offset_column)));
     auto insert_info_arr = ColumnArray::create(std::move(insert_list), std::move(insert_offset));
 
     Block block;

@@ -183,7 +183,10 @@ TEST(InsertRangeSelective, ColumnByteMapTest)
             offset_column->insert(offest_size);
         }
     }
-    MutableColumnPtr src_column = ColumnByteMap::create(std::move(key_column), std::move(value_column), std::move(offset_column));
+
+    ColumnPtr src_column = ColumnMap::create(ColumnArray::create(
+            ColumnTuple::create(Columns{std::move(key_column), std::move(value_column)}),
+            std::move(offset_column)));
     compareInsertRangeSelectiveWithInsertFrom(*src_column, true);
 }
 
@@ -205,7 +208,10 @@ TEST(InsertRangeSelective, ColumnMapTest)
         data2.push_back(i * 2);
         off_data.push_back(offest_size);
     }
-    auto src_column = ColumnMap::create(std::move(col1), std::move(col2), std::move(off));
+
+    ColumnPtr src_column = ColumnMap::create(ColumnArray::create(
+            ColumnTuple::create(Columns{std::move(col1), std::move(col2)}),
+            std::move(off)));
     compareInsertRangeSelectiveWithInsertFrom(*src_column, true);
 }
 

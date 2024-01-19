@@ -16,3 +16,4 @@
 #cmakedefine01 USE_NURAFT
 #cmakedefine01 USE_KRB5
 #cmakedefine01 USE_JEMALLOC
+#cmakedefine01 USE_NLP

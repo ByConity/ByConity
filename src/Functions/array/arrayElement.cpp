@@ -19,9 +19,11 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Functions/array/arrayElement.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/castTypeToEither.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -34,6 +36,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
 #include <Common/typeid_cast.h>
@@ -50,97 +53,6 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int ZERO_ARRAY_OR_TUPLE_INDEX;
 }
-
-namespace ArrayImpl
-{
-    class NullMapBuilder;
-}
-
-/** arrayElement(arr, i) - get the array element by index. If index is not constant and out of range - return default value of data type.
-  * The index begins with 1. Also, the index can be negative - then it is counted from the end of the array.
-  */
-class FunctionArrayElement : public IFunction
-{
-public:
-    static constexpr auto name = "arrayElement";
-    static FunctionPtr create(ContextPtr context);
-
-    String getName() const override;
-
-    bool useDefaultImplementationForConstants() const override { return true; }
-    size_t getNumberOfArguments() const override { return 2; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
-
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override;
-
-private:
-    ColumnPtr perform(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type,
-                      ArrayImpl::NullMapBuilder & builder, size_t input_rows_count) const;
-
-    template <typename DataType>
-    static ColumnPtr executeNumberConst(const ColumnsWithTypeAndName & arguments, const Field & index, ArrayImpl::NullMapBuilder & builder);
-
-    template <typename IndexType, typename DataType>
-    static ColumnPtr executeNumber(const ColumnsWithTypeAndName & arguments, const PaddedPODArray<IndexType> & indices, ArrayImpl::NullMapBuilder & builder);
-
-    static ColumnPtr executeStringConst(const ColumnsWithTypeAndName & arguments, const Field & index, ArrayImpl::NullMapBuilder & builder);
-
-    template <typename IndexType>
-    static ColumnPtr executeString(const ColumnsWithTypeAndName & arguments, const PaddedPODArray<IndexType> & indices, ArrayImpl::NullMapBuilder & builder);
-
-    static ColumnPtr executeGenericConst(const ColumnsWithTypeAndName & arguments, const Field & index, ArrayImpl::NullMapBuilder & builder);
-
-    template <typename IndexType>
-    static ColumnPtr executeGeneric(const ColumnsWithTypeAndName & arguments, const PaddedPODArray<IndexType> & indices, ArrayImpl::NullMapBuilder & builder);
-
-    template <typename IndexType>
-    static ColumnPtr executeConst(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type,
-                                  const PaddedPODArray <IndexType> & indices, ArrayImpl::NullMapBuilder & builder,
-                                  size_t input_rows_count);
-
-    template <typename IndexType>
-    ColumnPtr executeArgument(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type,
-                              ArrayImpl::NullMapBuilder & builder, size_t input_rows_count) const;
-
-    /** For a tuple array, the function is evaluated component-wise for each element of the tuple.
-      */
-    ColumnPtr executeTuple(const ColumnsWithTypeAndName & arguments, size_t input_rows_count) const;
-
-    /** For a map the function finds the matched value for a key.
-     *  Currently implemented just as linear search in array.
-     *  However, optimizations are possible.
-     */
-    ColumnPtr executeMap(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const;
-
-    using Offsets = ColumnArray::Offsets;
-
-    static bool matchKeyToIndex(const IColumn & data, const Offsets & offsets,
-        const ColumnsWithTypeAndName & arguments, PaddedPODArray<UInt64> & matched_idxs);
-
-    static bool matchKeyToIndexConst(const IColumn & data, const Offsets & offsets,
-        const Field & index, PaddedPODArray<UInt64> & matched_idxs);
-
-    template <typename DataType>
-    static bool matchKeyToIndexNumber(const IColumn & data, const Offsets & offsets,
-        const ColumnsWithTypeAndName & arguments, PaddedPODArray<UInt64> & matched_idxs);
-
-    template <typename DataType>
-    static bool matchKeyToIndexNumberConst(const IColumn & data, const Offsets & offsets,
-        const Field & index, PaddedPODArray<UInt64> & matched_idxs);
-
-    static bool matchKeyToIndexString(const IColumn & data, const Offsets & offsets,
-        const ColumnsWithTypeAndName & arguments, PaddedPODArray<UInt64> & matched_idxs);
-
-    static bool matchKeyToIndexStringConst(const IColumn & data, const Offsets & offsets,
-        const Field & index, PaddedPODArray<UInt64> & matched_idxs);
-
-    template <typename Matcher>
-    static void executeMatchKeyToIndex(const Offsets & offsets,
-        PaddedPODArray<UInt64> & matched_idxs, const Matcher & matcher);
-};
-
-
 namespace ArrayImpl
 {
 
@@ -776,10 +688,11 @@ ColumnPtr FunctionArrayElement::executeTuple(const ColumnsWithTypeAndName & argu
 namespace
 {
 
+template<typename DataColumn, typename IndexColumn>
 struct MatcherString
 {
-    const ColumnString & data;
-    const ColumnString & index;
+    const DataColumn & data;
+    const IndexColumn & index;
 
     bool match(size_t row_data, size_t row_index) const
     {
@@ -789,9 +702,10 @@ struct MatcherString
     }
 };
 
+template<typename DataColumn>
 struct MatcherStringConst
 {
-    const ColumnString & data;
+    const DataColumn & data;
     const String & index;
 
     bool match(size_t row_data, size_t /* row_index */) const
@@ -801,23 +715,23 @@ struct MatcherStringConst
     }
 };
 
-template <typename T>
+template <typename DataType, typename IndexType>
 struct MatcherNumber
 {
-    const PaddedPODArray<T> & data;
-    const PaddedPODArray<T> & index;
+    const PaddedPODArray<DataType> & data;
+    const PaddedPODArray<IndexType> & index;
 
     bool match(size_t row_data, size_t row_index) const
     {
-        return data[row_data] == index[row_index];
+        return data[row_data] == static_cast<DataType>(index[row_index]);
     }
 };
 
-template <typename T>
+template <typename DataType>
 struct MatcherNumberConst
 {
-    const PaddedPODArray<T> & data;
-    T index;
+    const PaddedPODArray<DataType> & data;
+    DataType index;
 
     bool match(size_t row_data, size_t /* row_index */) const
     {
@@ -852,128 +766,159 @@ void FunctionArrayElement::executeMatchKeyToIndex(
     }
 }
 
+template <typename Matcher>
+void FunctionArrayElement::executeMatchConstKeyToIndex(
+    size_t num_rows, size_t num_values,
+    PaddedPODArray<UInt64> & matched_idxs, const Matcher & matcher)
+{
+    for (size_t i = 0; i < num_rows; ++i)
+    {
+        bool matched = false;
+        for (size_t j = 0; j < num_values; ++j)
+        {
+            if (matcher.match(j, i))
+            {
+                matched_idxs.push_back(j + 1);
+                matched = true;
+                break;
+            }
+        }
+
+        if (!matched)
+            matched_idxs.push_back(0);
+    }
+}
+
+template <typename F>
+static bool castColumnString(const IColumn * column, F && f)
+{
+    return castTypeToEither<ColumnString, ColumnFixedString>(column, std::forward<F>(f));
+}
+
 bool FunctionArrayElement::matchKeyToIndexStringConst(
     const IColumn & data, const Offsets & offsets,
     const Field & index, PaddedPODArray<UInt64> & matched_idxs)
 {
-    const auto * data_string = checkAndGetColumn<ColumnString>(&data);
-    if (!data_string)
-        return false;
+    return castColumnString(&data, [&](const auto & data_column)
+    {
+        using DataColumn = std::decay_t<decltype(data_column)>;
 
-    if (index.getType() != Field::Types::String)
-        return false;
-
-    MatcherStringConst matcher{*data_string, get<const String &>(index)};
-    executeMatchKeyToIndex(offsets, matched_idxs, matcher);
-    return true;
+        MatcherStringConst<DataColumn> matcher{data_column, get<const String &>(index)};
+        executeMatchKeyToIndex(offsets, matched_idxs, matcher);
+        return true;
+    });
 }
 
 bool FunctionArrayElement::matchKeyToIndexString(
-    const IColumn & data, const Offsets & offsets,
-    const ColumnsWithTypeAndName & arguments, PaddedPODArray<UInt64> & matched_idxs)
+    const IColumn & data, const Offsets & offsets, bool is_key_const,
+    const IColumn & index, PaddedPODArray<UInt64> & matched_idxs)
 {
-    const auto * index_string = checkAndGetColumn<ColumnString>(arguments[1].column.get());
-    if (!index_string)
-        return false;
+    return castColumnString(&data, [&](const auto & data_column)
+    {
+        return castColumnString(&index, [&](const auto & index_column)
+        {
+            using DataColumn = std::decay_t<decltype(data_column)>;
+            using IndexColumn = std::decay_t<decltype(index_column)>;
 
-    const auto * data_string = checkAndGetColumn<ColumnString>(&data);
-    if (!data_string)
-        return false;
+            MatcherString<DataColumn, IndexColumn> matcher{data_column, index_column};
+            if (is_key_const)
+                executeMatchConstKeyToIndex(index.size(), data.size(), matched_idxs, matcher);
+            else
+                executeMatchKeyToIndex(offsets, matched_idxs, matcher);
 
-    MatcherString matcher{*data_string, *index_string};
-    executeMatchKeyToIndex(offsets, matched_idxs, matcher);
-    return true;
+            return true;
+        });
+    });
 }
 
-template <typename DataType>
+template <typename F>
+static bool castColumnNumeric(const IColumn * column, F && f)
+{
+    return castTypeToEither<
+        ColumnVector<UInt8>,
+        ColumnVector<UInt16>,
+        ColumnVector<UInt32>,
+        ColumnVector<UInt64>,
+        ColumnVector<UInt128>,
+        ColumnVector<UInt256>,
+        ColumnVector<Int8>,
+        ColumnVector<Int16>,
+        ColumnVector<Int32>,
+        ColumnVector<Int64>,
+        ColumnVector<Int128>,
+        ColumnVector<Int256>,
+        ColumnVector<UUID>,
+        ColumnVector<IPv4>,
+        ColumnVector<IPv6>,
+        ColumnVector<Float32>,
+        ColumnVector<Float64>
+    >(column, std::forward<F>(f));
+}
+
 bool FunctionArrayElement::matchKeyToIndexNumberConst(
     const IColumn & data, const Offsets & offsets,
     const Field & index, PaddedPODArray<UInt64> & matched_idxs)
 {
-    const auto * data_numeric = checkAndGetColumn<ColumnVector<DataType>>(&data);
-    if (!data_numeric)
-        return false;
-
-    std::optional<DataType> index_as_integer;
-    Field::dispatch([&](const auto & value)
+    return castColumnNumeric(&data, [&](const auto & data_column)
     {
-        using FieldType = std::decay_t<decltype(value)>;
-        if constexpr (std::is_same_v<FieldType, DataType> || (is_integer_v<FieldType> && std::is_convertible_v<FieldType, DataType>))
-            index_as_integer = static_cast<DataType>(value);
-    }, index);
+        using DataType = typename std::decay_t<decltype(data_column)>::ValueType;
+        std::optional<DataType> index_as_number;
 
-    if (!index_as_integer)
-        return false;
+        Field::dispatch([&](const auto & value)
+        {
+            using FieldType = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<FieldType, DataType>
+                || ((is_integer_v<FieldType> || std::is_floating_point_v<FieldType>) && std::is_convertible_v<FieldType, DataType>))
+                index_as_number = static_cast<DataType>(value);
+        }, index);
 
-    MatcherNumberConst<DataType> matcher{data_numeric->getData(), *index_as_integer};
-    executeMatchKeyToIndex(offsets, matched_idxs, matcher);
-    return true;
+        if (!index_as_number)
+            return false;
+
+        MatcherNumberConst<DataType> matcher{data_column.getData(), *index_as_number};
+        executeMatchKeyToIndex(offsets, matched_idxs, matcher);
+        return true;
+    });
 }
 
-template <typename DataType>
 bool FunctionArrayElement::matchKeyToIndexNumber(
-    const IColumn & data, const Offsets & offsets,
-    const ColumnsWithTypeAndName & arguments, PaddedPODArray<UInt64> & matched_idxs)
+    const IColumn & data, const Offsets & offsets, bool is_key_const,
+    const IColumn & index, PaddedPODArray<UInt64> & matched_idxs)
 {
-    const auto * index_numeric = checkAndGetColumn<ColumnVector<DataType>>(arguments[1].column.get());
-    if (!index_numeric)
-        return false;
+    return castColumnNumeric(&data, [&](const auto & data_column)
+    {
+        return castColumnNumeric(&index, [&](const auto & index_column)
+        {
+            using DataType = typename std::decay_t<decltype(data_column)>::ValueType;
+            using IndexType = typename std::decay_t<decltype(index_column)>::ValueType;
 
-    const auto * data_numeric = checkAndGetColumn<ColumnVector<DataType>>(&data);
-    if (!data_numeric)
-        return false;
+            if constexpr (std::is_same_v<IndexType, DataType>
+                || ((is_integer_v<IndexType> || std::is_floating_point_v<IndexType>) && std::is_convertible_v<IndexType, DataType>))
+            {
+                MatcherNumber<DataType, IndexType> matcher{data_column.getData(), index_column.getData()};
+                if (is_key_const)
+                    executeMatchConstKeyToIndex(index_column.size(), data_column.size(), matched_idxs, matcher);
+                else
+                    executeMatchKeyToIndex(offsets, matched_idxs, matcher);
 
-    MatcherNumber<DataType> matcher{data_numeric->getData(), index_numeric->getData()};
-    executeMatchKeyToIndex(offsets, matched_idxs, matcher);
-    return true;
-}
+                return true;
+            }
 
-bool FunctionArrayElement::matchKeyToIndex(
-    const IColumn & data, const Offsets & offsets,
-    const ColumnsWithTypeAndName & arguments, PaddedPODArray<UInt64> & matched_idxs)
-{
-    return matchKeyToIndexNumber<UInt8>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<UInt16>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<UInt32>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<UInt64>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<UInt128>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<UInt256>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<Int8>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<Int16>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<Int32>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<Int64>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<Int128>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<Int256>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexNumber<UUID>(data, offsets, arguments, matched_idxs)
-        || matchKeyToIndexString(data, offsets, arguments, matched_idxs);
-}
-
-bool FunctionArrayElement::matchKeyToIndexConst(
-    const IColumn & data, const Offsets & offsets,
-    const Field & index, PaddedPODArray<UInt64> & matched_idxs)
-{
-    return matchKeyToIndexNumberConst<UInt8>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<UInt16>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<UInt32>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<UInt64>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<UInt128>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<UInt256>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<Int8>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<Int16>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<Int32>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<Int64>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<Int128>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<Int256>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexNumberConst<UUID>(data, offsets, index, matched_idxs)
-        || matchKeyToIndexStringConst(data, offsets, index, matched_idxs);
+            return false;
+        });
+    });
 }
 
 ColumnPtr FunctionArrayElement::executeMap(
     const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
 {
-    const ColumnMap * col_map = typeid_cast<const ColumnMap *>(arguments[0].column.get());
-    if (!col_map)
+    const auto * col_map = checkAndGetColumn<ColumnMap>(arguments[0].column.get());
+    const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(arguments[0].column.get());
+    if (!col_map && !col_const_map)
         return nullptr;
+
+    if (col_const_map)
+        col_map = typeid_cast<const ColumnMap *>(&col_const_map->getDataColumn());
 
     const auto & nested_column = col_map->getNestedColumn();
     const auto & keys_data = col_map->getNestedData().getColumn(0);
@@ -985,29 +930,33 @@ ColumnPtr FunctionArrayElement::executeMap(
     indices_column->reserve(input_rows_count);
     auto & indices_data = assert_cast<ColumnVector<UInt64> &>(*indices_column).getData();
 
+    bool executed = false;
     if (!isColumnConst(*arguments[1].column))
     {
-        if (input_rows_count > 0 && !matchKeyToIndex(keys_data, offsets, arguments, indices_data))
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal types of arguments: {}, {} for function {}",
-                arguments[0].type->getName(), arguments[1].type->getName(), getName());
+        executed = matchKeyToIndexNumber(keys_data, offsets, !!col_const_map, *arguments[1].column, indices_data)
+            || matchKeyToIndexString(keys_data, offsets, !!col_const_map, *arguments[1].column, indices_data);
     }
     else
     {
         Field index = (*arguments[1].column)[0];
-
-        // Get Matched key's value
-        if (input_rows_count > 0 && !matchKeyToIndexConst(keys_data, offsets, index, indices_data))
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal types of arguments: {}, {} for function {}",
-                arguments[0].type->getName(), arguments[1].type->getName(), getName());
+        executed = matchKeyToIndexNumberConst(keys_data, offsets, index, indices_data)
+            || matchKeyToIndexStringConst(keys_data, offsets, index, indices_data);
     }
+
+    if (!executed)
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+            "Illegal types of arguments: {}, {} for function {}",
+            arguments[0].type->getName(), arguments[1].type->getName(), getName());
+
+    ColumnPtr values_array = ColumnArray::create(values_data.getPtr(), nested_column.getOffsetsPtr());
+    if (col_const_map)
+        values_array = ColumnConst::create(values_array, input_rows_count);
 
     /// Prepare arguments to call arrayElement for array with values and calculated indices at previous step.
     ColumnsWithTypeAndName new_arguments =
     {
         {
-            ColumnArray::create(values_data.getPtr(), nested_column.getOffsetsPtr()),
+            values_array,
             std::make_shared<DataTypeArray>(result_type),
             ""
         },
@@ -1054,13 +1003,14 @@ DataTypePtr FunctionArrayElement::getReturnTypeImpl(const DataTypes & arguments)
 
 ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
 {
-    /// Check nullability.
-    bool is_array_of_nullable = false;
+    const auto * col_map = checkAndGetColumn<ColumnMap>(arguments[0].column.get());
+    const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(arguments[0].column.get());
 
-    const ColumnMap * col_map = checkAndGetColumn<ColumnMap>(arguments[0].column.get());
-    if (col_map)
+    if (col_map || col_const_map)
         return executeMap(arguments, result_type, input_rows_count);
 
+    /// Check nullability.
+    bool is_array_of_nullable = false;
     const ColumnArray * col_array = nullptr;
     const ColumnArray * col_const_array = nullptr;
 

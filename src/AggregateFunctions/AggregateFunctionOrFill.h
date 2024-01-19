@@ -88,6 +88,11 @@ public:
         nested_function->destroy(place);
     }
 
+    void destroyUpToState(AggregateDataPtr __restrict place) const noexcept override
+    {
+        nested_function->destroyUpToState(place);
+    }
+
     void add(
         AggregateDataPtr place,
         const IColumn ** columns,
@@ -247,10 +252,11 @@ public:
         }
     }
 
-    void insertResultInto(
-        AggregateDataPtr place,
+    template <bool merge>
+    void insertResultIntoImpl(
+        AggregateDataPtr __restrict place,
         IColumn & to,
-        Arena * arena) const override
+        Arena * arena) const
     {
         if (place[size_of_data])
         {
@@ -259,11 +265,15 @@ public:
                 // -OrNull
 
                 if (inner_nullable)
-                    nested_function->insertResultInto(place, to, arena);
+                {
+                    if constexpr (merge)
+                        nested_function->insertMergeResultInto(place, to, arena);
+                    else
+                        nested_function->insertResultInto(place, to, arena);
+                }
                 else
                 {
                     ColumnNullable & col = typeid_cast<ColumnNullable &>(to);
-
                     col.getNullMapColumn().insertDefault();
                     nested_function->insertResultInto(place, col.getNestedColumn(), arena);
                 }
@@ -271,12 +281,24 @@ public:
             else
             {
                 // -OrDefault
-
-                nested_function->insertResultInto(place, to, arena);
+                if constexpr (merge)
+                    nested_function->insertMergeResultInto(place, to, arena);
+                else
+                    nested_function->insertResultInto(place, to, arena);
             }
         }
         else
             to.insertDefault();
+    }
+
+    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
+    {
+        insertResultIntoImpl<false>(place, to, arena);
+    }
+
+    void insertMergeResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
+    {
+        insertResultIntoImpl<true>(place, to, arena);
     }
 
     AggregateFunctionPtr getNestedFunction() const override { return nested_function; }

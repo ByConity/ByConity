@@ -2,6 +2,7 @@
 
 #include <Core/Field.h>
 #include <Core/UUID.h>
+#include <Common/SettingConstraintWritability.h>
 #include <optional>
 #include <vector>
 
@@ -62,6 +63,7 @@ public:
     Settings toSettings() const;
     SettingsChanges toSettingsChanges() const;
     SettingsConstraints toSettingsConstraints(const AccessControlManager & manager) const;
+    std::vector<UUID> toProfileIDs() const;
 };
 
 }

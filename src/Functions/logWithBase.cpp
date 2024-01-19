@@ -61,14 +61,12 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         // log_a(b) = ln(b)/ln(a)
-        ColumnsWithTypeAndName converted_time;
 
         const ColumnsWithTypeAndName arg1 = {arguments[0]};
         auto log1_func = FunctionFactory::instance().get("log", context_);
         auto col_base = log1_func->build(arg1)->execute(arg1, std::make_shared<DataTypeFloat64>(), input_rows_count);
 
         const ColumnsWithTypeAndName arg2 = {arguments[1]};
-        auto log2_func = FunctionFactory::instance().get("log", context_);
         auto col_num = log1_func->build(arg2)->execute(arg2, std::make_shared<DataTypeFloat64>(), input_rows_count);
 
         const ColumnsWithTypeAndName div_arg

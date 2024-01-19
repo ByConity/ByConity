@@ -158,4 +158,10 @@ struct Progress
     }
 };
 
+/** Callback to track the progress of the query.
+  * Used in QueryPipeline and Context.
+  * The function takes the number of rows in the last block, the number of bytes in the last block.
+  * Note that the callback can be called from different threads.
+  */
+using ProgressCallback = std::function<void(const Progress & progress)>;
 }
