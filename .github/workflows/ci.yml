@@ -15,12 +15,12 @@ jobs:
     name: Build binary and run stateless tests
     # Use digest instead of tag to avoid network issue, original image byconity/byconity-ci:24Jan11
     container: byconity/byconity-ci@sha256:8f1068c9c52140d9d704915f4d402727176c715dcef8c08aaa2e8b0b9db14c82
-    runs-on: self-hosted
+    runs-on: self-hosted 
     steps:
       - name: Preload docker images
         run: |
           cd /docker_image_archive && ls -1 *.tar | xargs --no-run-if-empty -L 1 docker image load -i
-      - name: Set environment variables
+      - name: Set environment variables and git
         run: |
           export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
           echo "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}" >> $GITHUB_ENV
@@ -36,48 +36,20 @@ jobs:
           echo "HIVE_SERVER_PORT=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           echo "HMS_PORT=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           echo "HIVE_NAMENODE_PORT=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Setup git proxy
+        if: ${{ runner.name != 'ip-10-10-129-157' }}
+        run: | 
+          git config --global http.proxy http://${{ secrets.HTTP_PROXY }}
       - name: Check out repository code
-        id: checkout_1st_time
-        continue-on-error: true
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: true  
-      - name: Preparing retry 2nd time checking out repository code
-        if: steps.checkout_1st_time.outcome != 'success'
-        run: sleep 30s
-        shell: bash
-      - name: Retry 2nd time checking out repository code  
-        id: checkout_2nd_time
-        if: steps.checkout_1st_time.outcome != 'success'
-        uses: actions/checkout@v3
-        with:
-          submodules: true  
-        continue-on-error: true
-      - name: Preparing retry 3rd time checking out repository code
-        if: steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
-        run: sleep 200s
-        shell: bash
-      - name: Retry 3rd time checking out repository code  
-        continue-on-error: true
-        id: checkout_3rd_time
-        if: steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
-        uses: actions/checkout@v3
-        with:
-          submodules: true  
-      - name: Preparing retry 4th time checking out repository code
-        if: steps.checkout_3rd_time.outcome != 'success' && steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
-        run: sleep 200s
-        shell: bash
-      - name: Retry 4th time checking out repository code  
-        if: steps.checkout_3rd_time.outcome != 'success' && steps.checkout_2nd_time.outcome != 'success' && steps.checkout_1st_time.outcome != 'success'
-        uses: actions/checkout@v3
-        with:
-          submodules: true  
+          submodules: recursive  
+          path: '.'
       - name: Build binary with build_bin.sh
         env:
           CUSTOM_CMAKE_BUILD_TYPE: "Release"
         run: |
-          git config --global --add safe.directory /__w/ByConity/ByConity
           # git -C "$GITHUB_WORKSPACE" submodule sync
           # git -C "$GITHUB_WORKSPACE" submodule update --init --recursive --force
           ./build_bin.sh
