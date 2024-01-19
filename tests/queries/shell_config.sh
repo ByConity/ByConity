@@ -68,8 +68,8 @@ export CLICKHOUSE_FORMAT=${CLICKHOUSE_FORMAT:="$CLICKHOUSE_BINARY-format"}
 
 export CLICKHOUSE_CONFIG_GREP=${CLICKHOUSE_CONFIG_GREP:="/etc/clickhouse-server/preprocessed/config.xml"}
 
-if [ -n "$ENABLE_IPV6" ]; then
-  IP_ADDRESS=BYTED_HOST_IPV6
+if [ -v ENABLE_IPV6 ]; then
+  IP_ADDRESS=${BYTED_HOST_IPV6}
 else
   IP_ADDRESS=$(hostname -I | cut -d " " -f 1) # container's ipv4 address
 fi

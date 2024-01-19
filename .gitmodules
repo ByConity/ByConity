@@ -324,9 +324,6 @@
 [submodule "contrib/corrosion"]
 	path = contrib/corrosion
 	url = https://github.com/corrosion-rs/corrosion.git
-[submodule "contrib/blake3-vendor"]
-	path = contrib/blake3-vendor
-	url = https://github.com/ByConity/blake3-vendor.git
 [submodule "contrib/libstemmer_c"]
 	path = contrib/libstemmer_c
     url = https://github.com/ClickHouse/libstemmer_c.git
