@@ -57,8 +57,9 @@ public:
     static Ptr create(const ColumnPtr & column) { return ColumnMap::create(column->assumeMutable()); }
     static Ptr create(ColumnPtr && arg) { return create(arg); }
 
-    template <typename Arg, typename = typename std::enable_if<std::is_rvalue_reference<Arg &&>::value>::type>
-    static MutablePtr create(Arg && arg) { return Base::create(std::forward<Arg>(arg)); }
+    template <typename ... Args>
+    requires (IsMutableColumns<Args ...>::value)
+    static MutablePtr create(Args &&... args) { return Base::create(std::forward<Args>(args)...); }
 
     std::string getName() const override;
     const char * getFamilyName() const override { return "Map"; }
@@ -107,6 +108,7 @@ public:
     size_t allocatedBytes() const override;
     void protect() override;
     void forEachSubcolumn(ColumnCallback callback) override;
+    void forEachSubcolumnRecursively(ColumnCallback callback) override;
     bool structureEquals(const IColumn & rhs) const override;
 
     const ColumnArray & getNestedColumn() const { return assert_cast<const ColumnArray &>(*nested); }

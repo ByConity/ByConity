@@ -53,7 +53,7 @@ public:
     {
         const auto arr = getArrayJoinDataType(arguments[0]);
         if (!arr)
-            throw Exception("Argument for function " + getName() + " must be Array.", ErrorCodes::TYPE_MISMATCH);
+            throw Exception("Argument for function " + getName() + " must be Array or Map.", ErrorCodes::TYPE_MISMATCH);
 
         return arr->getNestedType();
     }

@@ -1,3 +1,5 @@
+#include <cassert>
+#include <Common/BinStringDecodeHelper.h>
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionStringToString.h>
@@ -22,24 +24,8 @@ extern const UInt8 length_of_utf8_sequence[256];
 
 namespace
 {
-
     struct FromUTF8Impl
     {
-        static void convertHexToCharArray(const char * begin, const char * end, char * output)
-        {
-            begin += 2; // Skip "0x" prefix
-            size_t index = 0;
-
-            for (; begin < end; begin += 2, ++index)
-            {
-                unsigned int value = 0;
-                sscanf(begin, "%2x", &value);
-                output[index] = static_cast<char>(value);
-            }
-            output[index] = '\0'; // Add null terminator
-        }
-
-
         static void toValidUTF8One(const char * begin, const char * end, WriteBuffer & write_buffer)
         {
             static constexpr std::string_view replacement = "\xEF\xBF\xBD";
@@ -125,6 +111,9 @@ namespace
             res_data.resize(data.size());
             res_offsets.resize(offsets_size);
 
+            PaddedPODArray<UInt8> temp(4096);
+            char * temp_data_start = reinterpret_cast<char *>(&temp[0]);
+
             size_t prev_offset = 0;
             WriteBufferFromVector<ColumnString::Chars> write_buffer(res_data);
             for (size_t i = 0; i < offsets_size; ++i)
@@ -134,9 +123,10 @@ namespace
                 if (haystack_size >= 2 && haystack_data[0] == '0' && (haystack_data[1] == 'x' || haystack_data[1] == 'X'))
                 {
                     size_t converted_size = (haystack_size - 2) / 2;
-                    char converted[converted_size + 1];
-                    convertHexToCharArray(haystack_data, haystack_data + haystack_size, converted);
-                    toValidUTF8One(converted, converted + converted_size, write_buffer);
+                    temp.resize(converted_size + 2);
+                    char * temp_data = temp_data_start;
+                    hexStringDecode(haystack_data + 2, haystack_data + haystack_size, temp_data, 2);
+                    toValidUTF8One(temp_data_start, temp_data_start + converted_size, write_buffer);
                 }
                 else
                 {

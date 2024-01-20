@@ -1,7 +1,7 @@
 #include "RangeHashedDictionary.h"
 #include <Columns/ColumnNullable.h>
 #include <Functions/FunctionHelpers.h>
-#include <Common/TypeList.h>
+#include <common/TypeLists.h>
 #include <common/range.h>
 #include "DictionaryFactory.h"
 #include "RangeDictionaryBlockInputStream.h"
@@ -621,8 +621,8 @@ struct RangeHashedDictionaryCallGetBlockInputStreamImpl
     const Names * column_names;
     size_t max_block_size;
 
-    template <typename RangeType, size_t>
-    void operator()()
+    template <typename RangeType>
+    void operator()(TypeList<RangeType>)
     {
         const auto & type = dict->dict_struct.range_min->type;
         if (!stream && dynamic_cast<const DataTypeNumberBase<RangeType> *>(type.get()))
@@ -632,14 +632,12 @@ struct RangeHashedDictionaryCallGetBlockInputStreamImpl
 
 BlockInputStreamPtr RangeHashedDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size) const
 {
-    using ListType = TypeList<UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Int128, Float32, Float64>;
-
     RangeHashedDictionaryCallGetBlockInputStreamImpl callable;
     callable.dict = this;
     callable.column_names = &column_names;
     callable.max_block_size = max_block_size;
 
-    ListType::forEach(callable);
+    TypeListUtils::forEach(TypeListIntAndFloat{}, callable);
 
     if (!callable.stream)
         throw Exception(ErrorCodes::LOGICAL_ERROR,

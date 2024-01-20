@@ -77,6 +77,7 @@ namespace ErrorCodes
     extern const int BAD_TTL_EXPRESSION;
     extern const int CANNOT_PARSE_TEXT;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int UNSUPPORTED_PARAMETER;
 }
 
 void MergeTreeMetaBase::checkSampleExpression(const StorageInMemoryMetadata & metadata, bool allow_sampling_expression_not_in_primary_key)

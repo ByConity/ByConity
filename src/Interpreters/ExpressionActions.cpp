@@ -406,7 +406,7 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             auto & res_column = columns[action.result_position];
 
             res_column.column = array->getDataPtr();
-            res_column.type = assert_cast<const DataTypeArray &>(*type).getNestedType();
+            res_column.type = getArrayJoinDataType(array_join_key.type)->getNestedType();
             res_column.name = action.node->result_name;
 
             num_rows = res_column.column->size();
@@ -494,7 +494,7 @@ void ExpressionActions::execute(Block & block, Block * precomputed_result, size_
     }
 
     execution_context.columns.resize(num_columns);
-    
+
     std::set<String> bitmap_input_name_set;
     for (const auto & action : actions)
     {

@@ -51,6 +51,17 @@ void FieldVisitorCompatibleWriteBinary::operator()(const UUID & x, WriteBuffer &
     writeBinary(x, buf);
 }
 
+void FieldVisitorCompatibleWriteBinary::operator()(const IPv4 & x, WriteBuffer & buf) const
+{
+    writeBinary(x, buf);
+}
+
+void FieldVisitorCompatibleWriteBinary::operator()(const IPv6 & x, WriteBuffer & buf) const
+{
+    writeBinary(x, buf);
+}
+
+
 void FieldVisitorCompatibleWriteBinary::operator()(const DecimalField<Decimal32> & x, WriteBuffer & buf) const
 {
     writeBinary(x.getValue(), buf);
@@ -197,6 +208,15 @@ void FieldVisitorCompatibleReadBinary::deserialize(String & value, ReadBuffer & 
     readBinary(value, buf);
 }
 
+void FieldVisitorCompatibleReadBinary::deserialize(IPv4 & value, ReadBuffer & buf)
+{
+    readBinary(value, buf);
+}
+
+void FieldVisitorCompatibleReadBinary::deserialize(IPv6 & value, ReadBuffer & buf)
+{
+    readBinary(value, buf);
+}
 
 void FieldVisitorCompatibleReadBinary::deserialize(DecimalField<Decimal32> & value, ReadBuffer & buf)
 {

@@ -203,6 +203,19 @@ size_t DataTypeTuple::getPositionByName(const String & name) const
 }
 
 
+std::optional<size_t> DataTypeTuple::tryGetPositionByName(const String & name) const
+{
+    size_t size = elems.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        if (names[i] == name)
+        {
+            return std::optional<size_t>(i);
+        }
+    }
+    return std::nullopt;
+}
+
 bool DataTypeTuple::textCanContainOnlyValidUTF8() const
 {
     return std::all_of(elems.begin(), elems.end(), [](auto && elem) { return elem->textCanContainOnlyValidUTF8(); });

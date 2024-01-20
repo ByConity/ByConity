@@ -30,6 +30,7 @@
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/printPipeline.h>
 #include <Processors/ISource.h>
+#include <Processors/ReadProgressCallback.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -595,10 +596,15 @@ void PipelineExecutor::reportProcessorProfile(const IProcessor * processor) cons
             coordinator_address = segment_process_list_entry->getCoordinatorAddress();
             current_address = segment_process_list_entry->getCurrentAddress();
         }
-        
+
         if (segment_id > 0)
             reportToCoordinator(coordinator_address, current_address, processor, query_id, std::chrono::system_clock::now(), segment_id);
-    }   
+    }
+}
+
+void PipelineExecutor::setReadProgressCallback(ReadProgressCallbackPtr callback)
+{
+    read_progress_callback = std::move(callback);
 }
 
 void PipelineExecutor::cancel()
@@ -864,14 +870,14 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
 #endif
                 node->job();
 
-                if (need_processors_profiles) 
+                if (need_processors_profiles)
                 {
                     node->processor->elapsed_us += execution_time_watch->elapsedMicroseconds();
                     node->processor->work_count++;
                 }
 #ifndef NDEBUG
                 context->execution_time_ns += execution_time_watch->elapsed();
-#endif          
+#endif
             }
 
             if (node->exception)

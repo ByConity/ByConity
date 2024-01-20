@@ -583,6 +583,8 @@ include (cmake/find/java-extensions.cmake)
 include (cmake/find/cppjieba.cmake)
 include (cmake/find/tsquery.cmake)
 
+include (cmake/find/nlp.cmake)
+
 set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
 
@@ -649,6 +651,10 @@ if (ENABLE_MULTITARGET_CODE)
     add_compile_definitions(ENABLE_MULTITARGET_CODE=1)
 else()
     add_compile_definitions(ENABLE_MULTITARGET_CODE=0)
+endif()
+
+if (ENABLE_RUST)
+    add_subdirectory (rust)
 endif()
 
 add_subdirectory (base)

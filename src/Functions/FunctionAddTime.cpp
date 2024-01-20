@@ -275,8 +275,6 @@ REGISTER_FUNCTION(AddTime)
 {
     factory.registerFunction<FunctionAddTime>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionSubTime>(FunctionFactory::CaseInsensitive);
-    factory.registerAlias("time_diff", NameSubTime::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("timediff", NameSubTime::name, FunctionFactory::CaseInsensitive);
     factory.registerAlias("subtractTime", NameSubTime::name, FunctionFactory::CaseInsensitive);
 }
 }

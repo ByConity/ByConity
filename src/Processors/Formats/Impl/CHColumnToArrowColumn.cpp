@@ -86,6 +86,19 @@ namespace DB
             throw Exception{fmt::format("Error with a {} column \"{}\": {}.", format_name, column_name, status.ToString()), ErrorCodes::UNKNOWN_EXCEPTION};
     }
 
+    /// Invert values since Arrow interprets 1 as a non-null value, while CH as a null
+    static PaddedPODArray<UInt8> revertNullByteMap(const PaddedPODArray<UInt8> * null_bytemap, size_t start, size_t end)
+    {
+        PaddedPODArray<UInt8> res;
+        if (!null_bytemap)
+            return res;
+
+        res.reserve(end - start);
+        for (size_t i = start; i < end; ++i)
+            res.emplace_back(!(*null_bytemap)[i]);
+        return res;
+    }
+
     template <typename NumericType, typename ArrowBuilderType>
     static void fillArrowArrayWithNumericColumnData(
         ColumnPtr write_column,
@@ -327,6 +340,46 @@ namespace DB
         }
     }
 
+    static void fillArrowArrayWithIPv6ColumnData(
+        ColumnPtr write_column,
+        const PaddedPODArray<UInt8> * null_bytemap,
+        const String & format_name,
+        arrow::ArrayBuilder* array_builder,
+        size_t start,
+        size_t end)
+    {
+        const auto & internal_column = assert_cast<const ColumnIPv6 &>(*write_column);
+        const auto & internal_data = internal_column.getData();
+        size_t fixed_length = sizeof(IPv6);
+        arrow::FixedSizeBinaryBuilder & builder = assert_cast<arrow::FixedSizeBinaryBuilder &>(*array_builder);
+        arrow::Status status;
+
+        PaddedPODArray<UInt8> arrow_null_bytemap = revertNullByteMap(null_bytemap, start, end);
+        const UInt8 * arrow_null_bytemap_raw_ptr = arrow_null_bytemap.empty() ? nullptr : arrow_null_bytemap.data();
+
+        const uint8_t * data_start = reinterpret_cast<const uint8_t *>(internal_data.data()) + start * fixed_length;
+        status = builder.AppendValues(data_start, end - start, reinterpret_cast<const uint8_t *>(arrow_null_bytemap_raw_ptr));
+        checkStatus(status, write_column->getName(), format_name);
+    }
+
+    static void fillArrowArrayWithIPv4ColumnData(
+        ColumnPtr write_column,
+        const PaddedPODArray<UInt8> * null_bytemap,
+        const String & format_name,
+        arrow::ArrayBuilder* array_builder,
+        size_t start,
+        size_t end)
+    {
+        const auto & internal_data = assert_cast<const ColumnIPv4 &>(*write_column).getData();
+        auto & builder = assert_cast<arrow::UInt32Builder &>(*array_builder);
+        arrow::Status status;
+
+        PaddedPODArray<UInt8> arrow_null_bytemap = revertNullByteMap(null_bytemap, start, end);
+        const UInt8 * arrow_null_bytemap_raw_ptr = arrow_null_bytemap.empty() ? nullptr : arrow_null_bytemap.data();
+        status = builder.AppendValues(&(internal_data.data() + start)->toUnderType(), end - start, reinterpret_cast<const uint8_t *>(arrow_null_bytemap_raw_ptr));
+        checkStatus(status, write_column->getName(), format_name);
+    }
+
     static void fillArrowArrayWithDateColumnData(
         ColumnPtr write_column,
         const PaddedPODArray<UInt8> * null_bytemap,
@@ -428,6 +481,14 @@ namespace DB
         else if ("FixedString" == column_type_name)
         {
             fillArrowArrayWithStringColumnData<ColumnFixedString>(column, null_bytemap, format_name, array_builder, start, end);
+        }
+        else if (isIPv6(column_type))
+        {
+            fillArrowArrayWithIPv6ColumnData(column, null_bytemap, format_name, array_builder, start, end);
+        }
+        else if (isIPv4(column_type))
+        {
+            fillArrowArrayWithIPv4ColumnData(column, null_bytemap, format_name, array_builder, start, end);
         }
         else if ("Date" == column_type_name)
         {
@@ -653,6 +714,12 @@ namespace DB
                 getArrowType(val_type, column_byte_map->getValuePtr(), column_name, format_name, is_column_nullable)
             );
         }
+
+        if (isIPv6(column_type))
+            return arrow::fixed_size_binary(sizeof(IPv6));
+
+        if (isIPv4(column_type))
+            return arrow::uint32();
 
         const std::string type_name = column_type->getFamilyName();
         if (const auto * arrow_type_it = std::find_if(

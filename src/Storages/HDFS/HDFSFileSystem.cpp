@@ -899,7 +899,7 @@ void HDFSConnectionParams::lookupOnNeed()
     inited = true;
 }
 
-std::vector<HDFSConnectionParams::IpWithPort> HDFSConnectionParams::lookupAndShuffle() const 
+std::vector<HDFSConnectionParams::IpWithPort> HDFSConnectionParams::lookupAndShuffle() const
 {
     std::vector<IpWithPort> ret;
     if (conn_type != CONN_NNPROXY)
@@ -1241,10 +1241,6 @@ void setWritable(const std::string& path)
 void setSize(const std::string& path, uint64_t size)
 {
     getDefaultHdfsFileSystem()->setSize(path, size);
-}
-
-DirectoryIterator::DirectoryIterator()
-{
 }
 
 DirectoryIterator::DirectoryIterator(const std::string& dir_path_): dir_path(joinPaths({dir_path_}, true))

@@ -13,6 +13,7 @@ add_library(clickhouse_functions_obj OBJECT ${clickhouse_functions_sources})
 list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_obj>)
 
 list (APPEND PUBLIC_LIBS
+        ch_contrib::wyhash
         ${BASE64_LIBRARY}
         ${CITYHASH_LIBRARIES}
         ${FARMHASH_LIBRARIES}
@@ -25,13 +26,22 @@ list (APPEND PUBLIC_LIBS
         metrohash
         murmurhash
         biginteger
+        ch_contrib::hashidsxx
+        ch_contrib::morton_nd
 )
 
 list (APPEND PRIVATE_LIBS
         ${ZLIB_LIBRARIES}
         boost::filesystem
         divide_impl
+        ch_contrib::xxHash
 )
+
+if (TARGET ch_rust::blake3)
+    list (APPEND PUBLIC_LIBS
+        ch_rust::blake3
+    )
+endif()
 
 if (OPENSSL_CRYPTO_LIBRARY)
     list (APPEND PUBLIC_LIBS ${OPENSSL_CRYPTO_LIBRARY})
@@ -82,8 +92,6 @@ if(USE_BASE64)
     target_include_directories(clickhouse_functions_obj SYSTEM PRIVATE ${BASE64_INCLUDE_DIR})
 endif()
 
-list (APPEND PRIVATE_LIBS lz4)
-
 if (USE_H3)
     list (APPEND PRIVATE_LIBS  ${H3_LIBRARY})
     target_include_directories(clickhouse_functions_obj SYSTEM PRIVATE ${H3_INCLUDE_DIR})
@@ -108,11 +116,23 @@ list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_url>)
 add_subdirectory(array)
 list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_array>)
 
+if (ENABLE_GEOS)
+    add_subdirectory(GIS)
+    list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_gis>)
+endif()
+
+add_subdirectory(UniqTheta)
+list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_uniqtheta>)
+
 add_subdirectory(JSONPath)
 list (APPEND PRIVATE_LIBS clickhouse_functions_jsonpath)
 
 if (USE_STATS)
     list (APPEND PRIVATE_LIBS stats)
+endif()
+
+if (ENABLE_NLP)
+    list (APPEND PRIVATE_LIBS ch_contrib::cld2)
 endif()
 
 # Signed integer overflow on user-provided data inside boost::geometry - ignore.
@@ -129,3 +149,7 @@ else()
     add_library(clickhouse_functions SHARED ${OBJECT_LIBS})
     target_link_libraries(clickhouse_functions PUBLIC ${PUBLIC_LIBS} PRIVATE ${PRIVATE_LIBS})
 endif ()
+
+if (ENABLE_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()

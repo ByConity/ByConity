@@ -49,7 +49,7 @@ ZstdInflatingReadBuffer::~ZstdInflatingReadBuffer()
 
 bool ZstdInflatingReadBuffer::nextImpl()
 {
-    if (eof)
+    if (eof_flag)
         return false;
 
     if (input.pos >= input.size)
@@ -77,7 +77,7 @@ bool ZstdInflatingReadBuffer::nextImpl()
 
     if (in->eof())
     {
-        eof = true;
+        eof_flag = true;
         return !working_buffer.empty();
     }
     else if (output.pos == 0)

@@ -41,7 +41,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!isInteger(arguments[0]))
+        if (!isInteger(arguments[0]) && !isIPv4(arguments[0]))
             throw Exception("Illegal type " + arguments[0]->getName() + " of the first argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -129,6 +129,8 @@ private:
             executeType<Int32>(hash_col, num_buckets, res_col.get());
         else if (which.isInt64())
             executeType<Int64>(hash_col, num_buckets, res_col.get());
+        else if (which.isIPv4())
+            executeType<IPv4>(hash_col, num_buckets, res_col.get());
         else
             throw Exception("Illegal type " + hash_type->getName() + " of the first argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);

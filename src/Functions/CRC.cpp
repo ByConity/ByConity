@@ -115,6 +115,42 @@ struct CRCFunctionWrapper
         throw Exception("Cannot apply function " + std::string(Impl::name) + " to UUID argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
+    [[noreturn]] static void ipv6(const ColumnIPv6::Container & /*offsets*/, size_t /*n*/, PaddedPODArray<ReturnType> & /*res*/)
+    {
+        throw Exception("Cannot apply function " + std::string(Impl::name) + " to IPv6 argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+    [[noreturn]] static void ipv4(const ColumnIPv4::Container & /*offsets*/, size_t /*n*/, PaddedPODArray<ReturnType> & /*res*/)
+    {
+        throw Exception("Cannot apply function " + std::string(Impl::name) + " to IPv4 argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+    static bool isCompilable(const DataTypes & )
+    {
+        return false;
+    }
+
+    static llvm::Value * compileString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileFixedString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileArray(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileMap(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileUuid(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+
 private:
     static ReturnType doCRC(const ColumnString::Chars & buf, size_t offset, size_t size)
     {

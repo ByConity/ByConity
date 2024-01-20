@@ -1,3 +1,4 @@
+set dialect_type='MYSQL';
 select time_format('12:00:00', '%H %k %h %I %l');
 select time_format(timestamp '2022-01-22 23:00:00','%H %k %h %I %l')as result;       
 select time_format(datetime '2022-01-22 23:00:00','%H %k %h %I %l')as result;     

@@ -36,6 +36,8 @@ public:
     void operator()(const DecimalField<Decimal256> & x, WriteBuffer & buf) const;
     void operator()(const AggregateFunctionStateData & x, WriteBuffer & buf) const;
     void operator()(const BitMap64 & x, WriteBuffer & buf) const;
+    void operator()(const IPv4 & x, WriteBuffer & buf) const;
+    void operator()(const IPv6 & x, WriteBuffer & buf) const;
 };
 
 class FieldVisitorCompatibleReadBinary
@@ -83,6 +85,8 @@ private:
     static void deserialize(UUID & value, ReadBuffer & buf);
     static void deserialize(Float64 & value, ReadBuffer & buf);
     static void deserialize(String & value, ReadBuffer & buf);
+    static void deserialize(IPv4 & value, ReadBuffer & buf);
+    static void deserialize(IPv6 & value, ReadBuffer & buf);
 
     static void deserialize(DecimalField<Decimal32> & value, ReadBuffer & buf);
     static void deserialize(DecimalField<Decimal64> & value, ReadBuffer & buf);

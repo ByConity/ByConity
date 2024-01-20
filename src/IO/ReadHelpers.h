@@ -29,6 +29,7 @@
 
 #include <type_traits>
 
+#include <Common/formatIPv6.h>
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
 #include <common/LocalDateTime.h>
@@ -38,6 +39,7 @@
 #include <Core/Types.h>
 #include <Core/DecimalFunctions.h>
 #include <Core/UUID.h>
+#include <common/IPv4andIPv6.h>
 
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -71,6 +73,8 @@ namespace ErrorCodes
     extern const int CANNOT_PARSE_BOOL;
     extern const int CANNOT_PARSE_DATETIME;
     extern const int CANNOT_PARSE_UUID;
+    extern const int CANNOT_PARSE_IPV4;
+    extern const int CANNOT_PARSE_IPV6;
     extern const int CANNOT_READ_ARRAY_FROM_TEXT;
     extern const int CANNOT_PARSE_NUMBER;
     extern const int INCORRECT_DATA;
@@ -573,6 +577,12 @@ void readStringUntilEOF(String & s, ReadBuffer & buf);
 // Buffer pointer is left at EOL, don't forget to advance it.
 void readEscapedStringUntilEOL(String & s, ReadBuffer & buf);
 
+/// Reads chunk of data between {} in that way,
+/// that it has balanced parentheses sequence of {}.
+/// So, it may form a JSON object, but it can be incorrenct.
+template <typename Vector, typename ReturnType = void>
+ReturnType readJSONObjectPossiblyInvalid(Vector & s, ReadBuffer & buf);
+
 /// Only 0x20 as whitespace character
 void readStringUntilWhitespace(String & s, ReadBuffer & buf);
 
@@ -827,6 +837,49 @@ inline bool tryReadUUIDText(UUID & uuid, ReadBuffer & buf)
     return readUUIDTextImpl<bool>(uuid, buf);
 }
 
+template <typename ReturnType = void>
+inline ReturnType readIPv4TextImpl(IPv4 & ip, ReadBuffer & buf)
+{
+    if (parseIPv4(buf.position(), [&buf](){ return buf.eof(); }, reinterpret_cast<unsigned char *>(&ip.toUnderType())))
+        return ReturnType(true);
+
+    if constexpr (std::is_same_v<ReturnType, void>)
+        throw ParsingException(std::string("Cannot parse IPv4 ").append(buf.position(), buf.available()), ErrorCodes::CANNOT_PARSE_IPV4);
+    else
+        return ReturnType(false);
+}
+
+inline void readIPv4Text(IPv4 & ip, ReadBuffer & buf)
+{
+    return readIPv4TextImpl<void>(ip, buf);
+}
+
+inline bool tryReadIPv4Text(IPv4 & ip, ReadBuffer & buf)
+{
+    return readIPv4TextImpl<bool>(ip, buf);
+}
+
+template <typename ReturnType = void>
+inline ReturnType readIPv6TextImpl(IPv6 & ip, ReadBuffer & buf)
+{
+    if (parseIPv6orIPv4(buf.position(), [&buf](){ return buf.eof(); }, reinterpret_cast<unsigned char *>(ip.toUnderType().items)))
+        return ReturnType(true);
+
+    if constexpr (std::is_same_v<ReturnType, void>)
+        throw ParsingException(std::string("Cannot parse IPv6 ").append(buf.position(), buf.available()), ErrorCodes::CANNOT_PARSE_IPV6);
+    else
+        return ReturnType(false);
+}
+
+inline void readIPv6Text(IPv6 & ip, ReadBuffer & buf)
+{
+    return readIPv6TextImpl<void>(ip, buf);
+}
+
+inline bool tryReadIPv6Text(IPv6 & ip, ReadBuffer & buf)
+{
+    return readIPv6TextImpl<bool>(ip, buf);
+}
 
 template <typename T>
 inline T parse(const char * data, size_t size);
@@ -1167,8 +1220,10 @@ inline std::enable_if_t<is_arithmetic_v<T>, void>
 readBinary(T & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 
 inline void readBinary(String & x, ReadBuffer & buf) { readStringBinary(x, buf); }
+inline void readBinary(Int32 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(Int128 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(Int256 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
+inline void readBinary(UInt32 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(UInt128 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(UInt256 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(Decimal32 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
@@ -1233,6 +1288,8 @@ inline void readText(String & x, ReadBuffer & buf) { readEscapedString(x, buf); 
 inline void readText(LocalDate & x, ReadBuffer & buf) { readDateText(x, buf); }
 inline void readText(LocalDateTime & x, ReadBuffer & buf) { readDateTimeText(x, buf); }
 inline void readText(UUID & x, ReadBuffer & buf) { readUUIDText(x, buf); }
+inline void readText(IPv4 & x, ReadBuffer & buf) { readIPv4Text(x, buf); }
+inline void readText(IPv6 & x, ReadBuffer & buf) { readIPv6Text(x, buf); }
 
 /// Generic methods to read value in text format,
 ///  possibly in single quotes (only for data types that use quotes in VALUES format of INSERT statement in SQL).
@@ -1263,6 +1320,19 @@ inline void readQuoted(UUID & x, ReadBuffer & buf)
     assertChar('\'', buf);
 }
 
+inline void readQuoted(IPv4 & x, ReadBuffer & buf)
+{
+    assertChar('\'', buf);
+    readIPv4Text(x, buf);
+    assertChar('\'', buf);
+}
+
+inline void readQuoted(IPv6 & x, ReadBuffer & buf)
+{
+    assertChar('\'', buf);
+    readIPv6Text(x, buf);
+    assertChar('\'', buf);
+}
 
 /// Same as above, but in double quotes.
 template <typename T>
@@ -1312,6 +1382,8 @@ inline void readCSV(String & x, ReadBuffer & buf, const FormatSettings::CSV & se
 inline void readCSV(LocalDate & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(LocalDateTime & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(UUID & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
+inline void readCSV(IPv4 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
+inline void readCSV(IPv6 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(UInt128 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(Int128 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(UInt256 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
@@ -1606,5 +1678,10 @@ struct PcgDeserializer
         rng.state_ = state;
     }
 };
+
+/** Parse the escape sequence, which can be simple (one character after backslash) or more complex (multiple characters).
+  * It is assumed that the cursor is located on the `\` symbol
+  */
+bool parseComplexEscapeSequence(String & s, ReadBuffer & buf);
 
 }

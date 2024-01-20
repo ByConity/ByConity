@@ -56,6 +56,11 @@ template <typename Value, bool float_return> using FuncQuantilesTDigestWeighted 
 template <typename Value, bool float_return> using FuncQuantileBFloat16 = AggregateFunctionQuantile<Value, QuantileBFloat16Histogram<Value>, NameQuantileBFloat16, false, std::conditional_t<float_return, Float64, void>, false>;
 template <typename Value, bool float_return> using FuncQuantilesBFloat16 = AggregateFunctionQuantile<Value, QuantileBFloat16Histogram<Value>, NameQuantilesBFloat16, false, std::conditional_t<float_return, Float64, void>, true>;
 
+/// FuncQuantileTDigestWithSSize: for compatible with vanilla
+template <typename Value, bool float_return> using FuncQuantileTDigestWithSSize = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantileTDigest, false, std::conditional_t<float_return, Float32, void>, false>;
+template <typename Value, bool float_return> using FuncQuantilesTDigestWithSSize = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantilesTDigest, false, std::conditional_t<float_return, Float32, void>, true>;
+template <typename Value, bool float_return> using FuncQuantileTDigestWithSSizeWeighted = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantileTDigestWeighted, true, std::conditional_t<float_return, Float32, void>, false>;
+template <typename Value, bool float_return> using FuncQuantilesTDigestWithSSizeWeighted = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantilesTDigestWeighted, true, std::conditional_t<float_return, Float32, void>, true>;
 
 template <template <typename, bool> class Function>
 static constexpr bool supportDecimal()
@@ -179,6 +184,63 @@ void registerAggregateFunctionsQuantile(AggregateFunctionFactory & factory)
     factory.registerAlias("medianTDigest", NameQuantileTDigest::name);
     factory.registerAlias("medianTDigestWeighted", NameQuantileTDigestWeighted::name);
     factory.registerAlias("medianBFloat16", NameQuantileBFloat16::name);
+}
+
+template <template <typename, bool> class Function>
+AggregateFunctionPtr createAggregateFunctionQuantileTDigestWithSSize(
+    const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
+{
+    /// Second argument type check doesn't depend on the type of the first one.
+    Function<void, true>::assertSecondArg(argument_types);
+
+    if(argument_types.empty() || params.empty() || argument_types.size() > 2 || params.size() > 2)
+        throw Exception("Aggregate function " + name + " requires one or two arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+    /// the first param is array of level
+    Array levels = params[0].safeGet<Array>();
+    /// No need to get max_unmerged value, just do compatible
+    // UInt64 max_unmerged = (params.size() > 1) ? params[1].get<UInt64>() : 2048;
+
+    const DataTypePtr & argument_type = argument_types[0];
+    WhichDataType which(argument_type);
+
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) return std::make_shared<Function<TYPE, true>>(argument_types, levels);
+    FOR_BASIC_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    if (which.idx == TypeIndex::Date) return std::make_shared<Function<DataTypeDate::FieldType, false>>(argument_types, levels);
+    if (which.idx == TypeIndex::DateTime) return std::make_shared<Function<DataTypeDateTime::FieldType, false>>(argument_types, levels);
+
+    if constexpr (supportDecimal<Function>())
+    {
+        if (which.idx == TypeIndex::Decimal32) return std::make_shared<Function<Decimal32, false>>(argument_types, levels);
+        if (which.idx == TypeIndex::Decimal64) return std::make_shared<Function<Decimal64, false>>(argument_types, levels);
+        if (which.idx == TypeIndex::Decimal128) return std::make_shared<Function<Decimal128, false>>(argument_types, levels);
+        if (which.idx == TypeIndex::Decimal256) return std::make_shared<Function<Decimal256, false>>(argument_types, levels);
+        if (which.idx == TypeIndex::DateTime64) return std::make_shared<Function<DateTime64, false>>(argument_types, levels);
+    }
+
+    if constexpr (supportBigInt<Function>())
+    {
+        if (which.idx == TypeIndex::Int128) return std::make_shared<Function<Int128, true>>(argument_types, levels);
+        if (which.idx == TypeIndex::UInt128) return std::make_shared<Function<Int128, true>>(argument_types, levels);
+        if (which.idx == TypeIndex::Int256) return std::make_shared<Function<Int256, true>>(argument_types, levels);
+        if (which.idx == TypeIndex::UInt256) return std::make_shared<Function<UInt256, true>>(argument_types, levels);
+    }
+
+    throw Exception("Illegal type " + argument_type->getName() + " of argument for aggregate function " + name,
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+}
+
+void registerAggregateFunctionQuantileTDigestWithSSize(AggregateFunctionFactory & factory)
+{
+    /// For aggregate functions returning array we cannot return NULL on empty set.
+    AggregateFunctionProperties properties = { .returns_default_when_only_null = true };
+
+    factory.registerFunction(NameQuantileTDigestWithSSize::name, createAggregateFunctionQuantileTDigestWithSSize<FuncQuantileTDigestWithSSize>);
+    factory.registerFunction(NameQuantilesTDigestWithSSize::name, { createAggregateFunctionQuantileTDigestWithSSize<FuncQuantilesTDigestWithSSize>, properties });
+    factory.registerFunction(NameQuantileTDigestWithSSizeWeighted::name, createAggregateFunctionQuantileTDigestWithSSize<FuncQuantileTDigestWithSSizeWeighted>);
+    factory.registerFunction(NameQuantilesTDigestWithSSizeWeighted::name, { createAggregateFunctionQuantileTDigestWithSSize<FuncQuantilesTDigestWithSSizeWeighted>, properties });
 }
 
 }

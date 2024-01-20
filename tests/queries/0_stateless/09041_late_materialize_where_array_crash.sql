@@ -1,0 +1,5 @@
+drop table if exists tab;
+create table tab  (x UInt64, `arr.a` Array(UInt64), `arr.b` Array(UInt64)) engine = MergeTree order by x settings enable_late_materialize = 1;
+select x from tab array join arr where x != 0 and arr; -- { serverError 47 }
+select x from tab array join arr where arr and x != 0; -- { serverError 47 }
+drop table if exists tab;

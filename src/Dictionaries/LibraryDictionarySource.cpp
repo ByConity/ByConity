@@ -1,6 +1,5 @@
 #include "LibraryDictionarySource.h"
 
-#include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <Common/filesystemHelpers.h>
@@ -12,8 +11,6 @@
 #include <Dictionaries/DictionarySourceHelpers.h>
 #include <Dictionaries/DictionaryStructure.h>
 #include <Dictionaries/registerDictionaries.h>
-
-namespace fs = std::filesystem;
 
 namespace DB
 {
@@ -41,28 +38,25 @@ LibraryDictionarySource::LibraryDictionarySource(
     , sample_block{sample_block_}
     , context(Context::createCopy(context_))
 {
-    bool path_checked = false;
-    if (fs::is_symlink(path))
-        path_checked = symlinkStartsWith(path, context->getDictionariesLibPath());
-    else
-        path_checked = pathStartsWith(path, context->getDictionariesLibPath());
+    auto dictionaries_lib_path = context->getDictionariesLibPath();
+    if (created_from_ddl && !fileOrSymlinkPathStartsWith(path, dictionaries_lib_path))
+        throw Exception(ErrorCodes::PATH_ACCESS_DENIED, "File path {} is not inside {}", path, dictionaries_lib_path);
 
-    if (created_from_ddl && !path_checked)
-        throw Exception(ErrorCodes::PATH_ACCESS_DENIED, "File path {} is not inside {}", path, context->getDictionariesLibPath());
+    namespace fs = std::filesystem;
 
     if (!fs::exists(path))
         throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "LibraryDictionarySource: Can't load library {}: file doesn't exist", path);
 
     description.init(sample_block);
 
-    LibraryBridgeHelper::LibraryInitData library_data
+    ExternalDictionaryLibraryBridgeHelper::LibraryInitData library_data
     {
         .library_path = path,
         .library_settings = getLibrarySettingsString(config, config_prefix + ".settings"),
         .dict_attributes = getDictAttributesString()
     };
 
-    bridge_helper = std::make_shared<LibraryBridgeHelper>(context, description.sample_block, dictionary_id, library_data);
+    bridge_helper = std::make_shared<ExternalDictionaryLibraryBridgeHelper>(context, description.sample_block, dictionary_id, library_data);
 
     if (!bridge_helper->initLibrary())
         throw Exception(ErrorCodes::EXTERNAL_LIBRARY_ERROR, "Failed to create shared library from path: {}", path);
@@ -93,7 +87,7 @@ LibraryDictionarySource::LibraryDictionarySource(const LibraryDictionarySource &
     , context(other.context)
     , description{other.description}
 {
-    bridge_helper = std::make_shared<LibraryBridgeHelper>(context, description.sample_block, dictionary_id, other.bridge_helper->getLibraryData());
+    bridge_helper = std::make_shared<ExternalDictionaryLibraryBridgeHelper>(context, description.sample_block, dictionary_id, other.bridge_helper->getLibraryData());
     if (!bridge_helper->cloneLibrary(other.dictionary_id))
         throw Exception(ErrorCodes::EXTERNAL_LIBRARY_ERROR, "Failed to clone library");
 }
@@ -186,11 +180,11 @@ void registerDictionarySourceLibrary(DictionarySourceFactory & factory)
                                  const Poco::Util::AbstractConfiguration & config,
                                  const std::string & config_prefix,
                                  Block & sample_block,
-                                 ContextPtr context,
+                                 ContextPtr global_context,
                                  const std::string & /* default_database */,
                                  bool created_from_ddl) -> DictionarySourcePtr
     {
-        return std::make_unique<LibraryDictionarySource>(dict_struct, config, config_prefix + ".library", sample_block, context, created_from_ddl);
+        return std::make_unique<LibraryDictionarySource>(dict_struct, config, config_prefix + ".library", sample_block, global_context, created_from_ddl);
     };
 
     factory.registerSource("library", create_table_source);

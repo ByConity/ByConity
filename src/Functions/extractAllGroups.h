@@ -7,12 +7,12 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 #include <Functions/Regexps.h>
+#include <Interpreters/Context.h>
+#include <Core/Settings.h>
 
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <Core/iostream_debug_helpers.h>
 
 
 namespace DB
@@ -47,15 +47,23 @@ enum class ExtractAllGroupsResultKind
 template <typename Impl>
 class FunctionExtractAllGroups : public IFunction
 {
+    ContextPtr context;
+
 public:
     static constexpr auto Kind = Impl::Kind;
     static constexpr auto name = Impl::Name;
 
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionExtractAllGroups>(); }
+    explicit FunctionExtractAllGroups(ContextPtr context_)
+        : context(context_)
+    {}
+
+    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionExtractAllGroups>(context); }
 
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 2; }
+
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
@@ -84,9 +92,8 @@ public:
         if (needle.empty())
             throw Exception("Length of 'needle' argument must be greater than 0.", ErrorCodes::BAD_ARGUMENTS);
 
-        using StringPiece = typename Regexps::Regexp::StringPieceType;
-        auto holder = Regexps::get<false, false>(needle);
-        const auto & regexp = holder->getRE2();
+        const auto & holder = Regexps::createRegexp<false, false, false>(needle);
+        const auto & regexp = holder.getRE2();
 
         if (!regexp)
             throw Exception("There are no groups in regexp: " + needle, ErrorCodes::BAD_ARGUMENTS);
@@ -102,7 +109,7 @@ public:
                             ErrorCodes::BAD_ARGUMENTS);
 
         // Including 0-group, which is the whole regexp.
-        PODArrayWithStackMemory<StringPiece, MAX_GROUPS_COUNT> matched_groups(groups_count + 1);
+        PODArrayWithStackMemory<std::string_view, MAX_GROUPS_COUNT> matched_groups(groups_count + 1);
 
         ColumnArray::ColumnOffsets::MutablePtr root_offsets_col = ColumnArray::ColumnOffsets::create();
         ColumnArray::ColumnOffsets::MutablePtr nested_offsets_col = ColumnArray::ColumnOffsets::create();
@@ -119,14 +126,15 @@ public:
             root_offsets_data.resize(input_rows_count);
             for (size_t i = 0; i < input_rows_count; ++i)
             {
-                StringRef current_row = column_haystack->getDataAt(i);
+                std::string_view current_row = column_haystack->getDataAt(i).toView();
 
                 // Extract all non-intersecting matches from haystack except group #0.
-                const auto * pos = current_row.data;
-                const auto * end = pos + current_row.size;
+                const auto * pos = current_row.data();
+                const auto * end = pos + current_row.size();
                 while (pos < end
                     && regexp->Match({pos, static_cast<size_t>(end - pos)},
-                        0, end - pos, regexp->UNANCHORED, matched_groups.data(), matched_groups.size()))
+                        0, end - pos, regexp->UNANCHORED,
+                        matched_groups.data(), static_cast<int>(matched_groups.size())))
                 {
                     // 1 is to exclude group #0 which is whole re match.
                     for (size_t group = 1; group <= groups_count; ++group)
@@ -147,7 +155,10 @@ public:
         }
         else
         {
-            PODArray<StringPiece, 0> all_matches;
+            /// Additional limit to fail fast on supposedly incorrect usage.
+            const auto max_matches_per_row = context->getSettingsRef().regexp_max_matches_per_row;
+
+            PODArray<std::string_view, 0> all_matches;
             /// Number of times RE matched on each row of haystack column.
             PODArray<size_t, 0> number_of_matches_per_row;
 
@@ -166,22 +177,20 @@ public:
                 const auto * end = pos + current_row.size;
                 while (pos < end
                     && regexp->Match({pos, static_cast<size_t>(end - pos)},
-                        0, end - pos, regexp->UNANCHORED, matched_groups.data(), matched_groups.size()))
+                        0, end - pos, regexp->UNANCHORED, matched_groups.data(),
+                        static_cast<int>(matched_groups.size())))
                 {
                     // 1 is to exclude group #0 which is whole re match.
                     for (size_t group = 1; group <= groups_count; ++group)
                         all_matches.push_back(matched_groups[group]);
 
-                    /// Additional limit to fail fast on supposedly incorrect usage, arbitrary value.
-                    static constexpr size_t MAX_MATCHES_PER_ROW = 1000;
-                    if (matches_per_row > MAX_MATCHES_PER_ROW)
+                    ++matches_per_row;
+                    if (matches_per_row > max_matches_per_row)
                         throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE,
                                 "Too many matches per row (> {}) in the result of function {}",
-                                MAX_MATCHES_PER_ROW, getName());
+                                max_matches_per_row, getName());
 
                     pos = matched_groups[0].data() + std::max<size_t>(1, matched_groups[0].size());
-
-                    ++matches_per_row;
                 }
 
                 number_of_matches_per_row.push_back(matches_per_row);

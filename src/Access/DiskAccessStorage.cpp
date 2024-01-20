@@ -603,12 +603,17 @@ bool DiskAccessStorage::existsImpl(const UUID & id) const
 }
 
 
-AccessEntityPtr DiskAccessStorage::readImpl(const UUID & id) const
+AccessEntityPtr DiskAccessStorage::readImpl(const UUID & id, bool throw_if_not_exists) const
 {
     std::lock_guard lock{mutex};
     auto it = entries_by_id.find(id);
     if (it == entries_by_id.end())
-        throwNotFound(id);
+    {
+        if (throw_if_not_exists)
+            throwNotFound(id);
+        else
+            return nullptr;
+    }
 
     const auto & entry = it->second;
     if (!entry.entity)
@@ -617,13 +622,18 @@ AccessEntityPtr DiskAccessStorage::readImpl(const UUID & id) const
 }
 
 
-String DiskAccessStorage::readNameImpl(const UUID & id) const
+std::optional<std::pair<String, AccessEntityType>> DiskAccessStorage::readNameWithTypeImpl(const UUID & id, bool throw_if_not_exists) const
 {
     std::lock_guard lock{mutex};
     auto it = entries_by_id.find(id);
     if (it == entries_by_id.end())
-        throwNotFound(id);
-    return String{it->second.name};
+    {
+        if (throw_if_not_exists)
+            throwNotFound(id);
+        else
+            return std::nullopt;
+    }
+    return std::make_pair(it->second.name, it->second.type);
 }
 
 

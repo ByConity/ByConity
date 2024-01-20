@@ -15,6 +15,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wthread-safety-negative"
 #include <absl/container/flat_hash_map.h>
 #pragma clang diagnostic pop
 

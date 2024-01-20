@@ -1,5 +1,6 @@
-#include "FunctionArrayMapped.h"
 #include <Functions/FunctionFactory.h>
+
+#include "FunctionArrayMapped.h"
 
 
 namespace DB
@@ -9,6 +10,9 @@ namespace DB
   */
 struct ArrayMapImpl
 {
+    using column_type = ColumnArray;
+    using data_type = DataTypeArray;
+
     /// true if the expression (for an overload of f(expression, arrays)) or an array (for f(array)) should be boolean.
     static bool needBoolean() { return false; }
     /// true if the f(array) overload is unavailable.

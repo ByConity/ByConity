@@ -229,13 +229,18 @@ struct CustomWeekTransformImpl
             week_mode = DEFAULT_WEEK_MODE_MYSQL;
         }
 
+        size_t timezone_index = 2;
         if (arguments.size() > 1)
         {
             if (const auto * week_mode_column = checkAndGetColumnConst<ColumnUInt8>(arguments[1].column.get()))
                 week_mode = week_mode_column->getValue<UInt8>();
+            else if (const auto * timezone_column = checkAndGetColumnConst<ColumnString>(arguments[1].column.get()))
+                // for backward compatibility - try to get 2nd column as timezone
+                timezone_index = 1;
         }
 
-        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 2, 0);
+        // for backward compatibility - try to get 2nd column as timezone
+        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, timezone_index, 0);
         const ColumnPtr source_col = arguments[0].column;
         if (const auto * sources = checkAndGetColumn<typename FromDataType::ColumnType>(source_col.get()))
         {

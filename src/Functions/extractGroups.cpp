@@ -37,6 +37,8 @@ public:
 
     size_t getNumberOfArguments() const override { return 2; }
 
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
+
     bool useDefaultImplementationForConstants() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
@@ -61,8 +63,8 @@ public:
         if (needle.empty())
             throw Exception(getName() + " length of 'needle' argument must be greater than 0.", ErrorCodes::BAD_ARGUMENTS);
 
-        auto regexp = Regexps::get<false, false>(needle);
-        const auto & re2 = regexp->getRE2();
+        const auto & regexp = Regexps::createRegexp<false, false, false>(needle);
+        const auto & re2 = regexp.getRE2();
 
         if (!re2)
             throw Exception("There are no groups in regexp: " + needle, ErrorCodes::BAD_ARGUMENTS);
@@ -73,7 +75,7 @@ public:
             throw Exception("There are no groups in regexp: " + needle, ErrorCodes::BAD_ARGUMENTS);
 
         // Including 0-group, which is the whole regexp.
-        PODArrayWithStackMemory<re2_st::StringPiece, 128> matched_groups(groups_count + 1);
+        PODArrayWithStackMemory<std::string_view, 128> matched_groups(groups_count + 1);
 
         ColumnArray::ColumnOffsets::MutablePtr offsets_col = ColumnArray::ColumnOffsets::create();
         ColumnString::MutablePtr data_col = ColumnString::create();
@@ -85,10 +87,11 @@ public:
 
         for (size_t i = 0; i < input_rows_count; ++i)
         {
-            StringRef current_row = column_haystack->getDataAt(i);
+            std::string_view current_row = column_haystack->getDataAt(i).toView();
 
-            if (re2->Match(re2_st::StringPiece(current_row.data, current_row.size),
-                0, current_row.size, re2_st::RE2::UNANCHORED, matched_groups.data(), matched_groups.size()))
+            if (re2->Match({current_row.data(), current_row.size()},
+                0, current_row.size(), re2::RE2::UNANCHORED, matched_groups.data(),
+                static_cast<int>(matched_groups.size())))
             {
                 // 1 is to exclude group #0 which is whole re match.
                 for (size_t group = 1; group <= groups_count; ++group)

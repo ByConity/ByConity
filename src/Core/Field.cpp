@@ -69,16 +69,16 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
     switch (type)
     {
         case Field::Types::Null: {
-            return DB::Field();
+            return Field();
         }
         case Field::Types::UInt64: {
             UInt64 value;
-            DB::readVarUInt(value, buf);
+            readVarUInt(value, buf);
             return value;
         }
         case Field::Types::UInt128: {
             UInt128 value;
-            DB::readBinary(value, buf);
+            readBinary(value, buf);
             return value;
         }
         case Field::Types::UInt256:
@@ -89,7 +89,7 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
         }
         case Field::Types::Int64: {
             Int64 value;
-            DB::readVarInt(value, buf);
+            readVarInt(value, buf);
             return value;
         }
         case Field::Types::Int128:
@@ -106,27 +106,27 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
         }
         case Field::Types::Float64: {
             Float64 value;
-            DB::readFloatBinary(value, buf);
+            readFloatBinary(value, buf);
             return value;
         }
         case Field::Types::String: {
             std::string value;
-            DB::readStringBinary(value, buf);
+            readStringBinary(value, buf);
             return value;
         }
         case Field::Types::Array: {
             Array value;
-            DB::readBinary(value, buf);
+            readBinary(value, buf);
             return value;
         }
         case Field::Types::Tuple: {
             Tuple value;
-            DB::readBinary(value, buf);
+            readBinary(value, buf);
             return value;
         }
         case Field::Types::Map: {
             Map value;
-            DB::readBinary(value, buf);
+            readBinary(value, buf);
             return value;
         }
         case Field::Types::ByteMap: {
@@ -134,23 +134,40 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
         }
         case Field::Types::AggregateFunctionState: {
             AggregateFunctionStateData value;
-            DB::readStringBinary(value.name, buf);
-            DB::readStringBinary(value.data, buf);
+            readStringBinary(value.name, buf);
+            readStringBinary(value.data, buf);
+            return value;
+        }
+        case Field::Types::UUID: {
+            UUID value;
+            readBinary(value, buf);
+            return value;
+        }
+        case Field::Types::IPv4:
+        {
+            IPv4 value;
+            DB::readBinary(value, buf);
+            return value;
+        }
+        case Field::Types::IPv6:
+        {
+            IPv6 value;
+            DB::readBinary(value.toUnderType(), buf);
             return value;
         }
     }
-    return DB::Field();
+    return Field();
 }
 
 void readBinary(Array & x, ReadBuffer & buf)
 {
     size_t size;
-    DB::readBinary(size, buf);
+    readBinary(size, buf);
 
     for (size_t index = 0; index < size; ++index)
     {
         UInt8 type;
-        DB::readBinary(type, buf);
+        readBinary(type, buf);
         x.push_back(getBinaryValue(type, buf));
     }
 }
@@ -158,31 +175,31 @@ void readBinary(Array & x, ReadBuffer & buf)
 void writeBinary(const Array & x, WriteBuffer & buf)
 {
     const size_t size = x.size();
-    DB::writeBinary(size, buf);
+    writeBinary(size, buf);
 
     for (const auto & elem : x)
     {
         const UInt8 type = elem.getType();
-        DB::writeBinary(type, buf);
+        writeBinary(type, buf);
         Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
     }
 }
 
 void writeText(const Array & x, WriteBuffer & buf)
 {
-    DB::String res = applyVisitor(FieldVisitorToString(), DB::Field(x));
+    String res = applyVisitor(FieldVisitorToString(), Field(x));
     buf.write(res.data(), res.size());
 }
 
 void readBinary(Tuple & x, ReadBuffer & buf)
 {
     size_t size;
-    DB::readBinary(size, buf);
+    readBinary(size, buf);
 
     for (size_t index = 0; index < size; ++index)
     {
         UInt8 type;
-        DB::readBinary(type, buf);
+        readBinary(type, buf);
         x.push_back(getBinaryValue(type, buf));
     }
 }
@@ -190,19 +207,19 @@ void readBinary(Tuple & x, ReadBuffer & buf)
 void writeBinary(const Tuple & x, WriteBuffer & buf)
 {
     const size_t size = x.size();
-    DB::writeBinary(size, buf);
+    writeBinary(size, buf);
 
     for (const auto & elem : x)
     {
         const UInt8 type = elem.getType();
-        DB::writeBinary(type, buf);
+        writeBinary(type, buf);
         Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
     }
 }
 
 void writeText(const Tuple & x, WriteBuffer & buf)
 {
-    writeFieldText(DB::Field(x), buf);
+    writeFieldText(Field(x), buf);
 }
 
 void readBinary(Map & x, ReadBuffer & buf)
@@ -233,7 +250,7 @@ void writeBinary(const Map & x, WriteBuffer & buf)
 
 void writeText(const Map & x, WriteBuffer & buf)
 {
-    writeFieldText(DB::Field(x), buf);
+    writeFieldText(Field(x), buf);
 }
 
 // ByteDance Map support
@@ -282,7 +299,7 @@ void writeText(const ByteMap & x, WriteBuffer & buf)
 void readBinary(BitMap64 & x, ReadBuffer & buf)
 {
     size_t bytes{0};
-    DB::readVarUInt(bytes, buf);
+    readVarUInt(bytes, buf);
     PODArray<char> tmp_buf(bytes);
     buf.readStrict(tmp_buf.data(), bytes);
     x = roaring::Roaring64Map::readSafe(tmp_buf.data(), bytes);
@@ -291,7 +308,7 @@ void readBinary(BitMap64 & x, ReadBuffer & buf)
 void writeBinary(const BitMap64 & x, WriteBuffer & buf)
 {
     const size_t bytes = x.getSizeInBytes();
-    DB::writeVarUInt(bytes, buf);
+    writeVarUInt(bytes, buf);
     PODArray<char> tmp_buf(bytes);
     x.write(tmp_buf.data());
     writeString(tmp_buf.data(), bytes, buf);
@@ -386,6 +403,16 @@ void writeFieldBinaryBlobImpl(const Field & field, Field::Types::Which type, Wri
         case Field::Types::Tuple:
         {
             writeBinary(field.get<Tuple>(), buf);
+            return;
+        }
+        case Field::Types::IPv4:
+        {
+            writeBinary(field.get<IPv4>(), buf);
+            return;
+        }
+        case Field::Types::IPv6:
+        {
+            writeBinary(field.get<IPv6>(), buf);
             return;
         }
         case Field::Types::Decimal32:
@@ -564,8 +591,8 @@ void readFieldBinaryBlobImpl(Field & field, Field::Types::Which type, ReadBuffer
         case Field::Types::AggregateFunctionState:
         {
             AggregateFunctionStateData value;
-            DB::readStringBinary(value.name, buf);
-            DB::readStringBinary(value.data, buf);
+            readStringBinary(value.name, buf);
+            readStringBinary(value.data, buf);
             field = value;
             return;
         }

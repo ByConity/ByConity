@@ -158,14 +158,9 @@ inline UInt32 updateWeakHash32(const DB::UInt8 * pos, size_t size, DB::UInt32 up
 template <typename T>
 inline size_t DefaultHash64(std::enable_if_t<(sizeof(T) <= sizeof(UInt64)), T> key)
 {
-    union
-    {
-        T in;
-        DB::UInt64 out;
-    } u;
-    u.out = 0;
-    u.in = key;
-    return intHash64(u.out);
+    DB::UInt64 out{0};
+    std::memcpy(&out, &key, sizeof(T));
+    return intHash64(out);
 }
 
 
@@ -179,7 +174,7 @@ inline size_t DefaultHash64(std::enable_if_t<(sizeof(T) > sizeof(UInt64)), T> ke
             static_cast<UInt64>(key) ^
             static_cast<UInt64>(key >> 64));
     }
-    else if constexpr (std::is_same_v<T, DB::UUID>)
+    else if constexpr (std::is_same_v<T, DB::UUID> || std::is_same_v<T, DB::IPv6>)
     {
         return intHash64(
             static_cast<UInt64>(key.toUnderType()) ^

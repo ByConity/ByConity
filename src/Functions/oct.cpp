@@ -40,7 +40,7 @@ public:
     {
         // Here we are using conv(val, 10, 8) for computation of oct.
         ColumnPtr data_column = arguments[0].column;
-        data_column = ConvertImplGenericToString::execute(arguments);
+        data_column = ConvertImplGenericToString<ColumnString>::execute(arguments, std::make_shared<DataTypeString>(), input_rows_count);
 
         ColumnsWithTypeAndName args {
         ColumnWithTypeAndName(data_column, std::make_shared<DataTypeString>(), ""),

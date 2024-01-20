@@ -186,7 +186,7 @@ struct AppVersionCompare : public VersionCompareBase
     }
 
 private:
-    bool end_with_dot;
+    bool end_with_dot{false};
 };
 
 struct VersionCompare: public VersionCompareBase

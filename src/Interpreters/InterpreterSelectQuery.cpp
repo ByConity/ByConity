@@ -428,6 +428,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             options, joined_tables.tablesWithColumns(), required_result_column_names, table_join);
 
         query_info.syntax_analyzer_result = syntax_analyzer_result;
+        context->setDistributed(syntax_analyzer_result->is_remote_storage);
 
         /// Push down partition filter to query info partition_filter
         if (settings.enable_partition_filter_push_down && !syntax_analyzer_result->optimize_trivial_count)

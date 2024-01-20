@@ -145,20 +145,19 @@ void setSize(const std::string& path, uint64_t size);
 // This class is for File abstraction.
 class File {
 public:
-    File(const char* path) : path_(path)
-    {
-    }
-
-    File(const std::string& path) : path_(path)
-    {
-    }
-
-    File(const Poco::Path& path) : path_(path.toString())
-    {
-    }
-
     File() = default;
-    ~File() = default;
+
+    explicit File(const char* path) : path_(path)
+    {
+    }
+
+    explicit File(const std::string& path) : path_(path)
+    {
+    }
+
+    explicit File(const Poco::Path& path) : path_(path.toString())
+    {
+    }
 
     File& operator = (const Poco::Path& rpath) {
         path_ = rpath.toString();

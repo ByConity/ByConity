@@ -155,6 +155,14 @@ public:
         callback(null_map);
     }
 
+    void forEachSubcolumnRecursively(ColumnCallback callback) override
+    {
+        callback(nested_column);
+        nested_column->forEachSubcolumnRecursively(callback);
+        callback(null_map);
+        null_map->forEachSubcolumnRecursively(callback);
+    }
+
     bool structureEquals(const IColumn & rhs) const override
     {
         if (auto rhs_nullable = typeid_cast<const ColumnNullable *>(&rhs))

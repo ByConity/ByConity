@@ -345,32 +345,21 @@ bool KVAccessStorage::existsImpl(const UUID & id) const
 }
 
 
-AccessEntityPtr KVAccessStorage::readImpl(const UUID & id) const
+AccessEntityPtr KVAccessStorage::readImpl(const UUID & id, bool throw_if_not_exists) const
 {
 
     std::lock_guard lock{mutex};
     auto it = entries_by_id.find(id);
     if (it == entries_by_id.end())
-        throwNotFound(id);
+    {
+        if (throw_if_not_exists)
+            throwNotFound(id);
+        else
+            return nullptr;
+    }
 
     const auto & entry = it->second;
     return entry.entity;
-}
-
-
-String KVAccessStorage::readNameImpl(const UUID & id) const
-{
-    {
-        std::lock_guard lock{mutex};
-        auto it = entries_by_id.find(id);
-        if (it != entries_by_id.end())
-            return String{it->second.name};
-    }
-
-    auto name = catalog->tryGetAccessEntityName(id);
-    if (!name)
-        throwNotFound(id);
-    return *name;
 }
 
 

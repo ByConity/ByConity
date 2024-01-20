@@ -96,6 +96,8 @@ public:
     /// Name of data type (examples: UInt64, Array(String)).
     String getName() const;
 
+    DataTypePtr getPtr() const { return shared_from_this(); }
+
     /// Name of data type family (example: FixedString, Array).
     virtual const char * getFamilyName() const = 0;
 
@@ -313,6 +315,9 @@ public:
     /// Strings, Numbers, Date, DateTime, Nullable
     virtual bool canBeInsideLowCardinality() const { return false; }
 
+    /// Object, Array(Object), Tuple(..., Object, ...)
+    virtual bool hasDynamicSubcolumns() const { return false; }
+
     /// If this is map type
     virtual bool isMap() const { return false; }
 
@@ -419,6 +424,8 @@ struct WhichDataType
     constexpr bool isStringOrFixedString() const { return isString() || isFixedString(); }
 
     constexpr bool isUUID() const { return idx == TypeIndex::UUID; }
+    constexpr bool isIPv4() const { return idx == TypeIndex::IPv4; }
+    constexpr bool isIPv6() const { return idx == TypeIndex::IPv6; }
     constexpr bool isArray() const { return idx == TypeIndex::Array; }
     constexpr bool isTuple() const { return idx == TypeIndex::Tuple; }
     constexpr bool isMap() const {return idx == TypeIndex::Map; }
@@ -430,6 +437,7 @@ struct WhichDataType
     constexpr bool isNullable() const { return idx == TypeIndex::Nullable; }
     constexpr bool isFunction() const { return idx == TypeIndex::Function; }
     constexpr bool isAggregateFunction() const { return idx == TypeIndex::AggregateFunction; }
+    constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString(); }
     constexpr bool isBitmap64() const { return idx == TypeIndex::BitMap64; }
 };
 
@@ -456,8 +464,11 @@ inline bool isTuple(const DataTypePtr & data_type) { return WhichDataType(data_t
 inline bool isArray(const DataTypePtr & data_type) { return WhichDataType(data_type).isArray(); }
 inline bool isMap(const DataTypePtr & data_type) { return WhichDataType(data_type).isMap(); }
 inline bool isByteMap(const DataTypePtr & data_type) { return WhichDataType(data_type).isByteMap(); }
+inline bool isInterval(const DataTypePtr & data_type) {return WhichDataType(data_type).isInterval(); }
 inline bool isNothing(const DataTypePtr & data_type) { return WhichDataType(data_type).isNothing(); }
 inline bool isUUID(const DataTypePtr & data_type) { return WhichDataType(data_type).isUUID(); }
+inline bool isIPv4(const DataTypePtr & data_type) { return WhichDataType(data_type).isIPv4(); }
+inline bool isIPv6(const DataTypePtr & data_type) { return WhichDataType(data_type).isIPv6(); }
 inline bool isBitmap64(const DataTypePtr & data_type) { return WhichDataType(data_type).isBitmap64(); }
 
 template <typename T>

@@ -58,7 +58,44 @@ struct EmptyImpl
     static void uuid(const ColumnUUID::Container & container, size_t n, PaddedPODArray<UInt8> & res)
     {
         for (size_t i = 0; i < n; ++i)
-            res[i] = negative ^ (container.data()->toUnderType() == 0);
+            res[i] = negative ^ (container[i].toUnderType() == 0);
+    }
+
+    static void ipv6(const ColumnIPv6::Container & container, size_t n, PaddedPODArray<UInt8> & res)
+    {
+        for (size_t i = 0; i < n; ++i)
+            res[i] = negative ^ (container[i].toUnderType() == 0);
+    }
+
+    static void ipv4(const ColumnIPv4::Container & container, size_t n, PaddedPODArray<UInt8> & res)
+    {
+        for (size_t i = 0; i < n; ++i)
+            res[i] = negative ^ (container[i].toUnderType() == 0);
+    }
+
+    static bool isCompilable(const DataTypes &)
+    {
+        return false;
+    }
+    static llvm::Value * compileString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileFixedString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileArray(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileMap(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileUuid(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
     }
 };
 

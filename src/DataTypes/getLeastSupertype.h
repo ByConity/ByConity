@@ -54,6 +54,7 @@ size_t getMaxScaleIndex(const DataTypes &types)
 enum class LeastSupertypeOnError
 {
     Throw,
+    String,
     Null,
 };
 

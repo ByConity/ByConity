@@ -76,7 +76,7 @@ bool FillingRow::next(const FillingRow & to_row)
     auto next_value = row[pos];
     applyVisitor(FieldVisitorSum(getFillDescription(pos).fill_step), next_value);
 
-    if (less(to_row[pos], next_value, getDirection(pos)))
+    if (less(to_row[pos], next_value, getDirection(pos)) || equals(next_value, getFillDescription(pos).fill_to))
         return false;
 
     row[pos] = next_value;

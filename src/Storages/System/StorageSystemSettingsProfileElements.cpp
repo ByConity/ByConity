@@ -12,6 +12,7 @@
 #include <Access/SettingsProfile.h>
 #include <Interpreters/Context.h>
 #include <boost/range/algorithm_ext/push_back.hpp>
+#include <Common/SettingConstraintWritability.h>
 
 
 namespace DB
