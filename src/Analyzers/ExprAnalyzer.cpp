@@ -144,7 +144,7 @@ private:
     void expandAsterisk(ASTs & nodes);
 
     std::tuple<AggregateFunctionPtr, Array, String> resolveAggregateFunction(ASTFunction & function);
-    DataTypePtr handleSubquery(const ASTPtr & subquery);
+    DataTypePtr handleSubquery(const ASTPtr & subquery, bool use_explicit_named_tuple);
     ColumnWithTypeAndName handleResolvedField(ASTPtr & node, const ResolvedField & field);
 
     void processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTPtr & rhs_ast);
@@ -288,7 +288,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTQuantifiedComparison(ASTPtr &
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 {
-    auto type = handleSubquery(node);
+    auto type = handleSubquery(node, true);
 
     // when a scalar subquery has 0 rows, it returns NULL, hence we change its type to Nullable type
     // note that this feature is not compatible with subquery with multiple output returning Tuple type
@@ -636,7 +636,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeExistsSubquery(ASTFunctionPtr 
     if (function->children.size() != 1)
         throw Exception("Invalid exists subquery expression: " + serializeAST(*function), ErrorCodes::SYNTAX_ERROR);
 
-    handleSubquery(function->arguments->children[0]);
+    handleSubquery(function->arguments->children[0], false);
     analysis.exists_subqueries[options.select_query].push_back(function);
     return {nullptr, std::make_shared<DataTypeUInt8>(), function->getColumnName()};
 }
@@ -644,8 +644,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeExistsSubquery(ASTFunctionPtr 
 void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTPtr & rhs_ast)
 {
     auto lhs_type = process(lhs_ast).type;
-    auto rhs_type = handleSubquery(rhs_ast);
-
+    auto rhs_type = handleSubquery(rhs_ast, false);
     if (!JoinCommon::isJoinCompatibleTypes(lhs_type, rhs_type))
     {
         DataTypePtr super_type = nullptr;
@@ -720,7 +719,7 @@ std::tuple<AggregateFunctionPtr, Array, String> ExprAnalyzerVisitor::resolveAggr
     return {aggregate, parameters, column_name};
 }
 
-DataTypePtr ExprAnalyzerVisitor::handleSubquery(const ASTPtr & subquery)
+DataTypePtr ExprAnalyzerVisitor::handleSubquery(const ASTPtr & subquery, bool use_explicit_named_tuple)
 {
     if (auto * s = subquery->as<ASTSubquery>(); !s)
         throw Exception("Invalid subquery expression", ErrorCodes::LOGICAL_ERROR);
@@ -748,7 +747,18 @@ DataTypePtr ExprAnalyzerVisitor::handleSubquery(const ASTPtr & subquery)
         // if subquery has multiple output column, its return type should be the tuple of columns
         DataTypes column_types(output_columns.size());
         std::transform(output_columns.begin(), output_columns.end(), column_types.begin(), std::mem_fn(&FieldDescription::type));
-        type = std::make_shared<DataTypeTuple>(column_types);
+
+        if (use_explicit_named_tuple)
+        {
+            Strings names(output_columns.size());
+            std::transform(
+                output_columns.begin(), output_columns.end(), names.begin(), [](FieldDescription & v1) -> String { return v1.name; });
+            if (!DataTypeTuple::checkTupleNames(names))
+                type = std::make_shared<DataTypeTuple>(column_types, names);
+        }
+
+        if (!type)
+            type = std::make_shared<DataTypeTuple>(column_types);
     }
 
     analysis.setExpressionColumnWithType(subquery, {type});

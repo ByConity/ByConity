@@ -218,13 +218,15 @@ void CnchServerServiceImpl::createTransaction(
         try
         {
             TxnTimestamp primary_txn_id = request->has_primary_txn_id() ? TxnTimestamp(request->primary_txn_id()) : TxnTimestamp(0);
+            bool read_only = request->has_read_only() ? request->read_only() : false;
             CnchTransactionInitiator initiator
                 = request->has_primary_txn_id() ? CnchTransactionInitiator::Txn : CnchTransactionInitiator::Worker;
             auto transaction
                 = global_context.getCnchTransactionCoordinator().createTransaction(CreateTransactionOption()
                                                                                         .setPrimaryTransactionId(primary_txn_id)
                                                                                         .setType(CnchTransactionType::Implicit)
-                                                                                        .setInitiator(initiator));
+                                                                                        .setInitiator(initiator)
+                                                                                        .setReadOnly(read_only));
             auto & controller = static_cast<brpc::Controller &>(*cntl);
             transaction->setCreator(butil::endpoint2str(controller.remote_side()).c_str());
 

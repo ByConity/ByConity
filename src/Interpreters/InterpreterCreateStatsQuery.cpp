@@ -71,7 +71,7 @@ static auto getTableIdentifier(ContextPtr context, const QueryType * query)
 }
 
 
-static Block constructInfoBlock(ContextPtr context, const CollectTarget & target, String row_count_or_error, double time)
+static Block constructInfoBlock(ContextPtr context, const String & table_name, UInt64 column_count, String row_count_or_error, double time, bool only_header = false)
 {
     Block block;
     auto append_str_column = [&](String header, String value) {
@@ -79,7 +79,10 @@ static Block constructInfoBlock(ContextPtr context, const CollectTarget & target
         tuple.name = header;
         tuple.type = std::make_shared<DataTypeString>();
         auto col = tuple.type->createColumn();
-        col->insertData(value.data(), value.size());
+        if (!only_header) 
+        {
+            col->insertData(value.data(), value.size());
+        }
         tuple.column = std::move(col);
         block.insert(std::move(tuple));
     };
@@ -90,13 +93,16 @@ static Block constructInfoBlock(ContextPtr context, const CollectTarget & target
         tuple.name = header;
         tuple.type = std::make_shared<DataTypeNumber<T>>();
         auto col = ColumnVector<T>::create();
-        col->insertValue(value);
+        if (!only_header) 
+        {
+            col->insertValue(value);
+        }
         tuple.column = std::move(col);
         block.insert(std::move(tuple));
     };
 
-    append_str_column("table_name", target.table_identifier.getTableName());
-    append_num_column("column_count", target.columns_desc.size());
+    append_str_column("table_name", table_name);
+    append_num_column("column_count", column_count);
     append_str_column("row_count_or_error", row_count_or_error);
     if (context->getSettingsRef().create_stats_time_output)
     {
@@ -116,7 +122,10 @@ namespace
         {
         }
         String getName() const override { return "Statistics"; }
-        Block getHeader() const override { return {}; }
+        Block getHeader() const override { 
+            auto sample_block = constructInfoBlock(getContext(), "", 0, "", 0, true);
+            return sample_block; 
+        }
 
     private:
         Block readImpl() override
@@ -133,7 +142,7 @@ namespace
                         continue;
                     auto row_count = row_count_opt.value();
                     auto elapsed_time = watch.elapsedSeconds();
-                    return constructInfoBlock(context, collect_target, std::to_string(row_count), elapsed_time);
+                    return constructInfoBlock(context, collect_target.table_identifier.getTableName(), collect_target.columns_desc.size(), std::to_string(row_count), elapsed_time);
                 }
                 catch (...)
                 {
@@ -145,7 +154,7 @@ namespace
                     auto err_info = getCurrentExceptionMessage(false);
                     error_infos.emplace(collect_target.table_identifier.getDbTableName(), err_info_with_stack);
 
-                    return constructInfoBlock(context, collect_target, err_info, elapsed_time);
+                    return constructInfoBlock(context, collect_target.table_identifier.getTableName(), collect_target.columns_desc.size(), err_info, elapsed_time);
                 }
             }
 

@@ -49,13 +49,15 @@ CnchServerClient::CnchServerClient(HostWithPorts host_ports_)
 
 CnchServerClient::~CnchServerClient() = default;
 
-std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransaction(const TxnTimestamp & primary_txn_id)
+std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransaction(
+    const TxnTimestamp & primary_txn_id, bool read_only)
 {
     brpc::Controller cntl;
     Protos::CreateTransactionReq request;
     Protos::CreateTransactionResp response;
     if (primary_txn_id)
         request.set_primary_txn_id(primary_txn_id.toUInt64());
+    request.set_read_only(read_only);
     stub->createTransaction(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
