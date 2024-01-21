@@ -138,6 +138,17 @@ void CnchServerServiceImpl::commitParts(
                 cppkafka::TopicPartitionList tpl;
                 if (req->has_consumer_group())
                 {
+                    // check if table schema has changed before writing new parts. need reschedule consume task and update storage schema on work side if so.
+                    if (!parts.empty())
+                    {
+                        auto column_commit_time = storage->getPartColumnsCommitTime(*(parts[0]->getColumnsPtr()));
+                        if (column_commit_time != storage->commit_time.toUInt64())
+                        {
+                            LOG_WARNING(&Poco::Logger::get("CnchServerService"), "Kafka consumer cannot commit parts because of underlying table change. Will reschedule consume task.");
+                            throw Exception(ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP, "Commit fails because of storage schema change");
+                        }
+                    }
+
                     consumer_group = req->consumer_group();
                     tpl.reserve(req->tpl_size());
                     for (const auto & tp : req->tpl())
