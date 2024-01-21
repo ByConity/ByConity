@@ -22,6 +22,8 @@
 #include <Protos/RPCHelpers.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/IStorage.h>
+#include "Storages/Hive/HiveFile/IHiveFile.h"
+#include "Storages/Hive/StorageCnchHive.h"
 #include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
@@ -355,7 +357,8 @@ brpc::CallId CnchWorkerClient::sendResources(
         if (!resource.hive_parts.empty())
         {
             auto * mutable_hive_parts = table_data_parts.mutable_hive_parts();
-            RPCHelpers::serialize(*mutable_hive_parts, resource.hive_parts);
+            StorageCnchHive & hive_storage = dynamic_cast<StorageCnchHive &>(*resource.storage);
+            hive_storage.serializeHiveFiles(*mutable_hive_parts, resource.hive_parts);
         }
 
         if (!resource.file_parts.empty())

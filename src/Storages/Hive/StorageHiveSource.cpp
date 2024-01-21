@@ -112,7 +112,7 @@ void StorageHiveSource::prepareReader()
     int previous_file = current_file_slice.file;
     allocator->next(current_file_slice);
     /// no next file to read from
-    
+
     if (current_file_slice.empty())
         return;
 
@@ -168,6 +168,7 @@ Chunk StorageHiveSource::generate()
 
         reader.reset();
         pipeline.reset();
+        data_source.reset();
         prepareReader();
     }
     return {};

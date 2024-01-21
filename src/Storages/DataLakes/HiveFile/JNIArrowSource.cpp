@@ -1,9 +1,8 @@
 #include "Storages/DataLakes/HiveFile/JNIArrowSource.h"
 #if USE_JAVA_EXTENSIONS
 
-
-#include <JNIArrowReader.h>
-#include <JNIArrowStream.h>
+#include <jni/JNIArrowReader.h>
+#include <jni/JNIArrowStream.h>
 #include "Formats/FormatSettings.h"
 #include "Processors/Formats/Impl/ArrowColumnToCHColumn.h"
 
