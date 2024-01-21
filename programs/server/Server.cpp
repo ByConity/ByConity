@@ -38,6 +38,7 @@
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
 #include <DataTypes/MapHelpers.h>
+#include <Core/ServerUUID.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
@@ -795,6 +796,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
 
     StatusFile status{path + "status", StatusFile::write_full_info};
+
+    ServerUUID::load(path + "/uuid", log);
 
     /// Try to increase limit on number of open files.
     {
