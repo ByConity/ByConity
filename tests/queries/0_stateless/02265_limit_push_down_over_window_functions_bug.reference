@@ -1,0 +1,26 @@
+0	1
+1	2
+2	3
+a	2
+0	10000000
+1	10000000
+2	10000000
+0	10000000
+1	10000000
+2	10000000
+20
+20
+20
+20
+20
+20
+20
+20
+20
+20
+Expression ((Projection + Before ORDER BY))
+  Limit (preliminary LIMIT (without OFFSET))
+    Window (Window step for window \'\')
+      Expression (Before window functions)
+        SettingQuotaAndLimits (Set limits and quota after reading from storage)
+          ReadFromStorage (SystemNumbers)
