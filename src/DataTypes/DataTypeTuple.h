@@ -71,11 +71,13 @@ public:
 
     bool haveExplicitNames() const { return have_explicit_names; }
     bool serializeNames() const { return serialize_names; }
+    static std::optional<Exception> checkTupleNames(const Strings & names);
 
 private:
     template <typename OnSuccess, typename OnContinue>
     auto getSubcolumnEntity(const String & subcolumn_name,
         const OnSuccess & on_success, const OnContinue & on_continue) const;
+
 };
 
 }
