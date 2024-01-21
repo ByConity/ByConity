@@ -92,7 +92,7 @@ TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, con
                 if (new_join_node == nullptr)
                     continue;
 
-                auto join_step = static_cast<const JoinStep &>(*new_join_node->getStep());
+                const auto & join_step = static_cast<const JoinStep &>(*new_join_node->getStep());
 
                 UInt64 row_count = 0;
                 if (!is_final_join)
