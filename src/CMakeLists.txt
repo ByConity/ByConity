@@ -80,10 +80,6 @@ add_subdirectory (TSO)
 add_subdirectory (DaemonManager)
 add_subdirectory (Optimizer)
 
-if(USE_JAVA_EXTENSIONS)
-    add_subdirectory (JNI)
-endif()
-
 set(dbms_headers)
 set(dbms_sources)
 
