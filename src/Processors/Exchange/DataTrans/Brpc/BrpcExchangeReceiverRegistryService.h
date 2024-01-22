@@ -99,7 +99,6 @@ private:
 
     /// proxy will become real sender in this method
     void registerSenderToProxy(
-        brpc::Controller * cntl,
         const DiskExchangeDataManagerPtr & mgr,
         const BroadcastSenderProxyPtr & sender_proxy,
         const String & query_id,

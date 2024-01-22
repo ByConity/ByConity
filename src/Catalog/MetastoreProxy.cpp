@@ -1304,7 +1304,7 @@ void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & t
     if (resources.empty())
         return;
 
-    BatchCommitRequest batch_write;
+    BatchCommitRequest batch_write(false);
     BatchCommitResponse resp;
     for (auto & resource : resources)
     {

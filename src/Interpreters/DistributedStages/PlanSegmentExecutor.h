@@ -69,13 +69,13 @@ struct SenderMetrics
 struct RuntimeSegmentsStatus
 {
     String query_id;
-    int32_t segment_id;
-    size_t parallel_index;
-    bool is_succeed;
-    bool is_cancelled;
+    int32_t segment_id{0};
+    size_t parallel_index{0};
+    bool is_succeed{true};
+    bool is_cancelled{false};
     RuntimeSegmentsMetrics metrics;
     String message;
-    int32_t code;
+    int32_t code{0};
 };
 
 class PlanSegmentExecutor : private boost::noncopyable

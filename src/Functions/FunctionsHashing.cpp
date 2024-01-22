@@ -65,6 +65,8 @@ REGISTER_FUNCTION(Hashing)
     factory.registerFunction<FunctionJavaHash>();
     factory.registerFunction<FunctionJavaHashUTF16LE>();
     factory.registerFunction<FunctionHiveHash>();
+    factory.registerFunction<FunctionFNV1aHash>();
+    factory.registerFunction<FunctionFlinkFieldHash>();
 #if !defined(ARCADIA_BUILD)
     factory.registerFunction<FunctionMurmurHash2_32WithSeed>();
     factory.registerFunction<FunctionMurmurHash2_64WithSeed>();

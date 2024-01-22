@@ -14,6 +14,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <ctype.h>
 #include <fcntl.h>
@@ -488,6 +489,7 @@ void DiskExchangeDataManager::gc()
         result_holders.push_back(std::move(holder));
     }
 
+    std::unordered_map<uint64_t, size_t> cnts;
     for (const auto & holder : result_holders)
     {
         try
@@ -499,10 +501,15 @@ void DiskExchangeDataManager::gc()
                     fmt::format("wait for heart beat response failed, error text:{}", holder.cntl->ErrorText()));
             for (const auto & not_alive_query : holder.response->not_alive_queries())
             {
-                Protos::AliveQueryInfo elm;
-                elm.set_query_unique_id(not_alive_query.query_unique_id());
-                elm.set_query_id(not_alive_query.query_id());
-                not_alive_queries.push_back(std::move(elm));
+                auto & cnt = cnts[not_alive_query.query_unique_id()];
+                cnt += 1;
+                if (cnt == result_holders.size())
+                {
+                    Protos::AliveQueryInfo elm;
+                    elm.set_query_unique_id(not_alive_query.query_unique_id());
+                    elm.set_query_id(not_alive_query.query_id());
+                    not_alive_queries.push_back(std::move(elm));
+                }
             }
         }
         catch (...)

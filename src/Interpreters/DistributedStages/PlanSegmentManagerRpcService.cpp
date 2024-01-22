@@ -164,6 +164,7 @@ void PlanSegmentManagerRpcService::executeQuery(
     catch (...)
     {
         auto error_msg = getCurrentExceptionMessage(false);
+        tryLogCurrentException(__PRETTY_FUNCTION__);
         cntl->SetFailed(error_msg);
         LOG_ERROR(log, "executeQuery failed: {}", error_msg);
     }
