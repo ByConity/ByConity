@@ -46,16 +46,13 @@ DataTypeTuple::DataTypeTuple(const DataTypes & elems_)
         names[i] = toString(i + 1);
 }
 
-static std::optional<Exception> checkTupleNames(const Strings & names)
+std::optional<Exception> DataTypeTuple::checkTupleNames(const Strings & names)
 {
     std::unordered_set<String> names_set;
     for (const auto & name : names)
     {
         if (name.empty())
             return Exception("Names of tuple elements cannot be empty", ErrorCodes::BAD_ARGUMENTS);
-
-        if (isNumericASCII(name[0]))
-            return Exception("Explicitly specified names of tuple elements cannot start with digit", ErrorCodes::BAD_ARGUMENTS);
 
         if (!names_set.insert(name).second)
             return Exception("Names of tuple elements must be unique", ErrorCodes::DUPLICATE_COLUMN);
@@ -202,6 +199,19 @@ size_t DataTypeTuple::getPositionByName(const String & name) const
     throw Exception("Tuple doesn't have element with name '" + name + "'", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
 }
 
+
+std::optional<size_t> DataTypeTuple::tryGetPositionByName(const String & name) const
+{
+    size_t size = elems.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        if (names[i] == name)
+        {
+            return std::optional<size_t>(i);
+        }
+    }
+    return std::nullopt;
+}
 
 bool DataTypeTuple::textCanContainOnlyValidUTF8() const
 {

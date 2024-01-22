@@ -343,15 +343,15 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
         {
             auto is_server = context->getServerType() == ServerType::cnch_server;
             CnchServerClientPtr server_client;
-            if (const auto & client_info = context->getClientInfo(); client_info.rpc_port)
-            {
-                /// case: "insert select/infile" forward to worker | manipulation task | cnch system log flush | ingestion from kafka | etc
-                server_client = context->getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port);
-            }
-            else if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(context->getCurrentTransaction()); worker_txn)
+            if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(context->getCurrentTransaction()); worker_txn && worker_txn->tryGetServerClient())
             {
                 /// case: client submits INSERTs directly to worker
                 server_client = worker_txn->getServerClient();
+            }
+            else if (const auto & client_info = context->getClientInfo(); client_info.rpc_port)
+            {
+                /// case: "insert select/infile" forward to worker | manipulation task | cnch system log flush | ingestion from kafka | etc
+                server_client = context->getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port);
             }
             else
             {
@@ -747,9 +747,8 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
 UUID CnchDataWriter::newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
 {
     UUID random_id = UUIDHelpers::generateV4();
-    PairInt64 random_id_pair = UUIDHelpers::UUIDToPairInt64(random_id);
-    UInt64& random_id_low = random_id_pair.low;
-    UInt64& random_id_high = random_id_pair.high;
+    UInt64& random_id_low = UUIDHelpers::getHighBytes(random_id);
+    UInt64& random_id_high = UUIDHelpers::getLowBytes(random_id);
     boost::hash_combine(random_id_low, part_info.min_block);
     boost::hash_combine(random_id_high, part_info.max_block);
     boost::hash_combine(random_id_low, part_info.mutation);

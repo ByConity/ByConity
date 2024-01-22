@@ -26,7 +26,7 @@
 
 namespace DB
 {
-/** Tansform-type wrapper for DateTime64, simplifies DateTime64 support for given Transform.
+/** Transform-type wrapper for DateTime64, simplifies DateTime64 support for given Transform.
  *
  * Depending on what overloads of Transform::execute() are available, when called with DateTime64 value,
  * invokes Transform::execute() with either:
@@ -34,7 +34,7 @@ namespace DB
  * * DateTime64 value and scale factor (2)
  * * DateTime64 broken down to components, result of execute is then re-assembled back into DateTime64 value (3)
  *
- * Suitable Transfotm-types are commonly used in Date/DateTime manipulation functions,
+ * Suitable Transform-types are commonly used in Date/DateTime manipulation functions,
  * and should implement static (or const) function with following signatures:
  * 1:
  *     R execute(Int64 whole_value, ... )
@@ -70,6 +70,11 @@ public:
         wrapped_transform(t)
     {}
 
+    TransformDateTime64(DateTime64::NativeType scale_multiplier_ = 1, Transform t = {}) /// NOLINT(google-explicit-constructor)
+        : scale_multiplier(scale_multiplier_),
+        wrapped_transform(t)
+    {}
+
     template <typename ... Args>
     inline auto NO_SANITIZE_UNDEFINED execute(const DateTime64 & t, Args && ... args) const
     {
@@ -98,7 +103,10 @@ public:
         }
         else
         {
-            const auto components = DecimalUtils::splitWithScaleMultiplier(t, scale_multiplier);
+            auto components = DecimalUtils::splitWithScaleMultiplier(t, scale_multiplier);
+            if (t.value < 0 && components.fractional)
+                --components.whole;
+
             return wrapped_transform.execute(static_cast<Int64>(components.whole), std::forward<Args>(args)...);
         }
     }
@@ -149,9 +157,11 @@ public:
         return wrapped_transform.executeExtendedResult(t, std::forward<Args>(args)...);
     }
 
+    DateTime64::NativeType getScaleMultiplier() const { return scale_multiplier; }
+
 private:
     DateTime64::NativeType scale_multiplier = 1;
-    Transform wrapped_transform;
+    Transform wrapped_transform = {};
 };
 
 }

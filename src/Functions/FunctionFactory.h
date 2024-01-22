@@ -24,6 +24,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Common/register_objects.h>
 #include <Common/IFactoryWithAliases.h>
+#include <Common/Documentation.h>
 #include <Functions/IFunction.h>
 #include <Functions/IFunctionAdaptors.h>
 
@@ -53,6 +54,12 @@ public:
     }
 
     template <typename Function>
+    void registerFunction(Documentation /*doc*/, CaseSensitiveness case_sensitiveness = CaseSensitive)
+    {
+        registerFunction<Function>(Function::name, case_sensitiveness);
+    }
+
+    template <typename Function>
     void registerFunction(const std::string & name, CaseSensitiveness case_sensitiveness = CaseSensitive)
     {
 
@@ -61,6 +68,17 @@ public:
         else
             registerFunction(name, &Function::create, case_sensitiveness);
     }
+
+    template <typename Function>
+    void registerFunction(const std::string & name, Documentation, CaseSensitiveness case_sensitiveness = CaseSensitive)
+    {
+
+        if constexpr (std::is_base_of_v<IFunction, Function>)
+            registerFunction(name, &adaptFunctionToOverloadResolver<Function>, case_sensitiveness);
+        else
+            registerFunction(name, &Function::create, case_sensitiveness);
+    }
+
 
     /// This function is used by YQL - internal Yandex product that depends on ClickHouse by source code.
     std::vector<std::string> getAllNames() const;
@@ -86,6 +104,13 @@ public:
         const std::string & name,
         Value creator,
         CaseSensitiveness case_sensitiveness = CaseSensitive);
+
+    void registerFunction(
+        const std::string & name,
+        Value creator,
+        Documentation doc,
+        CaseSensitiveness case_sensitiveness = CaseSensitive);
+
 
 private:
     using Functions = std::unordered_map<std::string, Value>;

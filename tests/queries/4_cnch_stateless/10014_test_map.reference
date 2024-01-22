@@ -18,5 +18,9 @@ Map(DateTime, DateTime)
 {'key1':[1,2],'key2':[1,2,NULL]}
 {'key1':[4,8],'key2':[4,8,NULL]}
 Map(String, Array(Nullable(Int32)))
+{}
 {'key':'yy'}
 {'key':'value'}
+{}
+{'key':NULL}
+0	{'key':NULL}

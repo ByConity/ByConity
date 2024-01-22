@@ -88,7 +88,7 @@ public:
     /// 1 for plain array, 2 for array of arrays and so on.
     size_t getNumberOfDimensions() const;
 
-    bool canBeMapValueType() const override { return true; }
+    bool canBeByteMapValueType() const override { return nested->canBeByteMapValueType(); }
 
 private:
     ColumnPtr getSubcolumnImpl(const String & subcolumn_name, const IColumn & column, size_t level) const;

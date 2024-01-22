@@ -24,7 +24,6 @@
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Storages/BitEngine/BitEngineDictionaryManager.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationType.h>
 
@@ -153,9 +152,6 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
         {
             Stopwatch watch;
             bucketed_block_with_partition.partition = Row(original_partition);
-
-            if (storage.isBitEngineMode())
-                writeImplicitColumnForBitEngine(bucketed_block_with_partition, {});
 
             auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
 
@@ -472,78 +468,4 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
     return res;
 }
 
-void CloudMergeTreeBlockOutputStream::writeImplicitColumnForBitEngine(
-    BlockWithPartition & partition_block,
-    const BitengineWriteSettings & write_settings)
-{
-    auto & block = partition_block.block;
-    ColumnsWithTypeAndName columns = block.getColumnsWithTypeAndName();
-    ColumnsWithTypeAndName encoded_columns;
-    Names source_column_names;  /// used in a feature to discard source bitmap columns
-
-    for (auto & column : columns)
-    {
-        if (!isBitmap64(column.type))
-            continue;
-
-        /// check whether the column is a legal BitEngine column in table
-        if (!storage.isBitEngineEncodeColumn(column.name))
-            continue;
-
-        source_column_names.emplace_back(column.name);
-
-        try
-        {
-            auto encoded_column = storage.getBitEngineDictionaryManager()->encodeColumn(
-                    column, column.name, partition_block.bucket_info.bucket_number,
-                    context, write_settings);
-
-            encoded_columns.push_back(encoded_column);
-        }
-        catch(Exception & e)
-        {
-            // LOG_ERROR(&Logger::get("MergedBlockOutputStream"), "BitEngine encode column exception: " << e.message());
-            // tryLogCurrentException(&Logger::get("MergedBlockOutputStream"), __PRETTY_FUNCTION__);
-            throw Exception("BitEngine encode exception. reason: " + String(e.message()), ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-
-    /// add newly encoded column to the block
-    /// only_recode is used for PREATTACH PARTITION, only source_column is read and only the encoded_column is written to disk
-    /// and if only_recode = false, both source_column and encode_column will be written to disk
-    if (!encoded_columns.empty())
-    {
-        for (auto & encoded_column : encoded_columns)
-        {
-            block.insertUnique(encoded_column);
-        }
-    }
-
-    /// used for discard the source_column, we use an empty column to replace the original source_column
-    /// and there's an empty column on the disk, in this case, only_recode = false
-    if (!encoded_columns.empty())
-    {
-        auto replace_source_column = [&](const String & col_name) {
-            size_t rows = block.rows();
-            ColumnWithTypeAndName & col = block.getByName(col_name);
-            auto new_column = col.type->createColumn();
-            new_column->insertManyDefaults(rows);
-            col.column = std::move(new_column);
-        };
-
-        if (storage.getSettings()->bitengine_discard_source_bitmap)
-        {
-            std::for_each(source_column_names.begin(), source_column_names.end(),
-                replace_source_column);
-        }
-        else
-        {
-            for (auto & name : source_column_names)
-            {
-                if (storage.getBitEngineDictionaryManager()->isKeyStringDictioanry(name))
-                    replace_source_column(name);
-            }
-        }
-    }
-}
 }

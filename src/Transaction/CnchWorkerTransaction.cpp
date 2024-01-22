@@ -35,7 +35,7 @@ CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, CnchSe
     : ICnchTransaction(context_), server_client(std::move(client))
 {
     checkServerClient();
-    auto [start_ts, txn_id] = server_client->createTransaction();
+    auto [start_ts, txn_id] = server_client->createTransaction(0, false);
     TransactionRecord record;
     record.setID(txn_id).setInitiator(txnInitiatorToString(CnchTransactionInitiator::Worker)).setStatus(CnchTransactionStatus::Running).setType(CnchTransactionType::Implicit);
     setTransactionRecord(std::move(record));

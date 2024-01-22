@@ -27,7 +27,6 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeString.h>
@@ -257,11 +256,30 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
             const auto decimal_value = DecimalUtils::decimalFromComponents<DateTime64>(src.reinterpret<Int64>(), 0, scale);
             return Field(DecimalField<DateTime64>(decimal_value, scale));
         }
+        else if (which_type.isIPv4() && src.getType() == Field::Types::IPv4)
+        {
+            /// Already in needed type.
+            return src;
+        }
     }
     else if (which_type.isUUID() && src.getType() == Field::Types::UUID)
     {
         /// Already in needed type.
         return src;
+    }
+    else if (which_type.isIPv6())
+    {
+        /// Already in needed type.
+        if (src.getType() == Field::Types::IPv6)
+            return src;
+        /// Treat FixedString(16) as a binary representation of IPv6
+        if (which_from_type.isFixedString() && assert_cast<const DataTypeFixedString *>(from_type_hint)->getN() == IPV6_BINARY_LENGTH)
+        {
+            const auto col = type.createColumn();
+            ReadBufferFromString in_buffer(src.get<String>());
+            type.getDefaultSerialization()->deserializeBinary(*col, in_buffer);
+            return (*col)[0];
+        }
     }
     else if (which_type.isStringOrFixedString())
     {
@@ -348,70 +366,29 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
     }
     else if (const DataTypeMap * type_map = typeid_cast<const DataTypeMap *>(&type))
     {
-        if (src.getType() == Field::Types::Map)
+        const auto & key_type = *type_map->getKeyType();
+        const auto & value_type = *type_map->getValueType();
+
+        const auto & map = src.get<Map>();
+        size_t map_size = map.size();
+
+        Map res(map_size);
+
+        bool have_unconvertible_element = false;
+        for (size_t i = 0; i < map_size; ++i)
         {
-            const auto & key_type = *type_map->getKeyType();
-            const auto & value_type = *type_map->getValueType();
+            const auto & key = map[i].first;
+            const auto & value = map[i].second;
 
-            const auto & map = src.get<Map>();
-            size_t map_size = map.size();
+            res[i] = {convertFieldToType(key, key_type), convertFieldToType(value, value_type)};
+            if (res[i].first.isNull() && !key_type.isNullable())
+                have_unconvertible_element = true;
 
-            Map res(map_size);
-
-            bool have_unconvertible_element = false;
-
-            for (size_t i = 0; i < map_size; ++i)
-            {
-                const auto & map_entry = map[i].get<Tuple>();
-
-                const auto & key = map_entry[0];
-                const auto & value = map_entry[1];
-
-                Tuple updated_entry(2);
-
-                updated_entry[0] = convertFieldToType(key, key_type);
-
-                if (updated_entry[0].isNull() && !key_type.isNullable())
-                    have_unconvertible_element = true;
-
-                updated_entry[1] = convertFieldToType(value, value_type);
-                if (updated_entry[1].isNull() && !value_type.isNullable())
-                    have_unconvertible_element = true;
-
-                res[i] = updated_entry;
-            }
-
-            return have_unconvertible_element ? Field(Null()) : Field(res);
+            if (res[i].second.isNull() && !value_type.isNullable())
+                have_unconvertible_element = true;
         }
-    }
-    else if (const DataTypeByteMap * byte_type_map = typeid_cast<const DataTypeByteMap *>(&type))
-    {
-        if (src.getType() == Field::Types::ByteMap)
-        {
-            const auto & key_type = *byte_type_map->getKeyType();
-            const auto & value_type = *byte_type_map->getValueType();
 
-            const auto & map = src.get<ByteMap>();
-            size_t map_size = map.size();
-
-            ByteMap res(map_size);
-
-            bool have_unconvertible_element = false;
-            for (size_t i = 0; i < map_size; ++i)
-            {
-                const auto & key = map[i].first;
-                const auto & value = map[i].second;
-
-                res[i] = {convertFieldToType(key, key_type), convertFieldToType(value, value_type)};
-                if (res[i].first.isNull() && !key_type.isNullable())
-                    have_unconvertible_element = true;
-
-                if (res[i].second.isNull() && !value_type.isNullable())
-                    have_unconvertible_element = true;
-            }
-
-            return have_unconvertible_element ? Field(Null()) : Field(res);
-        }
+        return have_unconvertible_element ? Field(Null()) : Field(res);
     }
     else if (const DataTypeAggregateFunction * agg_func_type = typeid_cast<const DataTypeAggregateFunction *>(&type))
     {

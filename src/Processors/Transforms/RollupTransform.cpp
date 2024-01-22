@@ -73,7 +73,7 @@ Chunk RollupTransform::generate()
 
         auto num_rows = gen_chunk.getNumRows();
         auto columns = gen_chunk.getColumns();
-        columns[key] = columns[key]->cloneEmpty()->cloneResized(num_rows);
+        columns[key] = columns.at(key)->cloneEmpty()->cloneResized(num_rows);
 
         Chunks chunks;
         chunks.emplace_back(std::move(columns), num_rows);

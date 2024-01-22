@@ -62,6 +62,8 @@ REGISTER_FUNCTION(Conversion)
     factory.registerFunction<FunctionToDateTime32>("timestamp", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDateTime64>();
     factory.registerFunction<FunctionToUUID>();
+    factory.registerFunction<FunctionToIPv4>();
+    factory.registerFunction<FunctionToIPv6>();
     factory.registerFunction<FunctionToString>();
 
 
@@ -98,6 +100,8 @@ REGISTER_FUNCTION(Conversion)
 
     factory.registerFunction<FunctionToUUIDOrZero>();
     factory.registerFunction<FunctionToFixedStringOrZero>();
+    factory.registerFunction<FunctionToIPv4OrZero>();
+    factory.registerFunction<FunctionToIPv6OrZero>();
 
     factory.registerFunction<FunctionToUInt8OrNull>();
     factory.registerFunction<FunctionToUInt16OrNull>();
@@ -125,6 +129,8 @@ REGISTER_FUNCTION(Conversion)
 
     factory.registerFunction<FunctionToUUIDOrNull>();
     factory.registerFunction<FunctionToFixedStringOrNull>();
+    factory.registerFunction<FunctionToIPv4OrNull>();
+    factory.registerFunction<FunctionToIPv6OrNull>();
 
     factory.registerFunction<FunctionParseDateTimeBestEffort>();
     factory.registerFunction<FunctionParseDateTimeBestEffortOrZero>();
@@ -138,7 +144,14 @@ REGISTER_FUNCTION(Conversion)
     factory.registerFunction<FunctionParseDateTime64BestEffort>();
     factory.registerFunction<FunctionParseDateTime64BestEffortOrZero>();
     factory.registerFunction<FunctionParseDateTime64BestEffortOrNull>();
+    factory.registerFunction<FunctionParseDateTime64BestEffortUS>();
+    factory.registerFunction<FunctionParseDateTime64BestEffortUSOrZero>();
+    factory.registerFunction<FunctionParseDateTime64BestEffortUSOrNull>();
 
+
+    factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalNanosecond, PositiveMonotonicity>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalMicrosecond, PositiveMonotonicity>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalMillisecond, PositiveMonotonicity>>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalSecond, PositiveMonotonicity>>();
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalMinute, PositiveMonotonicity>>();
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalHour, PositiveMonotonicity>>();

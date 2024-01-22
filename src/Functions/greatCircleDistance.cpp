@@ -17,6 +17,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    extern const int ILLEGAL_COLUMN;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 /** Calculates the distance between two geographical locations.
@@ -316,12 +318,362 @@ private:
     ImplementationSelector<IFunction> selector;
 };
 
+static inline Float64 degToRad(Float64 angle) { return angle * RAD_IN_DEG; }
+static inline Float64 radToDeg(Float64 angle) { return angle / RAD_IN_DEG; }
+
+/// https://en.wikipedia.org/wiki/Great-circle_distance
+static Float64 greatCircleDistance(Float64 lon1Deg, Float64 lat1Deg, Float64 lon2Deg, Float64 lat2Deg)
+{
+    if (lon1Deg < -180 || lon1Deg > 180 ||
+        lon2Deg < -180 || lon2Deg > 180 ||
+        lat1Deg < -90 || lat1Deg > 90 ||
+        lat2Deg < -90 || lat2Deg > 90)
+    {
+        throw Exception("Arguments values out of bounds for Geo function", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+    }
+
+    Float64 lon1Rad = degToRad(lon1Deg);
+    Float64 lat1Rad = degToRad(lat1Deg);
+    Float64 lon2Rad = degToRad(lon2Deg);
+    Float64 lat2Rad = degToRad(lat2Deg);
+    Float64 u = sin((lat2Rad - lat1Rad) / 2);
+    Float64 v = sin((lon2Rad - lon1Rad) / 2);
+    return 2.0 * EARTH_RADIUS * asin(sqrt(u * u + cos(lat1Rad) * cos(lat2Rad) * v * v));
+}
+
+/**
+ * Calculate if any element in a set of geo points is in a specific business circle, which defined by a geo position and
+ * a distance(m) as radius.
+ * The first three arguments of this function are constants. They defined the business circle area together.
+ * Last two arguments are arrays of longitude and latitude, in which points will be tested if they are in the business circle.
+ * If any of the points in the longitude and latitude array fall into the business circle defined above, the function will
+ * return 1; otherwise return 0;
+ * usage: inBusinessCircle(distance, longitude, latitude, longitude array, latitude array)
+ */
+
+class FunctionInBusinessCircle : public IFunction
+{
+public:
+    static constexpr auto name = "inBusinessCircle";
+    static FunctionPtr create(ContextPtr &) {return std::make_shared<FunctionInBusinessCircle>();}
+
+private:
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 5; }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        for (const auto arg_idx : collections::range(0, arguments.size()))
+        {
+            const auto arg = arguments[arg_idx].get();
+            if (arg_idx==0 && !WhichDataType(arg).isNativeUInt()) {
+                throw Exception(
+                        "Illegal type " + arguments[0]->getName() + " of argument 0 of function " + getName() + ". Must be UInt",
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+            if (arg_idx>0 && arg_idx<3 && !WhichDataType(arg).isFloat64()) {
+                throw Exception(
+                        "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName() + ". Must be Float64",
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+            if (arg_idx>=3 && !WhichDataType(arg).isArray()) {
+                throw Exception(
+                        "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName() + ". Must be Array(Float64)",
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+        }
+
+        return std::make_shared<DataTypeUInt8>();
+    }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & , size_t input_rows_count) const override
+    {
+        const auto & distance = assert_cast<const ColumnConst *>(arguments[0].column.get())->getValue<UInt64>();
+        const auto & longitude = assert_cast<const ColumnConst *>(arguments[1].column.get())->getValue<Float64>();
+        const auto & latitude = assert_cast<const ColumnConst *>(arguments[2].column.get())->getValue<Float64>();
+
+        auto dst = ColumnVector<UInt8>::create();
+        auto &  dst_data = dst->getData();
+        dst_data.resize_fill(input_rows_count);
+
+        Float64 locs[4];
+        locs[0] = longitude;
+        locs[1] = latitude;
+
+
+        ColumnArray * arr_lon = assert_cast<ColumnArray *>(arguments[3].column->assumeMutable().get());
+        ColumnArray * arr_lat = assert_cast<ColumnArray *>(arguments[4].column->assumeMutable().get());
+
+        if (!arr_lon || !arr_lat) {
+            throw Exception("Illegal column of last two arguments of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        const ColumnArray::Offsets & lon_offsets = arr_lon->getOffsets();
+        const ColumnArray::Offsets & lat_offsets = arr_lat->getOffsets();
+
+        IColumn * lon_data = & arr_lon->getData();
+        IColumn * lat_data = & arr_lat->getData();
+
+        IColumn * inner_lon_data;
+        IColumn * inner_lat_data;
+
+        ColumnUInt8 *lon_nullmap = nullptr;
+        ColumnUInt8 *lat_nullmap = nullptr;
+
+
+        if (isColumnNullable(*lon_data)) {
+            ColumnNullable * c1 = static_cast<ColumnNullable *>(lon_data);
+            lon_nullmap = &(c1->getNullMapColumn());
+            inner_lon_data = &(c1->getNestedColumn());
+        } else {
+            inner_lon_data = lon_data;
+        }
+
+        if (isColumnNullable(*lat_data)) {
+            ColumnNullable * c2 = static_cast<ColumnNullable *>(lat_data);
+            lat_nullmap = &(c2->getNullMapColumn());
+            inner_lat_data = &(c2->getNestedColumn());
+        } else {
+            inner_lat_data = lat_data;
+        }
+
+        const ColumnVector<Float64> * lon_data_vector =  checkAndGetColumn<ColumnVector<Float64>>(inner_lon_data);
+        const ColumnVector<Float64> * lat_data_vector =  checkAndGetColumn<ColumnVector<Float64>>(inner_lat_data);
+
+        if (!lon_data_vector || !lat_data_vector)
+            throw Exception("Illegal data type in array type columns of longitude and latitude", ErrorCodes::ILLEGAL_COLUMN);
+
+
+        ColumnArray::Offset prev_offset = 0;
+
+        for (size_t row=0; row < input_rows_count; row++)
+        {
+            ColumnArray::Offset offset1 = lon_offsets[row];
+            ColumnArray::Offset offset2 = lat_offsets[row];
+
+            if (offset1 != offset2)
+                throw Exception("Size of longitude array must equal to that of latitude array.", ErrorCodes::LOGICAL_ERROR);
+
+            while (prev_offset<offset1)
+            {
+                /// skip null input
+                if ((lon_nullmap && lon_nullmap->getData()[prev_offset]) || (lat_nullmap && lat_nullmap->getData()[prev_offset])) {
+                    prev_offset++;
+                    continue;
+                }
+
+                locs[2] = lon_data_vector->getData()[prev_offset];
+                locs[3] = lat_data_vector->getData()[prev_offset];
+
+                ///skip illegal geo position
+                if (locs[2] < -180 || locs[2] > 180 ||
+                    locs[3] < -90 || locs[3] > 90) {
+                    prev_offset++;
+                    continue;
+                }
+
+                if (greatCircleDistance(locs[0], locs[1], locs[2], locs[3]) <= distance) {
+                    dst_data[row] = 1;
+                    break;
+                }
+                prev_offset++;
+            }
+
+            prev_offset = offset1;
+        }
+
+        return dst;
+    }
+};
+
+/***
+ * Some optimization on inBusinessCircle function. Split into two functions for the seek of compatibility. Replace inBusinessCircle later.
+ * The inBusinessCircle2 enable user provide multiple centers and may short cut calculation if any one of the provided positions is in
+ * the `business circle`. Moreover, bounding box (https://www.movable-type.co.uk/scripts/latlong-db.html) is used to filter unlikely positions
+ * and may reduce useless great distance calculation.
+ */
+class FunctionInBusinessCircle2 : public IFunction
+{
+public:
+    static constexpr auto name = "inBusinessCircle2";
+    static FunctionPtr create(ContextPtr &) {return std::make_shared<FunctionInBusinessCircle2>();}
+
+private:
+
+    String getName() const override { return name; }
+    bool isVariadic() const override {return true; }
+    size_t getNumberOfArguments() const override { return 0; }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 5 || (arguments.size()-2) % 3 != 0)
+            throw Exception("Incorrect number of arguments of function " + getName() + ". Must be 2 for latitude and " +
+                            "longitude array and plus 3*n for locations (distance, p_langitude, p_latitude)", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (const auto arg_idx : collections::range(0, arguments.size()))
+        {
+            const auto arg = arguments[arg_idx].get();
+            if (arg_idx<2 && !WhichDataType(arg).isArray())
+            {
+                throw Exception(
+                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName() + ". Must be Array(Float64)",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+
+            if (arg_idx>=2)
+            {
+                if (arg_idx % 3 == 2)
+                {
+                    if (!WhichDataType(arg).isNativeUInt())
+                        throw Exception(
+                            "Illegal type " + arguments[0]->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName() + ". Must be UInt",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                }
+                else
+                {
+                    if (!WhichDataType(arg).isFloat64())
+                        throw Exception(
+                            "Illegal type " + arguments[0]->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName() + ". Must be Float64",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                }
+            }
+        }
+
+        return std::make_shared<DataTypeUInt8>();
+    }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t input_rows_count) const override
+    {
+        ColumnArray * arr_lon = assert_cast<ColumnArray *>(arguments[0].column->assumeMutable().get());
+        ColumnArray * arr_lat = assert_cast<ColumnArray *>(arguments[1].column->assumeMutable().get());
+
+        if (!arr_lon || !arr_lat) {
+            throw Exception("Illegal column of last two arguments of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        const ColumnArray::Offsets & lon_offsets = arr_lon->getOffsets();
+        const ColumnArray::Offsets & lat_offsets = arr_lat->getOffsets();
+
+        IColumn * lon_data = & arr_lon->getData();
+        IColumn * lat_data = & arr_lat->getData();
+
+        IColumn * inner_lon_data;
+        IColumn * inner_lat_data;
+
+        ColumnUInt8 *lon_nullmap = nullptr;
+        ColumnUInt8 *lat_nullmap = nullptr;
+
+
+        if (isColumnNullable(*lon_data)) {
+            ColumnNullable * c1 = static_cast<ColumnNullable *>(lon_data);
+            lon_nullmap = &(c1->getNullMapColumn());
+            inner_lon_data = &(c1->getNestedColumn());
+        } else {
+            inner_lon_data = lon_data;
+        }
+
+        if (isColumnNullable(*lat_data)) {
+            ColumnNullable * c2 = static_cast<ColumnNullable *>(lat_data);
+            lat_nullmap = &(c2->getNullMapColumn());
+            inner_lat_data = &(c2->getNestedColumn());
+        } else {
+            inner_lat_data = lat_data;
+        }
+
+        const ColumnVector<Float64> * lon_data_vector =  checkAndGetColumn<ColumnVector<Float64>>(inner_lon_data);
+        const ColumnVector<Float64> * lat_data_vector =  checkAndGetColumn<ColumnVector<Float64>>(inner_lat_data);
+
+        if (!lon_data_vector || !lat_data_vector)
+            throw Exception("Illegal data type in array type columns of longitude and latitude", ErrorCodes::ILLEGAL_COLUMN);
+
+        auto dst = ColumnVector<UInt8>::create();
+        auto &  dst_data = dst->getData();
+        dst_data.resize_fill(input_rows_count);
+
+        Float64 locs[4];
+        Float64 max_lat, min_lat, max_lon, min_lon;
+
+        /// outer loop user provided positions.
+        size_t args_idx = 2;
+        while (args_idx < arguments.size())
+        {
+            const auto & distance = assert_cast<const ColumnConst *>(arguments[args_idx++].column.get())->getValue<UInt64>();
+            const auto & longitude = static_cast<const ColumnConst *>(arguments[args_idx++].column.get())->getValue<Float64>();
+            const auto & latitude = static_cast<const ColumnConst *>(arguments[args_idx++].column.get())->getValue<Float64>();
+
+            locs[0] = longitude;
+            locs[1] = latitude;
+
+            /// Widen the limitation by multiplying an factor 1.2
+            max_lon = locs[0] + 1.2*abs(radToDeg(asin((distance > EARTH_RADIUS) ? 1 : distance/EARTH_RADIUS) / cos(degToRad(locs[1]))));
+            min_lon = locs[0] - 1.2*abs(radToDeg(asin((distance > EARTH_RADIUS) ? 1 : distance/EARTH_RADIUS) / cos(degToRad(locs[1]))));
+            max_lat = locs[1] + 1.2*abs(radToDeg(distance/EARTH_RADIUS));
+            min_lat = locs[1] - 1.2*abs(radToDeg(distance/EARTH_RADIUS));
+
+            ColumnArray::Offset prev_offset = 0;
+
+            for (size_t row=0; row < input_rows_count; row++)
+            {
+                ColumnArray::Offset offset1 = lon_offsets[row];
+                ColumnArray::Offset offset2 = lat_offsets[row];
+
+                if (offset1 != offset2)
+                    throw Exception("Size of longitude array must equal to that of latitude array.", ErrorCodes::LOGICAL_ERROR);
+
+                /// skip if current row match any of previous position
+                if (dst_data[row] == 1)
+                {
+                    prev_offset = offset1;
+                    continue;
+                }
+
+                while (prev_offset<offset1)
+                {
+                    /// skip null input
+                    if ((lon_nullmap && lon_nullmap->getData()[prev_offset]) || (lat_nullmap && lat_nullmap->getData()[prev_offset])) {
+                        prev_offset++;
+                        continue;
+                    }
+
+                    locs[2] = lon_data_vector->getData()[prev_offset];
+                    locs[3] = lat_data_vector->getData()[prev_offset];
+
+                    ///skip illegal geo position
+                    if (locs[2] < -180 || locs[2] > 180 ||
+                        locs[3] < -90 || locs[3] > 90) {
+                        prev_offset++;
+                        continue;
+                    }
+
+                    /// fast skip unlikely position
+                    if (!(max_lon > locs[2] && min_lon < locs[2] && max_lat > locs[3] && min_lat < locs[3]))
+                    {
+                        prev_offset++;
+                        continue;
+                    }
+
+                    if (greatCircleDistance(locs[0], locs[1], locs[2], locs[3]) <= distance) {
+                        dst_data[row] = 1;
+                        break;
+                    }
+                    prev_offset++;
+                }
+
+                prev_offset = offset1;
+            }
+        }
+
+        return dst;
+    }
+};
+
 REGISTER_FUNCTION(GeoDistance)
 {
     geodistInit();
     factory.registerFunction<FunctionGeoDistance<Method::SPHERE_DEGREES>>();
     factory.registerFunction<FunctionGeoDistance<Method::SPHERE_METERS>>();
     factory.registerFunction<FunctionGeoDistance<Method::WGS84_METERS>>();
+    factory.registerFunction<FunctionInBusinessCircle>();
+    factory.registerFunction<FunctionInBusinessCircle2>();
 }
 
 }

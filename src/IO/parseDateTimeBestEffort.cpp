@@ -45,12 +45,6 @@ inline size_t readAlpha(char * res, size_t max_chars, ReadBuffer & in)
     return num_chars;
 }
 
-#if defined(__PPC__)
-#if !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-#endif
-
 template <size_t digit, size_t power_of_ten, typename T>
 inline void readDecimalNumberImpl(T & res, const char * src)
 {
@@ -122,6 +116,8 @@ ReturnType parseDateTimeBestEffortImpl(
     bool is_am = false;
     bool is_pm = false;
 
+    bool has_comma_between_date_and_time = false;
+
     auto read_alpha_month = [&month] (const auto & alpha)
     {
         if (0 == strncasecmp(alpha, "Jan", 3)) month = 1;
@@ -143,6 +139,15 @@ ReturnType parseDateTimeBestEffortImpl(
 
     while (!in.eof())
     {
+        if ((year && !has_time) || (!year && has_time))
+        {
+            if (*in.position() == ',')
+            {
+                has_comma_between_date_and_time = true;
+                ++in.position();
+            }
+        }
+
         char digits[std::numeric_limits<UInt64>::digits10];
 
         size_t num_digits = 0;
@@ -151,7 +156,18 @@ ReturnType parseDateTimeBestEffortImpl(
         {
             num_digits = readDigits(digits, sizeof(digits), in);
 
-            if (num_digits == 10 && !year && !has_time)
+            if (num_digits == 13 && !year && !has_time)
+            {
+                /// This is unix timestamp with millisecond.
+                readDecimalNumber<10>(res, digits);
+                if (fractional)
+                {
+                    fractional->digits = 3;
+                    readDecimalNumber<3>(fractional->value, digits + 10);
+                }
+                return ReturnType(true);
+            }
+            else if (num_digits == 10 && !year && !has_time)
             {
                 /// This is unix timestamp.
                 readDecimalNumber<10>(res, digits);
@@ -183,7 +199,7 @@ ReturnType parseDateTimeBestEffortImpl(
             }
             else if (num_digits == 6)
             {
-                /// This is YYYYMM
+                /// This is YYYYMM or hhmmss
                 if (!year && !month)
                 {
                     readDecimalNumber<4>(year, digits);
@@ -269,7 +285,7 @@ ReturnType parseDateTimeBestEffortImpl(
                 UInt8 hour_or_day_of_month_or_month = 0;
                 if (num_digits == 2)
                     readDecimalNumber<2>(hour_or_day_of_month_or_month, digits);
-                else if (num_digits == 1)   //-V547
+                else if (num_digits == 1)
                     readDecimalNumber<1>(hour_or_day_of_month_or_month, digits);
                 else
                     return on_error("Cannot read DateTime: logical error, unexpected branch in code", ErrorCodes::LOGICAL_ERROR);
@@ -302,6 +318,11 @@ ReturnType parseDateTimeBestEffortImpl(
                         else
                             return on_error("Cannot read DateTime: unexpected number of decimal digits after hour and minute: " + toString(num_digits), ErrorCodes::CANNOT_PARSE_DATETIME);
                     }
+                }
+                else if (checkChar(',', in))
+                {
+                    if (month && !day_of_month)
+                        day_of_month = hour_or_day_of_month_or_month;
                 }
                 else if (checkChar('/', in) || checkChar('.', in) || checkChar('-', in))
                 {
@@ -424,47 +445,59 @@ ReturnType parseDateTimeBestEffortImpl(
             else if (c == '+' || c == '-')
             {
                 ++in.position();
-                has_time_zone_offset = true;
-                if (c == '-')
-                    time_zone_offset_negative = true;
-
                 num_digits = readDigits(digits, sizeof(digits), in);
 
-                if (num_digits == 4)
+                if (num_digits == 6 && !has_time && year && month && day_of_month)
                 {
-                    readDecimalNumber<2>(time_zone_offset_hour, digits);
-                    readDecimalNumber<2>(time_zone_offset_minute, digits + 2);
-                }
-                else if (num_digits == 3)
-                {
-                    readDecimalNumber<1>(time_zone_offset_hour, digits);
-                    readDecimalNumber<2>(time_zone_offset_minute, digits + 1);
-                }
-                else if (num_digits == 2)
-                {
-                    readDecimalNumber<2>(time_zone_offset_hour, digits);
-                }
-                else if (num_digits == 1)
-                {
-                    readDecimalNumber<1>(time_zone_offset_hour, digits);
+                    /// It looks like hhmmss
+                    readDecimalNumber<2>(hour, digits);
+                    readDecimalNumber<2>(minute, digits + 2);
+                    readDecimalNumber<2>(second, digits + 4);
+                    has_time = true;
                 }
                 else
-                    return on_error("Cannot read DateTime: unexpected number of decimal digits for time zone offset: " + toString(num_digits), ErrorCodes::CANNOT_PARSE_DATETIME);
-
-                if (num_digits < 3 && checkChar(':', in))
                 {
-                    num_digits = readDigits(digits, sizeof(digits), in);
+                    /// It looks like time zone offset
+                    has_time_zone_offset = true;
+                    if (c == '-')
+                        time_zone_offset_negative = true;
 
-                    if (num_digits == 2)
+                    if (num_digits == 4)
                     {
-                        readDecimalNumber<2>(time_zone_offset_minute, digits);
+                        readDecimalNumber<2>(time_zone_offset_hour, digits);
+                        readDecimalNumber<2>(time_zone_offset_minute, digits + 2);
+                    }
+                    else if (num_digits == 3)
+                    {
+                        readDecimalNumber<1>(time_zone_offset_hour, digits);
+                        readDecimalNumber<2>(time_zone_offset_minute, digits + 1);
+                    }
+                    else if (num_digits == 2)
+                    {
+                        readDecimalNumber<2>(time_zone_offset_hour, digits);
                     }
                     else if (num_digits == 1)
                     {
-                        readDecimalNumber<1>(time_zone_offset_minute, digits);
+                        readDecimalNumber<1>(time_zone_offset_hour, digits);
                     }
                     else
-                        return on_error("Cannot read DateTime: unexpected number of decimal digits for time zone offset in minutes: " + toString(num_digits), ErrorCodes::CANNOT_PARSE_DATETIME);
+                        return on_error("Cannot read DateTime: unexpected number of decimal digits for time zone offset: " + toString(num_digits), ErrorCodes::CANNOT_PARSE_DATETIME);
+
+                    if (num_digits < 3 && checkChar(':', in))
+                    {
+                        num_digits = readDigits(digits, sizeof(digits), in);
+
+                        if (num_digits == 2)
+                        {
+                            readDecimalNumber<2>(time_zone_offset_minute, digits);
+                        }
+                        else if (num_digits == 1)
+                        {
+                            readDecimalNumber<1>(time_zone_offset_minute, digits);
+                        }
+                        else
+                            return on_error("Cannot read DateTime: unexpected number of decimal digits for time zone offset in minutes: " + toString(num_digits), ErrorCodes::CANNOT_PARSE_DATETIME);
+                    }
                 }
             }
             else
@@ -534,6 +567,10 @@ ReturnType parseDateTimeBestEffortImpl(
             }
         }
     }
+
+    //// Date like '2022/03/04, ' should parse fail?
+    if (has_comma_between_date_and_time && (!has_time || !year || !month || !day_of_month))
+        return on_error("Cannot read DateTime: unexpected word after Date", ErrorCodes::CANNOT_PARSE_DATETIME);
 
     /// If neither Date nor Time is parsed successfully, it should fail
     if (!year && !month && !day_of_month && !has_time)
@@ -627,17 +664,14 @@ ReturnType parseDateTime64BestEffortImpl(DateTime64 & res, UInt32 scale, ReadBuf
         fractional *= common::exp10_i64(scale - subsecond.digits);
     }
 
+    if constexpr (std::is_same_v<ReturnType, bool>)
+        return DecimalUtils::tryGetDecimalFromComponents<DateTime64>(whole, fractional, scale, res);
+
     res = DecimalUtils::decimalFromComponents<DateTime64>(whole, fractional, scale);
     return ReturnType(true);
 }
 
 }
-
-#if defined(__PPC__)
-#if !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-#endif
 
 void parseDateTimeBestEffort(time_t & res, ReadBuffer & in, const DateLUTImpl & local_time_zone, const DateLUTImpl & utc_time_zone)
 {
@@ -672,6 +706,11 @@ void parseDateTime64BestEffortUS(DateTime64 & res, UInt32 scale, ReadBuffer & in
 bool tryParseDateTime64BestEffort(DateTime64 & res, UInt32 scale, ReadBuffer & in, const DateLUTImpl & local_time_zone, const DateLUTImpl & utc_time_zone)
 {
     return parseDateTime64BestEffortImpl<bool, false>(res, scale, in, local_time_zone, utc_time_zone);
+}
+
+bool tryParseDateTime64BestEffortUS(DateTime64 & res, UInt32 scale, ReadBuffer & in, const DateLUTImpl & local_time_zone, const DateLUTImpl & utc_time_zone)
+{
+    return parseDateTime64BestEffortImpl<bool, true>(res, scale, in, local_time_zone, utc_time_zone);
 }
 
 }

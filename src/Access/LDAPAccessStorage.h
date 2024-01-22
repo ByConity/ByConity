@@ -45,8 +45,8 @@ private: // IAccessStorage implementations.
     virtual std::optional<UUID> findImpl(EntityType type, const String & name) const override;
     virtual std::vector<UUID> findAllImpl(EntityType type) const override;
     virtual bool existsImpl(const UUID & id) const override;
-    virtual AccessEntityPtr readImpl(const UUID & id) const override;
-    virtual String readNameImpl(const UUID & id) const override;
+    virtual AccessEntityPtr readImpl(const UUID & id, bool throw_if_not_exists) const override;
+    virtual std::optional<std::pair<String, AccessEntityType>> readNameWithTypeImpl(const UUID & id, bool throw_if_not_exists) const override;
     virtual bool canInsertImpl(const AccessEntityPtr &) const override;
     virtual UUID insertImpl(const AccessEntityPtr & entity, bool replace_if_exists) override;
     virtual void removeImpl(const UUID & id) override;

@@ -117,6 +117,9 @@ protected:
         const MergeTreeMetaBase::MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> settings_);
 
+    
+    std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
+
     const String cnch_database_name;
     const String cnch_table_name;
 

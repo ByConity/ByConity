@@ -35,6 +35,7 @@
 #include <Protos/enum.pb.h>
 #include <Common/AllocatorWithMemoryTracking.h>
 #include <Common/Exception.h>
+#include <common/IPv4andIPv6.h>
 #include <common/DayNum.h>
 #include <common/strong_typedef.h>
 
@@ -64,7 +65,9 @@ using NearestFieldType = typename NearestFieldTypeImpl<T>::Type;
 class Field;
 using FieldVector = std::vector<Field, AllocatorWithMemoryTracking<Field>>;
 
-using ByteMap = std::vector<std::pair<Field, Field>, AllocatorWithMemoryTracking<std::pair<Field, Field> > >;
+/// An vector with the following structure: [(key1, value1), (key2, value2), ...]
+using Map = std::vector<std::pair<Field, Field>, AllocatorWithMemoryTracking<std::pair<Field, Field> > >;
+
 /// Array and Tuple use the same storage type -- FieldVector, but we declare
 /// distinct types for them, so that the caller can choose whether it wants to
 /// construct a Field of Array or a Tuple type. An alternative approach would be
@@ -78,9 +81,6 @@ struct X : public FieldVector \
 
 DEFINE_FIELD_VECTOR(Array);
 DEFINE_FIELD_VECTOR(Tuple);
-
-/// An array with the following structure: [(key1, value1), (key2, value2), ...]
-DEFINE_FIELD_VECTOR(Map);
 
 #undef DEFINE_FIELD_VECTOR
 
@@ -246,7 +246,8 @@ template <> struct NearestFieldTypeImpl<Tuple> { using Type = Tuple; };
 template <> struct NearestFieldTypeImpl<Map> { using Type = Map; };
 template <> struct NearestFieldTypeImpl<bool> { using Type = UInt64; };
 template <> struct NearestFieldTypeImpl<Null> { using Type = Null; };
-template <> struct NearestFieldTypeImpl<ByteMap> { using Type = ByteMap; };
+template <> struct NearestFieldTypeImpl<IPv4> { using Type = IPv4; };
+template <> struct NearestFieldTypeImpl<IPv6> { using Type = IPv6; };
 template <> struct NearestFieldTypeImpl<NegativeInfinity> { using Type = NegativeInfinity; };
 template <> struct NearestFieldTypeImpl<PositiveInfinity> { using Type = PositiveInfinity; };
 
@@ -301,9 +302,10 @@ public:
             (Int256, 25),
             (Map, 26),
             (UUID, 27),
-            (ByteMap, 28),
-            (BitMap64, 29),
-            (SketchBinary, 30),
+            (BitMap64, 28),
+            (SketchBinary, 29),
+            (IPv4, 30),
+            (IPv6, 31),
             // Special types for index analysis
             (NegativeInfinity, 254),
             (PositiveInfinity, 255));
@@ -509,13 +511,14 @@ public:
             case Types::Int128:  return get<Int128>()  < rhs.get<Int128>();
             case Types::Int256:  return get<Int256>()  < rhs.get<Int256>();
             case Types::UUID:    return get<UUID>()    < rhs.get<UUID>();
+            case Types::IPv4:    return get<IPv4>()    < rhs.get<IPv4>();
+            case Types::IPv6:    return get<IPv6>()    < rhs.get<IPv6>();
             case Types::Float64: return get<Float64>() < rhs.get<Float64>();
             case Types::String:  return get<String>()  < rhs.get<String>();
             case Types::SketchBinary:  return get<String>()  < rhs.get<String>();
             case Types::Array:   return get<Array>()   < rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   < rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     < rhs.get<Map>();
-            case Types::ByteMap:    return get<ByteMap>()     < rhs.get<ByteMap>();
             case Types::Decimal32:  return get<DecimalField<Decimal32>>()  < rhs.get<DecimalField<Decimal32>>();
             case Types::Decimal64:  return get<DecimalField<Decimal64>>()  < rhs.get<DecimalField<Decimal64>>();
             case Types::Decimal128: return get<DecimalField<Decimal128>>() < rhs.get<DecimalField<Decimal128>>();
@@ -552,13 +555,14 @@ public:
             case Types::Int128:  return get<Int128>()  <= rhs.get<Int128>();
             case Types::Int256:  return get<Int256>()  <= rhs.get<Int256>();
             case Types::UUID:    return get<UUID>().toUnderType() <= rhs.get<UUID>().toUnderType();
+            case Types::IPv4:    return get<IPv4>()    <= rhs.get<IPv4>();
+            case Types::IPv6:    return get<IPv6>()    <= rhs.get<IPv6>();
             case Types::Float64: return get<Float64>() <= rhs.get<Float64>();
             case Types::String:  return get<String>()  <= rhs.get<String>();
             case Types::SketchBinary:  return get<String>()  <= rhs.get<String>();
             case Types::Array:   return get<Array>()   <= rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   <= rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     <= rhs.get<Map>();
-            case Types::ByteMap:    return get<ByteMap>()     <= rhs.get<ByteMap>();
             case Types::Decimal32:  return get<DecimalField<Decimal32>>()  <= rhs.get<DecimalField<Decimal32>>();
             case Types::Decimal64:  return get<DecimalField<Decimal64>>()  <= rhs.get<DecimalField<Decimal64>>();
             case Types::Decimal128: return get<DecimalField<Decimal128>>() <= rhs.get<DecimalField<Decimal128>>();
@@ -596,12 +600,13 @@ public:
                 return reinterpret<UInt64>() == rhs.reinterpret<UInt64>();
             }
             case Types::UUID:    return get<UUID>()    == rhs.get<UUID>();
+            case Types::IPv4:    return get<IPv4>()    == rhs.get<IPv4>();
+            case Types::IPv6:    return get<IPv6>()    == rhs.get<IPv6>();
             case Types::String:  return get<String>()  == rhs.get<String>();
             case Types::SketchBinary:  return get<String>()  == rhs.get<String>();
             case Types::Array:   return get<Array>()   == rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   == rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     == rhs.get<Map>();
-            case Types::ByteMap:     return get<ByteMap>()     == rhs.get<ByteMap>();
             case Types::UInt128: return get<UInt128>() == rhs.get<UInt128>();
             case Types::UInt256: return get<UInt256>() == rhs.get<UInt256>();
             case Types::Int128:  return get<Int128>()  == rhs.get<Int128>();
@@ -644,13 +649,14 @@ public:
             case Types::Int128:  return f(field.template get<Int128>());
             case Types::Int256:  return f(field.template get<Int256>());
             case Types::UUID:    return f(field.template get<UUID>());
+            case Types::IPv4:    return f(field.template get<IPv4>());
+            case Types::IPv6:    return f(field.template get<IPv6>());
             case Types::Float64: return f(field.template get<Float64>());
             case Types::String:  return f(field.template get<String>());
             case Types::SketchBinary:  return f(field.template get<String>());
             case Types::Array:   return f(field.template get<Array>());
             case Types::Tuple:   return f(field.template get<Tuple>());
             case Types::Map:     return f(field.template get<Map>());
-            case Types::ByteMap:     return f(field.template get<ByteMap>());
             case Types::Decimal32:  return f(field.template get<DecimalField<Decimal32>>());
             case Types::Decimal64:  return f(field.template get<DecimalField<Decimal64>>());
             case Types::Decimal128: return f(field.template get<DecimalField<Decimal128>>());
@@ -708,8 +714,6 @@ public:
                 return f.template operator()<Tuple>();
             case Types::Map:
                 return f.template operator()<Map>();
-            case Types::ByteMap:
-                return f.template operator()<ByteMap>();
             case Types::Decimal32:
                 return f.template operator()<Decimal32>();
             case Types::Decimal64:
@@ -722,6 +726,10 @@ public:
                 return f.template operator()<AggregateFunctionStateData>();
             case Types::BitMap64:
                 return f.template operator()<BitMap64>();
+            case Types::IPv4:
+                return f.template operator()<IPv4>();
+            case Types::IPv6:
+                return f.template operator()<IPv6>();
 #if !defined(__clang__)
 #    pragma GCC diagnostic pop
 #endif
@@ -773,7 +781,7 @@ public:
 
 private:
     std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which),
-        Null, UInt64, UInt128, UInt256, Int64, Int128, Int256, UUID, Float64, String, Array, Tuple, Map,
+        Null, UInt64, UInt128, UInt256, Int64, Int128, Int256, UUID, IPv4, IPv6, Float64, String, Array, Tuple, Map,
         DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>,
         AggregateFunctionStateData, BitMap64
         > storage;
@@ -871,9 +879,6 @@ private:
             case Types::Map:
                 destroy<Map>();
                 break;
-            case Types::ByteMap:
-                destroy<ByteMap>();
-                break;
             case Types::AggregateFunctionState:
                 destroy<AggregateFunctionStateData>();
                 break;
@@ -911,6 +916,8 @@ template <> struct Field::TypeToEnum<Int64>   { static const Types::Which value 
 template <> struct Field::TypeToEnum<Int128>  { static const Types::Which value = Types::Int128; };
 template <> struct Field::TypeToEnum<Int256>  { static const Types::Which value = Types::Int256; };
 template <> struct Field::TypeToEnum<UUID>    { static const Types::Which value = Types::UUID; };
+template <> struct Field::TypeToEnum<IPv4>    { static constexpr Types::Which value = Types::IPv4; };
+template <> struct Field::TypeToEnum<IPv6>    { static constexpr Types::Which value = Types::IPv6; };
 template <> struct Field::TypeToEnum<Float64> { static const Types::Which value = Types::Float64; };
 template <> struct Field::TypeToEnum<String>  { static const Types::Which value = Types::String; };
 template <> struct Field::TypeToEnum<Array>   { static const Types::Which value = Types::Array; };
@@ -922,7 +929,6 @@ template <> struct Field::TypeToEnum<DecimalField<Decimal128>>{ static const Typ
 template <> struct Field::TypeToEnum<DecimalField<Decimal256>>{ static const Types::Which value = Types::Decimal256; };
 template <> struct Field::TypeToEnum<DecimalField<DateTime64>>{ static const Types::Which value = Types::Decimal64; };
 template <> struct Field::TypeToEnum<AggregateFunctionStateData>{ static const Types::Which value = Types::AggregateFunctionState; };
-template <> struct Field::TypeToEnum<ByteMap>     { static const Types::Which value = Types::ByteMap; };
 template <> struct Field::TypeToEnum<BitMap64>{ static const Types::Which value = Types::BitMap64; };
 
 template <> struct Field::EnumToType<Field::Types::Null>    { using Type = Null; };
@@ -935,6 +941,8 @@ template <> struct Field::EnumToType<Field::Types::Int64>   { using Type = Int64
 template <> struct Field::EnumToType<Field::Types::Int128>  { using Type = Int128; };
 template <> struct Field::EnumToType<Field::Types::Int256>  { using Type = Int256; };
 template <> struct Field::EnumToType<Field::Types::UUID>    { using Type = UUID; };
+template <> struct Field::EnumToType<Field::Types::IPv4>    { using Type = IPv4; };
+template <> struct Field::EnumToType<Field::Types::IPv6>    { using Type = IPv6; };
 template <> struct Field::EnumToType<Field::Types::Float64> { using Type = Float64; };
 template <> struct Field::EnumToType<Field::Types::String>  { using Type = String; };
 template <> struct Field::EnumToType<Field::Types::Array>   { using Type = Array; };
@@ -945,7 +953,6 @@ template <> struct Field::EnumToType<Field::Types::Decimal64> { using Type = Dec
 template <> struct Field::EnumToType<Field::Types::Decimal128> { using Type = DecimalField<Decimal128>; };
 template <> struct Field::EnumToType<Field::Types::Decimal256> { using Type = DecimalField<Decimal256>; };
 template <> struct Field::EnumToType<Field::Types::AggregateFunctionState> { using Type = DecimalField<AggregateFunctionStateData>; };
-template <> struct Field::EnumToType<Field::Types::ByteMap>     { using Type = ByteMap; };
 template <> struct Field::EnumToType<Field::Types::BitMap64> { using Type = BitMap64; };
 
 inline constexpr bool isInt64OrUInt64FieldType(Field::Types::Which t)
@@ -1025,7 +1032,6 @@ T safeGet(Field & field)
 template <> inline constexpr const char * TypeName<Array> = "Array";
 template <> inline constexpr const char * TypeName<Tuple> = "Tuple";
 template <> inline constexpr const char * TypeName<Map> = "Map";
-template <> inline constexpr const char * TypeName<ByteMap> = "Map";
 template <> inline constexpr const char * TypeName<AggregateFunctionStateData> = "AggregateFunctionState";
 template <> inline constexpr const char * TypeName<BitMap64> = "BitMap64";
 
@@ -1129,9 +1135,9 @@ __attribute__ ((noreturn)) inline void writeText(const AggregateFunctionStateDat
 }
 
 template <typename T>
-inline void writeText(const DecimalField<T> & value, WriteBuffer & buf)
+inline void writeText(const DecimalField<T> & value, WriteBuffer & buf, bool trailing_zeros = false)
 {
-    writeText(value.getValue(), value.getScale(), buf);
+    writeText(value.getValue(), value.getScale(), buf, trailing_zeros);
 }
 
 void readBinary(BitMap64 & x, ReadBuffer & buf);

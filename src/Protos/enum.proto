@@ -136,6 +136,8 @@ message FieldType {
     ByteMap = 28;
     BitMap64 = 29;
     SketchBinary = 30;
+    IPv4 = 31;
+    IPv6 = 32;
     NegativeInfinity = 254;
     PositiveInfinity = 255;
   }

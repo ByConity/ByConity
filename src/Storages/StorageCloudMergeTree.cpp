@@ -87,8 +87,6 @@ StorageCloudMergeTree::StorageCloudMergeTree(
 
     if (getInMemoryMetadataPtr()->hasUniqueKey() && getSettings()->cloud_enable_dedup_worker)
         dedup_worker = std::make_unique<CloudMergeTreeDedupWorker>(*this);
-
-    registerBitEngineDictionaries();
 }
 
 void StorageCloudMergeTree::startup()
@@ -732,5 +730,9 @@ bool StorageCloudMergeTree::getQueryProcessingStageWithAggregateProjection(
     return false;
 }
 
+std::unique_ptr<MergeTreeSettings> StorageCloudMergeTree::getDefaultSettings() const
+{
+    return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+}
 
 }

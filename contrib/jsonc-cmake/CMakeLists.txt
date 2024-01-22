@@ -286,8 +286,8 @@ if (WIN32)
 endif()
 
 # Once we've done basic symbol/header searches let's add them in.
-configure_file(${JSONC_SOURCE_DIR}/cmake/config.h.in        ${PROJECT_BINARY_DIR}/config.h)
-message(STATUS "Wrote ${PROJECT_BINARY_DIR}/config.h")
+configure_file(${JSONC_SOURCE_DIR}/cmake/config.h.in        ${PROJECT_BINARY_DIR}/cmake/config.h)
+message(STATUS "Wrote ${PROJECT_BINARY_DIR}/cmake/config.h")
 configure_file(${JSONC_SOURCE_DIR}/cmake/json_config.h.in   ${PROJECT_BINARY_DIR}/json_config.h)
 message(STATUS "Wrote ${PROJECT_BINARY_DIR}/json_config.h")
 
@@ -432,9 +432,6 @@ endif()
 
 configure_file(${JSONC_SOURCE_DIR}/json.h.cmakein ${PROJECT_BINARY_DIR}/json.h @ONLY)
 
-include_directories(${JSONC_SOURCE_DIR})
-include_directories(${PROJECT_BINARY_DIR})
-
 #add_subdirectory(doc)
 
 # "uninstall" custom target for make generators in unix like operating systems
@@ -465,6 +462,8 @@ target_include_directories(${PROJECT_NAME}
         PUBLIC
         $<BUILD_INTERFACE:${JSONC_SOURCE_DIR}>
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
+        PRIVATE
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/cmake>
         )
 
 # Allow to build static and shared libraries at the same time
@@ -478,6 +477,8 @@ if (BUILD_STATIC_LIBS AND BUILD_SHARED_LIBS)
             PUBLIC
             $<BUILD_INTERFACE:${JSONC_SOURCE_DIR}>
             $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
+        PRIVATE
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/cmake>
             )
 
     # rename the static library

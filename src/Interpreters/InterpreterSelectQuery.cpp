@@ -428,6 +428,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             options, joined_tables.tablesWithColumns(), required_result_column_names, table_join);
 
         query_info.syntax_analyzer_result = syntax_analyzer_result;
+        context->setDistributed(syntax_analyzer_result->is_remote_storage);
 
         /// Push down partition filter to query info partition_filter
         if (settings.enable_partition_filter_push_down && !syntax_analyzer_result->optimize_trivial_count)
@@ -540,6 +541,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         }
 
         required_columns = syntax_analyzer_result->requiredSourceColumns();
+
+        // disable map column access if not explcit set to avoid "select *" query
+        if (storage && storage->supportsMapImplicitColumn() && !settings.allow_map_access_without_key && query_analyzer->hasByteMapColumn())
+            throw Exception("Map column access without key is not allowed for ByteMap", ErrorCodes::NOT_IMPLEMENTED);
 
         if (storage)
         {

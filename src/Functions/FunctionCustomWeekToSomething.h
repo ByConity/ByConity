@@ -79,10 +79,10 @@ public:
                     "Illegal type " + arguments[0].type->getName() + " of 1st argument of function " + getName()
                         + ". Must be Date, Date32, DateTime or DateTime64.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            if (!isUInt8(arguments[1].type))
+            if (!isUInt8(arguments[1].type) && !isString(arguments[1].type))
                 throw Exception(
                         "Illegal type of 2nd (optional) argument of function " + getName()
-                        + ". Must be constant UInt8 (week mode).",
+                        + ". Must be constant UInt8 (week mode) or timezone.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else if (arguments.size() == 3)
@@ -104,7 +104,8 @@ public:
                         + ". Must be constant string (timezone name).",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             if ((isDate(arguments[0].type) || isDate32(arguments[0].type))
-                && (std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeDate32>))                throw Exception(
+                && (std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeDate32>))                
+                throw Exception(
                     "The timezone argument of function " + getName() + " is allowed only when the 1st argument has the type DateTime or DateTime64.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }

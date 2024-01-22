@@ -91,9 +91,9 @@ Projection Est. 54 rows, cost 7.540000e+01
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_12]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00
-      │     │     Condition: dt64 = cast(\'1577826000.010\', \'DateTime64(3)\')
+      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
       │     └─ TableScan test.test_explain_stats Est. 4 rows, cost 2.960000e+00
-      │              Where: dt64 = cast(\'1577826000.010\', \'DateTime64(3)\')
+      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
       │              Outputs: [dt64], id_12:=id
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_13]
@@ -223,9 +223,9 @@ Projection Est. 54 rows, cost 7.540000e+01
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_12]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00
-      │     │     Condition: dt64 = cast(\'1577826000.010\', \'DateTime64(3)\')
+      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
       │     └─ TableScan test.test_explain_stats Est. 4 rows, cost 2.960000e+00
-      │              Where: dt64 = cast(\'1577826000.010\', \'DateTime64(3)\')
+      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
       │              Outputs: [dt64], id_12:=id
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_13]
@@ -355,9 +355,9 @@ Projection Est. 54 rows, cost 7.540000e+01
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_12]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00
-      │     │     Condition: dt64 = cast(\'1577826000.010\', \'DateTime64(3)\')
+      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
       │     └─ TableScan test.test_explain_stats Est. 4 rows, cost 2.960000e+00
-      │              Where: dt64 = cast(\'1577826000.010\', \'DateTime64(3)\')
+      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
       │              Outputs: [dt64], id_12:=id
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_13]

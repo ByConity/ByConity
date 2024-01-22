@@ -166,6 +166,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_encrypt{"ENCRYPT"};   /// just for compatible
     // ParserKeyword s_segment_bitmap_index{"SegmentBitmapIndex"};
     ParserKeyword s_kv{"KV"};
+    ParserKeyword s_byte{"BYTE"};
     ParserKeyword s_bitengine_encode{"BitEngineEncode"};
     ParserTernaryOperatorExpression expr_parser(dt); /* decimal type can use float as default value */
     ParserStringLiteral string_literal_parser;
@@ -276,10 +277,10 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             return false;
     }
 
-    UInt8 flags = 0;
+    UInt16 flags = 0;
     while (true)
     {
-        UInt8 inner_flags = 0;
+        UInt16 inner_flags = 0;
 
         if (s_kv.ignore(pos, expected))
             inner_flags |= TYPE_MAP_KV_STORE_FLAG;
@@ -287,6 +288,8 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             inner_flags |= TYPE_COMPRESSION_FLAG;
         if (s_bitengine_encode.ignore(pos, expected))
             inner_flags |= TYPE_BITENGINE_ENCODE_FLAG;
+        if (s_byte.ignore(pos, expected))
+            inner_flags |= TYPE_MAP_BYTE_STORE_FLAG;
         if (s_bloom.ignore(pos, expected))
             inner_flags |= TYPE_BLOOM_FLAG;
         if (s_bitmap_index.ignore(pos, expected))
@@ -305,6 +308,10 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             return false;
 
         flags |= inner_flags;
+
+        /// map kv flag and map byte flag cannot be set at the same time
+        if ((flags & TYPE_MAP_KV_STORE_FLAG) && (flags & TYPE_MAP_BYTE_STORE_FLAG))
+            return false;
     }
 
     column_declaration->flags = flags;

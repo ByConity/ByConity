@@ -51,7 +51,7 @@ public:
     ~CnchServerClient() override;
 
     /// Transaction RPCs related. TODO @canh: add implement when baseline rpc implementation is merged
-    std::pair<TxnTimestamp, TxnTimestamp> createTransaction(const TxnTimestamp & primary_txn_id = {0});
+    std::pair<TxnTimestamp, TxnTimestamp> createTransaction(const TxnTimestamp & primary_txn_id, bool read_only);
     std::pair<TxnTimestamp, TxnTimestamp> createTransactionForKafka(const StorageID & storage_id, const size_t consumer_index);
     TxnTimestamp commitTransaction(
         const ICnchTransaction & txn, const StorageID & kafka_storage_id = StorageID::createEmpty(), const size_t consumer_index = 0);

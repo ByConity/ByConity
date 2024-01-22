@@ -35,3 +35,14 @@ inline T unalignedLoadLE(const void * address)
         reverseMemcpy(&res, address, sizeof(res));
     return res;
 }
+
+template <typename T>
+inline void unalignedStoreLE(void * address,
+                           const typename std::enable_if<true, T>::type & src)
+{
+    static_assert(std::is_trivially_copyable_v<T>);
+    if constexpr (std::endian::native == std::endian::little)
+        memcpy(address, &src, sizeof(src));
+    else
+        reverseMemcpy(address, &src, sizeof(src));
+}

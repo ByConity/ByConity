@@ -16,7 +16,7 @@
 #pragma once
 
 #include <functional>
-#include <lz4/lib/xxhash.h>
+#include <xxHash/xxhash.h>
 
 constexpr unsigned long long crctab64[256] = {
     0x0000000000000000ULL, 0x7ad870c830358979ULL, 0xf5b0e190606b12f2ULL,

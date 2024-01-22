@@ -38,6 +38,7 @@
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
 #include <DataTypes/MapHelpers.h>
+#include <Core/ServerUUID.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
@@ -53,7 +54,6 @@
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
-#include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/ProcessList.h>
@@ -413,6 +413,7 @@ void Server::createServer(const std::string & listen_host, const char * port_nam
     try
     {
         func(port);
+        global_context->registerServerPort(port_name, port);
     }
     catch (const Poco::Exception &)
     {
@@ -796,6 +797,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     StatusFile status{path + "status", StatusFile::write_full_info};
 
+    ServerUUID::load(path + "/uuid", log);
+
     /// Try to increase limit on number of open files.
     {
         rlimit rlim;
@@ -992,7 +995,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros", log));
             global_context->setExternalAuthenticatorsConfig(*config);
-            global_context->setExternalModelsConfig(config);
 
             global_context->updateServerVirtualWarehouses(config);
 
@@ -1041,6 +1043,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Initialize map separator, once change the default value, it's necessary to adapt the corresponding tests.
     checkAndSetMapSeparator(config().getString("map_separator", "__"));
+
+    /// Determine whether use map type as default.
+    setDefaultUseMapType(config().getBool("default_use_kv_map_type", false));
 
     /// Still need `users_config` for server-worker communication
     ConfigurationPtr users_config;

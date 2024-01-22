@@ -49,8 +49,6 @@ const char * Field::Types::toString(Which which)
             return "-Inf";
         case PositiveInfinity:
             return "+Inf";
-        case ByteMap:
-            return "Map";
 
         default: {
             // this API returns a reference to String, so data() is safe
@@ -69,16 +67,16 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
     switch (type)
     {
         case Field::Types::Null: {
-            return DB::Field();
+            return Field();
         }
         case Field::Types::UInt64: {
             UInt64 value;
-            DB::readVarUInt(value, buf);
+            readVarUInt(value, buf);
             return value;
         }
         case Field::Types::UInt128: {
             UInt128 value;
-            DB::readBinary(value, buf);
+            readBinary(value, buf);
             return value;
         }
         case Field::Types::UInt256:
@@ -89,7 +87,7 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
         }
         case Field::Types::Int64: {
             Int64 value;
-            DB::readVarInt(value, buf);
+            readVarInt(value, buf);
             return value;
         }
         case Field::Types::Int128:
@@ -106,51 +104,65 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
         }
         case Field::Types::Float64: {
             Float64 value;
-            DB::readFloatBinary(value, buf);
+            readFloatBinary(value, buf);
             return value;
         }
         case Field::Types::String: {
             std::string value;
-            DB::readStringBinary(value, buf);
+            readStringBinary(value, buf);
             return value;
         }
         case Field::Types::Array: {
             Array value;
-            DB::readBinary(value, buf);
+            readBinary(value, buf);
             return value;
         }
         case Field::Types::Tuple: {
             Tuple value;
-            DB::readBinary(value, buf);
+            readBinary(value, buf);
             return value;
         }
         case Field::Types::Map: {
             Map value;
-            DB::readBinary(value, buf);
+            readBinary(value, buf);
             return value;
-        }
-        case Field::Types::ByteMap: {
-            throw Exception("Map getBinaryValue should not invoked", ErrorCodes::NOT_IMPLEMENTED);
         }
         case Field::Types::AggregateFunctionState: {
             AggregateFunctionStateData value;
-            DB::readStringBinary(value.name, buf);
-            DB::readStringBinary(value.data, buf);
+            readStringBinary(value.name, buf);
+            readStringBinary(value.data, buf);
+            return value;
+        }
+        case Field::Types::UUID: {
+            UUID value;
+            readBinary(value, buf);
+            return value;
+        }
+        case Field::Types::IPv4:
+        {
+            IPv4 value;
+            DB::readBinary(value, buf);
+            return value;
+        }
+        case Field::Types::IPv6:
+        {
+            IPv6 value;
+            DB::readBinary(value.toUnderType(), buf);
             return value;
         }
     }
-    return DB::Field();
+    return Field();
 }
 
 void readBinary(Array & x, ReadBuffer & buf)
 {
     size_t size;
-    DB::readBinary(size, buf);
+    readBinary(size, buf);
 
     for (size_t index = 0; index < size; ++index)
     {
         UInt8 type;
-        DB::readBinary(type, buf);
+        readBinary(type, buf);
         x.push_back(getBinaryValue(type, buf));
     }
 }
@@ -158,31 +170,31 @@ void readBinary(Array & x, ReadBuffer & buf)
 void writeBinary(const Array & x, WriteBuffer & buf)
 {
     const size_t size = x.size();
-    DB::writeBinary(size, buf);
+    writeBinary(size, buf);
 
     for (const auto & elem : x)
     {
         const UInt8 type = elem.getType();
-        DB::writeBinary(type, buf);
+        writeBinary(type, buf);
         Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
     }
 }
 
 void writeText(const Array & x, WriteBuffer & buf)
 {
-    DB::String res = applyVisitor(FieldVisitorToString(), DB::Field(x));
+    String res = applyVisitor(FieldVisitorToString(), Field(x));
     buf.write(res.data(), res.size());
 }
 
 void readBinary(Tuple & x, ReadBuffer & buf)
 {
     size_t size;
-    DB::readBinary(size, buf);
+    readBinary(size, buf);
 
     for (size_t index = 0; index < size; ++index)
     {
         UInt8 type;
-        DB::readBinary(type, buf);
+        readBinary(type, buf);
         x.push_back(getBinaryValue(type, buf));
     }
 }
@@ -190,19 +202,19 @@ void readBinary(Tuple & x, ReadBuffer & buf)
 void writeBinary(const Tuple & x, WriteBuffer & buf)
 {
     const size_t size = x.size();
-    DB::writeBinary(size, buf);
+    writeBinary(size, buf);
 
     for (const auto & elem : x)
     {
         const UInt8 type = elem.getType();
-        DB::writeBinary(type, buf);
+        writeBinary(type, buf);
         Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
     }
 }
 
 void writeText(const Tuple & x, WriteBuffer & buf)
 {
-    writeFieldText(DB::Field(x), buf);
+    writeFieldText(Field(x), buf);
 }
 
 void readBinary(Map & x, ReadBuffer & buf)
@@ -210,11 +222,17 @@ void readBinary(Map & x, ReadBuffer & buf)
     size_t size;
     DB::readBinary(size, buf);
 
-    for (size_t index = 0; index < size; ++index)
+    if (size > 0)
     {
-        UInt8 type;
-        DB::readBinary(type, buf);
-        x.push_back(getBinaryValue(type, buf));
+        x.reserve(size);
+
+        for (size_t index = 0; index < size; ++index)
+        {
+            Field key, value;
+            readFieldBinary(key, buf);
+            readFieldBinary(value, buf);
+            x.push_back(std::make_pair(key, value));
+        }
     }
 }
 
@@ -223,66 +241,25 @@ void writeBinary(const Map & x, WriteBuffer & buf)
     const size_t size = x.size();
     DB::writeBinary(size, buf);
 
-    for (const auto & elem : x)
+    if (size > 0)
     {
-        const UInt8 type = elem.getType();
-        DB::writeBinary(type, buf);
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
+        for (const auto & elem: x)
+        {
+            writeFieldBinary(elem.first, buf);
+            writeFieldBinary(elem.second, buf);
+        }
     }
 }
 
 void writeText(const Map & x, WriteBuffer & buf)
 {
-    writeFieldText(DB::Field(x), buf);
-}
-
-// ByteDance Map support
-void readBinary(ByteMap & x, ReadBuffer & buf)
-{
-    size_t size;
-    UInt8 ktype, vtype;
-    Field k, v;
-    DB::readBinary(ktype, buf);
-    DB::readBinary(vtype, buf);
-    DB::readBinary(size, buf);
-
-    for (size_t index = 0; index < size; ++index)
-    {
-        x.push_back(std::make_pair(getBinaryValue(ktype, buf),
-                                   getBinaryValue(vtype, buf)));
-    }
-}
-
-void writeBinary(const ByteMap & x, WriteBuffer & buf)
-{
-    UInt8 ktype = Field::Types::Null;
-    UInt8 vtype = Field::Types::Null;
-    size_t size = x.size();
-    if (size)
-    {
-        ktype = x.front().first.getType();
-        vtype = x.front().second.getType();
-    }
-    DB::writeBinary(ktype, buf);
-    DB::writeBinary(vtype, buf);
-    DB::writeBinary(size, buf);
-
-    for (ByteMap::const_iterator it = x.begin(); it != x.end(); ++it)
-    {
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->first);
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->second);
-    }
-}
-
-void writeText(const ByteMap & x, WriteBuffer & buf)
-{
-    writeFieldText(DB::Field(x), buf);
+    writeFieldText(Field(x), buf);
 }
 
 void readBinary(BitMap64 & x, ReadBuffer & buf)
 {
     size_t bytes{0};
-    DB::readVarUInt(bytes, buf);
+    readVarUInt(bytes, buf);
     PODArray<char> tmp_buf(bytes);
     buf.readStrict(tmp_buf.data(), bytes);
     x = roaring::Roaring64Map::readSafe(tmp_buf.data(), bytes);
@@ -291,7 +268,7 @@ void readBinary(BitMap64 & x, ReadBuffer & buf)
 void writeBinary(const BitMap64 & x, WriteBuffer & buf)
 {
     const size_t bytes = x.getSizeInBytes();
-    DB::writeVarUInt(bytes, buf);
+    writeVarUInt(bytes, buf);
     PODArray<char> tmp_buf(bytes);
     x.write(tmp_buf.data());
     writeString(tmp_buf.data(), bytes, buf);
@@ -388,6 +365,16 @@ void writeFieldBinaryBlobImpl(const Field & field, Field::Types::Which type, Wri
             writeBinary(field.get<Tuple>(), buf);
             return;
         }
+        case Field::Types::IPv4:
+        {
+            writeBinary(field.get<IPv4>(), buf);
+            return;
+        }
+        case Field::Types::IPv6:
+        {
+            writeBinary(field.get<IPv6>(), buf);
+            return;
+        }
         case Field::Types::Decimal32:
         {
             auto df = field.get<DecimalField<Decimal32>>();
@@ -422,19 +409,19 @@ void writeFieldBinaryBlobImpl(const Field & field, Field::Types::Which type, Wri
             writeBinary(df, buf);
             return;
         }
+        case Field::Types::UUID:
+        {
+            writeBinary(field.get<UUID>(), buf);
+            return;
+        }
         case Field::Types::AggregateFunctionState:
         {
             writeStringBinary(field.get<AggregateFunctionStateData>().name, buf);
             writeStringBinary(field.get<AggregateFunctionStateData>().data, buf);
             return;
         }
-        case Field::Types::ByteMap:
-        {
-            writeBinary(field.get<ByteMap>(), buf);
-            return;
-        }
         default:
-            throw Exception("Bad type of Field when serializing.", ErrorCodes::BAD_TYPE_OF_FIELD);
+            throw Exception(ErrorCodes::BAD_TYPE_OF_FIELD, "Bad type of Field {} when serializing.", type);
     }
 }
 
@@ -561,23 +548,23 @@ void readFieldBinaryBlobImpl(Field & field, Field::Types::Which type, ReadBuffer
             field = value;
             return;
         }
-        case Field::Types::AggregateFunctionState:
+        case Field::Types::UUID:
         {
-            AggregateFunctionStateData value;
-            DB::readStringBinary(value.name, buf);
-            DB::readStringBinary(value.data, buf);
-            field = value;
-            return;
-        }
-        case Field::Types::ByteMap:
-        {
-            ByteMap value;
+            UUID value;
             readBinary(value, buf);
             field = value;
             return;
         }
+        case Field::Types::AggregateFunctionState:
+        {
+            AggregateFunctionStateData value;
+            readStringBinary(value.name, buf);
+            readStringBinary(value.data, buf);
+            field = value;
+            return;
+        }
         default:
-            throw Exception("Bad type of Field when serializing.", ErrorCodes::BAD_TYPE_OF_FIELD);
+            throw Exception(ErrorCodes::BAD_TYPE_OF_FIELD, "Bad type of Field {} when deserializing.", type);
     }
 }
 
@@ -793,7 +780,9 @@ Field Field::restoreFromDump(const std::string_view & dump_)
             trimLeft(tail);
             if (!comma && tail != ")")
                 show_error();
-            map.push_back(Field::restoreFromDump(element));
+
+            Tuple tuple = Field::restoreFromDump(element).safeGet<Tuple>();
+            map.emplace_back(tuple[0], tuple[1]);
         }
         return map;
     }

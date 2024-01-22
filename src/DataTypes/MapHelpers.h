@@ -16,6 +16,7 @@
 #pragma once
 #include <string_view>
 #include <common/types.h>
+#include <DataTypes/IDataType.h>
 
 namespace DB
 {
@@ -30,7 +31,17 @@ struct ExtractMapKey
     static std::string_view apply(std::string_view src, std::string_view * column);
 };
 
-class IDataType;
+// Keywords compatible with community map and ByteMap KV
+const String MAP_KV_RESERVED_KEYS[4] = {".keys", ".key", ".values", ".value"};
+
+// Try convert key to field based on data type, return Null if failed
+Field tryConvertToMapKeyField(const DataTypePtr & key_type, const String & key_name);
+
+// Convert key to field based on data type
+Field convertToMapKeyField(const DataTypePtr & key_type, const String & key_name);
+
+// Convert key to field based on data type and then apply FieldVisitorToString
+String convertToMapKeyString(const DataTypePtr & key_type, const String & key_name);
 
 /********************************************************************************************************************************
  * Attention: In all the following methods, whether input or output parameters, file name is escaped, and others are not escaped.
@@ -54,6 +65,10 @@ String genMapBaseFilePrefix(const String & column);
 // e.g. col, 'key' -> __col__'key'
 String getImplicitColNameForMapKey(const String & map_col, const String & key_name);
 
+// Get implicit map file name prefix based on map column name and key name
+// e.g. col, 'key' -> __col__%27key%27
+String getImplicitFileNamePrefixForMapKey(const String & map_col, const String & key_name);
+
 // Get map base name
 // e.g. col -> __col_base
 String getBaseNameForMapCol(const String & map_col);
@@ -70,6 +85,10 @@ String parseMapNameFromImplicitFileName(const String & implicit_file_name);
 // e.g. __col__%27key%27.bin, col --> 'key'
 String parseKeyNameFromImplicitFileName(const String & implicit_file_name, const String & map_col);
 
+// Get implicit column name from its implicit file name.
+// e.g. __col__%27key%27.bin, col --> __col__'key'
+String parseImplicitColumnFromImplicitFileName(const String & implicit_file_name, const String & map_col);
+
 // Get map name from its implicit column name.
 // e.g. __col__'key' --> col
 String parseMapNameFromImplicitColName(const String & implicit_col);
@@ -77,15 +96,6 @@ String parseMapNameFromImplicitColName(const String & implicit_col);
 // Get key name from its implicit column name.
 // e.g. __col__'key' --> 'key'
 String parseKeyNameFromImplicitColName(const String & implicit_col, const String & map_col);
-
-// Get map name form its implicit kv name.
-// e.g. col.key   --> col
-// e.g. col.value --> col
-String parseMapNameFromImplicitKVName(const String & implicit_col);
-
-// Get map implicit column name from implicit file name
-// e.g __col__%27key%27.bin -> __col__'key'
-String parseImplicitColumnFromImplicitFileName(const String & implicit_file_name, const String & map_col);
 
 // Input parameter 'implicit_file_name' is from checksum, which has escaped by method escapeForFileName. For detail, please refer to ISerialization::getFileNameForStream.
 // In compact map version, all implicit columns are stored in the same file with different offsets, this method is extract the target file name which consist of map column name and extension.
@@ -101,11 +111,10 @@ bool isMapImplicitKey(const String & map_col);
 
 bool isMapImplicitKeyOfSpecialMapName(const String & implicit_col, const String & map_col);
 
-bool isMapImplicitKeyNotKV(const String & map_col);
-
-bool isMapKV(const String & map_col);
-
-bool isMapKVOfSpecialMapName(const String & implicit_col, const String & map_col);
+// Community map data files ends with "%2Ekeys" and "%2Evalues" while ByteKV map data files ends with "%2Ekey" and "%2Evalue"
+// After merging these two types, the merged types end with "%2Ekey" and "%2Evalue", so additional data compatible with the community version of map is required.
+// Therefore, here only consider the case that convert "%2Ekey" -> "%2Ekeys" and "%2Evalue" -> "%2Evalues"
+bool tryConvertToValidKVStreamName(String & stream_name, std::function<bool(String & stream_name)> check_validity);
 
 // Check if the implicit file belongs to the target map column excluding base file and if it's data file whose suffix is .bin(exclude .null.bin or .size.bin)
 // i.e. __col__%271%27.bin, co -> false(not belong to target map column)
@@ -118,5 +127,28 @@ bool isMapImplicitDataFileNameNotBaseOfSpecialMapName(const String file_name, co
 // i.e. __col_base.bin, col -> true
 // i.e. __col__%271%27.mrk2, col -> true
 bool isMapImplicitFileNameOfSpecialMapName(const String file_name, const String map_col);
+
+// Check if the implicit file belongs to the target map column, including base file and if it's data file whose suffix is .bin(exclude .null.bin or .size.bin)
+// i.e. __col_base.bin, co -> false(not belong to target map column)
+// i.e. __col_base.bin, col -> true
+// i.e. __col__%271%27.null.bin, col -> false(not data file)
+// i.e. __col__%271%27.bin, col -> true
+bool isMapImplicitDataFileNameOfSpecialMapName(const String & file_name, const String map_col);
+
+/// Get range of implicit column files from ordered files (e.g. std::map) with a hacking solution
+template <class V>
+std::pair<typename std::map<String, V>::const_iterator, typename std::map<String, V>::const_iterator>
+getMapColumnRangeFromOrderedFiles(const String & map_column, const std::map<String, V> & m)
+{
+    constexpr auto char_max = std::numeric_limits<String::value_type>::max();
+    String map_prefix = getMapSeparator() + map_column + getMapSeparator();
+    auto beg = m.lower_bound(map_prefix);
+    /// adding char_max to the end to speed up finding first key behind all the implicit column files
+    auto end = m.upper_bound(map_prefix + char_max);
+    /// a file with prefix `map_prefix + char_max` exists
+    while (end != m.end() && startsWith(end->first, map_prefix))
+        end++;
+    return {beg, end};
+}
 
 }

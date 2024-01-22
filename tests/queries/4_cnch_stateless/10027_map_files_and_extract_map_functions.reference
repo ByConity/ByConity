@@ -1,0 +1,98 @@
+CASE 0
+		M	M
+__ms__\'k1\'.bin
+__ms__\'k1\'.mrk
+__ms__\'k1\'.null.bin
+__ms__\'k1\'.null.mrk
+('ms','k1')
+CASE 1
+__ms__\'k1\'.bin
+__ms__\'k1\'.mrk
+__ms__\'k1\'.null.bin
+__ms__\'k1\'.null.mrk
+('ms','k1')
+CASE 2
+__md__18545.bin
+__md__18545.mrk
+__md__18545.null.bin
+__md__18545.null.mrk
+__mf__1..bin
+__mf__1..mrk
+__mf__1..null.bin
+__mf__1..null.mrk
+__mf__1.2345678806304932.bin
+__mf__1.2345678806304932.mrk
+__mf__1.2345678806304932.null.bin
+__mf__1.2345678806304932.null.mrk
+__mi__1.bin
+__mi__1.mrk
+__mi__1.null.bin
+__mi__1.null.mrk
+__mi__2.bin
+__mi__2.mrk
+__mi__2.null.bin
+__mi__2.null.mrk
+__ms__\'k1\'.bin
+__ms__\'k1\'.mrk
+__ms__\'k1\'.null.bin
+__ms__\'k1\'.null.mrk
+__ms__\'k\\\'2\'.bin
+__ms__\'k\\\'2\'.mrk
+__ms__\'k\\\'2\'.null.bin
+__ms__\'k\\\'2\'.null.mrk
+('md','2020-10-10')
+('mf','1')
+('mf','1.2345679')
+('mi','1')
+('mi','2')
+('ms','k\'2')
+('ms','k1')
+CASE 3
+__md__18545.bin	md	18545
+__md__18545.mrk	md	18545
+__md__18545.null.bin	md	18545
+__md__18545.null.mrk	md	18545
+__mf__1..bin	mf	1.
+__mf__1..mrk	mf	1.
+__mf__1..null.bin	mf	1.
+__mf__1..null.mrk	mf	1.
+__mf__1.2345678806304932.bin	mf	1.2345678806304932
+__mf__1.2345678806304932.mrk	mf	1.2345678806304932
+__mf__1.2345678806304932.null.bin	mf	1.2345678806304932
+__mf__1.2345678806304932.null.mrk	mf	1.2345678806304932
+__mi__1.bin	mi	1
+__mi__1.mrk	mi	1
+__mi__1.null.bin	mi	1
+__mi__1.null.mrk	mi	1
+__mi__2.bin	mi	2
+__mi__2.mrk	mi	2
+__mi__2.null.bin	mi	2
+__mi__2.null.mrk	mi	2
+__ms__\'k1\'.bin	ms	k1
+__ms__\'k1\'.mrk	ms	k1
+__ms__\'k1\'.null.bin	ms	k1
+__ms__\'k1\'.null.mrk	ms	k1
+__ms__\'k\\\'2\'.bin	ms	k\\\'2
+__ms__\'k\\\'2\'.mrk	ms	k\\\'2
+__ms__\'k\\\'2\'.null.bin	ms	k\\\'2
+__ms__\'k\\\'2\'.null.mrk	ms	k\\\'2
+CASE 4
+md	['18545']
+mf	['1.','1.2345678806304932']
+mi	['1','2']
+ms	['k1','k\\\'2']
+CASE 5
+md	2020-10-10
+mf	1
+mf	1.2345679
+mi	1
+mi	2
+ms	k\'2
+ms	k1
+CASE 6
+['k\'2','k1']
+['k\'2','k1']
+CASE 7
+[]
+CASE 8
+['k3']

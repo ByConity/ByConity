@@ -23,11 +23,11 @@
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnUnique.h>
 #include <Columns/ColumnsCommon.h>
+#include <common/TypeLists.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
 #include <Core/Field.h>
-#include <Core/TypeListNumber.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -74,8 +74,8 @@ namespace
         {
         }
 
-        template <typename T, size_t>
-        void operator()()
+        template <typename T>
+        void operator()(TypeList<T>)
         {
             if (typeid_cast<const DataTypeNumber<T> *>(&keys_type))
                 column = creator(static_cast<ColumnVector<T> *>(nullptr));
@@ -105,12 +105,16 @@ MutableColumnUniquePtr DataTypeLowCardinality::createColumnUniqueImpl(const IDat
         return creator(static_cast<ColumnVector<UInt32> *>(nullptr));
     else if (which.isUUID())
         return creator(static_cast<ColumnVector<UUID> *>(nullptr));
+    else if (which.isIPv4())
+        return creator(static_cast<ColumnVector<IPv4> *>(nullptr));
+    else if (which.isIPv6())
+        return creator(static_cast<ColumnVector<IPv6> *>(nullptr));
     else if (which.isInterval())
         return creator(static_cast<DataTypeInterval::ColumnType *>(nullptr));
     else if (which.isInt() || which.isUInt() || which.isFloat())
     {
         MutableColumnUniquePtr column;
-        TypeListNativeNumbers::forEach(CreateColumnVector(column, *type, creator));
+        TypeListUtils::forEach(TypeListIntAndFloat{}, CreateColumnVector(column, *type, creator));
 
         if (!column)
             throw Exception("Unexpected numeric type: " + type->getName(), ErrorCodes::LOGICAL_ERROR);
@@ -143,11 +147,21 @@ MutableColumnUniquePtr DataTypeLowCardinality::createColumnUnique(const IDataTyp
     return createColumnUniqueImpl(keys_type, creator);
 }
 
-bool DataTypeLowCardinality::canBeMapValueType() const
+bool DataTypeLowCardinality::canBeByteMapValueType() const
 {
     if (const auto * nullable_type = typeid_cast<const DataTypeNullable *>(dictionary_type.get()))
-        return nullable_type->getNestedType()->canBeMapValueType();
+        return nullable_type->getNestedType()->canBeByteMapValueType();
     return false;
+}
+
+Field DataTypeLowCardinality::stringToVisitorField(const String & ins) const
+{
+    return dictionary_type->stringToVisitorField(ins);
+}
+
+String DataTypeLowCardinality::stringToVisitorString(const String & ins) const
+{
+    return dictionary_type->stringToVisitorString(ins);
 }
 
 MutableColumnPtr DataTypeLowCardinality::createColumn() const

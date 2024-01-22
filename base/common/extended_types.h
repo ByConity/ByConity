@@ -26,7 +26,6 @@
 #include <common/types.h>
 #include <common/wide_integer.h>
 
-
 using Int128 = wide::integer<128, signed>;
 using UInt128 = wide::integer<128, unsigned>;
 using Int256 = wide::integer<256, signed>;
@@ -85,7 +84,7 @@ template <typename T>
 inline constexpr bool is_signed_v = is_signed<T>::value;
 
 template <typename T>
-struct is_unsigned
+struct is_unsigned // NOLINT(readability-identifier-naming)
 {
     static constexpr bool value = std::is_unsigned_v<T>;
 };
@@ -115,9 +114,17 @@ template <> struct is_integer<UInt512> { static constexpr bool value = true; };
 template <typename T>
 inline constexpr bool is_integer_v = is_integer<T>::value;
 
+template <class T> concept is_integer_v2 =
+    std::is_integral_v<T>
+    || std::is_same_v<T, Int128>
+    || std::is_same_v<T, UInt128>
+    || std::is_same_v<T, Int256>
+    || std::is_same_v<T, UInt256>;
+
+template <class T> concept is_floating_point = std::is_floating_point_v<T>;
 
 template <typename T>
-struct is_arithmetic
+struct is_arithmetic // NOLINT(readability-identifier-naming)
 {
     static constexpr bool value = std::is_arithmetic_v<T>;
 };
@@ -134,9 +141,9 @@ template <typename T>
 inline constexpr bool is_arithmetic_v = is_arithmetic<T>::value;
 
 template <typename T>
-struct make_unsigned
+struct make_unsigned // NOLINT(readability-identifier-naming)
 {
-    typedef std::make_unsigned_t<T> type;
+    using type = std::make_unsigned_t<T>;
 };
 
 template <> struct make_unsigned<Int128> { using type = UInt128; };
@@ -149,9 +156,9 @@ template <> struct make_unsigned<UInt512> { using type = UInt512; };
 template <typename T> using make_unsigned_t = typename make_unsigned<T>::type;
 
 template <typename T>
-struct make_signed
+struct make_signed // NOLINT(readability-identifier-naming)
 {
-    typedef std::make_signed_t<T> type;
+    using type = std::make_signed_t<T>;
 };
 
 template <> struct make_signed<Int128>  { using type = Int128; };
@@ -164,7 +171,7 @@ template <> struct make_signed<UInt512> { using type = Int512; };
 template <typename T> using make_signed_t = typename make_signed<T>::type;
 
 template <typename T>
-struct is_big_int
+struct is_big_int // NOLINT(readability-identifier-naming)
 {
     static constexpr bool value = false;
 };

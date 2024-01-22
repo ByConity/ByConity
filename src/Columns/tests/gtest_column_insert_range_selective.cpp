@@ -20,7 +20,7 @@
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnBitMap64.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnFixedString.h>
@@ -165,7 +165,7 @@ TEST(InsertRangeSelective, ColumnLowcardinalityTest)
     compareInsertRangeSelectiveWithInsertFrom(*src_column);
 }
 
-TEST(InsertRangeSelective, ColumnByteMapTest)
+TEST(InsertRangeSelective, ColumnStringMapTest)
 {
     const size_t size = 100;
     auto key_column = ColumnString::create();
@@ -183,11 +183,15 @@ TEST(InsertRangeSelective, ColumnByteMapTest)
             offset_column->insert(offest_size);
         }
     }
-    MutableColumnPtr src_column = ColumnByteMap::create(std::move(key_column), std::move(value_column), std::move(offset_column));
+
+    ColumnPtr src_column = ColumnMap::create(ColumnArray::create(
+            ColumnTuple::create(Columns{std::move(key_column), std::move(value_column)}),
+            std::move(offset_column)));
+
     compareInsertRangeSelectiveWithInsertFrom(*src_column, true);
 }
 
-TEST(InsertRangeSelective, ColumnMapTest)
+TEST(InsertRangeSelective, ColumnUInt64MapTest)
 {
     const size_t size = 100;
     auto col1 = ColumnUInt64::create();
@@ -205,7 +209,10 @@ TEST(InsertRangeSelective, ColumnMapTest)
         data2.push_back(i * 2);
         off_data.push_back(offest_size);
     }
-    auto src_column = ColumnMap::create(std::move(col1), std::move(col2), std::move(off));
+
+    ColumnPtr src_column = ColumnMap::create(ColumnArray::create(
+            ColumnTuple::create(Columns{std::move(col1), std::move(col2)}),
+            std::move(off)));
     compareInsertRangeSelectiveWithInsertFrom(*src_column, true);
 }
 

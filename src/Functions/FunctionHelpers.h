@@ -220,7 +220,7 @@ ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & a
   *  For non-nullable columns: column pointer -> its column pointer, nullmap pointer -> nullptr
   *  Note that raw_column_maps and nullable_args_map need to be pre-allocated with the size of args
   */
-void extractNullMapAndNestedCol(const ColumnsWithTypeAndName& args, ColumnPtr* raw_column_maps, const UInt8 ** nullable_args_map);
+bool extractNullMapAndNestedCol(const ColumnsWithTypeAndName& args, ColumnPtr* raw_column_maps, const UInt8 ** nullable_args_map);
 
 struct NullPresence
 {

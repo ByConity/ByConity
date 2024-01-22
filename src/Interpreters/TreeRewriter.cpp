@@ -44,6 +44,8 @@
 
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTQuantifiedComparison.h>
+#include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTOrderByElement.h>
@@ -52,7 +54,7 @@
 
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 
 #include <IO/WriteHelpers.h>
@@ -61,6 +63,7 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Parsers/ASTQuantifiedComparison.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/JoinedTables.h>
 #include <Core/Types.h>
@@ -79,6 +82,8 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_IDENTIFIER;
+    extern const int AUTHENTICATION_FAILED;
+    extern const int INCORRECT_QUERY;
 }
 
 namespace
@@ -331,6 +336,108 @@ struct ExistsExpressionData
 };
 
 using ExistsExpressionVisitor = InDepthNodeVisitor<OneTypeMatcher<ExistsExpressionData>, false>;
+
+struct QuantifiedComparisonData
+{
+    using TypeToVisit = ASTQuantifiedComparison;
+
+    static void modifyAST(ASTPtr ast, QuantifierType type)
+    {
+        /* Rewrite in AST:
+         *  = ANY --> IN
+         * != ALL --> NOT IN
+         *  = ALL --> IN (SELECT singleValueOrNull(*) FROM subquery)
+         * != ANY --> NOT IN (SELECT singleValueOrNull(*) FROM subquery)
+         **/
+
+        auto * function = assert_cast<ASTFunction *>(ast.get());
+        const String & operator_name = function->name;
+
+        auto function_equals = operator_name == "equals";
+        auto function_not_equals = operator_name == "notEquals";
+
+        String aggregate_function_name;
+        if (function_equals || function_not_equals)
+        {
+            if (operator_name == "notEquals")
+                function->name = "notIn";
+            else
+                function->name = "in";
+
+            if ((type == QuantifierType::ANY && function_equals)
+                    || (type == QuantifierType::ALL && function_not_equals))
+            {
+                return;
+            }
+
+            aggregate_function_name = "singleValueOrNull";
+        }
+        else if (operator_name == "greaterOrEquals" || operator_name == "greater")
+        {
+            aggregate_function_name = (type == QuantifierType::ANY ? "min" : "max");
+        }
+        else if (operator_name == "lessOrEquals" || operator_name == "less")
+        {
+            aggregate_function_name = (type == QuantifierType::ANY ? "max" : "min");
+        }
+        else
+        {
+            throw Exception(
+                ErrorCodes::INCORRECT_QUERY,
+                "Illegal operator: {} before {}; Accpted operators include =, !=, <, >, <=, >= ",
+                operator_name,
+                type == QuantifierType::ANY ? "ANY" : "ALL");
+        }
+
+        /// subquery --> (SELECT aggregate_function(*) FROM subquery)
+        auto aggregate_function = makeASTFunction(aggregate_function_name, std::make_shared<ASTAsterisk>());
+        auto subquery_node = function->children[0]->children[1];
+
+        auto table_expression = std::make_shared<ASTTableExpression>();
+        table_expression->subquery = std::move(subquery_node);
+        table_expression->children.push_back(table_expression->subquery);
+
+        auto tables_in_select_element = std::make_shared<ASTTablesInSelectQueryElement>();
+        tables_in_select_element->table_expression = std::move(table_expression);
+        tables_in_select_element->children.push_back(tables_in_select_element->table_expression);
+
+        auto tables_in_select = std::make_shared<ASTTablesInSelectQuery>();
+        tables_in_select->children.push_back(std::move(tables_in_select_element));
+
+        auto select_exp_list = std::make_shared<ASTExpressionList>();
+        select_exp_list->children.push_back(aggregate_function);
+
+        auto select_query = std::make_shared<ASTSelectQuery>();
+        select_query->children.push_back(select_exp_list);
+        select_query->children.push_back(tables_in_select);
+
+        select_query->setExpression(ASTSelectQuery::Expression::SELECT, select_exp_list);
+        select_query->setExpression(ASTSelectQuery::Expression::TABLES, tables_in_select);
+
+        auto select_with_union_query = std::make_shared<ASTSelectWithUnionQuery>();
+        select_with_union_query->list_of_selects = std::make_shared<ASTExpressionList>();
+        select_with_union_query->list_of_selects->children.push_back(std::move(select_query));
+        select_with_union_query->children.push_back(select_with_union_query->list_of_selects);
+
+        auto new_subquery = std::make_shared<ASTSubquery>();
+        new_subquery->children.push_back(select_with_union_query);
+        ast->children[0]->children.back() = std::move(new_subquery);
+    }
+
+    static void visit(ASTQuantifiedComparison & quantified_comp, ASTPtr & ast)
+    {
+        auto function = std::make_shared<ASTFunction>();
+        function->name = quantified_comp.comparator;
+        auto exp_list = std::make_shared<ASTExpressionList>();
+        function->arguments = exp_list;
+        function->children.push_back(exp_list);
+        exp_list->children = quantified_comp.children;
+        modifyAST(function, quantified_comp.quantifier_type);
+        ast = function;
+    }
+};
+
+using QuantifiedComparisonVisitor = InDepthNodeVisitor<OneTypeMatcher<QuantifiedComparisonData>, false>;
 
 struct ReplacePositionalArgumentsData
 {
@@ -661,7 +768,7 @@ void collectJoinedColumns(TableJoin & analyzed_join, const ASTTableJoin & table_
         CollectJoinOnKeysVisitor::Data data{analyzed_join, tables[0], tables[1], aliases, is_asof, false, enable_join_on_1_equals_1, {}, {}, false, ignore_array_join_check_in_join_on_condition, context};
         CollectJoinOnKeysVisitor(data).visit(table_join.on_expression);
         CollectJoinOnKeysMatcher::analyzeJoinOnConditions(data, table_join.kind);
-        
+
         if (!data.has_some && !data.is_nest_loop_join)
             throw Exception("Cannot get JOIN keys from JOIN ON section: " + queryToString(table_join.on_expression),
                             ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
@@ -670,6 +777,66 @@ void collectJoinedColumns(TableJoin & analyzed_join, const ASTTableJoin & table_
         if (data.is_nest_loop_join)
             analyzed_join.setJoinAlgorithm(JoinAlgorithm::NESTED_LOOP_JOIN);
     }
+}
+
+std::pair<bool, UInt64> recursivelyCollectMaxOrdinaryExpressions(const ASTPtr & expr, ASTExpressionList & into)
+{
+    if (expr->as<ASTIdentifier>())
+    {
+        into.children.push_back(expr);
+        return {false, 1};
+    }
+
+    auto * function = expr->as<ASTFunction>();
+
+    if (!function)
+        return {false, 0};
+
+    if (AggregateUtils::isAggregateFunction(*function))
+        return {true, 0};
+
+    UInt64 pushed_children = 0;
+    bool has_aggregate = false;
+
+    for (const auto & child : function->arguments->children)
+    {
+        auto [child_has_aggregate, child_pushed_children] = recursivelyCollectMaxOrdinaryExpressions(child, into);
+        has_aggregate |= child_has_aggregate;
+        pushed_children += child_pushed_children;
+    }
+
+    /// The current function is not aggregate function and there is no aggregate function in its arguments,
+    /// so use the current function to replace its arguments
+    if (!has_aggregate)
+    {
+        for (UInt64 i = 0; i < pushed_children; i++)
+            into.children.pop_back();
+
+        into.children.push_back(expr);
+        pushed_children = 1;
+    }
+
+    return {has_aggregate, pushed_children};
+}
+
+/** Expand GROUP BY ALL by extracting all the SELECT-ed expressions that are not aggregate functions.
+  *
+  * For a special case that if there is a function having both aggregate functions and other fields as its arguments,
+  * the `GROUP BY` keys will contain the maximum non-aggregate fields we can extract from it.
+  *
+  * Example:
+  * SELECT substring(a, 4, 2), substring(substring(a, 1, 2), 1, count(b)) FROM t GROUP BY ALL
+  * will expand as
+  * SELECT substring(a, 4, 2), substring(substring(a, 1, 2), 1, count(b)) FROM t GROUP BY substring(a, 4, 2), substring(a, 1, 2)
+  */
+void expandGroupByAll(ASTSelectQuery * select_query)
+{
+    auto group_expression_list = std::make_shared<ASTExpressionList>();
+
+    for (const auto & expr : select_query->select()->children)
+        recursivelyCollectMaxOrdinaryExpressions(expr, *group_expression_list);
+
+    select_query->setExpression(ASTSelectQuery::Expression::GROUP_BY, group_expression_list);
 }
 
 
@@ -923,19 +1090,12 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
         // @ByteMap: special handling map implicit column
         for (const auto & unknown_required_source_column : unknown_required_source_columns)
         {
-            if (isMapImplicitKeyNotKV(unknown_required_source_column))
+            if (isMapImplicitKey(unknown_required_source_column))
             {
                 String map_name = parseMapNameFromImplicitColName(unknown_required_source_column);
                 auto column = source_columns.tryGetByName(map_name);
-                if (column && column->type->isMap() && !column->type->isMapKVStore())
-                    source_columns.emplace_back(unknown_required_source_column, typeid_cast<const DataTypeByteMap &>(*column->type).getValueTypeForImplicitColumn());
-            }
-            else if (isMapKV(unknown_required_source_column)) /// handle KV Store
-            {
-                String map_name = parseMapNameFromImplicitKVName(unknown_required_source_column);
-                auto column = source_columns.tryGetByName(map_name);
-                if (column && column->type->isMap() && column->type->isMapKVStore())
-                    source_columns.emplace_back(unknown_required_source_column, typeid_cast<const DataTypeByteMap &>(*column->type).getMapStoreType(unknown_required_source_column));
+                if (column && column->type->isByteMap())
+                    source_columns.emplace_back(unknown_required_source_column, typeid_cast<const DataTypeMap &>(*column->type).getValueTypeForImplicitColumn());
             }
         }
     }
@@ -1205,6 +1365,10 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
 
    normalize(query, result.aliases, all_source_columns_set, select_options.ignore_alias, settings, /* allow_self_aliases = */ true, getContext(), result.storage, result.metadata_snapshot);
 
+    // expand GROUP BY ALL
+    if (select_query->group_by_all)
+        expandGroupByAll(select_query);
+
     /// Remove unneeded columns according to 'required_result_columns'.
     /// Leave all selected columns in case of DISTINCT; columns that contain arrayJoin function inside.
     /// Must be after 'normalizeTree' (after expanding aliases, for aliases not get lost)
@@ -1312,6 +1476,9 @@ TreeRewriterResultPtr TreeRewriter::analyze(
 void TreeRewriter::normalize(
     ASTPtr & query, Aliases & aliases, const NameSet & source_columns_set, bool ignore_alias, const Settings & settings, bool allow_self_aliases, const ContextPtr& context_, ConstStoragePtr storage_, const StorageMetadataPtr & metadata_snapshot_)
 {
+    QuantifiedComparisonVisitor::Data quantifier_comp;
+    QuantifiedComparisonVisitor(quantifier_comp).visit(query);
+
     CustomizeCountDistinctVisitor::Data data_count_distinct{settings.count_distinct_implementation};
     CustomizeCountDistinctVisitor(data_count_distinct).visit(query);
 

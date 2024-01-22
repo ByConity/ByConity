@@ -64,6 +64,16 @@ struct LengthImpl
     {
         throw Exception("Cannot apply function length to UUID argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
+
+    [[noreturn]] static void ipv6(const ColumnIPv6::Container &, size_t &, PaddedPODArray<UInt64> &)
+    {
+        throw Exception("Cannot apply function length to IPv6 argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+    [[noreturn]] static void ipv4(const ColumnIPv4::Container &, size_t &, PaddedPODArray<UInt64> &)
+    {
+        throw Exception("Cannot apply function length to IPv4 argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 };
 
 

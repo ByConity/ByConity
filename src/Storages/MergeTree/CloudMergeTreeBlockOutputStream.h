@@ -56,10 +56,6 @@ private:
     void writeSuffixForInsert();
     void writeSuffixForUpsert();
 
-    void writeImplicitColumnForBitEngine(
-        BlockWithPartition & block,
-        const BitengineWriteSettings & write_settings);
-
     MergeTreeMetaBase & storage;
     Poco::Logger * log;
     StorageMetadataPtr metadata_snapshot;

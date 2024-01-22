@@ -296,7 +296,7 @@ void MemoryEfficientIngestColumn::insertNewData(
     {
         auto column_name = name;
         /// No need to add implicit map column
-        if (isMapImplicitKeyNotKV(name))
+        if (isMapImplicitKey(name))
             column_name = parseMapNameFromImplicitColName(name);
         auto column = target_meta_data_ptr->getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
         ingested_header.insertUnique(ColumnWithTypeAndName(column.type, column.name));

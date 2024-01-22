@@ -27,3 +27,6 @@
 #cmakedefine01 USE_BZIP2
 #cmakedefine01 USE_JAVA_EXTENSIONS
 #cmakedefine01 USE_TSQUERY
+#cmakedefine01 USE_SIMDJSON
+#cmakedefine01 USE_RAPIDJSON
+#cmakedefine01 USE_NLP

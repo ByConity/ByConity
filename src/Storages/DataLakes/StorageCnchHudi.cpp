@@ -28,9 +28,16 @@ StorageCnchHudi::StorageCnchHudi(
     ContextPtr context_,
     std::shared_ptr<CnchHiveSettings> settings_,
     IMetaClientPtr client_from_catalog)
-    : StorageCnchHive(table_id_, hive_metastore_url_, hive_db_name_, hive_table_name_, metadata_, context_, settings_, client_from_catalog)
+    : StorageCnchHive(
+        table_id_,
+        hive_metastore_url_,
+        hive_db_name_,
+        hive_table_name_,
+        metadata_,
+        context_,
+        client_from_catalog,
+        settings_)
 {
-    log = &Poco::Logger::get("CnchHudi");
 }
 
 std::shared_ptr<IDirectoryLister> StorageCnchHudi::getDirectoryLister()

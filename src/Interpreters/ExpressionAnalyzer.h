@@ -180,6 +180,8 @@ public:
       */
     SetPtr isPlainStorageSetInSubquery(const ASTPtr & subquery_or_table_name);
 
+    bool hasByteMapColumn() const;
+
     MergeTreeIndexContextPtr getIndexContext() { return index_context; }
 
 protected:

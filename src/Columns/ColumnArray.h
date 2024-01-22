@@ -178,6 +178,14 @@ public:
         callback(data);
     }
 
+    void forEachSubcolumnRecursively(ColumnCallback callback) override
+    {
+        callback(offsets);
+        offsets->forEachSubcolumnRecursively(callback);
+        callback(data);
+        data->forEachSubcolumnRecursively(callback);
+    }
+
     bool structureEquals(const IColumn & rhs) const override
     {
         if (auto rhs_concrete = typeid_cast<const ColumnArray *>(&rhs))
@@ -189,6 +197,8 @@ public:
 
     size_t ALWAYS_INLINE offsetAt(ssize_t i) const { return getOffsets()[i - 1]; }
     size_t ALWAYS_INLINE sizeAt(ssize_t i) const { return getOffsets()[i] - getOffsets()[i - 1]; }
+
+    size_t getNumberOfDimensions() const;
 
 private:
     WrappedPtr data;

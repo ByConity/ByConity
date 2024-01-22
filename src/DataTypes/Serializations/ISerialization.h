@@ -95,10 +95,6 @@ public:
             SparseElements,
             SparseOffsets,
 
-            MapKeyElements,
-            MapValueElements,
-            MapSizes,
-
             StringElements,
             StringOffsets,
         };

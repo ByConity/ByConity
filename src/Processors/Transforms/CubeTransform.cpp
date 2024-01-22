@@ -74,7 +74,7 @@ Chunk CubeTransform::generate()
         current_zero_columns.reserve(keys.size());
 
         for (auto key : keys)
-            current_zero_columns.emplace_back(current_columns[key]->cloneEmpty()->cloneResized(num_rows));
+            current_zero_columns.emplace_back(current_columns.at(key)->cloneEmpty()->cloneResized(num_rows));
     }
 
     auto gen_chunk = std::move(cube_chunk);

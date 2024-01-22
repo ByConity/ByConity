@@ -4,8 +4,8 @@
 
 namespace DB
 {
-    
-using GroupIdToIds = std::unordered_map<GroupId, std::unordered_set<GroupId>>;
+
+using GroupIdToIds = std::unordered_map<GroupId, std::set<GroupId>>;
 
 namespace JoinReorderUtils
 {

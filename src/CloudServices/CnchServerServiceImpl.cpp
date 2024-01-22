@@ -138,6 +138,17 @@ void CnchServerServiceImpl::commitParts(
                 cppkafka::TopicPartitionList tpl;
                 if (req->has_consumer_group())
                 {
+                    // check if table schema has changed before writing new parts. need reschedule consume task and update storage schema on work side if so.
+                    if (!parts.empty())
+                    {
+                        auto column_commit_time = storage->getPartColumnsCommitTime(*(parts[0]->getColumnsPtr()));
+                        if (column_commit_time != storage->commit_time.toUInt64())
+                        {
+                            LOG_WARNING(&Poco::Logger::get("CnchServerService"), "Kafka consumer cannot commit parts because of underlying table change. Will reschedule consume task.");
+                            throw Exception(ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP, "Commit fails because of storage schema change");
+                        }
+                    }
+
                     consumer_group = req->consumer_group();
                     tpl.reserve(req->tpl_size());
                     for (const auto & tp : req->tpl())
@@ -218,13 +229,15 @@ void CnchServerServiceImpl::createTransaction(
         try
         {
             TxnTimestamp primary_txn_id = request->has_primary_txn_id() ? TxnTimestamp(request->primary_txn_id()) : TxnTimestamp(0);
+            bool read_only = request->has_read_only() ? request->read_only() : false;
             CnchTransactionInitiator initiator
                 = request->has_primary_txn_id() ? CnchTransactionInitiator::Txn : CnchTransactionInitiator::Worker;
             auto transaction
                 = global_context.getCnchTransactionCoordinator().createTransaction(CreateTransactionOption()
                                                                                         .setPrimaryTransactionId(primary_txn_id)
                                                                                         .setType(CnchTransactionType::Implicit)
-                                                                                        .setInitiator(initiator));
+                                                                                        .setInitiator(initiator)
+                                                                                        .setReadOnly(read_only));
             auto & controller = static_cast<brpc::Controller &>(*cntl);
             transaction->setCreator(butil::endpoint2str(controller.remote_side()).c_str());
 

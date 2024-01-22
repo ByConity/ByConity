@@ -173,7 +173,7 @@ TEST(TestFieldCompatibleBinary, MapBinary)
 {
 /// Map;
 {
-    DB::ByteMap map; /// key type is String, and value type is Array(UInt64)
+    DB::Map map; /// key type is String, and value type is Array(UInt64)
 
     DB::Array v1;
     for (size_t i = 0; i < 10; ++i)

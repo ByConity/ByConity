@@ -34,7 +34,7 @@
 
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
@@ -160,6 +160,9 @@ static void insertNumber(IColumn & column, WhichDataType type, T value)
             break;
         case TypeIndex::DateTime64:
             assert_cast<ColumnDecimal<DateTime64> &>(column).insertValue(value);
+            break;
+        case TypeIndex::IPv4:
+            assert_cast<ColumnIPv4 &>(column).insertValue(IPv4(static_cast<UInt32>(value)));
             break;
         default:
             throw Exception("Type is not compatible with Avro", ErrorCodes::ILLEGAL_COLUMN);
@@ -429,6 +432,15 @@ AvroDeserializer::DeserializeFn AvroDeserializer::createDeserializeFn(avro::Node
                     column.insertData(reinterpret_cast<const char *>(tmp_fixed.data()), tmp_fixed.size());
                 };
             }
+            else if (target.isIPv6() && fixed_size == sizeof(IPv6))
+            {
+                return [tmp_fixed = std::vector<uint8_t>(fixed_size)](IColumn & column, avro::Decoder & decoder) mutable
+                {
+                    decoder.decodeFixed(tmp_fixed.size(), tmp_fixed);
+                    column.insertData(reinterpret_cast<const char *>(tmp_fixed.data()), tmp_fixed.size());
+                    return true;
+                };
+            }
             break;
         }
         case avro::AVRO_SYMBOLIC:
@@ -464,9 +476,9 @@ AvroDeserializer::DeserializeFn AvroDeserializer::createDeserializeFn(avro::Node
         }
         case avro::AVRO_MAP:
         {
-            if (target.isByteMap())
+            if (target.isMap())
             {
-                const auto & map_type = assert_cast<const DataTypeByteMap &>(*target_type);
+                const auto & map_type = assert_cast<const DataTypeMap &>(*target_type);
                 const auto & keys_type = map_type.getKeyType();
                 const auto & values_type = map_type.getValueType();
                 auto keys_source_type = root_node->leafAt(0);
@@ -475,8 +487,8 @@ AvroDeserializer::DeserializeFn AvroDeserializer::createDeserializeFn(avro::Node
                 auto values_deserializer = createDeserializeFn(values_source_type, values_type);
                 return [keys_deserializer, values_deserializer](IColumn & column, avro::Decoder & decoder)
                 {
-                    ColumnByteMap & column_map = assert_cast<ColumnByteMap &>(column);
-                    ColumnByteMap::Offsets & offsets = column_map.getOffsets();
+                    ColumnMap & column_map = assert_cast<ColumnMap &>(column);
+                    ColumnMap::Offsets & offsets = column_map.getOffsets();
                     IColumn& key_column = column_map.getKey();
                     IColumn& value_column = column_map.getValue();
 

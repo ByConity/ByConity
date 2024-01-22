@@ -4,9 +4,17 @@
 #include <sstream>
 #include <iostream>
 #include <Core/Types.h>
+#include <Common/ErrorCodes.h>
 #include <Common/Exception.h>
 #include <Parsers/Lexer.h>
+#include <charconv>
+#include <string_view>
+#include <unordered_set>
 
+namespace DB::ErrorCodes
+{
+    extern const int CANNOT_PARSE_TEXT;
+}
 
 namespace DB
 {
@@ -43,6 +51,7 @@ namespace DB
 class TestHint
 {
 public:
+    using ErrorVector = std::vector<int>;
     TestHint(bool enabled_, const String & query_) :
         query(query_)
     {
@@ -74,8 +83,8 @@ public:
                         size_t pos_end = comment.find('}', pos_start);
                         if (pos_end != String::npos)
                         {
-                            String hint(comment.begin() + pos_start + 1, comment.begin() + pos_end);
-                            parse(hint, is_leading_hint);
+                            Lexer comment_lexer(comment.c_str() + pos_start + 1, comment.c_str() + pos_end, 0);
+                            parse(comment_lexer, is_leading_hint);
                         }
                     }
                 }
@@ -83,53 +92,107 @@ public:
         }
     }
 
-    int serverError() const { return server_error; }
-    int clientError() const { return client_error; }
+    int serverError() const { return server_errors.empty() ? 0 : server_errors[0]; }
+    int clientError() const { return client_errors.empty() ? 0 : client_errors[0]; }
     std::optional<bool> echoQueries() const { return echo; }
 
 private:
     const String & query;
-    int server_error = 0;
-    int client_error = 0;
+    ErrorVector server_errors{};
+    ErrorVector client_errors{};
     std::optional<bool> echo;
 
-    void parse(const String & hint, bool is_leading_hint)
+    void parse(Lexer & comment_lexer, bool is_leading_hint)
     {
-        std::stringstream ss;       // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        ss << hint;
-        String item;
+        std::unordered_set<std::string_view> commands{"echo", "echoOn", "echoOff"};
 
-        while (!ss.eof())
+        std::unordered_set<std::string_view> command_errors{
+            "serverError",
+            "clientError",
+        };
+
+        for (Token token = comment_lexer.nextToken(); !token.isEnd(); token = comment_lexer.nextToken())
         {
-            ss >> item;
-            if (ss.eof())
-                break;
-
-            if (!is_leading_hint)
+            String item = String(token.begin, token.end);
+            if (token.type == TokenType::BareWord && commands.contains(item))
             {
-                if (item == "serverError")
-                    ss >> server_error;
-                else if (item == "clientError")
-                    ss >> client_error;
+                if (item == "echo")
+                    echo.emplace(true);
+                if (item == "echoOn")
+                    echo.emplace(true);
+                if (item == "echoOff")
+                    echo.emplace(false);
             }
+            else if (!is_leading_hint && token.type == TokenType::BareWord && command_errors.contains(item))
+            {
+                /// Everything after this must be a list of errors separated by comma
+                ErrorVector error_codes;
+                while (!token.isEnd())
+                {
+                    token = comment_lexer.nextToken();
+                    if (token.type == TokenType::Whitespace)
+                        continue;
+                    if (token.type == TokenType::Number)
+                    {
+                        int code;
+                        auto [p, ec] = std::from_chars(token.begin, token.end, code);
+                        if (p == token.begin)
+                            throw DB::Exception(
+                                DB::ErrorCodes::CANNOT_PARSE_TEXT,
+                                "Could not parse integer number for errorcode: {}",
+                                String(token.begin, token.end));
+                        error_codes.push_back(code);
+                    }
+                    else if (token.type == TokenType::BareWord)
+                    {
+                        int code = DB::ErrorCodes::getErrorCodeByName(String(token.begin, token.end));
+                        error_codes.push_back(code);
+                    }
+                    else
+                        throw DB::Exception(
+                            DB::ErrorCodes::CANNOT_PARSE_TEXT,
+                            "Could not parse error code in {}: {}",
+                            getTokenName(token.type),
+                            String(token.begin, token.end));
+                    do
+                    {
+                        token = comment_lexer.nextToken();
+                    } while (!token.isEnd() && token.type == TokenType::Whitespace);
 
-            if (item == "echo")
-                echo.emplace(true);
-            if (item == "echoOn")
-                echo.emplace(true);
-            if (item == "echoOff")
-                echo.emplace(false);
+                    if (!token.isEnd() && token.type != TokenType::Comma)
+                        throw DB::Exception(
+                            DB::ErrorCodes::CANNOT_PARSE_TEXT,
+                            "Could not parse error code. Expected ','. Got '{}'",
+                            String(token.begin, token.end));
+                }
+
+                if (item == "serverError")
+                    server_errors = error_codes;
+                else
+                    client_errors = error_codes;
+                break;
+            }
         }
     }
 
     bool allErrorsExpected(int actual_server_error, int actual_client_error) const
     {
-        return (server_error || client_error) && (server_error == actual_server_error) && (client_error == actual_client_error);
+        if (actual_server_error && std::find(server_errors.begin(), server_errors.end(), actual_server_error) == server_errors.end())
+            return false;
+        if (!actual_server_error && server_errors.size())
+            return false;
+
+        if (actual_client_error && std::find(client_errors.begin(), client_errors.end(), actual_client_error) == client_errors.end())
+            return false;
+        if (!actual_client_error && client_errors.size())
+            return false;
+
+        return true;
     }
 
     bool lostExpectedError(int actual_server_error, int actual_client_error) const
     {
-        return (server_error && !actual_server_error) || (client_error && !actual_client_error);
+        return (server_errors.size() && !actual_server_error) || (client_errors.size() && !actual_client_error);
     }
 };
 

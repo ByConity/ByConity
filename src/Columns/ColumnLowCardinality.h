@@ -338,6 +338,26 @@ public:
             callback(dictionary.getColumnUniquePtr());
     }
 
+    void forEachSubcolumnRecursively(ColumnCallback callback) override
+    {
+
+        if (isFullState())
+        {
+            callback(nested_column);
+            nested_column->forEachSubcolumnRecursively(callback);
+        }
+
+        callback(idx.getPositionsPtr());
+        idx.getPositionsPtr()->forEachSubcolumnRecursively(callback);
+
+        /// Column doesn't own dictionary if it's shared.
+        if (!dictionary.isShared())
+        {
+            callback(dictionary.getColumnUniquePtr());
+            dictionary.getColumnUniquePtr()->forEachSubcolumnRecursively(callback);
+        }
+    }
+
     bool structureEquals(const IColumn & rhs) const override
     {
         if (full_state)

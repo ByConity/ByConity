@@ -294,6 +294,27 @@ std::shared_ptr<Protos::TableIdentifier> MetastoreProxy::getTableID(const String
     return res;
 }
 
+std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> MetastoreProxy::getTableIDs(const String & name_space, 
+        const std::vector<std::pair<String, String>> & db_table_pairs)
+{
+    Strings keys;
+    for (const auto & pair : db_table_pairs)
+    {
+        keys.push_back(tableUUIDMappingKey(name_space, pair.first, pair.second));
+    }
+
+    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> res(new std::vector<std::shared_ptr<Protos::TableIdentifier>>());
+
+    auto values = metastore_ptr->multiGet(keys);
+    for (const auto & value : values)
+    {
+        res->emplace_back(new Protos::TableIdentifier);
+        res->back()->ParseFromString(std::move(value.first));
+    }
+
+    return res;
+}
+
 String MetastoreProxy::getTrashTableUUID(const String & name_space, const String & database, const String & name, const UInt64 & ts)
 {
     String identifier_meta;

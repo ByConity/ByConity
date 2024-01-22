@@ -41,7 +41,10 @@ message CreateKafkaTransactionResp {
   optional uint64 start_time = 3;
 };
 
-message CreateTransactionReq { optional uint64 primary_txn_id = 1; };
+message CreateTransactionReq {
+  optional uint64 primary_txn_id = 1;
+  optional bool read_only = 2;
+};
 
 message CreateTransactionResp {
   optional string exception = 1;

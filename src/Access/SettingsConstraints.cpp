@@ -39,8 +39,6 @@ namespace ErrorCodes
 }
 
 
-SettingsConstraints::SettingsConstraints() = default;
-
 SettingsConstraints::SettingsConstraints(const AccessControlManager & manager_) : manager(&manager_)
 {
 }

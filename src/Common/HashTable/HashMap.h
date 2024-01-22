@@ -182,6 +182,7 @@ public:
     using Self = HashMapTable;
     using Base = HashTable<Key, Cell, Hash, Grower, Allocator>;
     using LookupResult = typename Base::LookupResult;
+    using Iterator = typename Base::iterator;
 
     using Base::Base;
 
@@ -261,6 +262,26 @@ public:
             new (&it->getMapped()) typename Cell::Mapped();
 
         return it->getMapped();
+    }
+
+    const typename Cell::Mapped & ALWAYS_INLINE at(const Key & x) const
+    {
+        if (auto it = this->find(x); it != this->end())
+            return it->getMapped();
+        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Cannot find element in HashMap::at method");
+    }
+
+    
+private:
+    Iterator advanceIterator(Iterator it, size_t n)
+    {
+        size_t i = 0;
+        while (i < n && it != this->end())
+        {
+            ++i;
+            ++it;
+        }
+        return it;
     }
 };
 

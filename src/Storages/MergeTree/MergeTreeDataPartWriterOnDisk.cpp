@@ -23,18 +23,17 @@
 #include <Storages/MergeTree/Index/MergeTreeBitmapIndex.h>
 #include <Storages/MergeTree/Index/MergeTreeSegmentBitmapIndex.h>
 
-#include <Columns/ColumnByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/Serializations/ISerialization.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <Storages/MergeTree/GinIndexDataPartHelper.h>
 #include <Storages/MergeTree/GinIndexStore.h>
 #include <Storages/MergeTree/MergeTreeIndexInverted.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Common/escapeForFileName.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Common/FieldVisitorToString.h>
 #include <utility>
@@ -77,19 +76,23 @@ MergeTreeDataPartWriterOnDisk::Stream::Stream(
     const std::string & marks_file_extension_,
     const CompressionCodecPtr & compression_codec_,
     size_t max_compress_block_size_,
+    bool write_append,
     bool is_compact_map,
     bool write_compressed_index) :
     escaped_column_name(escaped_column_name_),
     data_file_extension{data_file_extension_},
     marks_file_extension{marks_file_extension_},
-    plain_file(disk_->writeFile(data_path_ + data_file_extension, {.buffer_size = max_compress_block_size_, .mode = is_compact_map ? WriteMode::Append: WriteMode::Rewrite})),
+    plain_file(disk_->writeFile(data_path_ + data_file_extension, {.buffer_size = max_compress_block_size_, .mode = write_append ? WriteMode::Append: WriteMode::Rewrite})),
     plain_hashing(*plain_file),
     compressed_buf(plain_hashing, compression_codec_, max_compress_block_size_),
     compressed(compressed_buf),
-    marks_file(disk_->writeFile(marks_path_ + marks_file_extension, {.buffer_size = 4096, .mode = is_compact_map ? WriteMode::Append: WriteMode::Rewrite})), marks(*marks_file),
+    marks_file(disk_->writeFile(marks_path_ + marks_file_extension, {.buffer_size = 4096, .mode = write_append ? WriteMode::Append: WriteMode::Rewrite})), marks(*marks_file),
     data_file_offset(is_compact_map ? disk_->getFileSize(data_path_ + data_file_extension): 0),
     marks_file_offset(is_compact_map ? disk_->getFileSize(marks_path_ + marks_file_extension): 0)
 {
+    if (is_compact_map && !write_append)
+        throw Exception("Compact map must use append write mode. This is is bug.", ErrorCodes::LOGICAL_ERROR);
+
     if (write_compressed_index)
     {
         compressed_idx_file = disk_->writeFile(data_path_ + data_file_extension
@@ -690,7 +693,8 @@ void MergeTreeDataPartWriterOnDisk::addByteMapStreams(
             part_path + col_stream_name, marks_file_extension,
             compression_codec,
             settings.max_compress_block_size,
-            data_part->versions->enable_compact_map_data);
+            /* write_append = */data_part->versions->enable_compact_map_data,
+            /* is_compact_map = */data_part->versions->enable_compact_map_data);
     };
 
     column.type->enumerateStreams(serializations[column.name], callback);
@@ -704,12 +708,14 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     const Granules & granules)
 {
     const auto & [name, type] = name_and_type;
+    if (!type->isByteMap())
+        throw Exception("Data whose type is not ByteMap is processed in method `writeUncompactedByteMapColumn`", ErrorCodes::LOGICAL_ERROR);
 
     // I would like to move map type serialize (expanded) logic from DataTypeMap.cpp to here because it
     // tightly bind to MergeTree storage model.
 
-    const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(column);
-    const auto type_map = std::dynamic_pointer_cast<const DataTypeByteMap>(type);
+    const auto & column_map = typeid_cast<const ColumnMap &>(column);
+    const auto type_map = std::dynamic_pointer_cast<const DataTypeMap>(type);
 
     String map_base_stream_name = getBaseNameForMapCol(name);
 
@@ -772,8 +778,6 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
         }
     }
 
-    //TODO: patch MAP KEY # check feature idependently
-    // checkMapKey(name, key_name_map);
     ISerialization::SerializeBinaryBulkSettings serialize_settings;
 
     auto null_val_serial = null_val_type_ptr->getDefaultSerialization();
@@ -895,13 +899,13 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
      *
      ********************************************************************************************************/
     const auto & [name, type] = name_and_type;
-    if (!type->isMap())
+    if (!type->isByteMap())
     {
-        throw Exception("Data whose type is not map is processed in method `writeCompactedByteMapColumn`", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Data whose type is not ByteMap is processed in method `writeCompactedByteMapColumn`", ErrorCodes::LOGICAL_ERROR);
     }
 
-    const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(column);
-    const auto type_map = std::dynamic_pointer_cast<const DataTypeByteMap>(type);
+    const auto & column_map = typeid_cast<const ColumnMap &>(column);
+    const auto type_map = std::dynamic_pointer_cast<const DataTypeMap>(type);
 
     // NOTE: for business reason, LC is considered not very useful
     DataTypePtr null_val_type_ptr = type_map->getValueTypeForImplicitColumn();
@@ -926,8 +930,6 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
         }
     }
 
-    //TODO: patch MAP KEY # check feature idependently
-    // checkMapKey(name, key_name_map);
     ISerialization::SerializeBinaryBulkSettings serialize_settings;
 
 	auto null_val_serial = null_val_type_ptr->getDefaultSerialization();
@@ -985,7 +987,7 @@ void MergeTreeDataPartWriterOnDisk::writeColumn(
     const auto & [name, type] = name_and_type;
 
     // special code path for ByteMap data type in flatten model
-    if (type->isMap() && column.size() > 0 && !type->isMapKVStore())
+    if (column.size() > 0 && type->isByteMap())
     {
         if (data_part->versions->enable_compact_map_data)
             writeCompactedByteMapColumn(name_and_type, column, offset_columns, granules);
@@ -1024,7 +1026,7 @@ void MergeTreeDataPartWriterOnDisk::writeColumn(
                     getRowsWrittenInLastMark());
             last_non_written_marks[name] = getCurrentMarksForColumn(name_and_type, offset_columns, serialize_settings.path);
         }
-        else if (isMapImplicitKeyNotKV(name) && !last_non_written_marks.count(name))
+        else if (isMapImplicitKey(name) && !last_non_written_marks.count(name))
         {
             /// This case maybe happen when writing uncompact map data during merging.
             /// For uncompacted map, we need to handle new key implicit column(more detail see method @writeUncompactedByteMapColumn), which will deep and clone base stream.
@@ -1135,23 +1137,27 @@ void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(const String & source_name, c
                 column_streams[source_stream_name]->sync();
 
                 // copy flushed files
-                if (Poco::File(part_path + source_stream_name + DATA_FILE_EXTENSION).exists())
-                    Poco::File(part_path + source_stream_name + DATA_FILE_EXTENSION)
-                        .copyTo(part_path + target_stream_name + DATA_FILE_EXTENSION);
-                if (Poco::File(part_path + source_stream_name + marks_file_extension).exists())
-                    Poco::File(part_path + source_stream_name + marks_file_extension)
-                        .copyTo(part_path + target_stream_name + marks_file_extension);
+                const auto & disk = data_part->volume->getDisk();
+                std::vector<std::pair<std::string, std::string>> files_to_copy;
+
+                if (disk->exists(part_path + source_stream_name + DATA_FILE_EXTENSION))
+                    files_to_copy.emplace_back(part_path + source_stream_name + DATA_FILE_EXTENSION, part_path + target_stream_name + DATA_FILE_EXTENSION);
+                if (disk->exists(part_path + source_stream_name + marks_file_extension))
+                    files_to_copy.emplace_back(part_path + source_stream_name + marks_file_extension, part_path + target_stream_name + marks_file_extension);
+                disk->copyFiles(files_to_copy, disk);
 
                 // addStreams
                 column_streams[target_stream_name] = std::make_unique<Stream>(
                     target_stream_name,
-                    data_part->volume->getDisk(),
+                    disk,
                     part_path + target_stream_name,
                     DATA_FILE_EXTENSION,
                     part_path + target_stream_name,
                     marks_file_extension,
                     default_codec,
-                    settings.max_compress_block_size);
+                    settings.max_compress_block_size,
+                    /* write_append = */true,
+                    /* is_compact_map = */false);
 
                 // copy buffered stream and its info
                 column_streams[source_stream_name]->deepCopyTo(*column_streams[target_stream_name]);

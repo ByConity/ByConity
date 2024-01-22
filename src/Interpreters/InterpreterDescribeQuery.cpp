@@ -164,7 +164,15 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
         else
             res_columns[i++]->insert(column.type->getName());
 
-        res_columns[i++]->insert(String(column.type->isMapKVStore() ? "K" : ""));
+        auto get_flags = [&]() {
+            std::ostringstream os;
+            if (column.type->isByteMap())
+                os << " BYTE";
+            else if (column.type->isKVMap())
+                os << " KV";
+            return os.str();
+        };
+        res_columns[i++]->insert(get_flags());
 
         if (column.default_desc.expression)
         {

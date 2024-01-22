@@ -15,7 +15,6 @@ namespace DB
 {
 class SelectivityBasedJoinReorder : public Rule
 {
-    using GroupIdToIds = std::unordered_map<GroupId, std::unordered_set<GroupId>>;
 public:
     explicit SelectivityBasedJoinReorder(size_t max_join_size_): max_join_size(max_join_size_) {}
     RuleType getType() const override { return RuleType::SELECTIVITY_BASED_JOIN_REORDER; }

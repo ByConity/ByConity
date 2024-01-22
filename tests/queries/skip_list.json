@@ -120,23 +120,10 @@
         "01548_parallel_parsing_max_memory",
 
         /// Map
-        "00900_orc_arrow_parquet_maps",
         "00900_long_parquet_load",
-        "01318_map_add_map_subtract_on_map_type",
         "01323_add_scalars_in_time",
         "01455_opentelemetry_distributed",
         "01475_read_subcolumns",
-        "01475_read_subcolumns_storages",
-        "01475_read_subcolumns_3",
-        "01550_create_map_type",
-        "01592_length_map",
-        "01651_map_functions",
-        "01715_tuple_insert_null_as_default",
-        "01720_type_map_and_casts",
-        "01744_tuple_cast_to_map_bugfix",
-        "01803_const_nullable_map",
-        "01939_type_map_json",
-        "02029_aggregate_function_session_split",
 
         /// Bitmap
         "01829_test_aggregation_bitmapMaxLevel",

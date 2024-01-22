@@ -22,7 +22,6 @@
 #include <DataTypes/FieldToDataType.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeString.h>
@@ -30,6 +29,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <DataTypes/DataTypeBitMap64.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -107,6 +107,16 @@ DataTypePtr FieldToDataType::operator() (const UUID &) const
     return std::make_shared<DataTypeUUID>();
 }
 
+DataTypePtr FieldToDataType::operator() (const IPv4 &) const
+{
+    return std::make_shared<DataTypeIPv4>();
+}
+
+DataTypePtr FieldToDataType::operator() (const IPv6 &) const
+{
+    return std::make_shared<DataTypeIPv6>();
+}
+
 DataTypePtr FieldToDataType::operator() (const String &) const
 {
     return std::make_shared<DataTypeString>();
@@ -171,31 +181,11 @@ DataTypePtr FieldToDataType::operator() (const Map & map) const
 
     for (const auto & elem : map)
     {
-        const auto & tuple = elem.safeGet<const Tuple &>();
-        assert(tuple.size() == 2);
-        key_types.push_back(applyVisitor(FieldToDataType(), tuple[0]));
-        value_types.push_back(applyVisitor(FieldToDataType(), tuple[1]));
+        key_types.push_back(applyVisitor(FieldToDataType(), elem.first));
+        value_types.push_back(applyVisitor(FieldToDataType(), elem.second));
     }
 
     return std::make_shared<DataTypeMap>(getLeastSupertype(key_types), getLeastSupertype(value_types));
-}
-
-DataTypePtr FieldToDataType::operator() (const ByteMap & map) const
-{
-    DataTypePtr keyType, valueType;
-
-    if (map.empty())
-    {
-        keyType = std::make_shared<DataTypeNothing>();
-        valueType = std::make_shared<DataTypeNothing>();
-    }
-    else
-    {
-        keyType = applyVisitor(FieldToDataType(), map[0].first);
-        valueType = applyVisitor(FieldToDataType(), map[0].second);
-    }
-
-    return std::make_shared<DataTypeByteMap>(keyType, valueType);
 }
 
 DataTypePtr FieldToDataType::operator() (const AggregateFunctionStateData & x) const

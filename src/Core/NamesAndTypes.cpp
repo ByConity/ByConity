@@ -20,7 +20,7 @@
  */
 
 #include <Core/NamesAndTypes.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeHelper.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -152,6 +152,10 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
             {
                 it.type->setFlags(TYPE_MAP_KV_STORE_FLAG);
             }
+            else if (options == "BYTE")
+            {
+                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_MAP_BYTE_STORE_FLAG);
+            }
             else if(options == "COMPRESSION")
             {
                 it.type->setFlags(TYPE_COMPRESSION_FLAG);
@@ -174,7 +178,7 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
             }
             else
             {
-                // TBD: ignore for now, or throw exception
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown flag {}", options);
             }
 
             if (*buf.position() == '\n')
@@ -199,7 +203,7 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
         writeChar(' ', buf);
         writeString(it.type->getName(), buf);
 
-        UInt8 flag = it.type->getFlags();
+        UInt16 flag = it.type->getFlags();
 
         while (flag)
         {
@@ -233,6 +237,12 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
                 writeString("KV", buf);
                 flag ^= TYPE_MAP_KV_STORE_FLAG;
             }
+            else if (flag & TYPE_MAP_BYTE_STORE_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("BYTE", buf);
+                flag ^= TYPE_MAP_BYTE_STORE_FLAG;
+            }
             else if (flag & TYPE_BITENGINE_ENCODE_FLAG)
             {
                 writeChar('\t', buf);
@@ -240,7 +250,7 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
                 flag ^= TYPE_BITENGINE_ENCODE_FLAG;
             }
             else
-                break;
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown flag {}", flag);
         }
 
         writeChar('\n', buf);
@@ -366,35 +376,20 @@ NamesAndTypesList NamesAndTypesList::addTypes(const Names & names, BitEngineRead
     NamesAndTypesList res;
     for (const String & name : names)
     {
-        if (isMapImplicitKeyNotKV(name))
+        if (isMapImplicitKey(name))
         {
             String map_name = parseMapNameFromImplicitColName(name);
             auto it = types.find(map_name);
             if (it == types.end())
-                throw Exception(ErrorCodes::THERE_IS_NO_COLUMN, "No column {} when handing implicit column {}", map_name, name);
-            if (!(*it->second)->isMap() || (*it->second)->isMapKVStore())
+                throw Exception(ErrorCodes::THERE_IS_NO_COLUMN, "No column {} when handling implicit column {}", map_name, name);
+            if (!(*it->second)->isByteMap())
                 throw Exception(
                     ErrorCodes::BAD_ARGUMENTS,
-                    "Data type {} of column {} is not MapNotKV as expected when handling implicit column {}.",
+                    "Data type {} of column {} is not ByteMap as expected when handling implicit column {}.",
                     (*it->second)->getName(),
                     map_name,
                     name);
-            res.emplace_back(name, typeid_cast<const DataTypeByteMap &>(*(*it->second)).getValueTypeForImplicitColumn());
-        }
-        else if (isMapKV(name))
-        {
-            String map_name = parseMapNameFromImplicitKVName(name);
-            auto it = types.find(map_name);
-            if (it == types.end())
-                throw Exception(ErrorCodes::THERE_IS_NO_COLUMN, "No column {} when handling implicit kv column {}", map_name, name);
-            if (!(*it->second)->isMap() || !(*it->second)->isMapKVStore())
-                throw Exception(
-                    ErrorCodes::BAD_ARGUMENTS,
-                    "Data type {} of column {} is not MapKV as expected when handing implicit kv column {}.",
-                    (*it->second)->getName(),
-                    map_name,
-                    name);
-            res.emplace_back(name, typeid_cast<const DataTypeByteMap &>(*(*it->second)).getMapStoreType(name));
+            res.emplace_back(name, typeid_cast<const DataTypeMap &>(*(*it->second)).getValueTypeForImplicitColumn());
         }
         else
         {

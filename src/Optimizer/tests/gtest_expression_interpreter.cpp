@@ -167,7 +167,7 @@ INSTANTIATE_TEST_SUITE_P(TestExpressionInterpreter,
                                  // normal constant folding
                                  {"1 + 5 * 0.6 - 2", "2."},
                                  {"-1 + (1000000 - 1000000)", "cast(-1, 'Int64')"},
-                                 {"toDecimal32(3, 2) + toDecimal32(4.5, 4)", "'7.5000'"},
+                                 {"toDecimal32(3, 2) + toDecimal32(4.5, 4)", "'7.5'"},
                                  {"10 and (0 or not 1)", "0"},
                                  {"substring(concat('Hello, ', 'World!'), 3, 8)", "'llo, Wor'"},
                                  {"lower(rpad('ABC', 7, '*')) = 'abc****'", "lower(rpad('ABC', 7, '*')) = 'abc****'"},

@@ -23,7 +23,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/ProcessList.h>
 #include <Storages/System/StorageSystemProcesses.h>
@@ -84,13 +84,8 @@ NamesAndTypesList StorageSystemProcesses::getNamesAndTypes()
 
         {"thread_ids", std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
 
-#ifdef USE_COMMUNITY_MAP
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"Settings", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
-#else
-        {"ProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-        {"Settings", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
-#endif
 
         {"current_database", std::make_shared<DataTypeString>()},
     };

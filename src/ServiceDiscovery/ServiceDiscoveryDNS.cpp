@@ -140,8 +140,6 @@ HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentT
     int tcp_port = -1;
     int rpc_port = -1;
     int http_port = -1;
-    int exchange_port = -1;
-    int exchange_status_port = -1;
 
     // conduct SRV dns query.
     if (type == ComponentType::SERVER || type == ComponentType::WORKER)  // For server / worker pod. PORT0 is tcp port, PORT1 is rpc port, PORT2 is http port.
@@ -149,8 +147,6 @@ HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentT
         tcp_port = resolvePort(client, service_pair.serviceName, "PORT0");
         rpc_port = resolvePort(client, service_pair.serviceName, "PORT1");
         http_port = resolvePort(client, service_pair.serviceName, "PORT2");
-        exchange_port = rpc_port;
-        exchange_status_port = rpc_port;
 
         // Server and worker pods must contain tcp port and rpc port
         if (tcp_port <= 0 || rpc_port <= 0)

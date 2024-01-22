@@ -29,8 +29,10 @@
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/LimitTransform.h>
+#include <Processors/ReadProgressCallback.h>
 #include <Processors/ResizeProcessor.h>
 #include <Processors/RowsBeforeLimitCounter.h>
+#include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
@@ -38,6 +40,7 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/ExtremesTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
+#include <Processors/Transforms/MaterializingTransform.h>
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
 #include <Processors/Transforms/PartialSortingTransform.h>
 #include <Processors/Transforms/ToMainPortTransform.h>
@@ -550,11 +553,26 @@ void QueryPipeline::addPipelineBefore(QueryPipeline pipeline)
 
 void QueryPipeline::setProgressCallback(const ProgressCallback & callback)
 {
+    progress_callback = callback;
     for (auto & processor : pipe.processors)
     {
         if (auto * source = dynamic_cast<ISourceWithProgress *>(processor.get()))
             source->setProgressCallback(callback);
     }
+}
+
+std::unique_ptr<ReadProgressCallback> QueryPipeline::getReadProgressCallback() const
+{
+    auto callback = std::make_unique<ReadProgressCallback>();
+
+    callback->setProgressCallback(progress_callback);
+    callback->setQuota(quota);
+    callback->setProcessListElement(process_list_element);
+
+    if (!update_profile_events)
+        callback->disableProfileEventUpdate();
+
+    return callback;
 }
 
 void QueryPipeline::setProcessListElement(QueryStatus * elem)
@@ -677,6 +695,62 @@ PipelineExecutorPtr QueryPipeline::execute()
         throw Exception("Cannot execute pipeline because it is not completed.", ErrorCodes::LOGICAL_ERROR);
 
     return std::make_shared<PipelineExecutor>(pipe.processors, process_list_element);
+}
+
+static void addMaterializing(OutputPort *& output, Processors & processors)
+{
+    if (!output)
+        return;
+
+    auto materializing = std::make_shared<MaterializingTransform>(output->getHeader());
+    connect(*output, materializing->getInputPort());
+    output = &materializing->getOutputPort();
+    processors.emplace_back(std::move(materializing));
+}
+
+void QueryPipeline::complete(std::shared_ptr<IOutputFormat> format)
+{
+    auto & output = pipe.output_ports[0];
+    auto & totals = pipe.totals_port;
+    auto & extremes = pipe.extremes_port;
+
+    if (format->expectMaterializedColumns())
+    {
+        addMaterializing(output, pipe.processors);
+        addMaterializing(totals, pipe.processors);
+        addMaterializing(extremes, pipe.processors);
+    }
+
+    auto & format_main = format->getPort(IOutputFormat::PortKind::Main);
+    auto & format_totals = format->getPort(IOutputFormat::PortKind::Totals);
+    auto & format_extremes = format->getPort(IOutputFormat::PortKind::Extremes);
+
+    if (!totals)
+    {
+        auto source = std::make_shared<NullSource>(format_totals.getHeader());
+        totals = &source->getPort();
+        pipe.processors.emplace_back(std::move(source));
+    }
+
+    if (!extremes)
+    {
+        auto source = std::make_shared<NullSource>(format_extremes.getHeader());
+        extremes = &source->getPort();
+        pipe.processors.emplace_back(std::move(source));
+    }
+
+    connect(*output, format_main);
+    connect(*totals, format_totals);
+    connect(*extremes, format_extremes);
+
+    output = nullptr;
+    totals = nullptr;
+    extremes = nullptr;
+    pipe.output_ports.clear();
+
+    output_format = format.get();
+
+    pipe.processors.emplace_back(std::move(format));
 }
 
 void QueryPipeline::setCollectedProcessors(Processors * processors)

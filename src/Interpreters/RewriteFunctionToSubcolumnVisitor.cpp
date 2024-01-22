@@ -46,8 +46,8 @@ const std::unordered_map<String, std::tuple<TypeIndex, String, decltype(&transfo
     {"isNull",    {TypeIndex::Nullable, "null", transformToSubcolumn}},
     {"isNotNull", {TypeIndex::Nullable, "null", transformIsNotNullToSubcolumn}},
     {"count",     {TypeIndex::Nullable, "null", transformCountNullableToSubcolumn}},
-    {"mapKeys",   {TypeIndex::Map, "keys", transformToSubcolumn}},
-    {"mapValues", {TypeIndex::Map, "values", transformToSubcolumn}},
+    {"mapKeys",   {TypeIndex::Map, "key", transformToSubcolumn}},
+    {"mapValues", {TypeIndex::Map, "value", transformToSubcolumn}},
 };
 
 }
@@ -70,10 +70,11 @@ void RewriteFunctionToSubcolumnData::visit(ASTFunction & function, ASTPtr & ast)
     const auto & columns = metadata_snapshot->getColumns();
     const auto & name_in_storage = identifier->name();
 
-    if (columns.has(name_in_storage)
-        && columns.get(name_in_storage).type->getTypeId() == type_id)
+    if (columns.has(name_in_storage))
     {
-        ast = transformer(name_in_storage, subcolumn_name);
+        auto type = columns.get(name_in_storage).type;
+        if (type->getTypeId() == type_id && (type_id != TypeIndex::Map || !type->isByteMap())) /// Don't convert into subcolumn for byte map
+            ast = transformer(name_in_storage, subcolumn_name);
     }
 }
 

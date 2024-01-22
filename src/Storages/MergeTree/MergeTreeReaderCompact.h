@@ -110,9 +110,6 @@ private:
         MergeTreeMarksLoader & marks_loader,
         const ColumnPositions & column_positions,
         const MarkRanges & mark_ranges);
-
-    /// Record map kv column to its origin map column in order to speed up read process.
-    std::unordered_map<String, NameAndTypePair> map_kv_to_origin_col;
 };
 
 }
