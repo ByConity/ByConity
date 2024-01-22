@@ -776,6 +776,32 @@ struct JavaHashUTF16LEImpl
     static constexpr bool use_int_hash_for_pods = false;
 };
 
+struct FNV1aHashImpl
+{
+    static constexpr auto name = "fnv1aHash";
+    using ReturnType = Int32;
+
+    static Int32 apply(const char * data, const size_t size)
+    {
+        constexpr static uint32_t kDefault = 0x811C9DC5;
+        constexpr static uint32_t kPrime = 0x01000193;
+        uint32_t res = kDefault;
+        const char * pos = data;
+        const char * end = data + size;
+        for (; pos < end; ++pos) {
+            res = (static_cast<uint32_t>(*pos) ^ res) * kPrime;
+        }
+        return res;
+    }
+
+    static Int32 combineHashes(Int32, Int32)
+    {
+        throw Exception("fvn1a hash is not combineable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    static constexpr bool use_int_hash_for_pods = false;
+};
+
 /// This is just JavaHash with zeroed out sign bit.
 /// This function is used in Hive for versions before 3.0,
 ///  after 3.0, Hive uses murmur-hash3.
@@ -1754,6 +1780,288 @@ private:
 };
 
 
+struct FlinkFieldHashImpl
+{
+    static constexpr auto name = "flinkFieldHash";
+    using ReturnType = Int32;
+
+    static Int32 apply(Int8 data)
+    {
+        return data;
+    }
+
+    static Int32 apply(Int16 data)
+    {
+        return data;
+    }
+
+    static Int32 apply(Int32 data)
+    {
+        return data;
+    }
+
+    static Int32 apply(Int64 data)
+    {
+	    return static_cast<int>(data ^ (static_cast<UInt64>(data) >> 32));
+    }
+
+    static Int32 apply(const char * data, const size_t len)
+    {
+        return JavaHashImpl::apply(data, len);
+    }
+
+    static Int32 combineHashes(Int32 h1, Int32 h2)
+    {
+        return 31 * h1 + h2;
+    }
+};
+
+class FunctionFlinkFieldHash : public IFunction
+{
+protected:
+    using Impl = FlinkFieldHashImpl;
+public:
+    static constexpr auto name = Impl::name;
+    static FunctionPtr create(ContextPtr /* context*/) { return std::make_shared<FunctionFlinkFieldHash>(); }
+
+private:
+    using ToType = typename Impl::ReturnType;
+
+    template <typename FromType, bool first>
+    void executeIntType(const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
+    {
+        if (const ColumnVector<FromType> * col_from = checkAndGetColumn<ColumnVector<FromType>>(column))
+        {
+            const typename ColumnVector<FromType>::Container & vec_from = col_from->getData();
+            size_t size = vec_from.size();
+            for (size_t i = 0; i < size; ++i)
+            {
+                ToType h;
+
+                if constexpr (std::is_same_v<FromType, Int8>)
+                    h = Impl::apply(bit_cast<Int8>(vec_from[i]));
+                else if constexpr (std::is_same_v<FromType, Int16>)
+                    h = Impl::apply(bit_cast<Int16>(vec_from[i]));
+                else if constexpr (std::is_same_v<FromType, Int32>)
+                    h = Impl::apply(bit_cast<Int32>(vec_from[i]));
+                else
+                    h = Impl::apply(bit_cast<Int64>(vec_from[i]));
+
+                if (first)
+                    vec_to[i] = 31 + h;
+                else
+                    vec_to[i] = Impl::combineHashes(vec_to[i], h);
+            }
+        }
+        else if (auto col_from_const = checkAndGetColumnConst<ColumnVector<FromType>>(column))
+        {
+            auto value = col_from_const->template getValue<FromType>();
+            ToType hash;
+            if constexpr (std::is_same_v<FromType, Int8>)
+                hash = Impl::apply(bit_cast<Int8>(value));
+            else if constexpr (std::is_same_v<FromType, Int16>)
+                hash = Impl::apply(bit_cast<Int16>(value));
+            else if constexpr (std::is_same_v<FromType, Int32>)
+                hash = Impl::apply(bit_cast<Int32>(value));
+            else
+                hash = Impl::apply(bit_cast<Int64>(value));
+
+            size_t size = vec_to.size();
+            if (first)
+            {
+                vec_to.assign(size, 31 + hash);
+            }
+            else
+            {
+                for (size_t i = 0; i < size; ++i)
+                    vec_to[i] = Impl::combineHashes(vec_to[i], hash);
+            }
+        }
+        else
+            throw Exception("Illegal column " + column->getName()
+                + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    template <bool first>
+    void executeString(const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
+    {
+        if (const ColumnString * col_from = checkAndGetColumn<ColumnString>(column))
+        {
+            const typename ColumnString::Chars & data = col_from->getChars();
+            const typename ColumnString::Offsets & offsets = col_from->getOffsets();
+            size_t size = offsets.size();
+
+            ColumnString::Offset current_offset = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                const ToType h = Impl::apply(
+                    reinterpret_cast<const char *>(&data[current_offset]),
+                    offsets[i] - current_offset - 1);
+
+                if (first)
+                    vec_to[i] = 31 + h;
+                else
+                    vec_to[i] = Impl::combineHashes(vec_to[i], h);
+
+                current_offset = offsets[i];
+            }
+        }
+        else if (const ColumnFixedString * col_from_fixed = checkAndGetColumn<ColumnFixedString>(column))
+        {
+            const typename ColumnString::Chars & data = col_from_fixed->getChars();
+            size_t n = col_from_fixed->getN();
+            size_t size = data.size() / n;
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                const ToType h = Impl::apply(reinterpret_cast<const char *>(&data[i * n]), n);
+                if (first)
+                    vec_to[i] = 31 + h;
+                else
+                    vec_to[i] = Impl::combineHashes(vec_to[i], h);
+            }
+        }
+        else if (const ColumnConst * col_from_const = checkAndGetColumnConstStringOrFixedString(column))
+        {
+            String value = col_from_const->getValue<String>().data();
+            const ToType hash = Impl::apply(value.data(), value.size());
+            const size_t size = vec_to.size();
+
+            if (first)
+            {
+                vec_to.assign(size, 31 + hash);
+            }
+            else
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
+                    vec_to[i] = Impl::combineHashes(vec_to[i], hash);
+                }
+            }
+        }
+        else
+            throw Exception("Illegal column " + column->getName()
+                    + " of first argument of function " + getName(),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    template <bool first>
+    void executeNullable(const IDataType * type, const IColumn * icolumn, typename ColumnVector<ToType>::Container & vec_to) const
+    {
+        if (auto * nullable_column = checkAndGetColumn<ColumnNullable>(*icolumn))
+        {
+            auto & inner_type = static_cast<const DataTypeNullable &>(*type).getNestedType();
+            ColumnPtr nested_column = nullable_column->getNestedColumnPtr();
+            MutableColumnPtr mutable_column = IColumn::mutate(std::move(nested_column));
+            icolumn = (std::move(mutable_column)).get();
+            executeAny<first>(inner_type.get(), icolumn, vec_to);
+        }
+    }
+
+    template <bool first>
+    void executeAny(const IDataType * from_type, const IColumn * icolumn, typename ColumnVector<ToType>::Container & vec_to) const
+    {
+        WhichDataType which(from_type);
+
+        if (which.isInt8()) executeIntType<Int8, first>(icolumn, vec_to);
+        else if (which.isInt16()) executeIntType<Int16, first>(icolumn, vec_to);
+        else if (which.isInt32()) executeIntType<Int32, first>(icolumn, vec_to);
+        else if (which.isInt64()) executeIntType<Int64, first>(icolumn, vec_to);
+        else if (which.isEnum8()) executeIntType<Int8, first>(icolumn, vec_to);
+        else if (which.isEnum16()) executeIntType<Int16, first>(icolumn, vec_to);
+        else if (which.isString()) executeString<first>(icolumn, vec_to);
+        else if (which.isFixedString()) executeString<first>(icolumn, vec_to);
+        else if (which.isNullable()) executeNullable<first>(from_type, icolumn, vec_to);
+        else
+            throw Exception("Unexpected type " + from_type->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+    void executeForArgument(const IDataType * type, const IColumn * column, typename ColumnVector<ToType>::Container & vec_to, bool & is_first) const
+    {
+        /// Flattening of tuples.
+        if (const ColumnTuple * tuple = typeid_cast<const ColumnTuple *>(column))
+        {
+            const auto & tuple_columns = tuple->getColumns();
+            const DataTypes & tuple_types = typeid_cast<const DataTypeTuple &>(*type).getElements();
+            size_t tuple_size = tuple_columns.size();
+            for (size_t i = 0; i < tuple_size; ++i)
+                executeForArgument(tuple_types[i].get(), tuple_columns[i].get(), vec_to, is_first);
+        }
+        else if (const ColumnTuple * tuple_const = checkAndGetColumnConstData<ColumnTuple>(column))
+        {
+            const auto & tuple_columns = tuple_const->getColumns();
+            const DataTypes & tuple_types = typeid_cast<const DataTypeTuple &>(*type).getElements();
+            size_t tuple_size = tuple_columns.size();
+            for (size_t i = 0; i < tuple_size; ++i)
+            {
+                auto tmp = ColumnConst::create(tuple_columns[i], column->size());
+                executeForArgument(tuple_types[i].get(), tmp.get(), vec_to, is_first);
+            }
+        }
+        else
+        {
+            if (is_first)
+                executeAny<true>(type, column, vec_to);
+            else
+                executeAny<false>(type, column, vec_to);
+        }
+
+        is_first = false;
+    }
+
+    void executeFinal(typename ColumnVector<ToType>::Container & vec_to, size_t input_rows_count) const
+    {
+        for (size_t i = 0; i < input_rows_count; ++i)
+        {
+            vec_to[i] = vec_to[i] & 0x7FFFFFFF;
+        }
+    }
+
+public:
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override { return true; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
+    {
+        return std::make_shared<DataTypeNumber<ToType>>();
+    }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
+    {
+        size_t rows = input_rows_count;
+        auto col_to = ColumnVector<ToType>::create(rows);
+
+        typename ColumnVector<ToType>::Container & vec_to = col_to->getData();
+
+        if (arguments.empty())
+        {
+            /// Constant random number from /dev/urandom is used as a hash value of empty list of arguments.
+            vec_to.assign(rows, static_cast<ToType>(0xe28dbde7fe22e41c));
+        }
+
+        /// The function supports arbitrary number of arguments of arbitrary types.
+
+        bool is_first_argument = true;
+        for (size_t i = 0; i < arguments.size(); ++i)
+        {
+            const ColumnWithTypeAndName & col = arguments[i];
+            executeForArgument(col.type.get(), col.column.get(), vec_to, is_first_argument);
+        }
+
+        executeFinal(vec_to, input_rows_count);
+
+        return col_to;
+    }
+};
+
 struct URLHashImpl
 {
     static UInt64 apply(const char * data, const size_t size)
@@ -2023,6 +2331,7 @@ using FunctionMurmurHash3_64WithSeedV2 = FunctionAnyHash<MurmurHash3Impl64WithSe
 using FunctionJavaHash = FunctionAnyHash<JavaHashImpl>;
 using FunctionJavaHashUTF16LE = FunctionAnyHash<JavaHashUTF16LEImpl>;
 using FunctionHiveHash = FunctionAnyHash<HiveHashImpl>;
+using FunctionFNV1aHash = FunctionAnyHash<FNV1aHashImpl>;
 
 using FunctionJavaHashV2 = FunctionAnyHash<JavaHashImpl, false, false>;
 using FunctionJavaHashUTF16LEV2 = FunctionAnyHash<JavaHashUTF16LEImpl, false, false>;
