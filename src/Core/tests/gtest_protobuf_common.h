@@ -132,7 +132,7 @@ public:
         init_database();
         init_tables();
 
-        auto map_type = std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>());
+        auto map_type = std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>());
 
         test_data_types.emplace_back(std::make_shared<DataTypeString>());
         test_data_types.emplace_back(std::make_shared<DataTypeUInt32>());

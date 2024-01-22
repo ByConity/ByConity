@@ -32,7 +32,8 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTQueryParameter.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <DataTypes/MapHelpers.h> // for getImplicitFileNameForMapKey
+#include <DataTypes/MapHelpers.h>
+#include <DataTypes/DataTypeMap.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/quoteString.h>
 #include <Common/FieldVisitorToString.h>
@@ -90,51 +91,64 @@ private:
     const String copy;
 };
 
-String QueryNormalizer::getMapKeyName(ASTFunction & node, Data & data)
+namespace
 {
-    ASTLiteral * key_lit = node.arguments->children[1]->as<ASTLiteral>(); // Constant Literal
-    ASTFunction * key_func = node.arguments->children[1]->as<ASTFunction>(); // for constant foldable functions' case
+    /** 
+     * Convert key according to map key type.
+     * For some types, like Enum, Date, DateTime which can be map key type, they need to convert to correct Field. Otherwise, query will be wrong.
+     * For example, there has one map column named a and one row data
+     *      a Map(Date, UInt64) KV :  {'2022-05-31': 1})
+     * Here we query for key '2022-05-31', but in fact, the Date type is essentially UInt16 type, and it cannot be queried correctly later without conversion.
+     * After conversion, here we query for key 19143 which can be handled correctly.
+     */
+    Field getMapKeyField(ASTFunction & node, QueryNormalizer::Data & data, const DataTypePtr & key_type)
+    {
+        ASTLiteral * key_lit = node.arguments->children[1]->as<ASTLiteral>(); // Constant Literal
+        ASTFunction * key_func = node.arguments->children[1]->as<ASTFunction>(); // for constant foldable functions' case
 
-    String key_name;
-    if (key_lit) // key is literal
-    {
-        key_name = key_lit->getColumnName();
-    }
-    else if (key_func)
-    {
-        // check whether key_func's inputs are all constant literal, if yes, invoke constant folding logic.
-        // This handling is specially added for Date key which is toDate('YYYY-MM_DD') in SQL
-        bool all_input_const = true;
-        for (auto & c : key_func->arguments->children)
+        Field res = Null();
+        if (key_lit) // key is literal
         {
-            if (!c->as<ASTLiteral>())
+            Field key_field = tryConvertToMapKeyField(key_type, key_lit->getColumnName());
+            /// return origin key field if failed to convert to map key field, so the ast can be rewritten multi-times
+            return key_field.isNull() ? key_lit->value : key_field;
+        }
+        else if (key_func)
+        {
+            /// check whether key_func's inputs are all constant literal, if yes, invoke constant folding logic.
+            /// This handling is specially added for Date key which is toDate('YYYY-MM_DD') in SQL
+            bool all_input_const = true;
+            for (auto & c : key_func->arguments->children)
             {
-                all_input_const = false;
-                break;
+                if (!c->as<ASTLiteral>())
+                {
+                    all_input_const = false;
+                    break;
+                }
+            }
+
+            if (all_input_const)
+            {
+                std::pair<Field, DataTypePtr> value_raw = evaluateConstantExpression(node.arguments->children[1], data.context);
+                res = value_raw.first;
             }
         }
 
-        if (all_input_const)
-        {
-            std::pair<Field, DataTypePtr> value_raw = evaluateConstantExpression(node.arguments->children[1], data.context);
-            key_name = applyVisitor(DB::FieldVisitorToString(), value_raw.first);
-        }
+        return res;
     }
 
-    return key_name;
-}
-
-void QueryNormalizer::rewriteMapElement(ASTPtr & ast, const String & map_name, const String & key_name)
-{
-    String my_alias = ast->tryGetAlias();
-    if (!key_name.empty())
+    void rewriteMapElement(ASTPtr & ast, const String & map_name, const String & key_name)
     {
-        // create identifier
-        String implicit_name = getImplicitColNameForMapKey(map_name, key_name);
-        ast = std::make_shared<ASTIdentifier>(implicit_name);
-        ast->as<ASTIdentifier>()->is_implicit_map_key = true;
-        //set alias back
-        ast->setAlias(my_alias);
+        String my_alias = ast->tryGetAlias();
+        if (!key_name.empty())
+        {
+            // create identifier
+            String implicit_name = getImplicitColNameForMapKey(map_name, key_name);
+            ast = std::make_shared<ASTIdentifier>(implicit_name);
+            ast->as<ASTIdentifier>()->is_implicit_map_key = true;
+            //set alias back
+            ast->setAlias(my_alias);
+        }
     }
 }
 
@@ -239,79 +253,27 @@ void QueryNormalizer::visit(ASTFunction & node, ASTPtr & ast, Data & data)
     }
 #endif
     // Rewrite mapElement(c, 'k') to implicit column __c__'k'
-    else if (
-        data.rewrite_map_col && startsWith(func_name_lowercase, "mapelement") && node.arguments->children.size() == 2 && data.storage
-        && data.storage->supportsMapImplicitColumn())
+    else if (data.rewrite_map_col && startsWith(func_name_lowercase, "mapelement") && node.arguments->children.size() == 2 && data.storage)
     {
         ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
 
         if (map_col && !IdentifierSemantic::isSpecial(*map_col))
         {
-            String key_name = getMapKeyName(node, data);
             String map_name = map_col->name();
-            if (data.storage && data.metadata_snapshot->columns.hasPhysical(map_name))
+            if (data.metadata_snapshot && data.metadata_snapshot->columns.hasPhysical(map_name))
             {
-                auto map_type = data.metadata_snapshot->columns.getPhysical(map_name).type;
-                if (map_type->isMap() && !map_type->isMapKVStore())
-                    rewriteMapElement(ast, map_name, key_name);
-            }
-        }
-    }
-    // Support square bracket for map element. Just convert it into mapElement function.
-    // Rewrite arrayElement(c, 'k') to implicit column __c__'k'
-    else if (
-        data.rewrite_map_col && startsWith(func_name_lowercase, "arrayelement") && node.arguments->children.size() == 2 && data.storage
-        && data.storage->supportsMapImplicitColumn())
-    {
-        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
-
-        if (map_col && !IdentifierSemantic::isSpecial(*map_col))
-        {
-            String key_name = getMapKeyName(node, data);
-            String map_name = map_col->name();
-            if (data.storage && data.metadata_snapshot->columns.hasPhysical(map_name))
-            {
-                auto map_type = data.metadata_snapshot->columns.getPhysical(map_name).type;
-                if (map_type->isMap())
+                auto type = data.metadata_snapshot->columns.getPhysical(map_name).type;
+                if (const auto map_type = std::dynamic_pointer_cast<const DataTypeMap>(type))
                 {
-                    node.name = "mapElement"; /// convert array element to mapelement for map type
-                    if (!map_type->isMapKVStore())
+                    Field key_field = getMapKeyField(node, data, map_type->getKeyType());
+                    if (data.storage->supportsMapImplicitColumn() && map_type->isByteMap())
+                    {
+                        String key_name;
+                        if (!key_field.isNull())
+                            key_name = applyVisitor(DB::FieldVisitorToString(), key_field); // convert to correct implicit key name
                         rewriteMapElement(ast, map_name, key_name);
+                    }
                 }
-            }
-        }
-    }
-    // Rewrite mapKeys(c) to implicite column c.key for KV store map
-    else if (
-        data.rewrite_map_col && startsWith(func_name_lowercase, "mapkeys") && node.arguments->children.size() == 1 && data.storage
-        && data.storage->supportsMapImplicitColumn())
-    {
-        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
-        if (map_col)
-        {
-            DataTypePtr type = data.metadata_snapshot->columns.getPhysical(map_col->name()).type;
-            if (type->isMap() && type->isMapKVStore())
-            {
-                String origin_alias = ast->getAliasOrColumnName();
-                ast = std::make_shared<ASTIdentifier>(map_col->name() + ".key");
-                ast->setAlias(origin_alias);
-            }
-        }
-    }
-    // Rewrite mapValues(c) to implicite column c.value for KV store map
-    else if (
-        data.rewrite_map_col && startsWith(func_name_lowercase, "mapvalues") && node.arguments->children.size() == 1 && data.storage
-        && data.storage->supportsMapImplicitColumn())
-    {
-        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
-        if (map_col)
-        {
-            DataTypePtr type = data.metadata_snapshot->columns.getPhysical(map_col->name()).type;
-            if (type->isMap() && type->isMapKVStore())
-            {
-                String origin_alias = ast->getAliasOrColumnName();
-                ast = std::make_shared<ASTIdentifier>(map_col->name() + ".value");
-                ast->setAlias(origin_alias);
             }
         }
     }

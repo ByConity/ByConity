@@ -78,7 +78,6 @@ private:
     static NameToNameVector collectFilesForRenames(MergeTreeMetaBase::DataPartPtr source_part, const MutationCommands & commands_for_removes, const String & mrk_extension);
 
     /// Collect necessary implicit files for clear map key commands.
-    /// If the part enables compact map data and all implicit keys of the map column has been removed, the compacted file need to remove too.
     static NameSet collectFilesForClearMapKey(MergeTreeMetaBase::DataPartPtr source_part, const MutationCommands & commands);
 
     /// Get the columns list of the resulting part in the same order as storage_columns.

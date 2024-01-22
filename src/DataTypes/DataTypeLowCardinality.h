@@ -80,8 +80,13 @@ public:
 
     /// Key can not be null because it's meaningless
     bool canBeMapKeyType() const override { return dictionary_type->canBeMapKeyType(); }
-    /// Due to LowCardinality can not be inside nullable, so if dictionary_type is not nullable, ColumnByteMap can not insert Null field for missing key when handling each row. You can see more information in method ColumnByteMap::getValueColumnByKey.
-    bool canBeMapValueType() const override;
+    /// Due to LowCardinality can not be inside nullable, so if dictionary_type is not nullable, 
+    /// ColumnMap can not insert Null field for missing key when handling each row. 
+    /// You can see more information in method ColumnMap::getValueColumnByKey.
+    bool canBeByteMapValueType() const override;
+
+    Field stringToVisitorField(const String & ins) const override;
+    String stringToVisitorString(const String & ins) const override;
 
 protected:
     SerializationPtr doGetDefaultSerialization() const override;

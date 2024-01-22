@@ -128,28 +128,15 @@ void FieldVisitorCompatibleWriteBinary::operator()(const Map & x, WriteBuffer & 
 
     for (size_t i = 0; i < size; ++i)
     {
-        const UInt8 type = x[i].getType();
+        /// key
+        UInt8 type = x[i].first.getType();
         writeBinary(type, buf);
-        Field::dispatch([&buf](const auto & value) { FieldVisitorCompatibleWriteBinary()(value, buf); }, x[i]);
-    }
-}
+        Field::dispatch([&buf](const auto & value) { FieldVisitorCompatibleWriteBinary()(value, buf); }, x[i].first);
 
-void FieldVisitorCompatibleWriteBinary::operator()(const ByteMap & x, WriteBuffer & buf) const
-{
-    const size_t size = x.size();
-    writeBinary(size, buf);
-
-    if (size > 0)
-    {
-        const UInt8 ktype = x.front().first.getType();
-        const UInt8 vtype = x.front().second.getType();
-        writeBinary(ktype, buf);
-        writeBinary(vtype, buf);
-        for (const auto & elem : x)
-        {
-            Field::dispatch([&buf](const auto & value) { FieldVisitorCompatibleWriteBinary()(value, buf); }, elem.first);
-            Field::dispatch([&buf](const auto & value) { FieldVisitorCompatibleWriteBinary()(value, buf); }, elem.second);
-        }
+        /// value
+        type = x[i].second.getType();
+        writeBinary(type, buf);
+        Field::dispatch([&buf](const auto & value) { FieldVisitorCompatibleWriteBinary()(value, buf); }, x[i].second);
     }
 }
 
@@ -297,30 +284,16 @@ void FieldVisitorCompatibleReadBinary::deserialize(Map & value, ReadBuffer & buf
     for (size_t i = 0; i < size; ++i)
     {
         UInt8 type{0};
+
+        /// key
         readBinary(type, buf);
-        auto f = Field::dispatch(FieldVisitorCompatibleReadBinary(buf), static_cast<Field::Types::Which>(type));
-        value.push_back(f);
-    }
-}
+        auto key_field = Field::dispatch(FieldVisitorCompatibleReadBinary(buf), static_cast<Field::Types::Which>(type));
 
-void FieldVisitorCompatibleReadBinary::deserialize(ByteMap & value, ReadBuffer & buf)
-{
-    size_t size{0};
-    readBinary(size, buf);
+        /// value
+        readBinary(type, buf);
+        auto value_field = Field::dispatch(FieldVisitorCompatibleReadBinary(buf), static_cast<Field::Types::Which>(type));
 
-    if (size > 0)
-    {
-        value.reserve(size);
-        UInt8 ktype{0}, vtype{0};
-        readBinary(ktype, buf);
-        readBinary(vtype, buf);
-
-        for (size_t i = 0; i < size; ++i)
-        {
-            auto kvalue = Field::dispatch(FieldVisitorCompatibleReadBinary(buf), static_cast<Field::Types::Which>(ktype));
-            auto vvalue = Field::dispatch(FieldVisitorCompatibleReadBinary(buf), static_cast<Field::Types::Which>(vtype));
-            value.push_back({kvalue, vvalue});
-        }
+        value.push_back(std::make_pair(key_field, value_field));
     }
 }
 

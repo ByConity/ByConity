@@ -48,7 +48,6 @@ public:
     bool operator() (Array &) const;
     bool operator() (Tuple &) const;
     bool operator() (Map &) const;
-    bool operator() (ByteMap &) const;
     bool operator() (UUID &) const;
     bool operator() (IPv4 &) const;
     bool operator() (IPv6 &) const;

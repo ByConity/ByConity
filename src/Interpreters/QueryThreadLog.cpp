@@ -27,7 +27,6 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -93,11 +92,7 @@ NamesAndTypesList QueryThreadLogElement::getNamesAndTypes()
 
         {"revision", std::make_shared<DataTypeUInt32>()},
 
-#ifdef USE_COMMUNITY_MAP
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-#else
-        {"ProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-#endif
     };
 }
 

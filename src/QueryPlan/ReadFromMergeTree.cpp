@@ -24,7 +24,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/MapHelpers.h>
 #include <common/logger_useful.h>
@@ -87,63 +87,73 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & con
     return settings;
 }
 
-static Array extractMapColumnKeys(const MergeTreeMetaBase::DataPartsVector & parts)
+static MergeTreeData::DataPartsVector getSelectedPartsVector(const ReadFromMergeTree::AnalysisResult & result)
+{
+    MergeTreeData::DataPartsVector selected_parts_vector;
+    for (auto & part_with_ranges : result.parts_with_ranges)
+        selected_parts_vector.push_back(part_with_ranges.data_part);
+
+    return selected_parts_vector;
+}
+
+static Array extractMapColumnKeys(const MergeTreeMetaBase & data, const MergeTreeMetaBase::DataPartsVector & parts)
 {
     Array res;
 
-    std::unordered_map<String, std::set<String>> column_keys;
-    std::unordered_map<String, DataTypePtr> column_types;
+    std::unordered_map<String, DataTypePtr> map_types;
+    std::unordered_map<String, MutableColumnPtr> map_keys;
+    /// get all map columns from storage
+    StorageMetadataPtr metadata = data.getInMemoryMetadataPtr();
+    const auto & columns = metadata->getColumns();
+    for (auto it = columns.begin(); it != columns.end(); it++)
+    {
+        if (it->type->isMap() && it->type->isByteMap())
+            map_types[it->name] = it->type;
+    }
+
+    Poco::Logger * logger = nullptr;
     for (auto & part : parts)
     {
         for (auto & [file, _] : part->getChecksums()->files)
         {
-            if (!isMapImplicitKeyNotKV(file) || isMapBaseFile(file))
+            if (!isMapImplicitKey(file) || isMapBaseFile(file))
                 continue;
 
-            std::string unescaped_file = unescapeForFileName(file);
-            std::string_view column_view;
-            std::string_view key_view = ExtractMapKey::apply(unescaped_file, &column_view);
-            if (column_view.empty() || key_view.empty())
+            String map_name = parseMapNameFromImplicitFileName(file);
+            if (!isMapImplicitDataFileNameNotBaseOfSpecialMapName(file, map_name))
                 continue;
-            std::string column(column_view);
-            std::string key(key_view);
+            String key_name = parseKeyNameFromImplicitFileName(file, map_name);
 
-            column_keys[column].insert(key);
-            if (!column_types.count(column))
+            if (!map_types.count(map_name))
             {
-                auto it = std::find_if(part->getColumns().begin(), part->getColumns().end(), [&] (auto & c) { return c.name == column; });
-                if (it != part->getColumns().end())
-                    column_types[column] = it->type;
+                if (unlikely(logger == nullptr))
+                    logger = &Poco::Logger::get(data.getLogName() + " (ExtractMapKeys)");
+                LOG_WARNING(logger, "Can not find byte map column {} of implicit file {}", map_name, file);
+                continue;
             }
+            auto type = map_types[map_name];
+            auto map_key_type = static_cast<const DataTypeMap *>(type.get())->getKeyType();
+            if (!map_keys.count(map_name))
+                map_keys[map_name] = IColumn::mutate(map_key_type->createColumn());
+
+            map_keys[map_name]->insert(map_key_type->stringToVisitorField(key_name));
         }
     }
 
-    for (auto & [column, keys] : column_keys)
+    for (auto & [map_name, column] : map_keys)
     {
-        auto type_it = column_types.find(column);
-        if (type_it == column_types.end())
-            continue;
-        auto type = type_it->second;
+        auto type_it = map_types.find(map_name);
+        if (type_it == map_types.end())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find column {}", map_name);
 
-        auto map_type = typeid_cast<const DataTypeByteMap *>(type.get());
-        if (!map_type || map_type->isMapKVStore())
-            throw Exception("Type of " + column + " is not an ordinary Map", ErrorCodes::LOGICAL_ERROR);
-        auto map_key_type = map_type->getKeyType();
+        auto map_key_type = static_cast<const DataTypeMap *>(type_it->second.get())->getKeyType();
+        auto serialization = map_key_type->getDefaultSerialization();
 
-        if (dynamic_cast<const DataTypeDate *>(map_key_type.get()))
+        for (size_t i = 0; i < column->size(); ++i)
         {
-            for (auto & key : keys)
-                res.push_back(Tuple{column, toString(LocalDate(DayNum(parse<UInt64>(key))))});
-        }
-        else if (dynamic_cast<const DataTypeDateTime *>(map_key_type.get()))
-        {
-            for (auto & key : keys)
-                res.push_back(Tuple{column, toString(LocalDateTime(parse<UInt64>(key)))});
-        }
-        else
-        {
-            for (auto & key : keys)
-                res.push_back(Tuple{column, key});
+            WriteBufferFromOwnString buffer;
+            serialization->serializeText(*column, i, buffer, {});
+            res.push_back(Tuple{map_name, buffer.str()});
         }
     }
 
@@ -1127,6 +1137,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         return;
     }
 
+    // extract selected_parts_vector before result.parts_with_ranges be moved
+    auto selected_parts_vector = getSelectedPartsVector(result);
+
     /// Projection, that needed to drop columns, which have appeared by execution
     /// of some extra expressions, and to allow execute the same expressions later.
     /// NOTE: It may lead to double computation of expressions.
@@ -1250,7 +1263,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         column.name = "_map_column_keys";
         column.type = std::make_shared<DataTypeArray>(
             std::make_shared<DataTypeTuple>(DataTypes{std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()}));
-        column.column = column.type->createColumnConst(0, Field(extractMapColumnKeys(prepared_parts)));
+        column.column = column.type->createColumnConst(0, Field(extractMapColumnKeys(data, selected_parts_vector)));
 
         auto adding_column = ActionsDAG::makeAddingColumnActions(std::move(column));
         append_actions(std::move(adding_column));

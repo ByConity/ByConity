@@ -24,7 +24,6 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnMap.h>
-#include <Columns/ColumnByteMap.h>
 #include <Common/typeid_cast.h>
 #include <string.h>
 #include <boost/program_options/options_description.hpp>
@@ -82,29 +81,8 @@ void Settings::loadSettingsFromConfig(const String & path, const Poco::Util::Abs
 void Settings::dumpToMapColumn(IColumn * column, bool changed_only)
 {
     /// Convert ptr and make simple check
-#ifdef USE_COMMUNITY_MAP
     auto * column_map = column ? &typeid_cast<ColumnMap &>(*column) : nullptr;
     if (!column_map)
-        return;
-
-    auto & offsets = column_map->getNestedColumn().getOffsets();
-    auto & tuple_column = column_map->getNestedData();
-    auto & key_column = tuple_column.getColumn(0);
-    auto & value_column = tuple_column.getColumn(1);
-
-    size_t size = 0;
-    for (const auto & setting : all(changed_only ? SKIP_UNCHANGED : SKIP_NONE))
-    {
-        auto name = setting.getName();
-        key_column.insertData(name.data(), name.size());
-        value_column.insert(setting.getValueString());
-        size++;
-    }
-
-    offsets.push_back(offsets.back() + size);
-#else
-    auto * column_map = column ? &typeid_cast<ColumnByteMap &>(*column) : nullptr;
-        if (!column_map)
         return;
 
     auto & offsets = column_map->getOffsets();
@@ -121,8 +99,6 @@ void Settings::dumpToMapColumn(IColumn * column, bool changed_only)
     }
 
     offsets.push_back((offsets.size() == 0 ? 0 : offsets.back()) + size);
-#endif
-
 }
 
 void Settings::addProgramOptions(boost::program_options::options_description & options)

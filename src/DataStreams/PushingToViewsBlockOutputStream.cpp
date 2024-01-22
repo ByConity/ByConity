@@ -286,6 +286,11 @@ void PushingToViewsBlockOutputStream::write(const Block & block)
 
     // Insert data into materialized views only after successful insert into main table
     const Settings & settings = getContext()->getSettingsRef();
+
+    // Reset some block settings so that it doesn't block MV insert. e.g. in kafka scenario.
+    // After checking is caller, it is safe to update the const context here
+    const_cast<Settings &>(settings).allow_map_access_without_key = true;
+
     if (settings.parallel_view_processing && views.size() > 1)
     {
         // Push to views concurrently if enabled and more than one view is attached

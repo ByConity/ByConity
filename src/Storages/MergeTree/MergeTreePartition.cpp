@@ -186,12 +186,10 @@ namespace
             hash.update(x.size());
 
             for (const auto & elem : x)
-                applyVisitor(*this, elem);
-        }
-
-        [[ noreturn ]] void operator() (const ByteMap & ) const
-        {
-            throw Exception("Map hash not implemented", ErrorCodes::NOT_IMPLEMENTED);
+            {
+                applyVisitor(*this, elem.first);
+                applyVisitor(*this, elem.second);
+            }
         }
 
         void operator() (const DecimalField<Decimal32> & x) const

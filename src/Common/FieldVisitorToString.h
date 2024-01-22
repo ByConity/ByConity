@@ -47,7 +47,6 @@ public:
     String operator() (const Array & x) const;
     String operator() (const Tuple & x) const;
     String operator() (const Map & x) const;
-    String operator() (const ByteMap & x) const;
     String operator() (const DecimalField<Decimal32> & x) const;
     String operator() (const DecimalField<Decimal64> & x) const;
     String operator() (const DecimalField<Decimal128> & x) const;

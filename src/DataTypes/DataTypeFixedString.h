@@ -86,7 +86,7 @@ public:
     bool isCategorial() const override { return true; }
     bool canBeInsideNullable() const override { return true; }
     bool canBeMapKeyType() const override { return true; }
-    bool canBeMapValueType() const override { return true; }
+    bool canBeByteMapValueType() const override { return true; }
     bool canBeInsideLowCardinality() const override { return true; }
     Field stringToVisitorField(const String& ins) const override;
     String stringToVisitorString(const String & ins) const override;

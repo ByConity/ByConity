@@ -1044,6 +1044,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize map separator, once change the default value, it's necessary to adapt the corresponding tests.
     checkAndSetMapSeparator(config().getString("map_separator", "__"));
 
+    /// Determine whether use map type as default.
+    setDefaultUseMapType(config().getBool("default_use_kv_map_type", false));
+
     /// Still need `users_config` for server-worker communication
     ConfigurationPtr users_config;
     if (config().has("users_config") || config().has("config-file") || fs::exists("config.xml"))

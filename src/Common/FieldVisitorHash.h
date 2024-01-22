@@ -53,7 +53,6 @@ public:
     void operator() (const Array & x) const;
     void operator() (const Tuple & x) const;
     void operator() (const Map & x) const;
-    [[ noreturn ]] void operator() (const ByteMap & x) const;
     void operator() (const DecimalField<Decimal32> & x) const;
     void operator() (const DecimalField<Decimal64> & x) const;
     void operator() (const DecimalField<Decimal128> & x) const;

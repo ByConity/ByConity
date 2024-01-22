@@ -20,7 +20,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <Storages/BitEngine/BitEngineHelper.h>
 #include <Storages/DataPart_fwd.h>
 #include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <Transaction/Actions/DDLAlterAction.h>

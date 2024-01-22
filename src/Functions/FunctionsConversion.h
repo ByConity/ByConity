@@ -41,7 +41,6 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeUUID.h>
@@ -57,7 +56,6 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
-#include <Columns/ColumnByteMap.h>
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsDateTime.h>
 #include <Columns/ColumnStringHelpers.h>
@@ -3622,38 +3620,6 @@ private:
         }
     }
 
-    WrapperType createByteMapToByteMapWrapper(const DataTypes & from_kv_types, const DataTypes & to_kv_types) const
-    {
-        return [element_wrappers = getElementWrappers(from_kv_types, to_kv_types), from_kv_types, to_kv_types]
-            (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable * nullable_source, size_t /*input_rows_count*/) -> ColumnPtr
-        {
-            const auto * col = arguments.front().column.get();
-            const auto & column_map = typeid_cast<const ColumnByteMap &>(*col);
-
-            ColumnsWithTypeAndName key_col = {{column_map.getKeyPtr(), from_kv_types[0], ""}};
-            ColumnsWithTypeAndName value_col = {{column_map.getValuePtr(), from_kv_types[1], ""}};
-
-            ColumnPtr converted_key_col = element_wrappers[0](key_col, to_kv_types[0], nullable_source, (key_col[0].column)->size());
-            ColumnPtr converted_value_col = element_wrappers[1](value_col, to_kv_types[1], nullable_source, (value_col[0].column)->size());
-
-            return ColumnByteMap::create(converted_key_col, converted_value_col, column_map.getOffsetsPtr());
-        };
-    }
-
-    WrapperType createByteMapWrapper(const DataTypePtr & from_type_untyped, const DataTypeByteMap * to_type) const
-    {
-        /// currently only support map to map convert
-        if (const auto * from_type = checkAndGetDataType<DataTypeByteMap>(from_type_untyped.get()))
-        {
-            return createByteMapToByteMapWrapper({from_type->getKeyType(), from_type->getValueType()}, {to_type->getKeyType(), to_type->getValueType()});
-        }
-        else
-        {
-            throw Exception{"Unsupported types to CAST AS Map\n"
-                "Left type: " + from_type_untyped->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
-        }
-    }
-
     template <typename FieldType>
     WrapperType createEnumWrapper(const DataTypePtr & from_type, const DataTypeEnum<FieldType> * to_type) const
     {
@@ -4172,8 +4138,6 @@ private:
                 return createTupleWrapper(from_type, checkAndGetDataType<DataTypeTuple>(to_type.get()));
             case TypeIndex::Map:
                 return createMapWrapper(from_type, checkAndGetDataType<DataTypeMap>(to_type.get()));
-            case TypeIndex::ByteMap:
-                return createByteMapWrapper(from_type, checkAndGetDataType<DataTypeByteMap>(to_type.get()));
             case TypeIndex::AggregateFunction:
                 return createAggregateFunctionWrapper(from_type, checkAndGetDataType<DataTypeAggregateFunction>(to_type.get()));
             default:

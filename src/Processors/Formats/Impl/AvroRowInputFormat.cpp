@@ -34,7 +34,7 @@
 
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
@@ -476,9 +476,9 @@ AvroDeserializer::DeserializeFn AvroDeserializer::createDeserializeFn(avro::Node
         }
         case avro::AVRO_MAP:
         {
-            if (target.isByteMap())
+            if (target.isMap())
             {
-                const auto & map_type = assert_cast<const DataTypeByteMap &>(*target_type);
+                const auto & map_type = assert_cast<const DataTypeMap &>(*target_type);
                 const auto & keys_type = map_type.getKeyType();
                 const auto & values_type = map_type.getValueType();
                 auto keys_source_type = root_node->leafAt(0);
@@ -487,8 +487,8 @@ AvroDeserializer::DeserializeFn AvroDeserializer::createDeserializeFn(avro::Node
                 auto values_deserializer = createDeserializeFn(values_source_type, values_type);
                 return [keys_deserializer, values_deserializer](IColumn & column, avro::Decoder & decoder)
                 {
-                    ColumnByteMap & column_map = assert_cast<ColumnByteMap &>(column);
-                    ColumnByteMap::Offsets & offsets = column_map.getOffsets();
+                    ColumnMap & column_map = assert_cast<ColumnMap &>(column);
+                    ColumnMap::Offsets & offsets = column_map.getOffsets();
                     IColumn& key_column = column_map.getKey();
                     IColumn& value_column = column_map.getValue();
 

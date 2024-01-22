@@ -29,7 +29,6 @@ public:
     void operator()(const Array & x, WriteBuffer & buf) const;
     void operator()(const Tuple & x, WriteBuffer & buf) const;
     void operator()(const Map & x, WriteBuffer & buf) const;
-    void operator()(const ByteMap & x, WriteBuffer & buf) const;
     void operator()(const DecimalField<Decimal32> & x, WriteBuffer & buf) const;
     void operator()(const DecimalField<Decimal64> & x, WriteBuffer & buf) const;
     void operator()(const DecimalField<Decimal128> & x, WriteBuffer & buf) const;
@@ -97,7 +96,6 @@ private:
     static void deserialize(Array & value, ReadBuffer & buf);
     static void deserialize(Tuple & value, ReadBuffer & buf);
     static void deserialize(Map & value, ReadBuffer & buf);
-    static void deserialize(ByteMap & value, ReadBuffer & buf);
     static void deserialize(BitMap64 & value, ReadBuffer & buf);
 };
 

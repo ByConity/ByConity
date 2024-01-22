@@ -65,7 +65,6 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnString.h>
@@ -74,7 +73,6 @@
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
-#include <Columns/ColumnByteMap.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
 #include <Common/TargetSpecific.h>
@@ -1530,25 +1528,6 @@ private:
     }
 
     template <bool first>
-    void executeByteMap(const KeyType & key, const IDataType * type, const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
-    {
-        const IDataType * nested_type = typeid_cast<const DataTypeByteMap *>(type)->getNestedType().get();
-        if (const auto * col_map = checkAndGetColumn<ColumnByteMap>(column))
-        {
-            executeArray<first>(key, nested_type, col_map->getNestedColumnPtr().get(), vec_to);
-        }
-        else if (const ColumnConst * col_from_const = checkAndGetColumnConst<ColumnMap>(column))
-        {
-            /// NOTE: here, of course, you can do without the materialization of the column.
-            ColumnPtr full_column = col_from_const->convertToFullColumn();
-            executeByteMap<first>(key, type, &*full_column, vec_to);
-        }
-        else
-            throw Exception(
-                "Illegal column " + column->getName() + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
-    }
-
-    template <bool first>
     void executeNullableType(const KeyType & key, const IDataType * type, const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
     {
         uint32_t value = 0x9e3779b9;
@@ -1615,7 +1594,6 @@ private:
         else if (which.isTuple()) executeTuple<first>(key, from_type, icolumn, vec_to);
         else if (which.isMap()) executeMap<first>(key, from_type, icolumn, vec_to);
         else if (which.isNullable()) executeNullableType<first>(key, from_type, icolumn, vec_to);
-        else if (which.isByteMap()) executeByteMap<first>(key, from_type, icolumn, vec_to);
         else
             executeGeneric<first>(key, icolumn, vec_to);
     }

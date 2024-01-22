@@ -27,7 +27,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/NestedUtils.h>
@@ -37,11 +37,11 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTPartition.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
 #include <Storages/AlterCommands.h>
-#include <Storages/BitEngine/BitEngineDictionaryManager.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
@@ -157,8 +157,6 @@ MergeTreeMetaBase::MergeTreeMetaBase(
 
     if (metadata_.hasUniqueKey() && !attach_)
         checkVersionColumnConstraint();
-
-    parseAndCheckForBitEngine();
 
     if (metadata_.sampling_key.definition_ast != nullptr)
     {
@@ -687,52 +685,6 @@ NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
         NameAndTypePair("_part_row_number", std::make_shared<DataTypeUInt64>()),
         RowExistsColumn::ROW_EXISTS_COLUMN,
     };
-}
-
-void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns) const
-{
-    NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
-
-    for (auto & column: columns.getAll())
-    {
-        /// check func columns
-        for (auto & [name, type]: func_columns)
-        {
-            if (name == column.name)
-                throw Exception("Column " + backQuoteIfNeed(column.name) + " is reserved column", ErrorCodes::ILLEGAL_COLUMN);
-        }
-
-        /// block implicit key name for MergeTree family
-        if (isMapImplicitKey(column.name))
-            throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::ILLEGAL_COLUMN);
-
-        if (column.type && column.type->isMap())
-        {
-            auto escape_name = escapeForFileName(column.name + getMapSeparator());
-            auto pos = escape_name.find(getMapSeparator());
-            /// The name of map column should not contain map separator, which is convenient for extracting map column name from a implicit column name.
-            if (pos + getMapSeparator().size() != escape_name.size())
-                throw Exception(
-                    ErrorCodes::ILLEGAL_COLUMN,
-                    "Map column name {} is invalid because its escaped name {} contains reserved word {}",
-                    backQuoteIfNeed(column.name),
-                    backQuoteIfNeed(escape_name),
-                    getMapSeparator());
-
-            if (storage_settings.get()->enable_compact_map_data)
-            {
-                const auto & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
-                if (type_map.getValueType()->lowCardinality())
-                {
-                    throw Exception("Column " + backQuoteIfNeed(column.name) + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable compact map", ErrorCodes::ILLEGAL_COLUMN);
-                }
-            }
-        }
-
-        // _row_exists is reserved for DELETE mutation.
-        if (column.name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
-            throw Exception("Column name " + backQuoteIfNeed(column.name) + " is reserved for DELETE mutation.", ErrorCodes::ILLEGAL_COLUMN);
-    }
 }
 
 void MergeTreeMetaBase::insertQueryIdOrThrow(const String & query_id, size_t max_queries) const
@@ -1663,191 +1615,114 @@ UInt64 MergeTreeMetaBase::getTableHashForClusterBy() const
 
 }
 
-bool MergeTreeMetaBase::isBitEngineEncodeColumn(const String & name) const
+MergeTreeSettingsPtr MergeTreeMetaBase::getChangedSettings(const ASTPtr new_settings) const
 {
-    auto column = getInMemoryMetadataPtr()->getColumns().tryGetPhysical(name);
-    return column.has_value() && column->type->isBitEngineEncode();
+    MergeTreeSettingsPtr changed_settings = getSettings();
+    if (new_settings)
+    {
+        const auto & new_changes = new_settings->as<const ASTSetQuery &>().changes;
+        auto copy = getDefaultSettings();
+        copy->applyChanges(new_changes);
+        changed_settings = std::move(copy);
+    }
+
+    return changed_settings;
 }
 
- BitEngineDictionaryTableMapping MergeTreeMetaBase::parseUnderlyingDictionaryDependency(const String & mapping_str) const
- {
-    BitEngineDictionaryTableMapping dict_dependencies;
-
-    try
-    {
-        auto parsed_map = BitEngineHelper::parseUnderlyingDictionarySetting(mapping_str);
-
-        /// turn 'db.tbl' str in parsed map into {db, tbl} string pairs
-        for (auto & entry : parsed_map)
-        {
-            String db_and_table = entry.second;
-            ParserCompoundIdentifier parser(/*table_name_with_optional_uuid*/ true);
-            ASTPtr ast = parseQuery(parser, db_and_table.data(), db_and_table.data() + db_and_table.size(), "", 0, 0);
-            auto storage_id = ast->as<ASTTableIdentifier>()->getTableId();
-
-            String db_name = storage_id.database_name.empty() ? getDatabaseName() : storage_id.getDatabaseName();
-            String table_name = storage_id.getTableName();
-            dict_dependencies[entry.first] = std::make_pair(db_name, table_name);
-        }
-    }
-    catch (Exception & e)
-    {
-        throw Exception("Parsing bitengine and underlying dictionary table mapping JSON string failed. reason: "
-            + e.message(), ErrorCodes::CANNOT_PARSE_TEXT);
-    }
-    catch (...)
-    {
-        throw Exception("Parsing bitengine and underlying dictionary table mapping JSON string failed."
-            , ErrorCodes::CANNOT_PARSE_TEXT);
-    }
-
-    return dict_dependencies;
- }
-
-void MergeTreeMetaBase::parseAndCheckForBitEngine()
+void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
 {
-    auto metadata_snapshot = getInMemoryMetadataPtr();
-    const auto & all_columns = metadata_snapshot->getColumns();
-    auto all_physical_columns = all_columns.getAllPhysical();
-    std::for_each(all_physical_columns.begin(), all_physical_columns.end(),
-        [this](const auto & item) {
-            if (isBitEngineDataType(item.type))
-                bitengine_columns.push_back(item);
-         } );
+    NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
+    MergeTreeSettingsPtr current_settings = getChangedSettings(new_settings);
 
-    /// Not a bitengine table, just return
-    if (bitengine_columns.empty())
-        return;
-
-    /// Now do some syntax check for a bitengine table
-    /// 1. Unique keys are not allowed for BitEngine
-    if (metadata_snapshot->hasUniqueKey())
-        throw Exception("Unique table doesn't support BitEngine!", ErrorCodes::LOGICAL_ERROR);
-
-    //// BitEngine table has two constraints:
-    /// 1. only one field in `CLUSTE BY` clause, like `CLUSTER BY slice_id`
-    /// 2. a table setting `underlying_dictionary_tables` in a format of JSON map. It's a must.
-
-    /// Now, check the 1st constraint
-    if (!metadata_snapshot->hasClusterByKey())
-        throw Exception("A BitEngine table should have `CLUSTER BY` clause, table: " + getStorageID().getFullTableName(), ErrorCodes::LOGICAL_ERROR);
-    else if (metadata_snapshot->getClusterByKey().column_names.size() != 1U)
-        throw Exception("Only 1 field is allowed in cluster by for a BitEngine table: " + getStorageID().getFullTableName(),
-            ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
-
-    /// Now, parse and check the 2nd constraint:
-    /// the mapping info of bitengine table and underlying dictionary table
-    bitengine_dictionary_tables_mapping = parseUnderlyingDictionaryDependency(storage_settings.get()->underlying_dictionary_tables);
-    if (bitengine_dictionary_tables_mapping.empty())
-        throw Exception("Table has BitEngine fields but no valid dictionary table mapping settings, "\
-            "BitEngine cannot work without any dictionary table", ErrorCodes::LOGICAL_ERROR);
-
-    for (const auto & entry : bitengine_dictionary_tables_mapping)
+    auto columns_physical = columns.getAllPhysical();
+    for (auto & column: columns_physical)
     {
-        if (!bitengine_columns.contains(entry.first))
-                throw Exception("In underlying_dictionary_tables setting, no column in " + entry.first + " table",
-                    ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
-    }
-}
-
-void MergeTreeMetaBase::checkSchemaForBitEngineTableImpl(const BitEngineDictionaryTableMapping  & dict_dependencies, const ContextPtr & context_) const
-{
-    auto metadata_snapshot = getInMemoryMetadataPtr();
-    if (!metadata_snapshot->hasClusterByKey())
-        throw Exception("A BitEngine table must specify CLUSTER BY clause, table: " + getStorageID().getFullTableName(), ErrorCodes::BAD_ARGUMENTS);
-
-    auto this_cluster_by_hash = metadata_snapshot->getClusterByKeyAST()->getTreeHash();
-
-    for (const auto & entry : dict_dependencies)
-    {
-        const auto & db_name = entry.second.first;
-        const auto & table_name = entry.second.second;
-        StoragePtr dict_storage = DatabaseCatalog::instance().getTable(StorageID{db_name, table_name}, context_);
-
-        if (!dict_storage)
-            throw Exception(fmt::format("Cannot get dict table {}.{}", db_name, table_name), ErrorCodes::LOGICAL_ERROR);
-
-        auto dict_cluster_by = dict_storage->getInMemoryMetadataPtr()->getClusterByKeyAST();
-        if (!dict_cluster_by)
+        /// Check func columns
+        for (auto & [name, type]: func_columns)
         {
-            throw Exception(fmt::format("dictionary table ({}.{}) has no CLUSTER BY clause",
-                db_name, table_name), ErrorCodes::LOGICAL_ERROR);
+            if (name == column.name)
+                throw Exception("Column " + backQuoteIfNeed(column.name) + " is reserved column", ErrorCodes::BAD_ARGUMENTS);
         }
 
-        if (dict_cluster_by->getTreeHash() != this_cluster_by_hash)
+        /// block implicit key name for MergeTree family
+        if (isMapImplicitKey(column.name))
+            throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::BAD_ARGUMENTS);
+
+        /// Block implicit key name for MergeTree family
+        if (column.type && column.type->isMap())
         {
-            throw Exception(fmt::format("The CLUSTER BY clause of dictionary table specified ({}.{}) is "\
-                "not same as the BitEngine table, check and keep them same", db_name, table_name),
-                ErrorCodes::LOGICAL_ERROR);
+            const auto & type_map = typeid_cast<const DataTypeMap &>(*column.type);
+            /// Check map validity
+            type_map.checkValidity();
+
+            /// Check constraint for KVMap
+            if (column.type->isKVMap())
+            {
+                // To facilitate the processing of file formats compatible with community map and ByteKV map, we restrict the column names of KV map.
+                for (const auto & key : MAP_KV_RESERVED_KEYS)
+                {
+                    if (column.name.find(key) != String::npos)
+                        throw Exception(
+                            "Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word " + key, ErrorCodes::BAD_ARGUMENTS);
+                }
+            }
+            /// Check constraint for ByteMap
+            else
+            {
+                /// To compatible with old table which may have a Map(xx, Nullable(xx)) type, we can't check this in DataTypeMap
+                /// DataTypeLowCardinality->isNullable is false
+                if (type_map.getValueType()->isNullable())
+                    throw Exception(
+                        ErrorCodes::BAD_ARGUMENTS,
+                        "ByteMap column in table cannot have nullable value type, but column {} has type {}",
+                        backQuoteIfNeed(column.name),
+                        type_map.getName());
+
+                auto escape_name = escapeForFileName(column.name + getMapSeparator());
+                auto pos = escape_name.find(getMapSeparator());
+                /// The name of map column should not contain map separator, which is convenient for extracting map column name from a implicit column name.
+                if (pos + getMapSeparator().size() != escape_name.size())
+                    throw Exception(
+                        ErrorCodes::BAD_ARGUMENTS,
+                        "Map column name {} is invalid because its escaped name {} contains reserved prefix word {} of map implicit column",
+                        backQuoteIfNeed(column.name),
+                        backQuoteIfNeed(escape_name),
+                        getMapSeparator());
+
+                if (current_settings->enable_compact_map_data && type_map.getValueType()->lowCardinality())
+                    throw Exception(
+                        "Column " + backQuoteIfNeed(column.name)
+                            + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable "
+                              "enable_compact_map_data",
+                        ErrorCodes::BAD_ARGUMENTS);
+            }
+        }
+        else
+        {
+            /// Column names of non map types need to meet the following constraints, otherwise data will be written to the same file, resulting in errors.
+            /// For example: `col.key` UInt64, `col` Map<String, UInt64> KV, these two columns will both write data to file col%2Ekey.bin.
+            auto map_col = std::find_if(columns_physical.begin(), columns_physical.end(), [&](auto & col) {
+                if (col.type->isKVMap())
+                {
+                    for (const auto & key : MAP_KV_RESERVED_KEYS)
+                    {
+                        if (startsWith(column.name, col.name + key))
+                            return true;
+                    }
+                }
+                return false;
+            });
+            if (map_col != columns_physical.end())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "The name of column {} is not compatible with that of KV map column {}",
+                    backQuoteIfNeed(column.name),
+                    backQuoteIfNeed(map_col->name));
         }
 
-        auto *dict_storage_table = dynamic_cast<MergeTreeMetaBase *>(dict_storage.get());
-        dict_storage_table->checkBitEngineConstraints();
-    }
-}
-
-void MergeTreeMetaBase::checkSchemaForBitEngineTable(const ContextPtr & context_) const
-{
-    checkSchemaForBitEngineTableImpl(bitengine_dictionary_tables_mapping, context_);
-}
-
-ConstraintsDescription MergeTreeMetaBase::getBitEngineConstraints() const
-{
-    ConstraintsDescription res_constraints;
-    auto constraints = getInMemoryMetadataPtr()->getConstraints().constraints;
-
-    std::copy_if(constraints.begin(), constraints.end(),
-        std::back_inserter(res_constraints.constraints),
-        [](const auto & cons) { return cons->getType() == ASTType::ASTBitEngineConstraintDeclaration; });
-
-    return res_constraints;
-}
-
-void MergeTreeMetaBase::checkBitEngineConstraints() const
-{
-    auto dict_table_constraints = getBitEngineConstraints();
-    if (dict_table_constraints.constraints.empty())
-        throw Exception(fmt::format("There is no BITENGINE_CONSTRAINT in dictionary table ({}.{})", getDatabaseName(), getTableName()), ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    else if (dict_table_constraints.constraints.size() > 1)
-        throw Exception(fmt::format("There are more than one BITENGINE_CONSTRAINT in the dictionary table ({}.{})", getDatabaseName(), getTableName()), ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-}
-
-void MergeTreeMetaBase::registerBitEngineDictionaries()
-{
-    /// Not a bitengine table, just return
-    if (bitengine_columns.empty())
-        return;
-
-    auto context_v = getContext();
-    auto metadata_snapshot = getInMemoryMetadataPtr();
-
-    if (!bitengine_dictionary_manager)
-    {
-        String db_tbl = getDatabaseName() + "." + getTableName();
-        bitengine_dictionary_manager = std::make_shared<BitEngineDictionaryManager>(
-            db_tbl, context_v, metadata_snapshot->getClusterByKey().expression);
-        LOG_TRACE(log, "Successfully initilized the BitEngineDictionaryManager, now begin registering BitEngine columns");
-    }
-
-    const auto & all_columns = metadata_snapshot->getColumns();
-    for (const auto & item : bitengine_columns)
-    {
-        auto it = bitengine_dictionary_tables_mapping.find(item.name);
-        if (it == bitengine_dictionary_tables_mapping.end())
-            throw Exception("You shoud specify a dictionary table for the bitengine field: " + item.name
-                + " in settings `underlying_dictionary_tables` but there is none.", ErrorCodes::LOGICAL_ERROR);
-
-        /// There're two ways to tell the engine the BitEngine column may use String UID
-        /// - set bitengine_use_key_string = 1 in table settings, but it's for all bitengine columns
-        /// - set '+BITENGINE_KEY_STRING' in comment of table schema, like `id_map` BitMap64 BitEngine COMMENT '+BITENGINE_KEY_STRING'
-        /// Comment priority < settings
-        KeyType key_type = all_columns.isBitEngineKeyStringColumn(item.name) ? KeyType::KEY_STRING
-            : ( getSettings()->bitengine_use_key_string ? KeyType::KEY_STRING : KeyType::KEY_INTEGER);
-
-        BitEngineHelper::DictionaryDatabaseAndTable dict_table(it->second.first, it->second.second, key_type);
-        if (context_v->getServerType() == ServerType::cnch_server)
-            checkUnderlyingDictionaryTable(dict_table);
-        bitengine_dictionary_manager->addBitEngineDictionary(item.name, dict_table);
+        // _row_exists is reserved for DELETE mutation.
+        if (column.name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
+            throw Exception("Column name " + backQuoteIfNeed(column.name) + " is reserved for DELETE mutation.", ErrorCodes::ILLEGAL_COLUMN);
     }
 }
 

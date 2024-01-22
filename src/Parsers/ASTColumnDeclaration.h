@@ -40,7 +40,7 @@ public:
     ASTPtr comment;
     ASTPtr codec;
     ASTPtr ttl;
-    UInt8 flags;
+    UInt16 flags;
 
     String getID(char delim) const override { return "ColumnDeclaration" + (delim + name); }
 

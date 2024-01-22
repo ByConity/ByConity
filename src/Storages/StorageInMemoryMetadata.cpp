@@ -22,7 +22,7 @@
 #include <Storages/StorageInMemoryMetadata.h>
 
 #include <Core/ColumnWithTypeAndName.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/MapHelpers.h>
 #include <IO/Operators.h>
@@ -464,23 +464,9 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
             res.insert({type->createColumn(), type, name});
         }
         else
-        {
-            bool found = false;
-            for (const auto & column_inner: getColumns())
-            {
-                if (column_inner.type->isMap() && column_inner.type->isMapKVStore() && isMapKVOfSpecialMapName(name, column_inner.name))
-                {
-                    auto type = typeid_cast<const DataTypeByteMap &>(*column_inner.type).getMapStoreType(name);
-                    res.insert({type->createColumn(), type, name});
-                    found = true;
-                    break;
-                }
-            }
-            if (!found)
-                throw Exception(
-                    "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
-                    ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
-        }
+            throw Exception(
+                "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
+                ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
     }
 
     return res;
@@ -915,16 +901,5 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
         }
     }
 }
-
-bool StorageInMemoryMetadata::hasMapColumn() const
-{
-    const NamesAndTypesList & available_columns = getColumns().getAllPhysical();
-    for (auto & column: available_columns)
-    {
-        if (column.type->isMap()) return true;
-    }
-    return false;
-}
-
 
 }

@@ -5,7 +5,7 @@
 #include <Common/Trace/TracerUtils.h>
 #include <common/logger_useful.h>
 #include <DataTypes/DataTypeDate.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeMap.h>
@@ -28,28 +28,20 @@ NamesAndTypesList OTELTraceLogElement::getNamesAndTypes()
         {"duration_ns", std::make_shared<DataTypeUInt64>()},
         {"status_code", std::make_shared<DataTypeString>()},
         {"status_message", std::make_shared<DataTypeString>()},
-        #ifdef USE_COMMUNITY_MAP
         {"resource_attributes", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
         {"span_attributes", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())}
-        #else
-        {"resource_attributes", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
-        {"span_attributes", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())}
-        #endif
-      
     };
 }
 
 void dumpToMapColumn(const std::unordered_map<String, String> & map, DB::IColumn * column)
 {
-#ifdef USE_COMMUNITY_MAP
     auto * column_map = column ? &typeid_cast<DB::ColumnMap &>(*column) : nullptr;
     if (!column_map)
         return;
 
-    auto & offsets = column_map->getNestedColumn().getOffsets();
-    auto & tuple_column = column_map->getNestedData();
-    auto & key_column = tuple_column.getColumn(0);
-    auto & value_column = tuple_column.getColumn(1);
+    auto & offsets = column_map->getOffsets();
+    auto & key_column = column_map->getKey();
+    auto & value_column = column_map->getValue();
 
     size_t size = 0;
     for (auto & entry : map)
@@ -61,28 +53,7 @@ void dumpToMapColumn(const std::unordered_map<String, String> & map, DB::IColumn
         size++;
     }
 
-    offsets.push_back(offsets.back() + size);
-#else
-    auto * column_map = column ? &typeid_cast<DB::ColumnByteMap &>(*column) : nullptr;
-    if (!column_map)
-        return;
-
-    auto & offsets = column_map->getOffsets();
-    auto & key_column = column_map->getKey();
-    auto & value_column = column_map->getValue();
-
-    size_t size = 0;
-    for (const auto & entry : map)
-    {
-        String value = entry.second;
-
-        key_column.insertData(entry.first.c_str(), strlen(entry.first.c_str()));
-        value_column.insert(value);
-        size++;
-    }
-
-    offsets.push_back((offsets.empty() ? 0 : offsets.back()) + size);
-#endif
+    offsets.push_back((offsets.size() == 0 ? 0 : offsets.back()) + size);
 }
 
 void OTELTraceLogElement::appendToBlock(MutableColumns & columns) const

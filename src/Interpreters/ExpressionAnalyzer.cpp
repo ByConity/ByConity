@@ -552,6 +552,16 @@ void ExpressionAnalyzer::checkSample(ASTPtr & ast, std::map<String, size_t> & sa
         checkSample(child, sampled_table);
 }
 
+bool ExpressionAnalyzer::hasByteMapColumn() const
+{
+    for (auto & col : sourceColumns())
+    {
+        if (col.type->isByteMap())
+            return true;
+    }
+    return false;
+}
+
 void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables(bool do_global)
 {
     if (do_global && !getContext()->getSettingsRef().distributed_perfect_shard)

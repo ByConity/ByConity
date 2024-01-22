@@ -50,7 +50,7 @@ namespace ErrorCodes
 }
 
 
-DataTypePtr DataTypeFactory::get(const String & full_name, UInt8 flags) const
+DataTypePtr DataTypeFactory::get(const String & full_name, UInt16 flags) const
 {
     /// Data type parser can be invoked from coroutines with small stack.
     /// Value 315 is known to cause stack overflow in some test configurations (debug build, sanitizers)
@@ -63,7 +63,7 @@ DataTypePtr DataTypeFactory::get(const String & full_name, UInt8 flags) const
     return get(ast, flags);
 }
 
-DataTypePtr DataTypeFactory::get(const ASTPtr & ast, UInt8 flags) const
+DataTypePtr DataTypeFactory::get(const ASTPtr & ast, UInt16 flags) const
 {
     if (const auto * dt = ast->as<ASTDataType>())
     {
@@ -100,7 +100,7 @@ DataTypePtr DataTypeFactory::get(const ASTPtr & ast, UInt8 flags) const
     throw Exception("Unexpected AST element for data type.", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 }
 
-DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr & parameters, UInt8 flags) const
+DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr & parameters, UInt16 flags) const
 {
     ContextPtr query_context;
     if (CurrentThread::isInitialized())
@@ -158,7 +158,7 @@ DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr 
     return res;
 }
 
-DataTypePtr DataTypeFactory::getCustom(DataTypeCustomDescPtr customization, const UInt8 flags) const
+DataTypePtr DataTypeFactory::getCustom(DataTypeCustomDescPtr customization, const UInt16 flags) const
 {
     if (!customization->name)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot create custom type without name");
@@ -284,11 +284,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeDomainSimpleAggregateFunction(*this);
     registerDataTypeDomainGeo(*this);
     registerDataTypeSet(*this);
-#ifdef USE_COMMUNITY_MAP
     registerDataTypeMap(*this);
-#else
-    registerDataTypeByteMap(*this);
-#endif
     registerDataTypeBitMap64(*this);
     registerDataTypeSketchBinary(*this);
     registerDataTypeDomainBool(*this);

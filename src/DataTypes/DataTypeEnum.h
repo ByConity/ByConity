@@ -27,6 +27,7 @@ public:
     bool isCategorial() const override { return true; }
     bool canBeInsideNullable() const override { return true; }
     bool isComparable() const override { return true; }
+    bool canBeMapKeyType() const override { return true; }
 };
 
 
@@ -80,6 +81,11 @@ public:
     bool contains(const IDataType & rhs) const;
 
     SerializationPtr doGetDefaultSerialization() const override;
+
+    bool canBeByteMapValueType() const override { return true; }
+
+    Field stringToVisitorField(const String & ins) const override;
+    String stringToVisitorString(const String & ins) const override;
 };
 
 

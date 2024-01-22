@@ -9,7 +9,7 @@
 #include <Poco/Logger.h>
 #include "common/logger_useful.h"
 #include "DataTypes/DataTypeArray.h"
-#include "DataTypes/DataTypeByteMap.h"
+#include "DataTypes/DataTypeMap.h"
 #include "DataTypes/DataTypeDate.h"
 #include "DataTypes/DataTypeDate32.h"
 #include "DataTypes/DataTypeDateTime.h"
@@ -109,7 +109,7 @@ DataTypePtr HiveSchemaConverter::hiveTypeToCHType(const String & hive_type, bool
         // ck type key and value is not nullable
         auto key_type = hiveTypeToCHType(res.at(0), false);
         auto value_type = hiveTypeToCHType(res.at(1), false);
-        data_type = std::make_shared<DataTypeByteMap>(key_type, value_type);
+        data_type = std::make_shared<DataTypeMap>(key_type, value_type);
     }
     else if (type_keyword == "decimal")
     {
