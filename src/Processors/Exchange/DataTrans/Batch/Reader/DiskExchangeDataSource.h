@@ -2,10 +2,10 @@
 
 #include <Columns/ListIndex.h>
 #include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromFileBase.h>
 #include <Processors/Exchange/DataTrans/NativeChunkInputStream.h>
 #include <Processors/ISource.h>
 #include <common/defines.h>
-#include "IO/ReadBufferFromFileBase.h"
 
 namespace DB
 {
@@ -17,7 +17,8 @@ public:
     DiskExchangeDataSource(Block header, std::vector<std::unique_ptr<ReadBufferFromFileBase>> bufs_)
         : ISource(std::move(header)), bufs(std::move(bufs_))
     {
-        chassert(!bufs.empty());
+        if (bufs.empty())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "empty files to read");
         stream = std::make_unique<NativeChunkInputStream>(*bufs[idx], getOutputs().front().getHeader());
         LOG_DEBUG(&Poco::Logger::get("DiskExchangeDataSource"), "Start to read file {}", bufs[idx]->getFileName());
     }
