@@ -314,6 +314,11 @@ String TSOServer::tryGetTSOLeaderHostPort() const
     return {};
 }
 
+UInt64 TSOServer::getNumStopUpdateTsFromTSOService() const
+{
+    return tso_service->getNumTSOUpdateTsStoppedFunctioning();
+}
+
 int TSOServer::main(const std::vector<std::string> &)
 {
     auto shared_context = Context::createShared();

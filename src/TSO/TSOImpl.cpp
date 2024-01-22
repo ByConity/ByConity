@@ -160,6 +160,7 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
                 if (isLeader())
                 {
                     // yield leadership as updateTSO thread stopped functioning
+                    num_tso_update_timestamp_stopped_functioning++;
                     tso_server.leader_election->yieldLeadership();
                     UInt64 ts_now = ts.load(std::memory_order_acquire);
                     UInt64 machine_time_now = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();

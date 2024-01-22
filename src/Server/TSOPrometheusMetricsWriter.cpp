@@ -32,6 +32,14 @@ void TSOPrometheusMetricsWriter::write(WriteBuffer & wb)
     is_leader_key_label += getLabel({{"tso_leader_endpoint", tso_server.tryGetTSOLeaderHostPort()}}); // create label for label-value pair
     auto is_leader_metric_doc = metrics_namedoc_map.at(IS_LEADER_KEY); // create doc for #help
 
+    String update_ts_stopped_key{TSO_METRICS_PREFIX};
+    update_ts_stopped_key.append(UPDATE_TS_STOPPED_KEY); // create key with prefix
+    int update_ts_stopped_count = tso_server.getNumStopUpdateTsFromTSOService(); // get value for gauge
+    String update_ts_stopped_key_label{update_ts_stopped_key};
+    update_ts_stopped_key_label += getLabel({{"tso_endpoint", tso_server.getHostPort()}}); // create label for label-value pair
+    auto update_ts_stopped_key_metric_doc = metrics_namedoc_map.at(UPDATE_TS_STOPPED_KEY); // create doc for #help
+    
+
     // write out metrics to prometheus
     writeOutLine(wb, "# HELP", yielded_leadership_key, yielded_leadership_metric_doc);
     writeOutLine(wb, "# TYPE", yielded_leadership_key, "gauge");
@@ -40,6 +48,10 @@ void TSOPrometheusMetricsWriter::write(WriteBuffer & wb)
     writeOutLine(wb, "# HELP", is_leader_key, is_leader_metric_doc);
     writeOutLine(wb, "# TYPE", is_leader_key, "gauge");
     writeOutLine(wb, is_leader_key_label, tso_server.isLeader());
+
+    writeOutLine(wb, "# HELP", update_ts_stopped_key, update_ts_stopped_key_metric_doc);
+    writeOutLine(wb, "# TYPE", update_ts_stopped_key, "gauge");
+    writeOutLine(wb, update_ts_stopped_key_label, update_ts_stopped_count);
 
 }
 

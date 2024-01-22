@@ -78,11 +78,17 @@ public:
         ::DB::TSO::GetTimestampsResp* response,
         ::google::protobuf::Closure* done) override;
 
+    UInt64 getNumTSOUpdateTsStoppedFunctioning() const
+    {
+        return num_tso_update_timestamp_stopped_functioning.load(std::memory_order_relaxed);
+    }
+
 private:
     std::atomic<UInt64> ts = 0;
     std::atomic_bool is_kv_down{false};
     Poco::Logger * log = &Poco::Logger::get("TSOImpl");
     std::atomic<bool> logical_clock_checking {false};
+    std::atomic<UInt64> num_tso_update_timestamp_stopped_functioning{0};
 
     UInt64 fetchAddLogical(UInt32 to_add);
     void checkLogicalClock(UInt32 logical_value);
