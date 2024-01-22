@@ -182,7 +182,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserNameList values_p(dt);
     ParserSelectWithUnionQuery select_p(dt);
     ParserTTLExpressionList parser_ttl_list(dt);
-    ParserList parser_map_key_list(std::make_unique<ParserStringLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserList parser_map_key_list(std::make_unique<ParserLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false);
     ParserClusterByElement cluster_p;
 
     // Optional CASCADING keyword for drop/detach partition

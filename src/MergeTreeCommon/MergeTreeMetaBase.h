@@ -184,8 +184,6 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
-    void checkColumnsValidity(const ColumnsDescription & columns) const override;
-
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand , ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot) const override;
 
     /// Logger
@@ -394,6 +392,9 @@ public:
     void removeMutationEntry(TxnTimestamp create_time);
     Strings getPlainMutationEntries();
 
+    MergeTreeSettingsPtr getChangedSettings(const ASTPtr new_settings) const;
+    void checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+
     virtual bool supportsOptimizer() const override { return true; }
 
     /// *********** START OF BitEngine-related members *********** ///
@@ -582,6 +583,8 @@ protected:
 
     /// *********** END OF BitEngine-related members *********** ///
 
+    /// Returns default settings for storage with possible changes from global config.
+    virtual std::unique_ptr<MergeTreeSettings> getDefaultSettings() const = 0;
 
 private:
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.

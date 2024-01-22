@@ -26,14 +26,30 @@ INSERT INTO TABLE types VALUES ([1, 2], [1, 2, NULL], [1, 2]), ([4, 8], [4, 8, N
 
 SELECT map('key1', A32, 'key2', AN32) FROM types;
 SELECT map('key1', A32, 'key2', NA32) FROM types; -- { serverError 386 }
-SELECT map(A32, AN32) FROM types; -- { clientError 36 }
+SELECT map(A32, AN32) FROM types; -- { serverError 36 }
 
 SELECT toTypeName(map('key1', A32, 'key2', AN32)) FROM types LIMIT 1;
 
 DROP TABLE types;
 
-select map(); -- { serverError 42 }
+select map();
 select map('a', 'b', 'c'); -- { serverError 42 }
 SELECT map(CAST('key', 'Nullable(String)'), 'yy');
 SELECT map('key', CAST('value', 'Nullable(String)'));
+SELECT map(Null, 'value');
+SELECT map('key', Null);
 
+CREATE TABLE `10014_test_map` (a Int32, m Map(String, Nullable(String)) KV) Engine = CnchMergeTree ORDER BY a;
+INSERT INTO `10014_test_map` SELECT 0, map('key', Null);
+SELECT * FROM `10014_test_map` ORDER BY a;
+DROP TABLE `10014_test_map`;
+
+CREATE TABLE `10014_test_map` (a Int32, m Map(String, String) KV) Engine = CnchMergeTree ORDER BY a;
+INSERT INTO `10014_test_map` SELECT 0, map('key', Null); -- { serverError 70 }
+-- SELECT * FROM `10014_test_map` ORDER BY a;
+DROP TABLE `10014_test_map`;
+
+CREATE TABLE `10014_test_map` (a Int32, m Map(String, String)) Engine = CnchMergeTree ORDER BY a;
+INSERT INTO `10014_test_map` SELECT 0, map('key', Null); -- { serverError 70 }
+-- SELECT * FROM `10014_test_map` ORDER BY a;
+DROP TABLE `10014_test_map`;

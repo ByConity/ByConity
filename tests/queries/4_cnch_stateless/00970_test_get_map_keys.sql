@@ -10,6 +10,7 @@ select getMapKeys(currentDatabase(), 'test_map', 'float_map');
 select getMapKeys(currentDatabase(), 'test_map', 'date_map');
 select getMapKeys(currentDatabase(), 'test_map', 'date_time_map');
 
+select getMapKeys(currentDatabase(), 'test_map', 'int_map', '2001.*01.*01');
 select getMapKeys(currentDatabase(), 'test_map', 'int_map', '2001.*01.*02');
 
 drop table test_map;

@@ -596,42 +596,13 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Milliseconds, insert_quorum_timeout, 600000, "", 0) \
     M(Bool, insert_quorum_parallel, true, "For quorum INSERT queries - enable to make parallel inserts without linearizability", 0) \
-    M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
-    M(UInt64, \
-      select_sequential_consistency, \
-      0, \
-      "For SELECT queries from the replicated table, throw an exception if the replica does not have a chunk written with the quorum; do " \
-      "not read the parts that have not yet been written with the quorum.", \
-      0) \
-    M(UInt64, \
-      table_function_remote_max_addresses, \
-      1000, \
-      "The maximum number of different shards and the maximum number of replicas of one shard in the `remote` function.", \
-      0) \
-    M(Milliseconds, \
-      read_backoff_min_latency_ms, \
-      1000, \
-      "Setting to reduce the number of threads in case of slow reads. Pay attention only to reads that took at least that much time.", \
-      0) \
-    M(UInt64, \
-      read_backoff_max_throughput, \
-      1048576, \
-      "Settings to reduce the number of threads in case of slow reads. Count events when the read bandwidth is less than that many bytes " \
-      "per second.", \
-      0) \
-    M(Milliseconds, \
-      read_backoff_min_interval_between_events_ms, \
-      1000, \
-      "Settings to reduce the number of threads in case of slow reads. Do not pay attention to the event, if the previous one has passed " \
-      "less than a certain amount of time.", \
-      0) \
-    M(UInt64, \
-      read_backoff_min_events, \
-      2, \
-      "Settings to reduce the number of threads in case of slow reads. The number of events after which the number of threads will be " \
-      "reduced.", \
-      0) \
-\
+    M(UInt64, select_sequential_consistency, 0, "For SELECT queries from the replicated table, throw an exception if the replica does not have a chunk written with the quorum; do not read the parts that have not yet been written with the quorum.", 0) \
+    M(UInt64, table_function_remote_max_addresses, 1000, "The maximum number of different shards and the maximum number of replicas of one shard in the `remote` function.", 0) \
+    M(Milliseconds, read_backoff_min_latency_ms, 1000, "Setting to reduce the number of threads in case of slow reads. Pay attention only to reads that took at least that much time.", 0) \
+    M(UInt64, read_backoff_max_throughput, 1048576, "Settings to reduce the number of threads in case of slow reads. Count events when the read bandwidth is less than that many bytes per second.", 0) \
+    M(Milliseconds, read_backoff_min_interval_between_events_ms, 1000, "Settings to reduce the number of threads in case of slow reads. Do not pay attention to the event, if the previous one has passed less than a certain amount of time.", 0) \
+    M(UInt64, read_backoff_min_events, 2, "Settings to reduce the number of threads in case of slow reads. The number of events after which the number of threads will be reduced.", 0) \
+    \
     M(UInt64, read_backoff_min_concurrency, 1, "Settings to try keeping the minimal number of threads in case of slow reads.", 0) \
 \
     M(Float, \
@@ -1543,23 +1514,14 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_string_size_for_unique_key, 1048576, "Max string size limit for unique key.", 0) \
     M(Bool, enable_wait_attached_staged_parts_to_visible, true, "Enable wait for all staged parts become visible in attach process", 0) \
     M(Seconds, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partition for unique key", 0) \
-    M(Bool, \
-      enable_unique_table_attach_without_dedup, \
-      false, \
-      "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", \
-      0) \
-    M(Bool, \
-      enable_unique_table_detach_ignore_delete_bitmap, \
-      false, \
-      "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we " \
-      "can just ignore it via this parameter.", \
-      0) \
-\
-    M(UInt64, \
-      resource_group_unmatched_behavior, \
-      0, \
-      "The behavior when there is no resource group matched: 0 for let go, 1 for exception, 2 for the first root group.", \
-      0) \
+    M(Bool, enable_unique_table_attach_without_dedup, false, "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", 0) \
+    M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
+    \
+    /** Settings for Map */ \
+    M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
+    M(Bool, allow_map_access_without_key, true, "Allow access map column without providing key", 0) \
+    \
+    M(UInt64, resource_group_unmatched_behavior, 0, "The behavior when there is no resource group matched: 0 for let go, 1 for exception, 2 for the first root group.", 0) \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     M(UInt64, grace_hash_join_initial_buckets, 1, "Initial number of grace hash join buckets", 0) \

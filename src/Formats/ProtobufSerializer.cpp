@@ -27,7 +27,6 @@
 #   include <Columns/ColumnDecimal.h>
 #   include <Columns/ColumnLowCardinality.h>
 #   include <Columns/ColumnMap.h>
-#   include <Columns/ColumnByteMap.h>
 #   include <Columns/ColumnNullable.h>
 #   include <Columns/ColumnFixedString.h>
 #   include <Columns/ColumnString.h>
@@ -44,7 +43,6 @@
 #   include <DataTypes/DataTypeFixedString.h>
 #   include <DataTypes/DataTypeLowCardinality.h>
 #   include <DataTypes/DataTypeMap.h>
-#   include <DataTypes/DataTypeByteMap.h>
 #   include <DataTypes/DataTypeNullable.h>
 #   include <DataTypes/DataTypeTuple.h>
 #   include <DataTypes/Serializations/SerializationDecimal.h>
@@ -1900,16 +1898,9 @@ namespace
         {
             if (num_columns != 1)
                 wrongNumberOfColumns(num_columns, "1");
-#ifdef USE_COMMUNITY_MAP
             const auto & column_map = assert_cast<const ColumnMap &>(*columns[0]);
             ColumnPtr nested_column = column_map.getNestedColumnPtr();
             nested_serializer->setColumns(&nested_column, 1);
-#else
-            const auto & column_map = assert_cast<const ColumnByteMap &>(*columns[0]);
-            /// Construct nested column like that's in ColumnMap;
-            ColumnPtr map_like_nested_column = ColumnArray::create(ColumnTuple::create(Columns{column_map.getKeyPtr(), column_map.getValuePtr()}), column_map.getOffsetsPtr());
-            nested_serializer->setColumns(&map_like_nested_column, 1);
-#endif
         }
 
         void setColumns(const MutableColumnPtr * columns, [[maybe_unused]] size_t num_columns) override
@@ -3207,17 +3198,6 @@ namespace
                 {
                     const auto & map_data_type = assert_cast<const DataTypeMap &>(*data_type);
                     auto nested_serializer = buildFieldSerializer(column_name, map_data_type.getNestedType(), field_descriptor, allow_repeat);
-                    if (!nested_serializer)
-                        return nullptr;
-                    return std::make_unique<ProtobufSerializerMap>(std::move(nested_serializer));
-                }
-
-                case TypeIndex::ByteMap:
-                {
-                    const auto & map_data_type = assert_cast<const DataTypeByteMap &>(*data_type);
-                    auto map_like_nested_type = std::make_shared<DataTypeArray>(
-                        std::make_shared<DataTypeTuple>(DataTypes{map_data_type.getKeyType(), map_data_type.getValueType()}, Names{"keys", "values"}));
-                    auto nested_serializer = buildFieldSerializer(column_name, map_like_nested_type, field_descriptor, allow_repeat);
                     if (!nested_serializer)
                         return nullptr;
                     return std::make_unique<ProtobufSerializerMap>(std::move(nested_serializer));

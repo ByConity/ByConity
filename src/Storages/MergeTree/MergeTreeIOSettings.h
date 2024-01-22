@@ -99,20 +99,10 @@ struct MergeTreeWriterSettings
     bool enable_disk_based_key_index = false;
 };
 
-struct BitengineWriteSettings
-{
-    bool only_recode = false;
-    bool bitengine_encode_without_lock = false;
-    bool bitengine_encode_in_fast_mode = false;
-    bool skip_bitengine_encode = false;
-
-    Float64 bitengine_encode_loss_rate = 0.1;
-};
-
 struct BitmapBuildInfo
 {
-    // set to false when 
-    // 1. disenable bitmap index build in insert/merge 
+    // set to false when
+    // 1. disenable bitmap index build in insert/merge
     // 2. or modify dependent columns
     bool build_all_bitmap_index = true;
     // set to true when executing `alter table build bitmap of partition`
@@ -133,4 +123,41 @@ struct BitmapBuildInfo
     NamesAndTypes segment_bitmap_index_columns;
 };
 
+struct MergeTreeWriterSettings
+{
+    MergeTreeWriterSettings() = default;
+
+    MergeTreeWriterSettings(
+        const Settings & global_settings,
+        const MergeTreeSettingsPtr & storage_settings,
+        bool can_use_adaptive_granularity_,
+        bool rewrite_primary_key_,
+        bool blocks_are_granules_size_ = false,
+        bool optimize_map_column_serialization_ = false,
+        bool enable_disk_based_key_index_ = false,
+        bool skip_bitengine_encode_ = false)
+        : min_compress_block_size(
+            storage_settings->min_compress_block_size ? storage_settings->min_compress_block_size : global_settings.min_compress_block_size)
+        , max_compress_block_size(
+              storage_settings->max_compress_block_size ? storage_settings->max_compress_block_size
+                                                        : global_settings.max_compress_block_size)
+        , can_use_adaptive_granularity(can_use_adaptive_granularity_)
+        , rewrite_primary_key(rewrite_primary_key_)
+        , blocks_are_granules_size(blocks_are_granules_size_)
+        , optimize_map_column_serialization(optimize_map_column_serialization_)
+        , enable_disk_based_key_index(enable_disk_based_key_index_)
+    {
+    }
+
+    size_t min_compress_block_size;
+    size_t max_compress_block_size;
+    bool can_use_adaptive_granularity;
+    bool rewrite_primary_key;
+    bool blocks_are_granules_size;
+
+    bool optimize_map_column_serialization = false;
+    bool enable_disk_based_key_index = false;
+    bool is_merge = false;
+
+};
 }

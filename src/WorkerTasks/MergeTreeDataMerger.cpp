@@ -21,8 +21,7 @@
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
-#include <DataTypes/IDataType.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/CollapsingSortedTransform.h>
@@ -279,7 +278,7 @@ MergeAlgorithm MergeTreeDataMerger::chooseMergeAlgorithm(
     {
         for (const auto & column : gathering_columns)
         {
-            if (column.type->isMap() || column.type->lowCardinality())
+            if (column.type->isByteMap() || column.type->lowCardinality() || isBitmap64(column.type))
             {
                 return MergeAlgorithm::Vertical;
             }
@@ -366,12 +365,12 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         std::swap(old_gathering_columns, gathering_columns);
         for (auto & column : old_gathering_columns)
         {
-            if (column.type->isMap() && !column.type->isMapKVStore())
+            if (column.type->isByteMap())
             {
                 auto [curr, end] = getMapColumnRangeFromOrderedFiles(column.name, merged_column_to_size);
                 for (; curr != end; ++curr)
                     gathering_columns.emplace_back(
-                        curr->first, dynamic_cast<const DataTypeByteMap *>(column.type.get())->getValueTypeForImplicitColumn());
+                        curr->first, dynamic_cast<const DataTypeMap *>(column.type.get())->getValueTypeForImplicitColumn());
             }
             else
             {
@@ -753,7 +752,19 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                 column_gathered_stream.getProfileInfo().bytes, std::memory_order_relaxed);
             manipulation_entry->progress.store(progress_before + column_weight, std::memory_order_relaxed);
 
-            normal_columns_gathered += 1;
+        for (auto & [column_name, column_type] : gathering_columns)
+        {
+            if (column_type->isByteMap())
+                continue;
+
+            gather_column(column_name);
+
+            /// BitEngine table has a implicit column in part,
+            /// processes it here
+            if (data.isBitEngineMode() && isBitEngineDataType(column_type))
+            {
+                gather_column(column_name, BitEngineReadType::ONLY_ENCODE);
+            }
         }
 
         LOG_DEBUG(log, "Gathered {} columns in vertical merge, read {} rows for each column, part name is {}", gathering_columns.size(), rows_written, new_data_part->name);

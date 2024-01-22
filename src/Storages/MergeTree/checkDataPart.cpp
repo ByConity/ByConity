@@ -30,7 +30,9 @@
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/HashingReadBuffer.h>
+#include <IO/LimitReadBuffer.h>
 #include <Common/CurrentMetrics.h>
+#include <DataTypes/DataTypeMap.h>
 
 
 namespace CurrentMetrics
@@ -50,6 +52,7 @@ namespace ErrorCodes
     extern const int CANNOT_MUNMAP;
     extern const int CANNOT_MREMAP;
     extern const int UNEXPECTED_FILE_IN_DATA_PART;
+    extern const int CHECKSUM_DOESNT_MATCH;
 }
 
 
@@ -62,6 +65,153 @@ bool isNotEnoughMemoryErrorCode(int code)
         || code == ErrorCodes::CANNOT_ALLOCATE_MEMORY
         || code == ErrorCodes::CANNOT_MUNMAP
         || code == ErrorCodes::CANNOT_MREMAP;
+}
+
+
+void genCompactMapChecksums(
+    MergeTreeData::DataPartPtr data_part,
+    const DiskPtr & disk,
+    const String & path,
+    const NamesAndTypesList & map_columns_list,
+    const IMergeTreeDataPart::Checksums & checksums_txt,
+    IMergeTreeDataPart::Checksums & checksums_data,
+    NameSet & skipped_files)
+{
+    const String & mrk_ext = data_part->getMarksFileExtension();
+
+    /// This function calculates checksum for both compressed and decompressed contents of compact file.
+    auto checksum_compact_file = [](const DiskPtr & disk_, const String & file_path, size_t offset, size_t size) {
+        auto file_buf = disk_->readFile(file_path);
+        file_buf->seek(offset);
+        LimitReadBuffer limit_read_buf(*file_buf, size, false);
+        HashingReadBuffer compressed_hashing_buf(limit_read_buf);
+        CompressedReadBuffer uncompressing_buf(compressed_hashing_buf);
+        HashingReadBuffer uncompressed_hashing_buf(uncompressing_buf);
+
+        uncompressed_hashing_buf.ignoreAll();
+        return IMergeTreeDataPart::Checksums::Checksum{
+            compressed_hashing_buf.count(),
+            compressed_hashing_buf.getHash(),
+            uncompressed_hashing_buf.count(),
+            uncompressed_hashing_buf.getHash()};
+    };
+
+    /// This function calculates checksum of compact mrk2 file, without compressed info.
+    auto checksum_compact_mrk_file = [](const DiskPtr & disk_, const String & file_path, size_t offset, size_t size) {
+        auto file_buf = disk_->readFile(file_path);
+        file_buf->seek(offset);
+        LimitReadBuffer limit_read_buf(*file_buf, size, false);
+        HashingReadBuffer hashing_buf(limit_read_buf);
+
+        hashing_buf.ignoreAll();
+        return IMergeTreeDataPart::Checksums::Checksum{hashing_buf.count(), hashing_buf.getHash()};
+    };
+
+    for (const auto & column : map_columns_list)
+    {
+        const DataTypePtr & null_val_type_ptr = typeid_cast<const DataTypeMap &>(*column.type).getValueTypeForImplicitColumn();
+        auto null_val_serial = null_val_type_ptr->getDefaultSerialization();
+
+        null_val_serial->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path) {
+            /// checksum_txt doesn't contain compact map files, need to skip in checkEqual step
+            String base_file_name = ISerialization::getFileNameForStream(column.name, substream_path);
+            skipped_files.insert(base_file_name + ".bin");
+            skipped_files.insert(base_file_name + mrk_ext);
+        });
+
+        /// need to find all map keys from checksums
+        for (const auto & it : checksums_txt.files)
+        {
+            const String & it_file_name = it.first;
+            if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(it_file_name, column.name))
+            {
+                const String & key_name = parseKeyNameFromImplicitFileName(it_file_name, column.name);
+                const String & implicit_column = getImplicitColNameForMapKey(column.name, key_name);
+
+                null_val_serial->enumerateStreams(
+                    [&](const ISerialization::SubstreamPath & substream_path) {
+                        /// for each stream, we need to add both .bin and .mrk2/.mrk3 to checksums
+                        std::vector<String> bin_and_mrks_postfix{".bin", mrk_ext};
+                        for (size_t i = 0; i < bin_and_mrks_postfix.size(); i++)
+                        {
+                            const String & postfix = bin_and_mrks_postfix[i];
+                            String file_name = ISerialization::getFileNameForStream(implicit_column, substream_path) + postfix;
+                            String map_file_name = ISerialization::getFileNameForStream(column.name, substream_path) + postfix;
+
+                            /// get file offset and size of current stream
+                            auto checksum_it = checksums_txt.files.find(file_name);
+                            if (checksum_it == checksums_txt.files.end())
+                                throw Exception(
+                                    "Missing stream file " + file_name + " in checksums, column " + implicit_column + ".",
+                                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
+
+                            size_t file_offset = checksum_it->second.file_offset;
+                            size_t file_size = checksum_it->second.file_size;
+                            if (postfix == String(".bin"))
+                                checksums_data.files[file_name] = checksum_compact_file(disk, path + map_file_name, file_offset, file_size);
+                            else
+                                checksums_data.files[file_name]
+                                    = checksum_compact_mrk_file(disk, path + map_file_name, file_offset, file_size);
+                        }
+                    },
+                    {});
+            }
+        }
+    }
+}
+
+
+void genMapChecksums(
+    const DiskPtr & disk, const String & path, const NamesAndTypesList & map_columns_list, IMergeTreeDataPart::Checksums & checksums_data)
+{
+    /// This function calculates checksum for both compressed and decompressed contents of compressed file.
+    auto checksum_compressed_file = [](const DiskPtr & disk_, const String & file_path) {
+        auto file_buf = disk_->readFile(file_path);
+        HashingReadBuffer compressed_hashing_buf(*file_buf);
+        CompressedReadBuffer uncompressing_buf(compressed_hashing_buf);
+        HashingReadBuffer uncompressed_hashing_buf(uncompressing_buf);
+
+        uncompressed_hashing_buf.ignoreAll();
+        return IMergeTreeDataPart::Checksums::Checksum{
+            compressed_hashing_buf.count(),
+            compressed_hashing_buf.getHash(),
+            uncompressed_hashing_buf.count(),
+            uncompressed_hashing_buf.getHash()};
+    };
+
+    for (const auto & column : map_columns_list)
+    {
+        const DataTypePtr & null_val_type_ptr = typeid_cast<const DataTypeMap &>(*column.type).getValueTypeForImplicitColumn();
+        auto null_val_serial = null_val_type_ptr->getDefaultSerialization();
+
+        for (auto it = disk->iterateDirectory(path); it->isValid(); it->next())
+        {
+            const String & it_file_name = it->name();
+            // find all implicit columns through files
+            if (isMapImplicitDataFileNameOfSpecialMapName(it_file_name, column.name))
+            {
+                String implicit_column;
+                if (isMapBaseFile(it_file_name))
+                {
+                    /// map base
+                    implicit_column = getBaseNameForMapCol(column.name);
+                }
+                else
+                {
+                    /// map keys
+                    const String & key_name = parseKeyNameFromImplicitFileName(it_file_name, column.name);
+                    implicit_column = getImplicitColNameForMapKey(column.name, key_name);
+                }
+
+                null_val_serial->enumerateStreams(
+                    [&](const ISerialization::SubstreamPath & substream_path) {
+                        String file_name = ISerialization::getFileNameForStream(implicit_column, substream_path) + ".bin";
+                        checksums_data.files[file_name] = checksum_compressed_file(disk, path + file_name);
+                    },
+                    {});
+            }
+        }
+    }
 }
 
 
@@ -230,6 +380,10 @@ IMergeTreeDataPart::Checksums checkDataPart(
     {
         for (const auto & column : columns_list)
         {
+            // check map columns later
+            if (column.type->isByteMap())
+                continue;
+
             auto serialization = IDataType::getSerialization(column,
                 [&](const String & stream_name)
                 {
@@ -266,6 +420,19 @@ IMergeTreeDataPart::Checksums checkDataPart(
         assertEOF(*buf);
     }
 
+    /// get checksums_data of map keys
+    NameSet skipped_files;
+    NamesAndTypesList map_columns_list;
+    for (const auto & column : columns_list)
+    {
+        if (column.type->isByteMap())
+            map_columns_list.push_back(column);
+    }
+    if (data_part->versions->enable_compact_map_data)
+        genCompactMapChecksums(data_part, disk, path, map_columns_list, checksums_txt, checksums_data, skipped_files);
+    else
+        genMapChecksums(disk, path, map_columns_list, checksums_data);
+
     const auto & checksum_files_txt = checksums_txt.files;
     for (auto it = disk->iterateDirectory(path); it->isValid(); it->next())
     {
@@ -277,7 +444,7 @@ IMergeTreeDataPart::Checksums checkDataPart(
         auto checksum_it = checksums_data.files.find(file_name);
 
         /// Skip files that we already calculated. Also skip metadata files that are not checksummed.
-        if (checksum_it == checksums_data.files.end() && !files_without_checksums.count(file_name))
+        if (checksum_it == checksums_data.files.end() && !files_without_checksums.count(file_name) && !skipped_files.count(file_name))
         {
             auto txt_checksum_it = checksum_files_txt.find(file_name);
             if (txt_checksum_it == checksum_files_txt.end() || txt_checksum_it->second.uncompressed_size == 0)

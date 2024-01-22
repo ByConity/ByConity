@@ -76,39 +76,22 @@ void FieldVisitorWriteBinary::operator() (const Tuple & x, WriteBuffer & buf) co
     }
 }
 
-
 void FieldVisitorWriteBinary::operator() (const Map & x, WriteBuffer & buf) const
 {
     const size_t size = x.size();
     writeBinary(size, buf);
 
-    for (size_t i = 0; i < size; ++i)
+    if (size > 0)
     {
-        const UInt8 type = x[i].getType();
-        writeBinary(type, buf);
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, x[i]);
-    }
-}
-
-// FIXME
-void FieldVisitorWriteBinary::operator() (const ByteMap & x, WriteBuffer & buf) const
-{
-    UInt8 ktype = Field::Types::Null;
-    UInt8 vtype = Field::Types::Null;
-
-    const size_t size = x.size();
-    if (size)
-    {
-        ktype = x.front().first.getType();
-        vtype = x.front().second.getType();
-    }
-    writeBinary(ktype, buf);
-    writeBinary(vtype, buf);
-    writeBinary(size, buf);
-    for (ByteMap::const_iterator it = x.begin(); it != x.end(); ++it)
-    {
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->first);
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->second);
+        const UInt8 ktype = x.front().first.getType();
+        const UInt8 vtype = x.front().second.getType();
+        writeBinary(ktype, buf);
+        writeBinary(vtype, buf);
+        for (const auto & elem: x)
+        {
+            Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem.first);
+            Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem.second);
+        }
     }
 }
 

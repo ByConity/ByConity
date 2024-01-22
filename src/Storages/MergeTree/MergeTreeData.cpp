@@ -29,7 +29,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/MapHelpers.h>
 #include <Formats/FormatFactory.h>

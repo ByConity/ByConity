@@ -1,46 +1,76 @@
 Projection Est. ? rows
-│     Expressions: arrayElement(kv, \'456\'):=kv{\'456\'}
+│     Expressions: arrayElement(kv, \'456\'):=kv[\'456\']
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
-      │     Condition: kv{\'123\'} = 1
+      │     Condition: (kv[\'123\']) = 1
       └─ TableScan test.array_element_rewrite_46017 Est. ? rows
-               Where: kv{\'123\'} = 1
+               Where: (kv[\'123\']) = 1
                Outputs: [kv]
 Projection Est. ? rows
-│     Expressions: arrayElement(byte, \'456\'):=`__byte__\'456\'`
+│     Expressions: arrayElement(byte, \'456\'):=byte[\'456\']
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
-      │     Condition: `__byte__\'123\'` = 1
+      │     Condition: (byte[\'123\']) = 1
       └─ TableScan test.array_element_rewrite_46017 Est. ? rows
-               Where: `__byte__\'123\'` = 1
-               Outputs: [__byte__\'456\', __byte__\'123\']
+               Where: (byte[\'123\']) = 1
+               Outputs: [byte]
 Projection Est. ? rows
-│     Expressions: arrayElement(ta.kv, \'456\'):=kv{\'456\'}
+│     Expressions: arrayElement(kv, \'456\'):=kv[\'456\']
 └─ Gather Exchange Est. ? rows
    └─ Full Join Est. ? rows
       │     Condition: 
-      │     Filter: (kv{\'789\'} + kv_1{\'789\'}) = 0
+      │     Filter: ((kv[\'789\']) + (kv_1[\'789\'])) = 0
       ├─ Gather Exchange Est. ? rows
       │  └─ TableScan test.array_element_rewrite_46017 Est. ? rows
       │           Outputs: [kv]
       └─ Gather Exchange Est. ? rows
          └─ Filter Est. ? rows
-            │     Condition: kv_1{\'123\'} = 1
+            │     Condition: (kv_1[\'123\']) = 1
             └─ TableScan test.array_element_rewrite_46017 Est. ? rows
-                     Where: kv{\'123\'} = 1
+                     Where: (kv[\'123\']) = 1
                      Outputs: kv_1:=kv
 Projection Est. ? rows
-│     Expressions: arrayElement(ta.byte, \'456\'):=`__byte__\'456\'`
+│     Expressions: arrayElement(byte, \'456\'):=byte[\'456\']
 └─ Gather Exchange Est. ? rows
    └─ Full Join Est. ? rows
       │     Condition: 
-      │     Filter: (`__byte__\'789\'` + `__byte__\'789\'_1`) = 0
+      │     Filter: ((byte[\'789\']) + (byte_1[\'789\'])) = 0
       ├─ Gather Exchange Est. ? rows
       │  └─ TableScan test.array_element_rewrite_46017 Est. ? rows
-      │           Outputs: [__byte__\'456\', __byte__\'789\']
+      │           Outputs: [byte]
       └─ Gather Exchange Est. ? rows
          └─ Filter Est. ? rows
-            │     Condition: `__byte__\'123\'` = 1
+            │     Condition: (byte_1[\'123\']) = 1
             └─ TableScan test.array_element_rewrite_46017 Est. ? rows
-                     Where: `__byte__\'123\'` = 1
-                     Outputs: [__byte__\'123\'], __byte__\'789\'_1:=__byte__\'789\'
+                     Where: (byte[\'123\']) = 1
+                     Outputs: byte_1:=byte
+Projection Est. ? rows
+│     Expressions: arrayElement(ta.kv, \'456\'):=kv[\'456\']
+└─ Gather Exchange Est. ? rows
+   └─ Full Join Est. ? rows
+      │     Condition: 
+      │     Filter: ((kv[\'789\']) + (kv_1[\'789\'])) = 0
+      ├─ Gather Exchange Est. ? rows
+      │  └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+      │           Outputs: [kv]
+      └─ Gather Exchange Est. ? rows
+         └─ Filter Est. ? rows
+            │     Condition: (kv_1[\'123\']) = 1
+            └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+                     Where: (kv[\'123\']) = 1
+                     Outputs: kv_1:=kv
+Projection Est. ? rows
+│     Expressions: arrayElement(ta.byte, \'456\'):=byte[\'456\']
+└─ Gather Exchange Est. ? rows
+   └─ Full Join Est. ? rows
+      │     Condition: 
+      │     Filter: ((byte[\'789\']) + (byte_1[\'789\'])) = 0
+      ├─ Gather Exchange Est. ? rows
+      │  └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+      │           Outputs: [byte]
+      └─ Gather Exchange Est. ? rows
+         └─ Filter Est. ? rows
+            │     Condition: (byte_1[\'123\']) = 1
+            └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+                     Where: (byte[\'123\']) = 1
+                     Outputs: byte_1:=byte

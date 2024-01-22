@@ -66,6 +66,10 @@ namespace
             first = false;
 
             res << type->getName();
+            if (type->isMap())
+                res << " KV";
+            else if (type->isByteMap())
+                res << " BYTE";
         }
 
         return res.str();

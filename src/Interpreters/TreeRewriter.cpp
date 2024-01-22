@@ -54,7 +54,7 @@
 
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 
 #include <IO/WriteHelpers.h>
@@ -1090,19 +1090,12 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
         // @ByteMap: special handling map implicit column
         for (const auto & unknown_required_source_column : unknown_required_source_columns)
         {
-            if (isMapImplicitKeyNotKV(unknown_required_source_column))
+            if (isMapImplicitKey(unknown_required_source_column))
             {
                 String map_name = parseMapNameFromImplicitColName(unknown_required_source_column);
                 auto column = source_columns.tryGetByName(map_name);
-                if (column && column->type->isMap() && !column->type->isMapKVStore())
-                    source_columns.emplace_back(unknown_required_source_column, typeid_cast<const DataTypeByteMap &>(*column->type).getValueTypeForImplicitColumn());
-            }
-            else if (isMapKV(unknown_required_source_column)) /// handle KV Store
-            {
-                String map_name = parseMapNameFromImplicitKVName(unknown_required_source_column);
-                auto column = source_columns.tryGetByName(map_name);
-                if (column && column->type->isMap() && column->type->isMapKVStore())
-                    source_columns.emplace_back(unknown_required_source_column, typeid_cast<const DataTypeByteMap &>(*column->type).getMapStoreType(unknown_required_source_column));
+                if (column && column->type->isByteMap())
+                    source_columns.emplace_back(unknown_required_source_column, typeid_cast<const DataTypeMap &>(*column->type).getValueTypeForImplicitColumn());
             }
         }
     }

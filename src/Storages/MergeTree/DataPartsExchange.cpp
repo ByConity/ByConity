@@ -38,7 +38,6 @@
 #include <IO/LimitReadBuffer.h>
 #include <common/scope_guard.h>
 #include <Parsers/parseQuery.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/MapHelpers.h>
 
 #include <Poco/File.h>
@@ -443,7 +442,7 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
         }
         else
         {
-            if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
+            if (enable_compact_map_data && isMapImplicitKey(file_name))
                 ++it;
             else
             {
@@ -465,15 +464,15 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
     writeBoolText(enable_compact_map_data, out);
 
     using pair = std::pair<String, MergeTreeDataPartChecksum>;
-    std::vector<pair> checksumsVector;
+    std::vector<pair> checksums_vector;
 
     for (auto it = checksums.files.begin(); it != checksums.files.end(); it++)
-        checksumsVector.emplace_back(*it);
+        checksums_vector.emplace_back(*it);
 
     if (enable_compact_map_data)
     {
         // when enabling compact map data, it needs to sort the checksum.files, because all implicit columns of a map column need to transfer by order.
-        sort(checksumsVector.begin(), checksumsVector.end(), [](const pair &x, const pair &y) -> int {
+        sort(checksums_vector.begin(), checksums_vector.end(), [](const pair &x, const pair &y) -> int {
             return x.second.file_offset < y.second.file_offset;
         });
     }
@@ -498,13 +497,13 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
         }
     }
 
-    for (const auto & it : checksumsVector)
+    for (const auto & it : checksums_vector)
     {
         String file_name = it.first;
         String path;
         UInt64 size;
 
-        if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
+        if (enable_compact_map_data && isMapImplicitKey(file_name))
         {
             path = fs::path(part->getFullRelativePath()) / getMapFileNameFromImplicitFileName(file_name);
             size = it.second.file_size;
@@ -519,7 +518,7 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
         writeBinary(size, out);
 
         HashingWriteBuffer hashing_out(out);
-        if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
+        if (enable_compact_map_data && isMapImplicitKey(file_name))
         {
             UInt64 offset = it.second.file_offset;
             auto file_in = disk->readFile(path);
@@ -1020,7 +1019,7 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
         // When enable compact map data and the stream is implicit column, the file stream need to append.
         bool need_append = false;
         String file_name = stream_name;
-        if (enable_compact_map_data && isMapImplicitKeyNotKV(stream_name))
+        if (enable_compact_map_data && isMapImplicitKey(stream_name))
         {
             need_append = true;
             file_name = getMapFileNameFromImplicitFileName(stream_name);
@@ -1034,8 +1033,15 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
                 " This may happen if we are trying to download part from malicious replica or logical error.",
                 ErrorCodes::INSECURE_PATH);
 
+        /// For compact map, we need to get correct offset because it may be differ from source replica due to clear map key commands.
+        /// For compact map, clear map key only remove checksum item, only when all keys of the map column has been removed, we will delete compated files.
+        UInt64 file_offset = 0; 
+        if (need_append && disk->exists(fs::path(part_download_path) / file_name))
+            file_offset = disk->getFileSize(fs::path(part_download_path) / file_name);
+
         auto file_out = disk->writeFile(
             fs::path(part_download_path) / file_name, {.mode = need_append ? WriteMode::Append : WriteMode::Rewrite});
+
         HashingWriteBuffer hashing_out(*file_out);
         copyDataWithThrottler(in, hashing_out, file_size, blocker.getCounter(), throttler);
 
@@ -1058,7 +1064,7 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
         if (stream_name != "checksums.txt" &&
             stream_name != "columns.txt" &&
             stream_name != IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME)
-            checksums.addFile(stream_name, file_size, expected_hash);
+            checksums.addFile(stream_name, file_offset, file_size, expected_hash);
 
         if (sync)
             hashing_out.sync();
@@ -1137,6 +1143,17 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDisk(
     new_data_part->modification_time = time(nullptr);
     new_data_part->loadColumnsChecksumsIndexes(true, false);
     new_data_part->getChecksums()->checkEqual(checksums, false);
+    if (new_data_part->getChecksums()->adjustDiffImplicitKeyOffset(checksums))
+    {
+        LOG_INFO(log, "Checksums has different implicit key offset, replace checksum for part {}", new_data_part->name);
+        /// Rewrite file with checksums, it's safe to replace the origin one in download process.
+        auto out = new_data_part->volume->getDisk()->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", {.buffer_size = 4096, .mode = WriteMode::Rewrite});
+        new_data_part->getChecksums()->write(*out);
+        out->finalize();
+        if (sync)
+            out->sync();
+    }
+
     return new_data_part;
 }
 

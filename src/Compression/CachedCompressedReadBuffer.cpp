@@ -60,8 +60,11 @@ bool CachedCompressedReadBuffer::nextImpl()
 
     /// It represents the end of file when the position exceeds the limit in hdfs shared storage or handling implicit column data in compact impl.
     /// TODO: handle hdfs case
-    if (/*(storage_type == StorageType::Hdfs || */is_limit /*)*/ && file_pos >= static_cast<size_t>(limit_offset_in_file))
+    if (/*(storage_type == StorageType::Hdfs || */is_limit /*)*/ && file_pos >= static_cast<size_t>(limit_offset_in_file)) {
+        owned_cell = nullptr;
+
         return false;
+    }
 
     /// Let's check for the presence of a decompressed block in the cache, grab the ownership of this block, if it exists.
     UInt128 key = cache->hash(path, file_pos);

@@ -24,7 +24,6 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnByteMap.h>
 #include <Columns/ColumnMap.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime64.h>
@@ -34,7 +33,6 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -131,17 +129,10 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"max_io_thread_name", std::make_shared<DataTypeString>()},
         {"max_io_thread_query_ms", std::make_shared<DataTypeUInt64>()},
 
-#ifdef USE_COMMUNITY_MAP
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"MaxIOThreadProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"Settings", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
         {"Graphviz", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
-#else
-        {"ProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-        {"MaxIOThreadProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-        {"Settings", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
-        {"Graphviz", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
-#endif
 
         {"used_aggregate_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"used_aggregate_function_combinators", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
@@ -284,7 +275,6 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
     {
         auto * column = columns[i++].get();
         /// Convert ptr and make simple check
-#ifdef USE_COMMUNITY_MAP
         auto * column_map = column ? &typeid_cast<ColumnMap &>(*column) : nullptr;
         if (column_map)
         {
@@ -302,24 +292,6 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
 
             offsets.push_back((offsets.empty() ? 0 : offsets.back()) + size);
         }
-#else
-        auto * column_map = column ? &typeid_cast<DB::ColumnByteMap &>(*column) : nullptr;
-        if (column_map)
-        {
-            auto & offsets = column_map->getOffsets();
-            auto & key_column = column_map->getKey();
-            auto & value_column = column_map->getValue();
-            size_t size = 0;
-            for (const auto& entry : *graphviz)
-            {
-                key_column.insertData(entry.first.c_str(), strlen(entry.first.c_str()));
-                value_column.insert(entry.second);
-                size++;
-            }
-
-            offsets.push_back((offsets.empty() ? 0 : offsets.back()) + size);
-        }
-#endif
     }
     else {
         columns[i++]->insertDefault();

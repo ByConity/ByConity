@@ -147,11 +147,21 @@ MutableColumnUniquePtr DataTypeLowCardinality::createColumnUnique(const IDataTyp
     return createColumnUniqueImpl(keys_type, creator);
 }
 
-bool DataTypeLowCardinality::canBeMapValueType() const
+bool DataTypeLowCardinality::canBeByteMapValueType() const
 {
     if (const auto * nullable_type = typeid_cast<const DataTypeNullable *>(dictionary_type.get()))
-        return nullable_type->getNestedType()->canBeMapValueType();
+        return nullable_type->getNestedType()->canBeByteMapValueType();
     return false;
+}
+
+Field DataTypeLowCardinality::stringToVisitorField(const String & ins) const
+{
+    return dictionary_type->stringToVisitorField(ins);
+}
+
+String DataTypeLowCardinality::stringToVisitorString(const String & ins) const
+{
+    return dictionary_type->stringToVisitorString(ins);
 }
 
 MutableColumnPtr DataTypeLowCardinality::createColumn() const

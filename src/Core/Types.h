@@ -85,7 +85,6 @@ enum class TypeIndex
     AggregateFunction,
     LowCardinality,
     Map,
-    ByteMap,
     BitMap64,
     Time,
     SketchBinary,
@@ -339,7 +338,6 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::AggregateFunction: return "AggregateFunction";
         case TypeIndex::LowCardinality: return "LowCardinality";
         case TypeIndex::Map:        return "Map";
-        case TypeIndex::ByteMap:    return "Map";
         case TypeIndex::BitMap64:  return "BitMap64";
         case TypeIndex::SketchBinary: return "SketchBinary";
     }

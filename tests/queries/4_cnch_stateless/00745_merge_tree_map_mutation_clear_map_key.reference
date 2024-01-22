@@ -1,0 +1,6 @@
+test wide part, compact map, clear map key
+select * from 00745_merge_tree_map_mutation_clear_map_key
+1	{'k1':'v1','k2':'v2'}	{2:20,221:10}	{1.11:11.1,1.112:22.2}
+clear some map keys
+select * from 00745_merge_tree_map_mutation_clear_map_key
+1	{'k1':'v1'}	{221:10}	{1.112:22.2}

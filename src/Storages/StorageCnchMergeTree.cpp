@@ -103,6 +103,7 @@ namespace ErrorCodes
 {
     extern const int ILLEGAL_COLUMN;
     extern const int LOGICAL_ERROR;
+    extern const int BAD_ARGUMENTS;
     extern const int INDEX_NOT_USED;
     extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
     extern const int SUPPORT_IS_DISABLED;
@@ -1700,8 +1701,18 @@ PrunedPartitions StorageCnchMergeTree::getPrunedPartitions(
     return pruned_partitions;
 }
 
-ServerDataPartsVector
-StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
+void StorageCnchMergeTree::checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
+{
+    MergeTreeSettingsPtr current_settings = getChangedSettings(new_settings);
+
+    /// do not support compact map in CnchMergeTree
+    if (current_settings->enable_compact_map_data == true)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Compact map is not supported in CnchMergeTree.");
+
+    MergeTreeMetaBase::checkColumnsValidity(columns);
+}
+
+ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
 {
     Int64 primary_txn_id = local_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
     TxnTimestamp start_time = local_context->getCurrentTransaction()->getStartTime();
@@ -2236,7 +2247,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     alter_act.setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
 
     commands.apply(new_metadata, local_context);
-    checkColumnsValidity(new_metadata.columns);
+    checkColumnsValidity(new_metadata.columns, new_metadata.settings_changes);
 
     {
         String create_table_query = getCreateTableSql();
@@ -3299,6 +3310,10 @@ void StorageCnchMergeTree::checkUnderlyingDictionaryTable(const BitEngineHelper:
         throw Exception("Value column type should be UInt64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
+std::unique_ptr<MergeTreeSettings> StorageCnchMergeTree::getDefaultSettings() const
+{
+    return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+}
 
 StorageID StorageCnchMergeTree::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
 {

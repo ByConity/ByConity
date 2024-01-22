@@ -27,7 +27,7 @@
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Compression/CompressedDataIndex.h>
 #include <Columns/ColumnArray.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
@@ -349,8 +349,11 @@ bool IMergeTreeReader::isLowCardinalityDictionary(const ISerialization::Substrea
     return substream_path.size() > 1 && substream_path[substream_path.size() - 2].type == ISerialization::Substream::Type::DictionaryKeys;
 }
 
-void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
-	const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type)
+void IMergeTreeReader::addByteMapStreams(
+    const NameAndTypePair & name_and_type, 
+    const String & col_name,
+	const ReadBufferFromFileBase::ProfileCallback & profile_callback, 
+    clockid_t clock_type)
 {
     ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
         String implicit_stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
@@ -420,11 +423,14 @@ static ReadBuffer * getStream(
 
     String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
 
-    auto it = streams.find(stream_name);
-    if (it == streams.end())
+    auto check_vadility = [&](String & stream_name_) -> bool { return streams.find(stream_name_) != streams.end(); };
+
+    if ((!name_and_type.type->isKVMap() && !check_vadility(stream_name))
+        || (name_and_type.type->isKVMap() && !tryConvertToValidKVStreamName(stream_name, check_vadility)))
         return nullptr;
 
-    IMergeTreeReaderStream & stream = *it->second;
+    IMergeTreeReaderStream & stream = *streams[stream_name];
+
     // Adjust right mark MUST be executed before seek(), otherwise seek position may over until_postion
     stream.adjustRightMark(current_task_last_mark);
 
@@ -478,7 +484,7 @@ void IMergeTreeReader::prefetchForAllColumns(
         try
         {
             auto & cache = caches[column_from_part.getNameInStorage()];
-            if (type->isMap() && !type->isMapKVStore())
+            if (type->isByteMap())
                 prefetchForMapColumn(priority, column_from_part, from_mark, continue_reading, current_task_last_mark);
             else
                 prefetchForColumn(
@@ -505,7 +511,7 @@ void IMergeTreeReader::prefetchForMapColumn(
     // collect all the substreams based on map column's name and its keys substream.
     // and somehow construct runtime two implicit columns(key&value) representation.
     auto keys_iter = map_column_keys.equal_range(name);
-    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*type);
     DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
 
     for (auto kit = keys_iter.first; kit != keys_iter.second; ++kit)
@@ -563,7 +569,7 @@ void IMergeTreeReader::readMapDataNotKV(
     // collect all the substreams based on map column's name and its keys substream.
     // and somehow construct runtime two implicit columns(key&value) representation.
     auto keys_iter = map_column_keys.equal_range(name);
-    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*type);
     DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
 
     std::map<String, std::pair<size_t, const IColumn *>> impl_key_values;
@@ -595,7 +601,7 @@ void IMergeTreeReader::readMapDataNotKV(
 
     // after reading all implicit values columns based files(built by keys), it's time to
     // construct runtime ColumnMap(key_column, value_column).
-    dynamic_cast<ColumnByteMap *>(const_cast<IColumn *>(column.get()))
+    dynamic_cast<ColumnMap *>(const_cast<IColumn *>(column.get()))
         ->fillByExpandedColumns(type_map, impl_key_values, std::min(max_rows_to_read, data_part->rows_count - next_row_number_to_read));
 }
 
@@ -608,7 +614,7 @@ size_t IMergeTreeReader::skipMapDataNotKV(const NameAndTypePair& name_and_type,
     // collect all the substreams based on map column's name and its keys substream.
     // and somehow construct runtime two implicit columns(key&value) representation.
     auto keys_iter = map_column_keys.equal_range(name);
-    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*type);
     DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
 
     String impl_key_name;

@@ -112,31 +112,13 @@ String FieldVisitorDump::operator() (const Map & x) const
     {
         if (it != x.begin())
             wb << ", ";
-        wb << applyVisitor(*this, *it);
+        Field tuple = Tuple{it->first, it->second};
+        wb << applyVisitor(*this, tuple);
     }
     wb << ')';
 
     return wb.str();
 }
-
-String FieldVisitorDump::operator() (const ByteMap & x) const
-{
-    WriteBufferFromOwnString wb;
-
-    wb << "Map_{";
-    for (auto it = x.begin(); it != x.end(); ++it)
-    {
-        if (it != x.begin())
-            wb << ", ";
-        wb << applyVisitor(*this, it->first);
-        wb << ":";
-        wb << applyVisitor(*this, it->second);
-    }
-    wb << '}';
-
-    return wb.str();
-}
-
 
 String FieldVisitorDump::operator() (const AggregateFunctionStateData & x) const
 {

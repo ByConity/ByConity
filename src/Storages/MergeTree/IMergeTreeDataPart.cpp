@@ -47,7 +47,7 @@
 #include <Parsers/queryToString.h>
 #include <DataTypes/Serializations/ISerialization.h>
 #include <DataTypes/NestedUtils.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 
 namespace CurrentMetrics
@@ -849,7 +849,7 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
     /// Motivation: memory for index is shared between queries - not belong to the query itself.
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
 
- 	// load versions before load checksum because loading checksum needs it to judge reading format.
+ 	/// load versions before load checksum because loading checksum needs it to judge reading format.
     loadVersions();
 
     loadUUID();
@@ -1397,10 +1397,11 @@ std::optional<bool> IMergeTreeDataPart::keepSharedDataInDecoupledStorage() const
 ColumnSize IMergeTreeDataPart::getMapColumnSizeNotKV(const IMergeTreeDataPart::ChecksumsPtr & checksums, const NameAndTypePair & column) const
 {
     ColumnSize size;
-    if (!column.type->isMap())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not handle type {} in method getMapColumnSizeNotKV", column.type->getName());
-    if (column.type->isMapKVStore())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not handle map kv type in method getMapColumnSizeNotKV");
+    if (!column.type->isByteMap())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Can not handle type {} in method getMapColumnSizeNotKV",
+            (column.type->isKVMap() ? column.type->getName() : "map kv"));
     for (auto & name_csm : checksums->files)
     {
         if (isMapImplicitFileNameOfSpecialMapName(name_csm.first, column.name))
@@ -1839,7 +1840,7 @@ bool IMergeTreeDataPart::hasOnlyOneCompactedMapColumnNotKV() const
     if (columns_ptr->size() != 1)
         return false;
     const auto type = columns_ptr->begin()->type;
-    return type->isMap() && !type->isMapKVStore() && versions->enable_compact_map_data;
+    return type->isByteMap() && versions->enable_compact_map_data;
 }
 
 void IMergeTreeDataPart::makeCloneOnDisk(const DiskPtr & disk, const String & directory_name) const
@@ -1963,7 +1964,7 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
 
     for (const NameAndTypePair & name_type : storage.getInMemoryMetadataPtr()->getColumns().getAllPhysical())
     {
-        if (name_type.type->isMap() && !name_type.type->isMapKVStore())
+        if (name_type.type->isByteMap())
         {
             /// need escape map column name first to match filenames in checksums
             auto [curr, end] = getMapColumnRangeFromOrderedFiles(escapeForFileName(name_type.name), files);

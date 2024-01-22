@@ -148,12 +148,10 @@ void FieldVisitorHash::operator() (const Map & x) const
     hash.update(x.size());
 
     for (const auto & elem : x)
-        applyVisitor(*this, elem);
-}
-
-void FieldVisitorHash::operator() ([[maybe_unused]] const ByteMap & x) const
-{
-    throw Exception("FieldVisitorHash Map type not implemented!", ErrorCodes::NOT_IMPLEMENTED);
+    {
+        applyVisitor(*this, elem.first);
+        applyVisitor(*this, elem.second);
+    }
 }
 
 void FieldVisitorHash::operator() (const Array & x) const

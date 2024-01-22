@@ -19,7 +19,6 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <Columns/ColumnByteMap.h>
 #include <Compression/CompressedReadBufferFromFile.h>
 #include <Compression/CompressionFactory.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -126,9 +125,9 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
     const auto & columns = metadata_snapshot->getColumns();
     for (const auto & it : columns_list)
     {
-        if (it.type->isMap() && !it.type->isMapKVStore())
+        if (it.type->isByteMap())
             continue;
-        else if (isMapImplicitKeyNotKV(it.name))
+        else if (isMapImplicitKey(it.name))
             addByteMapStreams({it}, parseMapNameFromImplicitColName(it.name), default_codec->getFullCodecDesc());
         else
             addStreams(it, columns.getCodecDescOrDefault(it.name, default_codec));
@@ -681,7 +680,7 @@ void MergeTreeDataPartWriterWide::finishDataSerialization(IMergeTreeDataPart::Ch
         auto it = columns_list.begin();
         for (size_t i = 0; i < columns_list.size(); ++i, ++it)
         {
-            if (it->type->isMap() && !it->type->isMapKVStore())
+            if (it->type->isByteMap())
             {
                 continue;
             }
@@ -743,7 +742,7 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
         finishPrimaryIndexSerialization(checksums, sync);
 
     finishSkipIndicesSerialization(checksums, sync);
-    
+
     finishBitmapIndexSerialization(checksums);
 
     finishSegmentBitmapIndexSerialization(checksums);

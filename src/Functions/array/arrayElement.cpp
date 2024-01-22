@@ -28,8 +28,8 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/MapHelpers.h>
 #include <Core/ColumnNumbers.h>
 #include <Columns/ColumnArray.h>
 #include <Core/Field.h>
@@ -41,6 +41,7 @@
 #include <Columns/ColumnMap.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+#include <Parsers/ASTLiteral.h>
 
 
 namespace DB
@@ -53,6 +54,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int ZERO_ARRAY_OR_TUPLE_INDEX;
 }
+
 namespace ArrayImpl
 {
 
@@ -914,7 +916,8 @@ ColumnPtr FunctionArrayElement::executeMap(
 {
     const auto * col_map = checkAndGetColumn<ColumnMap>(arguments[0].column.get());
     const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(arguments[0].column.get());
-    if (!col_map && !col_const_map)
+    const DataTypeMap * map_type = checkAndGetDataType<DataTypeMap>(arguments[0].type.get());
+    if ((!col_map && !col_const_map) || !map_type)
         return nullptr;
 
     if (col_const_map)
@@ -939,6 +942,13 @@ ColumnPtr FunctionArrayElement::executeMap(
     else
     {
         Field index = (*arguments[1].column)[0];
+
+        /// try convert const index to right type
+        auto index_lit = std::make_shared<ASTLiteral>(index);
+        Field key_field = tryConvertToMapKeyField(map_type->getKeyType(), index_lit->getColumnName());
+        if (!key_field.isNull())
+            index = key_field;
+
         executed = matchKeyToIndexNumberConst(keys_data, offsets, index, indices_data)
             || matchKeyToIndexStringConst(keys_data, offsets, index, indices_data);
     }
@@ -979,9 +989,6 @@ DataTypePtr FunctionArrayElement::getReturnTypeImpl(const DataTypes & arguments)
 {
     if (const auto * map_type = checkAndGetDataType<DataTypeMap>(arguments[0].get()))
         return map_type->getValueType();
-
-    if (const auto * byte_map_type = checkAndGetDataType<DataTypeByteMap>(arguments[0].get()))
-        return byte_map_type->getValueType();
 
     const auto * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
     if (!array_type)

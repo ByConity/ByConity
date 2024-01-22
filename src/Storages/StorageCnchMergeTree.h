@@ -208,6 +208,8 @@ public:
 
     PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
 
+    void checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+
     /// parse bucket number set from where clause, only works for single-key cluster by
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
@@ -291,6 +293,8 @@ private:
     void checkUnderlyingDictionaryTable(const BitEngineHelper::DictionaryDatabaseAndTable & dict_table) override;
 
     /// *********** END OF BitEngine-related members *********** ///
+
+    std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
 };
 
 using StorageCnchMergeTreePtr = std::shared_ptr<StorageCnchMergeTree>;

@@ -732,5 +732,9 @@ bool StorageCloudMergeTree::getQueryProcessingStageWithAggregateProjection(
     return false;
 }
 
+std::unique_ptr<MergeTreeSettings> StorageCloudMergeTree::getDefaultSettings() const
+{
+    return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+}
 
 }

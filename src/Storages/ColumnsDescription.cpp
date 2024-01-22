@@ -41,7 +41,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeNested.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/MapHelpers.h>
@@ -102,7 +102,7 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
         writeEscapedString(queryToString(default_desc.expression), buf);
     }
 
-    UInt8 flag = type->getFlags();
+    UInt16 flag = type->getFlags();
 
     while (flag)
     {
@@ -117,6 +117,12 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
             writeChar('\t', buf);
             DB::writeText("KV", buf);
             flag ^= TYPE_MAP_KV_STORE_FLAG;
+        }
+        else if (flag & TYPE_MAP_BYTE_STORE_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("BYTE", buf);
+            flag ^= TYPE_MAP_BYTE_STORE_FLAG;
         }
         else if (flag & TYPE_BITENGINE_ENCODE_FLAG)
         {
@@ -142,6 +148,8 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
             DB::writeText("SegmentBitmapIndex", buf);
             flag ^= TYPE_SEGMENT_BITMAP_INDEX_FLAG;
         }
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown flag {}", flag);
     }
 
     if (!comment.empty())
@@ -546,10 +554,8 @@ std::optional<NameAndTypePair> ColumnsDescription::tryGetMapImplicitColumn(const
         auto ordinary_columns = getOrdinary();
         for (auto & nt : ordinary_columns)
         {
-            if (nt.type->isMap() && !nt.type->isMapKVStore() && isMapImplicitKeyOfSpecialMapName(column_name, nt.name))
-                return NameAndTypePair(column_name, typeid_cast<const DataTypeByteMap &>(*nt.type).getValueTypeForImplicitColumn());
-            else if (nt.type->isMap() && nt.type->isMapKVStore() && isMapKVOfSpecialMapName(column_name, nt.name))
-                return NameAndTypePair(column_name, typeid_cast<const DataTypeByteMap &>(*nt.type).getMapStoreType(column_name));
+            if (nt.type->isByteMap() && isMapImplicitKeyOfSpecialMapName(column_name, nt.name))
+                return NameAndTypePair(column_name, typeid_cast<const DataTypeMap &>(*nt.type).getValueTypeForImplicitColumn());
         }
     }
     return {};

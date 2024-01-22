@@ -1495,19 +1495,15 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             false);
     }
 
-    auto * merge_tree_storage = dynamic_cast<MergeTreeMetaBase *>(res.get());
-    if (merge_tree_storage)
+    try
     {
-        try
-        {
-            merge_tree_storage->checkColumnsValidity(properties.columns);
-        }
-        catch (...)
-        {
-            /// remove directory
-            merge_tree_storage->drop();
-            throw;
-        }
+        res->checkColumnsValidity(properties.columns);
+    }
+    catch (...)
+    {
+        /// remove directory
+        res->drop();
+        throw;
     }
 
     if (from_path && !res->storesDataOnDisk())

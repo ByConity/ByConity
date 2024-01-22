@@ -1,0 +1,15 @@
+test invalid column name who is map implicit key
+
+test invalid column name whose type is map
+
+test invalid map key or value type
+
+test create column whose name is same with func column name
+
+test create CnchMergeTree table with enable_compact_map_data enabled
+
+test modify enable_compact_map_data to 1
+
+test create CnchMergeTree table with nullable map value
+
+test modify map column to nullable value

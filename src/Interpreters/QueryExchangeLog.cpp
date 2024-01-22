@@ -17,7 +17,7 @@
 #include <array>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -63,11 +63,7 @@ NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
         {"disk_partition_writer_write_num", std::make_shared<DataTypeUInt64>()},
         {"disk_partition_writer_commit_ms", std::make_shared<DataTypeUInt64>()},
 
-#ifdef USE_COMMUNITY_MAP
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-#else
-        {"ProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-#endif
     };
 }
 

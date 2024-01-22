@@ -27,7 +27,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/NestedUtils.h>
@@ -37,6 +37,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTPartition.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
@@ -687,52 +688,6 @@ NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
         NameAndTypePair("_part_row_number", std::make_shared<DataTypeUInt64>()),
         RowExistsColumn::ROW_EXISTS_COLUMN,
     };
-}
-
-void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns) const
-{
-    NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
-
-    for (auto & column: columns.getAll())
-    {
-        /// check func columns
-        for (auto & [name, type]: func_columns)
-        {
-            if (name == column.name)
-                throw Exception("Column " + backQuoteIfNeed(column.name) + " is reserved column", ErrorCodes::ILLEGAL_COLUMN);
-        }
-
-        /// block implicit key name for MergeTree family
-        if (isMapImplicitKey(column.name))
-            throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::ILLEGAL_COLUMN);
-
-        if (column.type && column.type->isMap())
-        {
-            auto escape_name = escapeForFileName(column.name + getMapSeparator());
-            auto pos = escape_name.find(getMapSeparator());
-            /// The name of map column should not contain map separator, which is convenient for extracting map column name from a implicit column name.
-            if (pos + getMapSeparator().size() != escape_name.size())
-                throw Exception(
-                    ErrorCodes::ILLEGAL_COLUMN,
-                    "Map column name {} is invalid because its escaped name {} contains reserved word {}",
-                    backQuoteIfNeed(column.name),
-                    backQuoteIfNeed(escape_name),
-                    getMapSeparator());
-
-            if (storage_settings.get()->enable_compact_map_data)
-            {
-                const auto & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
-                if (type_map.getValueType()->lowCardinality())
-                {
-                    throw Exception("Column " + backQuoteIfNeed(column.name) + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable compact map", ErrorCodes::ILLEGAL_COLUMN);
-                }
-            }
-        }
-
-        // _row_exists is reserved for DELETE mutation.
-        if (column.name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
-            throw Exception("Column name " + backQuoteIfNeed(column.name) + " is reserved for DELETE mutation.", ErrorCodes::ILLEGAL_COLUMN);
-    }
 }
 
 void MergeTreeMetaBase::insertQueryIdOrThrow(const String & query_id, size_t max_queries) const
@@ -1661,6 +1616,117 @@ UInt64 MergeTreeMetaBase::getTableHashForClusterBy() const
 
     return cluster_definition_hash;
 
+}
+
+MergeTreeSettingsPtr MergeTreeMetaBase::getChangedSettings(const ASTPtr new_settings) const
+{
+    MergeTreeSettingsPtr changed_settings = getSettings();
+    if (new_settings)
+    {
+        const auto & new_changes = new_settings->as<const ASTSetQuery &>().changes;
+        auto copy = getDefaultSettings();
+        copy->applyChanges(new_changes);
+        changed_settings = std::move(copy);
+    }
+
+    return changed_settings;
+}
+
+void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
+{
+    NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
+    MergeTreeSettingsPtr current_settings = getChangedSettings(new_settings);
+
+    auto columns_physical = columns.getAllPhysical();
+    for (auto & column: columns_physical)
+    {
+        /// Check func columns
+        for (auto & [name, type]: func_columns)
+        {
+            if (name == column.name)
+                throw Exception("Column " + backQuoteIfNeed(column.name) + " is reserved column", ErrorCodes::BAD_ARGUMENTS);
+        }
+
+        /// block implicit key name for MergeTree family
+        if (isMapImplicitKey(column.name))
+            throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::BAD_ARGUMENTS);
+
+        /// Block implicit key name for MergeTree family
+        if (column.type && column.type->isMap())
+        {
+            const auto & type_map = typeid_cast<const DataTypeMap &>(*column.type);
+            /// Check map validity
+            type_map.checkValidity();
+
+            /// Check constraint for KVMap
+            if (column.type->isKVMap())
+            {
+                // To facilitate the processing of file formats compatible with community map and ByteKV map, we restrict the column names of KV map.
+                for (const auto & key : MAP_KV_RESERVED_KEYS)
+                {
+                    if (column.name.find(key) != String::npos)
+                        throw Exception(
+                            "Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word " + key, ErrorCodes::BAD_ARGUMENTS);
+                }
+            }
+            /// Check constraint for ByteMap
+            else
+            {
+                /// To compatible with old table which may have a Map(xx, Nullable(xx)) type, we can't check this in DataTypeMap
+                /// DataTypeLowCardinality->isNullable is false
+                if (type_map.getValueType()->isNullable())
+                    throw Exception(
+                        ErrorCodes::BAD_ARGUMENTS,
+                        "ByteMap column in table cannot have nullable value type, but column {} has type {}",
+                        backQuoteIfNeed(column.name),
+                        type_map.getName());
+
+                auto escape_name = escapeForFileName(column.name + getMapSeparator());
+                auto pos = escape_name.find(getMapSeparator());
+                /// The name of map column should not contain map separator, which is convenient for extracting map column name from a implicit column name.
+                if (pos + getMapSeparator().size() != escape_name.size())
+                    throw Exception(
+                        ErrorCodes::BAD_ARGUMENTS,
+                        "Map column name {} is invalid because its escaped name {} contains reserved prefix word {} of map implicit column",
+                        backQuoteIfNeed(column.name),
+                        backQuoteIfNeed(escape_name),
+                        getMapSeparator());
+
+                if (current_settings->enable_compact_map_data && type_map.getValueType()->lowCardinality())
+                    throw Exception(
+                        "Column " + backQuoteIfNeed(column.name)
+                            + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable "
+                              "enable_compact_map_data",
+                        ErrorCodes::BAD_ARGUMENTS);
+            }
+        }
+        else
+        {
+            /// Column names of non map types need to meet the following constraints, otherwise data will be written to the same file, resulting in errors.
+            /// For example: `col.key` UInt64, `col` Map<String, UInt64> KV, these two columns will both write data to file col%2Ekey.bin.
+            auto map_col = std::find_if(columns_physical.begin(), columns_physical.end(), [&](auto & col) {
+                if (col.type->isKVMap())
+                {
+                    for (const auto & key : MAP_KV_RESERVED_KEYS)
+                    {
+                        if (startsWith(column.name, col.name + key))
+                            return true;
+                    }
+                }
+                return false;
+            });
+            if (map_col != columns_physical.end())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "The name of column {} is not compatible with that of KV map column {}",
+                    backQuoteIfNeed(column.name),
+                    backQuoteIfNeed(map_col->name));
+        }
+
+        // _row_exists is reserved for DELETE mutation.
+        if (column.name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
+            throw Exception("Column name " + backQuoteIfNeed(column.name) + " is reserved for DELETE mutation.", ErrorCodes::ILLEGAL_COLUMN);
+    }
 }
 
 bool MergeTreeMetaBase::isBitEngineEncodeColumn(const String & name) const

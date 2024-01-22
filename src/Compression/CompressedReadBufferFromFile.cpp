@@ -40,7 +40,11 @@ bool CompressedReadBufferFromFile::nextImpl()
 {
     /// TODO: handle hdfs case
     if (/*(storage_type == StorageType::Hdfs ||*/ is_limit /*)*/ && file_in.getPosition() >= limit_offset_in_file)
+    {
+        size_compressed = 0;
+
         return false;
+    }
 
     size_t size_decompressed = 0;
     size_t size_compressed_without_checksum;

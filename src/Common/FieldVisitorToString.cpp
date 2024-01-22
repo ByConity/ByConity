@@ -139,22 +139,6 @@ String FieldVisitorToString::operator() (const Map & x) const
 {
     WriteBufferFromOwnString wb;
 
-    wb << '(';
-    for (auto it = x.begin(); it != x.end(); ++it)
-    {
-        if (it != x.begin())
-            wb << ", ";
-        wb << applyVisitor(*this, *it);
-    }
-    wb << ')';
-
-    return wb.str();
-}
-
-String FieldVisitorToString::operator() (const ByteMap & x) const
-{
-    WriteBufferFromOwnString wb;
-
     wb << '{';
     for (auto it = x.begin(); it != x.end(); ++it)
     {
