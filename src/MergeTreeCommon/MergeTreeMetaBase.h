@@ -20,7 +20,6 @@
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <MergeTreeCommon/IMergeTreePartMeta.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
-#include <Storages/BitEngine/BitEngineHelper.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
@@ -34,8 +33,6 @@ namespace DB
 {
 
 class MutationCommands;
-class BitEngineDictionaryManager;
-using BitEngineDictionaryManagerPtr = std::shared_ptr<BitEngineDictionaryManager>;
 
 class MergeTreeMetaBase : public IStorage, public WithMutableContext, public MergeTreeDataPartTypeHelper
 {
@@ -397,26 +394,6 @@ public:
 
     virtual bool supportsOptimizer() const override { return true; }
 
-    /// *********** START OF BitEngine-related members *********** ///
-    // BitEngine mode means the storage can work for BitEngine encode/decode
-    bool isBitEngineMode() const { return bitengine_dictionary_manager != nullptr; }
-    /// BitEngine table means the storage has `BitMap64 BitEngineEncode` clause,
-    /// that's to say, it's a `BitEngine table` in syntax.
-    bool isBitEngineTable() const { return !bitengine_columns.empty(); }
-    bool isBitEngineEncodeColumn(const String & name) const;
-    bool isBitEngineDictTable() const { return !getBitEngineConstraints().empty(); }
-
-    ConstraintsDescription getBitEngineConstraints() const;
-    void checkBitEngineConstraints() const;
-
-    /// parse BitEngine column and construct BitEngineDictionaryManager, it's called after
-    /// all schema and constraints checks are passed
-    virtual void registerBitEngineDictionaries();
-
-    auto getBitEngineDictionaryManager() { return bitengine_dictionary_manager; }
-
-    /// *********** END OF BitEngine-related members *********** ///
-
 protected:
     friend class IMergeTreeDataPart;
     friend class MergeTreeDataPartCNCH;
@@ -562,26 +539,6 @@ protected:
 
     /// Checks whether the column is in the primary key, possibly wrapped in a chain of functions with single argument.
     bool isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(const ASTPtr & node, const StorageMetadataPtr & metadata_snapshot) const;
-
-    /// *********** START OF BitEngine-related members *********** ///
-    BitEngineDictionaryManagerPtr bitengine_dictionary_manager{nullptr};
-    BitEngineDictionaryTableMapping bitengine_dictionary_tables_mapping;
-    NamesAndTypesList bitengine_columns;
-
-    BitEngineDictionaryTableMapping parseUnderlyingDictionaryDependency(const String & mapping_str) const;
-    /// in initializing, parse BitEngine-related components (like columns, underlying_dictionary_table setting)
-    /// to check primarily whether there're illegal syntax
-    void parseAndCheckForBitEngine();
-
-    /// check whethere the underlying dictionary table is legal
-    virtual void checkUnderlyingDictionaryTable(const BitEngineHelper::DictionaryDatabaseAndTable &) {}
-
-    /// validate a giving BitEngineDictionaryTableMapping object
-    void checkSchemaForBitEngineTableImpl(const BitEngineDictionaryTableMapping  & dict_dependencies, const ContextPtr & context_) const;
-    /// validate the member bitengine_dictionary_tables_mapping
-    virtual void checkSchemaForBitEngineTable(const ContextPtr & context_) const;
-
-    /// *********** END OF BitEngine-related members *********** ///
 
     /// Returns default settings for storage with possible changes from global config.
     virtual std::unique_ptr<MergeTreeSettings> getDefaultSettings() const = 0;

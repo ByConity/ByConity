@@ -187,15 +187,9 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 
-    /// check cluster by keys, for BitEngine, only when creating table first time
-    if (isBitEngineTable() && !attach_)
-        checkSchemaForBitEngineTable(context_);
-
     const auto & all_columns = getInMemoryMetadataPtr()->getColumns();
     MergeTreeBitmapIndex::checkValidBitmapIndexType(all_columns);
     MergeTreeSegmentBitmapIndex::checkSegmentBitmapStorageGranularity(all_columns, getSettings());
-
-    registerBitEngineDictionaries();
 }
 
 /// NOTE: it involve a RPC. We have a CnchStorageCache to avoid invoking this RPC frequently.
@@ -3260,54 +3254,6 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
         if (query_context->getSettingsRef().mutations_sync != 0)
             merge_mutate_thread->waitMutationFinish(mutation_entry->commit_time, timeout_ms);
     }
-}
-
-void StorageCnchMergeTree::checkSchemaForBitEngineTable(const ContextPtr & context_) const
-{
-    if (context_->getServerType() != ServerType::cnch_server)
-        return;
-
-    MergeTreeMetaBase::checkSchemaForBitEngineTable(context_);
-}
-
-void StorageCnchMergeTree::checkUnderlyingDictionaryTable(const BitEngineHelper::DictionaryDatabaseAndTable & dict_table)
-{
-    /// 1. check the cluster_by clause, it should keep consistent with the BitEngine table
-    auto context_v = getContext();
-    auto dict_storage = DatabaseCatalog::instance().getTable(StorageID{dict_table.database, dict_table.table}, context_v);
-
-    if (!dict_storage)
-    {
-        throw Exception(fmt::format("Fail to get StoragePtr of table {}.{}",
-            dict_table.database, dict_table.table), ErrorCodes::LOGICAL_ERROR);
-    }
-
-    /// 2. check dictionary key type
-    auto dict_physical_columns = dict_storage->getInMemoryMetadataPtr()->getColumns().getAllPhysical();
-    NameAndTypePair key_column, value_column;
-    for (const auto & column : dict_physical_columns)
-    {
-        if (column.name == "key")
-            key_column = column;
-        else if (column.name == "value")
-            value_column = column;
-    }
-
-    if (key_column.name.empty())
-        throw Exception("You should specify a column named `key`.", ErrorCodes::ILLEGAL_COLUMN);
-    if (value_column.name.empty())
-        throw Exception("You should specify a column named `value`.", ErrorCodes::ILLEGAL_COLUMN);
-
-    if (dict_table.dict_key_type == BitEngineHelper::KeyType::KEY_INTEGER &&
-        !WhichDataType(key_column.type).isUInt64())
-        throw Exception("Key column type should be UInt64 for a Integer BitEngine field",
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-    else if (dict_table.dict_key_type == BitEngineHelper::KeyType::KEY_STRING &&
-        !isString(key_column.type))
-        throw Exception("Key column type should be String for a String BitEngine field", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-    if (!WhichDataType(value_column.type).isUInt64())
-        throw Exception("Value column type should be UInt64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
 std::unique_ptr<MergeTreeSettings> StorageCnchMergeTree::getDefaultSettings() const

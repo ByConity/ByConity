@@ -350,9 +350,9 @@ bool IMergeTreeReader::isLowCardinalityDictionary(const ISerialization::Substrea
 }
 
 void IMergeTreeReader::addByteMapStreams(
-    const NameAndTypePair & name_and_type, 
+    const NameAndTypePair & name_and_type,
     const String & col_name,
-	const ReadBufferFromFileBase::ProfileCallback & profile_callback, 
+	const ReadBufferFromFileBase::ProfileCallback & profile_callback,
     clockid_t clock_type)
 {
     ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
@@ -697,12 +697,6 @@ size_t IMergeTreeReader::skipData(const NameAndTypePair & name_and_type,
         max_rows_to_skip, deserialize_settings, deserialize_state, &cache);
 }
 
-bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) const
-{
-    return storage.isBitEngineMode() && !settings.read_source_bitmap
-        && isBitmap64(column.type) && column.type->isBitEngineEncode();
-}
-
 bool IMergeTreeReader::hasBitmapIndexReader() const
 {
     if (index_executor && index_executor->valid())
@@ -770,11 +764,6 @@ NameAndTypePair IMergeTreeReader::columnTypeFromPart(const NameAndTypePair & req
             return required_column;
 
         return {String{it->first}, subcolumn_name, type, subcolumn_type};
-    }
-
-    if (checkBitEngineColumn({String{it->first}, *it->second}))
-    {
-        return {String{it->first}.append(BITENGINE_COLUMN_EXTENSION), type};
     }
 
     return {String{it->first}, type};

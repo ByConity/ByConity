@@ -3,7 +3,6 @@
 #include <Storages/StorageDictCloudMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageFactory.h>
-#include <Storages/BitEngine/BitEngineHelper.h>
 #include <Core/Block.h>
 #include <Parsers/ASTCreateQuery.h>
 
@@ -46,8 +45,6 @@ StorageDictCloudMergeTree::StorageDictCloudMergeTree(
 {
     log = &Poco::Logger::get(table_id_.getNameForLogs() + " (DictCloudMergeTree)");
 
-    checkBitEngineConstraints();
-    constraints = getBitEngineConstraints();
     init();
 }
 

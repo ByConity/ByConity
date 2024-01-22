@@ -87,8 +87,6 @@ StorageCloudMergeTree::StorageCloudMergeTree(
 
     if (getInMemoryMetadataPtr()->hasUniqueKey() && getSettings()->cloud_enable_dedup_worker)
         dedup_worker = std::make_unique<CloudMergeTreeDedupWorker>(*this);
-
-    registerBitEngineDictionaries();
 }
 
 void StorageCloudMergeTree::startup()

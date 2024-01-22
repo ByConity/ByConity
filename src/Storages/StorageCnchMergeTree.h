@@ -282,18 +282,6 @@ private:
     /// If something is wrong, throws an exception.
     void checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const;
 
-
-    /// *********** START OF BitEngine-related members *********** ///
-
-    /// check whether bitengine table and dictionary table has same CLUSTER BY clause
-    /// only CnChMergeTree use it when creating table, CloudMergeTree doesn't need it because it's more difficult
-    /// to get underlying dict table.
-    void checkSchemaForBitEngineTable(const ContextPtr & context_) const override;
-
-    void checkUnderlyingDictionaryTable(const BitEngineHelper::DictionaryDatabaseAndTable & dict_table) override;
-
-    /// *********** END OF BitEngine-related members *********** ///
-
     std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
 };
 

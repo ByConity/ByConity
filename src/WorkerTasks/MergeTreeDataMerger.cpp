@@ -585,6 +585,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     while (!check_cancel() && (block = merged_stream->read()))
     {
         rows_written += block.rows();
+
         to->write(block);
 
         manipulation_entry->rows_written = merged_stream->getProfileInfo().rows;
@@ -613,8 +614,8 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         throw Exception(
             "Written " + toString(rows_written) + " rows, but output rowid is " + toString(output_rowid), ErrorCodes::LOGICAL_ERROR);
 
+
     // gather columns
-    size_t normal_columns_gathered = 0;
     MergeTreeDataPartChecksums additional_column_checksums;
     if (merge_alg == MergeAlgorithm::Vertical)
     {
@@ -649,14 +650,10 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             /*can_use_adaptive_granularity = */ new_data_part->index_granularity_info.is_adaptive,
             /* rewrite_primary_key = */ false,
             /*blocks_are_granules_size = */ false,
-            context->getSettingsRef().optimize_map_column_serialization);
+            context->getSettingsRef().optimize_map_column_serialization,
+            /* enable_disk_based_key_index_ = */ false);
 
-        for (auto & [column_name, column_type] : gathering_columns)
-        {
-            if (column_type->isMap() && !column_type->isMapKVStore())
-                continue;
-            // gather each column
-            /// Prepare progress
+        auto gather_column = [&](const String & column_name) {
             Float64 progress_before = manipulation_entry->progress.load(std::memory_order_relaxed);
             Float64 column_weight = column_sizes->columnWeight(column_name);
             MergeStageProgress column_progress(progress_before, column_weight);
@@ -675,9 +672,10 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                     source_data_parts[part_num],
                     Names{column_name},
                     read_with_direct_io,
-                    /*take_column_types_from_storage*/ true,
+                    /*take_column_types_from_storage*/ true, /// default is true, in bitengine may set false,
                     /*quiet*/ false,
                     future_files);
+
                 column_part_source->setProgressCallback(
                     ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, column_progress));
 
@@ -751,6 +749,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             manipulation_entry->bytes_written_uncompressed.fetch_add(
                 column_gathered_stream.getProfileInfo().bytes, std::memory_order_relaxed);
             manipulation_entry->progress.store(progress_before + column_weight, std::memory_order_relaxed);
+        };
 
         for (auto & [column_name, column_type] : gathering_columns)
         {
@@ -758,13 +757,6 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                 continue;
 
             gather_column(column_name);
-
-            /// BitEngine table has a implicit column in part,
-            /// processes it here
-            if (data.isBitEngineMode() && isBitEngineDataType(column_type))
-            {
-                gather_column(column_name, BitEngineReadType::ONLY_ENCODE);
-            }
         }
 
         LOG_DEBUG(log, "Gathered {} columns in vertical merge, read {} rows for each column, part name is {}", gathering_columns.size(), rows_written, new_data_part->name);
