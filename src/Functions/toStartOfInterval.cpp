@@ -438,6 +438,11 @@ public:
         return true;
     }
 
+    Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override
+    {
+        return Monotonicity(/* is_monotonic */ true, /* is_positive */ true, /* is_always_monotonic */ true);
+    }
+
 private:
     ColumnPtr dispatchForColumns(
         const ColumnWithTypeAndName & time_column, const ColumnWithTypeAndName & interval_column, const DataTypePtr & result_type, const DateLUTImpl & time_zone) const
