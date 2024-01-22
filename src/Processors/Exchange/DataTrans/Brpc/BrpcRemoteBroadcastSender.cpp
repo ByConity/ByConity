@@ -149,15 +149,13 @@ void BrpcRemoteBroadcastSender::serializeChunkToIoBuffer(Chunk chunk, WriteBuffe
             level = settings.network_zstd_compression_level;
         const CompressionCodecPtr & codec = CompressionCodecFactory::instance().get(method, level);
         CompressedWriteBuffer compressed_out(out, codec, DBMS_DEFAULT_BUFFER_SIZE * 2);
-        NativeChunkOutputStream chunk_out(
-            compressed_out, DBMS_TCP_PROTOCOL_VERSION, header, !settings.low_cardinality_allow_in_native_format);
+        NativeChunkOutputStream chunk_out(compressed_out, header);
         chunk_out.write(chunk);
         compressed_out.next();
     }
     else
     {
-        NativeChunkOutputStream chunk_out(
-            out, DBMS_TCP_PROTOCOL_VERSION, header, !settings.low_cardinality_allow_in_native_format);
+        NativeChunkOutputStream chunk_out(out, header);
         chunk_out.write(chunk);
     }
 }

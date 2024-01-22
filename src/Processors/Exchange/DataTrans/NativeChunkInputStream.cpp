@@ -16,7 +16,6 @@
 #include "NativeChunkInputStream.h"
 
 #include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypeLowCardinality.h>
 #include <IO/ReadHelpers.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Common/typeid_cast.h>

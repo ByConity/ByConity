@@ -32,15 +32,13 @@ class CompressedWriteBuffer;
 class NativeChunkOutputStream
 {
 public:
-    NativeChunkOutputStream(WriteBuffer & ostr_, UInt64 client_revision_, const Block & header_, bool remove_low_cardinality_ = false);
+    NativeChunkOutputStream(WriteBuffer & ostr_, const Block & header_);
 
     void write(const Chunk & chunk);
 
 private:
     WriteBuffer & ostr;
-    UInt64 client_revision;
     Block header;
-    bool remove_low_cardinality;
 };
 
 using NativeChunkOutputStreamHolder = std::unique_ptr<NativeChunkOutputStream>;

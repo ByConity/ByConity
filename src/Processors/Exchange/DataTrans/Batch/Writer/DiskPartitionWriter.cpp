@@ -39,7 +39,6 @@ DiskPartitionWriter::DiskPartitionWriter(ContextPtr context_, DiskExchangeDataMa
     , key(std::move(key_))
     , log(&Poco::Logger::get("DiskPartitionWriter"))
     , data_queue(std::make_shared<BoundedDataQueue<Chunk>>(context->getSettingsRef().exchange_remote_receiver_queue_size))
-    , low_cardinality_allow_in_native_format(context->getSettings().low_cardinality_allow_in_native_format)
     , enable_disk_writer_metrics(context->getSettingsRef().log_query_exchange)
 {
     auto query_expiration_ts = context->getQueryExpirationTimeStamp();
@@ -169,7 +168,7 @@ void DiskPartitionWriter::runWriteTask()
         s.start();
     buf = mgr->createFileBufferForWrite(key);
     auto stream
-        = std::make_unique<NativeChunkOutputStream>(*buf, DBMS_TCP_PROTOCOL_VERSION, header, !low_cardinality_allow_in_native_format);
+        = std::make_unique<NativeChunkOutputStream>(*buf, header);
     if (enable_disk_writer_metrics)
         writer_metrics.create_file_ms << s.elapsedMilliseconds();
 
