@@ -4,6 +4,8 @@
 #include <common/types.h>
 #include <Common/FST.h>
 #include <Common/HashTable/StringHashMap.h>
+#include <Common/BucketLRUCache.h>
+#include <Common/ShardCache.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <IO/WriteBufferFromFileBase.h>
 #include <Interpreters/Context.h>
@@ -197,6 +199,8 @@ public:
 
     GinSegmentDictionaryPtr getDictionary(UInt32 segment_id_) const;
 
+    size_t cacheWeight() const;
+
 private:
     friend class GinIndexStoreDeserializer;
 
@@ -306,11 +310,43 @@ struct PostingsCacheForStore
     GinPostingsCachePtr getPostings(const String & query_string) const;
 };
 
+struct GinIndexStoreCacheSettings
+{
+    size_t lru_max_size {std::numeric_limits<size_t>::max()};
+
+    // Cache mapping bucket size
+    size_t mapping_bucket_size {5000};
+
+    // LRU queue update interval in seconds
+    size_t lru_update_interval {60};
+
+    size_t cache_shard_num {8};
+};
+
+enum class GinIndexStoreCacheState
+{
+    Caching,
+    Cached,
+    Deleting,
+};
+using GinIndexStoreCacheItem = std::pair<GinIndexStoreCacheState, GinIndexStorePtr>;
+
+struct GinIndexStoreWeightFunction
+{
+    size_t operator()(const GinIndexStoreCacheItem & cache_item) const
+    {
+        const auto & store = cache_item.second;
+        if (!store)
+            return 0;
+
+        return store->cacheWeight();
+    }
+};
+
 class GinIndexStoreFactory : private boost::noncopyable
 {
 public:
-    /// Get singleton of GinIndexStoreFactory
-    static GinIndexStoreFactory & instance();
+    GinIndexStoreFactory(const GinIndexStoreCacheSettings & settings);
 
     /// TODO get with data part or segment and batter cache info
     ///Get GinIndexStore by using index name and data part
@@ -323,8 +359,22 @@ public:
     using GinIndexStores = std::unordered_map<std::string, GinIndexStorePtr>;
 
 private:
-    GinIndexStores stores;
-    std::mutex mutex;
+    std::pair<bool, std::shared_ptr<GinIndexStoreCacheItem>> onEvictGinIndexStore(
+        [[maybe_unused]]const String & key, const std::shared_ptr<GinIndexStoreCacheItem>& item, size_t);
+
+    
+    void afterEvictGinIndexStore(
+        [[maybe_unused]] const std::vector<std::pair<String, std::shared_ptr<GinIndexStoreCacheItem>>>& removed_elements,
+        const std::vector<std::pair<String, std::shared_ptr<GinIndexStoreCacheItem>>>& updated_elements); 
+
+private:
+    size_t cache_shard_num;
+    std::unique_ptr<std::mutex[]> store_locks;
+
+    std::unique_ptr<std::unordered_map<String, std::set<String>>[]> part_to_indexes; //part path to gin index files
+
+    ShardCache<String, std::hash<String>, 
+        BucketLRUCache<String, GinIndexStoreCacheItem, std::hash<String>, GinIndexStoreWeightFunction>> stores_lru_cache;
 };
 
 }

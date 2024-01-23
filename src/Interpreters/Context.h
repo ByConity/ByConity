@@ -307,6 +307,9 @@ using NvmCachePtr = std::shared_ptr<NvmCache>;
 class IAsynchronousReader;
 using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
 
+class GinIndexStoreFactory;
+struct GinIndexStoreCacheSettings;
+
 enum class ServerType
 {
     standalone,
@@ -1431,6 +1434,10 @@ public:
     void setChecksumsCache(const ChecksumsCacheSettings & settings);
 
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
+
+
+    void setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings);
+    std::shared_ptr<GinIndexStoreFactory> getGinIndexStoreFactory() const;
 
     /// client for service discovery
     void initServiceDiscoveryClient();

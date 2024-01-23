@@ -1753,7 +1753,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
         {
             gin_part_helper = std::make_unique<GinDataLocalPartHelper>(*part);
         }
-        cache_in_store.store = GinIndexStoreFactory::instance().get(index_helper->getFileName(), std::move(gin_part_helper));
+        cache_in_store.store = context->getGinIndexStoreFactory()->get(index_helper->getFileName(), std::move(gin_part_helper));
     }
 
     const auto * gin_filter_condition = dynamic_cast<const MergeTreeConditionInverted *>(&*condition);
