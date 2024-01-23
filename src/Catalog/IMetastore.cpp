@@ -25,14 +25,14 @@ void IMetaStore::adaptiveBatchWrite(const BatchCommitRequest & req)
         batch_write = {};
     };
 
-    for (const auto & del_req : batch_write.deletes)
+    for (const auto & del_req : req.deletes)
     {
         if (del_req.size() + batch_write.size() >= max_batch_size)
             commit_rquest();
         batch_write.AddDelete(del_req);
     }
 
-    for (const auto & put_req: batch_write.puts)
+    for (const auto & put_req: req.puts)
     {
         if (put_req.size() + batch_write.size() >= max_batch_size)
             commit_rquest();
