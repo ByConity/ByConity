@@ -20,6 +20,7 @@
  */
 
 #include <Common/ThreadPool.h>
+#include <Common/setThreadName.h>
 #include <Common/Exception.h>
 #include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
@@ -51,6 +52,7 @@ namespace CurrentMetrics
     extern const Metric LocalThreadActive;
 }
 
+static constexpr auto DEFAULT_THREAD_NAME = "ThreadPool";
 
 template <typename Thread>
 ThreadPoolImpl<Thread>::ThreadPoolImpl(DB::CpuSetPtr cpu_set_)
@@ -255,6 +257,8 @@ void ThreadPoolImpl<Thread>::finalize()
     {
         std::unique_lock lock(mutex);
         shutdown = true;
+        /// We don't want threads to remove themselves from `threads` anymore, otherwise `thread.join()` will go wrong below in this function.
+        threads_remove_themselves = false;
     }
 
     new_job_or_shutdown.notify_all();
@@ -319,69 +323,42 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
         LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "add thread : {}", tid);
     }
 
+    bool job_is_done = false;
+    std::exception_ptr exception_from_job;
+
     while (true)
     {
+        /// This is inside the loop to also reset previous thread names set inside the jobs.
+        setThreadName(DEFAULT_THREAD_NAME);
+
         Job job;
-        bool need_shutdown = false;
 
         {
             std::unique_lock lock(mutex);
-            new_job_or_shutdown.wait(lock, [this] { return shutdown || !jobs.empty(); });
-            need_shutdown = shutdown;
 
-            if (!jobs.empty())
+            // Finish with previous job if any
+            if (job_is_done)
             {
-                /// std::priority_queue does not provide interface for getting non-const reference to an element
-                /// to prevent us from modifying its priority. We have to use const_cast to force move semantics on JobWithPriority::job.
-                job = std::move(const_cast<Job &>(jobs.top().job));
-                jobs.pop();
-            }
-            else
-            {
-                /// shutdown is true, simply finish the thread.
-                return;
-            }
-        }
-
-        if (!need_shutdown)
-        {
-            try
-            {
-                ALLOW_ALLOCATIONS_IN_SCOPE;
-                CurrentMetrics::Increment metric_active_threads(
-                    std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThreadActive : CurrentMetrics::LocalThreadActive);
-
-                job();
-                /// job should be reset before decrementing scheduled_jobs to
-                /// ensure that the Job destroyed before wait() returns.
-                job = {};
-            }
-            catch (...)
-            {
-                /// job should be reset before decrementing scheduled_jobs to
-                /// ensure that the Job destroyed before wait() returns.
-                job = {};
-
+                job_is_done = false;
+                if (exception_from_job)
                 {
-                    std::unique_lock lock(mutex);
                     if (!first_exception)
-                        first_exception = std::current_exception(); // NOLINT
+                        first_exception = exception_from_job;
                     if (shutdown_on_exception)
                         shutdown = true;
-                    --scheduled_jobs;
+                    exception_from_job = {};
                 }
 
+                --scheduled_jobs;
+
                 job_finished.notify_all();
-                new_job_or_shutdown.notify_all();
-                return;
+                if (shutdown)
+                    new_job_or_shutdown.notify_all(); /// `shutdown` was set, wake up other threads so they can finish themselves.
             }
-        }
 
-        {
-            std::unique_lock lock(mutex);
-            --scheduled_jobs;
+            new_job_or_shutdown.wait(lock, [&] { return !jobs.empty() || shutdown || threads.size() > std::min(max_threads, scheduled_jobs + max_free_threads); });
 
-            if (threads.size() > scheduled_jobs + max_free_threads)
+            if (jobs.empty() || threads.size() > std::min(max_threads, scheduled_jobs + max_free_threads))
             {
                 if constexpr (std::is_same_v<ThreadFromGlobalPool, Thread>)
                 {
@@ -394,14 +371,53 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
                     }
                 }
 
-                thread_it->detach();
-                threads.erase(thread_it);
-                job_finished.notify_all();
+                // We enter here if:
+                //  - either this thread is not needed anymore due to max_free_threads excess;
+                //  - or shutdown happened AND all jobs are already handled.
+                if (threads_remove_themselves)
+                {
+                    thread_it->detach();
+                    threads.erase(thread_it);
+                }
                 return;
+            }
+
+            /// std::priority_queue does not provide interface for getting non-const reference to an element
+            /// to prevent us from modifying its priority. We have to use const_cast to force move semantics on JobWithPriority::job.
+            job = std::move(const_cast<Job &>(jobs.top().job));
+            jobs.pop();
+
+            /// We don't run jobs after `shutdown` is set, but we have to properly dequeue all jobs and finish them.
+            if (shutdown)
+            {
+                job_is_done = true;
+                continue;
             }
         }
 
-        job_finished.notify_all();
+        ALLOW_ALLOCATIONS_IN_SCOPE;
+
+        /// Run the job.
+        try
+        {
+            CurrentMetrics::Increment metric_active_threads(
+                std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThreadActive : CurrentMetrics::LocalThreadActive);
+            job();
+
+            /// job should be reset before decrementing scheduled_jobs to
+            /// ensure that the Job destroyed before wait() returns.
+            job = {};
+        }
+        catch (...)
+        {
+            exception_from_job = std::current_exception();
+
+            /// job should be reset before decrementing scheduled_jobs to
+            /// ensure that the Job destroyed before wait() returns.
+            job = {};
+        }
+
+        job_is_done = true;
     }
 }
 
@@ -438,7 +454,7 @@ void GlobalThreadPool::initialize(size_t max_threads)
     }
 
     the_instance.reset(new GlobalThreadPool(max_threads,
-        1000 /*max_free_threads*/, 10000 /*max_queue_size*/,
+        1000 /*max_free_threads*/, max_threads /*max_queue_size*/,
         false /*shutdown_on_exception*/));
 }
 

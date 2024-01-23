@@ -105,6 +105,28 @@ void MergeTreeDataPartChecksums::checkEqual(const MergeTreeDataPartChecksums & r
     }
 }
 
+bool MergeTreeDataPartChecksums::adjustDiffImplicitKeyOffset(const MergeTreeDataPartChecksums & rhs)
+{
+    if (!versions->enable_compact_map_data)
+        return false;
+    bool has_diff = false;
+    for (auto & it: files)
+    {
+        const String & name = it.first;
+
+        auto jt = rhs.files.find(name);
+        if (jt == rhs.files.end())
+            throw Exception("No file " + name + " in data part", ErrorCodes::NO_FILE_IN_DATA_PART);
+
+        if (isMapImplicitKey(name) && it.second.file_offset != jt->second.file_offset)
+        {
+            has_diff = true;
+            it.second.file_offset = jt->second.file_offset;
+        }
+    }
+    return has_diff;
+}
+
 bool MergeTreeDataPartChecksums::isEqual(const MergeTreeDataPartChecksums & rhs, const String & col_name) const
 {
     auto it = files.find(col_name);
@@ -122,7 +144,7 @@ void MergeTreeDataPartChecksums::checkSizes(const DiskPtr & disk, const String &
     for (const auto & it : files)
     {
         const String & name = it.first;
-        if (versions->enable_compact_map_data && isMapImplicitKeyNotKV(name))
+        if (versions->enable_compact_map_data && isMapImplicitKey(name))
             continue;
         it.second.checkSize(disk, path + name);
     }
@@ -139,7 +161,7 @@ UInt64 MergeTreeDataPartChecksums::getTotalSizeOnDisk() const
 /// Returns names of all the files for the given map column.
 /// For compact map, both checksum's filename and disk's filename are returned in order for
 /// MergeTreeDataMergerMutator to remove related files from disk and checksums when the column is dropped.
-Strings MergeTreeDataPartChecksums::collectFilesForMapColumnNotKV(const String & map_column) const
+Strings MergeTreeDataPartChecksums::collectImplicitColumnFilesForByteMap(const String & map_column) const
 {
     auto map_key_prefix = genMapKeyFilePrefix(map_column);
     auto map_base_prefix = genMapBaseFilePrefix(map_column);
@@ -472,6 +494,12 @@ bool MergeTreeDataPartChecksums::deserialize(ReadBuffer & in)
 void MergeTreeDataPartChecksums::addFile(const String & file_name, UInt64 file_size, MergeTreeDataPartChecksum::uint128 file_hash)
 {
     files[file_name] = Checksum(file_size, file_hash);
+}
+
+void MergeTreeDataPartChecksums::addFile(
+    const String & file_name, UInt64 file_offset, UInt64 file_size, MergeTreeDataPartChecksum::uint128 file_hash)
+{
+    files[file_name] = Checksum(file_offset, file_size, file_hash);
 }
 
 void MergeTreeDataPartChecksums::add(MergeTreeDataPartChecksums && rhs_checksums)

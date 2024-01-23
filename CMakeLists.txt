@@ -451,11 +451,7 @@ elseif (OS_FREEBSD)
     include(cmake/freebsd/default_libs.cmake)
 endif ()
 
-# Determine whether to use community map implementation
-option (USE_COMMUNITY_MAP "Use clickhouse community map implmentation"  OFF)
-if (USE_COMMUNITY_MAP)
-    add_definitions(-DUSE_COMMUNITY_MAP)
-endif (USE_COMMUNITY_MAP)
+include (cmake/find/unwind-old.cmake)
 
 ######################################
 ### Add targets below this comment ###
@@ -581,6 +577,8 @@ include (cmake/find/java-extensions.cmake)
 include (cmake/find/cppjieba.cmake)
 include (cmake/find/tsquery.cmake)
 
+include (cmake/find/nlp.cmake)
+
 set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
 
@@ -647,6 +645,10 @@ if (ENABLE_MULTITARGET_CODE)
     add_compile_definitions(ENABLE_MULTITARGET_CODE=1)
 else()
     add_compile_definitions(ENABLE_MULTITARGET_CODE=0)
+endif()
+
+if (ENABLE_RUST)
+    add_subdirectory (rust)
 endif()
 
 add_subdirectory (base)

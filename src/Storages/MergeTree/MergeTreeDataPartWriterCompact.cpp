@@ -29,7 +29,6 @@
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <DataTypes/MapHelpers.h>
 #include <Common/escapeForFileName.h>
-#include <Columns/ColumnByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Common/FieldVisitorToString.h>
 
@@ -141,17 +140,24 @@ MergeTreeDataPartWriterCompact::MergeTreeDataPartWriterCompact(
     const MergeTreeWriterSettings & settings_,
     const MergeTreeIndexGranularity & index_granularity_,
     const BitmapBuildInfo & bitmap_build_info_)
-    : MergeTreeDataPartWriterOnDisk(data_part_, columns_list_, metadata_snapshot_,
-        indices_to_recalc_, marks_file_extension_,
-        default_codec_, settings_, index_granularity_, bitmap_build_info_)
+    : MergeTreeDataPartWriterOnDisk(
+        data_part_, 
+        columns_list_, 
+        metadata_snapshot_,
+        indices_to_recalc_, 
+        marks_file_extension_,
+        default_codec_, 
+        settings_, 
+        index_granularity_, 
+        bitmap_build_info_)
 	, log(&Poco::Logger::get(storage.getLogName() + " (WriterCompact)"))
 {
     const auto & storage_columns = metadata_snapshot->getColumns();
     for (const auto & column : columns_list)
     {
-        if (column.type->isMap() && !column.type->isMapKVStore())
+        if (column.type->isByteMap())
             continue;
-        else if (isMapImplicitKeyNotKV(column.name))
+        else if (isMapImplicitKey(column.name))
             addByteMapStreams({column}, parseMapNameFromImplicitColName(column.name), default_codec->getFullCodecDesc());
         else
         {
@@ -233,7 +239,7 @@ void writeColumnSingleGranule(
 bool checkGranuleValidityForImplicitColumn(
     const NamesAndTypesList & columns, const MergeTreeIndexGranularity & index_granularity, size_t rows_in_buffer, size_t current_mark)
 {
-    if (columns.size() > 1 || !isMapImplicitKeyNotKV(columns.front().name))
+    if (columns.size() > 1 || !isMapImplicitKey(columns.front().name))
         return true;
 
     if (current_mark >= index_granularity.getMarksCount())
@@ -306,7 +312,7 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
         auto name_and_type = columns_list.begin();
         for (size_t i = 0; i < columns_list.size(); ++i, ++name_and_type)
         {
-            if ((name_and_type->type->isMap() && !name_and_type->type->isMapKVStore()) || isMapImplicitKeyNotKV(name_and_type->name))
+            if ((name_and_type->type->isByteMap()) || isMapImplicitKey(name_and_type->name))
                 continue;
             if (!data_writer)
                 throw Exception("Compact data writer is not initialized but used.", ErrorCodes::LOGICAL_ERROR);
@@ -361,13 +367,13 @@ void MergeTreeDataPartWriterCompact::writeAllImplicitColumnBlock(const Block & b
     auto offset_columns = WrittenOffsetColumns{}; /// Nested type will not be the map KV type, so don't need to handle offset column
     for (size_t i = 0; i < columns_list.size(); ++i, ++name_and_type)
     {
-        if ((!name_and_type->type->isMap() || name_and_type->type->isMapKVStore()) && !isMapImplicitKeyNotKV(name_and_type->name))
+        if ((!name_and_type->type->isByteMap()) && !isMapImplicitKey(name_and_type->name))
             continue;
 
         const ColumnWithTypeAndName & column = block.getByName(name_and_type->name);
         data_written = true;
 
-        if (name_and_type->type->isMap() && !name_and_type->type->isMapKVStore())
+        if (name_and_type->type->isByteMap())
         {
             if (data_part->versions->enable_compact_map_data)
                 writeCompactedByteMapColumn(*name_and_type, *column.column, offset_columns, granules);
@@ -418,10 +424,10 @@ void MergeTreeDataPartWriterCompact::finishDataSerialization(IMergeTreeDataPart:
         auto name_and_type = columns_list.begin();
         for (size_t i = 0; i < columns_list.size(); ++i, ++name_and_type)
         {
-            if (name_and_type->type->isMap() && !name_and_type->type->isMapKVStore())
+            if (name_and_type->type->isByteMap())
                 continue;
 
-            if (isMapImplicitKeyNotKV(name_and_type->name))
+            if (isMapImplicitKey(name_and_type->name))
             {
                 if (!serialization_states.empty())
                 {

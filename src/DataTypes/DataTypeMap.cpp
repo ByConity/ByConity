@@ -6,8 +6,10 @@
 #include <Formats/FormatSettings.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/Serializations/SerializationMap.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTNameTypePair.h>
@@ -37,36 +39,41 @@ DataTypeMap::DataTypeMap(const DataTypes & elems_)
     key_type = elems_[0];
     value_type = elems_[1];
 
-    assertKeyType();
+    checkKeyType();
 
     nested = std::make_shared<DataTypeArray>(
-        std::make_shared<DataTypeTuple>(DataTypes{key_type, value_type}, Names{"keys", "values"}));
+        std::make_shared<DataTypeTuple>(DataTypes{key_type, value_type}, Names{"key", "value"}));
 }
 
 DataTypeMap::DataTypeMap(const DataTypePtr & key_type_, const DataTypePtr & value_type_)
     : key_type(key_type_), value_type(value_type_)
     , nested(std::make_shared<DataTypeArray>(
-        std::make_shared<DataTypeTuple>(DataTypes{key_type_, value_type_}, Names{"keys", "values"})))
+        std::make_shared<DataTypeTuple>(DataTypes{key_type_, value_type_}, Names{"key", "value"})))
 {
-    assertKeyType();
+    checkKeyType();
 }
 
-void DataTypeMap::assertKeyType() const
+void DataTypeMap::checkKeyType() const
 {
-    if (!key_type->isValueRepresentedByInteger()
-        && !isStringOrFixedString(*key_type)
-        && !WhichDataType(key_type).isNothing()
-        && !WhichDataType(key_type).isUUID())
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "Type of Map key must be a type, that can be represented by integer or string or UUID,"
-            " but {} given", key_type->getName());
+    if (!key_type->canBeMapKeyType())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Map Key Type {} is not compatible", key_type->getName());
 }
 
+void DataTypeMap::checkValidity() const
+{
+    if (isMapKVStore() && isMapByteStore())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Map KV flag and BYTE flag cannot be set at the same time.");
+    if (isByteMap())
+    {
+        if (!value_type->canBeByteMapValueType())
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Map Value Type {} is not compatible", value_type->getName());
+    }
+}
 
 std::string DataTypeMap::doGetName() const
 {
     WriteBufferFromOwnString s;
-    s << "Map(" << key_type->getName() << "," << value_type->getName() << ")";
+    s << "Map(" << key_type->getName() << ", " << value_type->getName() << ")";
 
     return s.str();
 }
@@ -102,12 +109,37 @@ Field DataTypeMap::getDefault() const
     return Map();
 }
 
+/// If type is not nullable, wrap it to be nullable
+static DataTypePtr tryMakeNullableForMapValue(const DataTypePtr & type)
+{
+    if (type->isNullable())
+        return type;
+    /// When type is low cardinality, its dictionary type must be nullable, see more detail in DataTypeLowCardinality::canBeByteMapValueType()
+    if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
+    {
+        if (const auto * nullable_type = typeid_cast<const DataTypeNullable *>(low_cardinality_type->getDictionaryType().get()))
+            return type;
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Can not get map implicit column data type of lowcardinality type.");
+    }
+    else
+    {
+        if (type->canBeInsideNullable())
+            return makeNullable(type);
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Can not get map implicit column data type of type {}.", type->getName());
+    }
+}
+
+DataTypePtr DataTypeMap::getValueTypeForImplicitColumn() const 
+{
+    return tryMakeNullableForMapValue(value_type);
+}
+
 SerializationPtr DataTypeMap::doGetDefaultSerialization() const
 {
     return std::make_shared<SerializationMap>(
-        key_type->getDefaultSerialization(),
-        value_type->getDefaultSerialization(),
-        nested->getDefaultSerialization());
+        key_type->getDefaultSerialization(), value_type->getDefaultSerialization(), nested->getDefaultSerialization());
 }
 
 bool DataTypeMap::equals(const IDataType & rhs) const
@@ -117,6 +149,28 @@ bool DataTypeMap::equals(const IDataType & rhs) const
 
     const DataTypeMap & rhs_map = static_cast<const DataTypeMap &>(rhs);
     return nested->equals(*rhs_map.nested);
+}
+
+bool DataTypeMap::isComparable() const
+{
+    if (isKVMap())
+        return key_type->isComparable() && value_type->isComparable();
+
+    /// always return false in ByteMap to prevent ByteMap type be used as sorting key,
+    /// which may lead to performance issues.
+    /// Order by Map column in select query is always allowed, see ColumnMap::compareAt
+    return false;
+}
+
+bool DataTypeMap::textCanContainOnlyValidUTF8() const
+{
+    return key_type->textCanContainOnlyValidUTF8() && value_type->textCanContainOnlyValidUTF8();
+}
+
+bool DataTypeMap::isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const
+{
+    return key_type->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion()
+        && value_type->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion();
 }
 
 static DataTypePtr create(const ASTPtr & arguments)
@@ -132,7 +186,6 @@ static DataTypePtr create(const ASTPtr & arguments)
 
     return std::make_shared<DataTypeMap>(nested_types);
 }
-
 
 void registerDataTypeMap(DataTypeFactory & factory)
 {

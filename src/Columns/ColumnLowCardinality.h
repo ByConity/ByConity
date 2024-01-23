@@ -338,6 +338,26 @@ public:
             callback(dictionary.getColumnUniquePtr());
     }
 
+    void forEachSubcolumnRecursively(ColumnCallback callback) override
+    {
+
+        if (isFullState())
+        {
+            callback(nested_column);
+            nested_column->forEachSubcolumnRecursively(callback);
+        }
+
+        callback(idx.getPositionsPtr());
+        idx.getPositionsPtr()->forEachSubcolumnRecursively(callback);
+
+        /// Column doesn't own dictionary if it's shared.
+        if (!dictionary.isShared())
+        {
+            callback(dictionary.getColumnUniquePtr());
+            dictionary.getColumnUniquePtr()->forEachSubcolumnRecursively(callback);
+        }
+    }
+
     bool structureEquals(const IColumn & rhs) const override
     {
         if (full_state)
@@ -371,7 +391,7 @@ public:
     bool nestedIsNullable() const { return isColumnNullable(*dictionary.getColumnUnique().getNestedColumn()); }
     void nestedToNullable() { dictionary.getColumnUnique().nestedToNullable(); }
     void nestedRemoveNullable() { dictionary.getColumnUnique().nestedRemoveNullable(); }
-    bool isNullable() const override { if (full_state) return getNestedColumn().isNullable(); else return isColumnNullable(*dictionary.getColumnUniquePtr()); }
+    MutableColumnPtr cloneNullable() const;
 
     const IColumnUnique & getDictionary() const { return dictionary.getColumnUnique(); }
     IColumnUnique & getDictionary() { return dictionary.getColumnUnique(); }
@@ -543,6 +563,8 @@ private:
 
     void getPermutationImpl(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability, size_t limit, int nan_direction_hint, Permutation & res, const Collator * collator = nullptr) const;
 };
+
+bool isColumnLowCardinalityNullable(const IColumn & column);
 
 
 }

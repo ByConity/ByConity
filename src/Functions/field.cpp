@@ -64,14 +64,14 @@ public:
         return std::make_shared<DataTypeUInt32>();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &/*result_type*/, size_t cnt) const override
     {
         ColumnPtr src_column = arguments[0].column;
 
         if (!isString(arguments[0].type))
         {
             ColumnsWithTypeAndName args_src {arguments[0]};
-            src_column = ConvertImplGenericToString::execute(args_src);
+            src_column = ConvertImplGenericToString<ColumnString>::execute(args_src, std::make_shared<DataTypeString>(), cnt);
         }
 
         auto col_res = ColumnUInt32::create();
@@ -84,7 +84,7 @@ public:
             if (!isString(arguments[i].type))
             {
                 ColumnsWithTypeAndName args_i {arguments[i]};
-                data_column = ConvertImplGenericToString::execute(args_i);
+                data_column = ConvertImplGenericToString<ColumnString>::execute(args_i, std::make_shared<DataTypeString>(), cnt);
             }
 
             for (size_t j = 0; j < vec_res.size(); ++j)

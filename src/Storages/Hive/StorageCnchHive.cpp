@@ -1,4 +1,5 @@
-#include <Storages/Hive/StorageCnchHive.h>
+#include "Storages/Hive/StorageCnchHive.h"
+#include <Protos/hive_models.pb.h>
 #if USE_HIVE
 
 #include <thrift/TToString.h>
@@ -52,32 +53,43 @@ StorageCnchHive::StorageCnchHive(
     const String & hive_metastore_url_,
     const String & hive_db_name_,
     const String & hive_table_name_,
-    StorageInMemoryMetadata metadata_,
+    std::optional<StorageInMemoryMetadata> metadata_,
     ContextPtr context_,
-    std::shared_ptr<CnchHiveSettings> settings_,
-    IMetaClientPtr client_from_catalog)
+    IMetaClientPtr meta_client,
+    std::shared_ptr<CnchHiveSettings> settings_)
     : IStorage(table_id_)
     , WithContext(context_)
     , hive_metastore_url(hive_metastore_url_)
     , hive_db_name(hive_db_name_)
     , hive_table_name(hive_table_name_)
+    , hive_client(meta_client)
     , storage_settings(settings_)
+{
+    if (metadata_)
+        initialize(*metadata_);
+}
+
+void StorageCnchHive::setHiveMetaClient(const IMetaClientPtr & client)
+{
+    hive_client = client;
+}
+
+void StorageCnchHive::initialize(StorageInMemoryMetadata metadata_)
 {
     try
     {
-        hive_client
-            = client_from_catalog != nullptr ? client_from_catalog : HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url,storage_settings);
+        if (!hive_client)
+            hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url, storage_settings);
+
         hive_table = hive_client->getTable(hive_db_name, hive_table_name);
     }
     catch (...)
     {
         hive_exception = std::current_exception();
-        // tryLogCurrentException(__PRETTY_FUNCTION__);
         return;
     }
 
-    HiveSchemaConverter converter(context_, hive_table);
-
+    HiveSchemaConverter converter(getContext(), hive_table);
     if (metadata_.columns.empty())
     {
         converter.convert(metadata_);
@@ -89,9 +101,6 @@ StorageCnchHive::StorageCnchHive(
         setInMemoryMetadata(metadata_);
     }
 }
-
-
-
 
 void StorageCnchHive::startup()
 {
@@ -134,6 +143,10 @@ std::optional<String> StorageCnchHive::getVirtualWarehouseName(VirtualWarehouseT
     {
         if (vw_type == VirtualWarehouseType::Default)
         {
+            /// deprecated
+            if (storage_settings->cnch_vw_read.changed)
+                return storage_settings->cnch_vw_read;
+
             return storage_settings->cnch_vw_default;
         }
         else if (vw_type == VirtualWarehouseType::Write)
@@ -208,6 +221,8 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     //     }
     //     pool.wait();
     // }
+
+    /// TODO: fix me
     for (const auto & partition : partitions)
     {
         list_partition(partition);
@@ -289,6 +304,7 @@ HivePartitions StorageCnchHive::selectPartitions(
     const SelectQueryInfo & query_info,
     const HiveWhereOptimizer & optimizer)
 {
+    /// non-partition table
     if (!metadata_snapshot->hasPartitionKey())
     {
         auto partition = std::make_shared<HivePartition>();
@@ -389,6 +405,21 @@ std::optional<TableStatistics> StorageCnchHive::getTableStats(const Strings & co
     return stats;
 }
 
+void StorageCnchHive::serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
+{
+    /// TODO: {caoliu} hack here
+    if (!hive_files.empty() && hive_files.front()->partition)
+    {
+        proto.set_sd_url(hive_files.front()->partition->location);
+    }
+
+    for (const auto & hive_file : hive_files)
+    {
+        auto * proto_file = proto.add_files();
+        hive_file->serialize(*proto_file);
+    }
+}
+
 std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister()
 {
     auto disk = HiveUtil::getDiskFromURI(hive_table->sd.location, getContext(), *storage_settings);
@@ -477,7 +508,7 @@ void registerStorageCnchHive(StorageFactory & factory)
             }
 
             return StorageCnchHive::create(
-                args.table_id, hive_metastore_url, hive_database, hive_table, std::move(metadata), args.getContext(), hive_settings, args.hive_client);
+                args.table_id, hive_metastore_url, hive_database, hive_table, metadata, args.getContext(), args.hive_client, hive_settings);
         },
         features);
 }

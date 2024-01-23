@@ -35,8 +35,6 @@
 #include <sys/types.h>
 #include <utime.h>
 
-namespace fs = std::filesystem;
-
 namespace DB
 {
 
@@ -46,9 +44,9 @@ namespace ErrorCodes
     extern const int SYSTEM_ERROR;
     extern const int NOT_IMPLEMENTED;
     extern const int CANNOT_STATVFS;
+    extern const int CANNOT_FSTAT;
     extern const int PATH_ACCESS_DENIED;
     extern const int CANNOT_CREATE_FILE;
-    extern const int BAD_ARGUMENTS;
 }
 
 
@@ -177,7 +175,43 @@ bool symlinkStartsWith(const String & path, const String & prefix_path)
     return symlinkStartsWith(filesystem_path, filesystem_prefix_path);
 }
 
-String joinPaths(const std::vector<String>& components, bool add_post_slash)
+bool fileOrSymlinkPathStartsWith(const std::filesystem::path & path, const std::filesystem::path & prefix_path)
+{
+    /// Differs from pathStartsWith in how `path` is normalized before comparison.
+    /// Make `path` absolute if it was relative and put it into normalized form: remove
+    /// `.` and `..` and extra `/`. Path is not canonized because otherwise path will
+    /// not be a path of a symlink itself.
+
+    String absolute_path = std::filesystem::absolute(path);
+    absolute_path = fs::path(absolute_path).lexically_normal(); /// Normalize path.
+    String absolute_prefix_path = std::filesystem::absolute(prefix_path);
+    absolute_prefix_path = fs::path(absolute_prefix_path).lexically_normal(); /// Normalize path.
+    return absolute_path.starts_with(absolute_prefix_path);
+}
+
+bool fileOrSymlinkPathStartsWith(const String & path, const String & prefix_path)
+{
+    auto filesystem_path = std::filesystem::path(path);
+    auto filesystem_prefix_path = std::filesystem::path(prefix_path);
+
+    return fileOrSymlinkPathStartsWith(filesystem_path, filesystem_prefix_path);
+}
+
+size_t getSizeFromFileDescriptor(int fd, const String & file_name)
+{
+    struct stat buf;
+    int res = fstat(fd, &buf);
+    if (-1 == res)
+    {
+        throwFromErrnoWithPath(
+            "Cannot execute fstat" + (file_name.empty() ? "" : " file: " + file_name),
+            file_name,
+            ErrorCodes::CANNOT_FSTAT);
+    }
+    return buf.st_size;
+}
+
+String joinPaths(const std::vector<String> & components, bool add_post_slash)
 {
     String result;
     for (size_t i = 0; i < components.size(); i++)
@@ -195,21 +229,6 @@ String joinPaths(const std::vector<String>& components, bool add_post_slash)
 
     return result;
 }
-
-size_t getSizeFromFileDescriptor(int fd, const String & file_name)
-{
-    struct stat buf;
-    int res = fstat(fd, &buf);
-    if (-1 == res)
-    {
-        throwFromErrnoWithPath(
-            "Cannot execute fstat" + (file_name.empty() ? "" : " file: " + file_name),
-            file_name,
-            ErrorCodes::CANNOT_STATVFS);
-    }
-    return buf.st_size;
-}
-
 }
 
 
@@ -226,6 +245,21 @@ bool createFile(const std::string & path)
         return true;
     }
     DB::throwFromErrnoWithPath("Cannot create file: " + path, path, DB::ErrorCodes::CANNOT_CREATE_FILE);
+}
+
+bool exists(const std::string & path)
+{
+    return faccessat(AT_FDCWD, path.c_str(), F_OK, AT_EACCESS) == 0;
+}
+
+bool canExecute(const std::string & path)
+{
+    int err = faccessat(AT_FDCWD, path.c_str(), X_OK, AT_EACCESS);
+    if (err == 0)
+        return true;
+    if (errno == EACCES)
+        return false;
+    DB::throwFromErrnoWithPath("Cannot check write access to file: " + path, path, DB::ErrorCodes::PATH_ACCESS_DENIED);
 }
 
 bool canRead(const std::string & path)
@@ -280,6 +314,4 @@ void setModificationTime(const std::string & path, time_t time)
     if (utime(path.c_str(), &tb) != 0)
         DB::throwFromErrnoWithPath("Cannot set modification time for file: " + path, path, DB::ErrorCodes::PATH_ACCESS_DENIED);
 }
-
-
 }

@@ -1,0 +1,21 @@
+<yandex>
+    <lemmatizers>
+        <lemmatizer>
+            <lang>en</lang>
+            <path>lem-en.bin</path>
+        </lemmatizer>
+    </lemmatizers>
+
+    <synonyms_extensions>
+        <extension>
+            <name>en</name>
+            <type>plain</type>
+            <path>ext-en.txt</path>
+        </extension>
+        <extension>
+            <name>ru</name>
+            <type>plain</type>
+            <path>ext-ru.txt</path>
+        </extension>
+    </synonyms_extensions>
+</yandex>

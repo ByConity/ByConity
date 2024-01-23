@@ -177,6 +177,7 @@ void executePlanSegmentRemotely(
     brpc::Controller * cntl = new brpc::Controller();
     Protos::ExecutePlanSegmentResponse * response = new Protos::ExecutePlanSegmentResponse();
     auto call_id = cntl->call_id();
+    cntl->set_timeout_ms(context->getSettingsRef().send_plan_segment_timeout_ms.totalMilliseconds());
     cntl->request_attachment().append(iobuf.movable());
     google::protobuf::Closure * done = brpc::NewCallback(
         &OnSendPlanSegmentCallback, response, cntl, rpc_channel, context->getWorkerStatusManager(), async_context, worker_id);

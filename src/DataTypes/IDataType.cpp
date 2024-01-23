@@ -47,6 +47,18 @@ namespace ErrorCodes
     extern const int UNSUPPORTED_PARAMETER;
 }
 
+static bool default_use_kv_map_type = false;
+
+void setDefaultUseMapType(bool default_use_kv_map_type_)
+{
+    default_use_kv_map_type = default_use_kv_map_type_;
+}
+
+bool getDefaultUseMapType()
+{
+    return default_use_kv_map_type;
+}
+
 IDataType::~IDataType() = default;
 
 String IDataType::getName() const
@@ -216,7 +228,7 @@ void IDataType::enumerateStreams(const SerializationPtr & serialization, const S
 
 Field IDataType::stringToVisitorField(const String &) const
 {
-    throw Exception("stringToVisitorField not implemented for Data type" + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception("stringToVisitorField not implemented for data type " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
 Names IDataType::getSpecialColumnFiles(const String & prefix, bool throw_exception) const
@@ -239,7 +251,7 @@ Names IDataType::getSpecialColumnFiles(const String & prefix, bool throw_excepti
         files.push_back(prefix + SEGMENT_BITMAP_TABLE_EXTENSION);
         files.push_back(prefix + SEGMENT_BITMAP_DIRECTORY_EXTENSION);
     }
-    if (throw_exception && (lowCardinality() || isMapKVStore()))
+    if (throw_exception && (lowCardinality() || isMap()))
     {
         // not support , throw exception instead.
         throw Exception(

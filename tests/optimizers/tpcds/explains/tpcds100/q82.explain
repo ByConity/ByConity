@@ -5,14 +5,14 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 112976 rows
+      └─ Gather Exchange Est. 91510 rows
          └─ Sorting Est. 100 rows
             │     Order by: {i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 112976 rows
-               └─ Repartition Exchange Est. 112976 rows
+            └─ MergingAggregated Est. 91510 rows
+               └─ Repartition Exchange Est. 91510 rows
                   │     Partition by: {i_item_id, i_item_desc, i_current_price}
-                  └─ Aggregating Est. 112976 rows
+                  └─ Aggregating Est. 91510 rows
                      │     Group by: {i_item_id, i_item_desc, i_current_price}
                      └─ Inner Join Est. 49346709 rows
                         │     Condition: ss_item_sk == i_item_sk

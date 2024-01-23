@@ -89,9 +89,10 @@ void TSOImpl::GetTimestamp(
             return;
         }
 
-        UInt64 cur_ts = fetchAddLogical(1);
+        UInt64 cur_ts = ts.load(std::memory_order_acquire);
         if (ts_to_physical(cur_ts) == 0)
             throw Exception("Timestamp has not been initialized in TSO yet. Timestamp will initialized in a few seconds. Please retry request in a few seconds.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
+        cur_ts = fetchAddLogical(1);
 
         response->set_timestamp(cur_ts);
         response->set_is_leader(true);
@@ -159,6 +160,7 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
                 if (isLeader())
                 {
                     // yield leadership as updateTSO thread stopped functioning
+                    num_tso_update_timestamp_stopped_functioning++;
                     tso_server.leader_election->yieldLeadership();
                     UInt64 ts_now = ts.load(std::memory_order_acquire);
                     UInt64 machine_time_now = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();

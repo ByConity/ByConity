@@ -53,6 +53,7 @@ public:
 
     void yieldLeadership();
     bool isLeader();
+    void stop();
 
     std::optional<HostWithPorts> getLeaderInfo() const;
 
@@ -100,7 +101,6 @@ private:
     Poco::Logger * logger = nullptr;
 
     void start();
-    void stop();
 
     bool initKey();
     Protos::LeaderInfo generateInitInfo();

@@ -188,3 +188,82 @@ SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts wh
 
 DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
 DROP TABLE IF EXISTS u10117_uniquekey_test_bucket2;
+
+set enable_wait_attached_staged_parts_to_visible = 0, enable_unique_table_attach_without_dedup = 0;
+SELECT '';
+SELECT 'test dedup correct staged parts in write process in table level';
+CREATE TABLE u10117_uniquekey_test_bucket (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY s INTO 2 BUCKETS ORDER BY s SETTINGS partition_level_unique_keys = 0;
+
+SELECT 'insert some values and query';
+INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-10-18', 2, '2a'), ('2023-06-26', 3, '3a'), ('2023-10-18', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-10-18', 3, '3a');
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+SELECT 'stop dedup worker and let part into staging area, write process will handle all staged parts in table level lock';
+SYSTEM STOP DEDUP WORKER u10117_uniquekey_test_bucket;
+ALTER TABLE u10117_uniquekey_test_bucket DETACH PARTITION ID '20230626';
+ALTER TABLE u10117_uniquekey_test_bucket DETACH PARTITION ID '20231018';
+ALTER TABLE u10117_uniquekey_test_bucket ATTACH PARTITION ID '20230626';
+ALTER TABLE u10117_uniquekey_test_bucket ATTACH PARTITION ID '20231018';
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 4, '4a');
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+SELECT 'use bucket level lock and try again, write process will only handle bucket-related staged parts';
+ALTER TABLE u10117_uniquekey_test_bucket MODIFY SETTING enable_bucket_level_unique_keys = 1;
+SYSTEM STOP DEDUP WORKER u10117_uniquekey_test_bucket;
+ALTER TABLE u10117_uniquekey_test_bucket DETACH PARTITION ID '20230626';
+ALTER TABLE u10117_uniquekey_test_bucket DETACH PARTITION ID '20231018';
+ALTER TABLE u10117_uniquekey_test_bucket ATTACH PARTITION ID '20230626';
+ALTER TABLE u10117_uniquekey_test_bucket ATTACH PARTITION ID '20231018';
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 4, '4a');
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+SELECT 'start dedup worker and all staged parts to be visible';
+SYSTEM START DEDUP WORKER u10117_uniquekey_test_bucket;
+SYSTEM SYNC DEDUP WORKER u10117_uniquekey_test_bucket;
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
+
+SELECT '';
+SELECT 'test dedup correct staged parts in write process in partition level';
+CREATE TABLE u10117_uniquekey_test_bucket (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY s INTO 2 BUCKETS ORDER BY s SETTINGS partition_level_unique_keys = 1;
+
+SELECT 'insert some values and query';
+INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-10-18', 2, '2a'), ('2023-06-26', 3, '3a'), ('2023-10-18', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-10-18', 3, '3a');
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+SELECT 'stop dedup worker and let part into staging area, write process will handle all staged parts in partition level lock';
+SYSTEM STOP DEDUP WORKER u10117_uniquekey_test_bucket;
+ALTER TABLE u10117_uniquekey_test_bucket DETACH PARTITION ID '20230626';
+ALTER TABLE u10117_uniquekey_test_bucket DETACH PARTITION ID '20231018';
+ALTER TABLE u10117_uniquekey_test_bucket ATTACH PARTITION ID '20230626';
+ALTER TABLE u10117_uniquekey_test_bucket ATTACH PARTITION ID '20231018';
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 4, '4a');
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+SYSTEM START DEDUP WORKER u10117_uniquekey_test_bucket;
+SYSTEM SYNC DEDUP WORKER u10117_uniquekey_test_bucket;
+
+SELECT 'use bucket level lock and try again, write process will only handle bucket-related staged parts';
+ALTER TABLE u10117_uniquekey_test_bucket MODIFY SETTING enable_bucket_level_unique_keys = 1;
+SYSTEM STOP DEDUP WORKER u10117_uniquekey_test_bucket;
+ALTER TABLE u10117_uniquekey_test_bucket DETACH PARTITION ID '20230626';
+ALTER TABLE u10117_uniquekey_test_bucket DETACH PARTITION ID '20231018';
+ALTER TABLE u10117_uniquekey_test_bucket ATTACH PARTITION ID '20230626';
+ALTER TABLE u10117_uniquekey_test_bucket ATTACH PARTITION ID '20231018';
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 4, '4a');
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+SELECT 'start dedup worker and all staged parts to be visible';
+SYSTEM START DEDUP WORKER u10117_uniquekey_test_bucket;
+SYSTEM SYNC DEDUP WORKER u10117_uniquekey_test_bucket;
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;

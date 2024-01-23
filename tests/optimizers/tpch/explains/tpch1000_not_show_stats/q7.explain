@@ -15,7 +15,7 @@ Projection
                      │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
                      └─ Inner (PARALLEL_HASH) Join
                         │     Condition: l_orderkey == o_orderkey
-                        │     Filter: ((n_name_1 = 'GERMANY') OR (n_name = 'GERMANY')) AND ((n_name = 'FRANCE') OR (n_name_1 = 'FRANCE'))
+                        │     Filter: ((n_name = 'GERMANY') OR (n_name_1 = 'GERMANY')) AND ((n_name_1 = 'FRANCE') OR (n_name = 'FRANCE'))
                         │     Runtime Filters Builder: {o_orderkey}
                         ├─ Repartition Exchange
                         │  │     Partition by: {l_orderkey}

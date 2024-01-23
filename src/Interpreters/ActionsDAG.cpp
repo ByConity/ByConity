@@ -346,6 +346,7 @@ const ActionsDAG::Node & ActionsDAG::addFunction(
     node.function_base = function->build(arguments);
     node.result_type = node.function_base->getResultType();
     node.function = node.function_base->prepare(arguments);
+    node.is_deterministic = node.function_base->isDeterministic();
 
     /// If all arguments are constants, and function is suitable to be executed in 'prepare' stage - execute function.
     if (node.function_base->isSuitableForConstantFolding())
@@ -551,7 +552,7 @@ void ActionsDAG::removeUnusedActions(bool allow_remove_inputs, bool allow_consta
         /// We cannot remove arrayJoin because it changes the number of rows.
         bool is_array_join = node.type == ActionType::ARRAY_JOIN;
 
-        if (is_array_join && visited_nodes.count(&node) == 0)
+        if (is_array_join && !visited_nodes.contains(&node))
         {
             visited_nodes.insert(&node);
             stack.push(&node);
@@ -566,16 +567,26 @@ void ActionsDAG::removeUnusedActions(bool allow_remove_inputs, bool allow_consta
         auto * node = stack.top();
         stack.pop();
 
+        /// Constant folding.
         if (allow_constant_folding && !node->children.empty() && node->column && isColumnConst(*node->column))
         {
-            /// Constant folding.
             node->type = ActionsDAG::ActionType::COLUMN;
+
+            for (const auto & child : node->children)
+            {
+                if (!child->is_deterministic)
+                {
+                    node->is_deterministic = false;
+                    break;
+                }
+            }
+
             node->children.clear();
         }
 
         for (const auto * child : node->children)
         {
-            if (visited_nodes.count(child) == 0)
+            if (!visited_nodes.contains(child))
             {
                 stack.push(const_cast<Node *>(child));
                 visited_nodes.insert(child);
@@ -583,9 +594,8 @@ void ActionsDAG::removeUnusedActions(bool allow_remove_inputs, bool allow_consta
         }
     }
 
-    nodes.remove_if([&](const Node & node) { return visited_nodes.count(&node) == 0; });
-    auto it = std::remove_if(inputs.begin(), inputs.end(), [&](const Node * node) { return visited_nodes.count(node) == 0; });
-    inputs.erase(it, inputs.end());
+    nodes.remove_if([&](const Node & node) { return !visited_nodes.contains(&node); });
+    std::erase_if(inputs, [&](const Node * node) { return !visited_nodes.contains(node); });
 }
 
 static ColumnWithTypeAndName executeActionForHeader(const ActionsDAG::Node * node, ColumnsWithTypeAndName arguments)
@@ -620,7 +630,7 @@ static ColumnWithTypeAndName executeActionForHeader(const ActionsDAG::Node * nod
 
             if (!array)
                 throw Exception(ErrorCodes::TYPE_MISMATCH,
-                                "ARRAY JOIN of not array: {}", node->result_name);
+                                "ARRAY JOIN of not array nor map: {}", node->result_name);
 
             res_column.column = array->getDataPtr()->cloneEmpty();
             break;
@@ -813,9 +823,10 @@ NameSet ActionsDAG::foldActionsByProjection(
         }
     }
 
-    std::erase_if(inputs, [&](const Node * node) { return visited_nodes.count(node) == 0; });
-    std::erase_if(index, [&](const Node * node) { return visited_index_names.count(node->result_name) == 0; });
-    nodes.remove_if([&](const Node & node) { return visited_nodes.count(&node) == 0; });
+    /// Clean up unused nodes after folding.
+    std::erase_if(inputs, [&](const Node * node) { return !visited_nodes.contains(node); });
+    std::erase_if(index, [&](const Node * node) { return !visited_index_names.contains(node->result_name); });
+    nodes.remove_if([&](const Node & node) { return !visited_nodes.contains(&node); });
 
     NameSet next_required_columns;
     for (const auto & input : inputs)
@@ -1123,6 +1134,22 @@ bool ActionsDAG::trivial() const
             return false;
 
     return true;
+}
+
+void ActionsDAG::assertDeterministic() const
+{
+    for (const auto & node : nodes)
+        if (!node.is_deterministic)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Expression must be deterministic but it contains non-deterministic part `{}`", node.result_name);
+}
+
+bool ActionsDAG::hasNonDeterministic() const
+{
+    for (const auto & node : nodes)
+        if (!node.is_deterministic)
+            return true;
+    return false;
 }
 
 void ActionsDAG::addMaterializingOutputActions()

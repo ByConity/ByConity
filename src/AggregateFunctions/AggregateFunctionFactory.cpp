@@ -90,26 +90,25 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
         AggregateFunctionPtr nested_function = getImpl(
             name, nested_types, nested_parameters, out_properties, has_null_arguments);
 
+        if (nested_function && nested_function->handleNullItSelf())
+            return getImpl(name, type_without_low_cardinality, parameters, out_properties, true, true);
+
         // Pure window functions are not real aggregate functions. Applying
         // combinators doesn't make sense for them, they must handle the
         // nullability themselves. Another special case is functions from Nothing
         // that are rewritten to AggregateFunctionNothing, in this case
         // nested_function is nullptr.
-        if (nested_function && nested_function->isOnlyWindowFunction())
+        if (!nested_function || !nested_function->isOnlyWindowFunction())
         {
-            return nested_function;
+            return combinator->transformAggregateFunction(nested_function,
+                out_properties, type_without_low_cardinality, parameters);
         }
-
-        if (nested_function && nested_function->handleNullItSelf())
-            return getImpl(name, type_without_low_cardinality, parameters, out_properties, true, true);
-
-        return combinator->transformAggregateFunction(nested_function, out_properties, type_without_low_cardinality, parameters);
     }
 
-    auto res = getImpl(name, type_without_low_cardinality, parameters, out_properties, false);
-    if (!res)
+    auto with_original_arguments = getImpl(name, type_without_low_cardinality, parameters, out_properties, false);
+    if (!with_original_arguments)
         throw Exception("Logical error: AggregateFunctionFactory returned nullptr", ErrorCodes::LOGICAL_ERROR);
-    return res;
+    return with_original_arguments;
 }
 
 

@@ -21,6 +21,7 @@
 #include <Analyzers/function_utils.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/FieldVisitorToString.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <DataTypes/DataTypeFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
@@ -28,6 +29,8 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeSet.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <DataTypes/FieldToDataType.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionFactory.h>
@@ -144,7 +147,7 @@ private:
     void expandAsterisk(ASTs & nodes);
 
     std::tuple<AggregateFunctionPtr, Array, String> resolveAggregateFunction(ASTFunction & function);
-    DataTypePtr handleSubquery(const ASTPtr & subquery);
+    DataTypePtr handleSubquery(const ASTPtr & subquery, bool use_explicit_named_tuple);
     ColumnWithTypeAndName handleResolvedField(ASTPtr & node, const ResolvedField & field);
 
     void processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTPtr & rhs_ast);
@@ -288,7 +291,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTQuantifiedComparison(ASTPtr &
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 {
-    auto type = handleSubquery(node);
+    auto type = handleSubquery(node, true);
 
     // when a scalar subquery has 0 rows, it returns NULL, hence we change its type to Nullable type
     // note that this feature is not compatible with subquery with multiple output returning Tuple type
@@ -413,33 +416,35 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         for (const auto & origin_col : column_ref.getFieldDescription().origin_columns)
             analysis.addReadSubColumn(origin_col.table_ast, origin_col.index_of_scope, sub_column_id);
     };
-    if ((startsWith(func_name_lowercase, "mapelement") || startsWith(func_name_lowercase, "arrayelement"))
-        && function->arguments->children.size() == 2)
+    if (startsWith(func_name_lowercase, "mapelement") && function->arguments->children.size() == 2)
     {
         if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
         {
             const auto & resolved_field = column_reference->getFieldDescription();
-            if (check_subcolumn(resolved_field, [](const auto & origin_col) -> bool {
-                    if (!origin_col.storage->supportsMapImplicitColumn())
-                        return false;
-
-                    DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
-                    return type->isMap() && !type->isMapKVStore();
-                }))
+            if (const auto map_type = std::dynamic_pointer_cast<const DataTypeMap>(resolved_field.type))
             {
-                String map_column_name;
+                /// Convert key according to map key type
+                Field key_field = Null();
                 if (auto * key_lit = function->arguments->children[1]->as<ASTLiteral>())
-                    map_column_name = key_lit->getColumnName();
+                {
+                    key_field = tryConvertToMapKeyField(map_type->getKeyType(), key_lit->getColumnName());
+                }
                 else if (processed_arguments.size() > 1 && processed_arguments[1].column)
                 {
                     auto argument_value = std::make_shared<ASTLiteral>((*processed_arguments[1].column)[0]);
-                    map_column_name = argument_value->getColumnName();
+                    key_field = tryConvertToMapKeyField(map_type->getKeyType(), argument_value->getColumnName());
                 }
 
-                if (!map_column_name.empty())
+                if (!key_field.isNull())
                 {
-                    auto column_id = SubColumnID::mapElement(map_column_name);
-                    register_subcolumn(function, *column_reference, column_id);
+                    if (resolved_field.hasOriginInfo() && resolved_field.type->isByteMap()
+                        && check_subcolumn(
+                            resolved_field, [](const auto & origin_col) { return origin_col.storage->supportsMapImplicitColumn(); }))
+                    {
+                        auto key_name = applyVisitor(DB::FieldVisitorToString(), key_field); // convert to correct implicit key name
+                        auto column_id = SubColumnID::mapElement(key_name);
+                        register_subcolumn(function, *column_reference, column_id);
+                    }
                 }
             }
         }
@@ -450,10 +455,11 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         {
             const auto & resolved_field = column_reference->getFieldDescription();
             if (check_subcolumn(resolved_field, [](const auto & origin_col) -> bool {
+                    // TODO(shiyuze): maybe we can remove this check, this rewrite is only for kv map
                     if (!origin_col.storage->supportsMapImplicitColumn())
                         return false;
                     DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
-                    return type->isMap() && type->isMapKVStore();
+                    return type->isKVMap();
                 }))
             {
                 auto column_id = SubColumnID::mapKeys();
@@ -471,7 +477,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
                         return false;
 
                     DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
-                    return type->isMap() && type->isMapKVStore();
+                    return type->isKVMap();
                 }))
             {
                 auto column_id = SubColumnID::mapValues();
@@ -636,7 +642,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeExistsSubquery(ASTFunctionPtr 
     if (function->children.size() != 1)
         throw Exception("Invalid exists subquery expression: " + serializeAST(*function), ErrorCodes::SYNTAX_ERROR);
 
-    handleSubquery(function->arguments->children[0]);
+    handleSubquery(function->arguments->children[0], false);
     analysis.exists_subqueries[options.select_query].push_back(function);
     return {nullptr, std::make_shared<DataTypeUInt8>(), function->getColumnName()};
 }
@@ -644,8 +650,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeExistsSubquery(ASTFunctionPtr 
 void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTPtr & rhs_ast)
 {
     auto lhs_type = process(lhs_ast).type;
-    auto rhs_type = handleSubquery(rhs_ast);
-
+    auto rhs_type = handleSubquery(rhs_ast, false);
     if (!JoinCommon::isJoinCompatibleTypes(lhs_type, rhs_type))
     {
         DataTypePtr super_type = nullptr;
@@ -720,7 +725,7 @@ std::tuple<AggregateFunctionPtr, Array, String> ExprAnalyzerVisitor::resolveAggr
     return {aggregate, parameters, column_name};
 }
 
-DataTypePtr ExprAnalyzerVisitor::handleSubquery(const ASTPtr & subquery)
+DataTypePtr ExprAnalyzerVisitor::handleSubquery(const ASTPtr & subquery, bool use_explicit_named_tuple)
 {
     if (auto * s = subquery->as<ASTSubquery>(); !s)
         throw Exception("Invalid subquery expression", ErrorCodes::LOGICAL_ERROR);
@@ -748,7 +753,18 @@ DataTypePtr ExprAnalyzerVisitor::handleSubquery(const ASTPtr & subquery)
         // if subquery has multiple output column, its return type should be the tuple of columns
         DataTypes column_types(output_columns.size());
         std::transform(output_columns.begin(), output_columns.end(), column_types.begin(), std::mem_fn(&FieldDescription::type));
-        type = std::make_shared<DataTypeTuple>(column_types);
+
+        if (use_explicit_named_tuple)
+        {
+            Strings names(output_columns.size());
+            std::transform(
+                output_columns.begin(), output_columns.end(), names.begin(), [](FieldDescription & v1) -> String { return v1.name; });
+            if (!DataTypeTuple::checkTupleNames(names))
+                type = std::make_shared<DataTypeTuple>(column_types, names);
+        }
+
+        if (!type)
+            type = std::make_shared<DataTypeTuple>(column_types);
     }
 
     analysis.setExpressionColumnWithType(subquery, {type});

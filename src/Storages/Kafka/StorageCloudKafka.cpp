@@ -279,7 +279,7 @@ BufferPtr StorageCloudKafka::createBuffer()
 
     return std::make_shared<DelimitedReadBuffer>(
             std::make_unique<CnchReadBufferFromKafkaConsumer>(
-                    consumer, logger_name.str(), batch_size, poll_timeout, expire_timeout, &stream_run),
+                    consumer, logger_name.str(), batch_size, poll_timeout, expire_timeout, &stream_run, settings.enable_skip_offsets_hole),
             settings.row_delimiter);
 }
 
@@ -590,6 +590,30 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
         try
         {
             auto *consumer_buf = consumer_context.buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>();
+
+            if (settings.enable_skip_offsets_hole)
+            {
+                String str;
+                for (const String & skipped_offset : consumer_buf->getSkippedOffsetsHole())
+                    str += (" {" + skipped_offset + "}");
+                size_t skipped_msgs = consumer_buf->getSkippedMsgsInHoles();
+
+                if (!str.empty())
+                {
+                    str = ("Poll skipped messges but we skipped these holes as `enable_skip_offsets_hole` enabled. The holes are:" + str);
+
+                    /// Record skipped holes in kafka_log to make it easy to trace
+                    auto kafka_error_log = createKafkaLog(KafkaLogElement::EXCEPTION, assigned_consumer_index);
+                    kafka_error_log.has_error = true;
+                    kafka_error_log.last_exception = str;
+                    kafka_error_log.metric = skipped_msgs;
+                    if (auto kafka_log = getContext()->getKafkaLog())
+                        kafka_log->add(kafka_error_log);
+                    if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
+                        cloud_kafka_log->add(kafka_error_log);
+                }
+            }
+
             consumer_buf->commit();
         }
         catch (...)
@@ -745,6 +769,9 @@ SettingsChanges StorageCloudKafka::createSettingsAdjustments()
 
     if (!settings.schema.value.empty())
         result.emplace_back("format_schema", settings.schema.value);
+
+    if (!settings.avro_schema_registry_url.value.empty())
+        result.emplace_back("format_avro_schema_registry_url", settings.avro_schema_registry_url.value);
 
     /// Forbidden parallel parsing for Kafka in case of global setting.
     /// Kafka cannot support parallel parsing due to virtual column

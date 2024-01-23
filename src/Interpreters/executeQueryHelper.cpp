@@ -100,7 +100,8 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     ProxyTransactionPtr proxy_txn;
     if (session_txn && session_txn->isPrimary())
     {
-        proxy_txn = context->getCnchTransactionCoordinator().createProxyTransaction(server, session_txn->getPrimaryTransactionID());
+        proxy_txn = context->getCnchTransactionCoordinator().createProxyTransaction(server, session_txn->getPrimaryTransactionID(),
+            isReadOnlyTransaction(ast.get()));
         context->setCurrentTransaction(proxy_txn);
         session_txn->as<CnchExplicitTransaction>()->addStatement(query);
     }

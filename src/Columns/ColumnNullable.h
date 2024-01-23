@@ -70,7 +70,8 @@ public:
     TypeIndex getDataType() const override { return TypeIndex::Nullable; }
     MutableColumnPtr cloneResized(size_t size) const override;
     size_t size() const override { return nested_column->size(); }
-    bool isNullAt(size_t n) const override { return assert_cast<const ColumnUInt8 &>(*null_map).getData()[n] != 0;}
+    bool isNullAt(size_t n) const override { return typeid_cast<const ColumnUInt8 &>(*null_map).getData()[n] != 0;}
+    void setNullAt(IColumn::Filter & offsets_set_to_null);
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
     bool getBool(size_t n) const override { return isNullAt(n) ? false : nested_column->getBool(n); }
@@ -154,6 +155,14 @@ public:
         callback(null_map);
     }
 
+    void forEachSubcolumnRecursively(ColumnCallback callback) override
+    {
+        callback(nested_column);
+        nested_column->forEachSubcolumnRecursively(callback);
+        callback(null_map);
+        null_map->forEachSubcolumnRecursively(callback);
+    }
+
     bool structureEquals(const IColumn & rhs) const override
     {
         if (auto rhs_nullable = typeid_cast<const ColumnNullable *>(&rhs))
@@ -216,5 +225,6 @@ private:
 };
 
 ColumnPtr makeNullable(const ColumnPtr & column);
+ColumnPtr makeNullableOrLowCardinalityNullable(const ColumnPtr & column);
 
 }

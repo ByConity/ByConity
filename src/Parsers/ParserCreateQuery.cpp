@@ -795,7 +795,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
                         return false;
                 }
 
-                /// Optional - IGNORE REPLCIATE can be specified
+                /// Optional - IGNORE REPLICATE can be specified
                 if (s_ignore.ignore(pos, expected))
                 {
                     bool option = false;

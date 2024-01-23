@@ -640,5 +640,7 @@ template class ColumnVector<Int256>;
 template class ColumnVector<Float32>;
 template class ColumnVector<Float64>;
 template class ColumnVector<UUID>;
+template class ColumnVector<IPv4>;
+template class ColumnVector<IPv6>;
 
 }

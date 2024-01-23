@@ -15,9 +15,9 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 1992868 rows
                      │     Group by: {ss_customer_sk}
                      │     Aggregates: expr#sum(act_sales):=AggNull(sum)(expr#multiIf(isNotNull(sr_return_quantity), multiply(minus(ss_quantity, sr_return_quantity), ss_sales_price), multiply(ss_quantity, ss_sales_price)))
-                     └─ Projection Est. 6278024 rows
+                     └─ Projection Est. 5022419 rows
                         │     Expressions: [ss_customer_sk], expr#multiIf(isNotNull(sr_return_quantity), multiply(minus(ss_quantity, sr_return_quantity), ss_sales_price), multiply(ss_quantity, ss_sales_price)):=multiIf(isNotNull(sr_return_quantity), (ss_quantity - sr_return_quantity) * ss_sales_price, ss_quantity * ss_sales_price)
-                        └─ Inner Join Est. 6313827 rows
+                        └─ Inner Join Est. 5051061 rows
                            │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │     Runtime Filters Builder: {sr_ticket_number}
                            ├─ Repartition Exchange Est. 287997024 rows

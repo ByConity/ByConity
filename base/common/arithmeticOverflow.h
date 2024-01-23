@@ -206,3 +206,5 @@ namespace common
         return false;
     }
 }
+
+// NOLINTEND(google-runtime-int)

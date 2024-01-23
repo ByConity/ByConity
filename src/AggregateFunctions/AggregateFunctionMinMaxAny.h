@@ -6,8 +6,10 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnNullable.h>
 #include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <common/StringRef.h>
 #include <Common/assert_cast.h>
 
@@ -49,6 +51,9 @@ private:
     T value;
 
 public:
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_any = false;
+
     bool has() const
     {
         return has_value;
@@ -469,6 +474,9 @@ private:
     char small_data[MAX_SMALL_STRING_SIZE]; /// Including the terminating zero.
 
 public:
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_any = false;
+
     bool has() const
     {
         return size >= 0;
@@ -692,6 +700,9 @@ private:
     Field value;
 
 public:
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_any = false;
+
     bool has() const
     {
         return !value.isNull();
@@ -925,6 +936,7 @@ template <typename Data>
 struct AggregateFunctionAnyData : Data
 {
     using Self = AggregateFunctionAnyData;
+    static constexpr bool is_any = true;
 
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeFirstTime(column, row_num, arena); }
     bool changeIfBetter(const Self & to, Arena * arena)                        { return this->changeFirstTime(to, arena); }
@@ -975,6 +987,69 @@ struct AggregateFunctionAnyLastData : Data
 #endif
 };
 
+template <typename Data>
+struct AggregateFunctionSingleValueOrNullData : Data
+{
+    static constexpr bool is_nullable = true;
+
+    using Self = AggregateFunctionSingleValueOrNullData;
+
+    bool first_value = true;
+    bool is_null = false;
+
+    void changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
+    {
+        if (first_value)
+        {
+            first_value = false;
+            this->change(column, row_num, arena);
+        }
+        else if (!this->isEqualTo(column, row_num))
+        {
+            is_null = true;
+        }
+    }
+
+    void changeIfBetter(const Self & to, Arena * arena)
+    {
+        if (!to.has())
+            return;
+
+        if (first_value)
+        {
+            first_value = false;
+            this->change(to, arena);
+        }
+        else if (!this->isEqualTo(to))
+        {
+            is_null = true;
+        }
+    }
+
+    void addManyDefaults(const IColumn & column, size_t /*length*/, Arena * arena) { this->changeIfBetter(column, 0, arena); }
+
+    void insertResultInto(IColumn & to) const
+    {
+        if (is_null || first_value)
+        {
+            to.insertDefault();
+        }
+        else
+        {
+            ColumnNullable & col = typeid_cast<ColumnNullable &>(to);
+            col.getNullMapColumn().insertDefault();
+            this->Data::insertResultInto(col.getNestedColumn());
+        }
+    }
+
+    static const char * name() { return "singleValueOrNull"; }
+
+#if USE_EMBEDDED_COMPILER
+
+    static constexpr bool is_compilable = false;
+
+#endif
+};
 
 /** Implement 'heavy hitters' algorithm.
   * Selects most frequent value if its frequency is more than 50% in each thread of execution.
@@ -1053,6 +1128,8 @@ struct AggregateFunctionAnyHeavyData : Data
 template <typename Data>
 class AggregateFunctionsSingleValue final : public IAggregateFunctionDataHelper<Data, AggregateFunctionsSingleValue<Data>>
 {
+    static constexpr bool is_any = Data::is_any;
+
 private:
     SerializationPtr serialization;
 
@@ -1074,12 +1151,83 @@ public:
 
     DataTypePtr getReturnType() const override
     {
+        if constexpr (Data::is_nullable)
+            return makeNullable(this->argument_types.at(0));
         return this->argument_types.at(0);
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         this->data(place).changeIfBetter(*columns[0], row_num, arena);
+    }
+
+    void addBatchSinglePlace(
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos) const override
+    {
+        if constexpr (is_any)
+            if (this->data(place).has())
+                return;
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                if (flags[i])
+                {
+                    this->data(place).changeIfBetter(*columns[0], i, arena);
+                    if constexpr (is_any)
+                        break;
+                }
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                this->data(place).changeIfBetter(*columns[0], i, arena);
+                if constexpr (is_any)
+                    break;
+            }
+        }
+    }
+
+    void addBatchSinglePlaceNotNull(
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const override
+    {
+        if constexpr (is_any)
+            if (this->data(place).has())
+                return;
+
+        if (if_argument_pos >= 0)
+        {
+            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                if (!null_map[i] && flags[i])
+                {
+                    this->data(place).changeIfBetter(*columns[0], i, arena);
+                    if constexpr (is_any)
+                        break;
+                }
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                if (!null_map[i])
+                {
+                    this->data(place).changeIfBetter(*columns[0], i, arena);
+                    if constexpr (is_any)
+                        break;
+                }
+            }
+        }
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override

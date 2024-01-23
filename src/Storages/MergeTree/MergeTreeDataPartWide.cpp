@@ -113,7 +113,7 @@ ColumnSize MergeTreeDataPartWide::getColumnSizeImpl(
         return size;
 
     // Special handling flattened map type
-    if (column.type->isMap() && !column.type->isMapKVStore())
+    if (column.type->isByteMap())
         return getMapColumnSizeNotKV(checksums, column);
 
     auto serialization = getSerializationForColumn(column);
@@ -154,7 +154,7 @@ void MergeTreeDataPartWide::loadIndexGranularity()
     std::string marks_file_path;
     for (auto & column: *columns_ptr)
     {
-        if (column.type->isMap() && !column.type->isMapKVStore())
+        if (column.type->isByteMap())
             continue;
         marks_file_path = index_granularity_info.getMarksFilePath(full_path + getFileNameForColumn(column));
         break;
@@ -221,8 +221,7 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
         {
             for (const NameAndTypePair & name_type : *columns_ptr)
             {
-                //@ByteMap
-                if (name_type.type->isMap() && !name_type.type->isMapKVStore())
+                if (name_type.type->isByteMap())
                     continue;
 
                 auto serialization = getSerializationForColumn(name_type);
@@ -248,8 +247,7 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
         std::optional<UInt64> marks_size;
         for (const NameAndTypePair & name_type : *columns_ptr)
         {
-            //@ByteMap
-            if (name_type.type->isMap() && !name_type.type->isMapKVStore())
+            if (name_type.type->isByteMap())
                 continue;
 
             auto serialization = IDataType::getSerialization(name_type,
@@ -296,7 +294,7 @@ bool MergeTreeDataPartWide::hasColumnFiles(const NameAndTypePair & column) const
         return bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end();
     };
 
-    if (column.type->isMap() && !column.type->isMapKVStore())
+    if (column.type->isByteMap())
     {
         for (auto & [file, _] : getChecksums()->files)
         {

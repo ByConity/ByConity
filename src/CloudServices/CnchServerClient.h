@@ -51,7 +51,7 @@ public:
     ~CnchServerClient() override;
 
     /// Transaction RPCs related. TODO @canh: add implement when baseline rpc implementation is merged
-    std::pair<TxnTimestamp, TxnTimestamp> createTransaction(const TxnTimestamp & primary_txn_id = {0});
+    std::pair<TxnTimestamp, TxnTimestamp> createTransaction(const TxnTimestamp & primary_txn_id, bool read_only);
     std::pair<TxnTimestamp, TxnTimestamp> createTransactionForKafka(const StorageID & storage_id, const size_t consumer_index);
     TxnTimestamp commitTransaction(
         const ICnchTransaction & txn, const StorageID & kafka_storage_id = StorageID::createEmpty(), const size_t consumer_index = 0);
@@ -99,6 +99,8 @@ public:
         const IMergeTreeDataPartsVector & commit_parts,
         const IMergeTreeDataPartsVector & commit_staged_parts,
         const Strings & detached_part_names,
+        size_t detached_visible_part_size,
+        size_t detached_staged_part_size,
         const Strings & detached_bitmap_names,
         const DeleteBitmapMetaPtrVector & detached_bitmaps,
         const DeleteBitmapMetaPtrVector & bitmaps,

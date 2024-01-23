@@ -27,8 +27,7 @@ private:
     std::optional<UUID> findImpl(EntityType type, const String & name) const override;
     std::vector<UUID> findAllImpl(EntityType type) const override;
     bool existsImpl(const UUID & id) const override;
-    AccessEntityPtr readImpl(const UUID & id) const override;
-    String readNameImpl(const UUID & id) const override;
+    AccessEntityPtr readImpl(const UUID & id, bool throw_if_not_exists) const override;
     bool canInsertImpl(const AccessEntityPtr &) const override { return true; }
     UUID insertImpl(const AccessEntityPtr & entity, bool replace_if_exists) override;
     void removeImpl(const UUID & id) override;

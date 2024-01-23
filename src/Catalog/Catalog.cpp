@@ -306,6 +306,8 @@ namespace ProfileEvents
     extern const Event GetAllTablesIDFailed;
     extern const Event GetTableIDByNameSuccess;
     extern const Event GetTableIDByNameFailed;
+    extern const Event GetTableIDsByNamesSuccess;
+    extern const Event GetTableIDsByNamesFailed;
     extern const Event GetAllWorkerGroupsSuccess;
     extern const Event GetAllWorkerGroupsFailed;
     extern const Event GetAllDictionariesSuccess;
@@ -1134,7 +1136,7 @@ namespace Catalog
                     throw Exception(
                         "Cannot get metadata of table " + from_database + "." + from_table + " by UUID : " + table_uuid,
                         ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
-                
+
                 if (table->commit_time() >= ts.toUInt64())
                     throw Exception("Cannot rename table with an earlier timestamp", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
 
@@ -1412,9 +1414,9 @@ namespace Catalog
         return res;
     }
 
-    DataPartsVector Catalog::getStagedParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    DataPartsVector Catalog::getStagedParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
-        auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
+        const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get());
         if (!storage)
             throw Exception("Table is not a merge tree", ErrorCodes::BAD_ARGUMENTS);
 
@@ -1422,12 +1424,12 @@ namespace Catalog
         return CnchPartsHelper::toMergeTreeDataPartsCNCHVector(createPartVectorFromServerParts(*storage, staged_server_parts));
     }
 
-    ServerDataPartsVector Catalog::getStagedServerDataParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
             [&] {
-                auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
+                const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get());
                 if (!storage)
                     throw Exception("Table is not a merge tree", ErrorCodes::BAD_ARGUMENTS);
                 String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
@@ -3221,7 +3223,7 @@ namespace Catalog
     }
 
     Catalog::UndoBufferIterator::UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter_, Poco::Logger * log_)
-        : metastore_iter{metastore_iter_}, log{log_}
+        : metastore_iter{std::move(metastore_iter_)}, log{log_}
     {}
 
     bool Catalog::UndoBufferIterator::next()
@@ -3266,7 +3268,7 @@ namespace Catalog
         runWithMetricSupport(
             [&] {
                 auto it = meta_proxy->getAllUndoBuffer(name_space);
-                ret = UndoBufferIterator{it, log};
+                ret = UndoBufferIterator{std::move(it), log};
             },
             ProfileEvents::GetUndoBufferIteratorSuccess,
             ProfileEvents::GetUndoBufferIteratorFailed);
@@ -3786,6 +3788,16 @@ namespace Catalog
         return res;
     }
 
+    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> Catalog::getTableIDsByNames(const std::vector<std::pair<String, String>> & db_table_pairs)
+    {
+        std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getTableIDs(name_space, db_table_pairs); },
+            ProfileEvents::GetTableIDsByNamesSuccess,
+            ProfileEvents::GetTableIDsByNamesFailed);
+        return res;
+    }
+
     Catalog::DataModelWorkerGroups Catalog::getAllWorkerGroups()
     {
         DataModelWorkerGroups res;
@@ -3851,14 +3863,33 @@ namespace Catalog
     {
         runWithMetricSupport(
             [&] {
+                String target_database;
                 String table_uuid = meta_proxy->getTrashTableUUID(name_space, database, name, ts);
+
+                /// The trash table may created by drop database. The trash key has database name with commit ts.
+                if (table_uuid.empty())
+                {
+                    target_database = database + '_' + toString(ts);
+                    table_uuid = meta_proxy->getTrashTableUUID(name_space, database + '_' + toString(ts), name, ts);
+                }
+                else
+                {
+                    target_database = database;
+                }
+
+                if (table_uuid.empty())
+                {
+                    LOG_WARNING(log, "Cannot find trashed table ID by name {}.{}, ts: {}", database, name, ts);
+                    return;
+                }
+
                 auto table = tryGetTableFromMetastore(table_uuid, ts, false, true);
 
                 Strings dependencies;
                 if (table)
                     dependencies = tryGetDependency(parseCreateQuery(table->definition()));
 
-                meta_proxy->clearTableMeta(name_space, database, name, table_uuid, dependencies, ts);
+                meta_proxy->clearTableMeta(name_space, target_database, name, table_uuid, dependencies, ts);
 
                 if (!table_uuid.empty() && context.getPartCacheManager())
                 {
@@ -5673,9 +5704,21 @@ namespace Catalog
                     log,
                     "Redirect attachDetachedParts request to remote host : {} for table {}"
                         , target_host.toDebugString(), to_tbl->getStorageID().getNameForLogs());
-                context.getCnchServerClientPool().get(target_host)->redirectAttachDetachedS3Parts(
-                    to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), parts, staged_parts, detached_part_names, {}, detached_bitmaps, bitmaps,
-                    DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS);
+                context.getCnchServerClientPool()
+                    .get(target_host)
+                    ->redirectAttachDetachedS3Parts(
+                        to_tbl,
+                        from_tbl->getStorageUUID(),
+                        to_tbl->getStorageUUID(),
+                        parts,
+                        staged_parts,
+                        detached_part_names,
+                        parts.size(),
+                        detached_part_names.size(),
+                        {},
+                        detached_bitmaps,
+                        bitmaps,
+                        DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS);
                 return;
             }
             catch (Exception & e)
@@ -5820,7 +5863,11 @@ namespace Catalog
     }
 
     void Catalog::attachDetachedPartsRaw(
-        const StoragePtr & tbl, const std::vector<String> & part_names, const std::vector<String> & bitmap_names)
+        const StoragePtr & tbl,
+        const std::vector<String> & part_names,
+        size_t detached_visible_part_size,
+        size_t detached_staged_part_size,
+        const std::vector<String> & bitmap_names)
     {
         if (part_names.empty())
         {
@@ -5841,9 +5888,21 @@ namespace Catalog
                     log,
                     "Redirect attachDetachedPartsRaw request to remote host : {} for table {}"
                         , target_host.toDebugString(), tbl->getStorageID().getNameForLogs());
-                context.getCnchServerClientPool().get(target_host)->redirectAttachDetachedS3Parts(
-                    tbl, UUIDHelpers::Nil, tbl->getStorageUUID(), {}, {}, part_names, bitmap_names, {}, {}
-                    , DB::Protos::DetachAttachType::ATTACH_DETACHED_RAW);
+                context.getCnchServerClientPool()
+                    .get(target_host)
+                    ->redirectAttachDetachedS3Parts(
+                        tbl,
+                        UUIDHelpers::Nil,
+                        tbl->getStorageUUID(),
+                        {},
+                        {},
+                        part_names,
+                        detached_visible_part_size,
+                        detached_staged_part_size,
+                        bitmap_names,
+                        {},
+                        {},
+                        DB::Protos::DetachAttachType::ATTACH_DETACHED_RAW);
                 return;
             }
             catch (Exception & e)
@@ -5859,6 +5918,8 @@ namespace Catalog
             name_space,
             UUIDHelpers::UUIDToString(tbl->getStorageUUID()),
             part_names,
+            detached_visible_part_size,
+            detached_staged_part_size,
             bitmap_names,
             max_commit_size_one_batch,
             max_drop_size_one_batch);

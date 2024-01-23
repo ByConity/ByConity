@@ -49,10 +49,10 @@ void write(ContextMutablePtr & context, Block header, DiskExchangeDataManagerPtr
     DiskPartitionWriterPtr writer = std::make_shared<DiskPartitionWriter>(context, mgr, header, std::move(key));
     auto origin_chunk = createUInt8Chunk(10, 1, 7);
     BroadcastStatus status = writer->sendImpl(std::move(origin_chunk));
-    ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
+    ASSERT_EQ(status.code, BroadcastStatusCode::RUNNING) << fmt::format("status_code:{} message:{}", status.code, status.message);
     mgr->submitWriteTask(writer, nullptr);
     status = writer->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "writer test");
-    ASSERT_TRUE(status.code == BroadcastStatusCode::ALL_SENDERS_DONE);
+    ASSERT_EQ(status.code, BroadcastStatusCode::ALL_SENDERS_DONE) << fmt::format("status_code:{} message:{}", status.code, status.message);
 }
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataWriteAndRead)
@@ -118,7 +118,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
     auto packet = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver)->recv(1000);
     ASSERT_TRUE(std::holds_alternative<BroadcastStatus>(packet));
     auto status = std::get<BroadcastStatus>(packet);
-    ASSERT_TRUE(status.code == BroadcastStatusCode::SEND_CANCELLED);
+    ASSERT_EQ(status.code, BroadcastStatusCode::SEND_CANCELLED) << fmt::format("status_code:{} message:{}", status.code, status.message);
     manager->cleanup(key->query_unique_id);
 }
 
@@ -143,12 +143,17 @@ TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByHeartBeat)
     auto test_query_unique_id = 1000;
     auto key = std::make_shared<ExchangeDataKey>(test_query_unique_id, exchange_id, parallel_idx);
     write(context, header, manager, key);
+    manager->gc();
+    ASSERT_TRUE(disk->exists("bsp/v-1.0.0/1000"));
     context->getExchangeDataTracker()->unregisterExchanges(std::to_string(test_query_unique_id));
+    manager->gc();
+    ASSERT_TRUE(!disk->exists("bsp/v-1.0.0/1000"));
     /// test invalid file name
     disk->createDirectories("bsp/v-1.0.0/invalid");
     disk->createFile(fs::path("bsp/v-1.0.0/invalid") / "tmp_file");
     disk->createFile("bsp/v-1.0.0/invalid-file");
 
+    manager->gc();
     std::mutex mu;
     std::condition_variable cv;
     for (size_t i = 0; i < 100; i++)
@@ -172,6 +177,8 @@ TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByExpire)
     write(context, header, manager, key);
 
     manager->setFileExpireSeconds(0);
+    manager->gc();
+    manager->setFileExpireSeconds(10000);
 
     std::mutex mu;
     std::condition_variable cv;

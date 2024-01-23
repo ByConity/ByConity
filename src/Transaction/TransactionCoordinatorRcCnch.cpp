@@ -106,25 +106,24 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
 }
 
 ProxyTransactionPtr TransactionCoordinatorRcCnch::createProxyTransaction(
-    const HostWithPorts & host_ports,
-    TxnTimestamp primary_txn_id)
+    const HostWithPorts & host_ports, TxnTimestamp primary_txn_id, bool read_only)
+{
+    /// Get the rpc client of target server
+    auto server_cli = getContext()->getCnchServerClient(host_ports);
+    auto txn = std::make_shared<CnchProxyTransaction>(getContext(), server_cli, primary_txn_id, read_only);
+    auto txn_id = txn->getTransactionID();
+    /// add to active txn list
     {
-        /// Get the rpc client of target server
-        auto server_cli = getContext()->getCnchServerClient(host_ports);
-        auto txn = std::make_shared<CnchProxyTransaction>(getContext(), server_cli, primary_txn_id);
-        auto txn_id = txn->getTransactionID();
-        /// add to active txn list
-        {
-            std::lock_guard<std::mutex> lock(list_mutex);
-            if (!active_txn_list.emplace(txn_id, txn).second)
-                throw Exception("Transaction (txn_id: " + txn_id.toString() + ") has been created", ErrorCodes::LOGICAL_ERROR);
-        }
-        /// add txn to its primary txn's secondary txn list
-        auto *primary_txn = getTransaction(txn->getPrimaryTransactionID())->as<CnchExplicitTransaction>();
-        if (primary_txn) primary_txn->addSecondaryTransaction(txn);
-        LOG_DEBUG(log, "Created proxy txn {}\n", txn->getTransactionRecord().toString());
-        return txn;
+        std::lock_guard<std::mutex> lock(list_mutex);
+        if (!active_txn_list.emplace(txn_id, txn).second)
+            throw Exception("Transaction (txn_id: " + txn_id.toString() + ") has been created", ErrorCodes::LOGICAL_ERROR);
     }
+    /// add txn to its primary txn's secondary txn list
+    auto *primary_txn = getTransaction(txn->getPrimaryTransactionID())->as<CnchExplicitTransaction>();
+    if (primary_txn) primary_txn->addSecondaryTransaction(txn);
+    LOG_DEBUG(log, "Created proxy txn {}\n", txn->getTransactionRecord().toString());
+    return txn;
+}
 
 TransactionCnchPtr TransactionCoordinatorRcCnch::getTransaction(const TxnTimestamp & txnID) const
 {

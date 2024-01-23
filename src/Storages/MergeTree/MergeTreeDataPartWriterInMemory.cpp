@@ -1,6 +1,8 @@
-#include <Storages/MergeTree/MergeTreeDataPartWriterInMemory.h>
+#include <Columns/ColumnMap.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
+#include <Storages/MergeTree/MergeTreeDataPartWriterInMemory.h>
 #include <Storages/MergeTree/MergeTreeWriteAheadLog.h>
+#include <Common/FieldVisitorToString.h>
 
 namespace DB
 {

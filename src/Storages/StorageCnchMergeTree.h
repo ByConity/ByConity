@@ -117,7 +117,7 @@ public:
      * @param snapshot_ts If not zero, specify the snapshot to use
      */
     ServerDataPartsVector
-    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0) const;
+    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0, bool staging_area = false) const;
 
     /// Return all base parts and delete bitmap metas in the given partitions.
     /// If `partitions` is empty, return meta for all partitions.
@@ -208,6 +208,8 @@ public:
 
     PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
 
+    void checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+
     /// parse bucket number set from where clause, only works for single-key cluster by
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
@@ -234,8 +236,12 @@ private:
     /**
      * @param snapshot_ts If not zero, specify the snapshot to use
      */
-    ServerDataPartsVector
-    getAllPartsInPartitions(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0) const;
+    ServerDataPartsVector getAllPartsInPartitions(
+        const Names & column_names_to_return,
+        ContextPtr local_context,
+        const SelectQueryInfo & query_info,
+        UInt64 snapshot_ts = 0,
+        bool staging_area = false) const;
 
     Strings selectPartitionsByPredicate(
         const SelectQueryInfo & query_info,
@@ -250,7 +256,7 @@ private:
         const Names & column_names_to_return) const;
 
     void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context, size_t max_threads);
+        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context, size_t max_threads, bool staging_area = false);
 
     void collectResource(
         ContextPtr local_context,
@@ -276,17 +282,7 @@ private:
     /// If something is wrong, throws an exception.
     void checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const;
 
-
-    /// *********** START OF BitEngine-related members *********** ///
-
-    /// check whether bitengine table and dictionary table has same CLUSTER BY clause
-    /// only CnChMergeTree use it when creating table, CloudMergeTree doesn't need it because it's more difficult
-    /// to get underlying dict table.
-    void checkSchemaForBitEngineTable(const ContextPtr & context_) const override;
-
-    void checkUnderlyingDictionaryTable(const BitEngineHelper::DictionaryDatabaseAndTable & dict_table) override;
-
-    /// *********** END OF BitEngine-related members *********** ///
+    std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
 };
 
 using StorageCnchMergeTreePtr = std::shared_ptr<StorageCnchMergeTree>;

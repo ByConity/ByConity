@@ -329,7 +329,7 @@ bool isDecimalOrNullableDecimal(const DataTypePtr & type)
     return isDecimal(assert_cast<const DataTypeNullable *>(type.get())->getNestedType());
 }
 
-void extractNullMapAndNestedCol(const ColumnsWithTypeAndName & args, ColumnPtr * raw_column_maps, const UInt8 ** nullable_args_map)
+bool extractNullMapAndNestedCol(const ColumnsWithTypeAndName & args, ColumnPtr * raw_column_maps, const UInt8 ** nullable_args_map)
 {
     size_t arg_size = args.size();
     for (size_t arg_idx = 0; arg_idx < arg_size; arg_idx++)
@@ -337,6 +337,10 @@ void extractNullMapAndNestedCol(const ColumnsWithTypeAndName & args, ColumnPtr *
         if (args[arg_idx].column->isNullable())
         {
             const ColumnNullable * nullable_column = checkAndGetColumn<ColumnNullable>(*args[arg_idx].column);
+            if(!nullable_column)
+            {
+                return false;
+            }
             nullable_args_map[arg_idx] = nullable_column->getNullMapData().data();
             raw_column_maps[arg_idx] = nullable_column->getNestedColumnPtr();
         }
@@ -346,6 +350,7 @@ void extractNullMapAndNestedCol(const ColumnsWithTypeAndName & args, ColumnPtr *
             raw_column_maps[arg_idx] = args[arg_idx].column;
         }
     }
+    return true;
 }
 
 String getFunctionResultName(const String & function_name, const Strings & arg_result_names)

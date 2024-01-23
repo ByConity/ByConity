@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <CloudServices/CnchServerServiceImpl.h>
 
 #include <Catalog/Catalog.h>
@@ -61,11 +62,22 @@ namespace ErrorCodes
 }
 namespace AutoStats = Statistics::AutoStats;
 
+namespace
+{
+    UInt64 getTS(ContextMutablePtr & context)
+    {
+        TxnTimestamp ts = context->tryGetTimestamp();
+        /// TSO server is unavailable now
+        if (ts == TxnTimestamp::fallbackTS())
+            ts = TxnTimestamp::fromUnixTimestamp(time(nullptr)).toUInt64();
+        return ts;
+    }
+}
+
 CnchServerServiceImpl::CnchServerServiceImpl(ContextMutablePtr global_context)
     : WithMutableContext(global_context),
-      server_start_time(global_context->getTimestamp()),
+      server_start_time(getTS(global_context)),
       global_gc_manager(global_context),
-
       log(&Poco::Logger::get("CnchServerService"))
 {
 }
@@ -126,6 +138,17 @@ void CnchServerServiceImpl::commitParts(
                 cppkafka::TopicPartitionList tpl;
                 if (req->has_consumer_group())
                 {
+                    // check if table schema has changed before writing new parts. need reschedule consume task and update storage schema on work side if so.
+                    if (!parts.empty())
+                    {
+                        auto column_commit_time = storage->getPartColumnsCommitTime(*(parts[0]->getColumnsPtr()));
+                        if (column_commit_time != storage->commit_time.toUInt64())
+                        {
+                            LOG_WARNING(&Poco::Logger::get("CnchServerService"), "Kafka consumer cannot commit parts because of underlying table change. Will reschedule consume task.");
+                            throw Exception(ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP, "Commit fails because of storage schema change");
+                        }
+                    }
+
                     consumer_group = req->consumer_group();
                     tpl.reserve(req->tpl_size());
                     for (const auto & tp : req->tpl())
@@ -206,13 +229,15 @@ void CnchServerServiceImpl::createTransaction(
         try
         {
             TxnTimestamp primary_txn_id = request->has_primary_txn_id() ? TxnTimestamp(request->primary_txn_id()) : TxnTimestamp(0);
+            bool read_only = request->has_read_only() ? request->read_only() : false;
             CnchTransactionInitiator initiator
                 = request->has_primary_txn_id() ? CnchTransactionInitiator::Txn : CnchTransactionInitiator::Worker;
             auto transaction
                 = global_context.getCnchTransactionCoordinator().createTransaction(CreateTransactionOption()
                                                                                         .setPrimaryTransactionId(primary_txn_id)
                                                                                         .setType(CnchTransactionType::Implicit)
-                                                                                        .setInitiator(initiator));
+                                                                                        .setInitiator(initiator)
+                                                                                        .setReadOnly(read_only));
             auto & controller = static_cast<brpc::Controller &>(*cntl);
             transaction->setCreator(butil::endpoint2str(controller.remote_side()).c_str());
 
@@ -691,7 +716,9 @@ void CnchServerServiceImpl::controlCnchBGThread(
 
             try
             {
-                auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+                StorageID storage_id = StorageID::createEmpty();
+                if (!request->storage_id().table().empty())
+                    storage_id = RPCHelpers::createStorageID(request->storage_id());
                 auto type = CnchBGThreadType(request->type());
                 auto action = CnchBGThreadAction(request->action());
                 global_context.controlCnchBGThread(storage_id, type, action);
@@ -879,8 +906,8 @@ void CnchServerServiceImpl::reportCnchLockHeartBeat(
 }
 
 void CnchServerServiceImpl::getServerStartTime(
-    google::protobuf::RpcController * cntl,
-    const Protos::GetServerStartTimeReq * request,
+    google::protobuf::RpcController *,
+    const Protos::GetServerStartTimeReq *,
     Protos::GetServerStartTimeResp * response,
     google::protobuf::Closure * done)
 {
@@ -1200,7 +1227,10 @@ void CnchServerServiceImpl::redirectAttachDetachedS3Parts(
                     if (!to_table)
                         throw Exception("Cannot get table by UUID " + to_table_uuid, ErrorCodes::UNKNOWN_TABLE);
                     throw_if_non_host(to_table);
-                    global_context->getCnchCatalog()->attachDetachedPartsRaw(to_table, detached_part_names, detached_bitmap_names);
+                    size_t detached_visible_part_size = request->detached_visible_part_size();
+                    size_t detached_staged_part_size = request->detached_staged_part_size();
+                    global_context->getCnchCatalog()->attachDetachedPartsRaw(
+                        to_table, detached_part_names, detached_visible_part_size, detached_staged_part_size, detached_bitmap_names);
                     break;
                 }
                 default:

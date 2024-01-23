@@ -225,30 +225,17 @@ namespace
 
         assert(output_desc.size() == field_symbol_infos.size());
 
-        bool has_global_low_cardinality = false;
         for (size_t i = 0; i < output_desc.size(); ++i)
         {
             String input_column = field_symbol_infos[i].getPrimarySymbol();
             String output_name = get_uniq_output_name(output_desc[i].name);
             assignments.emplace_back(output_name, toSymbolRef(input_column));
             output_types[output_name] = input_types[input_column];
-            // TODO global low card
-            // if (output_types[output_name]->globalLowCardinality())
-            // has_global_low_cardinality = true;
         }
-
-        PlanNodePtr secondary_newness_node = nullptr;
-        if (has_global_low_cardinality)
-        {
-            // auto global_decode = std::make_shared<GlobalDecodeStep>(old_root->getCurrentDataStream());
-            // secondary_newness_node = old_root->addStep(context->nextNodeId(), std::move(global_decode));
-        }
-        else
-            secondary_newness_node = old_root;
 
         auto output_step
-            = std::make_shared<ProjectionStep>(secondary_newness_node->getCurrentDataStream(), assignments, output_types, true);
-        auto new_root = secondary_newness_node->addStep(context->nextNodeId(), std::move(output_step));
+            = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types, true);
+        auto new_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
         PRINT_PLAN(new_root, plan_output);
         return new_root;
     }
@@ -2145,14 +2132,18 @@ RelationPlan QueryPlannerVisitor::combineSubqueryOutputsToTuple(const RelationPl
 
     if (outputs.size() > 1)
     {
+        auto subquery_type = analysis.getExpressionType(subquery);
+        const auto & type_tuple = typeid_cast<const DataTypeTuple &>(*subquery_type);
         ASTs tuple_func_args(outputs.size());
         std::transform(
             outputs.begin(), outputs.end(), tuple_func_args.begin(), [](auto & out) { return toSymbolRef(out.getPrimarySymbol()); });
 
-        auto tuple_func_expr = makeASTFunction("tuple", std::move(tuple_func_args));
+        ASTPtr tuple_func_expr = makeASTFunction("tuple", std::move(tuple_func_args));
+        if (type_tuple.haveExplicitNames())
+            tuple_func_expr = makeCastFunction(tuple_func_expr, subquery_type);
         auto tuple_func_symbol = context->getSymbolAllocator()->newSymbol(tuple_func_expr);
         Assignments assignments{{tuple_func_symbol, tuple_func_expr}};
-        NameToType types{{tuple_func_symbol, analysis.getExpressionType(subquery)}};
+        NameToType types{{tuple_func_symbol, subquery_type}};
         auto old_root = plan.getRoot();
         auto expression_step = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, types);
         auto new_root = old_root->addStep(context->nextNodeId(), std::move(expression_step));

@@ -61,6 +61,7 @@
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/loadMetadata.h>
+#include <BridgeHelper/CatBoostLibraryBridgeHelper.h>
 #include <Access/ContextAccess.h>
 #include <Access/AllowedClientHosts.h>
 #include <Databases/IDatabase.h>
@@ -381,16 +382,16 @@ BlockIO InterpreterSystemQuery::execute()
         {
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_MODEL);
 
-            auto & external_models_loader = system_context->getExternalModelsLoader();
-            external_models_loader.reloadModel(query.target_model);
+            auto bridge_helper = std::make_unique<CatBoostLibraryBridgeHelper>(getContext(), query.target_model);
+            bridge_helper->removeModel();
             break;
         }
         case Type::RELOAD_MODELS:
         {
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_MODEL);
 
-            auto & external_models_loader = system_context->getExternalModelsLoader();
-            external_models_loader.reloadAllTriedToLoad();
+            auto bridge_helper = std::make_unique<CatBoostLibraryBridgeHelper>(getContext());
+            bridge_helper->removeAllModels();
             break;
         }
         case Type::RELOAD_EMBEDDED_DICTIONARIES:
@@ -494,9 +495,13 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::STOP_MERGES:
         case Type::START_MERGES:
         case Type::REMOVE_MERGES:
+        case Type::RESUME_ALL_MERGES:
+        case Type::SUSPEND_ALL_MERGES:
         case Type::STOP_GC:
         case Type::START_GC:
         case Type::FORCE_GC:
+        case Type::RESUME_ALL_GC:
+        case Type::SUSPEND_ALL_GC:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
         case Type::START_CLUSTER:
@@ -513,7 +518,7 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             dumpCnchServerStatus();
             break;
         case Type::DROP_CNCH_PART_CACHE:
-            dropCnchPartCache(query);
+            dropCnchPartCache();
             break;
         case Type::SYNC_DEDUP_WORKER:
             executeSyncDedupWorker(system_context);
@@ -622,17 +627,36 @@ BlockIO InterpreterSystemQuery::executeLocalCommand(ASTSystemQuery & query, Cont
 
 void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & system_context, ASTSystemQuery::Type type) const
 {
+    using Type = ASTSystemQuery::Type;
+    auto daemon_manager = getContext()->getDaemonManagerClient();
+
     if (table_id.empty())
-        throw Exception("Table name should be specified for control background task", ErrorCodes::LOGICAL_ERROR);
+    {
+        switch (type)
+        {
+            case Type::RESUME_ALL_MERGES:
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
+                break;
+            case Type::SUSPEND_ALL_MERGES:
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString());
+                break;
+            case Type::RESUME_ALL_GC:
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
+                break;
+            case Type::SUSPEND_ALL_GC:
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::PartGC, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString());
+                break;
+            default:
+                throw Exception("Table name should be specified for control specified background task", ErrorCodes::LOGICAL_ERROR);
+        }
+        return;
+    }
 
     auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
 
     if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()))
         throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
-    auto daemon_manager = getContext()->getDaemonManagerClient();
-
-    using Type = ASTSystemQuery::Type;
     switch (type)
     {
         case Type::START_MERGES:
@@ -1168,16 +1192,14 @@ void InterpreterSystemQuery::dumpCnchServerStatus()
         topology_master->dumpStatus();
 }
 
-void InterpreterSystemQuery::dropCnchPartCache(ASTSystemQuery & query)
+void InterpreterSystemQuery::dropCnchPartCache()
 {
-    if (!query.database.empty() && !query.table.empty() && getContext()->getPartCacheManager())
+    auto local_context = getContext();
+    if (local_context->getPartCacheManager())
     {
-        auto storage = DatabaseCatalog::instance().getTable(StorageID{query.database, query.table}, getContext());
-        if (storage)
-        {
-            getContext()->getPartCacheManager()->invalidPartCache(storage->getStorageUUID());
-            LOG_DEBUG(log, "Dropped cnch part cache of table {}.{}", query.database, query.table);
-        }
+        auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
+        local_context->getPartCacheManager()->invalidPartCache(storage->getStorageUUID());
+        LOG_DEBUG(log, "Dropped cnch part cache of table {}", table_id.getNameForLogs());
     }
 }
 

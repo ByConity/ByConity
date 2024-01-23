@@ -33,6 +33,8 @@
 #include <DataSketches/cpc_sketch.hpp>
 #include <DataSketches/cpc_union.hpp>
 #include <DataSketches/kll_sketch.hpp>
+#include <DataSketches/theta_a_not_b.hpp>
+#include <DataSketches/theta_intersection.hpp>
 #include <DataSketches/theta_sketch.hpp>
 #include <DataSketches/theta_union.hpp>
 #include <Statistics/serde_extend.hpp>

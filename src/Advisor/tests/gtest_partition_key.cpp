@@ -73,6 +73,7 @@ TEST_F(PartitionKeyTest, testColocatedJoin)
     tester->execute("CREATE TABLE IF NOT EXISTS A(a UInt32 not null, b UInt32 not null) ENGINE=Memory");
     auto context = tester->createQueryContext();
     context->applySettingsChanges({DB::SettingChange("cascades_optimizer_timeout", "2000000")});
+    context->applySettingsChanges({DB::SettingChange("enum_replicate_no_stats", "0")});
     std::vector<std::string> sqls{"select * from A A1, A A2 where A1.a = A2.a;", "select * from A A1, A A2 where A1.a = A2.a;"};
     ThreadPool query_thread_pool{std::min<size_t>(size_t(context->getSettingsRef().max_threads), sqls.size())};
     WorkloadQueries queries = WorkloadQuery::build(std::move(sqls), context, query_thread_pool);
@@ -111,6 +112,7 @@ TEST_F(PartitionKeyTest, testMemoBasedAdvise)
     tester->execute("CREATE TABLE IF NOT EXISTS A(a UInt32 not null, b UInt32 not null) ENGINE=Memory");
     std::vector<std::string> sqls{"select * from A A1, A A2 where A1.a = A2.a;", "select * from A A1, A A2 where A1.a = A2.a;"};
     auto context = tester->createQueryContext();
+    context->applySettingsChanges({DB::SettingChange("enum_replicate_no_stats", "0")});
     ThreadPool query_thread_pool{std::min<size_t>(size_t(context->getSettingsRef().max_threads), sqls.size())};
     WorkloadQueries queries = WorkloadQuery::build(sqls, context, query_thread_pool);
     WorkloadTables tables(context);

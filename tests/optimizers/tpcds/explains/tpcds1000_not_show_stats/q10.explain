@@ -68,84 +68,80 @@ Projection
                                     │                    └─ TableScan tpcds1000.date_dim
                                     │                             Where: (d_year = 2002) AND (d_moy >= 1) AND (d_moy <= 4)
                                     │                             Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
-                                    └─ Repartition Exchange
-                                       │     Partition by: {c_customer_sk}
-                                       └─ Inner Join
-                                          │     Condition: cd_demo_sk == c_current_cdemo_sk
-                                          │     Runtime Filters Builder: {c_current_cdemo_sk}
-                                          ├─ Repartition Exchange
-                                          │  │     Partition by: {cd_demo_sk}
-                                          │  └─ Filter
-                                          │     │     Condition: Runtime Filters: {cd_demo_sk}
-                                          │     └─ TableScan tpcds1000.customer_demographics
-                                          │              Where: Runtime Filters: {cd_demo_sk}
-                                          │              Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count]
+                                    └─ Inner Join
+                                       │     Condition: c_customer_sk == ss_customer_sk
+                                       │     Runtime Filters Builder: {ss_customer_sk}
+                                       ├─ Repartition Exchange
+                                       │  │     Partition by: {c_customer_sk}
+                                       │  └─ Inner Join
+                                       │     │     Condition: cd_demo_sk == c_current_cdemo_sk
+                                       │     │     Runtime Filters Builder: {c_current_cdemo_sk}
+                                       │     ├─ Repartition Exchange
+                                       │     │  │     Partition by: {cd_demo_sk}
+                                       │     │  └─ Filter
+                                       │     │     │     Condition: Runtime Filters: {cd_demo_sk}
+                                       │     │     └─ TableScan tpcds1000.customer_demographics
+                                       │     │              Where: Runtime Filters: {cd_demo_sk}
+                                       │     │              Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count]
+                                       │     └─ Repartition Exchange
+                                       │        │     Partition by: {c_current_cdemo_sk}
+                                       │        └─ Inner Join
+                                       │           │     Condition: c_current_addr_sk == ca_address_sk
+                                       │           │     Runtime Filters Builder: {ca_address_sk}
+                                       │           ├─ Filter
+                                       │           │  │     Condition: Runtime Filters: {c_current_addr_sk, c_customer_sk}
+                                       │           │  └─ TableScan tpcds1000.customer
+                                       │           │           Where: Runtime Filters: {c_current_addr_sk, c_customer_sk}
+                                       │           │           Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_addr_sk]
+                                       │           └─ Broadcast Exchange
+                                       │              └─ Filter
+                                       │                 │     Condition: ca_county IN ('Dona Ana County', 'Jefferson County', 'La Porte County', 'Rush County', 'Toole County')
+                                       │                 └─ TableScan tpcds1000.customer_address
+                                       │                          Where: ca_county IN ('Dona Ana County', 'Jefferson County', 'La Porte County', 'Rush County', 'Toole County')
+                                       │                          Outputs: [ca_address_sk, ca_county]
+                                       └─ MergingAggregated
                                           └─ Repartition Exchange
-                                             │     Partition by: {c_current_cdemo_sk}
-                                             └─ Inner Join
-                                                │     Condition: c_customer_sk == ss_customer_sk
-                                                │     Runtime Filters Builder: {ss_customer_sk}
-                                                ├─ Repartition Exchange
-                                                │  │     Partition by: {c_customer_sk}
-                                                │  └─ Inner Join
-                                                │     │     Condition: c_current_addr_sk == ca_address_sk
-                                                │     │     Runtime Filters Builder: {ca_address_sk}
-                                                │     ├─ Filter
-                                                │     │  │     Condition: Runtime Filters: {c_current_addr_sk, c_customer_sk}
-                                                │     │  └─ TableScan tpcds1000.customer
-                                                │     │           Where: Runtime Filters: {c_current_addr_sk, c_customer_sk}
-                                                │     │           Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_addr_sk]
-                                                │     └─ Broadcast Exchange
-                                                │        └─ Filter
-                                                │           │     Condition: ca_county IN ('Dona Ana County', 'Jefferson County', 'La Porte County', 'Rush County', 'Toole County')
-                                                │           └─ TableScan tpcds1000.customer_address
-                                                │                    Where: ca_county IN ('Dona Ana County', 'Jefferson County', 'La Porte County', 'Rush County', 'Toole County')
-                                                │                    Outputs: [ca_address_sk, ca_county]
-                                                └─ Repartition Exchange
-                                                   │     Partition by: {ss_customer_sk}
-                                                   └─ MergingAggregated
-                                                      └─ Repartition Exchange
-                                                         │     Partition by: {ss_customer_sk}
-                                                         └─ Aggregating
-                                                            │     Group by: {ss_customer_sk}
-                                                            └─ Inner Join
-                                                               │     Condition: ss_sold_date_sk == d_date_sk
-                                                               │     Runtime Filters Builder: {d_date_sk}
-                                                               ├─ Inner Join
-                                                               │  │     Condition: ss_customer_sk == c_customer_sk_2
-                                                               │  │     Runtime Filters Builder: {c_customer_sk_2}
-                                                               │  ├─ Filter
-                                                               │  │  │     Condition: Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
-                                                               │  │  └─ TableScan tpcds1000.store_sales
-                                                               │  │           Where: Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
-                                                               │  │           Outputs: [ss_sold_date_sk, ss_customer_sk]
-                                                               │  └─ Broadcast Exchange
-                                                               │     └─ MergingAggregated
-                                                               │        └─ Repartition Exchange
-                                                               │           │     Partition by: {c_customer_sk_2}
-                                                               │           └─ Aggregating
-                                                               │              │     Group by: {c_customer_sk_2}
-                                                               │              └─ Projection
-                                                               │                 │     Expressions: c_customer_sk_2:=c_customer_sk
-                                                               │                 └─ Inner Join
-                                                               │                    │     Condition: c_current_addr_sk == ca_address_sk
-                                                               │                    │     Runtime Filters Builder: {ca_address_sk}
-                                                               │                    ├─ Filter
-                                                               │                    │  │     Condition: Runtime Filters: {c_current_addr_sk}
-                                                               │                    │  └─ TableScan tpcds1000.customer
-                                                               │                    │           Where: Runtime Filters: {c_current_addr_sk}
-                                                               │                    │           Outputs: [c_customer_sk, c_current_addr_sk]
-                                                               │                    └─ Broadcast Exchange
-                                                               │                       └─ Filter
-                                                               │                          │     Condition: ca_county IN ('Dona Ana County', 'Jefferson County', 'La Porte County', 'Rush County', 'Toole County')
-                                                               │                          └─ TableScan tpcds1000.customer_address
-                                                               │                                   Where: ca_county IN ('Dona Ana County', 'Jefferson County', 'La Porte County', 'Rush County', 'Toole County')
-                                                               │                                   Outputs: [ca_address_sk, ca_county]
-                                                               └─ Broadcast Exchange
-                                                                  └─ Filter
-                                                                     │     Condition: (d_year = 2002) AND (d_moy >= 1) AND (d_moy <= 4)
-                                                                     └─ TableScan tpcds1000.date_dim
-                                                                              Where: (d_year = 2002) AND (d_moy >= 1) AND (d_moy <= 4)
-                                                                              Outputs: [d_date_sk, d_year, d_moy]
+                                             │     Partition by: {ss_customer_sk}
+                                             └─ Aggregating
+                                                │     Group by: {ss_customer_sk}
+                                                └─ Inner Join
+                                                   │     Condition: ss_sold_date_sk == d_date_sk
+                                                   │     Runtime Filters Builder: {d_date_sk}
+                                                   ├─ Inner Join
+                                                   │  │     Condition: ss_customer_sk == c_customer_sk_1
+                                                   │  │     Runtime Filters Builder: {c_customer_sk_1}
+                                                   │  ├─ Filter
+                                                   │  │  │     Condition: Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
+                                                   │  │  └─ TableScan tpcds1000.store_sales
+                                                   │  │           Where: Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
+                                                   │  │           Outputs: [ss_sold_date_sk, ss_customer_sk]
+                                                   │  └─ Broadcast Exchange
+                                                   │     └─ MergingAggregated
+                                                   │        └─ Repartition Exchange
+                                                   │           │     Partition by: {c_customer_sk_1}
+                                                   │           └─ Aggregating
+                                                   │              │     Group by: {c_customer_sk_1}
+                                                   │              └─ Projection
+                                                   │                 │     Expressions: c_customer_sk_1:=c_customer_sk
+                                                   │                 └─ Inner Join
+                                                   │                    │     Condition: c_current_addr_sk == ca_address_sk
+                                                   │                    │     Runtime Filters Builder: {ca_address_sk}
+                                                   │                    ├─ Filter
+                                                   │                    │  │     Condition: Runtime Filters: {c_current_addr_sk}
+                                                   │                    │  └─ TableScan tpcds1000.customer
+                                                   │                    │           Where: Runtime Filters: {c_current_addr_sk}
+                                                   │                    │           Outputs: [c_customer_sk, c_current_addr_sk]
+                                                   │                    └─ Broadcast Exchange
+                                                   │                       └─ Filter
+                                                   │                          │     Condition: ca_county IN ('Dona Ana County', 'Jefferson County', 'La Porte County', 'Rush County', 'Toole County')
+                                                   │                          └─ TableScan tpcds1000.customer_address
+                                                   │                                   Where: ca_county IN ('Dona Ana County', 'Jefferson County', 'La Porte County', 'Rush County', 'Toole County')
+                                                   │                                   Outputs: [ca_address_sk, ca_county]
+                                                   └─ Broadcast Exchange
+                                                      └─ Filter
+                                                         │     Condition: (d_year = 2002) AND (d_moy >= 1) AND (d_moy <= 4)
+                                                         └─ TableScan tpcds1000.date_dim
+                                                                  Where: (d_year = 2002) AND (d_moy >= 1) AND (d_moy <= 4)
+                                                                  Outputs: [d_date_sk, d_year, d_moy]
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 10 times.

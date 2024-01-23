@@ -128,6 +128,16 @@ namespace
         {
             operator()(x.toUnderType());
         }
+        void operator() (const IPv4 & x) const
+        {
+            UInt8 type = Field::Types::IPv4;
+            hash.update(type);
+            hash.update(x);
+        }
+        void operator() (const IPv6 & x) const
+        {
+            return operator()(String(reinterpret_cast<const char *>(&x), 16));
+        }
         void operator() (const Float64 & x) const
         {
             UInt8 type = Field::Types::Float64;
@@ -176,12 +186,10 @@ namespace
             hash.update(x.size());
 
             for (const auto & elem : x)
-                applyVisitor(*this, elem);
-        }
-
-        [[ noreturn ]] void operator() (const ByteMap & ) const
-        {
-            throw Exception("Map hash not implemented", ErrorCodes::NOT_IMPLEMENTED);
+            {
+                applyVisitor(*this, elem.first);
+                applyVisitor(*this, elem.second);
+            }
         }
 
         void operator() (const DecimalField<Decimal32> & x) const

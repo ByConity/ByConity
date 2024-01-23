@@ -269,6 +269,8 @@ public:
 
     bool cascading = false; /// true for DROP/DETACH PARTITION [WHERE]
 
+    bool staging_area = false;  /// true for DETACH/DROP STAGED PARTITION/PART, only used by unique table
+
     DataDestinationType move_destination_type; /// option for MOVE PART/PARTITION
 
     String move_destination_name;             /// option for MOVE PART/PARTITION

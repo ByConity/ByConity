@@ -29,4 +29,3 @@
   */
 const std::string & getFQDNOrHostName();
 const std::string & getIPOrFQDNOrHostName();
-std::string getHostFromHostPort(const std::string & host_port);

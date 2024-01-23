@@ -106,6 +106,7 @@ inline PatternBuilder tree() { return typeOf(IQueryPlanStep::Type::Tree); }
 inline PatternBuilder project() { return typeOf(IQueryPlanStep::Type::Projection); }
 inline PatternBuilder filter() { return typeOf(IQueryPlanStep::Type::Filter); }
 inline PatternBuilder join() { return typeOf(IQueryPlanStep::Type::Join); }
+inline PatternBuilder multiJoin() { return typeOf(IQueryPlanStep::Type::MultiJoin); }
 inline PatternBuilder aggregating() { return typeOf(IQueryPlanStep::Type::Aggregating); }
 inline PatternBuilder window() { return typeOf(IQueryPlanStep::Type::Window); }
 inline PatternBuilder mergingAggregated() { return typeOf(IQueryPlanStep::Type::MergingAggregated); }

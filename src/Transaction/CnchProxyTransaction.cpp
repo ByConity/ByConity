@@ -16,6 +16,7 @@
 #include <Transaction/CnchProxyTransaction.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
+#include "TransactionCommon.h"
 #include <CloudServices/CnchServerClient.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
@@ -32,25 +33,27 @@ namespace ErrorCodes
     extern const int CNCH_TRANSACTION_ABORT_ERROR;
 }
 
-CnchProxyTransaction::CnchProxyTransaction(const ContextPtr & context_, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id)
+CnchProxyTransaction::CnchProxyTransaction(const ContextPtr & context_, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id, bool read_only)
     : Base(context_), remote_client(std::move(client))
 {
+    setReadOnly(read_only);
+
     /// Create remote transaction on target server
     /// @note This is a blocking call
-    const auto & [txn_id, start_time] = remote_client->createTransaction(primary_txn_id);
-    /// Load the transction record from byte kv, if creating transaction
-    /// success, should be available at this time
-    auto record = global_context->getCnchCatalog()->tryGetTransactionRecord(txn_id);
-    if (!record || record->status() != CnchTransactionStatus::Running || record->primaryTxnID() != primary_txn_id)
-    {
-        throw Exception("CnchProxyTransaction: create transaction on remote server failed", ErrorCodes::LOGICAL_ERROR);
-    }
-    txn_record = std::move(*record);
+    const auto & [txn_id, start_time] = remote_client->createTransaction(primary_txn_id, read_only);
+
+    TransactionRecord record;
+    record.setReadOnly(read_only)
+        .setID(txn_id)
+        .setInitiator(txnInitiatorToString(CnchTransactionInitiator::Txn))
+        .setStatus(CnchTransactionStatus::Running)
+        .setType(CnchTransactionType::Implicit);
+    txn_record = std::move(record);
 }
 
 void CnchProxyTransaction::precommit()
 {
-        throw Exception("Proxy transaction does not support precommit", ErrorCodes::LOGICAL_ERROR);
+    throw Exception("Proxy transaction does not support precommit", ErrorCodes::LOGICAL_ERROR);
 }
 
 TxnTimestamp CnchProxyTransaction::commit()
@@ -71,14 +74,22 @@ TxnTimestamp CnchProxyTransaction::abort()
 
 TxnTimestamp CnchProxyTransaction::rollback()
 {
-    /// Call rpc to rollback transaction on target server
-    syncTransactionStatus();
-    if (getStatus() != CnchTransactionStatus::Aborted)
+    if (isReadOnly())
     {
-        setStatus(CnchTransactionStatus::Aborted);
-        return remote_client->rollbackTransaction(txn_record.txnID());
+        throw Exception("Invalid rollback operation for read only transaction",
+            ErrorCodes::LOGICAL_ERROR);
     }
-    return {};
+    else
+    {
+        /// Call rpc to rollback transaction on target server
+        syncTransactionStatus();
+        if (getStatus() != CnchTransactionStatus::Aborted)
+        {
+            setStatus(CnchTransactionStatus::Aborted);
+            return remote_client->rollbackTransaction(txn_record.txnID());
+        }
+        return {};
+    }
 }
 
 void CnchProxyTransaction::clean(TxnCleanTask &)
@@ -89,8 +100,17 @@ void CnchProxyTransaction::clean(TxnCleanTask &)
 
 void CnchProxyTransaction::removeIntermediateData()
 {
-    /// call RPC to clean intermediate data
-    remote_client->removeIntermediateData(txn_record.txnID());
+    if (isReadOnly())
+    {
+        throw Exception("Invalid removeIntermediateData operation for read only transaction",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+    else
+    {
+        /// call RPC to clean intermediate data
+        remote_client->removeIntermediateData(txn_record.txnID());
+    }
+    
 }
 
 void CnchProxyTransaction::syncTransactionStatus(bool throw_on_missmatch)

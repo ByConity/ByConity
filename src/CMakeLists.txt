@@ -45,6 +45,9 @@ if (COMPILER_GCC)
     add_definitions ("-fno-tree-loop-distribute-patterns")
 endif ()
 
+add_subdirectory (AggregateFunctions)
+add_subdirectory (Functions)
+add_subdirectory (Storages)
 add_subdirectory (Access)
 add_subdirectory (Advisor)
 add_subdirectory (Columns)
@@ -54,12 +57,9 @@ add_subdirectory (DataStreams)
 add_subdirectory (DataTypes)
 add_subdirectory (Dictionaries)
 add_subdirectory (Disks)
-add_subdirectory (Storages)
 add_subdirectory (Parsers)
 add_subdirectory (IO)
-add_subdirectory (Functions)
 add_subdirectory (Interpreters)
-add_subdirectory (AggregateFunctions)
 add_subdirectory (Client)
 add_subdirectory (TableFunctions)
 add_subdirectory (Processors)
@@ -67,6 +67,7 @@ add_subdirectory (Formats)
 add_subdirectory (Compression)
 add_subdirectory (Server)
 add_subdirectory (Coordination)
+add_subdirectory (Bridge)
 add_subdirectory (Protos)
 add_subdirectory (FormaterTool)
 add_subdirectory (ServiceDiscovery)
@@ -78,10 +79,6 @@ add_subdirectory (ExternalCatalog)
 add_subdirectory (TSO)
 add_subdirectory (DaemonManager)
 add_subdirectory (Optimizer)
-
-if(USE_JAVA_EXTENSIONS)
-    add_subdirectory (JNI)
-endif()
 
 set(dbms_headers)
 set(dbms_sources)
@@ -257,7 +254,7 @@ add_object_library(clickhouse_storages_mergetree Storages/MergeTree)
 add_object_library(clickhouse_storages_mergetree_index Storages/MergeTree/Index)
 add_object_library(clickhouse_storages_liveview Storages/LiveView)
 add_object_library(clickhouse_client Client)
-add_object_library(clickhouse_bridge Bridge)
+add_object_library(clickhouse_bridge BridgeHelper)
 add_object_library(clickhouse_server Server)
 add_object_library(clickhouse_server_http Server/HTTP)
 add_object_library(clickhouse_formats Formats)
@@ -318,6 +315,7 @@ list (APPEND DBMS_COMMON_LIBRARIES ${CITYHASH_LIBRARIES})
 list (APPEND DBMS_COMMON_LIBRARIES ${FARMHASH_LIBRARIES})
 list (APPEND DBMS_COMMON_LIBRARIES metrohash)
 list (APPEND DBMS_COMMON_LIBRARIES murmurhash)
+list (APPEND DBMS_COMMON_LIBRARIES ch_contrib::abseil_swiss_tables)
 
 if (MAKE_STATIC_LIBRARIES OR NOT SPLIT_SHARED_LIBRARIES)
     add_library (dbms STATIC ${dbms_headers} ${dbms_sources})
@@ -335,6 +333,14 @@ else()
         set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-as-needed")
     endif()
 endif ()
+
+if (TARGET ch_rust::blake3)
+    if (MAKE_STATIC_LIBRARIES OR NOT SPLIT_SHARED_LIBRARIES)
+        target_include_directories(dbms PUBLIC ${ClickHouse_SOURCE_DIR}/rust/BLAKE3/include)
+    else()
+        target_include_directories(clickhouse_queryplan PUBLIC ${ClickHouse_SOURCE_DIR}/rust/BLAKE3/include)
+    endif()
+endif()
 
 macro (dbms_target_include_directories)
     foreach (module ${all_modules})
@@ -389,13 +395,6 @@ set_source_files_properties(
         Columns/ColumnString.cpp
         PROPERTIES COMPILE_FLAGS "${X86_INTRINSICS_FLAGS}")
 
-if(RE2_LIBRARY)
-    target_link_libraries(clickhouse_common_io PUBLIC ${RE2_LIBRARY})
-endif()
-if(RE2_ST_LIBRARY)
-    target_link_libraries(clickhouse_common_io PUBLIC ${RE2_ST_LIBRARY})
-endif()
-
 target_link_libraries(clickhouse_common_io
         PRIVATE
             ${EXECINFO_LIBRARIES}
@@ -413,9 +412,9 @@ target_link_libraries(clickhouse_common_io
             ipdb
             maxminddb
             libmetrics2
+            ch_contrib::re2
         PRIVATE
             ${UDNS_LIBRARIES}
-
 )
 
 target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${UDNS_INCLUDE_DIR})
@@ -425,6 +424,10 @@ target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${UDNS_INCLUDE_DIR
 # Make dbms depend on roaring instead of clickhouse_common_io so that roaring itself can depend on clickhouse_common_io
 # That way we we can redirect malloc/free functions avoiding circular dependencies
 dbms_target_link_libraries(PUBLIC roaring)
+
+if(USE_SIMDJSON)
+    dbms_target_link_libraries(PRIVATE simdjson)
+endif()
 
 if (USE_RDKAFKA)
     dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY} )
@@ -470,8 +473,8 @@ dbms_target_link_libraries (
         Poco::MongoDB
         Poco::ZIP
         string_utils
-    PUBLIC
         ${MYSQLXX_LIBRARY}
+    PUBLIC
         boost::system
         clickhouse_common_io
         clickhouse_protos_lib
@@ -619,10 +622,21 @@ if (USE_TSQUERY)
 endif()
 
 
+if (TARGET ch_contrib::ulid)
+    dbms_target_link_libraries (PUBLIC ch_contrib::ulid)
+endif()
+
 target_link_libraries(clickhouse_aggregate_functions PRIVATE datasketches_lib)
 dbms_target_link_libraries(PUBLIC datasketches_lib)
 
 dbms_target_link_libraries(PRIVATE _boost_context)
+
+if (USE_NLP)
+    dbms_target_link_libraries (PUBLIC stemmer)
+    dbms_target_link_libraries (PUBLIC wnb)
+    dbms_target_link_libraries (PUBLIC lemmagen)
+    dbms_target_link_libraries (PUBLIC ch_contrib::nlp_data)
+endif()
 
 dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${PARALLEL_HASHMAP_INCLUDE_DIR})
 

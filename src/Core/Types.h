@@ -28,6 +28,7 @@
 #include <common/extended_types.h>
 #include <common/defines.h>
 #include <roaring64map.hh>
+#include <common/IPv4andIPv6.h>
 
 
 namespace DB
@@ -84,10 +85,11 @@ enum class TypeIndex
     AggregateFunction,
     LowCardinality,
     Map,
-    ByteMap,
     BitMap64,
     Time,
     SketchBinary,
+    IPv4,
+    IPv6,
 };
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
@@ -121,6 +123,8 @@ template <> inline constexpr const char * TypeName<Float32> = "Float32";
 template <> inline constexpr const char * TypeName<Float64> = "Float64";
 template <> inline constexpr const char * TypeName<String> = "String";
 template <> inline constexpr const char * TypeName<UUID> = "UUID";
+template <> inline constexpr const char * TypeName<IPv4> = "IPv4";
+template <> inline constexpr const char * TypeName<IPv6> = "IPv6";
 
 /// TODO Try to remove it.
 template <typename T> constexpr TypeIndex TypeId = TypeIndex::Nothing;
@@ -139,7 +143,8 @@ template <> inline constexpr TypeIndex TypeId<Int256> = TypeIndex::Int256;
 template <> inline constexpr TypeIndex TypeId<Float32> = TypeIndex::Float32;
 template <> inline constexpr TypeIndex TypeId<Float64> = TypeIndex::Float64;
 template <> inline constexpr TypeIndex TypeId<UUID> = TypeIndex::UUID;
-
+template <> inline constexpr TypeIndex TypeId<IPv4> = TypeIndex::IPv4;
+template <> inline constexpr TypeIndex TypeId<IPv6> = TypeIndex::IPv6;
 
 /// Not a data type in database, defined just for convenience.
 using Strings = std::vector<String>;
@@ -233,6 +238,23 @@ public:
     {}
 };
 
+template <class T>
+concept is_decimal =
+    std::is_same_v<T, Decimal32>
+    || std::is_same_v<T, Decimal64>
+    || std::is_same_v<T, Decimal128>
+    || std::is_same_v<T, Decimal256>
+    || std::is_same_v<T, DateTime64>;
+
+template <class T>
+concept is_over_big_int =
+    std::is_same_v<T, Int128>
+    || std::is_same_v<T, UInt128>
+    || std::is_same_v<T, Int256>
+    || std::is_same_v<T, UInt256>
+    || std::is_same_v<T, Decimal128>
+    || std::is_same_v<T, Decimal256>;
+
 template <> inline constexpr const char * TypeName<Decimal32> = "Decimal32";
 template <> inline constexpr const char * TypeName<Decimal64> = "Decimal64";
 template <> inline constexpr const char * TypeName<Decimal128> = "Decimal128";
@@ -272,7 +294,6 @@ constexpr bool IsNumberMemComparable = !OverBigInt<T>;
 template <> inline constexpr bool IsNumberMemComparable<Float32> = false;
 template <> inline constexpr bool IsNumberMemComparable<Float64> = false;
 
-
 inline constexpr const char * getTypeName(TypeIndex idx)
 {
     switch (idx)
@@ -306,6 +327,8 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::Decimal128: return "Decimal128";
         case TypeIndex::Decimal256: return "Decimal256";
         case TypeIndex::UUID:       return "UUID";
+        case TypeIndex::IPv4:       return "IPv4";
+        case TypeIndex::IPv6:       return "IPv6";
         case TypeIndex::Array:      return "Array";
         case TypeIndex::Tuple:      return "Tuple";
         case TypeIndex::Set:        return "Set";
@@ -315,7 +338,6 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::AggregateFunction: return "AggregateFunction";
         case TypeIndex::LowCardinality: return "LowCardinality";
         case TypeIndex::Map:        return "Map";
-        case TypeIndex::ByteMap:    return "Map";
         case TypeIndex::BitMap64:  return "BitMap64";
         case TypeIndex::SketchBinary: return "SketchBinary";
     }

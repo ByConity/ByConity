@@ -51,12 +51,13 @@ public:
     DataTypePtr operator() (const Int128 & x) const;
     DataTypePtr operator() (const Int256 & x) const;
     DataTypePtr operator() (const UUID & x) const;
+    DataTypePtr operator() (const IPv4 & x) const;
+    DataTypePtr operator() (const IPv6 & x) const;
     DataTypePtr operator() (const Float64 & x) const;
     DataTypePtr operator() (const String & x) const;
     DataTypePtr operator() (const Array & x) const;
     DataTypePtr operator() (const Tuple & tuple) const;
     DataTypePtr operator() (const Map & map) const;
-    DataTypePtr operator() (const ByteMap & map) const;
     DataTypePtr operator() (const DecimalField<Decimal32> & x) const;
     DataTypePtr operator() (const DecimalField<Decimal64> & x) const;
     DataTypePtr operator() (const DecimalField<Decimal128> & x) const;

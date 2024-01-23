@@ -86,6 +86,7 @@ public:
     /// Functions for exposing metrics
     int getNumYieldedLeadership() const { return num_yielded_leadership; }
     String tryGetTSOLeaderHostPort() const;
+    UInt64 getNumStopUpdateTsFromTSOService() const;
 
     bool isLeader() const;
 

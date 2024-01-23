@@ -26,6 +26,6 @@ namespace DB
     /// Collect columns and values for WHERE condition with AND and EQUALS (case insesitive)
     /// e.g for query "select ... where db = 'x' ", method will return {'db' : 'x'} map
     void collectWhereClausePredicate(const ASTPtr & ast, std::map<String,String> & columnToValue);
-    std::vector<std::map<String,Field>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context);
+    std::vector<std::map<String,Field>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context, bool or_ret_empty = false);
     bool extractNameFromWhereClause(const ASTPtr & node, const String & key_name, String & ret);
 }

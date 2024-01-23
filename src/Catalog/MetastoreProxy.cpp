@@ -294,6 +294,27 @@ std::shared_ptr<Protos::TableIdentifier> MetastoreProxy::getTableID(const String
     return res;
 }
 
+std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> MetastoreProxy::getTableIDs(const String & name_space, 
+        const std::vector<std::pair<String, String>> & db_table_pairs)
+{
+    Strings keys;
+    for (const auto & pair : db_table_pairs)
+    {
+        keys.push_back(tableUUIDMappingKey(name_space, pair.first, pair.second));
+    }
+
+    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> res(new std::vector<std::shared_ptr<Protos::TableIdentifier>>());
+
+    auto values = metastore_ptr->multiGet(keys);
+    for (const auto & value : values)
+    {
+        res->emplace_back(new Protos::TableIdentifier);
+        res->back()->ParseFromString(std::move(value.first));
+    }
+
+    return res;
+}
+
 String MetastoreProxy::getTrashTableUUID(const String & name_space, const String & database, const String & name, const UInt64 & ts)
 {
     String identifier_meta;
@@ -1283,7 +1304,7 @@ void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & t
     if (resources.empty())
         return;
 
-    BatchCommitRequest batch_write;
+    BatchCommitRequest batch_write(false);
     BatchCommitResponse resp;
     for (auto & resource : resources)
     {
@@ -2512,10 +2533,20 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(
     const String & name_space,
     const String & tbl_uuid,
     const std::vector<String> & part_names,
+    size_t detached_visible_part_size,
+    size_t detached_staged_part_size,
     const std::vector<String> & bitmap_names,
     size_t batch_write_size,
     size_t batch_delete_size)
 {
+    if (part_names.size() != detached_visible_part_size + detached_staged_part_size)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "(Detached visible part size {} plus detached staged part size {}) and parts count {} mismatch",
+            detached_visible_part_size,
+            detached_staged_part_size,
+            part_names.size());
+
     if (part_names.empty())
     {
         return {};
@@ -2535,8 +2566,15 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(
         {
             if (!metas[i].first.empty())
             {
-                String part_key = dataPartKey(name_space, tbl_uuid, part_names[i]);
-                LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedPartsRaw] Write part meta record {}",
+                String part_key;
+                if (i < detached_visible_part_size)
+                    part_key = dataPartKey(name_space, tbl_uuid, part_names[i]);
+                else
+                    part_key = stagedDataPartKey(name_space, tbl_uuid, part_names[i]);
+                LOG_TRACE(
+                    &Poco::Logger::get("MetaStore"),
+                    "[attachDetachedPartsRaw] Write {} part meta record {}",
+                    i < detached_visible_part_size ? "" : "staged ",
                     part_key);
 
                 batch_writer.addPut(part_key, metas[i].first);

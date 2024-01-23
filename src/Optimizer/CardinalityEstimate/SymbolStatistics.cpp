@@ -42,6 +42,7 @@ SymbolStatistics::SymbolStatistics(
     , db_table_column(std::move(db_table_column_))
     , unknown(unknown_)
 {
+    normalize();
 }
 
 size_t SymbolStatistics::getOutputSizeInBytes()
@@ -64,6 +65,22 @@ bool SymbolStatistics::isString() const
 {
     auto tmp_type = Statistics::decayDataType(type);
     return tmp_type->getTypeId() == TypeIndex::String || tmp_type->getTypeId() == TypeIndex::FixedString;
+}
+
+void SymbolStatistics::normalize()
+{
+    // correct ndv
+    if (type)
+    {
+        auto tmp_type = Statistics::decayDataType(type);
+        if (tmp_type->isValueRepresentedByInteger() && (!(min == 0 && max == 0)))
+        {
+            if (ndv > max - min + 1)
+            {
+                ndv = max - min + 1;
+            }
+        }
+    }
 }
 
 bool SymbolStatistics::isImplicitConvertableFromString()
@@ -119,7 +136,7 @@ double SymbolStatistics::estimateLessThanOrLessThanEqualFilter(double upper_boun
         double range = upper_bound - lower_bound;
         if (range == 0 && upper_bound_inclusive)
         {
-            selectivity = (max - min <= 0) ? 1 : 1 / (ndv);
+            selectivity = (max - min <= 0) ? 1 : 1 / (max - min);
         }
         else
         {
@@ -361,12 +378,12 @@ SymbolStatisticsPtr SymbolStatistics::createNot(SymbolStatisticsPtr & origin)
 }
 
 // TODO Poisson distribution
-SymbolStatisticsPtr SymbolStatistics::applySelectivity(double selectivity)
+SymbolStatisticsPtr SymbolStatistics::applySelectivity(double selectivity) const
 {
     return applySelectivity(selectivity, selectivity);
 }
 
-SymbolStatisticsPtr SymbolStatistics::applySelectivity(double rowcount_selectivity, double ndv_selectivity)
+SymbolStatisticsPtr SymbolStatistics::applySelectivity(double rowcount_selectivity, double ndv_selectivity) const
 {
     UInt64 new_ndv = static_cast<UInt64>(getNdv() * ndv_selectivity);
     return std::make_shared<SymbolStatistics>(

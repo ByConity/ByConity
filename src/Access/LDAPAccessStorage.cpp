@@ -433,17 +433,17 @@ bool LDAPAccessStorage::existsImpl(const UUID & id) const
 }
 
 
-AccessEntityPtr LDAPAccessStorage::readImpl(const UUID & id) const
+AccessEntityPtr LDAPAccessStorage::readImpl(const UUID & id, bool throw_if_not_exists) const
 {
     std::scoped_lock lock(mutex);
-    return memory_storage.read(id);
+    return memory_storage.read(id, throw_if_not_exists);
 }
 
 
-String LDAPAccessStorage::readNameImpl(const UUID & id) const
+std::optional<std::pair<String, AccessEntityType>> LDAPAccessStorage::readNameWithTypeImpl(const UUID & id, bool throw_if_not_exists) const
 {
     std::scoped_lock lock(mutex);
-    return memory_storage.readName(id);
+    return memory_storage.readNameWithType(id, throw_if_not_exists);
 }
 
 

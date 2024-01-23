@@ -96,7 +96,7 @@ namespace
         ConnectionPoolPtrs pools;
         if (configuration.host.empty())
         {
-            pools = createPoolsToCnchServer(context, configuration);
+            pools = createPoolsToCnchServer(std::move(context), configuration);
         }
         else
         {
@@ -230,9 +230,11 @@ BlockInputStreamPtr ClickHouseDictionarySource::createStreamForQuery(const Strin
     if (configuration.is_local)
     {
         auto query_context = Context::createCopy(context);
+        query_context->setSetting("enable_auto_query_forwarding", false);
         if (!configuration.tenant_id.empty())
             pushTenantId(configuration.tenant_id);
-        stream = executeQuery(query, query_context, true).getInputStream();
+        auto block_io = executeQuery(query, query_context, true);
+        stream = block_io.getInputStream();
         if (!configuration.tenant_id.empty())
             popTenantId();
         stream = std::make_shared<ConvertingBlockInputStream>(stream, empty_sample_block, ConvertingBlockInputStream::MatchColumnsMode::Position);

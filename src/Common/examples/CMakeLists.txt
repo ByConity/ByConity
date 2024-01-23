@@ -50,7 +50,7 @@ target_link_libraries (integer_hash_tables_and_hashes PRIVATE dbms abseil_swiss_
 
 add_executable (integer_hash_tables_benchmark integer_hash_tables_benchmark.cpp)
 target_include_directories (integer_hash_tables_benchmark SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR})
-target_link_libraries (integer_hash_tables_benchmark PRIVATE dbms abseil_swiss_tables)
+target_link_libraries (integer_hash_tables_benchmark PRIVATE dbms ch_contrib::abseil_swiss_tables)
 
 add_executable (cow_columns cow_columns.cpp)
 target_link_libraries (cow_columns PRIVATE clickhouse_common_io)

@@ -38,6 +38,7 @@
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
 #include <DataTypes/MapHelpers.h>
+#include <Core/ServerUUID.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
@@ -53,7 +54,6 @@
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
-#include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/ProcessList.h>
@@ -173,6 +173,7 @@
 #endif
 
 #include <IO/VETosCommon.h>
+#include <IO/OSSCommon.h>
 
 namespace CurrentMetrics
 {
@@ -413,6 +414,7 @@ void Server::createServer(const std::string & listen_host, const char * port_nam
     try
     {
         func(port);
+        global_context->registerServerPort(port_name, port);
     }
     catch (const Poco::Exception &)
     {
@@ -576,7 +578,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.
-    GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 10000));
+    GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 50000));
 
     do
     {
@@ -796,6 +798,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     StatusFile status{path + "status", StatusFile::write_full_info};
 
+    ServerUUID::load(path + "/uuid", log);
+
     /// Try to increase limit on number of open files.
     {
         rlimit rlim;
@@ -992,7 +996,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros", log));
             global_context->setExternalAuthenticatorsConfig(*config);
-            global_context->setExternalModelsConfig(config);
 
             global_context->updateServerVirtualWarehouses(config);
 
@@ -1042,6 +1045,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize map separator, once change the default value, it's necessary to adapt the corresponding tests.
     checkAndSetMapSeparator(config().getString("map_separator", "__"));
 
+    /// Determine whether use map type as default.
+    setDefaultUseMapType(config().getBool("default_use_kv_map_type", false));
+
     /// Still need `users_config` for server-worker communication
     ConfigurationPtr users_config;
     if (config().has("users_config") || config().has("config-file") || fs::exists("config.xml"))
@@ -1075,11 +1081,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Set up caches.
 
     /// Lower cache size on low-memory systems.
-    double cache_size_to_ram_max_ratio = config().getDouble("cache_size_to_ram_max_ratio", 0.5);
-    size_t max_cache_size = memory_amount * cache_size_to_ram_max_ratio;
+    size_t max_cache_size = memory_amount * root_config.cache_size_to_ram_max_ratio;
 
     /// Size of cache for uncompressed blocks. Zero means disabled.
-    size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
+    size_t uncompressed_cache_size = root_config.uncompressed_cache_size;
     if (uncompressed_cache_size > max_cache_size)
     {
         uncompressed_cache_size = max_cache_size;
@@ -1103,7 +1108,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     const Settings & settings = global_context->getSettingsRef();
 
     /// Size of cache for marks (index of MergeTree family of tables). It is mandatory.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size");
+    size_t mark_cache_size = root_config.mark_cache_size;
     if (!mark_cache_size)
         LOG_ERROR(log, "Too low mark cache size will lead to server performance degradation.");
     if (mark_cache_size > max_cache_size)
@@ -1122,6 +1127,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     checksum_cache_settings.lru_update_interval = config().getUInt64("checksum_cache_lru_update_interval", 60); //60 seconds
     global_context->setChecksumsCache(checksum_cache_settings);
 
+
     /// A cache for gin index store 
     GinIndexStoreCacheSettings ginindex_store_cache_settings;
     ginindex_store_cache_settings.lru_max_size = config().getUInt64("ginindex_store_cache_size", 5368709120); //5GB
@@ -1129,6 +1135,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ginindex_store_cache_settings.cache_shard_num = config().getUInt64("ginindex_store_cache_shard", 8); //8
     ginindex_store_cache_settings.lru_update_interval = config().getUInt64("ginindex_store_cache_lru_update_interval", 60); //60 seconds
     global_context->setGinIndexStoreFactory(ginindex_store_cache_settings);
+
+    /// A cache for part's primary index
+    size_t primary_index_cache_size = root_config.cnch_primary_index_cache_size;
+    if (primary_index_cache_size > max_cache_size)
+    {
+        primary_index_cache_size = max_cache_size;
+        LOG_INFO(log, "Primary index cache size was lowered to {} because the system has low amount of memory",
+            formatReadableSizeWithBinarySuffix(primary_index_cache_size));
+    }
+    if (primary_index_cache_size)
+        global_context->setPrimaryIndexCache(primary_index_cache_size);
+
 
     /// A cache for mmapped files.
     size_t mmap_cache_size = config().getUInt64("mmap_cache_size", 1000);   /// The choice of default is arbitrary.
@@ -1169,6 +1187,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
     auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
     global_context->setVETosConnectParams(vetos_params);
+    auto oss_connection_params = OSSConnectionParams::parseOSSFromConfig(config());
+    global_context->setOSSConnectParams(oss_connection_params);
 
     // Clear old store data in the background
     ThreadFromGlobalPool clear_old_data;

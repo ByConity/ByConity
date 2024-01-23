@@ -7,12 +7,12 @@ Projection
          │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity)
          └─ Inner (PARALLEL_HASH) Join
             │     Condition: ss_addr_sk == ca_address_sk
-            │     Filter: ((ca_state IN ('CO', 'OH', 'TX')) AND (ss_net_profit >= 0) AND (ss_net_profit <= 2000)) OR ((ca_state IN ('OR', 'MN', 'KY')) AND (ss_net_profit >= 150) AND (ss_net_profit <= 3000)) OR ((ca_state IN ('VA', 'CA', 'MS')) AND (ss_net_profit >= 50) AND (ss_net_profit <= 25000))
+            │     Filter: ((ss_net_profit <= 3000) AND (ss_net_profit >= 150) AND (ca_state IN ('OR', 'MN', 'KY'))) OR ((ss_net_profit <= 25000) AND (ss_net_profit >= 50) AND (ca_state IN ('VA', 'CA', 'MS'))) OR ((ss_net_profit >= 0) AND (ss_net_profit <= 2000) AND (ca_state IN ('CO', 'OH', 'TX')))
             ├─ Repartition Exchange
             │  │     Partition by: {ss_addr_sk}
             │  └─ Inner Join
             │     │     Condition: ss_cdemo_sk == cd_demo_sk
-            │     │     Filter: ((cd_marital_status = 'M') AND (cd_education_status = '4 yr Degree') AND (ss_sales_price >= '100.00') AND (ss_sales_price <= '150.00')) OR ((cd_marital_status = 'D') AND (cd_education_status = '2 yr Degree') AND (ss_sales_price >= '50.00') AND (ss_sales_price <= '100.00')) OR ((cd_marital_status = 'S') AND (cd_education_status = 'College') AND (ss_sales_price >= '150.00') AND (ss_sales_price <= '200.00'))
+            │     │     Filter: ((ss_sales_price >= '100') AND (cd_education_status = '4 yr Degree') AND (ss_sales_price <= '150') AND (cd_marital_status = 'M')) OR ((cd_education_status = 'College') AND (ss_sales_price <= '200') AND (ss_sales_price >= '150') AND (cd_marital_status = 'S')) OR ((cd_marital_status = 'D') AND (cd_education_status = '2 yr Degree') AND (ss_sales_price >= '50') AND (ss_sales_price <= '100'))
             │     ├─ Repartition Exchange
             │     │  │     Partition by: {ss_cdemo_sk}
             │     │  └─ Inner Join

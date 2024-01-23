@@ -15,7 +15,16 @@
 
 #include "MergeTreeDataPartCNCH.h"
 
+#include <common/logger_useful.h>
+#include <Common/Exception.h>
+#include <Common/Priority.h>
+#include <Common/ElapsedTimeProfileEventIncrement.h>
+#include <Common/RowExistsColumnInfo.h>
+#include <Core/Settings.h>
+#include <Core/SettingsEnums.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
+#include <Interpreters/StorageID.h>
 #include <IO/LimitReadBuffer.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/FileDiskCacheSegment.h>
@@ -29,19 +38,15 @@
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/MergeTreeReaderCNCH.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
-#include <Common/Priority.h>
-#include <common/logger_useful.h>
-#include <Common/Exception.h>
-#include <Common/RowExistsColumnInfo.h>
-#include <Core/Settings.h>
-#include <Core/SettingsEnums.h>
-#include <DataTypes/DataTypeByteMap.h>
-#include <Interpreters/StorageID.h>
 
 namespace ProfileEvents
 {
+    extern const Event LoadPrimaryIndexMicroseconds;
+    extern const Event PrimaryIndexDiskCacheHits;
+    extern const Event PrimaryIndexDiskCacheMisses;
 }
 
 namespace DB
@@ -234,7 +239,7 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair & column) const
         return bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end();
     };
 
-    if (column.type->isMap() && !column.type->isMapKVStore())
+    if (column.type->isByteMap())
     {
         for (auto & [file, _] : getChecksums()->files)
         {
@@ -259,6 +264,9 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair & column) const
 
 void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)
 {
+    if (index_granularities.empty())
+        index_granularity_info.setNonAdaptive();
+
     /// init once
     if (index_granularity.isInitialized())
         return;
@@ -640,6 +648,23 @@ void MergeTreeDataPartCNCH::loadIndex()
         return;
     }
 
+    if (auto cache = storage.getContext()->getPrimaryIndexCache())
+    {
+        UUIDAndPartName cache_key(storage.getStorageUUID(), getUniquePartName());
+        auto load_func = [this] { return loadIndexFromStorage(); };
+        index = cache->getOrSet(cache_key, std::move(load_func)).first;
+    }
+    else
+    {
+        index = loadIndexFromStorage();
+    }
+}
+
+IMergeTreeDataPart::IndexPtr MergeTreeDataPartCNCH::loadIndexFromStorage() const
+{
+    ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::LoadPrimaryIndexMicroseconds);
+    IndexPtr res = std::make_shared<Columns>();
+
     /// It can be empty in case of mutations
     if (!index_granularity.isInitialized())
         throw Exception("Index granularity is not loaded before index loading", ErrorCodes::LOGICAL_ERROR);
@@ -647,13 +672,11 @@ void MergeTreeDataPartCNCH::loadIndex()
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     if (parent_part)
         metadata_snapshot = metadata_snapshot->projections.get(name).metadata;
-
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
-    size_t key_size = primary_key.column_names.size();
+    if (primary_key.column_names.empty())
+        return res;
 
-    if (!key_size)
-        return;
-
+    /// first try to load index from local disk cache
     if (enableDiskCache())
     {
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
@@ -666,34 +689,41 @@ void MergeTreeDataPartCNCH::loadIndex()
             {
                 LOG_DEBUG(storage.log, "has index disk cache {}", segment_path);
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
-                index = loadIndexFromBuffer(*cache_buf, primary_key);
-                return;
+                res = loadIndexFromBuffer(*cache_buf, primary_key);
+                ProfileEvents::increment(ProfileEvents::PrimaryIndexDiskCacheHits);
+                return res;
             }
             catch (...)
             {
                 tryLogCurrentException("Could not load index from disk cache");
             }
         }
-        else if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        else
         {
-            throw Exception(
-                ErrorCodes::DISK_CACHE_NOT_USED, "Index {} of part has no disk cache {} and 'FORCE_DISK_CACHE' is set", name, segment_path);
+            ProfileEvents::increment(ProfileEvents::PrimaryIndexDiskCacheMisses);
+            if (disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
+                throw Exception(
+                    ErrorCodes::DISK_CACHE_NOT_USED,
+                    "Index of part {} has no disk cache {} and 'FORCE_DISK_CACHE' is set",
+                    name,
+                    segment_path);
         }
     }
 
+    /// load index from remote disk
     auto checksums = getChecksums();
     auto [file_offset, file_size] = getFileOffsetAndSize(*this, "primary.idx");
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
     auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size);
     LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
-    index = loadIndexFromBuffer(buf, primary_key);
-
+    res = loadIndexFromBuffer(buf, primary_key);
     if (enableDiskCache())
     {
         auto index_seg = std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this());
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         disk_cache->cacheSegmentsToLocalDisk({std::move(index_seg)});
     }
+    return res;
 }
 
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_unused]] bool require)
@@ -723,11 +753,11 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
                 tryLogCurrentException("Could not load checksums from disk");
             }
         }
-        else if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        else if (disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
         {
             throw Exception(
                 ErrorCodes::DISK_CACHE_NOT_USED,
-                "Checksums {} of part has no disk cache {} and 'FORCE_DISK_CACHE' is set",
+                "Checksums of part {} has no disk cache {} and 'FORCE_DISK_CACHE' is set",
                 name,
                 segment_path);
         }
@@ -882,7 +912,7 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
     std::string marks_file_name;
     for (auto & column : *columns_ptr)
     {
-        if (column.type->isMap() && !column.type->isMapKVStore())
+        if (column.type->isByteMap())
             continue;
         marks_file_name = index_granularity_info.getMarksFilePath(getFileNameForColumn(column));
         break;
@@ -1004,7 +1034,7 @@ ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & colu
         return size;
 
     // Special handling flattened map type
-    if (column.type->isMap() && !column.type->isMapKVStore())
+    if (column.type->isByteMap())
     {
         if (storage.getSettings()->enable_calculate_columns_size_without_map)
             return size;
@@ -1173,12 +1203,11 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
 
     MarkCachePtr mark_cache_holder = storage.getContext()->getMarkCache();
     auto add_segments = [&, this, strategy = cache_strategy](
-                            const NameAndTypePair & real_column,
-                            const std::function<String(const String &, const ISerialization::SubstreamPath &)> & file_name_getter) {
+                            const NameAndTypePair & real_column) {
         ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
 
             String stream_name = ISerialization::getFileNameForStream(real_column, substream_path);
-            String file_name = file_name_getter(stream_name, substream_path);
+            String file_name = stream_name;
             ChecksumsPtr checksums = getChecksums();
             if (!checksums->files.count(file_name + DATA_FILE_EXTENSION))
             {
@@ -1209,10 +1238,10 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
 
     for (const NameAndTypePair & column : *columns_ptr)
     {
-        if (column.type->isMap() && !column.type->isMapKVStore())
+        if (column.type->isByteMap())
         {
             // Scan the directory to get all implicit columns(stream) for the map type
-            const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
+            const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column.type);
             for (auto & file : getChecksums()->files)
             {
                 // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
@@ -1221,29 +1250,14 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                 {
                     auto key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
                     String impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
-                    add_segments(
-                        {impl_key_name, type_map.getValueTypeForImplicitColumn()},
-                        [map_column_name = column.name,
-                         this](const String & stream_name, const ISerialization::SubstreamPath & substream_path) -> String {
-                            return versions->enable_compact_map_data ? ISerialization::getFileNameForStream(map_column_name, substream_path)
-                                                                     : stream_name;
-                        });
+                    /// compact map is not supported in CNCH
+                    add_segments({impl_key_name, type_map.getValueTypeForImplicitColumn()});
                 }
             }
         }
-        else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
-        {
-            String map_column_name = parseMapNameFromImplicitColName(column.name);
-            add_segments(column, [map_column_name, this](const String & stream_name, const ISerialization::SubstreamPath & substream_path) {
-                return versions->enable_compact_map_data ? ISerialization::getFileNameForStream(map_column_name, substream_path)
-                                                         : stream_name;
-            });
-        }
         else if (column.name != "_part_row_number")
         {
-            add_segments(column, [](const String & stream_name, const ISerialization::SubstreamPath &) {
-                return stream_name;
-            });
+            add_segments(column);
         }
     }
 

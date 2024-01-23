@@ -235,7 +235,6 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(String, s3_access_key_id, "", "S3 table access key id", 0) \
     M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
-    M(Bool, s3_use_read_ahead, true, "Enable read ahead buffer when read s3, now it is just for CnchS3", 0) \
     M(UInt64, s3_max_list_nums, 1000, "Sets the maximum number of keys returned in the response, now it is just for CnchS3", 0) \
     M(UInt64, s3_max_request_ms, 30000, "Request max timeout ms , now it is just for CnchS3", 0) \
     M(Bool, overwrite_current_file, false, "Enable overwrite current file, now it is just for CnchS3/CnchHDFS", 0) \
@@ -339,13 +338,9 @@ enum PreloadLevelSettings : UInt64
       "present.", \
       IMPORTANT) \
     M(Float, totals_auto_threshold, 0.5, "The threshold for totals_mode = 'auto'.", 0) \
-\
-    M(Bool, \
-      allow_suspicious_low_cardinality_types, \
-      true, \
-      "In CREATE TABLE statement allows specifying LowCardinality modifier for types of small fixed size (8 or less). Enabling this may " \
-      "increase merge times and memory consumption.", \
-      0) \
+    M(Bool, allow_suspicious_low_cardinality_types, true, "In CREATE TABLE statement allows specifying LowCardinality modifier for types of small fixed size (8 or less). Enabling this may increase merge times and memory consumption.", 0) \
+    M(Bool, allow_suspicious_fixed_string_types, false, "In CREATE TABLE statement allows creating columns of type FixedString(n) with n > 256. FixedString with length >= 256 is suspicious and most likely indicates misusage", 0) \
+    M(Bool, allow_experimental_object_type, false, "Allow Object and JSON data types", 0) \
     M(Bool, compile_expressions, true, "Compile some scalar functions and operators to native code.", 0) \
     M(UInt64, min_count_to_compile_expression, 3, "The number of identical expressions before they are JIT-compiled", 0) \
     M(Bool, compile_aggregate_expressions, true, "Compile aggregate functions to native code.", 0) \
@@ -601,42 +596,13 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Milliseconds, insert_quorum_timeout, 600000, "", 0) \
     M(Bool, insert_quorum_parallel, true, "For quorum INSERT queries - enable to make parallel inserts without linearizability", 0) \
-    M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
-    M(UInt64, \
-      select_sequential_consistency, \
-      0, \
-      "For SELECT queries from the replicated table, throw an exception if the replica does not have a chunk written with the quorum; do " \
-      "not read the parts that have not yet been written with the quorum.", \
-      0) \
-    M(UInt64, \
-      table_function_remote_max_addresses, \
-      1000, \
-      "The maximum number of different shards and the maximum number of replicas of one shard in the `remote` function.", \
-      0) \
-    M(Milliseconds, \
-      read_backoff_min_latency_ms, \
-      1000, \
-      "Setting to reduce the number of threads in case of slow reads. Pay attention only to reads that took at least that much time.", \
-      0) \
-    M(UInt64, \
-      read_backoff_max_throughput, \
-      1048576, \
-      "Settings to reduce the number of threads in case of slow reads. Count events when the read bandwidth is less than that many bytes " \
-      "per second.", \
-      0) \
-    M(Milliseconds, \
-      read_backoff_min_interval_between_events_ms, \
-      1000, \
-      "Settings to reduce the number of threads in case of slow reads. Do not pay attention to the event, if the previous one has passed " \
-      "less than a certain amount of time.", \
-      0) \
-    M(UInt64, \
-      read_backoff_min_events, \
-      2, \
-      "Settings to reduce the number of threads in case of slow reads. The number of events after which the number of threads will be " \
-      "reduced.", \
-      0) \
-\
+    M(UInt64, select_sequential_consistency, 0, "For SELECT queries from the replicated table, throw an exception if the replica does not have a chunk written with the quorum; do not read the parts that have not yet been written with the quorum.", 0) \
+    M(UInt64, table_function_remote_max_addresses, 1000, "The maximum number of different shards and the maximum number of replicas of one shard in the `remote` function.", 0) \
+    M(Milliseconds, read_backoff_min_latency_ms, 1000, "Setting to reduce the number of threads in case of slow reads. Pay attention only to reads that took at least that much time.", 0) \
+    M(UInt64, read_backoff_max_throughput, 1048576, "Settings to reduce the number of threads in case of slow reads. Count events when the read bandwidth is less than that many bytes per second.", 0) \
+    M(Milliseconds, read_backoff_min_interval_between_events_ms, 1000, "Settings to reduce the number of threads in case of slow reads. Do not pay attention to the event, if the previous one has passed less than a certain amount of time.", 0) \
+    M(UInt64, read_backoff_min_events, 2, "Settings to reduce the number of threads in case of slow reads. The number of events after which the number of threads will be reduced.", 0) \
+    \
     M(UInt64, read_backoff_min_concurrency, 1, "Settings to try keeping the minimal number of threads in case of slow reads.", 0) \
 \
     M(Float, \
@@ -706,21 +672,11 @@ enum PreloadLevelSettings : UInt64
       "columns data type.", \
       IMPORTANT) \
     M(Bool, join_using_null_safe, 0, "Force null safe equal comparison for USING keys except the last key of ASOF join", 0) \
-\
-    M(JoinStrictness, \
-      join_default_strictness, \
-      JoinStrictness::ALL, \
-      "Set default strictness in JOIN query. Possible values: empty string, 'ANY', 'ALL'. If empty, query without strictness will throw " \
-      "exception.", \
-      0) \
-    M(Bool, \
-      any_join_distinct_right_table_keys, \
-      false, \
-      "Enable old ANY JOIN logic with many-to-one left-to-right table keys mapping for all ANY JOINs. It leads to confusing not equal " \
-      "results for 't1 ANY LEFT JOIN t2' and 't2 ANY RIGHT JOIN t1'. ANY RIGHT JOIN needs one-to-many keys mapping to be consistent with " \
-      "LEFT one.", \
-      IMPORTANT) \
-\
+    \
+    M(JoinStrictness, join_default_strictness, JoinStrictness::ALL, "Set default strictness in JOIN query. Possible values: empty string, 'ANY', 'ALL'. If empty, query without strictness will throw exception.", 0) \
+    M(Bool, any_join_distinct_right_table_keys, false, "Enable old ANY JOIN logic with many-to-one left-to-right table keys mapping for all ANY JOINs. It leads to confusing not equal results for 't1 ANY LEFT JOIN t2' and 't2 ANY RIGHT JOIN t1'. ANY RIGHT JOIN needs one-to-many keys mapping to be consistent with LEFT one.", IMPORTANT) \
+    M(Bool, enable_join_on_1_equals_1, false, "Enable join on 1=1.", 0) \
+    \
     M(UInt64, preferred_block_size_bytes, 1000000, "", 0) \
 \
     M(UInt64, \
@@ -1120,57 +1076,20 @@ enum PreloadLevelSettings : UInt64
       "longest one.", \
       0) \
     M(Bool, optimize_read_in_order, true, "Enable ORDER BY optimization for reading data in corresponding order in MergeTree tables.", 0) \
-    M(Bool, \
-      optimize_aggregation_in_order, \
-      false, \
-      "Enable GROUP BY optimization for aggregating data in corresponding order in MergeTree tables.", \
-      0) \
-    M(UInt64, \
-      read_in_order_two_level_merge_threshold, \
-      100, \
-      "Minimal number of parts to read to run preliminary merge step during multithread reading in order of primary key.", \
-      0) \
-    M(Bool, \
-      low_cardinality_allow_in_native_format, \
-      true, \
-      "Use LowCardinality type in Native format. Otherwise, convert LowCardinality columns to ordinary for select query, and convert " \
-      "ordinary columns to required LowCardinality for insert query.", \
-      0) \
-    M(Bool, \
-      cancel_http_readonly_queries_on_client_close, \
-      false, \
-      "Cancel HTTP readonly queries when a client closes the connection without waiting for response.", \
-      0) \
-    M(Bool, \
-      external_table_functions_use_nulls, \
-      true, \
-      "If it is set to true, external table functions will implicitly use Nullable type if needed. Otherwise NULLs will be substituted " \
-      "with default values. Currently supported only by 'mysql', 'postgresql' and 'odbc' table functions.", \
-      0) \
-\
-    M(Bool, \
-      allow_hyperscan, \
-      true, \
-      "Allow functions that use Hyperscan library. Disable to avoid potentially long compilation times and excessive resource usage.", \
-      0) \
-    M(Bool, \
-      allow_simdjson, \
-      true, \
-      "Allow using simdjson library in 'JSON*' functions if AVX2 instructions are available. If disabled rapidjson will be used.", \
-      0) \
-    M(Bool, \
-      allow_introspection_functions, \
-      false, \
-      "Allow functions for introspection of ELF and DWARF for query profiling. These functions are slow and may impose security " \
-      "considerations.", \
-      0) \
-\
-    M(UInt64, \
-      max_partitions_per_insert_block, \
-      100, \
-      "Limit maximum number of partitions in single INSERTed block. Zero means unlimited. Throw exception if the block contains too many " \
-      "partitions. This setting is a safety threshold, because using large number of partitions is a common misconception.", \
-      0) \
+    M(Bool, optimize_aggregation_in_order, false, "Enable GROUP BY optimization for aggregating data in corresponding order in MergeTree tables.", 0) \
+    M(UInt64, read_in_order_two_level_merge_threshold, 100, "Minimal number of parts to read to run preliminary merge step during multithread reading in order of primary key.", 0) \
+    M(Bool, low_cardinality_allow_in_native_format, true, "Use LowCardinality type in Native format. Otherwise, convert LowCardinality columns to ordinary for select query, and convert ordinary columns to required LowCardinality for insert query.", 0) \
+    M(Bool, cancel_http_readonly_queries_on_client_close, false, "Cancel HTTP readonly queries when a client closes the connection without waiting for response.", 0) \
+    M(Bool, external_table_functions_use_nulls, true, "If it is set to true, external table functions will implicitly use Nullable type if needed. Otherwise NULLs will be substituted with default values. Currently supported only by 'mysql', 'postgresql' and 'odbc' table functions.", 0) \
+    \
+    M(Bool, allow_hyperscan, true, "Allow functions that use Hyperscan library. Disable to avoid potentially long compilation times and excessive resource usage.", 0) \
+    M(UInt64, max_hyperscan_regexp_length, 0, "Max length of regexp than can be used in hyperscan multi-match functions. Zero means unlimited.", 0) \
+    M(UInt64, max_hyperscan_regexp_total_length, 0, "Max total length of all regexps than can be used in hyperscan multi-match functions (per every function). Zero means unlimited.", 0) \
+    M(Bool, reject_expensive_hyperscan_regexps, true, "Reject patterns which will likely be expensive to evaluate with hyperscan (due to NFA state explosion)", 0) \
+    M(Bool, allow_simdjson, true, "Allow using simdjson library in 'JSON*' functions if AVX2 instructions are available. If disabled rapidjson will be used.", 0) \
+    M(Bool, allow_introspection_functions, false, "Allow functions for introspection of ELF and DWARF for query profiling. These functions are slow and may impose security considerations.", 0) \
+    \
+    M(UInt64, max_partitions_per_insert_block, 100, "Limit maximum number of partitions in single INSERTed block. Zero means unlimited. Throw exception if the block contains too many partitions. This setting is a safety threshold, because using large number of partitions is a common misconception.", 0) \
     M(Int64, max_partitions_to_read, -1, "Limit the max number of partitions that can be accessed in one query. <= 0 means unlimited.", 0) \
     M(Bool, check_query_single_value_result, false, "Return check query result as single 1/0 value", 0) \
     M(Bool, allow_drop_detached, false, "Allow ALTER TABLE ... DROP DETACHED PART[ITION] ... queries", 0) \
@@ -1303,6 +1222,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, allow_experimental_geo_types, false, "Allow geo data types such as Point, Ring, Polygon, MultiPolygon", 0) \
     M(Bool, data_type_default_nullable, false, "Data types without NULL or NOT NULL will make Nullable", 0) \
     M(Bool, cast_keep_nullable, false, "CAST operator keep Nullable for result data type", 0) \
+    M(Bool, cast_ipv4_ipv6_default_on_conversion_error, false, "CAST operator into IPv4, CAST operator into IPV6 type, toIPv4, toIPv6 functions will return default value instead of throwing exception on conversion error.", 0) \
     M(Bool, alter_partition_verbose_result, false, "Output information about affected parts. Currently works only for FREEZE and ATTACH commands.", 0) \
     M(Bool, allow_experimental_database_materialize_mysql, true, "Allow to create database with Engine=CnchMaterializedMySQL(...).", 0) \
     M(Bool, allow_experimental_database_materialized_postgresql, false, "Allow to create database with Engine=MaterializedPostgreSQL(...).", 0) \
@@ -1361,7 +1281,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, check_identifier_begin_valid, true, "Whether to check identifier", 0) \
 \
     /** Experimental feature for moving data between shards. */ \
-\
+    \
+    M(Bool, allow_experimental_nlp_functions, false, "Enable experimental functions for natural language processing.", 0) \
     M(Bool, allow_experimental_query_deduplication, false, "Experimental data deduplication for SELECT queries based on part UUIDs", 0) \
     M(Bool, \
       experimental_query_deduplication_send_all_part_uuids, \
@@ -1387,9 +1308,9 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, distributed_ddl_entry_format_version, 2, "Version of DDL entry to write into ZooKeeper", 0) \
     M(UInt64, external_storage_max_read_rows, 0, "Limit maximum number of rows when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0) \
     M(UInt64, external_storage_max_read_bytes, 0, "Limit maximum number of bytes when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0)  \
-    M(SetOperationMode, union_default_mode, SetOperationMode::DISTINCT, "Set default mode in UNION query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
-    M(SetOperationMode, intersect_default_mode, SetOperationMode::DISTINCT, "Set default mode in INTERSECT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
-    M(SetOperationMode, except_default_mode, SetOperationMode::DISTINCT, "Set default mode in EXCEPT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
+    M(SetOperationMode, union_default_mode, SetOperationMode::ALL, "Set default mode in UNION query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
+    M(SetOperationMode, intersect_default_mode, SetOperationMode::ALL, "Set default mode in INTERSECT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
+    M(SetOperationMode, except_default_mode, SetOperationMode::ALL, "Set default mode in EXCEPT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
     M(Bool, optimize_aggregators_of_group_by_keys, false, "Eliminates min/max/any/anyLast aggregators of GROUP BY keys in SELECT section", 0) \
     M(Bool, optimize_group_by_function_keys, true, "Eliminates functions of other keys in GROUP BY section", 0) \
     M(Bool, \
@@ -1409,10 +1330,13 @@ enum PreloadLevelSettings : UInt64
     M(Bool, query_plan_filter_push_down, true, "Allow to push down filter by predicate query plan step", 0) \
     M(Bool, enable_partition_filter_push_down, false, "Allow to push down partition filter to query info", 0) \
     M(Bool, enable_optimizer_early_prewhere_push_down, false, "Allow to push down prewhere in the optimizer phase", 0) \
+    M(UInt64, regexp_max_matches_per_row, 1000, "Max matches of any single regexp per row, used to safeguard 'extractAllGroupsHorizontal' against consuming too much memory with greedy RE.", 0) \
     \
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
     M(UInt64, offset, 0, "Offset on read rows from the most 'end' result for select query", 0) \
-\
+    \
+    M(UInt64, function_range_max_elements_in_block, 500000000, "Maximum number of values generated by function 'range' per block of data (sum of array sizes for every row in a block, see also 'max_block_size' and 'min_insert_block_size_rows'). It is a safety threshold.", 0) \
+    \
     /** Bytedance */ \
     M(UInt64, \
       alter_skip_check, \
@@ -1590,23 +1514,14 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_string_size_for_unique_key, 1048576, "Max string size limit for unique key.", 0) \
     M(Bool, enable_wait_attached_staged_parts_to_visible, true, "Enable wait for all staged parts become visible in attach process", 0) \
     M(Seconds, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partition for unique key", 0) \
-    M(Bool, \
-      enable_unique_table_attach_without_dedup, \
-      false, \
-      "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", \
-      0) \
-    M(Bool, \
-      enable_unique_table_detach_ignore_delete_bitmap, \
-      false, \
-      "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we " \
-      "can just ignore it via this parameter.", \
-      0) \
-\
-    M(UInt64, \
-      resource_group_unmatched_behavior, \
-      0, \
-      "The behavior when there is no resource group matched: 0 for let go, 1 for exception, 2 for the first root group.", \
-      0) \
+    M(Bool, enable_unique_table_attach_without_dedup, false, "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", 0) \
+    M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
+    \
+    /** Settings for Map */ \
+    M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
+    M(Bool, allow_map_access_without_key, true, "Allow access map column without providing key", 0) \
+    \
+    M(UInt64, resource_group_unmatched_behavior, 0, "The behavior when there is no resource group matched: 0 for let go, 1 for exception, 2 for the first root group.", 0) \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     M(UInt64, grace_hash_join_initial_buckets, 1, "Initial number of grace hash join buckets", 0) \
@@ -1622,6 +1537,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
     M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Milliseconds, send_plan_segment_timeout_ms, 10000, "Default timeout for send plan segment by rpc", 0) \
     M(Bool, send_plan_segment_by_brpc_join_per_stage, false, "Whether to send plan segment by BRPC and join async rpc request per stage", 0)\
     M(Bool, send_plan_segment_by_brpc_join_at_last, true, "Whether to send plan segment by BRPC and join async rpc request at last", 0)\
     \
@@ -1778,6 +1694,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_inner_join_associate, true, "Whether to enable InnerJoinAssociate rule", 0) \
     M(Bool, enable_inner_join_commutation, true, "Whether to enable InnerJoinCommutation rule", 0) \
     M(Bool, enable_join_enum_on_graph, true, "Whether to enable JoinEnumOnGraph rule", 0) \
+    M(Bool, enable_join_to_multi_join, true, "Whether to enable JoinToMultiJoin rule", 0) \
+    M(Bool, enable_cardinality_based_join_reorder, true, "Whether to enable CardinalityBasedJoinReorder rule", 0) \
+    M(Bool, enable_selectivity_based_join_reorder, true, "Whether to enable SelectivityBasedJoinReorder rule", 0) \
     M(Bool, enable_left_join_to_right_join, true, "Whether to enable LeftJoinToRightJoin rule", 0) \
     M(Bool, enable_magic_set_push_through_projection, true, "Whether to enable MagicSetPushThroughProject rule", 0) \
     M(Bool, enable_magic_set_push_through_join, true, "Whether to enable MagicSetPushThroughJoin rule", 0) \
@@ -1801,6 +1720,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
     M(Bool, enable_cascades_optimizer, true, "Whether to enable CascadesOptimizer", 0) \
     M(Bool, enable_iterative_rewriter, true, "Whether to enable InterativeRewriter", 0) \
+    M(Float, multi_join_keys_correlated_coefficient, 0.8, "Coefficient about multi join keys, the smaller the value, the smaller the estimated join cardnlity, do nothing when equals 1.0", 0) \
+    M(Float, multi_agg_keys_correlated_coefficient, 0.9, "Coefficient about multi agg keys, the smaller the value, the smaller the estimated agg cardnlity, do nothing when equals 1.0", 0) \
     M(Bool, enable_common_expression_sharing, true, "Whether to share common expression between steps", 0) \
     M(Bool, enable_common_expression_sharing_for_prewhere, true, "Whether to share common expression between steps and PREWHERE", 0) \
     M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
@@ -1830,7 +1751,7 @@ enum PreloadLevelSettings : UInt64
     M(Float, cost_calculator_join_build_weight, 2, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_join_output_weight, 0.5, "Join output weight for cost calculator", 0) \
     M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
-    M(Float, cost_calculator_cte_weight_for_join_build_side, 1.8, "Join build side weight for cost calculator", 0) \
+    M(Float, cost_calculator_cte_weight_for_join_build_side, 1.3, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
@@ -1840,10 +1761,12 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
     M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
     M(UInt64 , max_graph_reorder_size, 6, "Max tables join order enum on graph", 0) \
+    M(UInt64 , heuristic_join_reorder_enumeration_times, 3, "Heuristic times in CardinalityBased Join Reorder algorithm", 0) \
     M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
     M(Bool, enable_cascades_pruning, false, "Whether enable cascades pruning", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
     M(Bool, enum_repartition, true, "Enum repartition join", 0) \
+    M(Bool, enum_replicate_no_stats, true, "Enum replicate join when statistics not exists", 0) \
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
@@ -1861,7 +1784,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
     M(Float, magic_set_filter_factor, 0.5, "The minimum filter factor of magic set, used for early pruning", 0) \
-    M(UInt64, magic_set_max_search_tree, 4, "The maximum table scans in magic set, used for early pruning", 0) \
+    M(UInt64, magic_set_max_search_tree, 2, "The maximum table scans in magic set, used for early pruning", 0) \
     M(UInt64, magic_set_source_min_rows, 10000, "The minimum rows of source node in magic set, used for early pruning", 0) \
     M(Float, magic_set_rows_factor, 0.6, "The minimum rows of source node in magic set, used for early pruning", 0) \
     M(CTEMode, cte_mode, CTEMode::AUTO, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
@@ -1985,11 +1908,22 @@ enum PreloadLevelSettings : UInt64
     /* Outfile related Settings */ \
     M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
+    /** OSS related settings */ \
+    M(String, oss_access_key, "", "The access_key set by user when accessing oss.", 0) \
+    M(String, oss_secret_key, "", "The secret_key set by user when accessing oss.", 0) \
+    M(String, oss_region, "", "The region set by user when accessing oss.", 0) \
+    M(String, oss_security_token, "", "The security_key set by user when accessing oss with assume role.", 0) \
+    M(String, oss_endpoint, "", "The endpoint set by user when accessing oss.", 0) \
+    /* VE-TOS related settings */ \
     M(String, tos_access_key, "", "The access_key set by user when accessing ve tos.", 0) \
     M(String, tos_secret_key, "", "The secret_key set by user when accessing ve tos.", 0) \
     M(String, tos_region, "", "The region set by user when accessing ve tos.", 0) \
     M(String, tos_security_token, "", "The security_key set by user when accessing ve tos with assume role.", 0) \
+    M(String, tos_endpoint, "", "The endpoint set by user when accessing ve tos, which should be compatible with S3.", 0) \
+    M(UInt64, tos_connection_timeout, 10000, "The connection timeout set by user when accessing ve tos.", 0) \
+    M(UInt64, tos_request_timeout, 120000, "The request timeout set by user when accessing ve tos.", 0) \
     M(String, lasfs_session_token, "", "the session_token set by user when accessing lasfs", 0) \
+    /* LASFS related settings */ \
     M(String, lasfs_identity_id, "", "the identity_id set by user when accessing lasfs", 0) \
     M(String, lasfs_identity_type, "", "the identity_type set by user when accessing lasfs", 0) \
     M(String, lasfs_access_key, "", "the access_key set by user when accessing lasfs", 0) \
@@ -2059,6 +1993,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.",0) \
     M(String, bool_true_representation, "1", "Text to represent bool value in TSV/CSV formats.", 0) \
     M(String, bool_false_representation, "0", "Text to represent bool value in TSV/CSV formats.", 0) \
+    M(Bool, input_format_ipv4_default_on_conversion_error, false, "Deserialization of IPv4 will use default values instead of throwing exception on conversion error.", 0) \
+    M(Bool, input_format_ipv6_default_on_conversion_error, false, "Deserialization of IPV6 will use default values instead of throwing exception on conversion error.", 0) \
     \
     M(Bool, input_format_values_interpret_expressions, true, "For Values format: if the field could not be parsed by streaming parser, run SQL parser and try to interpret it as SQL expression.", 0) \
     M(Bool, input_format_values_deduce_templates_of_expressions, true, "For Values format: if the field could not be parsed by streaming parser, run SQL parser, deduce template of the SQL expression, try to parse all rows using template and then interpret expression for all rows.", 0) \
@@ -2102,20 +2038,16 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
     M(String, output_format_tsv_null_representation, "\\N", "Custom NULL representation in TSV format", 0) \
-\
-    M(UInt64, \
-      input_format_allow_errors_num, \
-      0, \
-      "Maximum absolute amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative " \
-      "amount of errors is lower than corresponding value, will skip until next line and continue.", \
-      0) \
-    M(Float, \
-      input_format_allow_errors_ratio, \
-      0, \
-      "Maximum relative amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative " \
-      "amount of errors is lower than corresponding value, will skip until next line and continue.", \
-      0) \
-\
+    M(Bool, output_format_decimal_trailing_zeros, false, "Output trailing zeros when printing Decimal values. E.g. 1.230000 instead of 1.23.", 0) \
+    \
+    /** Settings for Map */ \
+    M(Bool, input_format_parse_null_map_as_empty, true, "Parse null map as empty map. Throw exception if set false.", 0) \
+    M(Bool, input_format_skip_null_map_value, true, "Skip null map value. Throw exception if set false.", 0) \
+    M(UInt64, input_format_max_map_key_long, 80, "The maximum length of map key for input data.", 0) \
+    \
+    M(UInt64, input_format_allow_errors_num, 0, "Maximum absolute amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative amount of errors is lower than corresponding value, will skip until next line and continue.", 0) \
+    M(Float, input_format_allow_errors_ratio, 0, "Maximum relative amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative amount of errors is lower than corresponding value, will skip until next line and continue.", 0) \
+    \
     M(String, format_schema, "", "Schema identifier (used by schema-based formats)", 0) \
     M(String, format_template_resultset, "", "Path to file which contains format string for result set (for Template format)", 0) \
     M(String, format_template_row, "", "Path to file which contains format string for rows (for Template format)", 0) \

@@ -41,7 +41,10 @@ message CreateKafkaTransactionResp {
   optional uint64 start_time = 3;
 };
 
-message CreateTransactionReq { optional uint64 primary_txn_id = 1; };
+message CreateTransactionReq {
+  optional uint64 primary_txn_id = 1;
+  optional bool read_only = 2;
+};
 
 message CreateTransactionResp {
   optional string exception = 1;
@@ -239,7 +242,10 @@ message CleanTransactionResp { optional string exception = 1; }
 
 message GetServerStartTimeReq {}
 
-message GetServerStartTimeResp { required uint64 server_start_time = 1; }
+message GetServerStartTimeResp
+{
+  optional uint64 server_start_time = 1;
+}
 
 message AcquireLockReq { required DataModelLockInfo lock = 1; }
 
@@ -346,6 +352,8 @@ message RedirectAttachDetachedS3PartsReq {
   repeated string detached_bitmap_names = 7;
   repeated DataModelDeleteBitmap detached_bitmaps = 8;
   repeated DataModelDeleteBitmap bitmaps = 9;
+  required uint32 detached_visible_part_size = 10;
+  required uint32 detached_staged_part_size = 11;
 }
 
 message RedirectAttachDetachedS3PartsResp { optional string exception = 1; }
@@ -557,6 +565,6 @@ service CnchServerService {
 
   rpc forceRecalculateMetrics(ForceRecalculateMetricsReq)
       returns(ForceRecalculateMetricsResp);
-  
+
   rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
 };

@@ -34,7 +34,7 @@ target_link_libraries(clickhouse_dictionaries
 
 target_link_libraries(clickhouse_dictionaries
     PUBLIC
-        abseil_swiss_tables)
+        ch_contrib::abseil_swiss_tables)
 
 if(USE_CASSANDRA)
     target_include_directories(clickhouse_dictionaries SYSTEM PRIVATE ${CASSANDRA_INCLUDE_DIR})

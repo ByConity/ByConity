@@ -51,10 +51,13 @@ struct FormatSettings
     bool import_nested_json = false;
     bool null_as_default = true;
     bool defaults_for_omitted_fields = true;
+    bool decimal_trailing_zeros = false;
+
     enum class DateTimeInputFormat
     {
-        Basic, /// Default format for fast parsing: YYYY-MM-DD hh:mm:ss (ISO-8601 without fractional part and timezone) or NNNNNNNNNN unix timestamp.
-        BestEffort /// Use sophisticated rules to parse whatever possible.
+        Basic,      /// Default format for fast parsing: YYYY-MM-DD hh:mm:ss (ISO-8601 without fractional part and timezone) or NNNNNNNNNN unix timestamp.
+        BestEffort,  /// Use sophisticated rules to parse whatever possible.
+        BestEffortUS  /// Use sophisticated rules to parse American style: mm/dd/yyyy
     };
 
     DateTimeInputFormat date_time_input_format = DateTimeInputFormat::Basic;
@@ -200,6 +203,20 @@ struct FormatSettings
 
     struct
     {
+        bool parse_null_map_as_empty = true;
+        bool skip_null_map_value = true;
+        /**
+         *  Because of the maximum filename length limit (255) of ext4 filesystem and the HTTP encode of map key.
+         *  The maximum key length is approximately 255/3 ~= 85, which, in fact is not abosultely safe after
+         *  accounting the map name and some auxiliary symbols.
+         *
+         *  Pick up a smaller and lucky number, hopes it work at most time.
+         */
+        uint64_t max_map_key_length = 80;
+    } map;
+
+    struct
+    {
         std::string format_schema;
         std::string format_schema_path;
         bool is_server = false;
@@ -226,6 +243,21 @@ struct FormatSettings
         bool deduce_templates_of_expressions = true;
         bool accurate_types_of_literals = true;
     } values;
+
+    /// For capnProto format we should determine how to
+    /// compare ClickHouse Enum and Enum from schema.
+    enum class EnumComparingMode
+    {
+        BY_NAMES, // Names in enums should be the same, values can be different.
+        BY_NAMES_CASE_INSENSITIVE, // Case-insensitive name comparison.
+        BY_VALUES, // Values should be the same, names can be different.
+    };
+
+    struct
+    {
+        EnumComparingMode enum_comparing_mode = EnumComparingMode::BY_VALUES;
+        bool skip_fields_with_unsupported_types_in_schema_inference = false;
+    } capn_proto;
 };
 
 }

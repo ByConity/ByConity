@@ -1,7 +1,7 @@
 #include "Storages/DataLakes/HudiMorDirectoryLister.h"
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
-#include <JNIMetaClient.h>
+#include <jni/JNIMetaClient.h>
 #include <Protos/hive_models.pb.h>
 #include "Common/StringUtils/StringUtils.h"
 #include "Storages/DataLakes/HiveFile/HiveHudiFile.h"

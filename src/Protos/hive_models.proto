@@ -18,7 +18,9 @@ message ProtoHiveFile
     optional string storage = 4;
     optional string partition_id = 5;
 
+    /// hudi
     optional HudiProperties properties = 6;
+    optional bytes input_split_bytes = 7;
 }
 
 message ProtoHiveFiles

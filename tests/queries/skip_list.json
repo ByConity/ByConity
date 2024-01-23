@@ -120,24 +120,10 @@
         "01548_parallel_parsing_max_memory",
 
         /// Map
-        "00900_orc_arrow_parquet_maps",
         "00900_long_parquet_load",
-        "01318_map_add_map_subtract_on_map_type",
         "01323_add_scalars_in_time",
         "01455_opentelemetry_distributed",
         "01475_read_subcolumns",
-        "01475_read_subcolumns_storages",
-        "01475_read_subcolumns_3",
-        "01550_create_map_type",
-        "01550_type_map_formats",
-        "01592_length_map",
-        "01651_map_functions",
-        "01715_tuple_insert_null_as_default",
-        "01720_type_map_and_casts",
-        "01744_tuple_cast_to_map_bugfix",
-        "01803_const_nullable_map",
-        "01939_type_map_json",
-        "02029_aggregate_function_session_split",
 
         /// Bitmap
         "01829_test_aggregation_bitmapMaxLevel",
@@ -586,5 +572,63 @@
         "01530_drop_database_atomic_sync", /// creates database
         "02001_add_default_database_to_system_users", ///create user
         "02002_row_level_filter_bug" ///create user
+    ],
+
+    "ClickhouseSQL": [
+        /// FuntionalStatelessTest (ClickhouseSQL) with and without optimizer - Multi-workers
+        "00702_join_on_dups",
+        "00702_join_with_using_dups"
+      ],
+
+    "stateless-without-optimizer":[
+        /// FuntionalStatelessTest (cnch_stateless) - Multi-workers
+        "40007_outer_join_to_inner_join",
+        "00203_full_join"
+      ],
+
+    "stateless-with-optimizer":[
+        /// FuntionalStatelessTest (cnch_stateless) with ANSI - Multi-workers
+        "00712_prewhere_with_alias_bug",
+        "00203_full_join"
+      ],
+
+    "stateless-ANSI":[
+        /// FunctionalStatelessTest (cnch_stateless) with ANSI - Multi-workers
+        /// FunctionalStatelessTest (cnch_stateless) with ANSI
+        "35427_window_groups_denserank_unbounded_preceding_current_row",
+        "33431_window_range_denserank_unbounded_preceding_unbounded_following",
+        "33430_window_range_rank_unbounded_preceding_unbounded_following",
+        "00712_prewhere_with_alias_bug",
+        "00203_full_join"
+      ],
+
+    "bitmap":[
+        /// skip bitmap releated cases
+        "10121_agg_bitmapjoinandcard",
+        "10121_agg_bitmapjoin"
+      ],
+
+    "preload": [
+        /// ANSI and optimizer not compatible with disk preload check, beacuase optimizer and ansi sql are not using system.query_log
+        "00984_preload_check"
+      ],
+
+    "ASAN-skip-tests":[
+        "00596_limit_on_expanded_ast",
+        "10047_multiple_namenode"
+    ],
+
+    "s3": [
+        "46016_outfile_failed_select",
+        "02114_compression_in_query",
+        "00926_adaptive_index_granularity_pk",
+        "01496_attach_from_path_without_delta",
+        "01498_attach_from_self_with_exception",
+        "01499_attach_from_other_with_exception",
+        "01497_attach_with_delta",
+        "01500_attach_from_path_with_exception",
+        "10027_bucket",
+        "11007_atomic_attach_parts",
+        "11007_attach_commit_time_bug"
     ]
 }

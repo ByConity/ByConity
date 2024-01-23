@@ -200,7 +200,7 @@ static fs::path getRelativePathForPart(const String & part_name, const String & 
     auto hash = sipHash64(part_name.data(), part_name.size());
     String hex_key(HEX_KEY_LEN / 2, '\0');
     writeHexUIntLowercase(hash, hex_key.data());
-    
+
     return fs::path(prefix) / hex_key.substr(0, 3) / hex_key / "";
 }
 
@@ -299,7 +299,7 @@ size_t DiskCacheLRU::writeSegment(const String& seg_key, ReadBuffer& buffer, Res
         {
             WriteBufferFromFile to(fs::path(disk->getPath()) / temp_cache_rel_path);
             copyData(buffer, to, reservation.get());
-
+            to.finalize();
             written_size = to.count();
         }
 
@@ -422,7 +422,7 @@ void DiskCacheLRU::load()
                             LOG_TRACE(log, "Start migrate cache from {} to {}", disk->getPath() + path, disk->getPath() + latest_disk_cache_dir);
                             migrator->exec(fs::path(path) / "");
                         }
-                          
+
                     },
                     except_handler));
             }

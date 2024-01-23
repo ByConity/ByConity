@@ -131,9 +131,6 @@ private:
     static void visit(ASTSelectQuery &, const ASTPtr &, Data &);
 
     static void visitChildren(IAST * node, Data & data);
-
-    static String getMapKeyName(ASTFunction & node, Data & data);
-    static void rewriteMapElement(ASTPtr & ast, const String & map_name, const String & key_name);
 };
 
 }

@@ -46,6 +46,8 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
     extern const int PROTOBUF_BAD_CAST;
     extern const int UNKNOWN_PROTOBUF_FORMAT;
+    extern const int CANNOT_PARSE_IPV4;
+    extern const int CANNOT_PARSE_IPV6;
 }
 
 
@@ -65,7 +67,9 @@ bool isParseError(int code)
         || code == ErrorCodes::PROTOBUF_BAD_CAST
         || code == ErrorCodes::TOO_LARGE_STRING_SIZE
         || code == ErrorCodes::ARGUMENT_OUT_OF_BOUND       /// For Decimals
-        || code == ErrorCodes::INCORRECT_DATA;             /// For some ReadHelpers
+        || code == ErrorCodes::INCORRECT_DATA              /// For some ReadHelpers
+        || code == ErrorCodes::CANNOT_PARSE_IPV4
+        || code == ErrorCodes::CANNOT_PARSE_IPV6;
 }
 
 IRowInputFormat::IRowInputFormat(Block header, ReadBuffer & in_, Params params_)

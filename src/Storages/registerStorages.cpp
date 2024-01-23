@@ -99,6 +99,7 @@ void registerStorageCloudHive(StorageFactory & factory);
 
 #if USE_JAVA_EXTENSIONS
 void registerStorageHudi(StorageFactory & factory);
+void registerStorageLas(StorageFactory & factory);
 #endif
 
 void registerStorages()
@@ -174,6 +175,7 @@ void registerStorages()
 
     #if USE_JAVA_EXTENSIONS
     registerStorageHudi(factory);
+    registerStorageLas(factory);
     #endif
 }
 

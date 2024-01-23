@@ -47,6 +47,7 @@
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
+#include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/OffsetStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
@@ -126,8 +127,9 @@ public:
         plan_node = std::dynamic_pointer_cast<PlanNodeBase>(std::make_shared<PlanNode<TYPE##Step>>(id_, std::move(spec_step), children_)); \
     }
 
-    APPLY_STEP_TYPES(CREATE_PLAN_NODE)
-    CREATE_PLAN_NODE(Any)
+        APPLY_STEP_TYPES(CREATE_PLAN_NODE)
+        CREATE_PLAN_NODE(Any)
+        CREATE_PLAN_NODE(MultiJoin)
 #undef CREATE_PLAN_NODE
         plan_node->setStatistics(statistics_);
         return plan_node;
@@ -139,11 +141,9 @@ protected:
     PlanNodeStatisticsEstimate statistics;
 
 private:
-
     virtual QueryPlanStepPtr getStepImpl() const = 0;
     virtual void setStepImpl(QueryPlanStepPtr & step_) = 0;
     virtual void replaceChildrenImpl(const PlanNodes & children_) = 0;
-
 };
 
 template <class Step>
@@ -163,8 +163,8 @@ public:
     void setStep(StepPtr & step_) { step = step_; }
     const DataStream & getCurrentDataStream() const override { return step->getOutputStream(); }
 
-    static PlanNodePtr createPlanNode(
-        PlanNodeId id_, StepPtr step_, const PlanNodes & children_ = {}, const PlanNodeStatisticsEstimate & statistics_ = {})
+    static PlanNodePtr
+    createPlanNode(PlanNodeId id_, StepPtr step_, const PlanNodes & children_ = {}, const PlanNodeStatisticsEstimate & statistics_ = {})
     {
         PlanNodePtr plan_node = std::make_shared<PlanNode<Step>>(id_, std::move(step_), children_);
         plan_node->setStatistics(statistics_);
@@ -230,6 +230,7 @@ private:
 
 APPLY_STEP_TYPES(PLAN_NODE_DEF)
 PLAN_NODE_DEF(Any)
+PLAN_NODE_DEF(MultiJoin)
 #undef PLAN_NODE_DEF
 
 }

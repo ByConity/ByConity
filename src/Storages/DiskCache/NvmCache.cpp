@@ -352,10 +352,17 @@ NvmCache::NvmCache(Config && config, ValidConfigTag)
 
 NvmCache::~NvmCache()
 {
-    LOG_INFO(log, "NvmCache: finish scheduler");
-    scheduler->finish();
-    LOG_INFO(log, "NvmCache: finish scheduler successful");
-    scheduler.reset();
+    try
+    {
+        LOG_INFO(log, "NvmCache: finish scheduler");
+        scheduler->finish();
+        LOG_INFO(log, "NvmCache: finish scheduler successful");
+        scheduler.reset();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 bool NvmCache::shutDown()

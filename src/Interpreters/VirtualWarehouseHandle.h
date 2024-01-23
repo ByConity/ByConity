@@ -105,8 +105,9 @@ public:
     auto getUUID() const { return uuid; }
     auto & getSettingsRef() const { return settings; }
 
-    size_t empty(UpdateMode mode = NoUpdate);
+    bool empty(UpdateMode mode = NoUpdate);
     Container getAll(UpdateMode mode = NoUpdate);
+    size_t getNumWorkers(UpdateMode mode = NoUpdate);
 
     WorkerGroupHandle getWorkerGroup(const String & worker_group_id, UpdateMode mode = TryUpdate);
     WorkerGroupHandle pickWorkerGroup(VWScheduleAlgo query_algo, const Requirement & requirement = {}, UpdateMode mode = TryUpdate);

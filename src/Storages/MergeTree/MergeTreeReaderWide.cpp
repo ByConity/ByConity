@@ -23,7 +23,7 @@
 
 #include <Columns/ColumnArray.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
@@ -89,10 +89,10 @@ MergeTreeReaderWide::MergeTreeReaderWide(
         for (const NameAndTypePair & column : columns)
         {
             auto column_from_part = getColumnFromPart(column);
-            if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
+            if (column_from_part.type->isByteMap())
             {
                 // Scan the directory to get all implicit columns(stream) for the map type
-                const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column_from_part.type);
+                const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column_from_part.type);
 
                 String key_name;
                 String impl_key_name;
@@ -118,7 +118,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
                     }
                 }
             }
-            else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
+            else if (isMapImplicitKey(column.name)) // check if it's an implicit key and not KV
             {
                 addByteMapStreams({column.name, column.type}, parseMapNameFromImplicitColName(column.name), profile_callback_, clock_type_);
             }
@@ -230,7 +230,7 @@ size_t MergeTreeReaderWide::skipUnnecessaryRows(size_t num_columns, size_t from_
         try
         {
             auto& cache = caches[column_from_part.getNameInStorage()];
-            if (type->isMap() && !type->isMapKVStore())
+            if (type->isByteMap())
                 skipped_rows = std::max(skipped_rows,
                     skipMapDataNotKV(column_from_part, from_mark, continue_reading,
                         current_task_last_mark, rows_to_skip));
@@ -284,7 +284,7 @@ size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_ma
         {
             size_t column_size_before_reading = column->size();
             auto& cache = caches[column_from_part.getNameInStorage()];
-            if (type->isMap() && !type->isMapKVStore())
+            if (type->isByteMap())
                 readMapDataNotKV(column_from_part, column, from_mark, continue_reading,
                     current_task_last_mark, rows_to_read, res_col_to_idx, res_columns);
             else
@@ -343,12 +343,14 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
         if (streams.count(stream_name))
             return;
 
-        bool data_file_exists = data_part->getChecksums()->files.count(stream_name + DATA_FILE_EXTENSION);
+        auto check_validity
+            = [&](String & stream_name_) -> bool { return data_part->getChecksums()->files.count(stream_name_ + DATA_FILE_EXTENSION); };
 
         /** If data file is missing then we will not try to open it.
           * It is necessary since it allows to add new column to structure of the table without creating new files for old parts.
           */
-        if (!data_file_exists)
+        if ((!name_and_type.type->isKVMap() && !check_validity(stream_name))
+            || (name_and_type.type->isKVMap() && !tryConvertToValidKVStreamName(stream_name, check_validity)))
             return;
 
         bool is_lc_dict = isLowCardinalityDictionary(substream_path);

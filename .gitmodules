@@ -26,7 +26,7 @@
 	url = https://github.com/google/double-conversion.git
 [submodule "contrib/re2"]
 	path = contrib/re2
-	url = https://github.com/google/re2.git
+    url = https://github.com/google/re2
 [submodule "contrib/llvm"]
 	path = contrib/llvm
 	url = https://github.com/ClickHouse-Extras/llvm
@@ -35,7 +35,7 @@
 	url = https://github.com/ClickHouse-Extras/mariadb-connector-c.git
 [submodule "contrib/jemalloc"]
 	path = contrib/jemalloc
-	url = https://github.com/ClickHouse-Extras/jemalloc.git
+	url = https://github.com/ByConity/clickhouse-jemalloc.git
 [submodule "contrib/unixodbc"]
 	path = contrib/unixodbc
 	url = https://github.com/ClickHouse-Extras/UnixODBC.git
@@ -82,7 +82,10 @@
 	url = https://github.com/ClickHouse-Extras/hyperscan.git
 [submodule "contrib/libunwind"]
 	path = contrib/libunwind
-	url = https://github.com/ClickHouse-Extras/libunwind.git
+	url = https://github.com/ByConity/clickhouse-libunwind.git
+[submodule "contrib/libunwind-old"]
+	path = contrib/libunwind-old
+	url = https://github.com/ByConity/clickhouse-libunwind.git
 [submodule "contrib/simdjson"]
 	path = contrib/simdjson
 	url = https://github.com/simdjson/simdjson.git
@@ -214,7 +217,7 @@
 [submodule "contrib/abseil-cpp"]
 	path = contrib/abseil-cpp
 	url = https://github.com/ClickHouse-Extras/abseil-cpp.git
-	branch = lts_2020_02_25
+	branch = lts_2021_11_02
 [submodule "contrib/dragonbox"]
 	path = contrib/dragonbox
 	url = https://github.com/ClickHouse-Extras/dragonbox.git
@@ -300,3 +303,39 @@
 [submodule "contrib/TSQuery"]
 	path = contrib/TSQuery
 	url = https://github.com/ByConity/TSQuery.git
+[submodule "contrib/hashidsxx"]
+	path = contrib/hashidsxx
+	url = https://github.com/schoentoon/hashidsxx.git
+[submodule "contrib/magic_enum"]
+	path = contrib/magic_enum
+	url = https://github.com/Neargye/magic_enum.git
+[submodule "contrib/morton-nd"]
+	path = contrib/morton-nd
+	url = https://github.com/morton-nd/morton-nd.git
+[submodule "contrib/xxHash"]
+	path = contrib/xxHash
+	url = https://github.com/Cyan4973/xxHash.git
+[submodule "contrib/wyhash"]
+	path = contrib/wyhash
+	url = https://github.com/wangyi-fudan/wyhash.git
+[submodule "contrib/ulid-c"]
+	path = contrib/ulid-c
+    url = https://github.com/ClickHouse/ulid-c.git
+[submodule "contrib/corrosion"]
+	path = contrib/corrosion
+	url = https://github.com/corrosion-rs/corrosion.git
+[submodule "contrib/libstemmer_c"]
+	path = contrib/libstemmer_c
+    url = https://github.com/ClickHouse/libstemmer_c.git
+[submodule "contrib/wordnet-blast"]
+	path = contrib/wordnet-blast
+    url = https://github.com/ClickHouse/wordnet-blast
+[submodule "contrib/lemmagen-c"]
+	path = contrib/lemmagen-c
+    url = https://github.com/ClickHouse/lemmagen-c
+[submodule "contrib/cld2"]
+	path = contrib/cld2
+    url = https://github.com/ClickHouse/cld2
+[submodule "contrib/nlp-data"]
+	path = contrib/nlp-data
+    url = https://github.com/ClickHouse/nlp-data

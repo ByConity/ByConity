@@ -380,6 +380,11 @@ public:
     /// TODO: interface decoupled from ColumnGathererStream that allows non-generic specializations.
     virtual void gather(ColumnGathererStream & gatherer_stream) = 0;
 
+    /**
+     * Replace values with specific position with default value.
+     */
+    virtual Ptr replaceWithDefaultValue(Filter & set_to_null_rows);
+
     /** Computes minimum and maximum element of the column.
       * In addition to numeric types, the function is completely implemented for Date and DateTime.
       * For strings and arrays function should return default value.
@@ -411,6 +416,9 @@ public:
     /// Shallow: doesn't do recursive calls; don't do call for itself.
     using ColumnCallback = std::function<void(WrappedPtr&)>;
     virtual void forEachSubcolumn(ColumnCallback) {}
+
+    /// Similar to forEachSubcolumn but it also do recursive calls.
+    virtual void forEachSubcolumnRecursively(ColumnCallback) {}
 
     /// Columns have equal structure.
     /// If true - you can use "compareAt", "insertFrom", etc. methods.

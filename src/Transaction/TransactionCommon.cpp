@@ -249,13 +249,19 @@ UndoResourceNames integrateResources(const UndoResources & resources)
             if (!dst_path.empty() && dst_path.back() == '/')
                 dst_path.pop_back();
             String part_name = dst_path.substr(dst_path.find_last_of('/') + 1);
-            if (MergeTreePartInfo::tryParsePartName(part_name, nullptr, MERGE_TREE_CHCH_DATA_STORAGTE_VERSION))
+            MergeTreePartInfo part_info;
+            if (MergeTreePartInfo::tryParsePartName(part_name, &part_info, MERGE_TREE_CHCH_DATA_STORAGTE_VERSION)
+                && part_info.mutation == static_cast<Int64>(resource.txn_id))
             {
+                /// Here we need to check the part mutation match with the transaction id as well, because we also record
+                /// intermediate moves. If this undo buffer is for an intermediate move, part_name can be the name of old
+                /// parts (before attach).
                 result.parts.insert(part_name);
             }
         }
         else if (resource.type() == UndoResourceType::S3AttachPart
             || resource.type() == UndoResourceType::S3DetachPart
+            || resource.type() == UndoResourceType::S3DetachStagedPart
             || resource.type() == UndoResourceType::S3AttachMeta
             || resource.type() == UndoResourceType::S3DetachDeleteBitmap
             || resource.type() == UndoResourceType::S3AttachDeleteBitmap)

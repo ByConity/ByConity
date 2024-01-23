@@ -17,7 +17,7 @@ Projection Est. 1 rows
                      └─ Aggregating Est. 1 rows
                         │     Group by: {i_category_id, i_category}
                         │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                        └─ Inner Join Est. 822932 rows
+                        └─ Inner Join Est. 827713 rows
                            │     Condition: ss_item_sk == i_item_sk
                            │     Runtime Filters Builder: {i_item_sk}
                            ├─ Inner Join Est. 45814400 rows

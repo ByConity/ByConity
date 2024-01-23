@@ -5,31 +5,31 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#avg(inv_quantity_on_hand) ASC NULLS LAST, i_product_name ASC NULLS LAST, i_brand ASC NULLS LAST, i_class ASC NULLS LAST, i_category ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 778477048 rows
+      └─ Gather Exchange Est. 783000000 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#avg(inv_quantity_on_hand) ASC NULLS LAST, i_product_name ASC NULLS LAST, i_brand ASC NULLS LAST, i_class ASC NULLS LAST, i_category ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 778477048 rows
-               └─ Repartition Exchange Est. 778477048 rows
+            └─ MergingAggregated Est. 783000000 rows
+               └─ Repartition Exchange Est. 783000000 rows
                   │     Partition by: {i_product_name, i_brand, i_class, i_category, __grouping_set}
-                  └─ Aggregating Est. 778477048 rows
+                  └─ Aggregating Est. 783000000 rows
                      │     Group by: {i_product_name, i_brand, i_class, i_category}
                      │     Aggregates: expr#avg(inv_quantity_on_hand):=AggNull(avg)(inv_quantity_on_hand)
-                     └─ Inner Join Est. 778477048 rows
-                        │     Condition: inv_date_sk == d_date_sk
-                        ├─ Inner Join Est. 778477048 rows
-                        │  │     Condition: inv_item_sk == i_item_sk
-                        │  ├─ Repartition Exchange Est. 783000000 rows
-                        │  │  │     Partition by: {inv_item_sk}
-                        │  │  └─ TableScan tpcds1000.inventory Est. 783000000 rows
-                        │  │           Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]
-                        │  └─ Repartition Exchange Est. 300000 rows
-                        │     │     Partition by: {i_item_sk}
-                        │     └─ TableScan tpcds1000.item Est. 300000 rows
-                        │              Outputs: [i_item_sk, i_brand, i_class, i_category, i_product_name]
-                        └─ Broadcast Exchange Est. 334 rows
-                           └─ Filter Est. 334 rows
-                              │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                              └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                       Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                       Outputs: [d_date_sk, d_month_seq]
+                     └─ Inner Join Est. 783000000 rows
+                        │     Condition: inv_item_sk == i_item_sk
+                        ├─ Repartition Exchange Est. 783000000 rows
+                        │  │     Partition by: {inv_item_sk}
+                        │  └─ Inner Join Est. 783000000 rows
+                        │     │     Condition: inv_date_sk == d_date_sk
+                        │     ├─ TableScan tpcds1000.inventory Est. 783000000 rows
+                        │     │        Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]
+                        │     └─ Broadcast Exchange Est. 334 rows
+                        │        └─ Filter Est. 334 rows
+                        │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                        │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                        │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                        │                    Outputs: [d_date_sk, d_month_seq]
+                        └─ Repartition Exchange Est. 300000 rows
+                           │     Partition by: {i_item_sk}
+                           └─ TableScan tpcds1000.item Est. 300000 rows
+                                    Outputs: [i_item_sk, i_brand, i_class, i_category, i_product_name]

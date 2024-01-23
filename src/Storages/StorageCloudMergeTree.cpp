@@ -46,6 +46,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
+    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
 StorageCloudMergeTree::StorageCloudMergeTree(
@@ -86,8 +87,6 @@ StorageCloudMergeTree::StorageCloudMergeTree(
 
     if (getInMemoryMetadataPtr()->hasUniqueKey() && getSettings()->cloud_enable_dedup_worker)
         dedup_worker = std::make_unique<CloudMergeTreeDedupWorker>(*this);
-
-    registerBitEngineDictionaries();
 }
 
 void StorageCloudMergeTree::startup()
@@ -188,7 +187,21 @@ Pipe StorageCloudMergeTree::alterPartition(
     const PartitionCommands & commands,
     ContextPtr local_context)
 {
-    return ingestPartition(metadata_snapshot, commands[0], std::move(local_context));
+    if (commands.size() > 1U)
+        throw Exception(
+            ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION, "Too many commands in the same alter partition query on storage {}", getName());
+    else if (commands.empty())
+        return {};
+
+    const auto & command = commands.at(0U);
+    switch (command.type)
+    {
+        case PartitionCommand::INGEST_PARTITION:
+            return ingestPartition(metadata_snapshot, command, std::move(local_context));
+        default:
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "Partition command {} are not supported by storage {}", command.typeToString(), getName());
+    }
 }
 
 bool StorageCloudMergeTree::checkStagedParts()
@@ -717,5 +730,9 @@ bool StorageCloudMergeTree::getQueryProcessingStageWithAggregateProjection(
     return false;
 }
 
+std::unique_ptr<MergeTreeSettings> StorageCloudMergeTree::getDefaultSettings() const
+{
+    return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+}
 
 }

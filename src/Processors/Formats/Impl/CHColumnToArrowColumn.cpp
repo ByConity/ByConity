@@ -30,7 +30,6 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnMap.h>
-#include <Columns/ColumnByteMap.h>
 #include <Core/callOnTypeIndex.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -39,7 +38,6 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <arrow/api.h>
 #include <arrow/builder.h>
@@ -84,6 +82,19 @@ namespace DB
     {
         if (!status.ok())
             throw Exception{fmt::format("Error with a {} column \"{}\": {}.", format_name, column_name, status.ToString()), ErrorCodes::UNKNOWN_EXCEPTION};
+    }
+
+    /// Invert values since Arrow interprets 1 as a non-null value, while CH as a null
+    static PaddedPODArray<UInt8> revertNullByteMap(const PaddedPODArray<UInt8> * null_bytemap, size_t start, size_t end)
+    {
+        PaddedPODArray<UInt8> res;
+        if (!null_bytemap)
+            return res;
+
+        res.reserve(end - start);
+        for (size_t i = start; i < end; ++i)
+            res.emplace_back(!(*null_bytemap)[i]);
+        return res;
     }
 
     template <typename NumericType, typename ArrowBuilderType>
@@ -327,6 +338,46 @@ namespace DB
         }
     }
 
+    static void fillArrowArrayWithIPv6ColumnData(
+        ColumnPtr write_column,
+        const PaddedPODArray<UInt8> * null_bytemap,
+        const String & format_name,
+        arrow::ArrayBuilder* array_builder,
+        size_t start,
+        size_t end)
+    {
+        const auto & internal_column = assert_cast<const ColumnIPv6 &>(*write_column);
+        const auto & internal_data = internal_column.getData();
+        size_t fixed_length = sizeof(IPv6);
+        arrow::FixedSizeBinaryBuilder & builder = assert_cast<arrow::FixedSizeBinaryBuilder &>(*array_builder);
+        arrow::Status status;
+
+        PaddedPODArray<UInt8> arrow_null_bytemap = revertNullByteMap(null_bytemap, start, end);
+        const UInt8 * arrow_null_bytemap_raw_ptr = arrow_null_bytemap.empty() ? nullptr : arrow_null_bytemap.data();
+
+        const uint8_t * data_start = reinterpret_cast<const uint8_t *>(internal_data.data()) + start * fixed_length;
+        status = builder.AppendValues(data_start, end - start, reinterpret_cast<const uint8_t *>(arrow_null_bytemap_raw_ptr));
+        checkStatus(status, write_column->getName(), format_name);
+    }
+
+    static void fillArrowArrayWithIPv4ColumnData(
+        ColumnPtr write_column,
+        const PaddedPODArray<UInt8> * null_bytemap,
+        const String & format_name,
+        arrow::ArrayBuilder* array_builder,
+        size_t start,
+        size_t end)
+    {
+        const auto & internal_data = assert_cast<const ColumnIPv4 &>(*write_column).getData();
+        auto & builder = assert_cast<arrow::UInt32Builder &>(*array_builder);
+        arrow::Status status;
+
+        PaddedPODArray<UInt8> arrow_null_bytemap = revertNullByteMap(null_bytemap, start, end);
+        const UInt8 * arrow_null_bytemap_raw_ptr = arrow_null_bytemap.empty() ? nullptr : arrow_null_bytemap.data();
+        status = builder.AppendValues(&(internal_data.data() + start)->toUnderType(), end - start, reinterpret_cast<const uint8_t *>(arrow_null_bytemap_raw_ptr));
+        checkStatus(status, write_column->getName(), format_name);
+    }
+
     static void fillArrowArrayWithDateColumnData(
         ColumnPtr write_column,
         const PaddedPODArray<UInt8> * null_bytemap,
@@ -429,6 +480,14 @@ namespace DB
         {
             fillArrowArrayWithStringColumnData<ColumnFixedString>(column, null_bytemap, format_name, array_builder, start, end);
         }
+        else if (isIPv6(column_type))
+        {
+            fillArrowArrayWithIPv6ColumnData(column, null_bytemap, format_name, array_builder, start, end);
+        }
+        else if (isIPv4(column_type))
+        {
+            fillArrowArrayWithIPv4ColumnData(column, null_bytemap, format_name, array_builder, start, end);
+        }
         else if ("Date" == column_type_name)
         {
             fillArrowArrayWithDateColumnData(column, null_bytemap, format_name, array_builder, start, end);
@@ -455,17 +514,9 @@ namespace DB
         }
         else if ("Map" == column_type_name)
         {
-#ifdef USE_COMMUNITY_MAP
             ColumnPtr column_array = assert_cast<const ColumnMap *>(column.get())->getNestedColumnPtr();
             DataTypePtr array_type = assert_cast<const DataTypeMap *>(column_type.get())->getNestedType();
             fillArrowArrayWithArrayColumnData<arrow::MapBuilder>(column_name, column_array, array_type, null_bytemap, array_builder, format_name, start, end, dictionary_values);
-#else
-            const ColumnByteMap * map_column = assert_cast<const ColumnByteMap *>(column.get());
-            const DataTypeByteMap * map_type = assert_cast<const DataTypeByteMap *>(column_type.get());
-            ColumnPtr column_array = ColumnArray::create(ColumnTuple::create(Columns{map_column->getKeyPtr(), map_column->getValuePtr()}), map_column->getOffsetsPtr());
-            DataTypePtr array_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(DataTypes{map_type->getKeyType(), map_type->getValueType()}, Names{"keys", "values"}));
-            fillArrowArrayWithArrayColumnData<arrow::MapBuilder>(column_name, column_array, array_type, null_bytemap, array_builder, format_name, start, end, dictionary_values);
-#endif
         }
         else if (isDecimal(column_type))
         {
@@ -641,18 +692,11 @@ namespace DB
             );
         }
 
-        if (isByteMap(column_type))
-        {
-            const auto * byte_map_type = assert_cast<const DataTypeByteMap *>(column_type.get());
-            const auto & key_type = byte_map_type->getKeyType();
-            const auto & val_type = byte_map_type->getValueType();
+        if (isIPv6(column_type))
+            return arrow::fixed_size_binary(sizeof(IPv6));
 
-            const ColumnByteMap * column_byte_map =  assert_cast<const ColumnByteMap *>(column.get());
-            return arrow::map(
-                getArrowType(key_type, column_byte_map->getKeyPtr(), column_name, format_name, is_column_nullable),
-                getArrowType(val_type, column_byte_map->getValuePtr(), column_name, format_name, is_column_nullable)
-            );
-        }
+        if (isIPv4(column_type))
+            return arrow::uint32();
 
         const std::string type_name = column_type->getFamilyName();
         if (const auto * arrow_type_it = std::find_if(

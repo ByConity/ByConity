@@ -214,7 +214,7 @@ void TCPHandler::runImpl()
             else /// {tenant_id}`
                 default_database.clear();
         }
-        
+
         if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database, connection_context)))
         {
             Exception e("Database " + backQuote(default_database) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
@@ -410,7 +410,7 @@ void TCPHandler::runImpl()
                         BlockIO io;
                         try
                         {
-                            io = executeQuery(query, ast1, context, false, QueryProcessingStage::Complete, may_have_embedded_data);
+                            io = executeQuery(query, std::move(ast1), context, false, QueryProcessingStage::Complete, may_have_embedded_data);
                             if (need_receive_data_for_input) // It implies pipeline execution
                             {
                                 /// It is special case for input(), all works for reading data from client will be done in callbacks.
@@ -1157,7 +1157,7 @@ void TCPHandler::receiveHello()
 
     if (user.empty())
         throw NetException("Unexpected packet from client (no user in Hello package)", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
-    
+
     String tenant_id_from_db;
     String tenant_id_from_user;
     if (auto pos = user.find('`'); pos != String::npos)
@@ -1370,7 +1370,7 @@ void TCPHandler::receiveQuery()
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
         client_info.read(*in, client_tcp_protocol_version);
 
-    LOG_DEBUG(log, "receive query, client info: query_kind is {}, initial_user is {}, current_query_id is {}, initial_query_id is {}, current_user is {}, client_type is {}", 
+    LOG_DEBUG(log, "receive query, client info: query_kind is {}, initial_user is {}, current_query_id is {}, initial_query_id is {}, current_user is {}, client_type is {}",
         client_info.query_kind, client_info.initial_user, client_info.current_query_id, client_info.initial_query_id, client_info.current_user, client_info.client_type);
 
     /// For better support of old clients, that does not send ClientInfo.

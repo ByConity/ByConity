@@ -164,6 +164,7 @@ void PlanSegmentManagerRpcService::executeQuery(
     catch (...)
     {
         auto error_msg = getCurrentExceptionMessage(false);
+        tryLogCurrentException(__PRETTY_FUNCTION__);
         cntl->SetFailed(error_msg);
         LOG_ERROR(log, "executeQuery failed: {}", error_msg);
     }
@@ -227,7 +228,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         if (status.is_succeed)
             scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index());
 
-        if (!status.is_canceled && status.code == 0)
+        if (!status.is_cancelled && status.code == 0)
         {
             try
             {
@@ -242,7 +243,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         }
 
         // this means exception happened during execution.
-        if (!status.is_succeed && !status.is_canceled)
+        if (!status.is_succeed && !status.is_cancelled)
         {
             auto coodinator = MPPQueryManager::instance().getCoordinator(request->query_id());
             if (coodinator)
@@ -256,6 +257,29 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         auto error_msg = getCurrentExceptionMessage(false);
         cntl->SetFailed(error_msg);
         LOG_ERROR(log, "sendPlanSegmentStatus failed: {}", error_msg);
+    }
+}
+
+void PlanSegmentManagerRpcService::reportPlanSegmentError(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::ReportPlanSegmentErrorRequest * request,
+    ::DB::Protos::ReportPlanSegmentErrorResponse * /*response*/,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
+
+    try
+    {
+        auto coodinator = MPPQueryManager::instance().getCoordinator(request->query_id());
+        if (coodinator)
+            coodinator->tryUpdateRootErrorCause(QueryError{.code = request->code(), .message = request->message()}, false);
+    }
+    catch (...)
+    {
+        auto error_msg = getCurrentExceptionMessage(false);
+        cntl->SetFailed(error_msg);
+        LOG_ERROR(log, "reportPlanSegmentError failed: {}", error_msg);
     }
 }
 

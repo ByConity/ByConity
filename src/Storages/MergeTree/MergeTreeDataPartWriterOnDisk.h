@@ -89,6 +89,7 @@ public:
             const std::string & marks_file_extension_,
             const CompressionCodecPtr & compression_codec_,
             size_t max_compress_block_size_,
+            bool write_append = false,
             bool is_compact_map = false,
             bool write_compressed_index = false);
 
@@ -111,8 +112,8 @@ public:
         std::unique_ptr<CompressedDataIndex> compressed_idx;
 
         /// file offset, it's used to distinguish different implicit columns because all implicit column data store in the same file.
-        off_t data_file_offset;
-        off_t marks_file_offset;
+        size_t data_file_offset;
+        size_t marks_file_offset;
 
         void finalize();
 

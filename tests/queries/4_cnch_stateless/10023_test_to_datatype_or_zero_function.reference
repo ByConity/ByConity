@@ -10,7 +10,7 @@
 \N	Nullable(UUID)
 0	Float32
 \N	Nullable(Float32)
-0.000000	Decimal(9, 6)
+0	Decimal(9, 6)
 \N	Nullable(Decimal(9, 6))
 convert_fr	FixedString(10)
 convert_fr	FixedString(10)
@@ -26,8 +26,8 @@ convert_fr	FixedString(10)
 \N	Nullable(UUID)
 1	Float32
 1	Nullable(Float32)
-1.000000	Decimal(9, 6)
-1.000000	Nullable(Decimal(9, 6))
+1	Decimal(9, 6)
+1	Nullable(Decimal(9, 6))
 test_fixed
 test_fixed
 [1,2]
@@ -35,7 +35,7 @@ test_fixed
 ['1',NULL]
 [[1,2],[1,NULL]]
 [[1,NULL],[NULL,NULL]]
-0.00000000
+0
 \N
 2021-06-18
 2021-06-18

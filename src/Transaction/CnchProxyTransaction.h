@@ -41,7 +41,7 @@ private:
 
 public:
     explicit CnchProxyTransaction(const ContextPtr & context_) : Base(context_) {}
-    explicit CnchProxyTransaction(const ContextPtr & context_, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id);
+    explicit CnchProxyTransaction(const ContextPtr & context_, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id, bool read_only);
     ~CnchProxyTransaction() override = default;
     String getTxnType() const override { return "CnchProxyTransaction"; }
     void precommit() override;

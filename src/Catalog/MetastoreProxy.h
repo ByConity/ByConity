@@ -845,6 +845,8 @@ public:
 
     String getTableUUID(const String & name_space, const String & database, const String & name);
     std::shared_ptr<Protos::TableIdentifier> getTableID(const String & name_space, const String & database, const String & name);
+    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> getTableIDs(const String & name_space, 
+                    const std::vector<std::pair<String, String>> & db_name_pairs);
     String getTrashTableUUID(const String & name_space, const String & database, const String & name, const UInt64 & ts);
     void createTable(const String & name_space, const UUID & db_uuid, const DB::Protos::DataModelTable & table_data, const Strings & dependencies, const Strings & masking_policy_mapping);
     void createUDF(const String & name_space, const DB::Protos::DataModelUDF & udf_data);
@@ -1063,6 +1065,8 @@ public:
         const String & name_space,
         const String & tbl_uuid,
         const std::vector<String> & part_names,
+        size_t detached_visible_part_size,
+        size_t detached_staged_part_size,
         const std::vector<String> & bitmap_names,
         size_t batch_write_size,
         size_t batch_delete_size);

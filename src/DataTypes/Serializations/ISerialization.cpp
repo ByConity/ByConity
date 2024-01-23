@@ -60,12 +60,6 @@ String ISerialization::Substream::toString() const
             return "SparseElements";
         case SparseOffsets:
             return "SparseOffsets";
-        case MapKeyElements:
-            return "MapKeyElements";
-        case MapValueElements:
-            return "MapValueElements";
-        case MapSizes:
-            return "MapSizes";
         case StringElements:
             return "StringElements";
         case StringOffsets:
@@ -180,18 +174,6 @@ static String getNameForSubstreamPath(
             stream_name += (escape_tuple_delimiter && elem.escape_tuple_delimiter ?
                 escapeForFileName(".") : ".") + escapeForFileName(elem.tuple_element_name);
         }
-        else if (elem.type == Substream::MapKeyElements)
-        {
-            ++array_level;
-            stream_name += "%2Ekey";
-        }
-        else if (elem.type == Substream::MapValueElements)
-        {
-            ++array_level;
-            stream_name += "%2Evalue";
-        }
-        else if (elem.type == Substream::MapSizes)
-            stream_name += ".size" + toString(array_level);
         else if (elem.type == Substream::StringElements)
             stream_name += ".str_elements";
         else if (elem.type == Substream::StringOffsets)

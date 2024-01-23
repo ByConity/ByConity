@@ -17,7 +17,7 @@ Projection Est. 100 rows
                      │     Aggregates: expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
                      └─ Inner Join Est. 7058679 rows
                         │     Condition: cs_bill_customer_sk == c_customer_sk
-                        │     Filter: (substring(ca_zip, 1, 5) IN ('85669', '86197', '88274', '83405', '86475', '85392', '85460', '80348', '81792')) OR (ca_state IN ('CA', 'WA', 'GA')) OR (cs_sales_price > 500)
+                        │     Filter: (cs_sales_price > 500) OR (ca_state IN ('CA', 'WA', 'GA')) OR (substring(ca_zip, 1, 5) IN ('85669', '86197', '88274', '83405', '86475', '85392', '85460', '80348', '81792'))
                         ├─ Repartition Exchange Est. 7058679 rows
                         │  │     Partition by: {cs_bill_customer_sk}
                         │  └─ Inner Join Est. 7058679 rows

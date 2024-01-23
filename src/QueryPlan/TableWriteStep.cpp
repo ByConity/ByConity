@@ -43,7 +43,7 @@ Block TableWriteStep::getHeader(const NamesAndTypes & input_columns)
 BlockOutputStreams TableWriteStep::createOutputStream(
     StoragePtr target_table,
     const BuildQueryPipelineSettings & settings,
-    Block header,
+    Block & header,
     size_t max_threads,
     bool no_destination,
     bool no_squash)
@@ -76,6 +76,23 @@ BlockOutputStreams TableWriteStep::createOutputStream(
                 target_table->getStorageID(), out, out->getHeader(), metadata_snapshot->getConstraints(), settings.context);
 
         bool null_as_default = query_settings.insert_null_as_default;
+        if (null_as_default)
+        {
+            const auto & input_columns = input_streams[0].header.getColumnsWithTypeAndName();
+            const auto & query_columns = header.getColumnsWithTypeAndName();
+            const auto & output_columns = metadata_snapshot->getColumns();
+
+            if (input_columns.size() == query_columns.size())
+            {
+                for (size_t col_idx = 0; col_idx < query_columns.size(); ++col_idx)
+                {
+                    /// Change query sample block columns to Nullable to allow inserting nullable columns, where NULL values will be substituted with
+                    /// default column values (in AddingDefaultsTransform), so all values will be cast correctly.
+                    if (isNullableOrLowCardinalityNullable(input_columns[col_idx].type) && !isNullableOrLowCardinalityNullable(query_columns[col_idx].type) && output_columns.has(query_columns[col_idx].name))
+                        header.setColumn(col_idx, ColumnWithTypeAndName(makeNullableOrLowCardinalityNullable(query_columns[col_idx].column), makeNullableOrLowCardinalityNullable(query_columns[col_idx].type), query_columns[col_idx].name));
+                }
+            }
+        }
 
         /// Actually we don't know structure of input blocks from query/table,
         /// because some clients break insertion protocol (columns != header)
@@ -120,8 +137,9 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
             auto txn = std::make_shared<CnchWorkerTransaction>(settings.context->getGlobalContext(), server_client);
             const_cast<Context *>(settings.context.get())->setCurrentTransaction(txn);
 
+            auto insert_target_header = getHeader(insert_target->getColumns());
             auto out_streams = createOutputStream(
-                target_storage, settings, getHeader(insert_target->getColumns()), pipeline.getNumThreads(), false, false);
+                target_storage, settings, insert_target_header, pipeline.getNumThreads(), false, false);
 
             if (out_streams.empty())
                 throw Exception("No output stream when transfrom TableWriteStep", ErrorCodes::LOGICAL_ERROR);
@@ -145,7 +163,7 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
 
             //LOG_DEBUG(&Poco::Logger::get("TableWriteStep"), fmt::format("output header: {}", stream->getHeader().dumpStructure()));
             pipeline.addTransform(std::make_shared<TableWriteTransform>(
-                std::move(stream), getHeader(insert_target->getColumns()), insert_target->getStorage(), settings.context));
+                std::move(stream), insert_target_header, insert_target->getStorage(), settings.context));
             break;
         }
     }

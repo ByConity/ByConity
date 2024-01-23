@@ -286,7 +286,7 @@ void SerializationSketch::deserializeTextEscaped(IColumn & column, ReadBuffer & 
 {
     read(column, [&](ColumnSketchBinary::Chars & data) {
         String encoded_string;
-        readEscapedStringInto(encoded_string, istr);
+        readEscapedString(encoded_string, istr);
         String decodeString = decodeBase64(encoded_string);
         data.insert(decodeString.begin(), decodeString.end());
     });

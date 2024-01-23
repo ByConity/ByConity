@@ -47,7 +47,7 @@ else if (setting.name == #NAME) set(#NAME, setting.value);
         if (false)
         {
         }
-        KAFKA_RELATED_SETTINGS(SET)
+        LIST_OF_KAFKA_SETTINGS(SET)
         else throw Exception("Unknown Kafka setting " + setting.name, ErrorCodes::BAD_ARGUMENTS);
 #undef SET
     }
@@ -86,7 +86,7 @@ void sortKafkaSettings(IAST & settings_ast)
 seq_map[#NAME] = ++seq_no; \
 seq_map["kafka_" #NAME] = ++seq_no;
 
-    KAFKA_RELATED_SETTINGS(SET)
+    LIST_OF_KAFKA_SETTINGS(SET)
 #undef SET
 
 auto get_seq_no = [&](const String & name) {

@@ -34,9 +34,9 @@ Projection Est. 8973367 rows
                            │                 │     Group by: {}
                            │                 │     Aggregates: expr#avg(c_acctbal):=AggNull(avg)(c_acctbal_1)
                            │                 └─ Filter Est. 13636077 rows
-                           │                    │     Condition: (c_acctbal_1 > '0.00') AND (substring(c_phone_1, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
+                           │                    │     Condition: (c_acctbal_1 > '0') AND (substring(c_phone_1, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
                            │                    └─ TableScan tpch100.customer Est. 15000000 rows
-                           │                             Where: (c_acctbal > '0.00') AND (substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
+                           │                             Where: (c_acctbal > '0') AND (substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
                            │                             Outputs: c_phone_1:=c_phone, c_acctbal_1:=c_acctbal
                            └─ Projection Est. 9928153 rows
                               │     Expressions: [o_custkey], build_side_non_null_symbol:=1

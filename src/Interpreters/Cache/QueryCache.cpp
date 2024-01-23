@@ -129,8 +129,8 @@ QueryCache::Key::Key(
     std::chrono::time_point<std::chrono::system_clock> expires_at_,
     bool is_compressed_,
     TxnTimestamp cnch_txn_)
-    : ast(removeQueryCacheSettings(ast_))
-    , header(header_)
+    : ast(removeQueryCacheSettings(std::move(ast_)))
+    , header(std::move(header_))
     , user_name(user_name_)
     , is_shared(is_shared_)
     , expires_at(expires_at_)
@@ -596,4 +596,14 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
     }
     return max_last_modification_time;
 }
+
+void logUsedStorageIDs(Poco::Logger * log, const std::set<StorageID> & storage_ids)
+{
+    LOG_DEBUG(log, "StorageIDs:");
+    for (auto & storage_id : storage_ids)
+        LOG_DEBUG(log, "StorageID {}", storage_id.getNameForLogs());
+}
+
+
+
 }

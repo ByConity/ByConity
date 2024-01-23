@@ -34,6 +34,7 @@ public:
         settings.emplace("enable_materialized_view_join_rewriting", "1");
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
         settings.emplace("enable_single_distinct_to_group_by", "0");
+        settings.emplace("enum_replicate_no_stats", "0");
         settings.emplace("enable_materialized_view_rewrite_match_range_filter", "1");
         // settings.emplace("print_graphviz", "1");
         // settings.emplace("graphviz_path", "/data01/wangtao.2077/tmp/graphviz/");

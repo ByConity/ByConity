@@ -14,7 +14,7 @@ namespace DB
 struct FormatNumberImpl
 {
     static ColumnPtr
-    formatExecute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_row_counts /*input_rows_count*/)
+    formatExecute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &/*result_type*/, size_t input_row_counts)
     {
         // TODO: add support for an optional locale argument
         const DataTypePtr & data_type = arguments[0].type;
@@ -25,7 +25,7 @@ struct FormatNumberImpl
 
         // convert to string
         ColumnsWithTypeAndName rounded_data_cols = {{rounded_data_ptr, data_type, "rounded"}};
-        const ColumnPtr rounded_str_cols = ConvertImplGenericToString::execute(rounded_data_cols);
+        const ColumnPtr rounded_str_cols = ConvertImplGenericToString<ColumnString>::execute(rounded_data_cols, std::make_shared<DataTypeString>(), input_row_counts);
         size_t col_size = rounded_str_cols->size();
         auto res_col = ColumnString::create();
 

@@ -13,6 +13,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
+    extern const int BAD_FILE_TYPE;
 }
 
 std::atomic<UInt64> next_disk_id = 0;
@@ -66,6 +67,32 @@ void IDisk::copy(const String & from_path, const std::shared_ptr<IDisk> & to_dis
     ResultsCollector results;
 
     asyncCopy(*this, from_path, *to_disk, to_path, exec, results);
+
+    for (auto & result : results)
+        result.wait();
+    for (auto & result : results)
+        result.get();
+}
+
+void IDisk::copyFiles(const std::vector<std::pair<String, String>> & files_to_copy, const std::shared_ptr<IDisk> & to_disk)
+{
+    auto & exec = to_disk->getExecutor();
+    ResultsCollector results;
+
+    for (const auto & [source_file, target_file]: files_to_copy)
+    {
+        if (!isFile(source_file))
+            throw Exception(ErrorCodes::BAD_FILE_TYPE, "Can't copy {}, it's not a regular file", source_file);
+
+        auto result = exec.execute(
+            [this, source_file = source_file, &to_disk, target_file = target_file]()
+            {
+                setThreadName("DiskCopier");
+                DB::copyFile(*this, source_file, *to_disk, target_file);
+            });
+
+        results.push_back(std::move(result));
+    }
 
     for (auto & result : results)
         result.wait();

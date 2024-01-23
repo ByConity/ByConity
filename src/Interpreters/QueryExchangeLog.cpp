@@ -17,7 +17,7 @@
 #include <array>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -33,8 +33,9 @@ NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
         {"event_date", std::make_shared<DataTypeDate>()},
         {"event_time", std::make_shared<DataTypeDateTime>()},
         {"type", std::make_shared<DataTypeString>()},
-        {"exchange_id", std::make_shared<DataTypeString>()},
-        {"partition_id", std::make_shared<DataTypeString>()},
+        {"exchange_id", std::make_shared<DataTypeUInt64>()},
+        {"partition_id", std::make_shared<DataTypeUInt64>()},
+        {"parallel_index", std::make_shared<DataTypeUInt64>()},
         {"coordinator_address", std::make_shared<DataTypeString>()},
 
         {"finish_code", std::make_shared<DataTypeInt32>()},
@@ -62,11 +63,7 @@ NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
         {"disk_partition_writer_write_num", std::make_shared<DataTypeUInt64>()},
         {"disk_partition_writer_commit_ms", std::make_shared<DataTypeUInt64>()},
 
-#ifdef USE_COMMUNITY_MAP
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-#else
-        {"ProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
-#endif
     };
 }
 
@@ -88,6 +85,7 @@ void QueryExchangeLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insertData(type.data(), type.size());
     columns[i++]->insert(exchange_id);
     columns[i++]->insert(partition_id);
+    columns[i++]->insert(parallel_index);
     columns[i++]->insert(coordinator_address);
 
     columns[i++]->insert(finish_code);

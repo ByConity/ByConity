@@ -47,7 +47,7 @@
 #include <Parsers/queryToString.h>
 #include <DataTypes/Serializations/ISerialization.h>
 #include <DataTypes/NestedUtils.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 
 namespace CurrentMetrics
@@ -589,31 +589,29 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
     ChecksumsPtr res;
     {
         std::lock_guard lock(checksums_mutex);
-        res = checksums_ptr ? checksums_ptr : checksums_from_cache.lock();
+        res = checksums_ptr;
     }
 
-    if (res)
-        return res;
+    if (!res)
+    {
+        auto cache = storage.getContext()->getChecksumsCache();
+        std::lock_guard lock(checksums_mutex);
+        if (!checksums_ptr)
+        {
+            if (cache && !is_temp)
+            {
+                const String storage_unique_id = storage.getStorageUniqueID();
+                auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
+                checksums_ptr = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
+            }
+            else
+            {
+                checksums_ptr = const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true);
+            }
+        }
+        res = checksums_ptr;
+    }
 
-    auto cache = storage.getContext()->getChecksumsCache();
-    if (cache && !is_temp)
-    {
-        const String storage_unique_id = storage.getStorageUniqueID();
-        auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
-        res = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
-        {
-            std::lock_guard lock(checksums_mutex);
-            checksums_from_cache = res;
-        }
-    }
-    else
-    {
-        res = const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true);
-        {
-            std::lock_guard lock(checksums_mutex);
-            checksums_ptr = res;
-        }
-    }
     return res;
 }
 
@@ -851,12 +849,15 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
     /// Motivation: memory for index is shared between queries - not belong to the query itself.
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
 
- 	// load versions before load checksum because loading checksum needs it to judge reading format.
+ 	/// load versions before load checksum because loading checksum needs it to judge reading format.
     loadVersions();
 
     loadUUID();
     loadColumns(require_columns_checksums);
-    loadChecksums(require_columns_checksums);
+    {
+        std::lock_guard lock(checksums_mutex);
+        checksums_ptr = loadChecksums(require_columns_checksums);
+    }
     loadIndexGranularity();
     calculateColumnsSizesOnDisk();
     loadIndex();     /// Must be called after loadIndexGranularity as it uses the value of `index_granularity`
@@ -1396,10 +1397,11 @@ std::optional<bool> IMergeTreeDataPart::keepSharedDataInDecoupledStorage() const
 ColumnSize IMergeTreeDataPart::getMapColumnSizeNotKV(const IMergeTreeDataPart::ChecksumsPtr & checksums, const NameAndTypePair & column) const
 {
     ColumnSize size;
-    if (!column.type->isMap())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not handle type {} in method getMapColumnSizeNotKV", column.type->getName());
-    if (column.type->isMapKVStore())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not handle map kv type in method getMapColumnSizeNotKV");
+    if (!column.type->isByteMap())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Can not handle type {} in method getMapColumnSizeNotKV",
+            (column.type->isKVMap() ? column.type->getName() : "map kv"));
     for (auto & name_csm : checksums->files)
     {
         if (isMapImplicitFileNameOfSpecialMapName(name_csm.first, column.name))
@@ -1726,7 +1728,7 @@ bool IMergeTreeDataPart::enableDiskCache() const
         return storage.getSettings()->enable_local_disk_cache;
     else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
         return false;
-    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
+    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
         return true;
     else
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown disk cache mode");
@@ -1742,6 +1744,11 @@ String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix)
     return "detached/" + getRelativePathForPrefix(prefix);
 }
 
+String IMergeTreeDataPart::getRelativePathToDiskForDetachedPart(const String & prefix) const
+{
+    return fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
+}
+
 void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 {
     renameTo(getRelativePathForDetachedPart(prefix), true);
@@ -1749,7 +1756,7 @@ void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 
 void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
 {
-    String destination_path = fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
+    String destination_path = getRelativePathToDiskForDetachedPart(prefix);
 
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);
@@ -1833,7 +1840,7 @@ bool IMergeTreeDataPart::hasOnlyOneCompactedMapColumnNotKV() const
     if (columns_ptr->size() != 1)
         return false;
     const auto type = columns_ptr->begin()->type;
-    return type->isMap() && !type->isMapKVStore() && versions->enable_compact_map_data;
+    return type->isByteMap() && versions->enable_compact_map_data;
 }
 
 void IMergeTreeDataPart::makeCloneOnDisk(const DiskPtr & disk, const String & directory_name) const
@@ -1957,7 +1964,7 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
 
     for (const NameAndTypePair & name_type : storage.getInMemoryMetadataPtr()->getColumns().getAllPhysical())
     {
-        if (name_type.type->isMap() && !name_type.type->isMapKVStore())
+        if (name_type.type->isByteMap())
         {
             /// need escape map column name first to match filenames in checksums
             auto [curr, end] = getMapColumnRangeFromOrderedFiles(escapeForFileName(name_type.name), files);
@@ -1984,6 +1991,63 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
     }
 }
 
+IMergeTreeDataPart::ColumnSizeByName IMergeTreeDataPart::getColumnsSkipIndicesSize() const
+{
+    auto process_indice = [&](const IndexDescription & index_desc, ColumnSizeByName & indices_size) {
+        auto checksums = getChecksums();
+        auto index_helper = MergeTreeIndexFactory::instance().get(index_desc);
+        if (!checksums->files.contains(index_helper->getFileName() + ".idx"))
+            return;
+
+        ColumnSize size;
+        auto index_file_name = index_helper->getFileName();
+        static const std::vector<String> idx_extension = {
+            INDEX_FILE_EXTENSION, 
+            GIN_SEGMENT_ID_FILE_EXTENSION, 
+            GIN_SEGMENT_METADATA_FILE_EXTENSION, 
+            GIN_DICTIONARY_FILE_EXTENSION, 
+            GIN_POSTINGS_FILE_EXTENSION
+        };
+        std::for_each(idx_extension.begin(), idx_extension.end(), [&](const String & ext) {
+            auto elem_iter = checksums->files.find(index_file_name + ext);
+            if (elem_iter != checksums->files.end())
+            {
+                if (elem_iter->second.is_compressed)
+                {
+                    size.data_compressed += elem_iter->second.file_size;
+                    size.data_uncompressed += elem_iter->second.uncompressed_size;
+                }
+                else
+                {
+                    size.data_compressed += elem_iter->second.file_size;
+                    size.data_uncompressed += elem_iter->second.file_size;
+                }
+            }
+        });
+        auto mark_iter = checksums->files.find(index_file_name + index_granularity_info.marks_file_extension);
+        if (mark_iter != checksums->files.end())
+        {
+            size.marks += mark_iter->second.file_size;
+        }
+
+        auto index_columns = index_helper->getColumnsRequiredForIndexCalc();
+        auto column_names = columns_ptr->getNames();
+        for (auto & index_column : index_columns)
+        {
+            if (std::find(column_names.begin(), column_names.end(), index_column) != column_names.end())
+                indices_size[index_column].add(size);
+        }
+    };
+
+    ColumnSizeByName skip_indices_size;
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    for (const auto & index_item : metadata_snapshot->getSecondaryIndices())
+    {
+        process_indice(index_item, skip_indices_size);
+    }
+
+    return skip_indices_size;
+}
 
 bool IMergeTreeDataPart::checkAllTTLCalculated(const StorageMetadataPtr & metadata_snapshot) const
 {

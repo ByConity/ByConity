@@ -85,8 +85,5 @@ target_link_libraries (common
         replxx
         cctz
         fmt
+        ch_contrib::magic_enum
 )
-
-if (ENABLE_TESTS)
-    add_subdirectory (tests)
-endif ()

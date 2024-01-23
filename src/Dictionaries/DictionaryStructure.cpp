@@ -71,6 +71,7 @@ AttributeUnderlyingType getAttributeUnderlyingType(const DataTypePtr & type)
         case TypeIndex::Decimal256:     return AttributeUnderlyingType::Decimal256;
 
         case TypeIndex::Date:           return AttributeUnderlyingType::UInt16;
+        case TypeIndex::Date32:         return AttributeUnderlyingType::Int32;
         case TypeIndex::DateTime:       return AttributeUnderlyingType::UInt32;
         case TypeIndex::DateTime64:     return AttributeUnderlyingType::UInt64;
 

@@ -1495,19 +1495,15 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             false);
     }
 
-    auto * merge_tree_storage = dynamic_cast<MergeTreeMetaBase *>(res.get());
-    if (merge_tree_storage)
+    try
     {
-        try
-        {
-            merge_tree_storage->checkColumnsValidity(properties.columns);
-        }
-        catch (...)
-        {
-            /// remove directory
-            merge_tree_storage->drop();
-            throw;
-        }
+        res->checkColumnsValidity(properties.columns);
+    }
+    catch (...)
+    {
+        /// remove directory
+        res->drop();
+        throw;
     }
 
     if (from_path && !res->storesDataOnDisk())
@@ -1803,7 +1799,7 @@ ASTPtr convertMergeTreeToCnchEngine(ASTPtr query_ptr)
         return query_ptr;
 
     String new_engine_name = "Cnch" + engine_name;
-    engine->name = new_engine_name;
+    engine->name = std::move(new_engine_name);
     return query_ptr;
 }
 

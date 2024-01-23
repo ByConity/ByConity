@@ -119,7 +119,7 @@ void CGroupManager::free(const Cpus & cpus)
                         + " system cpu size: " + std::to_string(system_cpus.data.size())
                         + " alloc cpu size: " + std::to_string(cpus.data.size()), ErrorCodes::CPU_ALLOC_INVALIDATE);
     for (size_t i = 0; i < system_cpus.data.size(); ++i)
-        system_cpus.data[i] = system_cpus.data[i]|cpus.data[i];
+        system_cpus.data[i] = system_cpus.data[i] || cpus.data[i];
     system_cpu_set->resetCpuSet();
 }
 

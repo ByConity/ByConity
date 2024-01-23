@@ -352,12 +352,24 @@ template void readStringUntilEOFInto<PaddedPODArray<UInt8>>(PaddedPODArray<UInt8
 /** Parse the escape sequence, which can be simple (one character after backslash) or more complex (multiple characters).
   * It is assumed that the cursor is located on the `\` symbol
   */
-template <typename Vector>
-static void parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
+template <typename Vector, typename ReturnType = void>
+static ReturnType parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
 {
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
+
+    auto error = [](const char * message [[maybe_unused]], int code [[maybe_unused]])
+    {
+        if constexpr (throw_exception)
+            throw Exception(message, code);
+        return ReturnType(false);
+    };
+
     ++buf.position();
+
     if (buf.eof())
-        throw Exception("Cannot parse escape sequence", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
+    {
+        return error("Cannot parse escape sequence", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
+    }
 
     char char_after_backslash = *buf.position();
 
@@ -366,7 +378,14 @@ static void parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
         ++buf.position();
         /// escape sequence of the form \xAA
         char hex_code[2];
-        readPODBinary(hex_code, buf);
+
+        auto bytes_read = buf.read(hex_code, sizeof(hex_code));
+
+        if (bytes_read != sizeof(hex_code))
+        {
+            return error("Cannot parse escape sequence", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
+        }
+
         s.push_back(unhex2(hex_code));
     }
     else if (char_after_backslash == 'N')
@@ -387,6 +406,7 @@ static void parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
             && decoded_char != '"'
             && decoded_char != '`'  /// MySQL style identifiers
             && decoded_char != '/'  /// JavaScript in HTML
+            && decoded_char != '='  /// TSKV format invented somewhere
             && !isControlASCII(decoded_char))
         {
             s.push_back('\\');
@@ -395,8 +415,14 @@ static void parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
         s.push_back(decoded_char);
         ++buf.position();
     }
+
+    return ReturnType(true);
 }
 
+bool parseComplexEscapeSequence(String & s, ReadBuffer & buf)
+{
+    return parseComplexEscapeSequence<String, bool>(s, buf);
+}
 
 template <typename Vector, typename ReturnType>
 static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
@@ -516,8 +542,8 @@ static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
 }
 
 
-template <typename Vector>
-void readEscapedStringInto(Vector & s, ReadBuffer & buf)
+template <typename Vector, bool parse_complex_escape_sequence>
+void readEscapedStringIntoImpl(Vector & s, ReadBuffer & buf)
 {
     while (!buf.eof())
     {
@@ -533,9 +559,31 @@ void readEscapedStringInto(Vector & s, ReadBuffer & buf)
             return;
 
         if (*buf.position() == '\\')
-            parseComplexEscapeSequence(s, buf);
+        {
+            if constexpr (parse_complex_escape_sequence)
+            {
+                parseComplexEscapeSequence(s, buf);
+            }
+            else
+            {
+                s.push_back(*buf.position());
+                ++buf.position();
+                if (!buf.eof())
+                {
+                    s.push_back(*buf.position());
+                    ++buf.position();
+                }
+            }
+        }
     }
 }
+
+template <typename Vector>
+void readEscapedStringInto(Vector & s, ReadBuffer & buf)
+{
+    readEscapedStringIntoImpl<Vector, true>(s, buf);
+}
+
 
 void readEscapedString(String & s, ReadBuffer & buf)
 {
@@ -553,14 +601,18 @@ template void readEscapedStringInto<NullOutput>(NullOutput & s, ReadBuffer & buf
   *  backslash escape sequences are also parsed,
   *  that could be slightly confusing.
   */
-template <char quote, bool enable_sql_style_quoting, typename Vector>
-static void readAnyQuotedStringInto(Vector & s, ReadBuffer & buf)
+template <char quote, bool enable_sql_style_quoting, typename Vector, typename ReturnType = void>
+static ReturnType readAnyQuotedStringInto(Vector & s, ReadBuffer & buf)
 {
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
     if (buf.eof() || *buf.position() != quote)
     {
-        throw ParsingException(ErrorCodes::CANNOT_PARSE_QUOTED_STRING,
-            "Cannot parse quoted string: expected opening quote '{}', got '{}'",
-            std::string{quote}, buf.eof() ? "EOF" : std::string{*buf.position()});
+        if constexpr (throw_exception)
+            throw ParsingException(ErrorCodes::CANNOT_PARSE_QUOTED_STRING,
+                "Cannot parse quoted string: expected opening quote '{}', got '{}'",
+                std::string{quote}, buf.eof() ? "EOF" : std::string{*buf.position()});
+        else
+            return ReturnType(false);
     }
 
     ++buf.position();
@@ -586,15 +638,25 @@ static void readAnyQuotedStringInto(Vector & s, ReadBuffer & buf)
                 continue;
             }
 
-            return;
+            return ReturnType(true);
         }
 
         if (*buf.position() == '\\')
-            parseComplexEscapeSequence(s, buf);
+        {
+            if constexpr (throw_exception)
+                parseComplexEscapeSequence<Vector, ReturnType>(s, buf);
+            else
+            {
+                if (!parseComplexEscapeSequence<Vector, ReturnType>(s, buf))
+                    return ReturnType(false);
+            }
+        }
     }
 
-    throw ParsingException("Cannot parse quoted string: expected closing quote",
-        ErrorCodes::CANNOT_PARSE_QUOTED_STRING);
+    if constexpr (throw_exception)
+        throw ParsingException(ErrorCodes::CANNOT_PARSE_QUOTED_STRING, "Cannot parse quoted string: expected closing quote");
+    else
+        return ReturnType(false);
 }
 
 template <bool enable_sql_style_quoting, typename Vector>
@@ -979,6 +1041,70 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
 
 template void readDateTimeTextFallback<void>(time_t &, ReadBuffer &, const DateLUTImpl &);
 template bool readDateTimeTextFallback<bool>(time_t &, ReadBuffer &, const DateLUTImpl &);
+
+template <typename Vector, typename ReturnType>
+ReturnType readJSONObjectPossiblyInvalid(Vector & s, ReadBuffer & buf)
+{
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
+
+    auto error = [](const char * message [[maybe_unused]], int code [[maybe_unused]])
+    {
+        if constexpr (throw_exception)
+            throw ParsingException(code, std::move(message));
+        return ReturnType(false);
+    };
+
+    if (buf.eof() || *buf.position() != '{')
+        return error("JSON should start from opening curly bracket", ErrorCodes::INCORRECT_DATA);
+
+    s.push_back(*buf.position());
+    ++buf.position();
+
+    Int64 balance = 1;
+    bool quotes = false;
+
+    while (!buf.eof())
+    {
+        char * next_pos = find_first_symbols<'\\', '{', '}', '"'>(buf.position(), buf.buffer().end());
+        appendToStringOrVector(s, buf, next_pos);
+        buf.position() = next_pos;
+
+        if (!buf.hasPendingData())
+            continue;
+
+        s.push_back(*buf.position());
+
+        if (*buf.position() == '\\')
+        {
+            ++buf.position();
+            if (!buf.eof())
+            {
+                s.push_back(*buf.position());
+                ++buf.position();
+            }
+
+            continue;
+        }
+
+        if (*buf.position() == '"')
+            quotes = !quotes;
+        else if (!quotes) // can be only '{' or '}'
+            balance += *buf.position() == '{' ? 1 : -1;
+
+        ++buf.position();
+
+        if (balance == 0)
+            return ReturnType(true);
+
+        if (balance <    0)
+            break;
+    }
+
+    return error("JSON should have equal number of opening and closing brackets", ErrorCodes::INCORRECT_DATA);
+}
+
+template void readJSONObjectPossiblyInvalid<String>(String & s, ReadBuffer & buf);
+
 
 
 void skipJSONField(ReadBuffer & buf, const StringRef & name_of_field)

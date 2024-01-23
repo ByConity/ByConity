@@ -1,0 +1,11 @@
+SELECT toIntervalNanosecond(1);
+SELECT toIntervalMicrosecond(1);
+SELECT toIntervalMillisecond(1);
+SELECT toIntervalSecond(1);
+SELECT toIntervalMinute(1);
+SELECT toIntervalHour(1);
+SELECT toIntervalDay(1);
+SELECT toIntervalWeek(1);
+SELECT toIntervalMonth(1);
+SELECT toIntervalQuarter(1);
+SELECT toIntervalYear(1);

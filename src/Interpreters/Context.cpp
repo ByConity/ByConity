@@ -35,7 +35,8 @@
 #include <Access/ExternalAuthenticators.h>
 #include <Access/GSSAcceptor.h>
 #include <Access/QuotaUsage.h>
-#include <Access/SettingsConstraints.h>
+#include <Access/SettingsProfilesInfo.h>
+#include <Access/SettingsConstraintsAndProfileIDs.h>
 #include <Access/SettingsProfile.h>
 #include <Access/User.h>
 #include <Catalog/Catalog.h>
@@ -91,6 +92,8 @@
 #include <Interpreters/VirtualWarehousePool.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <Interpreters/WorkerStatusManager.h>
+#include <Interpreters/SynonymsExtensions.h>
+#include <Interpreters/Lemmatizers.h>
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
@@ -124,6 +127,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/StorageS3Settings.h>
@@ -176,12 +180,12 @@
 
 #include <ExternalCatalog/CnchExternalCatalogMgr.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
+#include <IO/VETosCommon.h>
+#include <IO/OSSCommon.h>
 #include <Interpreters/TemporaryDataOnDisk.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/StorageS3Settings.h>
-
-#include <IO/VETosCommon.h>
 
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Statistics/AutoStatisticsManager.h>
@@ -314,6 +318,7 @@ struct ContextSharedPart
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
 
     VETosConnectionParams vetos_connection_params;
+    OSSConnectionParams oss_connection_params;
 
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
@@ -323,6 +328,11 @@ struct ContextSharedPart
 
     scope_guard dictionaries_xmls;
     scope_guard dictionaries_cnch_catalog;
+
+    #if USE_NLP
+        mutable std::optional<SynonymsExtensions> synonyms_extensions;
+        mutable std::optional<Lemmatizers> lemmatizers;
+    #endif
 
     String default_profile_name; /// Default profile name used for default values.
     String system_profile_name; /// Profile used by system processes
@@ -374,6 +384,8 @@ struct ContextSharedPart
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
     /// global checksums cache;
     mutable ChecksumsCachePtr checksums_cache;
+    /// global primary index cache
+    mutable PrimaryIndexCachePtr primary_index_cache;
 
     mutable std::shared_ptr<GinIndexStoreFactory> ginindex_store_factory;
 
@@ -393,7 +405,7 @@ struct ContextSharedPart
     mutable std::unique_ptr<CnchServerClientPool> cnch_server_client_pool;
     mutable std::unique_ptr<CnchWorkerClientPools> cnch_worker_client_pools;
 
-    mutable std::optional<CnchBGThreadsMapArray> cnch_bg_threads_array;
+    mutable std::unique_ptr<CnchBGThreadsMapArray> cnch_bg_threads_array;
 
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
@@ -431,6 +443,8 @@ struct ContextSharedPart
     mutable UniqueKeyIndexBlockCachePtr unique_key_index_block_cache; /// Shared block cache of unique key indexes
     mutable UniqueKeyIndexFileCachePtr unique_key_index_file_cache; /// Shared file cache of unique key indexes
     mutable UniqueKeyIndexCachePtr unique_key_index_cache; /// Shared object cache of unique key indexes
+
+    std::map<String, UInt16> server_ports;
 
     bool shutdown_called = false;
 
@@ -513,6 +527,42 @@ struct ContextSharedPart
         if (meta_checker)
             meta_checker->deactivate();
 
+        std::unique_ptr<CnchBGThreadsMapArray> delete_cnch_bg_threads_array;
+        std::unique_ptr<TransactionCoordinatorRcCnch> delete_cnch_txn_coordinator;
+        CnchServerManagerPtr delete_server_manager;
+        CnchTopologyMasterPtr delete_topology_master;
+        PartCacheManagerPtr delete_cache_manager;
+        NvmCachePtr delete_nvm_cache;
+        QueueManagerPtr delete_queue_manager;
+        WorkerStatusManagerPtr delete_worker_status_manager;
+        {
+            auto lock = std::lock_guard(mutex);
+            delete_cnch_bg_threads_array = std::move(cnch_bg_threads_array);
+            delete_cnch_txn_coordinator = std::move(cnch_txn_coordinator);
+            delete_server_manager = std::move(server_manager);
+            delete_topology_master = std::move(topology_master);
+            delete_cache_manager = std::move(cache_manager);
+            delete_nvm_cache = std::move(nvm_cache);
+            delete_queue_manager = queue_manager;
+            delete_worker_status_manager = worker_status_manager;
+        }
+        /// do the heavy work w/o context lock
+        delete_cnch_bg_threads_array.reset();
+        delete_cnch_txn_coordinator.reset();
+        if (delete_server_manager)
+            delete_server_manager->shutDown();
+        if (delete_topology_master)
+            delete_topology_master->shutDown();
+        if (delete_cache_manager)
+            delete_cache_manager->shutDown();
+        if (delete_nvm_cache)
+            delete_nvm_cache->shutDown();
+        if (delete_queue_manager)
+            delete_queue_manager->shutdown();
+        if (delete_worker_status_manager)
+            delete_worker_status_manager->shutdown();
+
+
         std::unique_ptr<SystemLogs> delete_system_logs;
         std::unique_ptr<CnchSystemLogs> delete_cnch_system_logs;
         {
@@ -526,28 +576,9 @@ struct ContextSharedPart
                 cache->reset();
 #endif
 
-            if (server_manager)
-                server_manager.reset();
-
-            if (topology_master)
-                topology_master.reset();
-
-            if (global_binding_cache_manager)
-                global_binding_cache_manager.reset();
-
-            if (cache_manager)
-                cache_manager.reset();
+            global_binding_cache_manager.reset();
 
             access_control_manager.stopBgJobForKVStorage();
-
-            if (nvm_cache)
-                nvm_cache->shutDown();
-
-            if (queue_manager)
-                queue_manager->shutdown();
-
-            if (worker_status_manager)
-                worker_status_manager->shutdown();
 
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
@@ -563,9 +594,6 @@ struct ContextSharedPart
             /// but at least they can be preserved for storage termination.
             dictionaries_xmls.reset();
             dictionaries_cnch_catalog.reset();
-
-            cnch_bg_threads_array.reset();
-            cnch_txn_coordinator.reset();
 
             delete_system_logs = std::move(system_logs);
             delete_cnch_system_logs = std::move(cnch_system_logs);
@@ -699,6 +727,7 @@ Context::~Context() = default;
 
 WorkerStatusManagerPtr Context::getWorkerStatusManager()
 {
+    auto lock = getLock();
     if (!shared->worker_status_manager)
         shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
@@ -711,6 +740,7 @@ void Context::updateAdaptiveSchdulerConfig()
 
 WorkerStatusManagerPtr Context::getWorkerStatusManager() const
 {
+    auto lock = getLock();
     if (!shared->worker_status_manager)
         shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
@@ -759,7 +789,7 @@ ReadSettings Context::getReadSettings() const
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
-    res.enable_io_pfra = settings.enable_io_pfra || settings.s3_use_read_ahead;
+    res.enable_io_pfra = settings.enable_io_pfra;
     res.buffer_size = settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
@@ -1507,10 +1537,13 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     auto lock = getLock();
     user_id = new_user_id;
     access = std::move(new_access);
+
+    auto default_profile_info = access->getDefaultProfileInfo();
+    settings_constraints_and_current_profiles = default_profile_info->getConstraintsAndProfileIDs();
     current_roles.clear();
     use_default_roles = true;
 
-    applySettingsChanges(access->getDefaultSettings()->changes());
+    applySettingsChanges(default_profile_info->settings);
 }
 
 void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
@@ -1713,22 +1746,42 @@ std::optional<QuotaUsage> Context::getQuotaUsage() const
     return getAccess()->getQuotaUsage();
 }
 
-
-void Context::setProfile(const String & profile_name)
+void Context::setCurrentProfile(const String & profile_name)
 {
-    SettingsChanges profile_settings_changes = *getAccessControlManager().getProfileSettings(profile_name);
+    auto lock = getLock();
     try
     {
-        checkSettingsConstraints(profile_settings_changes);
+        UUID profile_id = getAccessControlManager().getID<SettingsProfile>(profile_name);
+        setCurrentProfile(profile_id);
     }
     catch (Exception & e)
     {
         e.addMessage(", while trying to set settings profile {}", profile_name);
         throw;
     }
-    applySettingsChanges(profile_settings_changes);
 }
 
+void Context::setCurrentProfile(const UUID & profile_id)
+{
+    auto lock = getLock();
+    auto profile_info = getAccessControlManager().getSettingsProfileInfo(profile_id);
+    checkSettingsConstraints(profile_info->settings);
+    applySettingsChanges(profile_info->settings);
+    settings_constraints_and_current_profiles = profile_info->getConstraintsAndProfileIDs(settings_constraints_and_current_profiles);
+}
+
+
+std::vector<UUID> Context::getCurrentProfiles() const
+{
+    auto lock = getLock();
+    return settings_constraints_and_current_profiles->current_profiles;
+}
+
+std::vector<UUID> Context::getEnabledProfiles() const
+{
+    auto lock = getLock();
+    return settings_constraints_and_current_profiles->enabled_profiles;
+}
 
 const Scalars & Context::getScalars() const
 {
@@ -1927,7 +1980,7 @@ void Context::setSetting(const StringRef & name, const String & value)
     auto lock = getLock();
     if (name == "profile")
     {
-        setProfile(value);
+        setCurrentProfile(value);
         return;
     }
     settings.set(std::string_view{name}, value);
@@ -1942,7 +1995,7 @@ void Context::setSetting(const StringRef & name, const Field & value)
     auto lock = getLock();
     if (name == "profile")
     {
-        setProfile(value.safeGet<String>());
+        setCurrentProfile(value.safeGet<String>());
         return;
     }
     settings.set(std::string_view{name}, value);
@@ -1951,6 +2004,85 @@ void Context::setSetting(const StringRef & name, const Field & value)
         calculateAccessRights();
 }
 
+void Context::applySettingsChanges(const JSON & changes)
+{
+    auto lock = getLock();
+
+    // set ansi related settings first, as they may be overwritten explicitly later
+    std::optional<String> dialect_type_opt;
+    std::function<void(const SettingsChanges &)> find_dialect_type_if_any = [&](const SettingsChanges & setting_changes)
+    {
+        for (const auto & change: setting_changes)
+        {
+            if (change.name == "profile")
+            {
+                UUID profile_id = getAccessControlManager().getID<SettingsProfile>(change.value.safeGet<String>());
+                auto profile_info = getAccessControlManager().getSettingsProfileInfo(profile_id);
+
+                find_dialect_type_if_any(profile_info->settings);
+            }
+
+            if (change.name == "dialect_type")
+            {
+                auto value_str = change.value.safeGet<String>();
+
+                if (!dialect_type_opt)
+                    dialect_type_opt = value_str;
+                else if (*dialect_type_opt != value_str)
+                    throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Multiple dialect_type value found");
+            }
+        }
+    };
+
+    for (JSON::iterator it = changes.begin(); it != changes.end(); ++it)
+    {
+        auto name = it.getRawName().toView();
+        auto value = it.getValue().getRawString().toView();
+        Field value_field(value);
+        auto value_str = value_field.safeGet<String>();
+        UUID profile_id = getAccessControlManager().getID<SettingsProfile>(value_str);
+        auto profile_info = getAccessControlManager().getSettingsProfileInfo(profile_id);
+        checkSettingsConstraints(profile_info->settings);
+        if (name == "profile")
+        {
+            find_dialect_type_if_any(profile_info->settings);
+        }
+
+        if (name == "dialect_type")
+        {
+            if (!dialect_type_opt)
+                dialect_type_opt = value;
+            else if (*dialect_type_opt != value)
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Multiple dialect_type value found");
+        }
+
+        try
+        {
+            setSetting(StringRef(name), value_field);
+        }
+        catch (Exception & e)
+        {
+            e.addMessage(fmt::format("in attempt to set the value of setting '{}' to {}",
+                                    name, applyVisitor(FieldVisitorToString(), value_field)));
+            throw;
+        }
+    }
+
+    // skip if a previous setting change is in process
+    bool apply_ansi_related_settings = dialect_type_opt && !settings.dialect_type.pending;
+
+    if (apply_ansi_related_settings)
+    {
+        setSetting("dialect_type", *dialect_type_opt);
+        ANSI::onSettingChanged(&settings);
+        settings.dialect_type.pending = true;
+    }
+
+    applySettingsQuirks(settings);
+
+    if (apply_ansi_related_settings)
+        settings.dialect_type.pending = false;
+}
 
 void Context::applySettingChange(const SettingChange & change)
 {
@@ -1978,8 +2110,10 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
         {
             if (change.name == "profile")
             {
-                auto value_str = change.value.safeGet<String>();
-                find_dialect_type_if_any(*getAccessControlManager().getProfileSettings(value_str));
+                UUID profile_id = getAccessControlManager().getID<SettingsProfile>(change.value.safeGet<String>());
+                auto profile_info = getAccessControlManager().getSettingsProfileInfo(profile_id);
+
+                find_dialect_type_if_any(profile_info->settings);
             }
 
             if (change.name == "dialect_type")
@@ -2017,27 +2151,31 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
 
 void Context::checkSettingsConstraints(const SettingChange & change) const
 {
-    getSettingsConstraints()->check(settings, change);
+    getSettingsConstraintsAndCurrentProfiles()->constraints.check(settings, change);
 }
 
 void Context::checkSettingsConstraints(const SettingsChanges & changes) const
 {
-    getSettingsConstraints()->check(settings, changes);
+    getSettingsConstraintsAndCurrentProfiles()->constraints.check(settings, changes);
 }
 
 void Context::checkSettingsConstraints(SettingsChanges & changes) const
 {
-    getSettingsConstraints()->check(settings, changes);
+    getSettingsConstraintsAndCurrentProfiles()->constraints.check(settings, changes);
 }
 
 void Context::clampToSettingsConstraints(SettingsChanges & changes) const
 {
-    getSettingsConstraints()->clamp(settings, changes);
+    getSettingsConstraintsAndCurrentProfiles()->constraints.clamp(settings, changes);
 }
 
-std::shared_ptr<const SettingsConstraints> Context::getSettingsConstraints() const
+std::shared_ptr<const SettingsConstraintsAndProfileIDs> Context::getSettingsConstraintsAndCurrentProfiles() const
 {
-    return getAccess()->getSettingsConstraints();
+    auto lock = getLock();
+    if (settings_constraints_and_current_profiles)
+        return settings_constraints_and_current_profiles;
+    static auto no_constraints_or_profiles = std::make_shared<SettingsConstraintsAndProfileIDs>(getAccessControlManager());
+    return no_constraints_or_profiles;
 }
 
 
@@ -2367,6 +2505,29 @@ void Context::loadDictionaries(const Poco::Util::AbstractConfiguration & config)
         shared->dictionaries_cnch_catalog = getExternalDictionariesLoader().addConfigRepository(
             std::make_unique<ExternalLoaderCnchCatalogRepository>(shared_from_this()));
 }
+
+#if USE_NLP
+
+    SynonymsExtensions & Context::getSynonymsExtensions() const
+    {
+        auto lock = getLock();
+
+        if (!shared->synonyms_extensions)
+            shared->synonyms_extensions.emplace(getConfigRef());
+
+        return *shared->synonyms_extensions;
+    }
+
+    Lemmatizers & Context::getLemmatizers() const
+    {
+        auto lock = getLock();
+
+        if (!shared->lemmatizers)
+            shared->lemmatizers.emplace(getConfigRef());
+
+        return *shared->lemmatizers;
+    }
+#endif
 
 void Context::setProgressCallback(ProgressCallback callback)
 {
@@ -2915,6 +3076,14 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
     return shared->zookeeper;
 }
 
+UInt32 Context::getZooKeeperSessionUptime() const
+{
+    std::lock_guard lock(shared->zookeeper_mutex);
+    if (!shared->zookeeper || shared->zookeeper->expired())
+        return 0;
+    return shared->zookeeper->getSessionUptime();
+}
+
 namespace
 {
 
@@ -3307,6 +3476,20 @@ std::optional<UInt16> Context::getTCPPortSecure() const
     if (config.has("tcp_port_secure"))
         return config.getInt("tcp_port_secure");
     return {};
+}
+
+void Context::registerServerPort(String port_name, UInt16 port)
+{
+    shared->server_ports.emplace(std::move(port_name), port);
+}
+
+UInt16 Context::getServerPort(const String & port_name) const
+{
+    auto it = shared->server_ports.find(port_name);
+    if (it == shared->server_ports.end())
+        throw Exception(ErrorCodes::BAD_GET, "There is no port named {}", port_name);
+    else
+        return it->second;
 }
 
 UInt16 Context::getHaTCPPort() const
@@ -4030,13 +4213,13 @@ void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & confi
     getAccessControlManager().setDefaultProfileName(shared->default_profile_name);
 
     shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
-    setProfile(shared->system_profile_name);
+    setCurrentProfile(shared->system_profile_name);
 
     applySettingsQuirks(settings, &Poco::Logger::get("SettingsQuirks"));
 
     shared->buffer_profile_name = config.getString("buffer_profile", shared->system_profile_name);
     buffer_context = Context::createCopy(shared_from_this());
-    buffer_context->setProfile(shared->buffer_profile_name);
+    buffer_context->setCurrentProfile(shared->buffer_profile_name);
 }
 
 String Context::getDefaultProfileName() const
@@ -4437,6 +4620,16 @@ const VETosConnectionParams & Context::getVETosConnectParams() const
     return shared->vetos_connection_params;
 }
 
+void Context::setOSSConnectParams(const OSSConnectionParams & connect_params)
+{
+    shared->oss_connection_params = connect_params;
+}
+
+const OSSConnectionParams & Context::getOSSConnectParams() const
+{
+    return shared->oss_connection_params;
+}
+
 void Context::setUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
 {
     auto lock = getLock();
@@ -4588,6 +4781,18 @@ void Context::setGinIndexStoreFactory(const GinIndexStoreCacheSettings & setting
 std::shared_ptr<GinIndexStoreFactory> Context::getGinIndexStoreFactory() const
 {
     return shared->ginindex_store_factory;
+}
+
+void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)
+{
+    if (shared->primary_index_cache)
+        throw Exception("Primary index cache has already been created.", ErrorCodes::LOGICAL_ERROR);
+    shared->primary_index_cache = std::make_shared<PrimaryIndexCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<PrimaryIndexCache> Context::getPrimaryIndexCache() const
+{
+    return shared->primary_index_cache;
 }
 
 void Context::updateQueueManagerConfig() const
@@ -5026,7 +5231,8 @@ ResourceManagerClientPtr Context::getResourceManagerClient() const
 
 void Context::initCnchBGThreads()
 {
-    shared->cnch_bg_threads_array.emplace(shared_from_this());
+    auto lock = getLock();
+    shared->cnch_bg_threads_array = std::make_unique<CnchBGThreadsMapArray>(shared_from_this());
 }
 
 CnchBGThreadsMap * Context::getCnchBGThreadsMap(CnchBGThreadType type) const
@@ -5213,8 +5419,7 @@ void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
 
 TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id, bool with_check)
 {
-    auto lock = getLock();
-
+    TransactionCnchPtr cnch_txn;
     if (shared->server_type == ServerType::cnch_server)
     {
         std::optional<TransactionRecord> txn_record = with_check ? getCnchCatalog()->tryGetTransactionRecord((txn_id)) : std::nullopt;
@@ -5226,11 +5431,13 @@ TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id,
             txn_record->read_only = true;
         }
 
-        current_cnch_txn = std::make_shared<CnchServerTransaction>(getGlobalContext(), std::move(*txn_record));
+        cnch_txn = std::make_shared<CnchServerTransaction>(getGlobalContext(), std::move(*txn_record));
     }
     else
-        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(getGlobalContext(), txn_id, primary_txn_id);
+        cnch_txn = std::make_shared<CnchWorkerTransaction>(getGlobalContext(), txn_id, primary_txn_id);
 
+    auto lock = getLock();
+    std::swap(current_cnch_txn, cnch_txn);
     return current_cnch_txn;
 }
 
@@ -5243,11 +5450,15 @@ TransactionCnchPtr Context::getCurrentTransaction() const
 
 TxnTimestamp Context::tryGetCurrentTransactionID() const
 {
+    auto lock = getLock();
+
     return current_cnch_txn ? current_cnch_txn->getTransactionID() : TxnTimestamp{};
 }
 
 TxnTimestamp Context::getCurrentTransactionID() const
 {
+    auto lock = getLock();
+
     if (!current_cnch_txn)
         throw Exception("Transaction is not set (empty)", ErrorCodes::LOGICAL_ERROR);
 
@@ -5260,6 +5471,8 @@ TxnTimestamp Context::getCurrentTransactionID() const
 
 TxnTimestamp Context::getCurrentCnchStartTime() const
 {
+    auto lock = getLock();
+
     if (!current_cnch_txn)
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 

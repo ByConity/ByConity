@@ -1,9 +1,11 @@
 #pragma once
 #include <atomic>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <Core/Types.h>
 #include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromFileBase.h>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
@@ -12,7 +14,7 @@
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
-#include "IO/WriteBufferFromFileBase.h"
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -27,8 +29,6 @@ public:
     BroadcastStatus sendImpl(Chunk chunk) override;
     /// run write task
     void runWriteTask();
-    /// cancel write task
-    void cancel();
     void merge(IBroadcastSender && sender) override;
     String getName() const override
     {
@@ -65,13 +65,13 @@ private:
     /// data_queue is used here to ensure thread-safety(by background write task) when multiple write/finish are called from different threads
     /// TODO @lianxuechao optimize for single-thread case
     std::shared_ptr<BoundedDataQueue<Chunk>> data_queue;
-    size_t timeout;
     std::atomic_bool finished{false};
     bthread::Mutex done_mutex;
     bthread::ConditionVariable done_cv;
     bool done = false;
     bool low_cardinality_allow_in_native_format;
     bool enable_disk_writer_metrics;
+    size_t query_expiration_ms;
 };
 
 using DiskPartitionWriterPtr = std::shared_ptr<DiskPartitionWriter>;

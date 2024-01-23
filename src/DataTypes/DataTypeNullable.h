@@ -62,6 +62,10 @@ public:
     bool onlyNull() const override;
     bool canBeInsideLowCardinality() const override { return nested_data_type->canBeInsideLowCardinality(); }
 
+    /// DataTypeNullable cannot be ByteMap value type, but we need to compatible old invalid tables,
+    /// this will be checked in MergeTreeMetaBase::checkColumnsValidity for newly created tables
+    bool canBeByteMapValueType() const override { return nested_data_type->canBeByteMapValueType(); }
+
     DataTypePtr tryGetSubcolumnType(const String & subcolumn_name) const override;
     ColumnPtr getSubcolumn(const String & subcolumn_name, const IColumn & column) const override;
     SerializationPtr getSubcolumnSerialization(
@@ -78,5 +82,6 @@ private:
 
 DataTypePtr makeNullable(const DataTypePtr & type);
 DataTypePtr removeNullable(const DataTypePtr & type);
+DataTypePtr makeNullableOrLowCardinalityNullable(const DataTypePtr & type);
 
 }

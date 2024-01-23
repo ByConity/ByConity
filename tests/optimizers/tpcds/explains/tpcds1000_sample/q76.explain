@@ -5,21 +5,21 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#'store'_1 ASC NULLS LAST, expr#'ss_store_sk'_1 ASC NULLS LAST, d_year_3 ASC NULLS LAST, d_qoy_3 ASC NULLS LAST, i_category_3 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 72360 rows
+      └─ Gather Exchange Est. 47475 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#'store'_1 ASC NULLS LAST, expr#'ss_store_sk'_1 ASC NULLS LAST, d_year_3 ASC NULLS LAST, d_qoy_3 ASC NULLS LAST, i_category_3 ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 72360 rows
-               └─ Repartition Exchange Est. 72360 rows
+            └─ MergingAggregated Est. 47475 rows
+               └─ Repartition Exchange Est. 47475 rows
                   │     Partition by: {expr#'store'_1, expr#'ss_store_sk'_1, d_year_3, d_qoy_3, i_category_3}
-                  └─ Aggregating Est. 72360 rows
+                  └─ Aggregating Est. 47475 rows
                      │     Group by: {expr#'store'_1, expr#'ss_store_sk'_1, d_year_3, d_qoy_3, i_category_3}
                      │     Aggregates: expr#count():=AggNull(count)(), expr#sum(ext_sales_price):=AggNull(sum)(ss_ext_sales_price_1)
-                     └─ Projection Est. 53468907 rows
+                     └─ Projection Est. 55939787 rows
                         │     Expressions: [expr#'ss_store_sk'_1, expr#'store'_1, ss_ext_sales_price_1], d_qoy_3:=d_qoy_4, d_year_3:=d_year_4, i_category_3:=i_category_4
-                        └─ Inner Join Est. 53468907 rows
+                        └─ Inner Join Est. 55939787 rows
                            │     Condition: ss_sold_date_sk_1 == d_date_sk_3
-                           ├─ Inner Join Est. 53468907 rows
+                           ├─ Inner Join Est. 55939787 rows
                            │  │     Condition: ss_item_sk_1 == i_item_sk_3
                            │  ├─ Repartition Exchange Est. 131129223 rows
                            │  │  │     Partition by: {ss_item_sk_1}

@@ -17,12 +17,14 @@
 
 #include <cctype>
 #include <cstring>
+#include <Columns/IColumn.h>
+#include <Formats/FormatSettings.h>
+#include <IO/ReadBufferFromString.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Common/Exception.h>
+#include <Common/FieldVisitorToString.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
-#include <Core/Field.h>
-#include <DataTypes/IDataType.h>
 
 namespace DB
 {
@@ -40,8 +42,6 @@ const String & getMapSeparator()
 {
     return map_separator;
 }
-
-const String MAP_KV_RESERVED_KEYS[4] = {".keys", ".key", ".values", ".value"};
 
 void checkAndSetMapSeparator(const String & map_separator_)
 {
@@ -141,6 +141,34 @@ std::string_view ExtractMapKey::apply(std::string_view src, std::string_view * o
         return {};
 }
 
+Field tryConvertToMapKeyField(const DataTypePtr & key_type, const String & key_name)
+{
+    try
+    {
+        return convertToMapKeyField(key_type, key_name);
+    }
+    catch (...)
+    {
+        /// return Null field if failed to convert key_name to field, this could be happend if key_name is 
+        /// got by getColumnName from a converted key field. See getMapKeyField() in QueryNormalizer.cpp
+        return Null();
+    }
+}
+
+Field convertToMapKeyField(const DataTypePtr & key_type, const String & key_name)
+{
+    ReadBufferFromString buffer(key_name);
+    auto column = IColumn::mutate(key_type->createColumn());
+    key_type->getDefaultSerialization()->deserializeTextQuoted(*column, buffer, {});
+    return (*column)[0];
+}
+
+String convertToMapKeyString(const DataTypePtr & key_type, const String & key_name)
+{
+    Field key_field = convertToMapKeyField(key_type, key_name);
+    return applyVisitor(DB::FieldVisitorToString(), key_field); // convert to correct implicit key name
+}
+
 String genMapKeyFilePrefix(const String & column)
 {
     return escapeForFileName(getMapKeyPrefix(column));
@@ -154,6 +182,11 @@ String genMapBaseFilePrefix(const String & column)
 String getImplicitColNameForMapKey(const String & map_col, const String & key_name)
 {
     return String(getMapSeparator() + map_col + getMapSeparator() + key_name);
+}
+
+String getImplicitFileNamePrefixForMapKey(const String & map_col, const String & key_name)
+{
+    return escapeForFileName(getImplicitColNameForMapKey(map_col, key_name));
 }
 
 String getBaseNameForMapCol(const String & map_col)
@@ -172,11 +205,18 @@ String parseMapNameFromImplicitFileName(const String & implicit_file_name)
     if (!startsWith(unescape_file_name, getMapSeparator()))
         throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit file name: {}", implicit_file_name);
 
-    /// Due to map column name meets the constraint in MergeTreeData::checkColumnsValidity, so we can find second separator directly.
-    auto location = unescape_file_name.find(getMapSeparator(), getMapSeparator().size());
-    if (location == String::npos)
-        throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit column name: {}", implicit_file_name);
-    return unescape_file_name.substr(getMapSeparator().size(), location - getMapSeparator().size());
+    /// Base file need to use implicit file name instead of unescape_file_name
+    auto location_base = implicit_file_name.find("_base.", getMapSeparator().size());
+    if (location_base == String::npos)
+    {
+        /// Due to map column name meets the constraint in MergeTreeMetaBase::checkColumnsValidity, so we can find second separator directly.
+        auto location = unescape_file_name.find(getMapSeparator(), getMapSeparator().size());
+        if (location == String::npos)
+            throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit column name: {}", implicit_file_name);
+        return unescape_file_name.substr(getMapSeparator().size(), location - getMapSeparator().size());
+    }
+    else
+        return unescapeForFileName(implicit_file_name.substr(getMapSeparator().size(), location_base - getMapSeparator().size()));
 }
 
 String parseKeyNameFromImplicitFileName(const String & implicit_file_name, const String & map_col)
@@ -199,7 +239,7 @@ String parseMapNameFromImplicitColName(const String & implicit_column_name)
     if (!startsWith(implicit_column_name, getMapSeparator()))
         throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit column name: {}", implicit_column_name);
 
-    /// Due to map column name meets the constraint in MergeTreeData::checkColumnsValidity, so we can find second separator directly.
+    /// Due to map column name meets the constraint in MergeTreeMetaBase::checkColumnsValidity, so we can find second separator directly.
     auto location = implicit_column_name.find(getMapSeparator(), getMapSeparator().size());
     if (location == String::npos)
         throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit column name: {}", implicit_column_name);
@@ -212,16 +252,6 @@ String parseKeyNameFromImplicitColName(const String & implicit_col, const String
     if (!startsWith(implicit_col, prefix))
         throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit column {} when parsing key", implicit_col);
     return implicit_col.substr(prefix.size(), implicit_col.size() - prefix.size());
-}
-
-String parseMapNameFromImplicitKVName(const String & implicit_col)
-{
-    if (endsWith(implicit_col, ".key"))
-        return implicit_col.substr(0, implicit_col.size() - 4);
-    else if (endsWith(implicit_col, ".value"))
-        return implicit_col.substr(0, implicit_col.size() - 6);
-    else
-        throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implciti kv name {} when parsing map name", implicit_col);
 }
 
 String parseImplicitColumnFromImplicitFileName(const String & implicit_file_name, const String & map_col)
@@ -254,12 +284,12 @@ std::pair<bool, String> mayBeMapKVReservedKeys(const String & name)
 
 bool isMapBaseFile(const String & file_name)
 {
-    return startsWith(file_name, getMapSeparator()) && file_name.find("_base.") != std::string::npos;
+    return startsWith(file_name, escapeForFileName(getMapSeparator())) && file_name.find("_base.") != std::string::npos;
 }
 
 bool isMapImplicitKey(const String & map_col)
 {
-    return startsWith(map_col, getMapSeparator()) || endsWith(map_col, ".key") || endsWith(map_col, ".value");
+    return startsWith(map_col, getMapSeparator());
 }
 
 bool isMapImplicitKeyOfSpecialMapName(const String & implicit_col, const String & map_col)
@@ -267,19 +297,27 @@ bool isMapImplicitKeyOfSpecialMapName(const String & implicit_col, const String 
     return startsWith(implicit_col, getMapKeyPrefix(map_col));
 }
 
-bool isMapImplicitKeyNotKV(const String & map_col)
+bool tryConvertToValidKVStreamName(String & stream_name, std::function<bool(String & stream_name)> check_validity)
 {
-    return startsWith(map_col, getMapSeparator());
-}
-
-bool isMapKV(const String & map_col)
-{
-    return endsWith(map_col, ".key") || endsWith(map_col, ".value");
-}
-
-bool isMapKVOfSpecialMapName(const String & implicit_col, const String & map_col)
-{
-    return implicit_col == map_col + ".key" || implicit_col == map_col + ".value";
+    if (check_validity(stream_name))
+        return true;
+    /// handle key
+    size_t key_pos = stream_name.find("%2Ekey");
+    if (key_pos != String::npos)
+    {
+        stream_name.insert(key_pos + 6, 1, 's');
+        if (check_validity(stream_name))
+            return true; 
+    }
+    /// handle value
+    size_t value_pos = stream_name.find("%2Evalue");
+    if (value_pos != String::npos)
+    {
+        stream_name.insert(value_pos + 8, 1, 's');
+        if (check_validity(stream_name))
+            return true; 
+    }
+    return false;
 }
 
 bool isMapImplicitDataFileNameNotBaseOfSpecialMapName(const String file_name, const String map_col)
@@ -301,6 +339,20 @@ bool isMapImplicitFileNameOfSpecialMapName(const String file_name, const String 
         return startsWith(file_name, genMapBaseFilePrefix(map_col));
     else
         return startsWith(file_name, genMapKeyFilePrefix(map_col));
+}
+
+bool isMapImplicitDataFileNameOfSpecialMapName(const String & file_name, const String map_col)
+{
+    if (isMapBaseFile(file_name))
+    {
+        auto extension_loc = file_name.find('.'); /// only extension contain dot, other dots in column name are escaped.
+        if (extension_loc == String::npos)
+            throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_FILE_NAME, "Invalid implicit column file name {}", file_name);
+
+        return file_name.substr(extension_loc) == DATA_FILE_EXTENSION;
+    }
+
+    return isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, map_col);
 }
 
 }

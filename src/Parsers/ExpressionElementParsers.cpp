@@ -34,6 +34,7 @@
 #include <IO/ReadHelpers.h>
 #include <Parsers/DumpASTNode.h>
 #include <Common/typeid_cast.h>
+#include <Common/BinStringDecodeHelper.h>
 
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTClusterByElement.h>
@@ -1217,7 +1218,7 @@ bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
 
     if (!ParserKeyword("GROUP_CONCAT").ignore(pos, expected) && !ParserKeyword("groupConcat").ignore(pos, expected))
         return false;
-    
+
     if (pos->type != TokenType::OpeningRoundBracket)
         return false;
     ++pos;
@@ -1234,7 +1235,7 @@ bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
 
         if (!columns_order_by.parse(pos, order_by_ast, expected))
             return false;
-        
+
         // TODO: order the data by the column specified BEFORE aggregating
     }
 
@@ -1636,7 +1637,7 @@ bool ParserDateAddExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         ASTFunction & convert = dynamic_cast<ASTFunction &>(*convert_node);
         convert.arguments = std::move(convert_expr_list_args);
         convert.children.push_back(convert.arguments);
-        
+
         offset_node = std::move(convert_node);
     }
 
@@ -1954,36 +1955,87 @@ bool ParserUnsignedInteger::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     return true;
 }
 
-
-bool ParserStringLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+static bool makeStringLiteral(IParser::Pos & pos, ASTPtr & node, String str)
 {
-    if (pos->type != TokenType::StringLiteral)
-        return false;
-
-    String s;
-    ReadBufferFromMemory in(pos->begin, pos->size());
-
-    try
-    {
-        readQuotedStringWithSQLStyle(s, in);
-    }
-    catch (const Exception &)
-    {
-        expected.add(pos, "string literal");
-        return false;
-    }
-
-    if (in.count() != pos->size())
-    {
-        expected.add(pos, "string literal");
-        return false;
-    }
-
-    auto literal = std::make_shared<ASTLiteral>(s);
+    auto literal = std::make_shared<ASTLiteral>(str);
     literal->begin = pos;
     literal->end = ++pos;
     node = literal;
     return true;
+}
+
+static bool makeHexOrBinStringLiteral(IParser::Pos & pos, ASTPtr & node, bool hex, size_t word_size)
+{
+    const char * str_begin = pos->begin + 2;
+    const char * str_end = pos->end - 1;
+    if (str_begin == str_end)
+        return makeStringLiteral(pos, node, "");
+
+    PODArray<UInt8> res;
+    res.resize((pos->size() + word_size) / word_size + 1);
+    char * res_begin = reinterpret_cast<char *>(res.data());
+    char * res_pos = res_begin;
+
+    if (hex)
+    {
+        hexStringDecode(str_begin, str_end, res_pos);
+    }
+    else
+    {
+        binStringDecode(str_begin, str_end, res_pos);
+    }
+
+    return makeStringLiteral(pos, node, String(reinterpret_cast<char *>(res.data()), (res_pos - res_begin - 1)));
+}
+
+bool ParserStringLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    if (pos->type != TokenType::StringLiteral && pos->type != TokenType::HereDoc)
+        return false;
+
+    String s;
+
+    if (pos->type == TokenType::StringLiteral)
+    {
+        if (*pos->begin == 'x' || *pos->begin == 'X')
+        {
+            constexpr size_t word_size = 2;
+            return makeHexOrBinStringLiteral(pos, node, true, word_size);
+        }
+
+        if (*pos->begin == 'b' || *pos->begin == 'B')
+        {
+            constexpr size_t word_size = 8;
+            return makeHexOrBinStringLiteral(pos, node, false, word_size);
+        }
+
+        ReadBufferFromMemory in(pos->begin, pos->size());
+
+        try
+        {
+            readQuotedStringWithSQLStyle(s, in);
+        }
+        catch (const Exception &)
+        {
+            expected.add(pos, "string literal");
+            return false;
+        }
+
+        if (in.count() != pos->size())
+        {
+            expected.add(pos, "string literal");
+            return false;
+        }
+    }
+    else if (pos->type == TokenType::HereDoc)
+    {
+        std::string_view here_doc(pos->begin, pos->size());
+        size_t heredoc_size = here_doc.find('$', 1) + 1;
+        assert(heredoc_size != std::string_view::npos);
+        s = String(pos->begin + heredoc_size, pos->size() - heredoc_size * 2);
+    }
+
+    return makeStringLiteral(pos, node, s);
 }
 
 template <typename Collection>
@@ -2045,7 +2097,6 @@ bool ParserCollectionOfLiterals<Collection>::parseImpl(Pos & pos, ASTPtr & node,
 
 template bool ParserCollectionOfLiterals<Array>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
 template bool ParserCollectionOfLiterals<Tuple>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-template bool ParserCollectionOfLiterals<Map>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
 
 bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {

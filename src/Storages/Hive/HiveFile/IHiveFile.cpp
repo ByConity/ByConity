@@ -9,6 +9,7 @@
 #include "Storages/DiskCache/FileDiskCacheSegment.h"
 #include "Storages/DiskCache/IDiskCache.h"
 #include "Storages/DataLakes/HiveFile/HiveHudiFile.h"
+#include "Storages/DataLakes/HiveFile/HiveInputSplitFile.h"
 #include "Storages/Hive/DirectoryLister.h"
 #include "Storages/Hive/HiveFile/HiveORCFile.h"
 #include "Storages/Hive/HiveFile/HiveParquetFile.h"
@@ -31,6 +32,7 @@ IHiveFile::FileFormat IHiveFile::fromFormatName(const String & format_name)
         {"Parquet", FileFormat::PARQUET},
         {"ORC", FileFormat::ORC},
         {"HUDI", FileFormat::HUDI},
+        {"InputSplit", FileFormat::InputSplit},
     };
 
     if (auto it = format_map.find(format_name); it != format_map.end())
@@ -41,7 +43,7 @@ IHiveFile::FileFormat IHiveFile::fromFormatName(const String & format_name)
 
 String IHiveFile::toString(IHiveFile::FileFormat format)
 {
-    constexpr static std::array format_names = {"Parquet", "ORC", "HUDI"};
+    constexpr static std::array format_names = {"Parquet", "ORC", "HUDI", "InputSplit"};
     return format_names[static_cast<int>(format)];
 }
 
@@ -53,6 +55,7 @@ HiveFilePtr IHiveFile::create(
     const HivePartitionPtr & partition)
 {
     HiveFilePtr file;
+    /// TODO: change to factory
     if (format == IHiveFile::FileFormat::PARQUET)
     {
         file = std::make_shared<HiveParquetFile>();
@@ -65,6 +68,10 @@ HiveFilePtr IHiveFile::create(
     else if (format == IHiveFile::FileFormat::HUDI)
     {
         file = std::make_shared<HiveHudiFile>();
+    }
+    else if (format == IHiveFile::FileFormat::InputSplit)
+    {
+        file = std::make_shared<HiveInputSplitFile>();
     }
 #endif
     else
@@ -118,7 +125,7 @@ std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings &
             tryLogCurrentException(log, "Could not read from local cache");
         }
 
-        if (settings.disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        if (settings.disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
         {
             throw Exception(ErrorCodes::DISK_CACHE_NOT_USED, "Hive file {}/{} has no disk cache", disk->getPath(), file_path);
         }
@@ -167,22 +174,6 @@ void IHiveFile::load(FileFormat format_, const String & file_path_, size_t file_
 
 namespace RPCHelpers
 {
-void serialize(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
-{
-    /// TODO: hack here
-    if (!hive_files.empty() && hive_files.front()->partition)
-    {
-        proto.set_sd_url(hive_files.front()->partition->location);
-    }
-
-    for (const auto & hive_file : hive_files)
-    {
-        auto * proto_file = proto.add_files();
-        hive_file->serialize(*proto_file);
-    }
-
-    LOG_TRACE(&Poco::Logger::get(__func__), "Proto files {}", proto.DebugString());
-}
 
 HiveFiles deserialize(
     const Protos::ProtoHiveFiles & proto,
@@ -196,7 +187,8 @@ HiveFiles deserialize(
 
     for (const auto & file_proto : proto.files())
     {
-        if (!disk)
+        /// TODO: {caoliu} hack here, this can be bad
+        if (!disk && !proto.sd_url().empty())
             disk = HiveUtil::getDiskFromURI(proto.sd_url(), context, settings);
 
         HivePartitionPtr partition;

@@ -60,6 +60,7 @@
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
+#include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/OffsetStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
@@ -92,7 +93,6 @@
 
 namespace DB
 {
-
 void serializeColumn(const ColumnPtr & column, const DataTypePtr & data_type, WriteBuffer & buf)
 {
     /** If there are columns-constants - then we materialize them.

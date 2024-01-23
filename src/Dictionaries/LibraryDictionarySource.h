@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Common/SharedLibrary.h>
-#include <Bridge/LibraryBridgeHelper.h>
+#include <BridgeHelper/ExternalDictionaryLibraryBridgeHelper.h>
 #include <common/LocalDateTime.h>
 #include <Core/UUID.h>
 #include "DictionaryStructure.h"
@@ -29,7 +28,7 @@ namespace ErrorCodes
 }
 
 class CStringsHolder;
-using LibraryBridgeHelperPtr = std::shared_ptr<LibraryBridgeHelper>;
+using ExternalDictionaryLibraryBridgeHelperPtr = std::shared_ptr<ExternalDictionaryLibraryBridgeHelper>;
 
 class LibraryDictionarySource final : public IDictionarySource
 {
@@ -86,7 +85,7 @@ private:
     Block sample_block;
     ContextPtr context;
 
-    LibraryBridgeHelperPtr bridge_helper;
+    ExternalDictionaryLibraryBridgeHelperPtr bridge_helper;
     ExternalResultDescription description;
 };
 

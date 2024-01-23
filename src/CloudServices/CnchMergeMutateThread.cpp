@@ -479,7 +479,7 @@ void CnchMergeMutateThread::runImpl()
         try
         {
             /// Ensure not submit too many merge tasks even if addition_bg_task and batch_select are active.
-            auto max_bg_task_num = storage_settings->max_addition_bg_task_num;
+            auto max_bg_task_num = static_cast<int>(storage_settings->max_addition_bg_task_num.value);
             if (running_merge_tasks < max_bg_task_num)
             {
                 merge_success |= tryMergeParts(istorage, storage);
@@ -571,10 +571,13 @@ bool CnchMergeMutateThread::tryMergeParts(StoragePtr & istorage, StorageCnchMerg
         result = trySelectPartsToMerge(istorage, storage, metrics);
     }
 
-    /// At most $max_partition_for_multi_select tasks are expected to be submitted in one round
     auto storage_settings = storage.getSettings();
-    size_t max_tasks_in_total = storage_settings->max_addition_bg_task_num;
-    size_t max_tasks_in_round = storage_settings->max_partition_for_multi_select;
+    /// When submitting tasks, we limit the max concurrency and also the tasks submitted in each round
+    /// as the merger_mutator may generate hundreds tasks in one time.
+    size_t num_workers = vw_handle->getNumWorkers();
+    size_t tasks_per_worker = storage_settings->max_replicated_merges_in_queue.value;
+    size_t max_tasks_in_total = std::max(num_workers * tasks_per_worker, storage_settings->max_addition_bg_task_num.value);
+    size_t max_tasks_in_round = std::max(num_workers, storage_settings->max_partition_for_multi_select.value);
 
     for (size_t i = 0; i < max_tasks_in_round //
          && static_cast<size_t>(running_merge_tasks.load(std::memory_order_relaxed)) < max_tasks_in_total //
@@ -669,7 +672,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         return false;
     }
 
-    if (auto max_merge_task = storage_settings->max_addition_bg_task_num.value; running_merge_tasks >= max_merge_task)
+    if (int max_merge_task = storage_settings->max_addition_bg_task_num.value; running_merge_tasks >= max_merge_task)
     {
         LOG_DEBUG(log, "Too many concurrent merge tasks(curr: {}, max: {}. will retry later.", running_merge_tasks, max_merge_task);
         return false;
@@ -680,6 +683,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     std::map<TxnTimestamp, CnchMergeTreeMutationEntry> mutation_entries;
     std::vector<std::pair<TxnTimestamp, bool>> mutation_timestamps;
     catalog->fillMutationsByStorage(storage_id, mutation_entries);
+    mutation_timestamps.reserve(mutation_entries.size());
     for (const auto & [_, mutation_entry] : mutation_entries)
         mutation_timestamps.emplace_back(mutation_entry.commit_time, mutation_entry.commands.changeSchema());
 
@@ -731,6 +735,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         max_bytes,
         false, /// aggressive
         enable_batch_select,
+        false, /// final
         false, /// merge_with_ttl_allowed
         log); /// log
 
@@ -945,7 +950,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
 }
 
 String CnchMergeMutateThread::triggerPartMerge(
-    StoragePtr & istorage, const String & partition_id, bool aggressive, bool try_select, bool try_execute)
+    StoragePtr & istorage, const String & partition_id, bool final, bool try_select, bool try_execute)
 {
     auto local_context = getContext();
 
@@ -1011,8 +1016,9 @@ String CnchMergeMutateThread::triggerPartMerge(
         /// Step 4: create merge predicate
         getMergePred(merging_mutating_parts_snapshot, mutation_timestamps),
         storage_settings->max_bytes_to_merge_at_max_space_in_pool,
-        aggressive, /// aggressive
+        true, /// aggressive
         false, /// enable_batch_select
+        final, /// final
         false, /// merge_with_ttl_allowed
         log);
 

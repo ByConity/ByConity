@@ -178,15 +178,15 @@ void serializeMapToProtoImpl(const Map & obj, ProtoType & proto)
 template <typename Key, typename Value, typename ProtoType>
 void serializeMapToProto(const std::unordered_map<Key, Value> & obj, ProtoType & proto)
 {
-    using Map = std::unordered_map<Key, Value>;
-    serializeMapToProtoImpl<Map, Key, Value, ProtoType>(obj, proto);
+    using UnorderedMap = std::unordered_map<Key, Value>;
+    serializeMapToProtoImpl<UnorderedMap, Key, Value, ProtoType>(obj, proto);
 }
 
 template <typename Key, typename Value, typename ProtoType>
 void serializeOrderedMapToProto(const std::map<Key, Value> & obj, ProtoType & proto)
 {
-    using Map = std::map<Key, Value>;
-    serializeMapToProtoImpl<Map, Key, Value, ProtoType>(obj, proto);
+    using OrderedMap = std::map<Key, Value>;
+    serializeMapToProtoImpl<OrderedMap, Key, Value, ProtoType>(obj, proto);
 }
 
 // assume proto type and obj is matched, won't check
@@ -222,15 +222,15 @@ auto deserializeMapFromProtoImpl(const ProtoType & proto) -> Map
 template <typename Key, typename Value, typename ProtoType>
 auto deserializeMapFromProto(const ProtoType & proto) -> std::unordered_map<Key, Value>
 {
-    using Map = std::unordered_map<Key, Value>;
-    return deserializeMapFromProtoImpl<Map, Key, Value>(proto);
+    using UnorderedMap = std::unordered_map<Key, Value>;
+    return deserializeMapFromProtoImpl<UnorderedMap, Key, Value>(proto);
 }
 
 template <typename Key, typename Value, typename ProtoType>
 auto deserializeOrderedMapFromProto(const ProtoType & proto) -> std::map<Key, Value>
 {
-    using Map = std::map<Key, Value>;
-    return deserializeMapFromProtoImpl<Map, Key, Value>(proto);
+    using OrderedMap = std::map<Key, Value>;
+    return deserializeMapFromProtoImpl<OrderedMap, Key, Value>(proto);
 }
 
 // this made for struct Array, struct Tuple and struct Map

@@ -52,9 +52,14 @@ PropertySets DeterminerVisitor::visitStep(const IQueryPlanStep &, DeterminerCont
     return {{context.getRequired()}};
 }
 
-PropertySets DeterminerVisitor::visitBufferStep(const BufferStep & node, DeterminerContext & context)
+PropertySets DeterminerVisitor::visitMultiJoinStep(const MultiJoinStep & step, DeterminerContext & ctx)
 {
-    return visitStep(node, context);
+    return visitStep(step, ctx);
+}
+
+PropertySets DeterminerVisitor::visitBufferStep(const BufferStep & step, DeterminerContext & ctx)
+{
+    return visitStep(step, ctx);
 }
 
 PropertySets DeterminerVisitor::visitPartitionTopNStep(const PartitionTopNStep &, DeterminerContext & context)

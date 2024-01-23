@@ -2,6 +2,7 @@
 
 #include <Columns/ColumnVector.h>
 #include <Common/assert_cast.h>
+#include <Common/ErrorCodes.h>
 #include <common/DateLUT.h>
 #include <Formats/FormatSettings.h>
 #include <Formats/ProtobufReader.h>
@@ -13,6 +14,10 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+}
 
 namespace
 {
@@ -26,6 +31,9 @@ inline void readText(time_t & x, ReadBuffer & istr, const FormatSettings & setti
             return;
         case FormatSettings::DateTimeInputFormat::BestEffort:
             parseDateTimeBestEffort(x, istr, time_zone, utc_time_zone);
+            return;
+        case FormatSettings::DateTimeInputFormat::BestEffortUS:
+            parseDateTimeBestEffortUS(x, istr, time_zone, utc_time_zone);
             return;
     }
 }

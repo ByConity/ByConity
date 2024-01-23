@@ -1161,6 +1161,8 @@ String alterTypeToString(const AlterCommand::Type type)
         return "RENAME COLUMN";
     case AlterCommand::Type::REMOVE_TTL:
         return "REMOVE TTL";
+    case AlterCommand::Type::CLEAR_MAP_KEY:
+        return "CLEAR MAP KEY";
     default:
         throw Exception("Uninitialized ALTER command", ErrorCodes::LOGICAL_ERROR);
     }
@@ -1408,7 +1410,8 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             // if (command.data_type && command.data_type->isSegmentBitmapIndex() && !MergeTreeSegmentBitmapIndex::isValidSegmentBitmapIndexColumnType(column.type))
             //     throw Exception("Unsupported type of segment bitmap index: " + column.type->getName() + ". Need: [Array | Nullable] String/Int/UInt/Float", ErrorCodes::BAD_TYPE_OF_FIELD);
 
-            if (column.type->isMap() && command.data_type && command.data_type->isMapKVStore() != column.type->isMapKVStore())
+            if (command.data_type && command.data_type->isMap() && column.type->isMap() 
+                && command.data_type->isKVMap() != column.type->isKVMap())
                 throw Exception("Not support modifying map column between KV Map and Byte Map", ErrorCodes::TYPE_MISMATCH);
 
             modified_columns.emplace(column_name);
@@ -1537,15 +1540,12 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             else
             {
                 const auto & column = all_columns.get(command.column_name);
-                if (!column.type->isMap())
+                if (!column.type->isByteMap())
                 {
-                    throw Exception("Not support clear keys on column " + command.column_name + " with type " + column.type->getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
-                }
-                else if (column.type->isMapKVStore())
-                {
-                    throw Exception("Not support clear keys on column " + command.column_name + " with type " + column.type->getName() + " KV store",
-                                    ErrorCodes::ILLEGAL_COLUMN);
+                    throw Exception(
+                        "Not support clear keys on column " + command.column_name + " with type " + column.type->getName()
+                            + (column.type->isKVMap() ? " KV store" : ""),
+                        ErrorCodes::ILLEGAL_COLUMN);
                 }
             }
         }

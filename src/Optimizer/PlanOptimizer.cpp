@@ -326,7 +326,7 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context, const 
 {
     context->setRuleId(GraphvizPrinter::PRINT_PLAN_OPTIMIZE_INDEX);
 
-    Stopwatch total_watch;
+    Stopwatch total_watch{CLOCK_THREAD_CPUTIME_ID};
     total_watch.start();
 
     for (const auto & rewriter : rewriters)
