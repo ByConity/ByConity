@@ -1,0 +1,230 @@
+-- currently, only setting NULLS FIRST can match sort propery, but it does not make sense for non-nullable columns
+-- { echoOn }
+EXPLAIN PIPELINE SELECT i1, count() as cnt
+FROM t40076_topn_filter
+GROUP BY i1
+ORDER BY i1 ASC NULLS FIRST
+LIMIT 10;
+
+Segment[ 2 ] :
+(Aggregating)
+AggregatingTransform
+  (TopNFiltering)
+  TopNFilteringByLimitingTransform
+    (TableScan) # 
+    NullSource 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(Sorting)
+MergeSortingTransform
+  LimitsCheckingTransform
+    PartialSortingTransform
+      (MergingAggregated)
+      MergingAggregatedTransform
+        (RemoteExchangeSource)
+        Source segment_id : [ 2 ]
+        DeserializeBufTransform
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+    MergeSortingTransform
+      LimitsCheckingTransform
+        PartialSortingTransform
+          (RemoteExchangeSource)
+          Source segment_id : [ 1 ]
+          DeserializeBufTransform
+            ExchangeSource 0 → 1
+
+------------------------------------------
+EXPLAIN PIPELINE SELECT i2, count() as cnt
+FROM t40076_topn_filter
+GROUP BY i2
+ORDER BY i2 ASC NULLS FIRST
+LIMIT 10;
+
+Segment[ 2 ] :
+(Aggregating)
+AggregatingTransform
+  (TopNFiltering)
+  TopNFilteringByLimitingTransform
+    PartialSortingTransform
+      (TableScan) # 
+      NullSource 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(Sorting)
+MergeSortingTransform
+  LimitsCheckingTransform
+    PartialSortingTransform
+      (MergingAggregated)
+      MergingAggregatedTransform
+        (RemoteExchangeSource)
+        Source segment_id : [ 2 ]
+        DeserializeBufTransform
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+    MergeSortingTransform
+      LimitsCheckingTransform
+        PartialSortingTransform
+          (RemoteExchangeSource)
+          Source segment_id : [ 1 ]
+          DeserializeBufTransform
+            ExchangeSource 0 → 1
+
+------------------------------------------
+-- prefix can also be matched
+EXPLAIN PIPELINE SELECT i1, count() as cnt
+FROM t40076_topn_filter_2
+GROUP BY i1
+ORDER BY i1 ASC NULLS FIRST
+LIMIT 10;
+
+Segment[ 2 ] :
+(Aggregating)
+AggregatingTransform
+  (TopNFiltering)
+  TopNFilteringByLimitingTransform
+    (TableScan) # 
+    NullSource 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(Sorting)
+MergeSortingTransform
+  LimitsCheckingTransform
+    PartialSortingTransform
+      (MergingAggregated)
+      MergingAggregatedTransform
+        (RemoteExchangeSource)
+        Source segment_id : [ 2 ]
+        DeserializeBufTransform
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+    MergeSortingTransform
+      LimitsCheckingTransform
+        PartialSortingTransform
+          (RemoteExchangeSource)
+          Source segment_id : [ 1 ]
+          DeserializeBufTransform
+            ExchangeSource 0 → 1
+
+------------------------------------------
+EXPLAIN PIPELINE SELECT i1, i2, count() as cnt
+FROM t40076_topn_filter_2
+GROUP BY i1, i2
+ORDER BY i1 ASC NULLS FIRST, i2 ASC NULLS FIRST
+LIMIT 10;
+
+Segment[ 2 ] :
+(Aggregating)
+AggregatingTransform
+  (TopNFiltering)
+  TopNFilteringByLimitingTransform
+    (TableScan) # 
+    NullSource 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(Sorting)
+MergeSortingTransform
+  LimitsCheckingTransform
+    PartialSortingTransform
+      (MergingAggregated)
+      MergingAggregatedTransform
+        (RemoteExchangeSource)
+        Source segment_id : [ 2 ]
+        DeserializeBufTransform
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+    MergeSortingTransform
+      LimitsCheckingTransform
+        PartialSortingTransform
+          (RemoteExchangeSource)
+          Source segment_id : [ 1 ]
+          DeserializeBufTransform
+            ExchangeSource 0 → 1
+
+------------------------------------------
+EXPLAIN PIPELINE SELECT i1, i2, count() as cnt
+FROM t40076_topn_filter_2
+GROUP BY i1, i2
+ORDER BY i2 ASC NULLS FIRST, i1 ASC NULLS FIRST
+LIMIT 10;
+
+Segment[ 2 ] :
+(Aggregating)
+AggregatingTransform
+  (TopNFiltering)
+  TopNFilteringByLimitingTransform
+    PartialSortingTransform
+      (TableScan) # 
+      NullSource 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(Sorting)
+MergeSortingTransform
+  LimitsCheckingTransform
+    PartialSortingTransform
+      (MergingAggregated)
+      MergingAggregatedTransform
+        (RemoteExchangeSource)
+        Source segment_id : [ 2 ]
+        DeserializeBufTransform
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+    MergeSortingTransform
+      LimitsCheckingTransform
+        PartialSortingTransform
+          (RemoteExchangeSource)
+          Source segment_id : [ 1 ]
+          DeserializeBufTransform
+            ExchangeSource 0 → 1
+
+------------------------------------------

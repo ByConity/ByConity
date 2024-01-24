@@ -1,0 +1,295 @@
+-- { echo }
+-- test order by single column
+EXPLAIN PIPELINE SELECT a, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a
+ORDER BY a ASC
+LIMIT 10;
+
+Segment[ 2 ] :
+(Aggregating)
+Resize 2 → 1
+  AggregatingTransform × 2
+    StrictResize 2 → 2
+      (TopNFiltering)
+      TopNFilteringByHeapTransform × 2
+        (TableScan) # 
+        Remote × 2 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(Sorting)
+MergeSortingTransform
+  LimitsCheckingTransform
+    PartialSortingTransform
+      (MergingAggregated)
+      MergingAggregatedTransform
+        (RemoteExchangeSource)
+        Source segment_id : [ 2 ]
+        DeserializeBufTransform
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+    MergeSortingTransform
+      LimitsCheckingTransform
+        PartialSortingTransform
+          (RemoteExchangeSource)
+          Source segment_id : [ 1 ]
+          DeserializeBufTransform
+            ExchangeSource 0 → 1
+
+------------------------------------------
+SELECT a, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a
+ORDER BY a ASC
+LIMIT 10;
+0	1000
+1	1000
+2	1000
+3	1000
+4	1000
+5	1000
+6	1000
+7	1000
+8	1000
+9	1000
+SELECT a, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a
+ORDER BY a DESC
+LIMIT 10;
+99	1000
+98	1000
+97	1000
+96	1000
+95	1000
+94	1000
+93	1000
+92	1000
+91	1000
+90	1000
+-- test nulls direction
+EXPLAIN PIPELINE SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b DESC NULLS FIRST
+LIMIT 10;
+
+Segment[ 2 ] :
+(Aggregating)
+Resize 2 → 1
+  AggregatingTransform × 2
+    StrictResize 2 → 2
+      (TopNFiltering)
+      TopNFilteringByHeapTransform × 2
+        (TableScan) # 
+        Remote × 2 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(Sorting)
+MergeSortingTransform
+  LimitsCheckingTransform
+    PartialSortingTransform
+      (MergingAggregated)
+      MergingAggregatedTransform
+        (RemoteExchangeSource)
+        Source segment_id : [ 2 ]
+        DeserializeBufTransform
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+    MergeSortingTransform
+      LimitsCheckingTransform
+        PartialSortingTransform
+          (RemoteExchangeSource)
+          Source segment_id : [ 1 ]
+          DeserializeBufTransform
+            ExchangeSource 0 → 1
+
+------------------------------------------
+SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b DESC NULLS FIRST
+LIMIT 10;
+\N	100
+999	100
+998	100
+997	100
+996	100
+995	100
+994	100
+993	100
+992	100
+991	100
+SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b DESC NULLS LAST
+LIMIT 10;
+999	100
+998	100
+997	100
+996	100
+995	100
+994	100
+993	100
+992	100
+991	100
+990	100
+SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b ASC NULLS FIRST
+LIMIT 10;
+\N	100
+1	100
+2	100
+3	100
+4	100
+5	100
+6	100
+7	100
+8	100
+9	100
+SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b ASC NULLS LAST
+LIMIT 10;
+1	100
+2	100
+3	100
+4	100
+5	100
+6	100
+7	100
+8	100
+9	100
+10	100
+-- test order by multiple columns
+EXPLAIN PIPELINE SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a ASC, b ASC NULLS FIRST
+LIMIT 10;
+
+Segment[ 2 ] :
+(Aggregating)
+Resize 2 → 1
+  AggregatingTransform × 2
+    StrictResize 2 → 2
+      (TopNFiltering)
+      TopNFilteringByHeapTransform × 2
+        (TableScan) # 
+        Remote × 2 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(Sorting)
+MergeSortingTransform
+  LimitsCheckingTransform
+    PartialSortingTransform
+      (MergingAggregated)
+      MergingAggregatedTransform
+        (RemoteExchangeSource)
+        Source segment_id : [ 2 ]
+        DeserializeBufTransform
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+    MergeSortingTransform
+      LimitsCheckingTransform
+        PartialSortingTransform
+          (RemoteExchangeSource)
+          Source segment_id : [ 1 ]
+          DeserializeBufTransform
+            ExchangeSource 0 → 1
+
+------------------------------------------
+SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a ASC, b ASC NULLS FIRST
+LIMIT 10;
+0	\N	1
+0	1	1
+0	2	1
+0	3	1
+0	4	1
+0	5	1
+0	6	1
+0	7	1
+0	8	1
+0	9	1
+SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a ASC, b DESC NULLS LAST
+LIMIT 10;
+0	999	1
+0	998	1
+0	997	1
+0	996	1
+0	995	1
+0	994	1
+0	993	1
+0	992	1
+0	991	1
+0	990	1
+SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a DESC, b ASC NULLS LAST
+LIMIT 10;
+99	1	1
+99	2	1
+99	3	1
+99	4	1
+99	5	1
+99	6	1
+99	7	1
+99	8	1
+99	9	1
+99	10	1
+SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a DESC, b DESC NULLS FIRST
+LIMIT 10;
+99	\N	1
+99	999	1
+99	998	1
+99	997	1
+99	996	1
+99	995	1
+99	994	1
+99	993	1
+99	992	1
+99	991	1

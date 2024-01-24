@@ -1,5 +1,5 @@
 SET enable_optimizer = 1;
-SET enable_topn_filtering_optimization = 1;
+SET enable_create_topn_filtering_for_aggregating = 1;
 
 EXPLAIN SELECT n, count(*)
         FROM (

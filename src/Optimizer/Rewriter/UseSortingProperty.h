@@ -38,6 +38,7 @@ public:
     PlanAndProp visitAggregatingNode(AggregatingNode &, Void &) override;
     PlanAndProp visitWindowNode(WindowNode &, Void &) override;
     PlanAndProp visitCTERefNode(CTERefNode & node, Void &) override;
+    PlanAndProp visitTopNFilteringNode(TopNFilteringNode & node, Void &) override;
 
 private:
     ContextMutablePtr context;

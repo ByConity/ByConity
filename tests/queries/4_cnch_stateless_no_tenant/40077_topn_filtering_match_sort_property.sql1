@@ -1,0 +1,63 @@
+-- this test can be enabled when test tag is supported, since single-node cluster and 2-nodes cluster give different result
+SET enable_optimizer = 1, enable_create_topn_filtering_for_aggregating = 1;
+
+SET max_threads=1, exchange_source_pipeline_threads=1;
+
+DROP TABLE IF EXISTS t40076_topn_filter;
+DROP TABLE IF EXISTS t40076_topn_filter_2;
+
+CREATE TABLE t40076_topn_filter
+(
+    i1 Int32,
+    i2 Int32,
+    i3 Int32
+) ENGINE = CnchMergeTree ORDER BY i1
+SETTINGS index_granularity = 1024;
+
+CREATE TABLE t40076_topn_filter_2
+(
+    i1 Int32,
+    i2 Int32,
+    i3 Int32
+) ENGINE = CnchMergeTree ORDER BY (i1, i2)
+SETTINGS index_granularity = 1024;
+
+-- currently, only setting NULLS FIRST can match sort propery, but it does not make sense for non-nullable columns
+-- { echoOn }
+EXPLAIN PIPELINE SELECT i1, count() as cnt
+FROM t40076_topn_filter
+GROUP BY i1
+ORDER BY i1 ASC NULLS FIRST
+LIMIT 10;
+
+EXPLAIN PIPELINE SELECT i2, count() as cnt
+FROM t40076_topn_filter
+GROUP BY i2
+ORDER BY i2 ASC NULLS FIRST
+LIMIT 10;
+
+-- prefix can also be matched
+EXPLAIN PIPELINE SELECT i1, count() as cnt
+FROM t40076_topn_filter_2
+GROUP BY i1
+ORDER BY i1 ASC NULLS FIRST
+LIMIT 10;
+
+EXPLAIN PIPELINE SELECT i1, i2, count() as cnt
+FROM t40076_topn_filter_2
+GROUP BY i1, i2
+ORDER BY i1 ASC NULLS FIRST, i2 ASC NULLS FIRST
+LIMIT 10;
+
+EXPLAIN PIPELINE SELECT i1, i2, count() as cnt
+FROM t40076_topn_filter_2
+GROUP BY i1, i2
+ORDER BY i2 ASC NULLS FIRST, i1 ASC NULLS FIRST
+LIMIT 10;
+
+-- { echoOff }
+
+DROP TABLE IF EXISTS t40076_topn_filter_local;
+DROP TABLE IF EXISTS t40076_topn_filter;
+DROP TABLE IF EXISTS t40076_topn_filter_2_local;
+DROP TABLE IF EXISTS t40076_topn_filter_2;

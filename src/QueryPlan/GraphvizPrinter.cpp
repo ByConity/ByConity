@@ -2366,6 +2366,8 @@ String StepPrinter::printTopNFilteringStep(const TopNFilteringStep & step)
     }
     details << "|";
     details << "Size: " << step.getSize();
+    details << "|";
+    details << "Algorithm: " << TopNFilteringAlgorithmConverter::toString(step.getAlgorithm());
     /*
     details << "|";
     details << "Output |";

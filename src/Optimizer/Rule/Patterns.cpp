@@ -78,4 +78,9 @@ PatternBuilder & PatternBuilder::with(PatternPtrs sub_patterns)
     return *this;
 }
 
+PatternBuilder & PatternBuilder::oneOf(PatternPtrs sub_patterns)
+{
+    current = std::make_unique<OneOfPattern>(std::move(sub_patterns), std::move(current));
+    return *this;
+}
 }

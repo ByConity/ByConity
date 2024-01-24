@@ -193,7 +193,7 @@ std::vector<RulePtr> Rules::pushDownTopNFilteringRules()
 {
     /// PushTopNFilteringXXX rules cannot be mixed with CreateTopNFilteringXXX rules,
     /// as create rules will produce redundant TopNFilteringSteps when the last produced one is pushdowned.
-    return {std::make_shared<PushTopNFilteringThroughProjection>()};
+    return {std::make_shared<PushTopNFilteringThroughProjection>(), std::make_shared<PushTopNFilteringThroughUnion>()};
 }
 
 std::vector<RulePtr> Rules::pushApplyRules()

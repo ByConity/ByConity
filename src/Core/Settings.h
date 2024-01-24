@@ -1561,6 +1561,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select (Obsolete setting).", 0) \
     M(Bool, enable_replace_group_by_literal_to_symbol, false, "Obsolete setting, does nothing.", 0) \
     M(Bool, enable_replace_order_by_literal_to_symbol, false, "Obsolete setting, does nothing.", 0) \
+    M(Bool, enable_topn_filtering_optimization, false, "Obsolete setting, Whether enable TopNFilterting optimization", 0) \
     /** Ingestion */ \
     M(Seconds, ingest_column_memory_lock_timeout, 5, "The time that spend on wait for memory lock", 0) \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
@@ -1647,7 +1648,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
     M(Bool, enable_remove_unused_cte, true, "Whether enable remove unused cte", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
-    M(Bool, enable_topn_filtering_optimization, false, "Whether enable TopNFilterting optimization", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
     M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
     M(Bool, optimizer_index_projection_support, true, "Use indexprojection in optimizer mode", 0) \
@@ -1716,9 +1716,12 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_partial_sorting_through_exchange, true, "Whether to enable PushPartialSortingThroughExchange rules", 0) \
     M(Bool, enable_push_partial_limit_through_exchange, true, "Whether to enable PushPartialLimitThroughExchange rules", 0) \
     M(Bool, enable_push_partial_distinct_through_exchange, true, "Whether to enable PushPartialDistinctThroughExchange rules", 0) \
-    M(Bool, enable_create_topn_filtering_for_aggregating, true, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
+    M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
+    M(String, topn_filtering_algorithm_for_unsorted_stream, "SortAndLimit", "The default topn filtering algorithm for unsorted stream, can be one of: 'SortAndLimit', 'Heap'", 0) \
+    M(Bool, enable_create_topn_filtering_for_aggregating, false, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
     M(Bool, enable_push_topn_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
+    M(Bool, enable_push_topn_filtering_through_union, true, "Whether to enable PushTopNFilteringThroughUnion rules", 0) \
     M(Bool, enable_cascades_optimizer, true, "Whether to enable CascadesOptimizer", 0) \
     M(Bool, enable_iterative_rewriter, true, "Whether to enable InterativeRewriter", 0) \
     M(Float, multi_join_keys_correlated_coefficient, 0.8, "Coefficient about multi join keys, the smaller the value, the smaller the estimated join cardnlity, do nothing when equals 1.0", 0) \

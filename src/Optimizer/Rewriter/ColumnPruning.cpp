@@ -980,7 +980,8 @@ PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & nod
         require.insert(item.column_name);
     }
     auto child = VisitorUtil::accept(*node.getChildren()[0], *this, require);
-    auto topn_filter_step = std::make_shared<TopNFilteringStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getSize(), step->getModel());
+    auto topn_filter_step = std::make_shared<TopNFilteringStep>(
+        child->getStep()->getOutputStream(), step->getSortDescription(), step->getSize(), step->getModel(), step->getAlgorithm());
     return TopNFilteringNode::createPlanNode(context->nextNodeId(), std::move(topn_filter_step), PlanNodes{child}, node.getStatistics());
 }
 

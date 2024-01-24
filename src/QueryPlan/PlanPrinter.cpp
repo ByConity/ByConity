@@ -980,6 +980,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             sort_columns.emplace_back(desc.format());
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
         out << intent.detailIntent() << "Size: " << topn_filter->getSize();
+        out << intent.detailIntent() << "Algorithm: " << TopNFilteringAlgorithmConverter::toString(topn_filter->getAlgorithm());
     }
 
     if (verbose && plan->getType() == IQueryPlanStep::Type::TableWrite)

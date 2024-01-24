@@ -19,6 +19,7 @@
 
 #include <functional>
 #include <memory>
+#include <unordered_set>
 #include <utility>
 
 /**
@@ -44,6 +45,7 @@ public:
     virtual ~Pattern() = default;
 
     IQueryPlanStep::Type getTargetType() const;
+    std::unordered_set<IQueryPlanStep::Type> getTargetTypes() const;
     String toString() const;
 
     bool matches(const PlanNodePtr & node) const { return match(node).has_value(); }
@@ -135,6 +137,28 @@ private:
     PatternPtrs sub_patterns;
 };
 
+class OneOfPattern : public Pattern
+{
+public:
+    explicit OneOfPattern(PatternPtrs sub_patterns_) : sub_patterns{std::move(sub_patterns_)}
+    {
+        assert(!sub_patterns.empty());
+    }
+
+    OneOfPattern(PatternPtrs sub_patterns_, PatternPtr previous) : Pattern(std::move(previous)), sub_patterns{std::move(sub_patterns_)}
+    {
+        assert(!sub_patterns.empty());
+    }
+
+    std::optional<Match> accept(const PlanNodePtr & node, Captures & captures) const override;
+    void accept(PatternVisitor & pattern_visitor) const override;
+
+    PatternRawPtrs getSubPatterns() const;
+
+private:
+    PatternPtrs sub_patterns;
+};
+
 class PatternVisitor
 {
 public:
@@ -143,6 +167,7 @@ public:
     virtual void visitCapturePattern(const CapturePattern & pattern) = 0;
     virtual void visitFilterPattern(const FilterPattern & pattern) = 0;
     virtual void visitWithPattern(const WithPattern & pattern) = 0;
+    virtual void visitOneOfPattern(const OneOfPattern & pattern) = 0;
 
     void visitPrevious(const Pattern & pattern)
     {
@@ -158,6 +183,7 @@ public:
     void visitCapturePattern(const CapturePattern & pattern) override;
     void visitFilterPattern(const FilterPattern & pattern) override;
     void visitWithPattern(const WithPattern & pattern) override;
+    void visitOneOfPattern(const OneOfPattern & pattern) override;
 
     void appendLine(const std::string & str);
 

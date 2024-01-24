@@ -177,6 +177,7 @@ message TopNFilteringStep {
   repeated SortColumnDescription sort_description = 2;
   required uint64 size = 3;
   required TopNModel.Enum model = 4;
+  optional TopNFilteringAlgorithm.Enum algorithm = 5;
 }
 
 message TableWriteStep {
