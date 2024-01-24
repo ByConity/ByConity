@@ -15,36 +15,35 @@
 
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/QueryRewriter.h>
+#include <Interpreters/Cache/QueryCache.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
+#include <Interpreters/executeQuery.h>
 #include <Optimizer/JoinOrderUtils.h>
 #include <Optimizer/PlanNodeSearcher.h>
 #include <Optimizer/PlanOptimizer.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTEALimit.h>
+#include <Parsers/ASTWithAlias.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/queryToString.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
-#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/PlanCache.h>
+#include <QueryPlan/PlanNodeIdAllocator.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/QueryPlanner.h>
-#include <QueryPlan/PlanPrinter.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageDistributed.h>
-#include <Interpreters/WorkerStatusManager.h>
-#include <common/logger_useful.h>
 #include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
-#include "QueryPlan/QueryPlan.h"
-#include <Parsers/queryToString.h>
-#include <Interpreters/executeQuery.h>
-#include <common/logger_useful.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageDistributed.h>
 #include <Common/ProfileEvents.h>
-#include <QueryPlan/PlanNodeIdAllocator.h>
-#include <Interpreters/Cache/QueryCache.h>
+#include <common/logger_useful.h>
 
 
 namespace ProfileEvents
@@ -197,7 +196,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
 }
 
-QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr context, ASTPtr query_ptr)
+QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr context, ASTPtr query_ptr, Poco::Logger * log)
 {
     const ASTSelectWithUnionQuery & ast = query_ptr->as<ASTSelectWithUnionQuery &>();
 
@@ -349,6 +348,36 @@ QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr contex
     {
         comma = false;
         postQuery << " ORDER BY ";
+
+        if (ast.list_of_selects->children.size() == 1)
+        {
+            auto & select_ast = ast.list_of_selects->children[0];
+
+            if (auto * select = select_ast->as<ASTSelectQuery>())
+            {
+                if (select->orderBy())
+                {
+                    for (auto & elem : select->orderBy()->children)
+                    {
+                        if (comma)
+                            postQuery << ", ";
+                        comma = true;
+                        auto new_elem = elem->clone();
+                        new_elem->children.clear();
+                        for (auto & child : elem->children)
+                        {
+                            if (auto * alias = dynamic_cast<ASTWithAlias *>(child.get()))
+                            {
+                                auto iden = std::make_shared<ASTIdentifier>(alias->getAliasOrColumnName());
+                                new_elem->children.push_back(iden);
+                            }
+                        }
+                        postQuery << serializeAST(*new_elem, true);
+                    }
+                }
+            }
+        }
+
         for (auto & elem : tea_limit->order_expr_list->children)
         {
             if (comma)
@@ -357,6 +386,8 @@ QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr contex
             postQuery << serializeAST(*elem, true);
         }
     }
+
+    LOG_TRACE(log, "tealimit rewrited query with optimizer: {}", postQuery.str());
 
     // evaluate the internal SQL and get the result
     return executeQuery(postQuery.str(), context->getQueryContext(), true).pipeline;
@@ -435,7 +466,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     if (auto * select_union = query_ptr->as<ASTSelectWithUnionQuery>())
     {
         if (unlikely(select_union->tealimit))
-            res.pipeline = executeTEALimit(res.pipeline, context, query_ptr);
+            res.pipeline = executeTEALimit(res.pipeline, context, query_ptr, log);
     }
     return res;
 }

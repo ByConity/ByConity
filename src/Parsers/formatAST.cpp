@@ -42,4 +42,13 @@ String serializeAST(const IAST & ast, bool one_line)
     return buf.str();
 }
 
+String serializeASTWithOutAlias(const IAST & ast)
+{
+    WriteBufferFromOwnString buf;
+    IAST::FormatSettings settings(buf, true);
+    settings.hilite = false;
+    settings.without_alias = true;
+    ast.format(settings);
+    return buf.str();
+}
 }
