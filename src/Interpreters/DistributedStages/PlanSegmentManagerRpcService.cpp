@@ -156,8 +156,7 @@ void PlanSegmentManagerRpcService::executeQuery(
 
         ThreadFromGlobalPool async_thread([query_context = std::move(query_context),
                                             execution_info = std::move(execution_info),
-                                           plan_segment_buf = std::make_shared<butil::IOBuf>(cntl->request_attachment().movable()),
-                                           parent_thread_ctx = std::move(parent_thread_ctx)]() {
+                                           plan_segment_buf = std::make_shared<butil::IOBuf>(cntl->request_attachment().movable())]() {
             try
             {
                 /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
@@ -379,11 +378,6 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
-        auto segment_execute_span = startBrpcServerSpan("brpc", "CnchWorker.executeQuery", "CnchWorker", "executeQuery", cntl);
-        OpentelemetryScope scope(segment_execute_span);
-        segment_execute_span->SetAttribute("segment.id", std::to_string(request->plan_segment_id()));
-        segment_execute_span->SetStatus(opentelemetry::trace::StatusCode::kOk);
-
         if (request->brpc_protocol_major_revision() != DBMS_BRPC_PROTOCOL_MAJOR_VERSION)
             throw Exception(
                 "brpc protocol major version different - current is " + std::to_string(request->brpc_protocol_major_revision())
