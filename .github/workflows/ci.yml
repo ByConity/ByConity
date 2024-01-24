@@ -13,9 +13,9 @@ concurrency:
 jobs:
   scm_build:
     name: Build binary and run stateless tests
-    # Use digest instead of tag to avoid network issue, original image byconity/byconity-ci:24Jan11
-    container: byconity/byconity-ci@sha256:8f1068c9c52140d9d704915f4d402727176c715dcef8c08aaa2e8b0b9db14c82
-    runs-on: self-hosted 
+    # Use digest instead of tag to avoid network issue, original image byconity/byconity-ci:24Jan16
+    container: byconity/byconity-ci:24Jan16
+    runs-on: id1 
     steps:
       - name: Preload docker images
         run: |
@@ -27,6 +27,7 @@ jobs:
           echo "BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume" >> $GITHUB_ENV
           echo "HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume" >> $GITHUB_ENV
           echo "CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume" >> $GITHUB_ENV
+          echo "CONFIG_VOL_FOR_S3=${COMPOSE_PROJECT_NAME}_config_volume_for_s3" >> $GITHUB_ENV
           echo "SCRIPTS_VOL=${COMPOSE_PROJECT_NAME}_scripts_volume" >> $GITHUB_ENV
           echo "CLICKHOUSE_PORT_TCP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           echo "CLICKHOUSE_PORT_HTTP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
@@ -59,7 +60,7 @@ jobs:
       - name: glibc_compatibility_check 
         run: |
           python3 $GITHUB_WORKSPACE/tests/ci/compatibility_check.py --binary $GITHUB_WORKSPACE/build/programs/clickhouse
-      - name: Create ByConity Cluster HDFS
+      - name: Preparing
         run: |
           mkdir /CI/
           cd /CI/
@@ -71,9 +72,56 @@ jobs:
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/fdb.cluster
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/cnch-config.yml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/daemon-manager.yml
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config_for_s3_storage/fdb.cluster
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config_for_s3_storage/cnch-config.yml
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config_for_s3_storage/daemon-manager.yml
           echo "Create volumes for ByConity Cluster"
           /bin/bash create_docker_volume_ci.sh
+          mkdir -p /test_output
+
+      - name: Create ByConity Cluster S3
+        run: |
+          cd /CI/
+          echo "Bring up ByConity Cluster S3"
+          docker-compose -f docker-compose-s3.yml -p s3_ci up -d
+          docker ps --filter name=$COMPOSE_PROJECT_NAME
+      - name: Run ByConity FuntionalStateless for S3 (w.o optimizer)
+        continue-on-error: true
+        run: |
+          mkdir -p ci_stateless_without_optimizer_s3
+          cd ci_stateless_without_optimizer_s3
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
+          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
+          mkdir queries
+          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries/
+          mkdir -p test_output
+          ./clickhouse-test --s3 --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/wo_optimizer_s3_test_result.txt
+          cd ..
+          rm -rf ci_stateless_without_optimizer_s3
+      - name: After S3 tests
+        if: always()
+        continue-on-error: true
+        run: |
+          docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/byconity/log /test_output/$2/log' sh || true
+          mv /test_output /Artifacts/test_output_for_s3 || true
+      - name: Stop ByConity Cluster S3
+        run: |
+          cd /CI/
+          sleep 1000
+          echo "Bring down ByConity Cluster S3"
+          docker-compose -f docker-compose-s3.yml down 
+          docker ps --filter name=$COMPOSE_PROJECT_NAME
+          sleep 30
+           
+      - name: Create ByConity Cluster HDFS
+        run: |
           echo "Bring up ByConity Cluster HDFS"
+          cd /CI/
           docker-compose up -d
           sleep 10
           hdfs_config/script/create_users.sh
@@ -86,9 +134,6 @@ jobs:
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
           echo "Check status of cluster"
           docker ps --filter name=$COMPOSE_PROJECT_NAME
-      - name: Prepare run test suite 
-        run: |
-          mkdir -p /test_output
       - name: Run ByConity External Table test
         continue-on-error: true
         run: |

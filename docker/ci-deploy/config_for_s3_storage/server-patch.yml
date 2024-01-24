@@ -1,0 +1,18 @@
+storage_configuration:
+  # To avoid break hard-coded test cases.
+  cnch_default_policy: cnch_default_hdfs
+  disks:
+    s3_disk:
+      path: /user/clickhouse/
+      type: s3
+      endpoint: http://minio:9000
+      bucket: cnch
+      path: data123/
+      ak_id: minio
+      ak_secret: minio123
+  policies:
+    cnch_default_hdfs:
+      volumes:
+        s3:
+          default: s3_disk
+          disk: s3_disk
