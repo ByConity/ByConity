@@ -107,6 +107,8 @@ protected:
     /// DirectoryList is not multi-threaded
     virtual std::shared_ptr<IDirectoryLister> getDirectoryLister();
 
+    void checkAlterSettings(const AlterCommands & commands) const;
+
     String hive_metastore_url;
     String hive_db_name;
     String hive_table_name;

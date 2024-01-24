@@ -34,6 +34,7 @@ struct Settings;
 #define APPLY_FOR_CNCHHIVE_SETTINGS(M) \
     /** How many rows correspond to one primary key value. */ \
     M(UInt64, index_granularity, 8192, "", 0) \
+    M(String, cnch_server_vw, DEFAULT_SERVER_VW_NAME, "server vw", 0) \
     M(String, cnch_vw_default, "vw_default", "read vw", 0) \
     M(String, cnch_vw_read, "vw_read", "deprecated read settings, use cnch_vw_default instead", 0) \
     M(String, cnch_vw_write, "vw_write", "Not used for hive", 0) \
