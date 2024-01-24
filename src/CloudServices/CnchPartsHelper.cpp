@@ -537,6 +537,23 @@ MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all
     return calcVisiblePartsImpl<MergeTreeDataPartsCNCHVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
+IMergeTreeDataPartsVector calcVisibleParts(IMergeTreeDataPartsVector& all_parts,
+    bool collect_on_chain, bool skip_drop_ranges, IMergeTreeDataPartsVector* visible_alone_drop_ranges,
+    IMergeTreeDataPartsVector* invisible_dropped_parts, LoggingOption logging)
+{
+    return calcVisiblePartsImpl(all_parts, collect_on_chain, skip_drop_ranges,
+        visible_alone_drop_ranges, invisible_dropped_parts, logging);
+}
+
+ServerDataPartsVector calcVisibleParts(ServerDataPartsVector& all_parts,
+    bool collect_on_chain, bool skip_drop_ranges, ServerDataPartsVector* visible_alone_drop_ranges,
+    ServerDataPartsVector* invisible_dropped_parts, LoggingOption logging)
+{
+    return calcVisiblePartsImpl(all_parts, collect_on_chain,
+        skip_drop_ranges, visible_alone_drop_ranges, invisible_dropped_parts,
+        logging);
+}
+
 void calcPartsForGC(ServerDataPartsVector & all_parts, ServerDataPartsVector * out_parts_to_gc, ServerDataPartsVector * out_visible_parts)
 {
     return calcForGCImpl<ServerDataPartsVector, ServerDataPartOperation, PartComparator<ServerDataPartPtr>>(
