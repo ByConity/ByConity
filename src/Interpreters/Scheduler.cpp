@@ -2,14 +2,17 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <memory>
 #include <CloudServices/CnchServerResource.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/Scheduler.h>
 #include <Interpreters/sendPlanSegment.h>
-#include "common/types.h"
+#include <common/types.h>
 #include <Common/Stopwatch.h>
 #include <Common/time.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <butil/iobuf.h>
 
 namespace DB
 {
@@ -33,6 +36,7 @@ TaskResult IScheduler::scheduleTask(const SegmentTask & task, PlanSegment * plan
 {
     TaskResult res;
     sendResource(task.task_id, plan_segment_ptr);
+    const auto local_address = getLocalAddress(*query_context);
     if (query_context->getSettingsRef().bsp_mode)
     {
         for (const auto & output : plan_segment_ptr->getPlanSegmentOutputs())
@@ -46,6 +50,8 @@ TaskResult IScheduler::scheduleTask(const SegmentTask & task, PlanSegment * plan
     auto & selector_info = selector_result.first->second;
     dag_graph_ptr->segment_paralle_size_map.emplace(task.task_id, selector_info.worker_nodes.size());
 
+    PlanSegmentExecutionInfo execution_info;
+
     for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
     {
         if (auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
@@ -54,10 +60,25 @@ TaskResult IScheduler::scheduleTask(const SegmentTask & task, PlanSegment * plan
             plan_segment_input->insertSourceAddresses(iter->second.addresses, query_context->getSettingsRef().bsp_mode);
         }
     }
+    std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
+    if (!dag_graph_ptr->query_common_buf.empty())
+    {
+        plan_segment_buf_ptr = std::make_shared<butil::IOBuf>();
+        butil::IOBufAsZeroCopyOutputStream wrapper(plan_segment_buf_ptr.get());
+        Protos::PlanSegment plansegment_proto;
+        plan_segment_ptr->toProto(plansegment_proto);
+        plansegment_proto.SerializeToZeroCopyStream(&wrapper);
+    }
+    else
+    {
+        // no need to setCoordinatorAddress since this addersss is already stored at query_common_buf
+        plan_segment_ptr->setCoordinatorAddress(local_address);
+    }
 
     std::unordered_set<size_t> idx_to_schedule;
     for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
         idx_to_schedule.insert(i);
+    UInt32 parallel_id = 0;
     while (!idx_to_schedule.empty())
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
@@ -76,29 +97,22 @@ TaskResult IScheduler::scheduleTask(const SegmentTask & task, PlanSegment * plan
                 idx_iter++;
                 continue;
             }
-            for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
-            {
-                auto source_iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
-                if (source_iter != selector_info.source_addresses.end() && source_iter->second.parallel_index)
-                {
-                    plan_segment_input->setParallelIndex(*source_iter->second.parallel_index);
-                }
-                else
-                    plan_segment_input->setParallelIndex(selector_info.indexes[idx]);
-            }
-            plan_segment_ptr->setParallelIndex(idx);
+            execution_info.parallel_id = parallel_id++;
             if (worker_node.type == NodeType::Local)
             {
-                sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
+                sendPlanSegmentToAddress(
+                    local_address, plan_segment_ptr, execution_info, query_context, dag_graph_ptr, plan_segment_buf_ptr);
             }
             else
             {
                 const auto worker_group = query_context->tryGetCurrentWorkerGroup();
-                sendPlanSegmentToRemote(
+                sendPlanSegmentToAddress(
                     worker_node.address,
-                    query_context,
                     plan_segment_ptr,
+                    execution_info,
+                    query_context,
                     dag_graph_ptr,
+                    plan_segment_buf_ptr,
                     worker_group ? WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_node.id)
                                  : WorkerId{});
             }
@@ -141,6 +155,8 @@ void IScheduler::schedule()
     genTopology();
     genSourceTasks();
     BatchTaskPtr batch_task;
+    
+    auto local_address = getLocalAddress(*query_context);
     /// Leave final segment alone.
     while (true)
     {
@@ -167,7 +183,6 @@ void IScheduler::schedule()
                 break;
             }
             auto plan_segment_ptr = iter->second;
-            auto local_address = getLocalAddress(query_context);
             plan_segment_ptr->setCoordinatorAddress(local_address);
             scheduleTask(task, plan_segment_ptr);
             onSegmentScheduled(task);
@@ -253,18 +268,15 @@ void IScheduler::prepareFinalTask()
     if (final_it == dag_graph_ptr->id_to_segment.end())
         throw Exception("Logical error: final segment is not found", ErrorCodes::LOGICAL_ERROR);
 
-    const auto & final_address_info = getLocalAddress(query_context);
+    const auto & final_address_info = getLocalAddress(*query_context);
     LOG_DEBUG(log, "Set address {} for final segment", final_address_info.toString());
-    final_it->second->setCurrentAddress(final_address_info);
     final_it->second->setCoordinatorAddress(final_address_info);
-    final_it->second->setParallelIndex(0);
 
     for (auto & plan_segment_input : final_it->second->getPlanSegmentInputs())
     {
         // segment has more than one input which one is table
         if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
             continue;
-        plan_segment_input->setParallelIndex(0);
         auto address_it = dag_graph_ptr->id_to_address.find(plan_segment_input->getPlanSegmentId());
         if (address_it == dag_graph_ptr->id_to_address.end())
             throw Exception(

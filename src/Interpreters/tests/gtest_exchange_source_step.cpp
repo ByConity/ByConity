@@ -16,6 +16,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <stdlib.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
@@ -34,6 +35,7 @@
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>
+#include <Poco/Util/MapConfiguration.h>
 #include "common/types.h"
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
@@ -49,32 +51,31 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     initLogger();
     UInt64 query_tx_id = 666;
     auto context = Context::createCopy(getContext().context);
-    context->setTemporaryTransaction(query_tx_id,query_tx_id,false);
+    AddressInfo local_address("localhost", 0, "test", "123456");
+    context->setTemporaryTransaction(query_tx_id, query_tx_id, false);
+    context->setPlanSegmentInstanceId({1, 1});
 
     auto & client_info = context->getClientInfo();
     PlanSegment plan_segment = PlanSegment();
     plan_segment.setQueryId("RemoteExchangeSourceStep_test");
     plan_segment.setPlanSegmentId(2);
-    plan_segment.setContext(context);
 
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
-    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
-    AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
-    auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456");
+    
+    auto coordinator_address_str = extractExchangeHostPort(coordinator_address);
     plan_segment.setCoordinatorAddress(coordinator_address);
-    plan_segment.setCurrentAddress(local_address);
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
 
     PlanSegmentInputs inputs;
     for (int i = 1; i <= 2; ++i)
     {
         auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
-        input->setParallelIndex(i);
         input->setExchangeParallelSize(1);
         input->setPlanSegmentId(1);
-        input->setExchangeId(1);
+        input->setExchangeId(i);
         input->insertSourceAddress(local_address);
         inputs.push_back(input);
     }
@@ -82,7 +83,7 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
 
     DataStream datastream{.header = header};
     RemoteExchangeSourceStep exchange_source_step(inputs, datastream, false, false);
-    exchange_source_step.setPlanSegment(&plan_segment);
+    exchange_source_step.setPlanSegment(&plan_segment, context);
 
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -94,7 +95,7 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     BroadcastSenderProxyPtr local_sender_1 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_1);
     local_sender_1->accept(context, header);
 
-    auto data_key_2 = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 2);
+    auto data_key_2 = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 1);
     BroadcastSenderProxyPtr local_sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_2);
     local_sender_2->accept(context, header);
 

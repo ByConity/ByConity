@@ -41,7 +41,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
 {
     const String & initial_query_id = plan_segment.getQueryId();
     const String & segment_id_str = std::to_string(plan_segment.getPlanSegmentId());
-    const String & coordinator_address = extractExchangeStatusHostPort(plan_segment.getCoordinatorAddress());
+    const String & coordinator_address = extractExchangeHostPort(plan_segment.getCoordinatorAddress());
     bool need_wait_cancel = false;
 
     if (shouldEraseGroup())
@@ -94,7 +94,6 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
 
     auto res = std::make_shared<PlanSegmentProcessListEntry>(*this, entry->getPtr(), initial_query_id, plan_segment.getPlanSegmentId());
     res->setCoordinatorAddress(plan_segment.getCoordinatorAddress());
-    res->setCurrentAddress(plan_segment.getCurrentAddress());
 
     if (need_wait_cancel)
     {

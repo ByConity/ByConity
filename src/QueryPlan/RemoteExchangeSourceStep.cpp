@@ -43,9 +43,9 @@
 #include <brpc/controller.h>
 #include <butil/endpoint.h>
 #include <Common/Exception.h>
-#include <common/getFQDNOrHostName.h>
 #include <common/types.h>
-#include "Interpreters/QueryExchangeLog.h"
+#include <Interpreters/QueryExchangeLog.h>
+#include <Interpreters/sendPlanSegment.h>
 
 namespace DB
 {
@@ -106,8 +106,9 @@ std::shared_ptr<IQueryPlanStep> RemoteExchangeSourceStep::copy(ContextPtr) const
     return std::make_shared<RemoteExchangeSourceStep>(inputs, input_streams[0], is_add_totals, is_add_extremes);
 }
 
-void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_)
+void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_, ContextPtr context_)
 {
+    context = std::move(context_);
     plan_segment = plan_segment_;
     plan_segment_id = plan_segment->getPlanSegmentId();
     /// only plan segment at server needs to set totals source or extremes source
@@ -117,9 +118,8 @@ void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_)
         is_add_extremes = false;
     }
     query_id = plan_segment->getQueryId();
-    coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
-    read_address_info = plan_segment->getCurrentAddress();
-    context = plan_segment->getContext();
+    coordinator_address = extractExchangeHostPort(plan_segment->getCoordinatorAddress());
+    read_address_info = getLocalAddress(*context);
     if (!context)
         throw Exception("Plan segment not set context", ErrorCodes::BAD_ARGUMENTS);
     options = ExchangeUtils::getExchangeOptions(context);
@@ -166,17 +166,19 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
 
     for (const auto & input : inputs)
     {
-        if (context->getSettingsRef().exchange_enable_multipath_reciever && input->getExchangeMode() != ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+        size_t write_plan_segment_id = input->getPlanSegmentId();
+        size_t exchange_parallel_size = input->getExchangeParallelSize();
+        UInt32 exchange_id = input->getExchangeId();
+        UInt32 parallel_id = context->getPlanSegmentInstanceId().parallel_id;
+        auto exchange_mode = input->getExchangeMode();
+        //TODO: hack logic for BROADCAST/LOCAL_NO_NEED_REPARTITION/LOCAL_MAY_NEED_REPARTITION, we should remove this logic
+        if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+            parallel_id = 0;
+        else if (exchange_mode == ExchangeMode::BROADCAST)
+            exchange_parallel_size = 1;
+        size_t partition_id_start = parallel_id * exchange_parallel_size;
+        if (context->getSettingsRef().exchange_enable_multipath_reciever && !keep_order)
         {
-            size_t write_plan_segment_id = input->getPlanSegmentId();
-            size_t exchange_parallel_size = input->getExchangeParallelSize();
-            UInt32 exchange_id = input->getExchangeId();
-
-            //TODO: hack logic for BROADCAST, we should remove this logic
-            if (input->getExchangeMode() == ExchangeMode::BROADCAST)
-                exchange_parallel_size = 1;
-
-            size_t partition_id_start = input->getParallelIndex() * exchange_parallel_size;
             LocalChannelOptions local_options{
                 .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size,
                 .max_timeout_ts = options.exchange_timeout_ts,
@@ -245,15 +247,6 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
         }
         else
         {
-            size_t write_plan_segment_id = input->getPlanSegmentId();
-            size_t exchange_parallel_size = input->getExchangeParallelSize();
-            size_t exchange_id = input->getExchangeId();
-
-            //TODO: hack logic for BROADCAST, we should remove this logic
-            if (input->getExchangeMode() == ExchangeMode::BROADCAST)
-                exchange_parallel_size = 1;
-
-            size_t partition_id_start = input->getParallelIndex() * exchange_parallel_size;
             LocalChannelOptions local_options{
                 .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size,
                 .max_timeout_ts = options.exchange_timeout_ts,

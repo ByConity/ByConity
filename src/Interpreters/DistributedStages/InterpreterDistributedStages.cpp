@@ -198,8 +198,8 @@ void MockTestQuery(PlanSegmentTree * plan_segment_tree, ContextMutablePtr contex
 
     for (size_t i = 0; i < plan_size; ++i)
     {
-        auto plan = std::make_shared<PlanSegment>(context);
-        plan->deserialize(read_buffer);
+        auto plan = std::make_shared<PlanSegment>();
+        plan->deserialize(read_buffer, context);
         plansegments.push_back(plan);
     }
 

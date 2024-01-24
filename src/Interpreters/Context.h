@@ -28,6 +28,8 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
 #include <Core/UUID.h>
+#include <DaemonManager/DaemonManagerClient_fwd.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <IO/ReadSettings.h>
 #include <Interpreters/ClientInfo.h>
@@ -35,10 +37,13 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/DistributedStages/ExchangeDataTracker.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Optimizer/OptimizerProfile.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <QueryPlan/SymbolAllocator.h>
+#include <Server/AsyncQueryManager.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/TxnTimestamp.h>
@@ -49,14 +54,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
-#include <CloudServices/CnchBGThreadPartitionSelector.h>
-#include <Transaction/TxnTimestamp.h>
-#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
-#include <Storages/HDFS/HDFSFileSystem.h>
-#include <DaemonManager/DaemonManagerClient_fwd.h>
-#include <DataStreams/BlockStreamProfileInfo.h>
-#include <Optimizer/OptimizerProfile.h>
-#include <Server/AsyncQueryManager.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config.h>
 #    include "config_core.h"
@@ -605,6 +603,8 @@ private:
 
     String async_query_id;
 
+    PlanSegmentInstanceId plan_segment_instance_id;
+
     bool read_from_client_finished = false;
 
     bool is_explain_query = false;
@@ -873,6 +873,9 @@ public:
 
     /// Id of initiating query for distributed queries; or current query id if it's not a distributed query.
     String getInitialQueryId() const;
+
+    void setPlanSegmentInstanceId(const PlanSegmentInstanceId & instance_id);
+    PlanSegmentInstanceId getPlanSegmentInstanceId() const;
 
     void setCurrentDatabase(const String & name);
     void setCurrentDatabase(const String & name, ContextPtr local_context);

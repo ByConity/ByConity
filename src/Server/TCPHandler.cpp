@@ -375,7 +375,9 @@ void TCPHandler::runImpl()
             bool may_have_embedded_data = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
             /// Processing Query
             if (state.plan_segment)
-                executePlanSegmentInternal(std::move(state.plan_segment), query_context, true);
+            {
+                throw Exception("Unexpected plan_segment in state", ErrorCodes::LOGICAL_ERROR);
+            }
             else
             {
                 const char * begin = state.query.data();

@@ -15,6 +15,8 @@
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <common/logger_useful.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Interpreters/sendPlanSegment.h>
 
 
 #include <boost/msm/front/euml/common.hpp>
@@ -192,12 +194,10 @@ BlockIO MPPQueryCoordinator::execute()
     if (plan_segment_tree->getNodes().size() > 1)
     {
         RuntimeFilterManager::getInstance().registerQuery(query_id, *plan_segment_tree, query_context);
-        scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
     }
-    else
-    {
-        scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
-    }
+
+    query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{0, 0});
+    scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
 
     if (scheduler_status && !scheduler_status->exception.empty())
     {
@@ -211,12 +211,17 @@ BlockIO MPPQueryCoordinator::execute()
     }
 
     auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
-    final_segment->update();
+    final_segment->update(query_context);
     LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
+
+    auto final_semgent_instance = std::make_unique<PlanSegmentInstance>();
+    final_semgent_instance->info = PlanSegmentExecutionInfo{.parallel_id = 0};
+    final_semgent_instance->info.execution_address = getLocalAddress(*query_context);
+    final_semgent_instance->plan_segment = std::make_unique<PlanSegment>(std::move(*final_segment));
 
     try
     {
-        auto res = DB::lazyExecutePlanSegmentLocally(std::make_unique<PlanSegment>(std::move(*final_segment)), query_context);
+        auto res = DB::lazyExecutePlanSegmentLocally(std::move(final_semgent_instance), query_context);
         res.coordinator = this_coodinator;
         return res;
     }

@@ -22,6 +22,12 @@
 #include <Interpreters/WorkerStatusManager.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <brpc/controller.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+
+namespace butil
+{
+class IObuf;
+}
 
 namespace std
 {
@@ -110,16 +116,29 @@ struct AsyncContext
 
 using AsyncContextPtr = std::shared_ptr<AsyncContext>;
 
-BlockIO lazyExecutePlanSegmentLocally(PlanSegmentPtr plan_segment, ContextMutablePtr context);
+BlockIO lazyExecutePlanSegmentLocally(PlanSegmentInstancePtr plan_segment_instance, ContextMutablePtr context);
 
-void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextMutablePtr context, bool async);
+void executePlanSegmentInternal(PlanSegmentInstancePtr plan_segment_instance, ContextMutablePtr context, bool async);
 void executePlanSegmentRemotely(
     const PlanSegment & plan_segment,
+    const PlanSegmentExecutionInfo & execution_info,
     ContextPtr context,
     AsyncContextPtr & async_context,
     const WorkerId & worker_id = WorkerId{});
 
-void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context);
+// void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context);
 
 void cleanupExchangeDataForQuery(const AddressInfo & address, UInt64 & query_unique_id);
+
+void prepareQueryCommonBuf(butil::IOBuf & common_buf, const PlanSegment & any_plan_segment, ContextPtr & context);
+
+void executePlanSegmentRemotelyWithPreparedBuf(
+    const PlanSegment & plan_segment,
+    PlanSegmentExecutionInfo execution_info,
+    const butil::IOBuf & query_common_buf,
+    const butil::IOBuf & query_settings_buf,
+    const butil::IOBuf & plan_segment_buf,
+    AsyncContextPtr & async_context,
+    const Context & context,
+    const WorkerId & worker_id = WorkerId{});
 }

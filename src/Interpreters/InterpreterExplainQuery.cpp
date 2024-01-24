@@ -936,10 +936,13 @@ void InterpreterExplainQuery::explainPipelineWithOptimizer(
     for (auto it = plan_segments.begin(); it != plan_segments.end(); ++it)
     {
         auto * segment = it->getPlanSegment();
-        buffer << "\nSegment[ " << std::to_string(segment->getPlanSegmentId()) << " ] :\n";
+        segment->update(contextptr);
+        buffer << "\nSegment[ " << std::to_string(segment->getPlanSegmentId()) <<" ] :\n" ;
         auto & segment_plan = segment->getQueryPlan();
         auto pipeline = segment_plan.buildQueryPipeline(
-            QueryPlanOptimizationSettings::fromContext(contextptr), BuildQueryPipelineSettings::fromPlanSegment(segment, contextptr, true));
+            QueryPlanOptimizationSettings::fromContext(contextptr),
+            BuildQueryPipelineSettings::fromPlanSegment(
+                segment, {.execution_address = segment->getCoordinatorAddress()}, contextptr, true));
         if (pipeline)
         {
             if (settings.graph)

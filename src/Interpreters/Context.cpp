@@ -2194,6 +2194,16 @@ String Context::getInitialQueryId() const
 }
 
 
+void Context::setPlanSegmentInstanceId(const PlanSegmentInstanceId & instance_id)
+{
+    plan_segment_instance_id = instance_id;
+}
+
+PlanSegmentInstanceId Context::getPlanSegmentInstanceId() const
+{
+    return plan_segment_instance_id;
+};
+
 void Context::setCurrentDatabaseNameInGlobalContext(const String & name)
 {
     if (!isGlobalContext())

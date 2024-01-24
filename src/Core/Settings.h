@@ -1812,6 +1812,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_parquert_orc_split, false, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \
     \
     /** Exchange settings */ \
+    M(UInt64, min_compatible_brpc_minor_version, 2, "Min compatble version of inter server BRPC protocol", 0) \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, \

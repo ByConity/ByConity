@@ -30,7 +30,8 @@
 #include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
-#include "QueryPlan/QueryPlan.h"
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <QueryPlan/QueryPlan.h>
 
 #include <sstream>
 
@@ -232,6 +233,22 @@ void PlanSegmentOutput::deserialize(ReadBuffer & buf, ContextPtr context)
     readBinary(keep_order, buf);
 }
 
+void PlanSegmentOutput::toProto(Protos::PlanSegmentOutput & proto)
+{
+    IPlanSegment::toProtoBase(*proto.mutable_base_plan_segment());
+    proto.set_shuffle_hash_function(shuffle_function_name);
+    proto.set_parallel_size(parallel_size);
+    proto.set_keep_order(keep_order);
+}
+
+void PlanSegmentOutput::fillFromProto(const Protos::PlanSegmentOutput & proto)
+{
+    IPlanSegment::fromProtoBase(proto.base_plan_segment());
+    shuffle_function_name = proto.shuffle_hash_function();
+    parallel_size = proto.parallel_size();
+    keep_order = proto.keep_order();
+}
+
 String PlanSegmentOutput::toString(size_t indent) const
 {
     std::ostringstream ostr;
@@ -245,24 +262,19 @@ String PlanSegmentOutput::toString(size_t indent) const
     return ostr.str();
 }
 
-PlanSegment::PlanSegment(const ContextPtr & context_) : context(Context::createCopy(context_)) {
 
-}
-
-void PlanSegment::setContext(const ContextPtr & context_) { context = Context::createCopy(context_); }
-
-void PlanSegment::setPlanSegmentToQueryPlan(QueryPlan::Node * node)
+void PlanSegment::setPlanSegmentToQueryPlan(QueryPlan::Node * node, ContextPtr & context)
 {
     if (!node)
         return;
 
     if (auto * remote_step = dynamic_cast<RemoteExchangeSourceStep *>(node->step.get()))
-        remote_step->setPlanSegment(this);
+        remote_step->setPlanSegment(this, context);
     else
     {
         for (auto & child : node->children)
         {
-            setPlanSegmentToQueryPlan(child);
+            setPlanSegmentToQueryPlan(child, context);
         }
     }
 }
@@ -291,7 +303,6 @@ void PlanSegment::serialize(WriteBuffer & buf) const
         output->serialize(buf);
 
     coordinator_address.serialize(buf);
-    current_address.serialize(buf);
 
     writeBinary(cluster_name, buf);
     writeBinary(parallel, buf);
@@ -303,7 +314,7 @@ void PlanSegment::serialize(WriteBuffer & buf) const
     writeBinary(parallel_index, buf);
 }
 
-void PlanSegment::deserialize(ReadBuffer & buf)
+void PlanSegment::deserialize(ReadBuffer & buf, ContextMutablePtr context)
 {
     readBinary(segment_id, buf);
     readBinary(query_id, buf);
@@ -338,7 +349,6 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     }
 
     coordinator_address.deserialize(buf);
-    current_address.deserialize(buf);
 
     readBinary(cluster_name, buf);
     readBinary(parallel, buf);
@@ -356,21 +366,67 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     readBinary(parallel_index, buf);
 }
 
+void PlanSegment::toProto(Protos::PlanSegment & plan_segment_proto)
+{
+    auto plan_ptr = std::make_unique<Protos::QueryPlan>();
+    
+    query_plan.toProto(*plan_ptr);
+    plan_segment_proto.set_allocated_query_plan(plan_ptr.release());
+    plan_segment_proto.set_cluster_name(cluster_name);
+    plan_segment_proto.set_parallel(parallel);
+    plan_segment_proto.set_exchange_parallel_size(exchange_parallel_size);
+    if (outputs.empty())
+        throw Exception("Cannot find output when serialize PlanSegment", ErrorCodes::LOGICAL_ERROR);
+    for (auto & output : outputs)
+    {
+        Protos::PlanSegmentOutput output_proto;
+        output->toProto(output_proto);
+        *plan_segment_proto.add_outputs() = std::move(output_proto);
+    }
+
+    for (const auto & id : runtime_filters)
+        plan_segment_proto.add_runtime_filter_id(id);
+}
+
+void PlanSegment::fillFromProto(const Protos::PlanSegment & proto, ContextMutablePtr context_)
+{
+    query_plan.addInterpreterContext(context_);
+    query_plan.fromProto(proto.query_plan());
+    cluster_name = proto.cluster_name();
+    parallel = proto.parallel();
+    exchange_parallel_size = proto.exchange_parallel_size();
+    query_id = proto.query_id();
+    segment_id = proto.segment_id();
+    coordinator_address = AddressInfo{proto.coordinator_address()};
+
+    for(const auto & output_proto: proto.outputs())
+    {
+        auto cur_output = std::make_shared<PlanSegmentOutput>();
+        cur_output->fillFromProto(output_proto);
+        outputs.emplace_back(std::move(cur_output));
+    }
+
+    for(auto runtime_filter_id: proto.runtime_filter_id())
+    {   
+        runtime_filters.emplace(runtime_filter_id);
+    }
+
+}
 /**
  * update plansegemnt if
  * 1. a segment is deserialized
  * 2. before final segment executed on coordinator
  */
-void PlanSegment::update()
+void PlanSegment::update(ContextPtr context)
 {
-    setPlanSegmentToQueryPlan(query_plan.getRoot());
+    setPlanSegmentToQueryPlan(query_plan.getRoot(), context);
 }
 
-PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextPtr context_)
+PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextMutablePtr context)
 {
-    auto plan_segment = std::make_unique<PlanSegment>(context_);
-    plan_segment->deserialize(buf);
-    plan_segment->update();
+    auto plan_segment = std::make_unique<PlanSegment>();
+    plan_segment->deserialize(buf, context);
+    plan_segment->update(std::move(context));
     return plan_segment;
 }
 
@@ -394,7 +450,6 @@ String PlanSegment::toString() const
         ostr << output->toString(4) << "\n";
 
     ostr << "coordinator_address: " << coordinator_address.toString() << "\n";
-    ostr << "current_address: " << current_address.toString() << "\n";
     ostr << "cluster_name: " << cluster_name << "\n";
     ostr << "parallel: " << parallel << ", exchange_parallel_size: " << exchange_parallel_size;
 

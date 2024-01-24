@@ -182,11 +182,11 @@ void RuntimeFilterConsumer::transferRuntimeFilter(RuntimeFilterData && data)
     auto * controller = new brpc::Controller;
     Protos::TransferRuntimeFilterRequest request;
     std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(
-        extractExchangeStatusHostPort(coordinator_address), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        extractExchangeHostPort(coordinator_address), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
     Protos::RuntimeFilterService_Stub runtime_filter_service(&rpc_client->getChannel());
     request.set_query_id(query_id);
     request.set_builder_id(builder->getId());
-    request.set_worker_address(extractExchangeStatusHostPort(current_address));
+    request.set_worker_address(extractExchangeHostPort(current_address));
     request.set_require_parallel_size(parallel);
     request.set_filter_data(write_buffer.str());
     runtime_filter_service.transferRuntimeFilter(

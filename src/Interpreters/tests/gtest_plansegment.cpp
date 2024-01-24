@@ -59,5 +59,5 @@ TEST(PlanSegmentTest, PlanSegmentSerDer)
      */
     ReadBufferFromString read_buffer(write_buffer.str());
     PlanSegmentPtr new_plan_segment = std::make_unique<PlanSegment>();
-    new_plan_segment->deserialize(read_buffer);
+    new_plan_segment->deserialize(read_buffer, ContextMutablePtr());
 }
