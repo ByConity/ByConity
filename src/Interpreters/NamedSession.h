@@ -55,8 +55,8 @@ public:
     }
 
     std::vector<std::pair<Key, std::shared_ptr<CnchWorkerResource>>> getAllWorkerResources() const;
-private:
 
+private:
     /// TODO it's very complicated. Make simple std::map with time_t or boost::multi_index.
     using Container = std::unordered_map<Key, std::shared_ptr<NamedSession>, SessionKeyHash>;
     using CloseTimes = std::deque<std::vector<Key>>;
@@ -99,6 +99,8 @@ struct NamedSession
     NamedSession(NamedSessionKey key_, ContextPtr context_, std::chrono::steady_clock::duration timeout_, NamedSessions & parent_);
     void release();
 
+    String getID() const { return key.first + "-" + key.second; }
+
     class SessionKeyHash
     {
     public:
@@ -125,6 +127,8 @@ struct NamedCnchSession
 
     NamedCnchSession(NamedSessionKey key_, ContextPtr context_, std::chrono::steady_clock::duration timeout_, NamedCnchSessions & parent_);
     void release();
+
+    String getID() const { return std::to_string(key); }
 };
 
 }
