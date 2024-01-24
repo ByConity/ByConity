@@ -508,9 +508,9 @@ public:
         return escapeString(name_space) + '_' + UNDO_BUFFER_PREFIX + toString(txn);
     }
 
-    static std::string undoBufferStoreKey(const std::string & name_space, const UInt64 & txn, const UndoResource & resource)
+    static std::string undoBufferStoreKey(const std::string & name_space, const UInt64 & txn, const String & rpc_address, const UndoResource & resource)
     {
-        return undoBufferKey(name_space, txn) + '_' + escapeString(toString(resource.id));
+        return undoBufferKey(name_space, txn) + '_' + escapeString(rpc_address) + '_' + escapeString(toString(resource.id));
     }
 
     static std::string kvLockKey(const std::string & name_space, const std::string & uuid, const std::string & part_name)
@@ -918,7 +918,7 @@ public:
     Strings getAllMutations(const String & name_space, const String & uuid);
     std::multimap<String, String> getAllMutations(const String & name_space);
 
-    void writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & uuid, UndoResources & resources);
+    void writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & rpc_address, const String & uuid, UndoResources & resources);
 
     void clearUndoBuffer(const String & name_space, const UInt64 & txnID);
     IMetaStore::IteratorPtr getUndoBuffer(const String & name_space, UInt64 txnID);

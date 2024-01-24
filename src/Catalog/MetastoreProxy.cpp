@@ -1299,7 +1299,7 @@ std::unordered_set<UInt64> MetastoreProxy::getActiveTransactionsSet()
     return res;
 }
 
-void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & uuid, UndoResources & resources)
+void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & rpc_address, const String & uuid, UndoResources & resources)
 {
     if (resources.empty())
         return;
@@ -1309,7 +1309,7 @@ void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & t
     for (auto & resource : resources)
     {
         resource.setUUID(uuid);
-        batch_write.AddPut(SinglePutRequest(undoBufferStoreKey(name_space, txnID, resource), resource.serialize()));
+        batch_write.AddPut(SinglePutRequest(undoBufferStoreKey(name_space, txnID, rpc_address, resource), resource.serialize()));
     }
     metastore_ptr->batchWrite(batch_write, resp);
 }
