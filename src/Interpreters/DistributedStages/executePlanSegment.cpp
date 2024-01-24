@@ -13,8 +13,11 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <Core/Defines.h>
 #include <Core/Types.h>
 #include <DataStreams/BlockIO.h>
@@ -28,6 +31,7 @@
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Protos/plan_segment_manager.pb.h>
@@ -48,23 +52,23 @@ namespace ErrorCodes
     extern const int SUPPORT_IS_DISABLED;
 }
 
-BlockIO lazyExecutePlanSegmentLocally(PlanSegmentPtr plan_segment, ContextMutablePtr context)
+BlockIO lazyExecutePlanSegmentLocally(PlanSegmentInstancePtr plan_segment_instance, ContextMutablePtr context)
 {
-    if (!plan_segment)
+    if (!plan_segment_instance)
         throw Exception("Cannot execute empty plan segment", ErrorCodes::LOGICAL_ERROR);
-    PlanSegmentExecutor executor(std::move(plan_segment), std::move(context));
+    PlanSegmentExecutor executor(std::move(plan_segment_instance), std::move(context));
     return executor.lazyExecute();
 }
 
-void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextMutablePtr context, bool async)
+void executePlanSegmentInternal(PlanSegmentInstancePtr plan_segment_instance, ContextMutablePtr context, bool async)
 {
-    if (!plan_segment)
+    if (!plan_segment_instance)
         throw Exception("Cannot execute empty plan segment", ErrorCodes::LOGICAL_ERROR);
 
     if (context->getSettingsRef().debug_plan_generation)
         return;
 
-    auto executor = std::make_shared<PlanSegmentExecutor>(std::move(plan_segment), std::move(context));
+    auto executor = std::make_shared<PlanSegmentExecutor>(std::move(plan_segment_instance), std::move(context));
 
     if (async)
     {
@@ -117,9 +121,9 @@ static void OnSendPlanSegmentCallback(
 }
 
 void executePlanSegmentRemotely(
-    const PlanSegment & plan_segment, ContextPtr context, AsyncContextPtr & async_context, const WorkerId & worker_id)
+    const PlanSegment & plan_segment, const PlanSegmentExecutionInfo & execution_info, ContextPtr context, AsyncContextPtr & async_context, const WorkerId & worker_id)
 {
-    auto execute_address = extractExchangeStatusHostPort(plan_segment.getCurrentAddress());
+    auto execute_address = extractExchangeHostPort(execution_info.execution_address);
     auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
     Protos::PlanSegmentManagerService_Stub manager_stub(&rpc_channel->getChannel());
     Protos::ExecutePlanSegmentRequest request;
@@ -127,6 +131,7 @@ void executePlanSegmentRemotely(
     request.set_brpc_protocol_minor_revision(DBMS_BRPC_PROTOCOL_MINOR_VERSION);
     request.set_query_id(plan_segment.getQueryId());
     request.set_plan_segment_id(plan_segment.getPlanSegmentId());
+    request.set_parallel_id(execution_info.parallel_id);
     request.set_initial_query_start_time(context->getClientInfo().initial_query_start_time_microseconds.value);
     auto settings = context->getSettingsRef().dumpToMap();
     request.mutable_settings()->insert(settings.begin(), settings.end());
@@ -138,12 +143,12 @@ void executePlanSegmentRemotely(
     request.set_current_host(coordinator_address.getHostName());
     request.set_current_port(coordinator_address.getPort());
     request.set_current_exchange_port(coordinator_address.getExchangePort());
-    request.set_current_exchange_status_port(coordinator_address.getExchangeStatusPort());
+    request.set_current_exchange_status_port(coordinator_address.getExchangePort());
 
     request.set_coordinator_host(coordinator_address.getHostName());
     request.set_coordinator_port(coordinator_address.getPort());
     request.set_coordinator_exchange_port(coordinator_address.getExchangePort());
-    request.set_coordinator_exchange_status_port(coordinator_address.getExchangeStatusPort());
+    request.set_coordinator_exchange_status_port(coordinator_address.getExchangePort());
 
     request.set_database(context->getCurrentDatabase());
     request.set_check_session(!(context->getSettingsRef().enable_new_scheduler && context->getSettingsRef().bsp_mode));
@@ -185,45 +190,9 @@ void executePlanSegmentRemotely(
     manager_stub.executeQuery(cntl, &request, response, done);
 }
 
-void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context)
-{
-    PlanSegmentPtr plan_segment_clone
-        = std::make_unique<PlanSegment>(plan_segment.getPlanSegmentId(), plan_segment.getQueryId(), plan_segment.getClusterName());
-    plan_segment_clone->setContext(initial_query_context);
-
-    ContextMutablePtr context = plan_segment_clone->getContext();
-
-    if (!context->hasQueryContext())
-        context->makeQueryContext();
-
-    ClientInfo & client_info = context->getClientInfo();
-    client_info.initial_query_id = plan_segment.getQueryId();
-    client_info.current_query_id = client_info.initial_query_id + "_" + std::to_string(plan_segment.getPlanSegmentId());
-    client_info.brpc_protocol_major_version = DBMS_BRPC_PROTOCOL_MAJOR_VERSION;
-    client_info.brpc_protocol_minor_version = DBMS_BRPC_PROTOCOL_MINOR_VERSION;
-    client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
-    client_info.interface = ClientInfo::Interface::BRPC;
-    context->setProcessListElement(nullptr);
-
-    MemoryWriteBuffer write_buf;
-    plan_segment.getQueryPlan().serialize(write_buf);
-    auto read_buf = write_buf.tryGetReadBuffer();
-    plan_segment_clone->getQueryPlan().addInterpreterContext(context);
-    plan_segment_clone->getQueryPlan().deserialize(*read_buf);
-
-    plan_segment_clone->setCoordinatorAddress(plan_segment.getCoordinatorAddress());
-    plan_segment_clone->setCurrentAddress(plan_segment.getCurrentAddress());
-    plan_segment_clone->appendPlanSegmentInputs(plan_segment.getPlanSegmentInputs());
-    plan_segment_clone->appendPlanSegmentOutputs(plan_segment.getPlanSegmentOutputs());
-    plan_segment_clone->setParallelSize(plan_segment.getParallelSize());
-    plan_segment_clone->setExchangeParallelSize(plan_segment.getExchangeParallelSize());
-
-    executePlanSegmentInternal(std::move(plan_segment_clone), context, true);
-}
-
 void cleanupExchangeDataForQuery(const AddressInfo & address, UInt64 & query_unique_id)
 {
-    auto execute_address = extractExchangeStatusHostPort(address);
+    auto execute_address = extractExchangeHostPort(address);
     auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
     Protos::RegistryService_Stub manager_stub(&rpc_channel->getChannel());
     Protos::CleanupExchangeDataRequest request;
@@ -234,4 +203,76 @@ void cleanupExchangeDataForQuery(const AddressInfo & address, UInt64 & query_uni
     manager_stub.cleanupExchangeData(&cntl, &request, &response, nullptr);
     rpc_channel->assertController(cntl);
 }
+
+void prepareQueryCommonBuf(
+    butil::IOBuf & common_buf, const PlanSegment & any_plan_segment, ContextPtr & context)
+{
+    Protos::QueryCommon query_common;
+    const auto & client_info = context->getClientInfo();
+    auto min_compatible_brpc_minor_version = std::min(static_cast<UInt32>(DBMS_BRPC_PROTOCOL_MINOR_VERSION), static_cast<UInt32>(context->getSettingsRef().min_compatible_brpc_minor_version.value));
+    query_common.set_brpc_protocol_minor_revision(min_compatible_brpc_minor_version);
+    query_common.set_query_id(any_plan_segment.getQueryId());
+    query_common.set_initial_query_start_time(client_info.initial_query_start_time_microseconds.value);
+    query_common.set_initial_user(client_info.initial_user);
+    query_common.set_initial_client_host(client_info.initial_address.host().toString());
+    query_common.set_initial_client_port(client_info.initial_address.port());
+    any_plan_segment.getCoordinatorAddress().toProto(*query_common.mutable_coordinator_address());
+    query_common.set_database(context->getCurrentDatabase());
+    query_common.set_check_session(!(context->getSettingsRef().enable_new_scheduler && context->getSettingsRef().bsp_mode));
+    query_common.set_txn_id(context->getCurrentTransactionID().toUInt64());
+    query_common.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64());
+    const String & quota_key = client_info.quota_key;
+    if (!client_info.quota_key.empty())
+        query_common.set_quota(quota_key);
+
+    butil::IOBuf query_common_buf;
+    butil::IOBufAsZeroCopyOutputStream wrapper(&common_buf);
+    query_common.SerializeToZeroCopyStream(&wrapper);
+}
+
+void executePlanSegmentRemotelyWithPreparedBuf(
+    const PlanSegment & plan_segment,
+    PlanSegmentExecutionInfo execution_info,
+    const butil::IOBuf & query_common_buf,
+    const butil::IOBuf & query_settings_buf,
+    const butil::IOBuf & plan_segment_buf,
+    AsyncContextPtr & async_context,
+    const Context & context,
+    const WorkerId & worker_id)
+{
+    auto execute_address = extractExchangeHostPort(execution_info.execution_address);
+    auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+    Protos::PlanSegmentManagerService_Stub manager_stub(&rpc_channel->getChannel());
+    Protos::SubmitPlanSegmentRequest request;
+    request.set_brpc_protocol_major_revision(DBMS_BRPC_PROTOCOL_MAJOR_VERSION);
+    request.set_plan_segment_id(plan_segment.getPlanSegmentId());
+    request.set_parallel_id(execution_info.parallel_id);
+
+    execution_info.execution_address.toProto(*request.mutable_execution_address());
+
+    butil::IOBuf attachment;
+
+    request.set_query_common_buf_size(query_common_buf.size());
+    attachment.append(query_common_buf);
+
+    request.set_query_settings_buf_size(query_settings_buf.size());
+    if (!query_settings_buf.empty())
+    {
+        attachment.append(query_settings_buf);
+    }
+
+    request.set_plan_segment_buf_size(plan_segment_buf.size());
+    attachment.append(plan_segment_buf);
+
+    /// async call
+    brpc::Controller * cntl = new brpc::Controller();
+    Protos::ExecutePlanSegmentResponse * response = new Protos::ExecutePlanSegmentResponse();
+    auto call_id = cntl->call_id();
+    cntl->request_attachment().append(attachment.movable());
+    google::protobuf::Closure * done = brpc::NewCallback(
+        &OnSendPlanSegmentCallback, response, cntl, rpc_channel, context.getWorkerStatusManager(), async_context, worker_id);
+    async_context->addCallId(call_id);
+    manager_stub.submitPlanSegment(cntl, &request, response, done);
+}
+
 }

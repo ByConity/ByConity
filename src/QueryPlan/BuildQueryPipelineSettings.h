@@ -18,6 +18,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/DistributedPipelineSettings.h>
 #include <Interpreters/ExpressionActionsSettings.h>
+#include "Interpreters/DistributedStages/PlanSegmentInstance.h"
 
 #include <cstddef>
 
@@ -26,6 +27,7 @@ namespace DB
 
 struct Settings;
 class PlanSegment;
+struct PlanSegmentExecutionInfo;
 
 struct BuildQueryPipelineSettings
 {
@@ -38,7 +40,7 @@ struct BuildQueryPipelineSettings
 
     static BuildQueryPipelineSettings fromSettings(const Settings & from);
     static BuildQueryPipelineSettings fromContext(ContextPtr from);
-    static BuildQueryPipelineSettings fromPlanSegment(PlanSegment * plan_segment, ContextPtr context, bool is_explain = false);
+    static BuildQueryPipelineSettings
+    fromPlanSegment(PlanSegment * plan_segment, const PlanSegmentExecutionInfo & info, ContextPtr context, bool is_explain = false);
 };
-
 }

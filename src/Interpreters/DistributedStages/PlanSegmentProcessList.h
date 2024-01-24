@@ -82,7 +82,6 @@ private:
     String initial_query_id;
     size_t segment_id;
     AddressInfo coordinator_address;
-    AddressInfo current_address;
 
 public:
     PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, size_t segment_id_);
@@ -93,8 +92,6 @@ public:
     const QueryStatus & get() const { return *status; }
     void setCoordinatorAddress(const AddressInfo & coordinator_address_) {coordinator_address = coordinator_address_;}
     AddressInfo getCoordinatorAddress() const {return coordinator_address;}
-    void setCurrentAddress(const AddressInfo & current_address_) {current_address = current_address_;}
-    AddressInfo getCurrentAddress() const {return current_address;}
     size_t getSegmentId() const {return segment_id;}
 };
 

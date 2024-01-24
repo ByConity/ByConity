@@ -20,7 +20,7 @@
 namespace DB
 {
 class PlanSegment;
-
+struct PlanSegmentExecutionInfo;
 struct DistributedPipelineSettings
 {
     bool is_distributed = false;
@@ -31,6 +31,6 @@ struct DistributedPipelineSettings
     AddressInfo coordinator_address{};
     AddressInfo current_address{};
 
-    static DistributedPipelineSettings fromPlanSegment(PlanSegment * plan_segment);
+    static DistributedPipelineSettings fromPlanSegment(PlanSegment * plan_segment, const PlanSegmentExecutionInfo & info);
 };
 }

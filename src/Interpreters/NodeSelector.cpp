@@ -89,13 +89,12 @@ void setPlansegmentParallelIndex(
     }
 }
 
-NodeSelectorResult LocalNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context)
+NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_context)
 {
     NodeSelectorResult result;
-    auto local_address = getLocalAddress(query_context);
+    auto local_address = getLocalAddress(*query_context);
     result.worker_nodes.emplace_back(local_address, NodeType::Local);
     result.indexes.emplace_back(0);
-    plan_segment_ptr->setParallelIndex(0);
     return result;
 }
 
@@ -160,7 +159,7 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
         }
         return result;
     }
-    auto local_address = getLocalAddress(query_context);
+    auto local_address = getLocalAddress(*query_context);
     for (const AddressInfo & addr : query_context->getExchangeDataTracker()->getExchangeDataAddrs(
              plan_segment_ptr, 0, plan_segment_ptr->getParallelSize(), cluster_nodes.rank_worker_ids.size()))
     {

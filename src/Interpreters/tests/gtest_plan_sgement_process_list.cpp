@@ -76,7 +76,7 @@ TEST(PlanSegmentProcessList, InsertTest)
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
-    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456");
     plan_segment.setCoordinatorAddress(coordinator_address);
     plan_segment_processlist.insert(plan_segment, context);
 }
@@ -96,7 +96,7 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
-    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456");
     plan_segment.setCoordinatorAddress(coordinator_address);
     auto plan_segment_process_entry = plan_segment_processlist.insert(plan_segment, context);
     auto async_func = [to_release_entry = std::move(plan_segment_process_entry)]() {
@@ -108,7 +108,7 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
         if (thread.joinable())
             thread.join();
     });
-    plan_segment.setCoordinatorAddress(AddressInfo("localhost", 8888, "test", "123456", 6666, 9999));
+    plan_segment.setCoordinatorAddress(AddressInfo("localhost", 8888, "test", "123456"));
     plan_segment_processlist.insert(plan_segment, context, true);
 }
 
@@ -126,7 +126,7 @@ TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
-    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456");
     plan_segment.setCoordinatorAddress(coordinator_address);
     auto plan_segment_process_entry = plan_segment_processlist.insert(plan_segment, context);
 
@@ -141,7 +141,7 @@ TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
             thread.join();
     });
 
-    plan_segment.setCoordinatorAddress(AddressInfo("localhost", 8888, "test", "123456", 6666, 9999));
+    plan_segment.setCoordinatorAddress(AddressInfo("localhost", 8888, "test", "123456"));
     ASSERT_THROW(plan_segment_processlist.insert(plan_segment, context, true), DB::Exception);
 }
 

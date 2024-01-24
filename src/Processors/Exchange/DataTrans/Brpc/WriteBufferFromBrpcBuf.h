@@ -64,7 +64,7 @@ public:
 
     const auto & getIntermediateBuf() const { return buf; }
 
-    const auto & getFinishedBuf()
+    auto & getFinishedBuf()
     {
         finish();
         return buf;

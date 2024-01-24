@@ -36,7 +36,7 @@ namespace Protos
         AddressInfo() = default;
         AddressInfo(const String & host_name_, UInt16 port_, const String & user_, const String & password_);
         AddressInfo(const String & host_name_, UInt16 port_, const String & user_, const String & password_, UInt16 exchange_port_);
-        AddressInfo(const String & host_name_, UInt16 port_, const String & user_, const String & password_, UInt16 exchange_port_, UInt16 exchange_status_port);
+        AddressInfo(const Protos::AddressInfo & proto_);
 
         void serialize(WriteBuffer &) const;
         void deserialize(ReadBuffer &);
@@ -46,21 +46,10 @@ namespace Protos
         const String & getHostName() const { return host_name; }
         UInt16 getPort() const { return port; }
         UInt16 getExchangePort() const { return exchange_port;}
-        UInt16 getExchangeStatusPort() const {return exchange_status_port;}
         const String & getUser() const { return user; }
         const String & getPassword() const { return password; }
 
-        String toString() const
-        {
-            std::ostringstream ostr;
-
-            ostr << "host_name: " << host_name << ", "
-                 << "port: " << std::to_string(port) << ", "
-                 << "user: " <<  user << ", "
-                 << "exchange_port: " << exchange_port << ", "
-                 << "exchange_status_port: " << exchange_status_port;
-            return ostr.str();
-        }
+        String toString() const;
         inline bool operator == (AddressInfo const& rhs) const
         {
             return (this->host_name == rhs.host_name && this->port == rhs.port);
@@ -87,21 +76,12 @@ namespace Protos
         String user;
         String password;
         UInt16 exchange_port;
-        UInt16 exchange_status_port;
     };
 
     using AddressInfos = std::vector<AddressInfo>;
 
-    inline String extractHostPort(const AddressInfo & address) { return createHostPortString(address.getHostName(), toString(address.getPort())); }
-
-    std::vector<String> extractHostPorts(const AddressInfos & addresses);
-
+    inline String extractHostPort(const AddressInfo & address) { return createHostPortString(address.getHostName(), address.getPort()); }
     inline String extractExchangeHostPort(const AddressInfo & address) {return createHostPortString(address.getHostName(), toString(address.getExchangePort())); }
 
-    std::vector<String> extractExchangeHostPorts(const AddressInfos & addresses);
-
-    inline String extractExchangeStatusHostPort(const AddressInfo & address) {return createHostPortString(address.getHostName(), toString(address.getExchangeStatusPort())); }
-
-    std::vector<String> extractExchangeStatusHostPorts(const AddressInfos & addresses);
 
 }

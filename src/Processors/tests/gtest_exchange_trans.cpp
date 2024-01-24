@@ -143,7 +143,7 @@ TEST_F(ExchangeRemoteTest, SerDserChunk)
     chunk_info->bucket_num = 99;
     origin_chunk.setChunkInfo(chunk_info);
     WriteBufferFromBrpcBuf out;
-    NativeChunkOutputStream block_out(out, ClickHouseRevision::getVersionRevision(), header, false);
+    NativeChunkOutputStream block_out(out, header);
     block_out.write(origin_chunk);
     auto send_buf = out.getFinishedBuf();
 

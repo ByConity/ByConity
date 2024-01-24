@@ -3,8 +3,21 @@ package DB.Protos;
 
 import "data_models.proto";
 import "plan_node_utils.proto";
+import "plan_node.proto";
 
 option cc_generic_services = true;
+
+message PlanSegment {
+  optional string cluster_name = 1;
+  optional uint32 parallel = 2;
+  optional uint32  exchange_parallel_size = 3;
+  required QueryPlan query_plan = 4;
+  repeated PlanSegmentOutput outputs = 5;
+  repeated uint32 runtime_filter_id = 6;
+  optional uint32 segment_id = 7;
+  optional string query_id = 8;
+  optional AddressInfo coordinator_address = 9;
+}
 
 message CancelQueryRequest {
   required string query_id = 1;
@@ -57,6 +70,58 @@ message TraceMeta {
   required string tracestate = 2;
 }
 
+message QueryCommon {
+  // minor version number
+  required uint32 brpc_protocol_minor_revision = 1;
+  // id of distributed query
+  required string query_id = 2;
+  // user
+  required string initial_user = 3;
+  // the starting time of a distributed query
+  optional int64 initial_query_start_time = 4;
+
+  // the client info of a distributed query
+  optional string initial_client_host = 5;
+  optional int32 initial_client_port = 6;
+
+  // related to query quota mechanism
+  optional string quota = 7;
+
+  // coordinator address
+  optional AddressInfo coordinator_address = 8;
+
+  // Default database.
+  optional string database = 9;
+
+  // Cnch Transaction ID
+  required uint64 txn_id = 10;
+    
+  optional uint64 primary_txn_id = 11;
+  
+  // Opentelemetry protocol v2
+  optional TraceMeta trace_meta = 12;
+
+  optional bool check_session = 13;
+}
+
+message SubmitPlanSegmentRequest {
+  // major version number
+  required uint32 brpc_protocol_major_revision = 1;
+  
+  // common part for a mpp query
+  required uint32 query_common_buf_size = 2;
+
+  // common settings for a mpp query
+  required uint32 query_settings_buf_size = 3;
+
+  // PlanSegment buf size
+  optional uint32 plan_segment_buf_size = 4;
+
+  required uint32 plan_segment_id = 5;
+  required uint32 parallel_id = 6;
+  optional AddressInfo execution_address = 7;
+}
+
 message ExecutePlanSegmentRequest {
   // version number for plan segment serialize and deserialize
   required uint32 brpc_protocol_minor_revision = 1;
@@ -106,6 +171,7 @@ message ExecutePlanSegmentRequest {
 
   optional string initial_user = 28;
   optional bool check_session = 29;
+  optional uint32 parallel_id = 30;
 }
 
 message ExecutePlanSegmentResponse {
@@ -157,6 +223,8 @@ message ReportPlanSegmentErrorResponse {
 service PlanSegmentManagerService {
 
   rpc executeQuery(ExecutePlanSegmentRequest) returns (ExecutePlanSegmentResponse);
+
+  rpc submitPlanSegment(SubmitPlanSegmentRequest) returns (ExecutePlanSegmentResponse);
 
   rpc cancelQuery(CancelQueryRequest) returns (CancelQueryResponse);
 

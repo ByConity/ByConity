@@ -1012,8 +1012,13 @@ public:
             + " SETTINGS early_limit_for_map_virtual_columns = 1, max_threads = 1";
         String query = "SELECT groupUniqArrayArray(ks) AS keys FROM ( " + inner_query + " )";
 
+        auto query_context = Context::createCopy(context->getQueryContext());
+        query_context->makeQueryContext();
+        auto query_id = fmt::format("{}_interal", query_context->getCurrentQueryId());
+        query_context->setCurrentQueryId(query_id);
+
         /// need to hold some shared ptrs in block_io here
-        BlockIO block_io = executeQuery(query, context->getQueryContext(), true);
+        BlockIO block_io = executeQuery(query, query_context, true);
         auto stream = block_io.getInputStream();
         auto res = stream->read();
         if (res)

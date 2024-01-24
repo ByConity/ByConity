@@ -513,19 +513,16 @@ public:
         auto port = eng() % 1000 + 10000;
         auto user = fmt::format("text{}", eng() % 100);
         auto password = fmt::format("text{}", eng() % 100);
-        auto exchange_port = eng() % 1000 + 10000;
-        auto exchange_status_port = eng() % 1000 + 10000;
-        return AddressInfo(host_name, port, user, password, exchange_port, exchange_status_port);
+        return AddressInfo(host_name, port, user, password);
     }
 
     static std::shared_ptr<PlanSegmentInput> generatePlanSegmentInput(std::default_random_engine &)
     {
         Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
-        AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
+        AddressInfo local_address("localhost", 0, "test", "123456");
         PlanSegmentInputs inputs;
 
         auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
-        input->setParallelIndex(1);
         input->setExchangeParallelSize(2);
         input->setExchangeId(3);
         input->setPlanSegmentId(4);

@@ -50,7 +50,7 @@ public:
 
     PlanSegmentInputs getInput() const { return inputs; }
 
-    void setPlanSegment(PlanSegment * plan_segment_);
+    void setPlanSegment(PlanSegment * plan_segment_, ContextPtr context_);
     PlanSegment * getPlanSegment() const { return plan_segment; }
     size_t getPlanSegmentId() const { return plan_segment_id; }
 

@@ -43,7 +43,7 @@ public:
     virtual AddressInfos sendPlanSegment(PlanSegment *, bool, ContextPtr, std::shared_ptr<DAGGraph>, std::vector<size_t>) override
     {
         AddressInfos res;
-        AddressInfo address("127.0.0.1", 9000, "test", "test", 9001, 9002);
+        AddressInfo address("127.0.0.1", 9000, "test", "test");
         res.emplace_back(std::move(address));
         std::cerr << "call sendPlanSegment!" << std::endl;
         return res;

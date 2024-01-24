@@ -240,7 +240,6 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
 
     auto plan_segment = std::make_unique<PlanSegment>(segment_id, plan_segment_context.query_id, cluster_name);
     plan_segment->setQueryPlan(std::move(sub_plan));
-    plan_segment->setContext(plan_segment_context.context);
     plan_segment->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
 
     PlanSegmentType output_type = segment_id == 0 ? PlanSegmentType::OUTPUT : PlanSegmentType::EXCHANGE;
@@ -273,8 +272,6 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
         plan_segment->setParallelSize(1);
 
     plan_segment->appendPlanSegmentInputs(inputs);
-
-    plan_segment->setPlanSegmentToQueryPlan(plan_segment->getQueryPlan().getRoot());
 
     PlanSegmentTree::Node plan_segment_node{.plan_segment = std::move(plan_segment)};
     plan_segment_context.plan_segment_tree->addNode(std::move(plan_segment_node));

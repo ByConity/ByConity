@@ -84,6 +84,13 @@ public:
         const ::DB::Protos::ExecutePlanSegmentRequest * request,
         ::DB::Protos::ExecutePlanSegmentResponse * response,
         ::google::protobuf::Closure * done) override;
+    
+    /// submit query described by plan segment
+    void submitPlanSegment(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::SubmitPlanSegmentRequest * request,
+        ::DB::Protos::ExecutePlanSegmentResponse * response,
+        ::google::protobuf::Closure * done) override;
 
     /// receive exception report send terminate query (coordinate host ---> segment executor host)
     void cancelQuery(
