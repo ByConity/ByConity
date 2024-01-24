@@ -122,8 +122,16 @@ TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, con
 
                 inter_join_nodes.emplace_back(row_count, new_join_node, current_group_id, group_id);
             }
+            
             std::sort(inter_join_nodes.begin(), inter_join_nodes.end(), [](const auto & lhs, const auto & rhs) {
-                return std::get<0>(lhs) < std::get<0>(rhs);
+                if (std::get<0>(lhs) != std::get<0>(rhs))
+                    return std::get<0>(lhs) < std::get<0>(rhs);
+                if (std::get<2>(lhs) != std::get<2>(rhs))
+                    return std::get<2>(lhs) < std::get<2>(rhs);
+                if (std::get<3>(lhs) != std::get<3>(rhs))
+                    return std::get<3>(lhs) < std::get<3>(rhs);
+
+                return std::get<1>(lhs)->getId() < std::get<1>(rhs)->getId();
             });
 
             const auto & min_join_node = inter_join_nodes.at(0);

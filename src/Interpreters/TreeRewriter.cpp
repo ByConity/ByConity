@@ -968,7 +968,7 @@ void TreeRewriterResult::collectSourceColumns(bool add_special)
 /// Calculate which columns are required to execute the expression.
 /// Then, delete all other columns from the list of available columns.
 /// After execution, columns will only contain the list of columns needed to read from the table.
-void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr & query, bool is_select)
+void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr & query, bool is_select, bool rewrite_unknown_left_join_identifier)
 {
     /// We calculate required_source_columns with source_columns modifications and swap them on exit
     required_source_columns = source_columns;
@@ -1129,7 +1129,7 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
         }
     }
 
-    if (!unknown_required_source_columns.empty())
+    if (!unknown_required_source_columns.empty() && rewrite_unknown_left_join_identifier)
     {
         // try rewrite unknown columns
         collectJoinTableAndAlias(context, query);

@@ -17,6 +17,7 @@
 #include <string>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
+#include <Interpreters/DistributedStages/PlanSegmentReport.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/NamedSession.h>
 #include <Processors/Exchange/DataTrans/Brpc/ReadBufferFromBrpcBuf.h>
@@ -157,12 +158,15 @@ void PlanSegmentManagerRpcService::executeQuery(
         ThreadFromGlobalPool async_thread([query_context = std::move(query_context),
                                             execution_info = std::move(execution_info),
                                            plan_segment_buf = std::make_shared<butil::IOBuf>(cntl->request_attachment().movable())]() {
+            bool before_execute = true;
             try
             {
                 /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
                 ReadBufferFromBrpcBuf plan_segment_read_buf(*plan_segment_buf);
                 auto plan_segment = PlanSegment::deserializePlanSegment(plan_segment_read_buf, query_context);
                 auto segment_instance = std::make_unique<PlanSegmentInstance>();
+
+                before_execute = false;
                 segment_instance->info = std::move(execution_info);
                 segment_instance->plan_segment = std::move(plan_segment);
                 executePlanSegmentInternal(std::move(segment_instance), std::move(query_context), false);
@@ -171,6 +175,23 @@ void PlanSegmentManagerRpcService::executeQuery(
             catch (...)
             {
                 tryLogCurrentException(__PRETTY_FUNCTION__);
+
+                if (before_execute)
+                {
+                    int exception_code = getCurrentExceptionCode();
+                    auto exception_message = getCurrentExceptionMessage(false);
+
+                    const auto & host = extractExchangeHostPort(execution_info.execution_address);
+                    RuntimeSegmentsStatus runtime_segment_status;
+                    runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
+                    runtime_segment_status.segment_id = 0;
+                    runtime_segment_status.is_succeed = false;
+                    runtime_segment_status.is_cancelled = false;
+                    runtime_segment_status.code = exception_code;
+                    runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
+
+                    reportPlanSegmentStatus(execution_info.execution_address, runtime_segment_status);
+                }
             }
         });
         async_thread.detach();
@@ -506,6 +527,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                                            query_common = std::move(query_common),
                                            segment_id = request->plan_segment_id(),
                                            plan_segment_buf = std::make_shared<butil::IOBuf>(plan_segment_buf.movable()) ]() {
+            bool before_execute = true;
             try
             {
                 /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
@@ -520,6 +542,8 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                 plan_segment->fillFromProto(plan_segment_proto, query_context);
                 plan_segment->update(query_context);
                 auto segment_instance = std::make_unique<PlanSegmentInstance>();
+
+                before_execute = false;
                 segment_instance->info = std::move(execution_info);
                 segment_instance->plan_segment = std::move(plan_segment);
                 executePlanSegmentInternal(std::move(segment_instance), std::move(query_context), false);
@@ -527,6 +551,23 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
             catch (...)
             {
                 tryLogCurrentException(__PRETTY_FUNCTION__);
+
+                if (before_execute)
+                {
+                    int exception_code = getCurrentExceptionCode();
+                    auto exception_message = getCurrentExceptionMessage(false);
+
+                    const auto & host = extractExchangeHostPort(execution_info.execution_address);
+                    RuntimeSegmentsStatus runtime_segment_status;
+                    runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
+                    runtime_segment_status.segment_id = segment_id;
+                    runtime_segment_status.is_succeed = false;
+                    runtime_segment_status.is_cancelled = false;
+                    runtime_segment_status.code = exception_code;
+                    runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
+
+                    reportPlanSegmentStatus(execution_info.execution_address, runtime_segment_status);
+                }
             }
         });
         async_thread.detach();

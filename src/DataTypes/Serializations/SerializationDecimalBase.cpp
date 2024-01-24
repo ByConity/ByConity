@@ -106,8 +106,8 @@ struct MemoryCompareWrapper<T, true>
         using UnsignedType = typename std::make_unsigned<real_type>::type;
         auto unsigned_value = static_cast<UnsignedType>(value);
         /// flip sign bit for signed type
-        if constexpr (std::is_signed_v<T>)
-            unsigned_value ^= (1ull << (sizeof(T) * 8 - 1));
+        if constexpr (std::is_signed_v<real_type>)
+            unsigned_value ^= (1ull << (sizeof(real_type) * 8 - 1));
         /// write in big-endian order
         unsigned_value = Endian::big(unsigned_value);
         writeBinary(unsigned_value, ostr);
@@ -123,8 +123,8 @@ struct MemoryCompareWrapper<T, true>
         readBinary(unsigned_value, istr);
         unsigned_value = Endian::big(unsigned_value);
         /// flip sign bit for signed type
-        if constexpr (std::is_signed_v<T>)
-            unsigned_value ^= (1ull << (sizeof(T) * 8 - 1));
+        if constexpr (std::is_signed_v<real_type>)
+            unsigned_value ^= (1ull << (sizeof(real_type) * 8 - 1));
         assert_cast<ColumnType &>(column).getData().push_back(FieldType(unsigned_value));
     }
 };

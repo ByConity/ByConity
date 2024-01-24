@@ -46,6 +46,7 @@ namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_FORMAT;
+    extern const int SUPPORT_IS_DISABLED;
 }
 
 StorageCnchHive::StorageCnchHive(
@@ -341,6 +342,38 @@ HivePartitions StorageCnchHive::selectPartitions(
     return partitions;
 }
 
+void StorageCnchHive::checkAlterSettings(const AlterCommands & commands) const
+{
+    static std::set<String> supported_settings = {
+        "cnch_vw_default",
+        "cnch_vw_read",
+        "cnch_server_vw",
+
+        "enable_local_disk_cache"
+    };
+
+    /// Check whether the value is legal for Setting.
+    /// For example, we have a setting item, `SettingBool setting_test`
+    /// If you submit a Alter query: "Alter table test modify setting setting_test='abc'"
+    /// Then, it will throw an Exception here, because we can't convert string 'abc' to a Bool.
+    auto settings_copy = *storage_settings;
+
+    for (auto & command : commands)
+    {
+        if (command.type != AlterCommand::MODIFY_SETTING)
+            continue;
+
+        for (auto & change : command.settings_changes)
+        {
+            if (!supported_settings.count(change.name))
+                throw Exception("Setting " + change.name + " cannot be modified", ErrorCodes::SUPPORT_IS_DISABLED);
+
+            settings_copy.set(change.name, change.value);
+        }
+    }
+}
+
+
 void StorageCnchHive::checkAlterIsPossible(const AlterCommands & commands, ContextPtr) const
 {
     for (const auto & command : commands)
@@ -355,6 +388,8 @@ void StorageCnchHive::checkAlterIsPossible(const AlterCommands & commands, Conte
 
 void StorageCnchHive::alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &)
 {
+    checkAlterSettings(params);
+
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
 
     params.apply(new_metadata, local_context);

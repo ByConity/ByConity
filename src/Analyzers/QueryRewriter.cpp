@@ -492,7 +492,7 @@ namespace
         // 5. Call `TreeOptimizer` since some optimizations will change the query result
         TreeOptimizer::apply(node, result, tables_with_columns, context, false);
 
-        result.collectUsedColumns(context, node, true);
+        result.collectUsedColumns(context, node, true, settings.rewrite_unknown_left_join_identifier);
     }
 
     class MarkTupleLiteralsAsLegacyData
