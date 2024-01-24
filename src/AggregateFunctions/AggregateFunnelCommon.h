@@ -32,6 +32,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <common/logger_useful.h>
 
+#include "pdqsort.h"
+
 namespace DB
 {
 
@@ -778,6 +780,178 @@ public:
     std::vector<REPType> value;
     std::vector<Arithmetics> ariths;
 };
+
+// ========================= For funnelPathSplit: ============================
+
+template <typename T>
+using Vector = std::vector<T, TrackAllocator<T>>;
+
+
+struct ExtraProp
+{
+    bool is_null;
+    StringRef prop;
+};
+using ExtraPropVec = Vector<ExtraProp>;
+
+using EventIndex = UInt16;
+using EventId = Int32;
+using Time = UInt64;
+
+struct NodeInfo
+{
+    EventId id{};
+    StringRef prop{};
+};
+
+struct PathInfo
+{
+    Vector<NodeInfo> path;
+    size_t level{};
+
+    void clear()
+    {
+        Vector<NodeInfo>{}.swap(path);
+        level = 0;
+    }
+};
+
+struct PathInfoPro
+{
+    Vector<NodeInfo> path;
+    size_t level{};
+    Time begin_time{};
+};
+
+using PathBuckets = Vector<PathInfoPro>;
+// FunnelLevelMap: unordered_map(level, set(bucket_index))
+using FunnelLevelMap = std::unordered_map<size_t, std::set<size_t>>;
+
+struct Event
+{
+    EventIndex index;
+    Time time;
+    StringRef param;
+    ExtraPropVec extra_prop;
+    Event(EventIndex index_, Time time_, StringRef param_, ExtraPropVec & extra_prop_) : index(index_), time(time_), param(param_), extra_prop(std::move(extra_prop_)) { }
+};
+
+struct AggregateFunctionFunnelPathSplitData
+{
+    using Allocator = MixedArenaAllocator<8192>;
+    using Events = PODArray<Event, 32 * sizeof(Event), Allocator>;
+    Events events;
+
+    bool sorted = false;
+    void sort(bool reverse = false)
+    {
+        if (sorted)
+            return;
+        if (reverse)
+        {
+            pdqsort(events.begin(), events.end(), [](Event & lhs, Event & rhs) {
+                return lhs.time > rhs.time
+                    || (lhs.time == rhs.time && (lhs.index > rhs.index || (lhs.index == rhs.index && lhs.param > rhs.param)));
+            });
+        }
+        else
+        {
+            pdqsort(events.begin(), events.end(), [](Event & lhs, Event & rhs) {
+                return lhs.time < rhs.time
+                    || (lhs.time == rhs.time && (lhs.index < rhs.index || (lhs.index == rhs.index && lhs.param < rhs.param)));
+            });
+        }
+        sorted = true;
+    }
+
+    void add(EventIndex index, Time time, StringRef param, ExtraPropVec & extra_prop, Arena * arena) { events.push_back(Event(index, time, param, extra_prop), arena); }
+    
+    void merge(const AggregateFunctionFunnelPathSplitData & other, Arena * arena)
+    {
+        sorted = false;
+        size_t size = events.size();
+        events.insert(std::begin(other.events), std::end(other.events), arena);
+        // realloc from arena
+        /// TODO: need it? 
+        for (size_t i = size; i < events.size(); ++i)
+        {
+            auto t_param = events[i].param;
+            events[i].param = StringRef(arena->insert(t_param.data, t_param.size), t_param.size);
+
+            for (size_t j = 0; j < events[i].extra_prop.size(); ++j)
+            {
+                auto extra_prop = events[i].extra_prop[j];
+                events[i].extra_prop[j].prop = StringRef(arena->insert(extra_prop.prop.data, extra_prop.prop.size), extra_prop.prop.size);
+                events[i].extra_prop[j].is_null = extra_prop.is_null;
+            }
+        }
+    }
+
+    void serialize(WriteBuffer & buf) const
+    {
+        writeBinary(sorted, buf);
+        size_t size = events.size();
+        writeBinary(size, buf);
+        for (size_t i = 0; i < size; ++i)
+        {
+            writeBinary(events[i].index, buf);
+            writeBinary(events[i].time, buf);
+            writeBinary(events[i].param, buf);
+
+            size_t extra_size = events[i].extra_prop.size();
+            writeBinary(extra_size, buf);
+            for (size_t j = 0; j < extra_size; ++j)
+            {
+                writeBinary(events[i].extra_prop[j].is_null, buf);
+                writeBinary(events[i].extra_prop[j].prop, buf);
+            }
+        }
+    }
+
+    void deserialize(ReadBuffer & buf, Arena * arena)
+    {
+        readBinary(sorted, buf);
+        size_t size;
+        readBinary(size, buf);
+        events.reserve(size, arena);
+        for (size_t i = 0; i < size; ++i)
+        {
+            EventIndex index;
+            Time time;
+            readBinary(index, buf);
+            readBinary(time, buf);
+            StringRef param = readStringBinaryInto(*arena, buf);
+
+            size_t extra_size;
+            readBinary(extra_size, buf);
+            ExtraPropVec extra_prop;
+            for (size_t j = 0; j < extra_size; ++j)
+            {
+                bool is_null;
+                readBinary(is_null, buf);
+                StringRef prop = readStringBinaryInto(*arena, buf);
+                extra_prop.push_back(ExtraProp{is_null, prop});
+            }
+
+            add(index, time, param, extra_prop, arena);
+        }
+    }
+};
+
+inline bool isCommonEvent(UInt64 event_num)
+{
+    return !event_num;
+}
+
+inline bool isFunnelEvent(size_t level_flag, UInt64 event_num)
+{
+    return (!isCommonEvent(event_num)) && event_num <= level_flag;
+}
+
+bool nextLevelNeedPropNode(const std::vector<UInt64> & prop_flags, size_t current_level);
+
+size_t getExtraPropIndex(const std::vector<UInt64> & prop_flags, size_t current_level);
+
 
 
 }
