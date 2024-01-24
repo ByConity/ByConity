@@ -1448,7 +1448,6 @@ namespace Catalog
                     need_partitions_check = (partitions != nullptr);
                 }
 
-                DataModelPartPtrVector models;
                 while (m_it->next())
                 {
                     /// if ts is set, exclude model whose txn id > ts
@@ -1472,14 +1471,8 @@ namespace Catalog
                     /// exclude model not belong to the given partitions
                     if (need_partitions_check && !partitions->count(model->part_info().partition_id()))
                         continue;
-                    models.push_back(std::move(model));
-                }
 
-                res.reserve(models.size());
-                for (auto & model : models)
-                {
-                    auto part_model_wrapper = createPartWrapperFromModel(*storage, *model);
-                    res.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
+                    res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(*storage, std::move(*model))));
                 }
 
                 if (ts)
@@ -1505,9 +1498,9 @@ namespace Catalog
                     const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
                     Strings all_partitions = getPartitionIDsFromMetastore(storage);
                     auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts, /*from_trash=*/ false);
-                    for (auto & part_model_ptr : parts_model)
+                    for (auto & ele : parts_model)
                     {
-                        auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, *part_model_ptr);
+                        auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, std::move(*(ele->model)), std::move(ele->name));
                         tmp_res.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
                     }
                     return tmp_res;
@@ -1622,9 +1615,9 @@ namespace Catalog
                 Stopwatch watch;
                 Strings all_partitions = getPartitionIDsFromMetastore(storage);
                 auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts, /*from_trash=*/ true);
-                for (auto & part_model_ptr : parts_model)
+                for (auto & ele : parts_model)
                 {
-                    auto part_model_wrapper = createPartWrapperFromModel(*merge_tree, *part_model_ptr);
+                    auto part_model_wrapper = createPartWrapperFromModel(*merge_tree, std::move(*(ele->model)), std::move(ele->name));
                     res.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
                 }
 
@@ -4005,9 +3998,8 @@ namespace Catalog
             {
                 Protos::DataModelPart part_model;
                 part_model.ParseFromString(it->value());
-                auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, part_model);
+                auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, std::move(part_model), meta_key.substr(String(PART_STORE_PREFIX).length(), String::npos));
                 res.data_parts.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
-
             }
             else if (startsWith(meta_key, DELETE_BITMAP_PREFIX))
             {
@@ -4025,6 +4017,11 @@ namespace Catalog
     {
         if (items.empty())
             return;
+
+        if (!isHostServer(table))
+            throw Exception("Cannot move parts to trash because current server is non-host server for table : "
+                + UUIDHelpers::UUIDToString(table->getStorageUUID()),
+                ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
 
         LOG_INFO(
             log,
@@ -4189,7 +4186,7 @@ namespace Catalog
                         {
                             Protos::DataModelPart part_model;
                             part_model.ParseFromString(it->value());
-                            res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, part_model)));
+                            res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, std::move(part_model))));
                         }
                     }
                 }
@@ -5003,29 +5000,34 @@ namespace Catalog
         meta_proxy->createDictionary(name_space, database, name, dic_model.SerializeAsString());
     }
 
-    DataModelPartPtrVector Catalog::getDataPartsMetaFromMetastore(
+    DataModelPartWithNameVector Catalog::getDataPartsMetaFromMetastore(
         const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash)
     {
-        auto create_func = [&](const String & meta) {
+        String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+        String part_meta_prefix = MetastoreProxy::dataPartPrefix(name_space, uuid);
+        auto create_func = [&](const String & key, const String & value) {
             Protos::DataModelPart part_model;
-            part_model.ParseFromString(meta);
-            std::shared_ptr<Protos::DataModelPart> res_ptr;
+            part_model.ParseFromString(value);
+            DataModelPartWithNamePtr res = nullptr;
             if (ts.toUInt64() && part_model.has_commit_time() && TxnTimestamp{part_model.commit_time()} > ts)
-                return res_ptr;
+                return res;
             // compatible with old parts from alpha, old part doesn't have commit time field, the mutation is its commit time
             else if (ts.toUInt64() && !part_model.has_commit_time() && static_cast<UInt64>(part_model.part_info().mutation()) > ts)
-                return res_ptr;
-            return createPtrFromModel(std::move(part_model));
+                return res;
+            String part_name = key.substr(part_meta_prefix.size(), std::string::npos);
+            DataModelPartPtr partmodel_ptr = std::make_shared<Protos::DataModelPart>(std::move(part_model));
+            res = std::make_shared<DataModelPartWithName>(std::move(part_name), std::move(partmodel_ptr));
+            return res;
+
         };
 
         UInt32 time_out_ms = 1000 * (context.getSettingsRef().cnch_fetch_parts_timeout.totalSeconds());
 
-        String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
         String meta_prefix = from_trash
             ? MetastoreProxy::trashItemsPrefix(name_space, uuid) + PART_STORE_PREFIX
-            : MetastoreProxy::dataPartPrefix(name_space, uuid);
+            : part_meta_prefix;
 
-        return getDataModelsByPartitions<DataModelPartPtr>(
+        return getDataModelsByPartitions<DataModelPartWithNamePtr>(
             storage,
             meta_prefix,
             required_partitions,
@@ -5086,7 +5088,7 @@ namespace Catalog
             [&] {
                 const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
 
-                auto create_func = [&](const String & meta) -> DeleteBitmapMetaPtr {
+                auto create_func = [&](const String &, const String & meta) -> DeleteBitmapMetaPtr {
                     DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
                     model_ptr->ParseFromString(meta);
                     if (ts.toUInt64() && model_ptr->has_commit_time() && TxnTimestamp{model_ptr->commit_time()} > ts)
@@ -6044,7 +6046,7 @@ namespace Catalog
             Protos::DataModelPart part_model;
             part_model.ParseFromString(iter->value());
             parts_vec.push_back(std::make_shared<ServerDataPart>(
-                createPartWrapperFromModel(storage, part_model)));
+                createPartWrapperFromModel(storage, std::move(part_model))));
         }
         return parts_vec;
     }
