@@ -865,6 +865,18 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             throw Exception("Table TTL is not allowed for MergeTree in old syntax", ErrorCodes::BAD_ARGUMENTS);
     }
 
+    /// For compatibility, if version is used without unique key specified, just increase arg_num
+    if (arg_num < arg_cnt && !args.storage_def->unique_key)
+    {
+        if (merging_params.mode != MergeTreeMetaBase::MergingParams::Ordinary || (!is_cnch && !is_cloud))
+            throw Exception("Only CnchMergeTree and CloudMergeTree support version column with arg_num < arg_cnt", ErrorCodes::BAD_ARGUMENTS);
+
+        if (!engine_args.back()->as<ASTIdentifier>() && !engine_args.back()->as<ASTFunction>())
+            throw Exception("Version column must be identifier or function expression", ErrorCodes::BAD_ARGUMENTS);
+
+        ++arg_num;
+    }
+
     if (args.storage_def->unique_key)
     {
         if (merging_params.mode != MergeTreeMetaBase::MergingParams::Ordinary || (!is_cnch && !is_cloud))

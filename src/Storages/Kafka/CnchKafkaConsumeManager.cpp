@@ -241,9 +241,9 @@ ContextPtr CnchKafkaConsumeManager::createQueryContext()
     return false;
 }
 
-bool CnchKafkaConsumeManager::checkTargetTable(const StorageCnchMergeTree * /*target_table*/)
+bool CnchKafkaConsumeManager::checkTargetTable(const StorageCnchMergeTree * target_table)
 {
-    cloud_table_has_unique_key = false; /// FIXME: target_table->hasUniqueKey();
+    cloud_table_has_unique_key = target_table->getInMemoryMetadataPtr()->hasUniqueKey();
     return true;
 }
 
@@ -584,7 +584,8 @@ void CnchKafkaConsumeManager::getOffsetsFromCatalog(
 StoragePtr CnchKafkaConsumeManager::rewriteCreateTableSQL(const DB::StorageID & dependence,
                                                     const StorageID & replace_storage_id,
                                                     const String & table_suffix,
-                                                    std::vector<String> & create_commands)
+                                                    std::vector<String> & create_commands,
+                                                    bool enable_staging_area)
 {
     StoragePtr target_table = nullptr;
 
@@ -598,7 +599,7 @@ StoragePtr CnchKafkaConsumeManager::rewriteCreateTableSQL(const DB::StorageID & 
         if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(target_table.get()))
         {
             auto crete_query = cnch_table->getCreateTableSql();
-            replaceCreateTableQuery(getContext(), crete_query, cnch_table->getTableName() + table_suffix, true, false);
+            replaceCreateTableQuery(getContext(), crete_query, cnch_table->getTableName() + table_suffix, true, enable_staging_area);
             create_commands.push_back(crete_query);
 
             create_commands.push_back(replaceMaterializedViewQuery(mv, replace_storage_id, table_suffix));
@@ -610,7 +611,7 @@ StoragePtr CnchKafkaConsumeManager::rewriteCreateTableSQL(const DB::StorageID & 
                 /// XXX: CnchUniqueKey don't support it now
                 auto target_dependencies = getDependenciesFromCatalog(target_table->getStorageID());
                 for (const auto & table_id : target_dependencies)
-                    rewriteCreateTableSQL(table_id, cnch_table->getStorageID(), table_suffix, create_commands);
+                    rewriteCreateTableSQL(table_id, cnch_table->getStorageID(), table_suffix, create_commands, false);
             }
         }
         else
@@ -650,9 +651,10 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     command.local_table_name = command.cnch_storage_id.table_name + table_suffix;
     command.create_table_commands.push_back(create_kafka_query);
 
+    bool enable_staging_area = cloud_table_has_unique_key && kafka_table.getSettings().enable_staging_area;
     StoragePtr target_table;
     for (const auto & dependency : dependencies)
-        target_table = rewriteCreateTableSQL(dependency, this->storage_id, table_suffix, command.create_table_commands);
+        target_table = rewriteCreateTableSQL(dependency, this->storage_id, table_suffix, command.create_table_commands, enable_staging_area);
     if (!target_table)
         throw Exception("Unable to get target table for CnchKafka, this is unexpected", ErrorCodes::LOGICAL_ERROR);
 

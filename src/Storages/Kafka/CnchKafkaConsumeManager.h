@@ -81,7 +81,7 @@ public:
 private:
     void clearData() override;
 
-    StoragePtr rewriteCreateTableSQL(const StorageID & dependence, const StorageID & replace_storage_id, const String & table_suffix, std::vector<String> & create_commands);
+    StoragePtr rewriteCreateTableSQL(const StorageID & dependence, const StorageID & replace_storage_id, const String & table_suffix, std::vector<String> & create_commands, bool enable_staging_area);
     void updatePartitionCountOfTopics(StorageCnchKafka & kafka_table, bool & partitions_changed);
 
     CnchWorkerClientPtr selectWorker(size_t index, const String & table_suffix);
