@@ -168,3 +168,12 @@ message TotalsMode {
     AFTER_HAVING_AUTO = 3;
   }
 }
+
+message TopNFilteringAlgorithm {
+  enum Enum {
+    Unspecified = 0;
+    SortAndLimit = 1;
+    Limit = 2;
+    Heap = 3;
+  }
+}

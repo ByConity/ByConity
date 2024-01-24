@@ -25,6 +25,7 @@ class SetOperationStep : public IQueryPlanStep
 public:
     SetOperationStep(DataStreams input_streams_, DataStream output_stream_, OutputToInputs output_to_inputs_);
     const OutputToInputs & getOutToInputs() const;
+    NameToNameMap getOutToInput(size_t source_idx) const;
     void setInputStreams(const DataStreams & input_streams_) override;
 
     void serializeToProtoBase(Protos::SetOperationStep & proto) const;

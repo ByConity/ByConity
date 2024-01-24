@@ -44,18 +44,19 @@ IterativeRewriter::IterativeRewriter(const std::vector<RulePtr> & rules_, std::s
 {
     for (const auto & rule : rules_)
     {
-        auto target_type = rule->getTargetType();
-
-        if (target_type != IQueryPlanStep::Type::Any)
-            rules[target_type].emplace_back(rule);
-        else
+        for (auto target_type : rule->getTargetTypes())
         {
-            // for rules targeted to arbitrary type, copy them into each specific type's index
+            if (target_type != IQueryPlanStep::Type::Any)
+                rules[target_type].emplace_back(rule);
+            else
+            {
+                // for rules targeted to arbitrary type, copy them into each specific type's index
 #define ADD_RULE_TO_INDEX(ITEM) rules[IQueryPlanStep::Type::ITEM].emplace_back(rule);
 
             APPLY_STEP_TYPES(ADD_RULE_TO_INDEX)
 
 #undef ADD_RULE_TO_INDEX
+            }
         }
     }
 }

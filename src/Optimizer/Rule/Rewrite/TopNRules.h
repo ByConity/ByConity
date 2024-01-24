@@ -46,4 +46,23 @@ public:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+class PushTopNFilteringThroughUnion : public Rule
+{
+public:
+    RuleType getType() const override
+    {
+        return RuleType::PUSH_TOPN_FILTERING_THROUGH_UNION;
+    }
+    String getName() const override
+    {
+        return "PUSH_TOPN_FILTERING_THROUGH_UNION";
+    }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_push_topn_filtering_through_union;
+    }
+    PatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
 }

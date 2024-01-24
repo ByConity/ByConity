@@ -106,6 +106,21 @@ PlanAndProp SortingOrderedSource::Rewriter::visitCTERefNode(CTERefNode & node, V
     return {node.shared_from_this(), Property{}};
 }
 
+PlanAndProp SortingOrderedSource::Rewriter::visitTopNFilteringNode(TopNFilteringNode & node, Void & ctx)
+{
+    auto result = VisitorUtil::accept(node.getChildren()[0], *this, ctx);
+    auto actual_sorting = result.property.getSorting().toSortDesc();
+
+    auto & topn_filtering = dynamic_cast<TopNFilteringStep &>(*node.getStep());
+    const auto & required_sorting = topn_filtering.getSortDescription();
+
+    if (actual_sorting.hasPrefix(required_sorting))
+        topn_filtering.setAlgorithm(TopNFilteringAlgorithm::Limit);
+
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, context);
+    return {node.shared_from_this(), prop};
+}
+
 PlanNodePtr PushSortingInfoRewriter::visitSortingNode(SortingNode & node, SortInfo &)
 {
     auto prefix_desc = node.getStep()->getPrefixDescription();
