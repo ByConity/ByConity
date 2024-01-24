@@ -507,18 +507,13 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     + "expected: " + std::to_string(request->plan_segment_buf_size()),
                 ErrorCodes::LOGICAL_ERROR);
         }
-        auto parent_thread_ctx = opentelemetry::context::RuntimeContext::GetCurrent();
         ThreadFromGlobalPool async_thread([query_context = std::move(query_context),
                                            execution_info = std::move(execution_info),
                                            query_common = std::move(query_common),
                                            segment_id = request->plan_segment_id(),
-                                           plan_segment_buf = std::make_shared<butil::IOBuf>(plan_segment_buf.movable()),
-                                           parent_thread_ctx = std::move(parent_thread_ctx)]() {
+                                           plan_segment_buf = std::make_shared<butil::IOBuf>(plan_segment_buf.movable()) ]() {
             try
             {
-                OpentelemetryThreadContextScope otel_thread_ctx_scope(parent_thread_ctx);
-                auto span = startCommonSpan("CnchWorker", "CnchWorker.executePlanSegmentInternal", SpanHierarchy::INFO);
-                OpentelemetryScope{span};
                 /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
                 butil::IOBufAsZeroCopyInputStream plansegment_buf_wrapper(*plan_segment_buf);
                 Protos::PlanSegment plan_segment_proto;
