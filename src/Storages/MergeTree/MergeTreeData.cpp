@@ -1568,7 +1568,7 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
         context_copy->setSetting("disable_str_to_arraystr_cast", Field{true});
 
         auto old_header = old_metadata.getSampleBlock();
-        performRequiredConversions(old_header, columns_to_check_conversion, getContext());
+        performRequiredConversions(old_header, columns_to_check_conversion, context_copy);
     }
 
     if (old_metadata.hasSettingsChanges())
