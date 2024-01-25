@@ -49,6 +49,11 @@ inline bool functionIsDictGet(const std::string & name)
     return startsWith(name, "dictGet") || (name == "dictHas") || (name == "dictIsIn");
 }
 
+inline bool functionWithInnerQuery(const std::string & name)
+{
+    return name == "getMapKeys";
+}
+
 inline bool checkFunctionIsInOrGlobalInOperator(const ASTFunction & func)
 {
     if (functionIsInOrGlobalInOperator(func.name))
