@@ -20,8 +20,6 @@
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
 #include <Analyzers/SimpleFunctionVisitor.h>
-#include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
-#include <Functions/UserDefined/UserDefinedSQLFunctionVisitor.h>
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/CollectJoinOnKeysVisitor.h>
