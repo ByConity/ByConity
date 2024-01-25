@@ -51,11 +51,13 @@ Protos::DataModelPartVector createPartBatch(const String & partition_id, size_t 
     return res;
 }
 
-DataModelPartPtrVector createPartsBatch(const String & partition_id, size_t count) {
-    DataModelPartPtrVector ret;
+DataModelPartWithNameVector createPartsBatch(const String & partition_id, size_t count) {
+    DataModelPartWithNameVector ret;
     for (size_t i = 0; i< count; i++) {
         DataModelPartPtr part_model = createPart(partition_id, i, i, 0);
-        ret.emplace_back(part_model);
+        auto part_info = createPartInfoFromModel(part_model->part_info());
+        String part_name = part_info->getPartName();
+        ret.emplace_back(std::make_shared<DataModelPartWithName>(std::move(part_name), std::move(part_model)));
     }
     return ret;
 }
@@ -216,7 +218,7 @@ TEST_F(CacheManagerTest, GetPartsFromCache)
     (*it_p2)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartPtrVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
         load_from_func = true;
         return {};
     };
@@ -345,7 +347,7 @@ TEST_F(CacheManagerTest, getAndSetStatus) {
     (*it_p0)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartPtrVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
         load_from_func = true;
         return {};
     };
@@ -400,7 +402,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
     (*it_p0)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartPtrVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
         load_from_func = true;
         return {};
     };
@@ -420,7 +422,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
     current_topology_version = PairInt64{2, 1};
     cache_manager->mayUpdateTableMeta(*storage, current_topology_version);
 
-    auto new_load_func = [&](const Strings &, const Strings &) -> DataModelPartPtrVector {
+    auto new_load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
         load_from_func = true;
         return CacheTestMock::createPartsBatch("1000", 10);
     };
@@ -472,7 +474,7 @@ TEST_F(CacheManagerTest, DelayTest) {
 
 
     tds.emplace_back([cache_manager, storage, current_topology_version] {
-        auto load_func = [](const Strings &, const Strings &) -> DataModelPartPtrVector {
+        auto load_func = [](const Strings &, const Strings &) -> DataModelPartWithNameVector {
             std::this_thread::sleep_for(100ms);
             throw Poco::Exception("");
         };
@@ -486,7 +488,7 @@ TEST_F(CacheManagerTest, DelayTest) {
 
     tds.emplace_back([cache_manager, storage, current_topology_version] {
         std::this_thread::sleep_for(50ms);
-        auto load_func = [](const Strings &, const Strings &) -> DataModelPartPtrVector {
+        auto load_func = [](const Strings &, const Strings &) -> DataModelPartWithNameVector {
             std::this_thread::sleep_for(100ms);
             return CacheTestMock::createPartsBatch("1000", 10);
         };

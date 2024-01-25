@@ -270,14 +270,39 @@ NamesAndTypesListPtr IStorage::getPartColumns(const UInt64 &columns_commit_time)
 
 UInt64 IStorage::getPartColumnsCommitTime(const NamesAndTypesList &search_part_columns) const
 {
-    if (search_part_columns == *part_columns)
-        return commit_time.toUInt64();
-    for (const auto & version : previous_versions_part_columns)
+    // find the exactly the same columns first. If cannot find one, use the most recent one that could be best compitible with the data.
+    UInt64 most_recend_quilified = 0;
+    size_t distance = search_part_columns.size();
+
+    auto getColumnsCommitTimeInternal = [&](const UInt64 commit_ts, const NamesAndTypesListPtr & columns_ptr)
     {
-        if (search_part_columns == *version.second)
-            return version.first;
+        UInt64 res = 0;
+        NamesAndTypesList deleted;
+        NamesAndTypesList added;
+
+        columns_ptr->getDifference(search_part_columns, deleted, added);
+
+        // return directly if find the mathing columns version
+        if (deleted.empty() && added.empty())
+            res = commit_ts;
+        // data part has more columns than storage
+        else if (deleted.empty() && added.size() < distance)
+        {
+            distance = added.size();
+            most_recend_quilified = commit_ts;
+        }
+        return res;
+    };
+
+    if (auto ts = getColumnsCommitTimeInternal(commit_time.toUInt64(), part_columns); ts)
+        return ts;
+    
+    for (auto it = previous_versions_part_columns.crbegin(); it != previous_versions_part_columns.crend(); it++)
+    {
+        if (auto ts = getColumnsCommitTimeInternal(it->first, it->second); ts)
+            return ts;
     }
-    return 0;
+    return most_recend_quilified;
 }
 
 std::string PrewhereInfo::dump() const

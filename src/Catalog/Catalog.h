@@ -53,6 +53,10 @@ class AttachFilter;
 struct PrunedPartitions;
 using DataModelPartPtr = std::shared_ptr<Protos::DataModelPart>;
 using DataModelPartPtrVector = std::vector<DataModelPartPtr>;
+
+struct DataModelPartWithName;
+using DataModelPartWithNamePtr = std::shared_ptr<DataModelPartWithName>;
+using DataModelPartWithNameVector = std::vector<DataModelPartWithNamePtr>;
 }
 
 namespace DB::Catalog
@@ -777,7 +781,7 @@ private:
     static void replace_definition(Protos::DataModelTable & table, const String & db_name, const String & table_name);
     StoragePtr createTableFromDataModel(const Context & session_context, const Protos::DataModelTable & data_model);
     void detachOrAttachTable(const String & db, const String & name, const TxnTimestamp & ts, bool is_detach);
-    DataModelPartPtrVector getDataPartsMetaFromMetastore(
+    DataModelPartWithNameVector getDataPartsMetaFromMetastore(
         const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash = false);
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false);
@@ -836,7 +840,7 @@ private:
         const String & meta_prefix,
         const Strings & partitions,
         const Strings & full_partitions_,
-        const std::function<T(const String &)> & create_func,
+        const std::function<T(const String &, const String &)> & create_func,
         const TxnTimestamp & ts,
         UInt32 time_out_ms = 0)
     {
@@ -900,7 +904,7 @@ private:
                     }
                 }
 
-                T data_model = create_func(mIt->value());
+                T data_model = create_func(mIt->key(), mIt->value());
                 if (data_model)
                     res.emplace_back(std::move(data_model));
             }

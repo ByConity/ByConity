@@ -53,15 +53,21 @@ bool hasNonParallelAggregateFunctions(const AggregateDescriptions & aggregates)
     for (const auto & agg: aggregates)
     {
         auto agg_name = agg.function->getName();
-        if (startsWith(agg_name, "finderFunnel") ||
-            startsWith(agg_name, "finderGroupFunnel") ||
-            startsWith(agg_name, "pathSplit") ||
-            startsWith(agg_name, "pathCount") ||
-            startsWith(agg_name, "retention") ||
-            startsWith(agg_name, "attributionAnalysis") ||
+        // if (startsWith(agg_name, "finderFunnel") ||
+        //     startsWith(agg_name, "finderGroupFunnel") ||
+        //     startsWith(agg_name, "pathSplit") ||
+        //     startsWith(agg_name, "pathCount") ||
+        //     startsWith(agg_name, "retention") ||
+        //     startsWith(agg_name, "attributionAnalysis") ||
+        //     startsWith(agg_name, "attributionCorrelation") ||
+        //     startsWith(agg_name, "funnelRep") ||
+        //     agg_name == "sessionAnalysis" ||
+        //     agg_name == "vSessionAnalysis")
+        //     return true;
+
+        if (startsWith(agg_name, "pathCount") ||
             startsWith(agg_name, "attributionCorrelation") ||
-            agg_name == "sessionAnalysis" ||
-            agg_name == "vSessionAnalysis")
+            startsWith(agg_name, "funnelRep"))
             return true;
     }
 

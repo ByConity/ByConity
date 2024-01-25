@@ -47,12 +47,12 @@ namespace ErrorCodes
     extern const int EMPTY_PARTITION_IN_DATA_MODEL_PART;
 }
 
-DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model)
+DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, Protos::DataModelPart && part_model, String && part_name)
 {
-    DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(part_model);
+    DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(std::move(part_model), std::move(part_name));
 
     /// Partition and Minmax index
-    ReadBufferFromString partition_minmax_buf(part_model.partition_minmax());
+    ReadBufferFromString partition_minmax_buf(part_model_wrapper->part_model->partition_minmax());
     if (unlikely(storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING))
         throw Exception("MergeTree data format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
 
@@ -66,14 +66,17 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
     return part_model_wrapper;
 }
 
-DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart & part_model)
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(Protos::DataModelPart && part_model, String && part_name)
 {
     DataModelPartWrapperPtr part_model_wrapper = std::make_shared<DataModelPartWrapper>();
 
     part_model_wrapper->info = createPartInfoFromModel(part_model.part_info());
-    part_model_wrapper->name = part_model_wrapper->info->getPartName();
+    if (part_name.empty())
+        part_model_wrapper->name = part_model_wrapper->info->getPartName();
+    else
+        part_model_wrapper->name = std::move(part_name);
 
-    part_model_wrapper->part_model = std::make_shared<Protos::DataModelPart>(part_model);
+    part_model_wrapper->part_model = std::make_shared<Protos::DataModelPart>(std::move(part_model));
     auto & inside_part_model = *(part_model_wrapper->part_model);
     if (!inside_part_model.has_deleted())
         inside_part_model.set_deleted(false);
@@ -426,7 +429,7 @@ createServerPartsFromModels(const MergeTreeMetaBase & storage, const pb::Repeate
 
     for (const auto & part_model : parts_model)
     {
-        res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, part_model)));
+        res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, Protos::DataModelPart(part_model))));
     }
 
     return res;
@@ -437,7 +440,7 @@ ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage
     auto part_model = std::make_shared<Protos::DataModelPart>();
     fillPartModel(storage, *part, *part_model);
 
-    auto res = std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, *part_model));
+    auto res = std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, std::move(*part_model)));
     if (auto prev_part = part->tryGetPreviousPart())
         res->setPreviousPart(createServerPartFromDataPart(storage, prev_part));
     return res;

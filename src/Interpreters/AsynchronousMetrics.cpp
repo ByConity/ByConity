@@ -149,7 +149,7 @@ void AsynchronousMetrics::openSensors()
         {
             readText(temperature, *file);
         }
-        catch (const ErrnoException & e)
+        catch (const ErrnoException &)
         {
             const auto log_message = fmt::format("Thermal monitor '{}' exists but could not be read", thermal_device_index);
             tryLogCurrentException("AsynchronousMetrics", log_message);
@@ -261,7 +261,7 @@ void AsynchronousMetrics::openSensorsChips()
                 Int64 temperature = 0;
                 readText(temperature, *file);
             }
-            catch (const ErrnoException & e)
+            catch (const ErrnoException &)
             {
                 const auto log_message = fmt::format("Hardware monitor '{}', sensor '{}' exists but could not be read", hwmon_name, sensor_index);
                 tryLogCurrentException("AsynchronousMetrics", log_message);

@@ -639,7 +639,7 @@ void PartCacheManager::insertDataPartsIntoCache(
     auto & storage = dynamic_cast<const MergeTreeMetaBase &>(table);
     for (auto & part_model : parts_model)
     {
-        auto part_wrapper_ptr = createPartWrapperFromModel(storage, part_model);
+        auto part_wrapper_ptr = createPartWrapperFromModel(storage, Protos::DataModelPart(part_model));
         const auto & partition_id = part_wrapper_ptr->info->partition_id;
         if (!partitionid_to_partition.contains(partition_id))
             partitionid_to_partition[partition_id] = createPartitionFromMetaString(storage, part_model.partition_minmax());
@@ -720,7 +720,7 @@ void PartCacheManager::insertDataPartsIntoCache(
             {
                 cached->insert(parts_wrapper_vector, [](const DataModelPartWrapperPtr & part_wrapper_ptr) { return part_wrapper_ptr->name; });
                 /// Force LRU cache update status (weight/evict).
-                part_cache_ptr->set({uuid, partition_id}, cached);
+                part_cache_ptr->insert({uuid, partition_id}, cached);
             }
         }
         if (should_update_metrics)
@@ -802,10 +802,10 @@ DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(
     /// On cnch worker, we disable part cache to avoid cache synchronization with server.
     if (getContext()->getServerType() != ServerType::cnch_server && !dummy_mode)
     {
-        DataModelPartPtrVector fetched = load_func(partitions,  meta_ptr->getPartitionIDs());
-        for (auto & part_model_ptr : fetched)
+        DataModelPartWithNameVector fetched = load_func(partitions,  meta_ptr->getPartitionIDs());
+        for (auto & ele : fetched)
         {
-            auto part_wrapper_ptr = createPartWrapperFromModel(storage, *part_model_ptr);
+            auto part_wrapper_ptr = createPartWrapperFromModel(storage, std::move(*(ele->model)), std::move(ele->name));
             if (isVisible(part_wrapper_ptr, ts))
                 res.push_back(std::make_shared<ServerDataPart>(part_wrapper_ptr));
         }
@@ -956,15 +956,15 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
     {
         /// Save data part model as well as data part to avoid build them with metaentry lock.
         std::map<String, DataModelPartWrapperVector> partition_to_parts;
-        DataModelPartPtrVector fetched = load_func(partitions_not_cached, all_existing_partitions);
+        DataModelPartWithNameVector fetched = load_func(partitions_not_cached, all_existing_partitions);
 
         /// The load_func may include partitions that not in the required `partitions_not_cache`
         /// Need to have an extra filter
         std::unordered_set<String> partitions_set(partitions_not_cached.begin(), partitions_not_cached.end());
 
-        for (auto & part_model_ptr : fetched)
+        for (auto & ele : fetched)
         {
-            auto part_wrapper_ptr = createPartWrapperFromModel(storage, *part_model_ptr);
+            auto part_wrapper_ptr = createPartWrapperFromModel(storage, std::move(*(ele->model)), std::move(ele->name));
             const auto & partition_id = part_wrapper_ptr->info->partition_id;
             if (!partitions_set.contains(partition_id))
                 continue;
@@ -1027,7 +1027,7 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
                         }
                     }
                     /// Force LRU cache update status(weight/evict).
-                    part_cache_ptr->set({uuid, partition_id}, cached);
+                    part_cache_ptr->insert({uuid, partition_id}, cached);
                 }
 
                 partition_info_ptr->cache_status = CacheStatus::LOADED;
@@ -1116,15 +1116,15 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
             /// need to load parts from metastore
             if (need_load_parts)
             {
-                DataModelPartPtrVector fetched;
+                DataModelPartWithNameVector fetched;
                 try
                 {
                     std::map<String, DataModelPartWrapperVector> partition_to_parts;
                     fetched = load_func({partition_id}, {partition_id});
                     DataModelPartWrapperVector fetched_data;
-                    for (auto & dataModelPartPtr : fetched)
+                    for (auto & ele : fetched)
                     {
-                        fetched_data.push_back(createPartWrapperFromModel(storage, *dataModelPartPtr));
+                        fetched_data.push_back(createPartWrapperFromModel(storage, std::move(*(ele->model)), std::move(ele->name)));
                     }
 
                     /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make
@@ -1153,7 +1153,7 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
                             }
                         }
                         /// Force LRU cache update status(weight/evict).
-                        part_cache_ptr->set({uuid, partition_id}, cached);
+                        part_cache_ptr->insert({uuid, partition_id}, cached);
                     }
 
                     partition_info_ptr->cache_status = CacheStatus::LOADED;

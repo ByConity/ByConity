@@ -37,6 +37,16 @@ using DataPartInfoPtr = std::shared_ptr<MergeTreePartInfo>;
 using DataModelPartPtr = std::shared_ptr<Protos::DataModelPart>;
 using DataModelPartPtrVector = std::vector<DataModelPartPtr>;
 
+struct DataModelPartWithName
+{
+    DataModelPartWithName(std::string && name_, DataModelPartPtr && model_) : name(std::move(name_)), model(std::move(model_)) {}
+    std::string name;
+    DataModelPartPtr model;
+};
+
+using DataModelPartWithNamePtr = std::shared_ptr<DataModelPartWithName>;
+using DataModelPartWithNameVector = std::vector<DataModelPartWithNamePtr>;
+
 namespace pb = google::protobuf;
 
 MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
@@ -253,9 +263,9 @@ inline DeleteBitmapMetaPtr createFromModel(const MergeTreeMetaBase & storage, co
 void fillLockInfoModel(const LockInfo & lock_info, Protos::DataModelLockInfo & model);
 LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model);
 
-DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model);
+DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, Protos::DataModelPart && part_model, String && part_name = "");
 
-DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart & part_model);
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(Protos::DataModelPart && part_model, String && part_name = "");
 
 ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage, const IMergeTreeDataPartPtr & part);
 
