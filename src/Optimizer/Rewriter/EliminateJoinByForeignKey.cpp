@@ -1227,7 +1227,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
     // 3-1. add new projection at pk side with cast function.
     if (!JoinCommon::isJoinCompatibleTypes(left_type, right_type))
     {
-        auto common_type = getLeastSupertype({left_type, right_type}, context->getSettingsRef().allow_extended_type_conversion);
+        auto common_type = getLeastSupertype(DataTypes{left_type, right_type}, context->getSettingsRef().allow_extended_type_conversion);
         if (!common_type->equals(*left_type))
             throw Exception(ErrorCodes::LOGICAL_ERROR, "EliminateByForeignKey::Eliminator logical error! fk type isn't the leastSupertType of pk type.");
         auto cast_function = makeCastFunction(std::make_shared<ASTIdentifier>(pk_name), common_type);

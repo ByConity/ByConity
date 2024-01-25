@@ -42,6 +42,10 @@
 #include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
+#include <Parsers/queryToString.h>
+#include <Interpreters/executeQuery.h>
+#include <common/logger_useful.h>
+#include <DataTypes/ObjectUtils.h>
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
 
@@ -61,6 +65,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int TOO_MANY_PLAN_SEGMENTS;
+extern const int OPTIMIZER_NONSUPPORT;
 extern const int LOGICAL_ERROR;
 }
 
@@ -150,6 +155,16 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan(bool skip_optimi
     return query_plan;
 }
 
+static void blockQueryJSONUseOptimizer(std::set<StorageID> used_storage_ids, ContextMutablePtr context)
+{
+    for (const auto & storage_id : used_storage_ids)
+    {
+        auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        if (hasDynamicSubcolumns(storage->getInMemoryMetadata().columns))
+            throw Exception("JSON query is not supported in Optimizer mode.", ErrorCodes::OPTIMIZER_NONSUPPORT);
+    }
+}
+
 std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOptimizer::getPlanSegment()
 {
     Stopwatch stage_watch, total_watch;
@@ -170,6 +185,8 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
 
     stage_watch.restart();
     std::set<StorageID> used_storage_ids = plan.allocateLocalTable(context);
+
+    blockQueryJSONUseOptimizer(used_storage_ids, context);
     // select health worker before split
     if (context->getSettingsRef().enable_adaptive_scheduler && context->tryGetCurrentWorkerGroup())
     {

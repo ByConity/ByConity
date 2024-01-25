@@ -53,6 +53,8 @@ bvar::Adder<int> & getExecuteMetric(CnchBGThreadType type)
             return g_executeImpl_TxnGC;
         case CnchBGThreadType::Clustering:
             return g_executeImpl_Clustering;
+        case CnchBGThreadType::ObjectSchemaAssemble:
+            return g_executeImpl_ObjectSchemaAssemble;    
         case CnchBGThreadType::MaterializedMySQL:
             return g_executeImpl_MaterializedMySQL;
         default:
@@ -81,6 +83,8 @@ bvar::Adder<int> & getExecuteErrorMetric(CnchBGThreadType type)
             return g_executeImpl_TxnGC_error;
         case CnchBGThreadType::Clustering:
             return g_executeImpl_Clustering_error;
+        case CnchBGThreadType::ObjectSchemaAssemble:
+            return g_executeImpl_ObjectSchemaAssemble_error;   
         case CnchBGThreadType::MaterializedMySQL:
             return g_executeImpl_MaterializedMySQL_error;
         default:

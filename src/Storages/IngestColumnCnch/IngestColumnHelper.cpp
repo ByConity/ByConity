@@ -39,8 +39,8 @@ void checkColumnStructure(const StorageInMemoryMetadata & target_data, const Sto
 {
     for (const auto & col_name : names)
     {
-        const auto & target = target_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
-        const auto & src = src_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
+        const auto & target = target_data.getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, col_name);
+        const auto & src = src_data.getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, col_name);
 
         if (target.name != src.name)
             throw Exception("Column structure mismatch, found different names of column " + backQuoteIfNeed(col_name),

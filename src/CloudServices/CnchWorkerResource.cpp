@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <CloudServices/CnchWorkerResource.h>
 
 #include <Core/Names.h>
@@ -26,6 +27,7 @@
 #include <Parsers/ASTForeignKeyDeclaration.h>
 #include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
 #include <Poco/Logger.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <Storages/ForeignKeysDescription.h>
 #include <Storages/UniqueNotEnforcedDescription.h>
 #include <Storages/IStorage.h>
@@ -43,7 +45,7 @@ namespace ErrorCodes
     extern const int TABLE_ALREADY_EXISTS;
 }
 
-void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists)
+void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists, const ColumnsDescription & object_columns)
 {
     LOG_DEBUG(&Poco::Logger::get("WorkerResource"), "start create cloud table {}", create_query);
     const char * begin = create_query.data();
@@ -138,6 +140,9 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
     /// Table constructing
     StoragePtr res = StorageFactory::instance().get(ast_create_query, "", context, context->getGlobalContext(), columns, constraints, foreign_keys, unique_not_enforced, false);
     res->startup();
+
+    if (auto cloud_table = std::dynamic_pointer_cast<StorageCloudMergeTree>(res))
+        cloud_table->resetObjectColumns(object_columns);
 
     {
         auto lock = getLock();

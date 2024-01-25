@@ -35,9 +35,10 @@ namespace CnchBGThread
         DedupWorker = 5,
         Clustering = 6,
         MaterializedMySQL = 7,
+        ObjectSchemaAssemble = 8,
         
         ServerMinType = PartGC,
-        ServerMaxType = MaterializedMySQL,
+        ServerMaxType = ObjectSchemaAssemble,
 
         GlobalGC = 20, /// reserve several entries
         TxnGC = 21,
@@ -96,6 +97,8 @@ constexpr auto toString(CnchBGThreadType type)
             return "TxnGCThread";
         case CnchBGThreadType::ResourceReport:
             return "ResourceReport";
+        case CnchBGThreadType::ObjectSchemaAssemble:
+            return "ObjectSchemaAssembleThread";
         case CnchBGThreadType::MemoryBuffer:
             return "MemoryBuffer";
         case CnchBGThreadType::MaterializedMySQL:

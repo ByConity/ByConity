@@ -8,7 +8,7 @@
 #include <Core/Settings.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Functions/DummyJSONParser.h>
+#include <Common/JSONParsers//DummyJSONParser.h>
 #include <Functions/IFunction.h>
 #include <Functions/JSONPath/ASTs/ASTJSONPath.h>
 #include <Functions/JSONPath/Generator/GeneratorJSONPath.h>

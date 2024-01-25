@@ -75,8 +75,11 @@ IngestColumnBlockInputStream::IngestColumnBlockInputStream(
     if (!source_cloud_merge_tree)
         throw Exception("source table in worker is not CloudMeregTree", ErrorCodes::LOGICAL_ERROR);
 
-    target_meta_data_ptr = target_cloud_merge_tree->getInMemoryMetadataPtr();
-    source_meta_data_ptr = source_cloud_merge_tree->getInMemoryMetadataPtr();
+    auto target_meta_data_ptr = target_cloud_merge_tree->getInMemoryMetadataPtr();
+    auto source_meta_data_ptr = source_cloud_merge_tree->getInMemoryMetadataPtr();
+    target_storage_snapshot = target_cloud_merge_tree->getStorageSnapshot(target_meta_data_ptr, local_context);
+    source_storage_snapshot = source_cloud_merge_tree->getStorageSnapshot(source_meta_data_ptr, local_context);
+
     ordered_key_names = getOrderedKeys(command.key_names, *target_meta_data_ptr);
     partition_id = target_cloud_merge_tree->getPartitionIDFromQuery(command.partition, context);
 

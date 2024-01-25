@@ -291,25 +291,25 @@ ColumnPtr DataTypeTuple::getSubcolumn(const String & subcolumn_name, const IColu
     throw Exception(ErrorCodes::ILLEGAL_COLUMN, "There is no subcolumn {} in type {}", subcolumn_name, getName());
 }
 
-SerializationPtr DataTypeTuple::getSubcolumnSerialization(
-    const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const
-{
-    auto on_success = [&](size_t pos)
-    {
-        return std::make_shared<SerializationTupleElement>(base_serialization_getter(*elems[pos]), names[pos]);
-    };
+// SerializationPtr DataTypeTuple::getSubcolumnSerialization(
+//     const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const
+// {
+//     auto on_success = [&](size_t pos)
+//     {
+//         return std::make_shared<SerializationTupleElement>(base_serialization_getter(*elems[pos]), names[pos]);
+//     };
 
-    auto on_continue = [&](size_t pos, const String & next_subcolumn)
-    {
-        auto next_serialization = elems[pos]->getSubcolumnSerialization(next_subcolumn, base_serialization_getter);
-        return std::make_shared<SerializationTupleElement>(next_serialization, names[pos]);
-    };
+//     auto on_continue = [&](size_t pos, const String & next_subcolumn)
+//     {
+//         auto next_serialization = elems[pos]->getSubcolumnSerialization(next_subcolumn, base_serialization_getter);
+//         return std::make_shared<SerializationTupleElement>(next_serialization, names[pos]);
+//     };
 
-    if (auto serialization = getSubcolumnEntity(subcolumn_name, on_success, on_continue))
-        return serialization;
+//     if (auto serialization = getSubcolumnEntity(subcolumn_name, on_success, on_continue))
+//         return serialization;
 
-    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "There is no subcolumn {} in type {}", subcolumn_name, getName());
-}
+//     throw Exception(ErrorCodes::ILLEGAL_COLUMN, "There is no subcolumn {} in type {}", subcolumn_name, getName());
+// }
 
 
 SerializationPtr DataTypeTuple::doGetDefaultSerialization() const
@@ -320,7 +320,7 @@ SerializationPtr DataTypeTuple::doGetDefaultSerialization() const
     {
         String elem_name = use_explicit_names ? names[i] : toString(i + 1);
         auto serialization = elems[i]->getDefaultSerialization();
-        serializations[i] = std::make_shared<SerializationTupleElement>(serialization, elem_name);
+        serializations[i] = std::make_shared<SerializationNamed>(serialization, elem_name);
     }
 
     return std::make_shared<SerializationTuple>(std::move(serializations), use_explicit_names);
@@ -335,7 +335,7 @@ SerializationPtr DataTypeTuple::getSerialization(const String & column_name, con
         String elem_name = use_explicit_names ? names[i] : toString(i + 1);
         auto subcolumn_name = Nested::concatenateName(column_name, elem_name);
         auto serializaion = elems[i]->getSerialization(subcolumn_name, callback);
-        serializations[i] = std::make_shared<SerializationTupleElement>(serializaion, elem_name);
+        serializations[i] = std::make_shared<SerializationNamed>(serializaion, elem_name);
     }
 
     return std::make_shared<SerializationTuple>(std::move(serializations), use_explicit_names);

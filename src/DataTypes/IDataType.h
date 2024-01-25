@@ -110,11 +110,33 @@ public:
     static constexpr auto MAIN_SUBCOLUMN_NAME = "__main";
     virtual DataTypePtr tryGetSubcolumnType(const String & subcolumn_name) const;
     DataTypePtr getSubcolumnType(const String & subcolumn_name) const;
+
+    ColumnPtr tryGetSubcolumn(const String & subcolumn_name, const ColumnPtr & column) const;
     virtual ColumnPtr getSubcolumn(const String & subcolumn_name, const IColumn & column) const;
     Names getSubcolumnNames() const;
 
+    using SubstreamData = ISerialization::SubstreamData;
+    using SubstreamPath = ISerialization::SubstreamPath;
+
+    using SubcolumnCallback = std::function<void(
+        const SubstreamPath &,
+        const String &,
+        const SubstreamData &)>;
+
+    static void forEachSubcolumn(
+        const SubcolumnCallback & callback,
+        const SubstreamData & data);
+
+    virtual SerializationInfoPtr getSerializationInfo(const IColumn & column) const;
+
     /// Returns default serialization of data type.
     SerializationPtr getDefaultSerialization() const;
+
+    /// Chooses serialization according to serialization kind.
+    SerializationPtr getSerialization(ISerialization::Kind kind) const;
+
+    /// Chooses serialization according to collected information about content of column.
+    virtual SerializationPtr getSerialization(const SerializationInfo & info) const;
 
     /// Asks whether the stream with given name exists in table.
     /// If callback returned true for all streams, which are required for
@@ -133,7 +155,7 @@ public:
 
     /// Returns serialization wrapper for reading one particular subcolumn of data type.
     virtual SerializationPtr getSubcolumnSerialization(
-        const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const;
+        const String & subcolumn_name, const SerializationPtr & serialization) const;
 
     using StreamCallbackWithType = std::function<void(const ISerialization::SubstreamPath &, const IDataType &)>;
 
@@ -371,6 +393,14 @@ protected:
 public:
     const IDataTypeCustomName * getCustomName() const { return custom_name.get(); }
     const ISerialization * getCustomSerialization() const { return custom_serialization.get(); }
+    
+private:
+    template <typename Ptr>
+    Ptr getForSubcolumn(
+        const String & subcolumn_name,
+        const SubstreamData & data,
+        Ptr SubstreamData::*member,
+        bool throw_if_null) const;
 };
 
 void setDefaultUseMapType(bool default_use_kv_map_type);
@@ -443,6 +473,7 @@ struct WhichDataType
     constexpr bool isMap() const {return idx == TypeIndex::Map; }
     constexpr bool isSet() const { return idx == TypeIndex::Set; }
     constexpr bool isInterval() const { return idx == TypeIndex::Interval; }
+    constexpr bool isObject() const { return idx == TypeIndex::Object; }
 
     constexpr bool isNothing() const { return idx == TypeIndex::Nothing; }
     constexpr bool isNullable() const { return idx == TypeIndex::Nullable; }
@@ -450,6 +481,7 @@ struct WhichDataType
     constexpr bool isAggregateFunction() const { return idx == TypeIndex::AggregateFunction; }
     constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString(); }
     constexpr bool isBitmap64() const { return idx == TypeIndex::BitMap64; }
+
 };
 
 /// IDataType helpers (alternative for IDataType virtual methods with single point of truth)
@@ -480,6 +512,12 @@ inline bool isUUID(const DataTypePtr & data_type) { return WhichDataType(data_ty
 inline bool isIPv4(const DataTypePtr & data_type) { return WhichDataType(data_type).isIPv4(); }
 inline bool isIPv6(const DataTypePtr & data_type) { return WhichDataType(data_type).isIPv6(); }
 inline bool isBitmap64(const DataTypePtr & data_type) { return WhichDataType(data_type).isBitmap64(); }
+
+template <typename T>
+inline bool isObject(const T & data_type)
+{
+    return WhichDataType(data_type).isObject();
+}
 
 template <typename T>
 inline bool isUInt8(const T & data_type)
@@ -642,4 +680,19 @@ template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime> = t
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime64> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeTime> = true;
 
+#define FOR_NUMERIC_TYPES(M) \
+    M(UInt8) \
+    M(UInt16) \
+    M(UInt32) \
+    M(UInt64) \
+    M(UInt128) \
+    M(UInt256) \
+    M(Int8) \
+    M(Int16) \
+    M(Int32) \
+    M(Int64) \
+    M(Int128) \
+    M(Int256) \
+    M(Float32) \
+    M(Float64) 
 }

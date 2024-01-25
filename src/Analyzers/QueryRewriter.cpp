@@ -44,6 +44,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
+#include <Storages/StorageSnapshot.h>
 
 namespace DB
 {
@@ -433,7 +434,10 @@ namespace
         }
 
         StoragePtr storage = joined_tables.getLeftTableStorage();
-        rewrite_context.result.emplace(source_columns, storage, storage ? storage->getInMemoryMetadataPtr() : nullptr);
+        StorageSnapshotPtr storage_snapshot = nullptr;
+        if (storage)
+            storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+        rewrite_context.result.emplace(source_columns, storage, storage_snapshot);
         auto & result = *(rewrite_context.result);
 
         if (tables_with_columns.size() > 1)
@@ -486,8 +490,15 @@ namespace
                 for (const auto & col : result.analyzed_join->columnsFromJoinedTable())
                     all_source_columns_set.insert(col.name);
             }
-            normalizeNameAndAliases(node, result.aliases, all_source_columns_set, settings, context, result.storage,
-                                    result.metadata_snapshot, graphviz_index);
+            normalizeNameAndAliases(
+                node,
+                result.aliases,
+                all_source_columns_set,
+                settings,
+                context,
+                result.storage,
+                result.storage_snapshot ? result.storage_snapshot->metadata : nullptr,
+                graphviz_index);
         }
 
         // 5. Call `TreeOptimizer` since some optimizations will change the query result

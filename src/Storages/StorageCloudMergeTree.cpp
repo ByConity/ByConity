@@ -108,7 +108,7 @@ StorageCloudMergeTree::~StorageCloudMergeTree()
 void StorageCloudMergeTree::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
@@ -116,13 +116,13 @@ void StorageCloudMergeTree::read(
     unsigned num_streams)
 {
     if (auto plan = MergeTreeDataSelectExecutor(*this).read(
-            column_names, metadata_snapshot, query_info, local_context, max_block_size, num_streams, processed_stage))
+            column_names, storage_snapshot, query_info, local_context, max_block_size, num_streams, processed_stage))
         query_plan = std::move(*plan);
 }
 
 Pipe StorageCloudMergeTree::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
@@ -130,7 +130,7 @@ Pipe StorageCloudMergeTree::read(
     const unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
@@ -362,12 +362,12 @@ ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where
 QueryProcessingStage::Enum StorageCloudMergeTree::getQueryProcessingStage(
     ContextPtr query_context,
     QueryProcessingStage::Enum to_stage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info) const
 {
     if (to_stage >= QueryProcessingStage::Enum::WithMergeableState)
     {
-        if (getQueryProcessingStageWithAggregateProjection(query_context, metadata_snapshot, query_info))
+        if (getQueryProcessingStageWithAggregateProjection(query_context, storage_snapshot, query_info))
         {
             if (query_info.projection->desc->type == ProjectionDescription::Type::Aggregate)
                 return QueryProcessingStage::Enum::WithMergeableState;
@@ -443,8 +443,9 @@ static void selectBestProjection(
 }
 
 bool StorageCloudMergeTree::getQueryProcessingStageWithAggregateProjection(
-    ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
+    ContextPtr query_context, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const
 {
+    const auto & metadata_snapshot = storage_snapshot->metadata;
     const auto & settings = query_context->getSettingsRef();
     if (!settings.allow_experimental_projection_optimization || query_info.ignore_projections || query_info.is_projection_query)
         return false;

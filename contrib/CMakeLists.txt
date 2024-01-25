@@ -328,6 +328,10 @@ if (USE_SIMDJSON)
     add_subdirectory (simdjson-cmake)
 endif()
 
+if (USE_RAPIDJSON)
+    add_subdirectory (rapidjson-cmake)
+endif()
+
 if (USE_BREAKPAD)
     add_subdirectory(breakpad-cmake)
 endif()

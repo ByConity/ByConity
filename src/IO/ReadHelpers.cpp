@@ -274,6 +274,8 @@ void readString(String & s, ReadBuffer & buf)
 }
 
 template void readStringInto<PaddedPODArray<UInt8>>(PaddedPODArray<UInt8> & s, ReadBuffer & buf);
+template void readStringInto<String>(String & s, ReadBuffer & buf);
+// template void readStringInto<NullOutput>(NullOutput & s, ReadBuffer & buf);
 
 template <typename Vector>
 void readWordInto(Vector & s, ReadBuffer & buf)
@@ -874,7 +876,6 @@ template void readJSONStringInto<PaddedPODArray<UInt8>, void>(PaddedPODArray<UIn
 template bool readJSONStringInto<PaddedPODArray<UInt8>, bool>(PaddedPODArray<UInt8> & s, ReadBuffer & buf);
 template void readJSONStringInto<NullOutput>(NullOutput & s, ReadBuffer & buf);
 template void readJSONStringInto<String>(String & s, ReadBuffer & buf);
-
 
 template <typename ReturnType>
 ReturnType readDateTextFallback(LocalDate & date, ReadBuffer & buf)

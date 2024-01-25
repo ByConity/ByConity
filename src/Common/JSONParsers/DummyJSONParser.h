@@ -2,9 +2,6 @@
 
 #include <Common/Exception.h>
 #include <common/types.h>
-#include <common/defines.h>
-#include "ElementTypes.h"
-
 
 namespace DB
 {
@@ -25,26 +22,25 @@ struct DummyJSONParser
     class Element
     {
     public:
-        Element() = default;
-        static ElementType type() { return ElementType::NULL_VALUE; }
-        static bool isInt64() { return false; }
-        static bool isUInt64() { return false; }
-        static bool isDouble() { return false; }
-        static bool isString() { return false; }
-        static bool isArray() { return false; }
-        static bool isObject() { return false; }
-        static bool isBool() { return false; }
-        static bool isNull() { return false; }
+        Element() {}
+        bool isInt64() const { return false; }
+        bool isUInt64() const { return false; }
+        bool isDouble() const { return false; }
+        bool isString() const { return false; }
+        bool isArray() const { return false; }
+        bool isObject() const { return false; }
+        bool isBool() const { return false; }
+        bool isNull() const { return false; }
 
-        static Int64 getInt64() { return 0; }
-        static UInt64 getUInt64() { return 0; }
-        static double getDouble() { return 0; }
-        static bool getBool() { return false; }
-        static std::string_view getString() { return {}; }
-        static Array getArray() { return {}; }
-        static Object getObject() { return {}; }
+        Int64 getInt64() const { return 0; }
+        UInt64 getUInt64() const { return 0; }
+        double getDouble() const { return 0; }
+        bool getBool() const { return false; }
+        std::string_view getString() const { return {}; }
+        Array getArray() const { return {}; }
+        Object getObject() const { return {}; }
 
-        static Element getElement() { return {}; }
+        Element getElement() { return {}; }
     };
 
     /// References an array in a JSON document.
@@ -56,14 +52,14 @@ struct DummyJSONParser
         public:
             Element operator*() const { return {}; }
             Iterator & operator++() { return *this; }
-            Iterator operator++(int) { return *this; } /// NOLINT
+            Iterator operator++(int) { return *this; }
             friend bool operator==(const Iterator &, const Iterator &) { return true; }
             friend bool operator!=(const Iterator &, const Iterator &) { return false; }
         };
 
-        static Iterator begin() { return {}; }
-        static Iterator end() { return {}; }
-        static size_t size() { return 0; }
+        Iterator begin() const { return {}; }
+        Iterator end() const { return {}; }
+        size_t size() const { return 0; }
         Element operator[](size_t) const { return {}; }
     };
 
@@ -78,15 +74,15 @@ struct DummyJSONParser
         public:
             KeyValuePair operator*() const { return {}; }
             Iterator & operator++() { return *this; }
-            Iterator operator++(int) { return *this; } /// NOLINT
+            Iterator operator++(int) { return *this; }
             friend bool operator==(const Iterator &, const Iterator &) { return true; }
             friend bool operator!=(const Iterator &, const Iterator &) { return false; }
         };
 
-        static Iterator begin() { return {}; }
-        static Iterator end() { return {}; }
-        static size_t size() { return 0; }
-        bool find(std::string_view, Element &) const { return false; } /// NOLINT
+        Iterator begin() const { return {}; }
+        Iterator end() const { return {}; }
+        size_t size() const { return 0; }
+        bool find(const std::string_view &, Element &) const { return false; }
 
 #if 0
         /// Optional: Provides access to an object's element by index.
@@ -95,7 +91,7 @@ struct DummyJSONParser
     };
 
     /// Parses a JSON document, returns the reference to its root element if succeeded.
-    bool parse(std::string_view, Element &) { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Functions JSON* are not supported"); } /// NOLINT
+    bool parse(const std::string_view &, Element &) { throw Exception{"Functions JSON* are not supported", ErrorCodes::NOT_IMPLEMENTED}; }
 
 #if 0
     /// Optional: Allocates memory to parse JSON documents faster.

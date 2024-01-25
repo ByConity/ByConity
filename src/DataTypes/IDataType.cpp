@@ -33,6 +33,7 @@
 #include <DataTypes/DataTypeCustom.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/Serializations/SerializationTupleElement.h>
+#include <DataTypes/Serializations/SerializationInfo.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 
 
@@ -117,6 +118,50 @@ size_t IDataType::getSizeOfValueInMemory() const
     throw Exception("Value of type " + getName() + " in memory is not of fixed size.", ErrorCodes::LOGICAL_ERROR);
 }
 
+void IDataType::forEachSubcolumn(
+    const SubcolumnCallback & callback,
+    const SubstreamData & data)
+{
+    ISerialization::StreamCallback callback_with_data = [&](const auto & subpath)
+    {
+        for (size_t i = 0; i < subpath.size(); ++i)
+        {
+            size_t prefix_len = i + 1;
+            if (!subpath[i].visited && ISerialization::hasSubcolumnForPath(subpath, prefix_len))
+            {
+                auto name = ISerialization::getSubcolumnNameForStream(subpath, prefix_len);
+                auto subdata = ISerialization::createFromPath(subpath, prefix_len);
+                callback(subpath, name, subdata);
+            }
+            subpath[i].visited = true;
+        }
+    };
+
+    ISerialization::EnumerateStreamsSettings settings;
+    settings.position_independent_encoding = false;
+    data.serialization->enumerateStreams(settings, callback_with_data, data);
+}
+
+template <typename Ptr>
+Ptr IDataType::getForSubcolumn(
+    const String & subcolumn_name,
+    const SubstreamData & data,
+    Ptr SubstreamData::*member,
+    bool throw_if_null) const
+{
+    Ptr res;
+    forEachSubcolumn([&](const auto &, const auto & name, const auto & subdata)
+    {
+        if (name == subcolumn_name)
+            res = subdata.*member;
+    }, data);
+
+    if (!res && throw_if_null)
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "There is no subcolumn {} in type {}", subcolumn_name, getName());
+
+    return res;
+}
+
 DataTypePtr IDataType::tryGetSubcolumnType(const String & subcolumn_name) const
 {
     if (subcolumn_name == MAIN_SUBCOLUMN_NAME)
@@ -127,11 +172,17 @@ DataTypePtr IDataType::tryGetSubcolumnType(const String & subcolumn_name) const
 
 DataTypePtr IDataType::getSubcolumnType(const String & subcolumn_name) const
 {
-    auto subcolumn_type = tryGetSubcolumnType(subcolumn_name);
-    if (subcolumn_type)
-        return subcolumn_type;
+    if (subcolumn_name == MAIN_SUBCOLUMN_NAME)
+        return shared_from_this();
+    
+    auto data = SubstreamData(getDefaultSerialization()).withType(getPtr());
+    return getForSubcolumn<DataTypePtr>(subcolumn_name, data, &SubstreamData::type, true);
+}
 
-    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "There is no subcolumn {} in type {}", subcolumn_name, getName());
+ColumnPtr IDataType::tryGetSubcolumn(const String & subcolumn_name, const ColumnPtr & column) const
+{
+    auto data = SubstreamData(getDefaultSerialization()).withColumn(column);
+    return getForSubcolumn<ColumnPtr>(subcolumn_name, data, &SubstreamData::column, false);
 }
 
 ColumnPtr IDataType::getSubcolumn(const String & subcolumn_name, const IColumn &) const
@@ -141,21 +192,12 @@ ColumnPtr IDataType::getSubcolumn(const String & subcolumn_name, const IColumn &
 
 Names IDataType::getSubcolumnNames() const
 {
-    NameSet res;
-    getDefaultSerialization()->enumerateStreams([&res, this](const ISerialization::SubstreamPath & substream_path)
+    Names res;
+    forEachSubcolumn([&](const auto &, const auto & name, const auto &)
     {
-        ISerialization::SubstreamPath new_path;
-        /// Iterate over path to try to get intermediate subcolumns for complex nested types.
-        for (const auto & elem : substream_path)
-        {
-            new_path.push_back(elem);
-            auto subcolumn_name = ISerialization::getSubcolumnNameForStream(new_path);
-            if (!subcolumn_name.empty() && tryGetSubcolumnType(subcolumn_name))
-                res.insert(subcolumn_name);
-        }
-    });
-
-    return Names(std::make_move_iterator(res.begin()), std::make_move_iterator(res.end()));
+        res.push_back(name);
+    }, SubstreamData(getDefaultSerialization()));
+    return res;
 }
 
 void IDataType::insertDefaultInto(IColumn & column) const
@@ -173,6 +215,14 @@ void IDataType::setCustomization(DataTypeCustomDescPtr custom_desc_) const
         custom_serialization = std::move(custom_desc_->serialization);
 }
 
+SerializationInfoPtr IDataType::getSerializationInfo(const IColumn & column) const
+{
+    if (const auto * column_const = checkAndGetColumn<ColumnConst>(&column))
+        return getSerializationInfo(column_const->getDataColumn());
+
+    return std::make_shared<SerializationInfo>(ISerialization::getKind(column), SerializationInfo::Settings{});
+}
+
 SerializationPtr IDataType::getDefaultSerialization() const
 {
     if (custom_serialization)
@@ -181,9 +231,23 @@ SerializationPtr IDataType::getDefaultSerialization() const
     return doGetDefaultSerialization();
 }
 
-SerializationPtr IDataType::getSubcolumnSerialization(const String & subcolumn_name, const BaseSerializationGetter &) const
+SerializationPtr IDataType::getSubcolumnSerialization(const String & subcolumn_name, const SerializationPtr & serialization) const
 {
-    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "There is no subcolumn {} in type {}", subcolumn_name, getName());
+    auto data = SubstreamData(serialization);
+    return getForSubcolumn<SerializationPtr>(subcolumn_name, data, &SubstreamData::serialization, true);
+}
+
+SerializationPtr IDataType::getSerialization(ISerialization::Kind  /*kind*/) const
+{
+    // if (supportsSparseSerialization() && kind == ISerialization::Kind::SPARSE)
+    //     return getSparseSerialization();
+
+    return getDefaultSerialization();
+}
+
+SerializationPtr IDataType::getSerialization(const SerializationInfo & info) const
+{
+    return getSerialization(info.getKind());
 }
 
 // static
@@ -191,14 +255,9 @@ SerializationPtr IDataType::getSerialization(const NameAndTypePair & column, con
 {
     if (column.isSubcolumn())
     {
-        /// Wrap to custom serialization deepest subcolumn, which is represented in non-complex type.
-        auto base_serialization_getter = [&](const IDataType & subcolumn_type)
-        {
-            return subcolumn_type.getSerialization(column.name, callback);
-        };
-
-        auto type_in_storage = column.getTypeInStorage();
-        return type_in_storage->getSubcolumnSerialization(column.getSubcolumnName(), base_serialization_getter);
+        const auto & type_in_storage = column.getTypeInStorage();
+        auto default_serialization = type_in_storage->getDefaultSerialization();
+        return type_in_storage->getSubcolumnSerialization(column.getSubcolumnName(), default_serialization);
     }
 
     return column.type->getSerialization(column.name, callback);

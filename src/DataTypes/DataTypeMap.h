@@ -31,6 +31,7 @@ private:
 public:
     static constexpr bool is_parametric = true;
 
+    explicit DataTypeMap(const DataTypePtr & nested_);
     DataTypeMap(const DataTypes & elems);
     DataTypeMap(const DataTypePtr & key_type_, const DataTypePtr & value_type_);
 
@@ -42,8 +43,8 @@ public:
 
     DataTypePtr tryGetSubcolumnType(const String & subcolumn_name) const override;
     ColumnPtr getSubcolumn(const String & subcolumn_name, const IColumn & column) const override;
-    SerializationPtr getSubcolumnSerialization(
-        const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const override;
+    // SerializationPtr getSubcolumnSerialization(
+    //     const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const override;
 
     MutableColumnPtr createColumn() const override;
 
@@ -73,7 +74,6 @@ public:
 
 private:
     void checkKeyType() const;
-
     bool isMapKVStore() const { return flags & TYPE_MAP_KV_STORE_FLAG;}
     bool isMapByteStore() const { return flags & TYPE_MAP_BYTE_STORE_FLAG; }
 };

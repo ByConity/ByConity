@@ -175,6 +175,7 @@ public:
     bool isDefaultAt(size_t n) const override { return data[n].value == 0; }
 
     ColumnPtr filter(const IColumn::Filter & filt, ssize_t result_size_hint) const override;
+
     ColumnPtr permute(const IColumn::Permutation & perm, size_t limit) const override;
     ColumnPtr index(const IColumn & indexes, size_t limit) const override;
 
@@ -196,6 +197,21 @@ public:
         if (auto rhs_concrete = typeid_cast<const ColumnDecimal<T> *>(&rhs))
             return scale == rhs_concrete->scale;
         return false;
+    }
+
+    double getRatioOfDefaultRows(double sample_ratio) const override
+    {
+        return this->template getRatioOfDefaultRowsImpl<Self>(sample_ratio);
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return this->template getNumberOfDefaultRowsImpl<Self>();
+    }
+
+    void getIndicesOfNonDefaultRows(IColumn::Offsets & indices, size_t from, size_t limit) const override
+    {
+        return this->template getIndicesOfNonDefaultRowsImpl<Self>(indices, from, limit);
     }
 
     ColumnPtr compress() const override;

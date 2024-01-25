@@ -25,6 +25,8 @@
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/queryToString.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/NestedUtils.h>
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -53,7 +55,7 @@ BlockIO InterpreterDescribeQuery::execute()
 }
 
 
-Block InterpreterDescribeQuery::getSampleBlock(ContextPtr context_)
+Block InterpreterDescribeQuery::getSampleBlock(ContextPtr context_, bool include_subcolumns)
 {
     Block block;
 
@@ -90,6 +92,14 @@ Block InterpreterDescribeQuery::getSampleBlock(ContextPtr context_)
     col.name = "ttl_expression";
     block.insert(col);
 
+    if (include_subcolumns)
+    {
+        col.name = "is_subcolumn";
+        col.type = std::make_shared<DataTypeUInt8>();
+        col.column = col.type->createColumn();
+        block.insert(col);
+    }
+
     return block;
 }
 
@@ -97,9 +107,12 @@ Block InterpreterDescribeQuery::getSampleBlock(ContextPtr context_)
 BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
 {
     ColumnsDescription columns;
+    StorageSnapshotPtr storage_snapshot;
 
     const auto & ast = query_ptr->as<ASTDescribeQuery &>();
     const auto & table_expression = ast.table_expression->as<ASTTableExpression &>();
+    const auto & settings = getContext()->getSettingsRef();
+
     if (table_expression.subquery)
     {
         auto names_and_types = InterpreterSelectWithUnionQuery::getSampleBlock(
@@ -116,12 +129,15 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
         auto table_id = getContext()->resolveStorageID(table_expression.database_and_table_name);
         getContext()->checkAccess(AccessType::SHOW_COLUMNS, table_id);
         auto table = DatabaseCatalog::instance().getTable(table_id, getContext());
-        auto table_lock = table->lockForShare(getContext()->getInitialQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
+        auto table_lock = table->lockForShare(getContext()->getInitialQueryId(), settings.lock_acquire_timeout);
         auto metadata_snapshot = table->getInMemoryMetadataPtr();
+        storage_snapshot = table->getStorageSnapshot(metadata_snapshot, getContext());
         columns = metadata_snapshot->getColumns();
     }
 
-    Block sample_block = getSampleBlock(getContext());
+    bool extend_object_types = settings.describe_extend_object_types && storage_snapshot;
+    bool include_subcolumns = settings.describe_include_subcolumns;
+    Block sample_block = getSampleBlock(getContext(), include_subcolumns);
     MutableColumns res_columns = sample_block.cloneEmptyColumns();
 
     auto dialect_type = getContext()->getSettingsRef().dialect_type;
@@ -130,22 +146,21 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     {
         size_t i = 0;
         res_columns[i++]->insert(column.name);
-
-        /// Under ANSI mode, data type will be parsed by ANSI type parser, which converts Nullable to
-        /// null modifiers. And the nullability of root type will be demonstrated in the separate
-        /// field: `nullable`. For instance, the type field Nullable(Array(Array(Nullable(Array(String)))))
-        /// will be divided into two fields under ANSI mode:
-        ///     type: Array(Array(Array(String NOT NULL) NULL) NOT NULL
-        ///     nullable: true
-        if (dialect_type == DialectType::ANSI)
+        if (extend_object_types)
+            res_columns[i++]->insert(storage_snapshot->getConcreteType(column.name)->getName());
+        else if (dialect_type == DialectType::ANSI)
         {
+            /// Under ANSI mode, data type will be parsed by ANSI type parser, which converts Nullable to
+            /// null modifiers. And the nullability of root type will be demonstrated in the separate
+            /// field: `nullable`. For instance, the type field Nullable(Array(Array(Nullable(Array(String)))))
+            /// will be divided into two fields under ANSI mode:
+            ///     type: Array(Array(Array(String NOT NULL) NULL) NOT NULL
+            ///     nullable: true
             ParserDataType type_parser(ParserSettings::ANSI);
             String type_name = column.type->getName();
             const char * type_name_pos = type_name.data();
             const char * type_name_end = type_name_pos + type_name.size();
-            auto type_ast = parseQuery(type_parser,
-                                       type_name_pos, type_name_end, "data type", 0,
-                                       DBMS_DEFAULT_MAX_PARSER_DEPTH);
+            auto type_ast = parseQuery(type_parser, type_name_pos, type_name_end, "data type", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
             bool nullable;
             if (const auto * t_ast = type_ast->as<ASTDataType>())
@@ -196,6 +211,38 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
             res_columns[i++]->insert(queryToString(column.ttl));
         else
             res_columns[i++]->insertDefault();
+    }
+
+    if (include_subcolumns)
+    {
+        for (const auto & column : columns)
+        {
+            auto type = extend_object_types ? storage_snapshot->getConcreteType(column.name) : column.type;
+
+            IDataType::forEachSubcolumn([&](const auto & path, const auto & name, const auto & data)
+            {
+                res_columns[0]->insert(Nested::concatenateName(column.name, name));
+                res_columns[1]->insert(data.type->getName());
+
+                /// It's not trivial to calculate default expression for subcolumn.
+                /// So, leave it empty.
+                res_columns[2]->insertDefault();
+                res_columns[3]->insertDefault();
+                res_columns[4]->insert(column.comment);
+
+                if (column.codec && ISerialization::isSpecialCompressionAllowed(path))
+                    res_columns[5]->insert(queryToString(column.codec->as<ASTFunction>()->arguments));
+                else
+                    res_columns[5]->insertDefault();
+
+                if (column.ttl)
+                    res_columns[6]->insert(queryToString(column.ttl));
+                else
+                    res_columns[6]->insertDefault();
+
+                res_columns[7]->insert(1u);
+            }, ISerialization::SubstreamData(type->getDefaultSerialization()).withType(type));
+        }
     }
 
     return std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns)));

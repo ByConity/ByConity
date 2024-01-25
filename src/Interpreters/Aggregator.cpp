@@ -1605,14 +1605,14 @@ Block Aggregator::prepareBlockAndFill(
             if (aggregate_functions[i]->isState())
             {
 
-                auto callback = [&](auto & subcolumn)
+                auto callback = [&](IColumn & subcolumn)
                 {
                     /// The ColumnAggregateFunction column captures the shared ownership of the arena with aggregate function states.
-                    if (auto * column_aggregate_func = typeid_cast<ColumnAggregateFunction *>(subcolumn.get()))
+                    if (auto * column_aggregate_func = typeid_cast<ColumnAggregateFunction *>(&subcolumn))
                         for (auto & pool : data_variants.aggregates_pools)
                             column_aggregate_func->addArena(pool);
                 };
-                callback(final_aggregate_columns[i]);
+                callback(*final_aggregate_columns[i]);
                 final_aggregate_columns[i]->forEachSubcolumnRecursively(callback);
             }
         }

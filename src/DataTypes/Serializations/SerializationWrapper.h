@@ -16,9 +16,13 @@ protected:
 public:
     explicit SerializationWrapper(const SerializationPtr & nested_serialization_) : nested_serialization(nested_serialization_) {}
 
-    void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
+    void enumerateStreams(
+        EnumerateStreamsSettings & settings,
+        const StreamCallback & callback,
+        const SubstreamData & data) const override;
 
     void serializeBinaryBulkStatePrefix(
+        const IColumn & column,
         SerializeBinaryBulkSettings & settings,
         SerializeBinaryBulkStatePtr & state) const override;
 

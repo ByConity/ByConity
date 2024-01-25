@@ -27,9 +27,10 @@
 #include <common/logger_useful.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
-#include "Interpreters/Context_fwd.h"
-#include "Storages/Hive/HiveFile/IHiveFile.h"
-#include "Storages/Hive/StorageCnchHive.h"
+#include <DataTypes/ObjectUtils.h>
+#include <Interpreters/Context_fwd.h>
+#include <Storages/Hive/HiveFile/IHiveFile.h>
+#include <Storages/Hive/StorageCnchHive.h>
 
 #include <Storages/RemoteFile/StorageCnchHDFS.h>
 #include <Storages/RemoteFile/StorageCnchS3.h>
@@ -63,6 +64,7 @@ AssignedResource::AssignedResource(AssignedResource && resource)
     part_names = resource.part_names; // don't call move here
 
     resource.sent_create_query = true;
+    object_columns = resource.object_columns;
 }
 
 void AssignedResource::addDataParts(const ServerDataPartsVector & parts)
@@ -470,6 +472,7 @@ void CnchServerResource::allocateResource(
                 worker_resource.create_table_query = resource.create_table_query;
                 worker_resource.worker_table_name = resource.worker_table_name;
                 worker_resource.bucket_numbers = assigned_bucket_numbers;
+                worker_resource.object_columns = resource.object_columns;
             }
         }
     }

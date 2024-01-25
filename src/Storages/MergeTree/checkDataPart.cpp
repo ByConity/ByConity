@@ -153,8 +153,7 @@ void genCompactMapChecksums(
                                 checksums_data.files[file_name]
                                     = checksum_compact_mrk_file(disk, path + map_file_name, file_offset, file_size);
                         }
-                    },
-                    {});
+                    });
             }
         }
     }
@@ -207,8 +206,7 @@ void genMapChecksums(
                     [&](const ISerialization::SubstreamPath & substream_path) {
                         String file_name = ISerialization::getFileNameForStream(implicit_column, substream_path) + ".bin";
                         checksums_data.files[file_name] = checksum_compressed_file(disk, path + file_name);
-                    },
-                    {});
+                    });
             }
         }
     }
@@ -312,8 +310,7 @@ IMergeTreeDataPart::Checksums checkDataPart(
                         {
                             String projection_file_name = ISerialization::getFileNameForStream(projection_column, substream_path) + ".bin";
                             checksums_data.files[projection_file_name] = checksum_compressed_file(disk, projection_path + projection_file_name);
-                        },
-                        {});
+                        });
                 }
             }
 
@@ -394,7 +391,7 @@ IMergeTreeDataPart::Checksums checkDataPart(
             {
                 String file_name = ISerialization::getFileNameForStream(column, substream_path) + ".bin";
                 checksums_data.files[file_name] = checksum_compressed_file(disk, path + file_name);
-            }, {});
+            });
         }
     }
     else

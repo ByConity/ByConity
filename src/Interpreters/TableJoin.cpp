@@ -493,7 +493,7 @@ bool TableJoin::inferJoinKeyCommonType(const NamesAndTypesList & left, const Nam
         DataTypePtr supertype;
         try
         {
-            supertype = DB::getLeastSupertype({ltype->second, rtype->second}, allow_extended_conversion);
+            supertype = DB::getLeastSupertype(DataTypes{ltype->second, rtype->second}, allow_extended_conversion);
         }
         catch (DB::Exception & ex)
         {

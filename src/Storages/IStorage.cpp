@@ -112,7 +112,7 @@ TableExclusiveLockHolder IStorage::lockExclusively(const String & query_id, cons
 
 Pipe IStorage::read(
     const Names & /*column_names*/,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
     SelectQueryInfo & /*query_info*/,
     ContextPtr /*context*/,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -125,17 +125,17 @@ Pipe IStorage::read(
 void IStorage::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
     unsigned num_streams)
 {
-    auto pipe = read(column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+    auto pipe = read(column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
     if (pipe.empty())
     {
-        auto header = (query_info.projection ? query_info.projection->desc->metadata : metadata_snapshot)
+        auto header = (query_info.projection ? query_info.projection->desc->metadata : storage_snapshot->metadata)
                           ->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
         InterpreterSelectQuery::addEmptySourceToQueryPlan(query_plan, header, query_info, context);
     }
@@ -149,7 +149,7 @@ void IStorage::read(
 void IStorage::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum processed_stage,
@@ -160,7 +160,7 @@ void IStorage::read(
     if (distributed_stages)
     {
         //IStorage::read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
-        auto header = getHeaderForProcessingStage(*this, column_names, metadata_snapshot, query_info, context, processed_stage);
+        auto header = getHeaderForProcessingStage(column_names, storage_snapshot, query_info, context, processed_stage);
         auto read_step = std::make_unique<PlanSegmentSourceStep>(header,
                                                               getStorageID(),
                                                               query_info,

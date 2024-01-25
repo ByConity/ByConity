@@ -209,7 +209,7 @@ void InterpreterPerfectShard::sendQuery(QueryPlan & query_plan)
     }
 
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
-        header, processed_stage, StorageID(main_database, main_table), scalars, false, context->getExternalTables()
+        header, {}, {}, processed_stage, StorageID(main_database, main_table), scalars, false, context->getExternalTables()
     );
 
     LOG_TRACE(log, "Perfect-Shard will send query {} ", queryToString(query));

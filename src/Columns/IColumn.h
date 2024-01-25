@@ -91,6 +91,10 @@ public:
     /// If column is ColumnLowCardinality, transforms is to full column.
     virtual Ptr convertToFullColumnIfLowCardinality() const { return getPtr(); }
 
+        /// If column isn't ColumnSparse, return itself.
+    /// If column is ColumnSparse, transforms it to full column.
+    [[nodiscard]] virtual Ptr convertToFullColumnIfSparse() const { return getPtr(); }
+
     /// Creates empty column with the same type.
     virtual MutablePtr cloneEmpty() const { return cloneResized(0); }
 
@@ -207,6 +211,13 @@ public:
     {
         for (size_t i = 0; i < length; ++i)
             insertFrom(src, position);
+    }
+
+    /// Appends one field multiple times. Can be optimized in inherited classes.
+    virtual void insertMany(const Field & field, size_t length)
+    {
+        for (size_t i = 0; i < length; ++i)
+            insert(field);
     }
 
     /// Appends data located in specified memory chunk if it is possible (throws an exception if it cannot be implemented).
@@ -414,8 +425,18 @@ public:
 
     /// If the column contains subcolumns (such as Array, Nullable, etc), do callback on them.
     /// Shallow: doesn't do recursive calls; don't do call for itself.
-    using ColumnCallback = std::function<void(WrappedPtr&)>;
-    virtual void forEachSubcolumn(ColumnCallback) {}
+
+    using ColumnCallback = std::function<void(const WrappedPtr &)>;
+    virtual void forEachSubcolumn(ColumnCallback) const;
+
+    using MutableColumnCallback = std::function<void(WrappedPtr &)>;
+    virtual void forEachSubcolumn(MutableColumnCallback) {}
+
+    using RecursiveColumnCallback = std::function<void(const IColumn &)>;
+    virtual void forEachSubcolumnRecursively(RecursiveColumnCallback) const;
+
+    using RecursiveMutableColumnCallback = std::function<void(IColumn &)>;
+    virtual void forEachSubcolumnRecursively(RecursiveMutableColumnCallback) {}
 
     /// Similar to forEachSubcolumn but it also do recursive calls.
     virtual void forEachSubcolumnRecursively(ColumnCallback) {}
@@ -426,6 +447,23 @@ public:
     {
         throw Exception("Method structureEquals is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
+
+    /// Returns ratio of values in column, that are equal to default value of column.
+    /// Checks only @sample_ratio ratio of rows.
+    [[nodiscard]] virtual double getRatioOfDefaultRows(double sample_ratio = 1.0) const = 0; /// NOLINT
+
+    /// Returns number of values in column, that are equal to default value of column.
+    [[nodiscard]] virtual UInt64 getNumberOfDefaultRows() const = 0;
+
+    /// Returns indices of values in column, that not equal to default value of column.
+    virtual void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const = 0;
+
+     /// Returns column with @total_size elements.
+    /// In result column values from current column are at positions from @offsets.
+    /// Other values are filled by @default_value.
+    /// @shift means how much rows to skip from the beginning of current column.
+    /// Used to create full column from sparse.
+    [[nodiscard]] virtual Ptr createWithOffsets(const Offsets & offsets, const Field & default_field, size_t total_rows, size_t shift) const;
 
     /// Compress column in memory to some representation that allows to decompress it back.
     /// Return itself if compression is not applicable for this column type.
@@ -442,6 +480,16 @@ public:
         return getPtr();
     }
 
+    /// Some columns may require finalization before using of other operations.
+    virtual void finalize() {}
+    virtual bool isFinalized() const { return true; }
+
+    MutablePtr cloneFinalized() const
+    {
+        auto finalized = IColumn::mutate(getPtr());
+        finalized->finalize();
+        return finalized;
+    }
 
     static MutablePtr mutate(Ptr ptr)
     {
@@ -509,6 +557,8 @@ public:
 
     virtual bool lowCardinality() const { return false; }
 
+    [[nodiscard]] virtual bool isSparse() const { return false; }
+
     virtual bool isCollationSupported() const { return false; }
 
     virtual ~IColumn() = default;
@@ -544,6 +594,9 @@ protected:
     /// Template is to devirtualize calls to 'isDefaultAt' method.
     template <typename Derived>
     double getRatioOfDefaultRowsImpl(double sample_ratio) const;
+
+    template <typename Derived>
+    UInt64 getNumberOfDefaultRowsImpl() const;
 
     template <typename Derived>
     void getIndicesOfNonDefaultRowsImpl(Offsets & indices, size_t from, size_t limit) const;

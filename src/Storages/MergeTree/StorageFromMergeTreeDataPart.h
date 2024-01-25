@@ -31,6 +31,7 @@
 #include <Core/Defines.h>
 
 #include <common/shared_ptr_helper.h>
+#include <DataTypes/ObjectUtils.h>
 
 namespace ErrorCodes
 {
@@ -46,10 +47,24 @@ class StorageFromMergeTreeDataPart final : public shared_ptr_helper<StorageFromM
     friend struct shared_ptr_helper<StorageFromMergeTreeDataPart>;
 public:
     String getName() const override { return "FromMergeTreeDataPart"; }
+    
+    StorageSnapshotPtr getStorageSnapshot(
+        const StorageMetadataPtr & metadata_snapshot, ContextPtr /*query_context*/) const override
+    {
+        const auto & storage_columns = metadata_snapshot->getColumns();
+        if (!hasDynamicSubcolumns(storage_columns))
+            return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
+
+        auto object_columns = getConcreteObjectColumns(
+            parts.begin(), parts.end(),
+            storage_columns, [](const auto & part) -> const auto & { return part->getColumns(); });
+
+        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns);
+    }
 
     Pipe read(
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr context,
         QueryProcessingStage::Enum /*processed_stage*/,
@@ -69,8 +84,7 @@ public:
                                                   parts,
                                                   delete_bitmap_getter,
                                                   column_names,
-                                                  metadata_snapshot,
-                                                  metadata_snapshot,
+                                                  storage_snapshot,
                                                   query_info,
                                                   context,
                                                   max_block_size,
@@ -83,6 +97,8 @@ public:
     bool supportsPrewhere() const override { return true; }
 
     bool supportsIndexForIn() const override { return true; }
+    
+    bool supportsDynamicSubcolumns() const override { return true; }
 
     bool mayBenefitFromIndexForIn(
         const ASTPtr & left_in_operand, ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot) const override

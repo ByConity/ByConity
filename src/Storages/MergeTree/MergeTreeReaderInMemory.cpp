@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <Storages/MergeTree/MergeTreeReaderInMemory.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
+#include <Interpreters/getColumnFromBlock.h>
 #include <Common/ProfileEventsTimer.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/NestedUtils.h>
@@ -69,19 +70,6 @@ MergeTreeReaderInMemory::MergeTreeReaderInMemory(
             if (auto offset_position = findColumnForOffsets(name))
                 positions_for_offsets[name] = *offset_position;
     }
-}
-
-static ColumnPtr getColumnFromBlock(const Block & block, const NameAndTypePair & name_and_type)
-{
-    auto storage_name = name_and_type.getNameInStorage();
-    if (!block.has(storage_name))
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Not found column '{}' in block", storage_name);
-
-    const auto & column = block.getByName(storage_name).column;
-    if (name_and_type.isSubcolumn())
-        return name_and_type.getTypeInStorage()->getSubcolumn(name_and_type.getSubcolumnName(), *column);
-
-    return column;
 }
 
 size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row,

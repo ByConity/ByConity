@@ -43,6 +43,7 @@
 #include <Core/AccurateComparison.h>
 #include <Common/typeid_cast.h>
 #include <Common/NaNUtils.h>
+#include <Common/FieldVisitorToString.h>
 
 #include <common/DateLUT.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
@@ -298,6 +299,8 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
             }
             return src;
         }
+
+        return applyVisitor(FieldVisitorToString(), src);
     }
     else if (const DataTypeArray * type_array = typeid_cast<const DataTypeArray *>(&type))
     {
@@ -406,6 +409,48 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
     {
         if (src.getType() == Field::Types::BitMap64)
             return src;
+    }
+    else if (isObject(type))
+    {
+        if (src.getType() == Field::Types::Object)
+            return src;  /// Already in needed type.
+
+        const auto * from_type_tuple = typeid_cast<const DataTypeTuple *>(from_type_hint);
+        if (src.getType() == Field::Types::Tuple && from_type_tuple && from_type_tuple->haveExplicitNames())
+        {
+            const auto & names = from_type_tuple->getElementNames();
+            const auto & tuple = src.get<const Tuple &>();
+
+            if (names.size() != tuple.size())
+                throw Exception(ErrorCodes::TYPE_MISMATCH,
+                    "Bad size of tuple in IN or VALUES section (while converting to Object). Expected size: {}, actual size: {}",
+                        names.size(), tuple.size());
+
+            Object object;
+            for (size_t i = 0; i < names.size(); ++i)
+                object[names[i]] = tuple[i];
+
+            return object;
+        }
+
+        if (src.getType() == Field::Types::Map)
+        {
+            Object object;
+            const auto & map = src.get<const Map &>();
+            for (const auto & i : map)
+            {
+                const auto & key = i.first;
+                const auto & value = i.second;
+
+                if (key.getType() != Field::Types::String)
+                    throw Exception(ErrorCodes::TYPE_MISMATCH,
+                        "Cannot convert from Map with key of type {} to Object", key.getTypeName());
+
+                object[key.get<const String &>()] = value;
+            }
+
+            return object;
+        }
     }
 
     /// Conversion from string by parsing.

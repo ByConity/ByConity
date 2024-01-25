@@ -331,7 +331,7 @@ void TinyLogBlockOutputStream::writeData(const NameAndTypePair & name_and_type, 
         /// Use different WrittenStreams set, or we get nullptr for them in `serializeBinaryBulkWithMultipleStreams`
         WrittenStreams prefix_written_streams;
         settings.getter = createStreamGetter(name_and_type, prefix_written_streams);
-        serialization->serializeBinaryBulkStatePrefix(settings, serialize_states[name]);
+        serialization->serializeBinaryBulkStatePrefix(column, settings, serialize_states[name]);
     }
 
     settings.getter = createStreamGetter(name_and_type, written_streams);
@@ -466,9 +466,8 @@ void StorageTinyLog::addFiles(const NameAndTypePair & column)
         }
     };
 
-    ISerialization::SubstreamPath substream_path;
     auto serialization = type->getDefaultSerialization();
-    serialization->enumerateStreams(stream_callback, substream_path);
+    serialization->enumerateStreams(stream_callback);
 }
 
 
@@ -500,16 +499,17 @@ static std::chrono::seconds getLockTimeout(ContextPtr context)
 
 Pipe StorageTinyLog::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & /*query_info*/,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     const size_t max_block_size,
     const unsigned /*num_streams*/)
 {
-    metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
+    storage_snapshot->check(column_names);
 
-    auto all_columns = metadata_snapshot->getColumns().getByNames(ColumnsDescription::All, column_names, true);
+    auto options = GetColumnsOptions(GetColumnsOptions::All).withExtendedObjects();
+    auto all_columns = storage_snapshot->getColumns(options);
 
     // When reading, we lock the entire storage, because we only have one file
     // per column and can't modify it concurrently.

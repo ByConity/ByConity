@@ -1114,10 +1114,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     MergeStageProgress horizontal_stage_progress(
         column_sizes ? column_sizes->keyColumnsWeight() : 1.0);
 
+    auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot, context);
     for (const auto & part : parts)
     {
         auto input = std::make_unique<MergeTreeSequentialSource>(
-            data, metadata_snapshot, part, merging_column_names, read_with_direct_io, true);
+            data, storage_snapshot, part, merging_column_names, read_with_direct_io, true);
 
         input->setProgressCallback(
             MergeProgressCallback(merge_entry, watch_prev_elapsed, horizontal_stage_progress));
@@ -1321,6 +1322,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
             /*blocks_are_granules_size = */ false,
             context->getSettingsRef().optimize_map_column_serialization);
 
+
         for (size_t column_num = 0, gathering_column_names_size = gathering_column_names.size(); column_num < gathering_column_names_size;
              ++column_num, ++it_name_and_type)
         {
@@ -1335,7 +1337,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 {
                     /// FIXME(UNIQUE KEY): set delete bitmap from snapshot
                     auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
-                        data, metadata_snapshot, parts[part_num], /*delete_bitmap*/nullptr, column_names_, read_with_direct_io,
+                        data, storage_snapshot, parts[part_num], /*delete_bitmap*/nullptr, column_names_, read_with_direct_io,
                         /*take_column_types_from_storage*/true,
                         /*quiet=*/ false);
 
@@ -2113,8 +2115,7 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
             [&](const ISerialization::SubstreamPath & substream_path)
             {
                 ++stream_counts[ISerialization::getFileNameForStream(column, substream_path)];
-            },
-            {});
+            });
     }
 
     NameToNameVector rename_vector;

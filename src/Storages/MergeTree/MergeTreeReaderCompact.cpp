@@ -170,6 +170,15 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
             if (name_and_type->name == "_part_row_number")
                 continue;
 
+            if (name_and_type->isSubcolumn())
+            {
+                auto storage_column_from_part = getColumnFromPart(
+                    {name_and_type->getNameInStorage(), name_and_type->getTypeInStorage()});
+
+                if (!storage_column_from_part.type->tryGetSubcolumnType(name_and_type->getSubcolumnName()))
+                    continue;
+            }
+
             NameAndTypePair column_from_part = getColumnFromPart(*name_and_type);
 
             auto position = compact_part->getColumnPositionWithoutMap(column_from_part.name);

@@ -64,9 +64,10 @@ void PlanSegmentSourceStep::initializePipeline(QueryPipeline & pipeline, const B
 QueryPlanStepPtr PlanSegmentSourceStep::generateStep()
 {
     StoragePtr storage = DatabaseCatalog::instance().getTable({storage_id.database_name, storage_id.table_name}, context);
+    auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
 
     auto pipe = storage->read(column_names,
-                              storage->getInMemoryMetadataPtr(),
+                              storage_snapshot,
                               query_info,
                               context,
                               processed_stage,

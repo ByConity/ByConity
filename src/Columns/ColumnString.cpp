@@ -214,7 +214,6 @@ ColumnPtr ColumnString::filter(const Filter & filt, ssize_t result_size_hint) co
     return res;
 }
 
-
 ColumnPtr ColumnString::permute(const Permutation & perm, size_t limit) const
 {
     size_t size = offsets.size();

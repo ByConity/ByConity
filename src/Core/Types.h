@@ -88,6 +88,7 @@ enum class TypeIndex
     BitMap64,
     Time,
     SketchBinary,
+    Object,
     IPv4,
     IPv6,
 };
@@ -340,6 +341,7 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::Map:        return "Map";
         case TypeIndex::BitMap64:  return "BitMap64";
         case TypeIndex::SketchBinary: return "SketchBinary";
+        case TypeIndex::Object: return "Object";
     }
 
     __builtin_unreachable();

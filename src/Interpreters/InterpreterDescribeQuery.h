@@ -16,7 +16,7 @@ public:
 
     BlockIO execute() override;
 
-    static Block getSampleBlock(ContextPtr context_);
+    static Block getSampleBlock(ContextPtr context_, bool include_subcolumns);
 
 private:
     ASTPtr query_ptr;

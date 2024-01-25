@@ -179,6 +179,7 @@ std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> createDaemonJob
         { "CONSUMER", 10000},
         { "DEDUP_WORKER", 10000},
         { "PART_CLUSTERING", 10000},
+        { "OBJECT_SCHEMA_ASSEMBLE", 10000},
         { "MATERIALIZED_MYSQL", 10000}
     };
 

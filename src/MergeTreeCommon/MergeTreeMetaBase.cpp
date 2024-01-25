@@ -31,6 +31,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/NestedUtils.h>
+#include <DataTypes/ObjectUtils.h>
 #include <IO/ConcatReadBuffer.h>
 #include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTFunction.h>
@@ -906,6 +907,53 @@ MergeTreeMetaBase::DataParts MergeTreeMetaBase::getDataParts(const DataPartState
     return res;
 }
 
+MergeTreeMetaBase::DataPartsVector MergeTreeMetaBase::getDataPartsVectorUnlocked(
+    const DataPartStates & affordable_states,
+    const DataPartsLock & /*lock*/,
+    DataPartStateVector * out_states,
+    bool require_projection_parts) const
+{
+    DataPartsVector res;
+    DataPartsVector buf;
+
+    for (auto state : affordable_states)
+    {
+        auto range = getDataPartsStateRange(state);
+
+        if (require_projection_parts)
+        {
+            for (const auto & part : range)
+            {
+                for (const auto & [_, projection_part] : part->getProjectionParts())
+                    res.push_back(projection_part);
+            }
+        }
+        else
+        {
+            std::swap(buf, res);
+            res.clear();
+            std::merge(range.begin(), range.end(), buf.begin(), buf.end(), std::back_inserter(res), LessDataPart()); //-V783
+        }
+    }
+
+    if (out_states != nullptr)
+    {
+        out_states->resize(res.size());
+        if (require_projection_parts)
+        {
+            for (size_t i = 0; i < res.size(); ++i)
+                (*out_states)[i] = res[i]->getParentPart()->getState();
+        }
+        else
+        {
+            for (size_t i = 0; i < res.size(); ++i)
+                (*out_states)[i] = res[i]->getState();
+        }
+    }
+
+    return res;
+}
+
 MergeTreeMetaBase::DataPartsVector MergeTreeMetaBase::getDataPartsVector(
     const DataPartStates & affordable_states, DataPartStateVector * out_states, bool require_projection_parts) const
 {
@@ -1613,6 +1661,16 @@ UInt64 MergeTreeMetaBase::getTableHashForClusterBy() const
 
     return cluster_definition_hash;
 
+}
+
+StorageSnapshotPtr MergeTreeMetaBase::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr  /*query_context*/) const
+{
+    return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns);
+}
+
+StorageSnapshotPtr MergeTreeMetaBase::getStorageSnapshotWithoutParts(const StorageMetadataPtr & metadata_snapshot) const
+{
+    return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns);
 }
 
 MergeTreeSettingsPtr MergeTreeMetaBase::getChangedSettings(const ASTPtr new_settings) const

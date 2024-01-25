@@ -28,6 +28,7 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/SelectQueryOptions.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/StorageSnapshot.h>
 
 namespace DB
 {
@@ -44,7 +45,7 @@ using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 struct TreeRewriterResult
 {
     ConstStoragePtr storage;
-    StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
     std::shared_ptr<TableJoin> analyzed_join;
     const ASTTablesInSelectQueryElement * ast_join = nullptr;
 
@@ -99,10 +100,10 @@ struct TreeRewriterResult
     /// Rewrite columns for compatibility.
     TablesWithColumns join_tables_to_rewrite;
 
-    TreeRewriterResult(
+    explicit TreeRewriterResult(
         const NamesAndTypesList & source_columns_,
         ConstStoragePtr storage_ = {},
-        const StorageMetadataPtr & metadata_snapshot_ = {},
+        const StorageSnapshotPtr & storage_snapshot_ = {},
         bool add_special = true);
 
     void collectSourceColumns(bool add_special);
@@ -137,7 +138,7 @@ public:
         ASTPtr & query,
         const NamesAndTypesList & source_columns_,
         ConstStoragePtr storage = {},
-        const StorageMetadataPtr & metadata_snapshot = {},
+        const StorageSnapshotPtr & storage_snapshot = {},
         bool allow_aggregations = false,
         bool allow_self_aliases = true) const;
 

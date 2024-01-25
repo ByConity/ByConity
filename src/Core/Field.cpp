@@ -150,6 +150,12 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
             DB::readBinary(value.toUnderType(), buf);
             return value;
         }
+        case Field::Types::Object:
+        {
+            Object value;
+            readBinary(value, buf);
+            return value;
+        }
     }
     return Field();
 }
@@ -272,6 +278,40 @@ void writeBinary(const BitMap64 & x, WriteBuffer & buf)
     PODArray<char> tmp_buf(bytes);
     x.write(tmp_buf.data());
     writeString(tmp_buf.data(), bytes, buf);
+}
+
+void readBinary(Object & x, ReadBuffer & buf)
+{
+    size_t size;
+    readBinary(size, buf);
+
+    for (size_t index = 0; index < size; ++index)
+    {
+        UInt8 type;
+        String key;
+        readBinary(type, buf);
+        readBinary(key, buf);
+        x[key] = getBinaryValue(type, buf);
+    }
+}
+
+void writeBinary(const Object & x, WriteBuffer & buf)
+{
+    const size_t size = x.size();
+    writeBinary(size, buf);
+
+    for (const auto & [key, value] : x)
+    {
+        const UInt8 type = value.getType();
+        writeBinary(type, buf);
+        writeBinary(key, buf);
+        Field::dispatch([&buf] (const auto & val) { FieldVisitorWriteBinary()(val, buf); }, value);
+    }
+}
+
+void writeText(const Object & x, WriteBuffer & buf)
+{
+    writeFieldText(Field(x), buf);
 }
 
 template <typename T>

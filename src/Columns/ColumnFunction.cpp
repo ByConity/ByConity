@@ -187,6 +187,14 @@ void ColumnFunction::appendArgument(const ColumnWithTypeAndName & column)
     captured_columns.push_back(column);
 }
 
+DataTypePtr ColumnFunction::getResultType() const
+{
+    // if (recursively_convert_result_to_full_column_if_low_cardinality)
+    //     return recursiveRemoveLowCardinality(function->getResultType());
+
+    return function->getResultType();
+}
+
 ColumnWithTypeAndName ColumnFunction::reduce() const
 {
     auto args = function->getArgumentTypes().size();
@@ -201,6 +209,14 @@ ColumnWithTypeAndName ColumnFunction::reduce() const
 
     res.column = function->execute(columns, res.type, size_);
     return res;
+}
+
+const ColumnFunction * checkAndGetShortCircuitArgument(const ColumnPtr & column)
+{
+    const ColumnFunction * column_function;
+    if ((column_function = typeid_cast<const ColumnFunction *>(column.get())) && column_function->isShortCircuitArgument())
+        return column_function;
+    return nullptr;
 }
 
 }

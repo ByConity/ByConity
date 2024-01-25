@@ -17,13 +17,13 @@ namespace ErrorCodes
 
 EmbeddedRocksDBBlockInputStream::EmbeddedRocksDBBlockInputStream(
             StorageEmbeddedRocksDB & storage_,
-            const StorageMetadataPtr & metadata_snapshot_,
+            const StorageSnapshotPtr & storage_snapshot_,
             size_t max_block_size_)
             : storage(storage_)
-            , metadata_snapshot(metadata_snapshot_)
+            , storage_snapshot(storage_snapshot_)
             , max_block_size(max_block_size_)
 {
-    sample_block = metadata_snapshot->getSampleBlock();
+    sample_block = storage_snapshot->metadata->getSampleBlock();
     primary_key_pos = sample_block.getPositionByName(storage.primary_key);
 }
 

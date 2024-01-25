@@ -13,8 +13,7 @@
  * limitations under the License.
  */
 
-#include <Processors/MergeTreeSelectPrepareProcessor.h>
-#include <Processors/ResizeProcessor.h>
+#include <memory>
 #include <QueryPlan/TableScanStep.h>
 #include <QueryPlan/ExecutePlanElement.h>
 
@@ -795,8 +794,8 @@ void TableScanStep::formatOutputStream(ContextPtr context)
     storage = DatabaseCatalog::instance().getTable(storage_id, context);
     storage_id.uuid = storage->getStorageUUID();
 
-    // TODO: in long term, we should use different constructor for server/worker
-    Block header = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(getRequiredColumns(), storage->getVirtuals());
+   // TODO: in long term, we should use different constructor for server/worker
+    Block header = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context)->getSampleBlockForColumns(getRequiredColumns());
 
     NameToNameMap name_to_name_map;
     for (auto & item : column_alias)
@@ -1085,12 +1084,10 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     if (use_projection_index)
     {
-        auto metadata_snapshot = storage->getInMemoryMetadataPtr();
-        auto input_columns_block
-            = metadata_snapshot->getSampleBlockForColumns(getRequiredColumns(), storage->getVirtuals(), storage_id);
+        auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), build_context.context);
+        auto input_columns_block = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
         auto input_columns = input_columns_block.getNamesAndTypesList();
-        auto required_columns_block = metadata_snapshot->getSampleBlockForColumns(
-            getRequiredColumns(OutputAndPrewhere), storage->getVirtuals(), storage_id);
+        auto required_columns_block = storage_snapshot->getSampleBlockForColumns(getRequiredColumns(OutputAndPrewhere));
         auto required_columns = required_columns_block.getNamesAndTypesList();
 
         if (log->debug())
@@ -1123,7 +1120,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 .prepared_sets = query_info.sets,
                 .outputs = column_alias /* no meaning */};
 
-        query_info.index_context = MergeTreeIndexContext::buildFromProjection(inline_expressions, index_building_context, metadata_snapshot);
+        query_info.index_context = MergeTreeIndexContext::buildFromProjection(inline_expressions, index_building_context, storage_snapshot->metadata);
     }
 
     ExecutePlan execute_plan;
@@ -1144,14 +1141,14 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     if (execute_plan.empty())
     {
+        auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), build_context.context);
         auto pipe = storage->read(
-            interpreter->getRequiredColumns(), storage->getInMemoryMetadataPtr(), query_info, build_context.context, QueryProcessingStage::Enum::FetchColumns, max_block_size, max_streams);
+            interpreter->getRequiredColumns(), storage_snapshot, query_info, build_context.context, QueryProcessingStage::Enum::FetchColumns, max_block_size, max_streams);
 
         QueryPlanStepPtr step;
         if (pipe.empty())
         {
-            auto header
-                = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(getRequiredColumns(), storage->getVirtuals(), storage_id);
+            auto header = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
             auto null_pipe = InterpreterSelectQuery::generateNullSourcePipe(header, query_info);
             auto read_from_pipe = std::make_shared<ReadFromPreparedSource>(std::move(null_pipe));
             read_from_pipe->setStepDescription("Read from NullSource");
@@ -1181,8 +1178,9 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     MergeTreeDataSelectExecutor merge_tree_reader{*merge_tree_storage};
     auto metadata_snapshot = storage->getInMemoryMetadataPtr();
     auto context = build_context.context;
+    auto storage_snapshot = storage->getStorageSnapshot(metadata_snapshot, context);
     Pipes pipes;
-    
+
     // num of pipes may be smaller than num of plan elements since MergeTreeDataSelectExecutor
     // can infer an empty result for a part group. hence we record a mapping of pipe->plan element
     std::vector<size_t> plan_element_ids;
@@ -1208,12 +1206,15 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 projection_query_info.prewhere_info->prewhere_actions = plan_element.prewhere_actions;
             }
             MergeTreeData::DeleteBitmapGetter null_getter = [](auto & /*part*/) { return nullptr; };
+            auto proj_snapshot = std::make_shared<StorageSnapshot>(
+                storage_snapshot->storage, storage_snapshot->metadata, storage_snapshot->object_columns);
+            proj_snapshot->addProjection(plan_element.projection_desc);
+
             auto read_plan = merge_tree_reader.readFromParts(
                 {},
                 null_getter,
                 plan_element.projection_required_columns,
-                metadata_snapshot,
-                plan_element.projection_desc->metadata,
+                proj_snapshot,
                 projection_query_info,
                 context,
                 max_block_size,
@@ -1258,8 +1259,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 {},
                 delete_bitmap_getter,
                 getRequiredColumns(),
-                metadata_snapshot,
-                metadata_snapshot,
+                storage_snapshot,
                 query_info_for_index,
                 context,
                 max_block_size,
@@ -1538,9 +1538,11 @@ void TableScanStep::allocate(ContextPtr context)
     // init query_info.syntax_analyzer
     if (!query_info.syntax_analyzer_result)
     {
-        Block header = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(getRequiredColumns(), storage->getVirtuals());
+        auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+        Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
+
         auto tree_rewriter_result
-            = std::make_shared<TreeRewriterResult>(header.getNamesAndTypesList(), storage, storage->getInMemoryMetadataPtr());
+            = std::make_shared<TreeRewriterResult>(header.getNamesAndTypesList(), storage, storage_snapshot);
         tree_rewriter_result->required_source_columns = header.getNamesAndTypesList();
         tree_rewriter_result->analyzed_join = std::make_shared<TableJoin>();
         query_info.syntax_analyzer_result = tree_rewriter_result;

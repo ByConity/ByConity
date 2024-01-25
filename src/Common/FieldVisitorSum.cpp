@@ -53,6 +53,7 @@ bool FieldVisitorSum::operator() (UUID &) const { throw Exception("Cannot sum UU
 bool FieldVisitorSum::operator() (IPv4 &) const { throw Exception("Cannot sum IPv4s", ErrorCodes::LOGICAL_ERROR); }
 bool FieldVisitorSum::operator() (IPv6 &) const { throw Exception("Cannot sum IPv6s", ErrorCodes::LOGICAL_ERROR); }
 bool FieldVisitorSum::operator() (BitMap64 &) const { throw Exception("Cannot sum BitMap64", ErrorCodes::LOGICAL_ERROR); }
+bool FieldVisitorSum::operator() (Object &) const { throw Exception("Cannot sum Objects", ErrorCodes::LOGICAL_ERROR); }
 
 bool FieldVisitorSum::operator() (AggregateFunctionStateData &) const
 {

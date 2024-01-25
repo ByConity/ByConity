@@ -38,25 +38,30 @@
 #include <common/logger_useful.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <filesystem>
+#include <memory>
 #include <Common/filesystemHelpers.h>
 
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <Databases/DatabaseCnch.h>
+#include <Common/Status.h>
+#include <Interpreters/Context_fwd.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <DataTypes/ObjectUtils.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <Protos/RPCHelpers.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Common/DefaultCatalogName.h>
 
-#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/Status.h>
-#include "Core/SettingsEnums.h"
-#include "Databases/DatabaseExternalHive.h"
-#include "Interpreters/StorageID.h"
-#include "Transaction/TxnTimestamp.h"
+#include <Core/SettingsEnums.h>
+#include <Databases/DatabaseExternalHive.h>
+#include <Interpreters/StorageID.h>
+#include <Transaction/TxnTimestamp.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #if !defined(ARCADIA_BUILD)
-#    include "config_core.h"
+#    include <config_core.h>
 #endif
 
 #if USE_MYSQL
@@ -377,6 +382,12 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
             database->getEngineName());
     if (!table)
         database = nullptr;
+
+    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
+    {
+        if (auto cnch_table = std::dynamic_pointer_cast<StorageCnchMergeTree>(table))
+            cnch_table->resetObjectColumns(context_);
+    }
 
     return {database, table};
 }

@@ -13,7 +13,13 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <iterator>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
 #include <Catalog/DataModelPartWrapper.h>
@@ -33,6 +39,11 @@
 #include <Common/RpcClientPool.h>
 #include <Common/serverLocality.h>
 #include <Common/ScanWaitFreeMap.h>
+#include <Catalog/MetastoreCommon.h>
+#include <DataTypes/ObjectUtils.h>
+#include <Storages/ColumnsDescription.h>
+#include <Storages/IStorage_fwd.h>
+#include <Storages/StorageSnapshot.h>
 #include <Core/Types.h>
 // #include <Access/MaskingPolicyDataModel.h>
 // #include <Access/MaskingPolicyCommon.h>
@@ -1208,6 +1219,22 @@ namespace Catalog
             ProfileEvents::SetWorkerGroupForTableFailed);
     }
 
+    void Catalog::initStorageObjectSchema(StoragePtr & res)
+    {
+        // Load dynamic object column schema
+        if (res && hasDynamicSubcolumns(res->getInMemoryMetadata().getColumns()))
+        {
+            auto cnch_table = std::dynamic_pointer_cast<StorageCnchMergeTree>(res);
+
+            if (cnch_table)
+            {
+                auto assembled_schema = tryGetTableObjectAssembledSchema(res->getStorageUUID());
+                auto partial_schemas = tryGetTableObjectPartialSchemas(res->getStorageUUID());
+                cnch_table->resetObjectSchemas(assembled_schema, partial_schemas);
+            }
+        }
+    }
+
     StoragePtr Catalog::getTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts)
     {
         StoragePtr res = nullptr;
@@ -1245,6 +1272,7 @@ namespace Catalog
 
                 res = createTableFromDataModel(query_context, *table);
 
+                initStorageObjectSchema(res);
                 /// TODO: (zuochuang.zema, guanzhe.andy) handle TimeTravel
                 if (auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(res.get()))
                 {
@@ -1313,6 +1341,9 @@ namespace Catalog
                 if (!table)
                     return;
                 res = createTableFromDataModel(query_context, *table);
+
+                initStorageObjectSchema(res);
+
                 /// Try insert the storage into cache.
                 if (res && cache_manager)
                 {
@@ -6239,6 +6270,208 @@ namespace Catalog
         create_ast->uuid = final_uuid;
         String create_query = serializeAST(*ast);
         d.set_definition(create_query);
+    }
+
+    void Catalog::appendObjectPartialSchema(
+        const StoragePtr & table, const TxnTimestamp & txn_id, const MutableMergeTreeDataPartsCNCHVector & parts)
+    {
+        //txn partial schema
+        //multi column
+        auto cnch_table = std::dynamic_pointer_cast<StorageCnchMergeTree>(table);
+        if (!cnch_table)
+            return;
+
+        auto subcolumns_limit = cnch_table->getSettings()->json_subcolumns_threshold;
+
+        //check schema compatibility and merge part schema
+        auto partial_schema = DB::getConcreteObjectColumns(
+            parts.begin(), parts.end(), table->getInMemoryMetadata().columns, [](const auto & part) { return part->getColumns(); });
+
+        // compare with existed schema , check if it need to insert
+        // Attention: this comparison will scan existed partial schema from meta store, it may cost too many meta store resource.
+        // if it cause meta store performance fallback, just remove this comparison
+        auto assembled_schema = tryGetTableObjectAssembledSchema(table->getStorageUUID());
+        auto existed_partial_schemas = tryGetTableObjectPartialSchemas(table->getStorageUUID());
+        std::vector<TxnTimestamp> existed_partial_schema_txnids(existed_partial_schemas.size());
+        std::for_each(
+            existed_partial_schemas.begin(),
+            existed_partial_schemas.end(),
+            [&existed_partial_schema_txnids](const auto & existed_partial_schema) {
+                existed_partial_schema_txnids.emplace_back(existed_partial_schema.first);
+            });
+        auto committed_partial_schema_txnids = filterUncommittedObjectPartialSchemas(existed_partial_schema_txnids);
+        std::vector<ObjectPartialSchema> committed_partial_schema_list(committed_partial_schema_txnids.size() + 2);
+        std::for_each(
+            committed_partial_schema_txnids.begin(),
+            committed_partial_schema_txnids.end(),
+            [&committed_partial_schema_list, &existed_partial_schemas](const auto & txn_id) {
+                committed_partial_schema_list.emplace_back(existed_partial_schemas[txn_id]);
+            });
+
+        committed_partial_schema_list.emplace_back(assembled_schema);
+
+        auto existed_assembled_schema = DB::getConcreteObjectColumns(
+            committed_partial_schema_list.begin(),
+            committed_partial_schema_list.end(),
+            cnch_table->getInMemoryMetadata().getColumns(),
+            [](const auto & partial_schema_) { return partial_schema_; });
+
+        committed_partial_schema_list.emplace_back(partial_schema);
+        auto new_assembled_schema = DB::getConcreteObjectColumns(
+            committed_partial_schema_list.begin(),
+            committed_partial_schema_list.end(),
+            cnch_table->getInMemoryMetadata().getColumns(),
+            [](const auto & partial_schema_) { return partial_schema_; });
+
+        if (new_assembled_schema != existed_assembled_schema)
+        {
+            DB::limitObjectSubcolumns(new_assembled_schema, subcolumns_limit);
+
+            meta_proxy->appendObjectPartialSchema(
+                name_space, UUIDHelpers::UUIDToString(table->getStorageUUID()), txn_id.toUInt64(), partial_schema.toString());
+            cnch_table->appendObjectPartialSchema(txn_id, partial_schema);
+
+            LOG_DEBUG(
+                log,
+                "Append dynamic object partial schema [TxnTimestamp:{}, Partial Schema:{}]",
+                txn_id.toString(),
+                partial_schema.toString());
+        }
+    }
+
+    ObjectAssembledSchema Catalog::tryGetTableObjectAssembledSchema(const UUID & table_uuid) const
+    {
+        auto serialized_assembled_schema = meta_proxy->getObjectAssembledSchema(name_space, UUIDHelpers::UUIDToString(table_uuid));
+
+        if (serialized_assembled_schema.empty())
+            return ColumnsDescription();
+        return ColumnsDescription::parse(serialized_assembled_schema);
+    }
+
+    ObjectPartialSchemas Catalog::tryGetTableObjectPartialSchemas(const UUID & table_uuid, const int & limit_size) const
+    {
+        auto serialized_partial_schemas
+            = meta_proxy->scanObjectPartialSchemas(name_space, UUIDHelpers::UUIDToString(table_uuid), limit_size);
+        ObjectPartialSchemas partial_schemas;
+        partial_schemas.reserve(serialized_partial_schemas.size());
+        std::for_each(
+            serialized_partial_schemas.begin(),
+            serialized_partial_schemas.end(),
+            [&partial_schemas](std::pair<String, String> serialized_partial_schema) {
+                partial_schemas.emplace(
+                    std::stoll(serialized_partial_schema.first),
+                    ColumnsDescription::parse(serialized_partial_schema.second));
+            });
+
+        return partial_schemas;
+    }
+
+    bool Catalog::resetObjectAssembledSchemaAndPurgePartialSchemas(
+        const UUID & table_uuid,
+        const ObjectAssembledSchema & old_assembled_schema,
+        const ObjectAssembledSchema & new_assembled_schema,
+        const std::vector<TxnTimestamp> & partial_schema_txnids)
+    {
+        return meta_proxy->resetObjectAssembledSchemaAndPurgePartialSchemas(
+            name_space,
+            UUIDHelpers::UUIDToString(table_uuid),
+            old_assembled_schema.empty() ? "" : old_assembled_schema.toString(),
+            new_assembled_schema.toString(),
+            partial_schema_txnids);
+    }
+
+    std::vector<TxnTimestamp> Catalog::filterUncommittedObjectPartialSchemas(std::vector<TxnTimestamp> & unfiltered_partial_schema_txnids)
+    {
+        std::vector<TxnTimestamp> committed_partial_schema_txnids;
+        std::unordered_map<TxnTimestamp, TxnTimestamp, TxnTimestampHasher> unfiltered_partial_schema_txnid_map;
+        unfiltered_partial_schema_txnid_map.reserve(unfiltered_partial_schema_txnids.size());
+        std::for_each(
+            unfiltered_partial_schema_txnids.begin(),
+            unfiltered_partial_schema_txnids.end(),
+            [&unfiltered_partial_schema_txnid_map](const auto & txn_id) { unfiltered_partial_schema_txnid_map[txn_id] = txn_id; });
+
+        // query partial schema status in meta store
+        auto partial_schema_statuses = batchGetObjectPartialSchemaStatuses(unfiltered_partial_schema_txnids);
+        std::for_each(
+            partial_schema_statuses.begin(),
+            partial_schema_statuses.end(),
+            [&committed_partial_schema_txnids, &unfiltered_partial_schema_txnid_map](const auto & partial_schema_status_pair) {
+                if (partial_schema_status_pair.second == ObjectPartialSchemaStatus::Finished)
+                {
+                    committed_partial_schema_txnids.emplace_back(partial_schema_status_pair.first);
+                    unfiltered_partial_schema_txnid_map.erase(partial_schema_status_pair.first);
+                }
+            });
+
+        // query remaining partial schemas by its co-responding txn record status
+        unfiltered_partial_schema_txnids.clear();
+        std::transform(
+            unfiltered_partial_schema_txnid_map.begin(),
+            unfiltered_partial_schema_txnid_map.end(),
+            std::back_inserter(unfiltered_partial_schema_txnids),
+            [](const auto & txn_id_pair) { return txn_id_pair.first; });
+        auto txn_record_statuses = getTransactionRecords(unfiltered_partial_schema_txnids, 10000);
+
+        std::for_each(
+            txn_record_statuses.begin(), txn_record_statuses.end(), [&committed_partial_schema_txnids](TransactionRecord txn_record) {
+                auto txn_id = txn_record.txnID();
+                auto status = txn_record.status();
+                if (status == CnchTransactionStatus::Finished)
+                    committed_partial_schema_txnids.emplace_back(txn_id);
+            });
+
+        return committed_partial_schema_txnids;
+    }
+
+    ObjectPartialSchemaStatuses
+    Catalog::batchGetObjectPartialSchemaStatuses(const std::vector<TxnTimestamp> & txn_ids, const int & batch_size)
+    {
+        ObjectPartialSchemaStatuses partial_schema_statuses;
+        size_t total_txn_size = txn_ids.size();
+
+        partial_schema_statuses.reserve(total_txn_size);
+
+        auto fetch_records_in_batch = [&](size_t begin, size_t end) {
+            auto statuses_in_metastore = meta_proxy->batchGetObjectPartialSchemaStatuses(
+                name_space, std::vector<TxnTimestamp>(txn_ids.begin() + begin, txn_ids.begin() + end));
+
+            for (const auto & serialized_partial_schema_status : statuses_in_metastore)
+            {
+                auto txn_id = serialized_partial_schema_status.first;
+                auto status = ObjectSchemas::deserializeObjectPartialSchemaStatus(serialized_partial_schema_status.second);
+                partial_schema_statuses.emplace(txn_id, status);
+            }
+        };
+
+        if (batch_size > 0)
+        {
+            size_t batch_count{0};
+            while (batch_count + batch_size < total_txn_size)
+            {
+                fetch_records_in_batch(batch_count, batch_count + batch_size);
+                batch_count += batch_size;
+            }
+            fetch_records_in_batch(batch_count, total_txn_size);
+        }
+        else
+            fetch_records_in_batch(0, total_txn_size);
+
+        return partial_schema_statuses;
+    }
+
+    void Catalog::batchDeleteObjectPartialSchemaStatus(const std::vector<TxnTimestamp> &txn_ids)
+    {
+        meta_proxy->batchDeletePartialSchemaStatus(name_space, txn_ids);
+    }
+
+    void Catalog::commitObjectPartialSchema(const TxnTimestamp &txn_id)
+    {
+        meta_proxy->updateObjectPartialSchemaStatus(name_space, txn_id, ObjectPartialSchemaStatus::Finished);
+    }
+
+    void Catalog::abortObjectPartialSchema(const TxnTimestamp & txn_id)
+    {
+        meta_proxy->updateObjectPartialSchemaStatus(name_space, txn_id, ObjectPartialSchemaStatus::Aborted);
     }
 
     std::unordered_map<String, std::shared_ptr<PartitionMetrics>>

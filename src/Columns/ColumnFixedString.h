@@ -177,6 +177,7 @@ public:
 
     ColumnPtr filter(const IColumn::Filter & filt, ssize_t result_size_hint) const override;
 
+
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
 
     ColumnPtr index(const IColumn & indexes, size_t limit) const override;
@@ -212,6 +213,21 @@ public:
         if (auto rhs_concrete = typeid_cast<const ColumnFixedString *>(&rhs))
             return n == rhs_concrete->n;
         return false;
+    }
+
+    double getRatioOfDefaultRows(double sample_ratio) const override
+    {
+        return getRatioOfDefaultRowsImpl<ColumnFixedString>(sample_ratio);
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return getNumberOfDefaultRowsImpl<ColumnFixedString>();
+    }
+
+    void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override
+    {
+        return getIndicesOfNonDefaultRowsImpl<ColumnFixedString>(indices, from, limit);
     }
 
     bool canBeInsideNullable() const override { return true; }

@@ -2060,6 +2060,7 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction<IWindowFunctio
             return;
         }
 
+
         const auto supertype = getLeastSupertype(DataTypes{argument_types[0], argument_types[2]});
         if (!supertype)
         {

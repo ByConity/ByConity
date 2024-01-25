@@ -244,6 +244,18 @@ namespace
             for (roaring::Roaring64MapSetBitForwardIterator it(x); it != x.end(); ++it)
                 applyVisitor(*this, Field(*it));
         }
+        void operator() (const Object & x) const
+        {
+            UInt8 type = Field::Types::Object;
+            hash.update(type);
+            hash.update(x.size());
+
+            for (const auto & [key, value]: x)
+            {
+                hash.update(key);
+                applyVisitor(*this, value);
+            }
+        }
     };
 }
 

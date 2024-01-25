@@ -35,8 +35,8 @@ MemoryEfficientIngestColumn::MemoryEfficientIngestColumn(IngestColumnBlockInputS
       settings{stream_.context->getSettingsRef()},
       target_cloud_merge_tree{*stream_.target_cloud_merge_tree},
       source_cloud_merge_tree{*stream_.source_cloud_merge_tree},
-      target_meta_data_ptr{stream_.target_meta_data_ptr},
-      source_meta_data_ptr{stream_.source_meta_data_ptr},
+      target_storage_snapshot{stream_.target_storage_snapshot},
+      source_storage_snapshot{stream_.source_storage_snapshot},
       visible_target_parts{stream_.visible_target_parts},
       visible_source_parts{stream_.visible_source_parts},
       number_of_threads_for_read_source_parts{std::min(settings.parallel_ingest_threads.value, stream_.visible_source_parts.size())},
@@ -130,7 +130,7 @@ void MemoryEfficientIngestColumn::probeHashMapWithTargetData(
 
                 auto source_input = std::make_unique<MergeTreeSequentialSource>(
                     target_cloud_merge_tree,
-                    target_meta_data_ptr,
+                    target_storage_snapshot,
                     part, stream.ordered_key_names, read_with_direct_io, true);
 
                 QueryPipeline source_pipeline;
@@ -225,7 +225,7 @@ HashMapWithSavedHash<StringRef, KeyInfo, StringRefHash> MemoryEfficientIngestCol
                                part->bytes_on_disk >= settings.min_bytes_to_use_direct_io;
                 auto source_input = std::make_unique<MergeTreeSequentialSource>(
                     source_cloud_merge_tree,
-                    source_meta_data_ptr,
+                    source_storage_snapshot,
                     part, stream.ordered_key_names, read_with_direct_io, true);
                 QueryPipeline source_pipeline;
                 source_pipeline.init(Pipe(std::move(source_input)));
@@ -285,11 +285,11 @@ void MemoryEfficientIngestColumn::insertNewData(
     std::atomic<bool> has_read_exception = false;
     const Names source_read_columns =
         IngestColumn::getColumnsFromSourceTableForInsertNewPart(stream.ordered_key_names,
-            stream.ingest_column_names, source_meta_data_ptr);
+            stream.ingest_column_names, source_storage_snapshot->metadata);
 
-    BlockOutputStreamPtr new_part_output = target_cloud_merge_tree.write(ASTPtr(), target_meta_data_ptr, context);
+    BlockOutputStreamPtr new_part_output = target_cloud_merge_tree.write(ASTPtr(), target_storage_snapshot->metadata, context);
     new_part_output = std::make_shared<SquashingBlockOutputStream>(
-        new_part_output, target_meta_data_ptr->getSampleBlock(), settings.min_insert_block_size_rows, settings.min_insert_block_size_bytes);
+        new_part_output, target_storage_snapshot->metadata->getSampleBlock(), settings.min_insert_block_size_rows, settings.min_insert_block_size_bytes);
 
     Block ingested_header;
     for (const auto & name : source_read_columns)
@@ -298,12 +298,12 @@ void MemoryEfficientIngestColumn::insertNewData(
         /// No need to add implicit map column
         if (isMapImplicitKey(name))
             column_name = parseMapNameFromImplicitColName(name);
-        auto column = target_meta_data_ptr->getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
+        auto column = target_storage_snapshot->metadata->getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, column_name);
         ingested_header.insertUnique(ColumnWithTypeAndName(column.type, column.name));
     }
 
     new_part_output = std::make_shared<AddingDefaultBlockOutputStream>(
-        new_part_output, ingested_header, target_meta_data_ptr->getColumns(), context);
+        new_part_output, ingested_header, target_storage_snapshot->metadata->getColumns(), context);
 
     new_part_output->writePrefix();
 
@@ -341,7 +341,7 @@ void MemoryEfficientIngestColumn::insertNewData(
 
                 auto source_input = std::make_unique<MergeTreeSequentialSource>(
                     source_cloud_merge_tree,
-                    source_meta_data_ptr,
+                    source_storage_snapshot,
                     part, source_read_columns, read_with_direct_io, true);
                 QueryPipeline source_pipeline;
                 source_pipeline.init(Pipe(std::move(source_input)));
@@ -362,7 +362,7 @@ void MemoryEfficientIngestColumn::insertNewData(
                         new_part_output_mutex,
                         number_of_buckets,
                         *new_part_output,
-                        target_meta_data_ptr,
+                        target_storage_snapshot->metadata,
                         log
                     );
                 }
@@ -485,10 +485,10 @@ MergeTreeMutableDataPartPtr MemoryEfficientIngestColumn::updateTargetPartWithout
 
     BlockInputStreamPtr res_block_in =
         std::make_shared<DefaultBlockInputStream>(
-            target_meta_data_ptr->getSampleBlockForColumns(stream.ingest_column_names),
+            target_storage_snapshot->getSampleBlockForColumns(stream.ingest_column_names),
             target_part->rows_count, settings.min_insert_block_size_rows);
 
-    updateTempPartWithData(new_partial_part, target_part, res_block_in, target_meta_data_ptr);
+    updateTempPartWithData(new_partial_part, target_part, res_block_in, target_storage_snapshot->metadata);
     return new_partial_part;
 }
 
@@ -522,7 +522,7 @@ MergeTreeMutableDataPartPtr MemoryEfficientIngestColumn::updateTargetPart(
 
     BlockInputStreamPtr res_block_in = std::make_shared<BlocksListBlockInputStream>(std::move(res_block_list));
 
-    updateTempPartWithData(new_partial_part, target_part, res_block_in, target_meta_data_ptr);
+    updateTempPartWithData(new_partial_part, target_part, res_block_in, target_storage_snapshot->metadata);
     return new_partial_part;
 }
 
@@ -545,7 +545,7 @@ IngestColumn::TargetPartData MemoryEfficientIngestColumn::readTargetPartForUpdat
 
     auto source_input = std::make_unique<MergeTreeSequentialSource>(
         target_cloud_merge_tree,
-        target_meta_data_ptr,
+        target_storage_snapshot,
         target_part, all_columns, read_with_direct_io, true);
     QueryPipeline source_pipeline;
     source_pipeline.init(Pipe(std::move(source_input)));
@@ -567,7 +567,7 @@ void MemoryEfficientIngestColumn::updateTargetDataWithSourcePart(
 
     auto source_input = std::make_unique<MergeTreeSequentialSource>(
         source_cloud_merge_tree,
-        source_meta_data_ptr,
+        source_storage_snapshot,
         source_part, all_columns, read_with_direct_io, true);
     QueryPipeline source_pipeline;
     source_pipeline.init(Pipe(std::move(source_input)));

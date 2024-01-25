@@ -61,16 +61,27 @@ SerializationLowCardinality::SerializationLowCardinality(const DataTypePtr & dic
 {
 }
 
-void SerializationLowCardinality::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+void SerializationLowCardinality::enumerateStreams(
+    EnumerateStreamsSettings & settings,
+    const StreamCallback & callback,
+    const SubstreamData & data) const
 {
-    path.push_back(Substream::DictionaryKeys);
-    dict_inner_serialization->enumerateStreams(callback, path);
-    path.back() = Substream::DictionaryIndexes;
-    // for fall-back compatibility
-    dictionary_type->getDefaultSerialization()->enumerateStreams(callback, path);
-    // callback(path);
+    const auto * column_lc = data.column ? &getColumnLowCardinality(*data.column) : nullptr;
 
-    path.pop_back();
+    settings.path.push_back(Substream::DictionaryKeys);
+    auto dict_data = SubstreamData(dict_inner_serialization)
+        .withType(data.type ? dictionary_type : nullptr)
+        .withColumn(column_lc ? column_lc->getDictionary().getNestedColumn() : nullptr)
+        .withSerializationInfo(data.serialization_info);
+
+    settings.path.back().data = dict_data;
+    dict_inner_serialization->enumerateStreams(settings, callback, dict_data);
+
+    settings.path.back() = Substream::DictionaryIndexes;
+    settings.path.back().data = data;
+
+    callback(settings.path);
+    settings.path.pop_back();
 }
 
 struct KeysSerializationVersion
@@ -269,6 +280,7 @@ static DeserializeStateLowCardinality * checkAndGetLowCardinalityDeserializeStat
 }
 
 void SerializationLowCardinality::serializeBinaryBulkStatePrefix(
+    const IColumn & /*column*/,
     SerializeBinaryBulkSettings & settings,
     SerializeBinaryBulkStatePtr & state) const
 {
@@ -895,15 +907,20 @@ SerializationFullLowCardinality::SerializationFullLowCardinality(const DataTypeP
     dict_inner_serialization = dictionary_type_->getDefaultSerialization();
 }
 
-void SerializationFullLowCardinality::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+void SerializationFullLowCardinality::enumerateStreams(
+    EnumerateStreamsSettings & settings,
+    const StreamCallback & callback,
+    const SubstreamData & data) const
 {
-    dict_inner_serialization->enumerateStreams(callback, path);
-    path.push_back(Substream::DictionaryKeys);
-    callback(path);
-    path.pop_back();
+    /// TODO(fredwang) verify
+    dict_inner_serialization->enumerateStreams(settings, callback, data);
+    settings.path.push_back(Substream::DictionaryKeys);
+    callback(settings.path);
+    settings.path.pop_back();
 }
 
 void SerializationFullLowCardinality::serializeBinaryBulkStatePrefix(
+        const IColumn & column,
         SerializeBinaryBulkSettings & settings,
         SerializeBinaryBulkStatePtr & state) const
 {
@@ -918,7 +935,7 @@ void SerializationFullLowCardinality::serializeBinaryBulkStatePrefix(
     /// Write version and create SerializeBinaryBulkState.
     UInt64 key_version;
     key_version = KeysSerializationVersion::DictionariesInFullState;
-    dict_inner_serialization->serializeBinaryBulkStatePrefix(settings, state);
+    dict_inner_serialization->serializeBinaryBulkStatePrefix(column, settings, state);
 
     writeIntBinary(key_version, *stream);
 

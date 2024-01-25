@@ -27,7 +27,7 @@ public:
 
     virtual Pipe read(
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr query_context,
         QueryProcessingStage::Enum processed_stage,
@@ -37,7 +37,7 @@ public:
     virtual void read(
         QueryPlan & query_plan,
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr query_context,
         QueryProcessingStage::Enum processed_stage,
@@ -51,7 +51,7 @@ public:
         FileDataPartsCNCHVector parts,
         QueryPlan & query_plan,
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr query_context,
         QueryProcessingStage::Enum processed_stage,
@@ -82,8 +82,8 @@ public:
     virtual void tryUpdateFSClient(const ContextPtr & /*query_context*/) { }
 
     QueryProcessingStage::Enum
-    getQueryProcessingStage(ContextPtr query_context, QueryProcessingStage::Enum stage, const StorageMetadataPtr & storage_metadata, SelectQueryInfo & query_info) const override;
-
+    getQueryProcessingStage(ContextPtr query_context, QueryProcessingStage::Enum stage, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const override;
+    
     bool supportsOptimizer() const override { return true; }
     bool supportsDistributedRead() const override { return true; }
     StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;

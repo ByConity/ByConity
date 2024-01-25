@@ -29,23 +29,23 @@
 #include <DataTypes/getLeastSupertype.h>
 
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeLowCardinality.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypeEnum.h>
-#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTime.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <magic_enum.hpp>
 #include <DataTypes/DataTypeIPv4andIPv6.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int NO_COMMON_TYPE;
@@ -53,10 +53,12 @@ namespace ErrorCodes
 
 namespace
 {
+    String typeToString(const DataTypePtr & type) { return type->getName(); }
+    String typeToString(const TypeIndex & type) { return String(magic_enum::enum_name(type)); }
+
     String getExceptionMessagePrefix(const DataTypes & types)
     {
         WriteBufferFromOwnString res;
-        res << "There is no supertype for types ";
 
         bool first = true;
         for (const auto & type : types)
@@ -65,17 +67,35 @@ namespace
                 res << ", ";
             first = false;
 
-            res << type->getName();
-            if (type->isMap())
-                res << " KV";
-            else if (type->isByteMap())
-                res << " BYTE";
+            res << typeToString(type);
+
+                if (type->isMap())
+                    res << " KV";
+                else if (type->isByteMap())
+                    res << " BYTE";
         }
 
         return res.str();
     }
 
-    template <LeastSupertypeOnError on_error>
+    String getExceptionMessagePrefix(const TypeIndexSet & types)
+    {
+        WriteBufferFromOwnString res;
+
+        bool first = true;
+        for (const auto & type : types)
+        {
+            if (!first)
+                res << ", ";
+            first = false;
+
+            res << typeToString(type);
+        }
+
+        return res.str();
+    }
+
+    template <LeastSupertypeOnError on_error, typename DataTypes>
     DataTypePtr throwOrReturn(const DataTypes & types, std::string_view message_suffix, int error_code)
     {
         if constexpr (on_error == LeastSupertypeOnError::String)
@@ -91,7 +111,7 @@ namespace
     }
 
     template <LeastSupertypeOnError on_error>
-    DataTypePtr getNumericType(const DataTypes & types, bool allow_extended_conversion)
+    DataTypePtr getNumericType(const TypeIndexSet & types, bool allow_extended_conversion)
     {
         bool all_numbers = true;
 
@@ -99,50 +119,52 @@ namespace
         size_t max_bits_of_unsigned_integer = 0;
         size_t max_mantissa_bits_of_floating = 0;
 
-        auto maximize = [](size_t & what, size_t value)
-        {
+        auto maximize = [](size_t & what, size_t value) {
             if (value > what)
                 what = value;
         };
 
         for (const auto & type : types)
         {
-            if (typeid_cast<const DataTypeUInt8 *>(type.get()))
+            if (type == TypeIndex::UInt8)
                 maximize(max_bits_of_unsigned_integer, 8);
-            else if (typeid_cast<const DataTypeUInt16 *>(type.get()))
+            else if (type == TypeIndex::UInt16)
                 maximize(max_bits_of_unsigned_integer, 16);
-            else if (typeid_cast<const DataTypeUInt32 *>(type.get()) || typeid_cast<const DataTypeIPv4 *>(type.get()))
+            else if (type == TypeIndex::UInt32 || type == TypeIndex::IPv4)
                 maximize(max_bits_of_unsigned_integer, 32);
-            else if (typeid_cast<const DataTypeUInt64 *>(type.get()))
+            else if (type == TypeIndex::UInt32)
+                maximize(max_bits_of_unsigned_integer, 32);
+            else if (type == TypeIndex::UInt64)
                 maximize(max_bits_of_unsigned_integer, 64);
-            else if (typeid_cast<const DataTypeUInt128 *>(type.get()))
+            else if (type == TypeIndex::UInt128)
                 maximize(max_bits_of_unsigned_integer, 128);
-            else if (typeid_cast<const DataTypeUInt256 *>(type.get()))
+            else if (type == TypeIndex::UInt256)
                 maximize(max_bits_of_unsigned_integer, 256);
-            else if (typeid_cast<const DataTypeInt8 *>(type.get()) || typeid_cast<const DataTypeEnum8 *>(type.get()))
+            else if (type == TypeIndex::Int8 || type == TypeIndex::Enum8)
                 maximize(max_bits_of_signed_integer, 8);
-            else if (typeid_cast<const DataTypeInt16 *>(type.get()) || typeid_cast<const DataTypeEnum16 *>(type.get()))
+            else if (type == TypeIndex::Int16 || type == TypeIndex::Enum16)
                 maximize(max_bits_of_signed_integer, 16);
-            else if (typeid_cast<const DataTypeInt32 *>(type.get()))
+            else if (type == TypeIndex::Int32)
                 maximize(max_bits_of_signed_integer, 32);
-            else if (typeid_cast<const DataTypeInt64 *>(type.get()))
+            else if (type == TypeIndex::Int64)
                 maximize(max_bits_of_signed_integer, 64);
-            else if (typeid_cast<const DataTypeInt128 *>(type.get()))
+            else if (type == TypeIndex::Int128)
                 maximize(max_bits_of_signed_integer, 128);
-            else if (typeid_cast<const DataTypeInt256 *>(type.get()))
+            else if (type == TypeIndex::Int256)
                 maximize(max_bits_of_signed_integer, 256);
-            else if (typeid_cast<const DataTypeFloat32 *>(type.get()))
+            else if (type == TypeIndex::Float32)
                 maximize(max_mantissa_bits_of_floating, 24);
-            else if (typeid_cast<const DataTypeFloat64 *>(type.get()))
+            else if (type == TypeIndex::Float64)
                 maximize(max_mantissa_bits_of_floating, 53);
-            else if (typeid_cast<const DataTypeNothing *>(type.get()))
+            else if (type != TypeIndex::Nothing)
                 all_numbers = false;
         }
 
         if (max_bits_of_signed_integer || max_bits_of_unsigned_integer || max_mantissa_bits_of_floating)
         {
             if (!all_numbers)
-                return throwOrReturn<on_error>(types, "because some of them are numbers and some of them are not", ErrorCodes::NO_COMMON_TYPE);
+                return throwOrReturn<on_error>(
+                    types, "because some of them are numbers and some of them are not", ErrorCodes::NO_COMMON_TYPE);
 
             /// If there are signed and unsigned types of same bit-width, the result must be signed number with at least one more bit.
             /// Example, common of Int32, UInt32 = Int64.
@@ -150,14 +172,15 @@ namespace
             size_t min_bit_width_of_integer = std::max(max_bits_of_signed_integer, max_bits_of_unsigned_integer);
 
             /// If unsigned is not covered by signed.
-            if (max_bits_of_signed_integer && max_bits_of_unsigned_integer >= max_bits_of_signed_integer)
+            if (max_bits_of_signed_integer && max_bits_of_unsigned_integer >= max_bits_of_signed_integer) //-V1051
             {
                 // Because 128 and 256 bit integers are significantly slower, we should not promote to them.
                 // But if we already have wide numbers, promotion is necessary.
                 if (min_bit_width_of_integer != 64 || allow_extended_conversion)
                     ++min_bit_width_of_integer;
                 else
-                    return throwOrReturn<on_error>(types,
+                    return throwOrReturn<on_error>(
+                        types,
                         "because some of them are signed integers and some are unsigned integers,"
                         " but there is no signed integer type, that can exactly represent all required unsigned integer values",
                         ErrorCodes::NO_COMMON_TYPE);
@@ -172,9 +195,11 @@ namespace
                 else if (min_mantissa_bits <= 53 || allow_extended_conversion)
                     return std::make_shared<DataTypeFloat64>();
                 else
-                    return throwOrReturn<on_error>(types,
-                        " because some of them are integers and some are floating point,"
-                        " but there is no floating point type, that can exactly represent all required integers", ErrorCodes::NO_COMMON_TYPE);
+                    return throwOrReturn<on_error>(
+                        types,
+                        "because some of them are integers and some are floating point,"
+                        " but there is no floating point type, that can exactly represent all required integers",
+                        ErrorCodes::NO_COMMON_TYPE);
             }
 
             /// If the result must be signed integer.
@@ -193,9 +218,11 @@ namespace
                 else if (min_bit_width_of_integer <= 256)
                     return std::make_shared<DataTypeInt256>();
                 else
-                    return throwOrReturn<on_error>(types,
-                        " because some of them are signed integers and some are unsigned integers,"
-                        " but there is no signed integer type, that can exactly represent all required unsigned integer values", ErrorCodes::NO_COMMON_TYPE);
+                    return throwOrReturn<on_error>(
+                        types,
+                        "because some of them are signed integers and some are unsigned integers,"
+                        " but there is no signed integer type, that can exactly represent all required unsigned integer values",
+                        ErrorCodes::NO_COMMON_TYPE);
             }
 
             /// All unsigned.
@@ -213,8 +240,10 @@ namespace
                 else if (min_bit_width_of_integer <= 256)
                     return std::make_shared<DataTypeUInt256>();
                 else
-                    return throwOrReturn<on_error>(types,
-                        " but as all data types are unsigned integers, we must have found maximum unsigned integer type", ErrorCodes::NO_COMMON_TYPE);
+                    return throwOrReturn<on_error>(
+                        types,
+                        "but as all data types are unsigned integers, we must have found maximum unsigned integer type",
+                        ErrorCodes::NO_COMMON_TYPE);
             }
         }
 
@@ -244,7 +273,6 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
                 break;
             }
         }
-
         if (all_equal)
             return types[0];
     }
@@ -523,9 +551,12 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
             }
 
             size_t max_scale_date_time_index;
-            if (have_datetime64) {
+            if (have_datetime64)
+            {
                 max_scale_date_time_index = getMaxScaleIndex<DataTypeDateTime64>(types);
-            } else {
+            }
+            else
+            {
                 max_scale_date_time_index = getMaxScaleIndex<DataTypeTime>(types);
             }
 
@@ -544,8 +575,15 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
         {
             UInt32 num_supported = have_decimal32 + have_decimal64 + have_decimal128 + have_decimal256;
 
-            std::vector<TypeIndex> int_ids = {TypeIndex::Int8, TypeIndex::UInt8, TypeIndex::Int16, TypeIndex::UInt16,
-                                            TypeIndex::Int32, TypeIndex::UInt32, TypeIndex::Int64, TypeIndex::UInt64};
+            std::vector<TypeIndex> int_ids
+                = {TypeIndex::Int8,
+                   TypeIndex::UInt8,
+                   TypeIndex::Int16,
+                   TypeIndex::UInt16,
+                   TypeIndex::Int32,
+                   TypeIndex::UInt32,
+                   TypeIndex::Int64,
+                   TypeIndex::UInt64};
             std::vector<UInt32> num_ints(int_ids.size(), 0);
 
             TypeIndex max_int = TypeIndex::Nothing;
@@ -567,7 +605,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
                 constexpr std::array<TypeIndex, 2> float_ids = {TypeIndex::Float32, TypeIndex::Float64};
                 bool have_float = false;
 
-                for (const auto & float_id: float_ids)
+                for (const auto & float_id : float_ids)
                 {
                     UInt32 num = type_ids.count(float_id);
                     num_supported += num;
@@ -584,7 +622,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
 
                     for (const auto & type : types)
                     {
-                        if(!strcmp(type->getFamilyName(), "Decimal"))
+                        if (!strcmp(type->getFamilyName(), "Decimal"))
                         {
                             auto bits_of_integer_part = getDecimalPrecision(*type) - getDecimalScale(*type, 0);
 
@@ -649,7 +687,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
 
     /// For numeric types, the most complicated part.
     {
-        auto numeric_type = getNumericType<on_error>(types, allow_extended_conversion);
+        auto numeric_type = getNumericType<on_error>(type_ids, allow_extended_conversion);
         if (numeric_type)
             return numeric_type;
     }
@@ -658,10 +696,67 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
     return throwOrReturn<on_error>(types, "", ErrorCodes::NO_COMMON_TYPE);
 }
 
-DataTypePtr tryGetLeastSupertype(const DataTypes & types, bool allow_extended_conversio)
+DataTypePtr getLeastSupertypeOrString(const DataTypes & types, bool allow_extended_conversion)
 {
-    return getLeastSupertype<LeastSupertypeOnError::Null>(types, allow_extended_conversio);
+    return getLeastSupertype<LeastSupertypeOnError::String>(types, allow_extended_conversion);
 }
 
-template DataTypePtr getLeastSupertype<LeastSupertypeOnError::Throw>(const DataTypes & types, bool allow_extended_conversio);
+DataTypePtr tryGetLeastSupertype(const DataTypes & types, bool allow_extended_conversion)
+{
+    return getLeastSupertype<LeastSupertypeOnError::Null>(types, allow_extended_conversion);
+}
+
+template <LeastSupertypeOnError on_error>
+DataTypePtr getLeastSupertype(const TypeIndexSet & types, bool allow_extended_conversion)
+{
+    if (types.empty())
+        return std::make_shared<DataTypeNothing>();
+
+    if (types.size() == 1)
+    {
+        WhichDataType which(*types.begin());
+        if (which.isNothing())
+            return std::make_shared<DataTypeNothing>();
+
+    #define DISPATCH(TYPE) \
+        if (which.idx == TypeIndex::TYPE) \
+            return std::make_shared<DataTypeNumber<TYPE>>(); /// NOLINT
+
+        FOR_NUMERIC_TYPES(DISPATCH)
+    #undef DISPATCH
+
+        if (which.isString())
+            return std::make_shared<DataTypeString>();
+
+        return throwOrReturn<on_error>(types, "because cannot get common type by type indexes with non-simple types", ErrorCodes::NO_COMMON_TYPE);
+    }
+
+    if (types.contains(TypeIndex::String))
+    {
+        bool only_string = types.size() == 2 && types.contains(TypeIndex::Nothing);
+        if (!only_string)
+            return throwOrReturn<on_error>(types, "because some of them are String and some of them are not", ErrorCodes::NO_COMMON_TYPE);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    auto numeric_type = getNumericType<on_error>(types, allow_extended_conversion);
+    if (numeric_type)
+        return numeric_type;
+
+    return throwOrReturn<on_error>(types, "", ErrorCodes::NO_COMMON_TYPE);
+}
+
+DataTypePtr getLeastSupertypeOrString(const TypeIndexSet & types, bool allow_extended_conversion)
+{
+    return getLeastSupertype<LeastSupertypeOnError::String>(types, allow_extended_conversion);
+}
+
+DataTypePtr tryGetLeastSupertype(const TypeIndexSet & types, bool allow_extended_conversion)
+{
+    return getLeastSupertype<LeastSupertypeOnError::Null>(types, allow_extended_conversion);
+}
+
+template DataTypePtr getLeastSupertype<LeastSupertypeOnError::Throw>(const DataTypes & types, bool allow_extended_conversion);
+template DataTypePtr getLeastSupertype<LeastSupertypeOnError::Throw>(const TypeIndexSet & types, bool allow_extended_conversion);
 }

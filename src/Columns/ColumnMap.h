@@ -117,9 +117,12 @@ public:
     size_t byteSizeAt(size_t n) const override;
     size_t allocatedBytes() const override;
     void protect() override;
-    void forEachSubcolumn(ColumnCallback callback) override;
-    void forEachSubcolumnRecursively(ColumnCallback callback) override;
+    void forEachSubcolumn(MutableColumnCallback callback) override;
+    void forEachSubcolumnRecursively(RecursiveMutableColumnCallback callback) override;
     bool structureEquals(const IColumn & rhs) const override;
+    double getRatioOfDefaultRows(double sample_ratio) const override;
+    UInt64 getNumberOfDefaultRows() const override;
+    void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override;
 
     /** Access embeded columns*/
     const ColumnArray & getNestedColumn() const { return assert_cast<const ColumnArray &>(*nested); }

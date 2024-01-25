@@ -59,6 +59,7 @@ public:
     void operator() (const DecimalField<Decimal256> & x) const;
     void operator() (const AggregateFunctionStateData & x) const;
     void operator() (const BitMap64 & x) const;
+    void operator() (const Object & x) const;
 };
 
 }

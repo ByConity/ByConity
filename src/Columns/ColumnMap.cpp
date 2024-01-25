@@ -383,14 +383,14 @@ void ColumnMap::getExtremes(Field & min, Field & max) const
     max = std::move(map_max_value);
 }
 
-void ColumnMap::forEachSubcolumn(ColumnCallback callback)
+void ColumnMap::forEachSubcolumn(MutableColumnCallback callback)
 {
     nested->forEachSubcolumn(callback);
 }
 
-void ColumnMap::forEachSubcolumnRecursively(ColumnCallback callback)
+void ColumnMap::forEachSubcolumnRecursively(RecursiveMutableColumnCallback callback)
 {
-    callback(nested);
+    callback(*nested);
     nested->forEachSubcolumnRecursively(callback);
 }
 
@@ -408,6 +408,21 @@ ColumnPtr ColumnMap::compress() const
     {
         return ColumnMap::create(compressed->decompress());
     });
+}
+
+double ColumnMap::getRatioOfDefaultRows(double sample_ratio) const
+{
+    return getRatioOfDefaultRowsImpl<ColumnMap>(sample_ratio);
+}
+
+UInt64 ColumnMap::getNumberOfDefaultRows() const
+{
+    return getNumberOfDefaultRowsImpl<ColumnMap>();
+}
+
+void ColumnMap::getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const
+{
+    return getIndicesOfNonDefaultRowsImpl<ColumnMap>(indices, from, limit);
 }
 
 /**

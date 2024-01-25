@@ -576,7 +576,7 @@ DomainVisitor<T>::canImplicitCoerceValue(Field & value, DataTypePtr & from_type_
         return convertFieldToType(value, *to_type, from_type.get());
 
     //Based on whether there is a super type between them
-    DataTypePtr super_type = tryGetLeastSupertype({from_type, to_type}, context->getSettingsRef().allow_extended_type_conversion);
+    DataTypePtr super_type = tryGetLeastSupertype(DataTypes{from_type, to_type}, context->getSettingsRef().allow_extended_type_conversion);
 
     //have super_type and super_type equals to_type, which means to_type is wider type;
     if (super_type != nullptr && super_type->equals(*to_type))

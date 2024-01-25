@@ -32,9 +32,11 @@
 #include "common/logger_useful.h"
 #include <Common/Exception.h>
 #include <common/JSON.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <DataTypes/ObjectUtils.h>
+#include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include <Storages/HDFS/HDFSCommon.h>
-#include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Poco/Logger.h>
 
 namespace DB
@@ -287,6 +289,14 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
         part_model.set_columns(part.getColumns().toString());
     }
 
+    if (DB::hasDynamicSubcolumns(storage.getInMemoryMetadata().columns))
+    {
+        if (auto commit_time = DB::getColumnsCommitTimeForJSONTable(storage, *(part.getColumnsPtr())))
+            part_model.set_columns_commit_time(commit_time);
+
+        part_model.set_columns(part.getColumns().toString());
+    }
+
     if (!part.min_unique_key.empty())
         part_model.set_min_unique_key(part.min_unique_key);
     if (!part.max_unique_key.empty())
@@ -364,9 +374,21 @@ void fillPartsModelForSend(
         part_model = part->part_model();
         part_model.set_commit_time(part->getCommitTime());
         part_model.set_virtual_part_size(part->getVirtualPartSize());
+
+        auto table_has_dynamic_subcolumns = hasDynamicSubcolumns(storage.getInMemoryMetadataPtr()->columns);
+        if (table_has_dynamic_subcolumns)
+        {
+            if (part_model.has_columns())
+            {
+                continue;
+            }
+        }
+
         if (part_model.has_columns_commit_time() && sent_columns_commit_time.count(part_model.columns_commit_time()) == 0)
         {
-            part_model.set_columns(storage.getPartColumns(part_model.columns_commit_time())->toString());
+            auto storage_columns = storage.getPartColumns(part_model.columns_commit_time());
+
+            part_model.set_columns(storage_columns->toString());
             sent_columns_commit_time.insert(part_model.columns_commit_time());
         }
         part_model.set_disk_cache_host_port(part->disk_cache_host_port);

@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <cstddef>
 #include <Core/Settings.h>
 #include <Core/NamesAndTypes.h>
 
@@ -931,10 +932,10 @@ void markTupleLiteralsAsLegacy(ASTPtr & query)
 TreeRewriterResult::TreeRewriterResult(
     const NamesAndTypesList & source_columns_,
     ConstStoragePtr storage_,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     bool add_special)
     : storage(storage_)
-    , metadata_snapshot(metadata_snapshot_)
+    , storage_snapshot(storage_snapshot_)
     , source_columns(source_columns_)
 {
     collectSourceColumns(add_special);
@@ -947,13 +948,12 @@ void TreeRewriterResult::collectSourceColumns(bool add_special)
 {
     if (storage)
     {
-        const ColumnsDescription & columns = metadata_snapshot->getColumns();
-
-        NamesAndTypesList columns_from_storage;
+        auto options = GetColumnsOptions(add_special ? GetColumnsOptions::All : GetColumnsOptions::AllPhysical);
+        options.withExtendedObjects();
         if (storage->supportsSubcolumns())
-            columns_from_storage = add_special ? columns.getAllWithSubcolumns() : columns.getAllPhysicalWithSubcolumns();
-        else
-            columns_from_storage = add_special ? columns.getAll() : columns.getAllPhysical();
+            options.withSubcolumns();
+
+        auto columns_from_storage = storage_snapshot->getColumns(options);
 
         if (source_columns.empty())
             source_columns.swap(columns_from_storage);
@@ -1060,9 +1060,9 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
             /// If we have no information about columns sizes, choose a column of minimum size of its data type.
             required.insert(ExpressionActions::getSmallestColumn(source_columns));
     }
-    else if (is_select && metadata_snapshot && !columns_context.has_array_join)
+    else if (is_select && storage_snapshot && !columns_context.has_array_join)
     {
-        const auto & partition_desc = metadata_snapshot->getPartitionKey();
+        const auto & partition_desc = storage_snapshot->metadata->getPartitionKey();
         if (partition_desc.expression)
         {
             auto partition_source_columns = partition_desc.expression->getRequiredColumns();
@@ -1363,7 +1363,16 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
             all_source_columns_set.insert(name);
     }
 
-   normalize(query, result.aliases, all_source_columns_set, select_options.ignore_alias, settings, /* allow_self_aliases = */ true, getContext(), result.storage, result.metadata_snapshot);
+    normalize(
+        query,
+        result.aliases,
+        all_source_columns_set,
+        select_options.ignore_alias,
+        settings,
+        /* allow_self_aliases = */ true,
+        getContext(),
+        result.storage,
+        result.storage_snapshot ? result.storage_snapshot->metadata : nullptr);
 
     // expand GROUP BY ALL
     if (select_query->group_by_all)
@@ -1392,10 +1401,10 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
     if (const auto * join_ast = select_query->join(); join_ast && tables_with_columns.size() >= 2)
     {
         auto & table_join_ast = join_ast->table_join->as<ASTTableJoin &>();
-        if (table_join_ast.using_expression_list && result.metadata_snapshot)
-            replaceAliasColumnsInQuery(table_join_ast.using_expression_list, result.metadata_snapshot->getColumns(), result.array_join_result_to_source, getContext());
-        if (table_join_ast.on_expression && result.metadata_snapshot)
-            replaceAliasColumnsInQuery(table_join_ast.on_expression, result.metadata_snapshot->getColumns(), result.array_join_result_to_source, getContext());
+        if (table_join_ast.using_expression_list && result.storage_snapshot && result.storage_snapshot->metadata)
+            replaceAliasColumnsInQuery(table_join_ast.using_expression_list, result.storage_snapshot->metadata->getColumns(), result.array_join_result_to_source, getContext());
+        if (table_join_ast.on_expression && result.storage_snapshot && result.storage_snapshot->metadata)
+            replaceAliasColumnsInQuery(table_join_ast.on_expression, result.storage_snapshot->metadata->getColumns(), result.array_join_result_to_source, getContext());
         collectJoinedColumns(*result.analyzed_join, table_join_ast, tables_with_columns, result.aliases, settings.join_using_null_safe, settings.ignore_array_join_check_in_join_on_condition, getContext(), settings.enable_join_on_1_equals_1);
     }
 
@@ -1407,10 +1416,10 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
 
     /// rewrite filters for select query, must go after getArrayJoinedColumns
     bool is_initiator = getContext()->getClientInfo().distributed_depth == 0;
-    if (settings.optimize_respect_aliases && result.metadata_snapshot && is_initiator)
+    if (settings.optimize_respect_aliases && result.storage_snapshot && is_initiator)
     {
         /// If query is changed, we need to redo some work to correct name resolution.
-        if (replaceAliasColumnsInQuery(query, result.metadata_snapshot->getColumns(), result.array_join_result_to_source, getContext()))
+        if (replaceAliasColumnsInQuery(query, result.storage_snapshot->metadata->getColumns(), result.array_join_result_to_source, getContext()))
         {
             result.aggregates = getAggregates(query, *select_query);
             result.window_function_asts = getWindowFunctions(query, *select_query);
@@ -1434,7 +1443,7 @@ TreeRewriterResultPtr TreeRewriter::analyze(
     ASTPtr & query,
     const NamesAndTypesList & source_columns,
     ConstStoragePtr storage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     bool allow_aggregations,
     bool allow_self_aliases) const
 {
@@ -1443,9 +1452,18 @@ TreeRewriterResultPtr TreeRewriter::analyze(
 
     const auto & settings = getContext()->getSettingsRef();
 
-    TreeRewriterResult result(source_columns, storage, metadata_snapshot, false);
+    TreeRewriterResult result(source_columns, storage, storage_snapshot, false);
 
-    normalize(query, result.aliases, result.source_columns_set, false, settings, allow_self_aliases, this->getContext(), storage, metadata_snapshot);
+    normalize(
+        query,
+        result.aliases,
+        result.source_columns_set,
+        false,
+        settings,
+        allow_self_aliases,
+        this->getContext(),
+        storage,
+        storage_snapshot ? storage_snapshot->metadata : nullptr);
 
     /// Executing scalar subqueries. Column defaults could be a scalar subquery.
     executeScalarSubqueries(query, getContext(), 0, result.scalars, false);

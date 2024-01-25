@@ -149,6 +149,19 @@ void FieldVisitorCompatibleWriteBinary::operator()(const BitMap64 & x, WriteBuff
     writeString(buffer.data(), bytes, buf);
 }
 
+void FieldVisitorCompatibleWriteBinary::operator()(const Object & x, WriteBuffer & buf) const
+{
+    const size_t size = x.size();
+    writeBinary(size, buf);
+
+    for (const auto & [key, value] : x)
+    {
+        const UInt8 type = value.getType();
+        writeBinary(type, buf);
+        writeBinary(key, buf);
+        Field::dispatch([&buf] (const auto & val) { FieldVisitorCompatibleWriteBinary()(val, buf); }, value);
+    }
+}
 
 void FieldVisitorCompatibleReadBinary::deserialize(UInt64 & value, ReadBuffer & buf)
 {
@@ -304,6 +317,21 @@ void FieldVisitorCompatibleReadBinary::deserialize(BitMap64 & value, ReadBuffer 
     PODArray<char> bitmap_buffer(bytes);
     buf.readStrict(bitmap_buffer.data(), bytes);
     value = BitMap64::readSafe(bitmap_buffer.data(), bytes);
+}
+
+void FieldVisitorCompatibleReadBinary::deserialize(Object & value, ReadBuffer & buf)
+{
+    size_t size;
+    readBinary(size, buf);
+
+    for (size_t index = 0; index < size; ++index)
+    {
+        UInt8 type;
+        String key;
+        readBinary(type, buf);
+        readBinary(key, buf);
+        value[key] = Field::dispatch(FieldVisitorCompatibleReadBinary(buf), static_cast<Field::Types::Which>(type));
+    }
 }
 
 }

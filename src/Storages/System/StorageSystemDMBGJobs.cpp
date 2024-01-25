@@ -57,7 +57,8 @@ namespace DB
             CnchBGThreadType::MergeMutate,
             CnchBGThreadType::Consumer,
             CnchBGThreadType::Clustering,
-            CnchBGThreadType::DedupWorker
+            CnchBGThreadType::DedupWorker,
+            CnchBGThreadType::ObjectSchemaAssemble
         };
 
         std::for_each(types.begin(), types.end(),

@@ -41,6 +41,11 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 class FieldToDataType : public StaticVisitor<DataTypePtr>
 {
 public:
+    FieldToDataType(bool allow_convertion_to_string_ = false)
+      : allow_convertion_to_string(allow_convertion_to_string_)
+    {
+    }
+
     DataTypePtr operator() (const Null & x) const;
     DataTypePtr operator() (const NegativeInfinity & x) const;
     DataTypePtr operator() (const PositiveInfinity & x) const;
@@ -64,6 +69,10 @@ public:
     DataTypePtr operator() (const DecimalField<Decimal256> & x) const;
     DataTypePtr operator() (const AggregateFunctionStateData & x) const;
     DataTypePtr operator() (const BitMap64 & x) const;
+    DataTypePtr operator() (const Object & map) const;
+
+private:
+    bool allow_convertion_to_string;
 };
 
 }

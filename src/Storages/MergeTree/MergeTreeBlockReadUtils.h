@@ -103,7 +103,7 @@ struct MergeTreeReadTask
 
 MergeTreeReadTaskColumns getReadTaskColumns(
     const MergeTreeMetaBase & storage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const MergeTreeMetaBase::DataPartPtr & data_part,
     const Names & required_columns,
     const PrewhereInfoPtr & prewhere_info,

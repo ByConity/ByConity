@@ -26,12 +26,13 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
-#include "Common/tests/gtest_global_context.h"
+#include <Common/RWLock.h>
+#include <Common/tests/gtest_global_context.h>
 #include <Statistics/AutoStatisticsHelper.h>
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
-#include <Access/AccessControlManager.h>
+#include <DataTypes/ObjectUtils.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchDataWriter.h>

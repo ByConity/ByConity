@@ -24,7 +24,7 @@
 #include <Storages/IStorage.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/ErrorCodes.h>
-#include "Storages/IStorage_fwd.h"
+#include <Storages/IStorage_fwd.h>
 #include <Interpreters/Context_fwd.h>
 
 namespace DB

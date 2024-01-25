@@ -37,7 +37,7 @@
 #include <common/range.h>
 
 #include <common/unaligned.h>
-#include "Columns/ColumnConst.h"
+#include <Columns/ColumnConst.h>
 
 
 namespace DB
@@ -128,9 +128,27 @@ public:
         return column_holder->allocatedBytes() + reverse_index.allocatedBytes()
             + (nested_null_mask ? nested_null_mask->allocatedBytes() : 0);
     }
-    void forEachSubcolumn(IColumn::ColumnCallback callback) override
+    
+    void forEachSubcolumn(IColumn::ColumnCallback callback) const override { callback(column_holder); }
+
+    void forEachSubcolumn(IColumn::MutableColumnCallback callback) override
     {
         callback(column_holder);
+        reverse_index.setColumn(getRawColumnPtr());
+        if (is_nullable)
+            nested_column_nullable = ColumnNullable::create(column_holder, nested_null_mask);
+    }
+
+    void forEachSubcolumnRecursively(IColumn::RecursiveColumnCallback callback) const override
+    {
+        callback(*column_holder);
+        column_holder->forEachSubcolumnRecursively(callback);
+    }
+
+    void forEachSubcolumnRecursively(IColumn::RecursiveMutableColumnCallback callback) override
+    {
+        callback(*column_holder);
+        column_holder->forEachSubcolumnRecursively(callback);
         reverse_index.setColumn(getRawColumnPtr());
         if (is_nullable)
             nested_column_nullable = ColumnNullable::create(column_holder, nested_null_mask);

@@ -32,7 +32,7 @@ StorageCloudHive::StorageCloudHive(
 
 Pipe StorageCloudHive::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo &  query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum  /*processed_stage*/,
@@ -54,11 +54,11 @@ Pipe StorageCloudHive::read(
     }
 
     HiveFiles hive_files = getHiveFiles();
-    selectFiles(local_context, metadata_snapshot, query_info, hive_files, num_streams);
+    selectFiles(local_context, storage_snapshot->metadata, query_info, hive_files, num_streams);
 
     Pipes pipes;
     auto block_info = std::make_shared<StorageHiveSource::BlockInfo>(
-        metadata_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, metadata_snapshot->getPartitionKey());
+        storage_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, storage_snapshot->metadata->getPartitionKey());
     auto allocator = std::make_shared<StorageHiveSource::Allocator>(std::move(hive_files));
 
     if (block_info->to_read.columns() == 0)

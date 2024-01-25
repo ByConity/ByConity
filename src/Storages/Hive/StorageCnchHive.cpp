@@ -118,7 +118,7 @@ bool StorageCnchHive::isBucketTable() const
 }
 
 QueryProcessingStage::Enum StorageCnchHive::getQueryProcessingStage(
-    ContextPtr local_context, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const
+    ContextPtr local_context, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const
 {
     const auto & local_settings = local_context->getSettingsRef();
 
@@ -239,7 +239,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
 
 Pipe StorageCnchHive::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
@@ -247,7 +247,7 @@ Pipe StorageCnchHive::read(
     unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
@@ -255,14 +255,14 @@ Pipe StorageCnchHive::read(
 void StorageCnchHive::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t /*max_block_size*/,
     unsigned num_streams)
 {
-    PrepareContextResult result = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);
+    PrepareContextResult result = prepareReadContext(column_names, storage_snapshot->metadata, query_info, local_context, num_streams);
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     auto worker_group = getWorkerGroupForTable(local_context, shared_from_this());
@@ -282,6 +282,8 @@ void StorageCnchHive::read(
 
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
         header,
+        {},
+        storage_snapshot,
         processed_stage,
         StorageID::createEmpty(), /// Don't check whether table exists in cnch-worker
         scalars,

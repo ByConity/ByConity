@@ -57,7 +57,8 @@ MergeTreeMutableDataPartsVector MergeTreeDataReclusterMutator::executeOnSinglePa
     MergeTreeMutableDataPartsVector res;
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
     auto column_names = metadata_snapshot->getColumns().getNamesOfPhysical();
-    auto source = std::make_shared<MergeTreeSequentialSource>(data, metadata_snapshot, part, column_names, false, true);
+    auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot, context);
+    auto source = std::make_shared<MergeTreeSequentialSource>(data, storage_snapshot, part, column_names, false, true);
     QueryPipeline pipeline;
     pipeline.init(Pipe(std::move(source)));
     pipeline.setMaxThreads(1);

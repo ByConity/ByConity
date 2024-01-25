@@ -58,7 +58,7 @@ static void writeData(const ISerialization & serialization, const ColumnPtr & co
     ISerialization::SerializeBinaryBulkStatePtr state;
     // todo aron pass compile
     // serialization.serializeBinaryBulkStatePrefix(*full_column, settings, state);
-    serialization.serializeBinaryBulkStatePrefix(settings, state);
+    serialization.serializeBinaryBulkStatePrefix(*full_column, settings, state);
     serialization.serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
     serialization.serializeBinaryBulkStateSuffix(settings, state);
 }

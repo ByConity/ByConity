@@ -108,7 +108,7 @@ IStorageCnchFile::IStorageCnchFile(
 
 Pipe IStorageCnchFile::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr query_context,
     QueryProcessingStage::Enum processed_stage,
@@ -116,7 +116,7 @@ Pipe IStorageCnchFile::read(
     unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(query_context), BuildQueryPipelineSettings::fromContext(query_context));
 }
@@ -124,7 +124,7 @@ Pipe IStorageCnchFile::read(
 void IStorageCnchFile::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr query_context,
     QueryProcessingStage::Enum processed_stage,
@@ -133,7 +133,7 @@ void IStorageCnchFile::read(
 {
     tryUpdateFSClient(query_context);
     
-    auto prepare_result = prepareReadContext(column_names, metadata_snapshot, query_info, query_context);
+    auto prepare_result = prepareReadContext(column_names, storage_snapshot->metadata, query_info, query_context);
 
     /// If no parts to read from - execute locally, must make sure that all stages are executed
     /// because CnchMergeTree is a high order storage
@@ -152,7 +152,7 @@ void IStorageCnchFile::read(
     // todo(jiashuo): table function hasn't supported distributed query
     if (arguments.is_function_table || settings.resourcesAssignType() == StorageResourcesAssignType::SERVER_LOCAL)
     {
-        readByLocal(prepare_result.file_parts, query_plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
+        readByLocal(prepare_result.file_parts, query_plan, column_names, storage_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
         return;
     }
 
@@ -176,6 +176,8 @@ void IStorageCnchFile::read(
 
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
         header,
+        {},
+        storage_snapshot,
         processed_stage,
         StorageID::createEmpty(), /// Don't check whether table exists in cnch-worker
         scalars,
@@ -411,10 +413,10 @@ void IStorageCnchFile::collectResource(const ContextPtr & query_context, const F
 }
 
 QueryProcessingStage::Enum IStorageCnchFile::getQueryProcessingStage(
-    ContextPtr query_context, QueryProcessingStage::Enum stage, const StorageMetadataPtr & storage_metadata, SelectQueryInfo & query_info) const
+    ContextPtr query_context, QueryProcessingStage::Enum stage, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const
 {
     if (arguments.is_function_table || settings.resourcesAssignType() == StorageResourcesAssignType::SERVER_LOCAL)
-        return IStorage::getQueryProcessingStage(query_context, stage, storage_metadata, query_info);
+        return IStorage::getQueryProcessingStage(query_context, stage, storage_snapshot, query_info);
 
     const auto & local_settings = query_context->getSettingsRef();
 
