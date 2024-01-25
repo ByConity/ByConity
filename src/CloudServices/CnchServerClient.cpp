@@ -934,7 +934,13 @@ void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, cons
     if (timeout_ms)
         cntl.set_timeout_ms(timeout_ms);
 
-    RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_uuid());
+    /// prefer to get cnch table uuid from settings as multiple CloudMergeTrees cannot share a same uuid,
+    /// thus most CloudMergeTrees have no uuids on the worker side
+    String uuid_str = storage.getSettings()->cnch_table_uuid.value;
+    if (uuid_str.empty())
+        uuid_str = UUIDHelpers::UUIDToString(storage.getStorageUUID());
+    RPCHelpers::fillUUID(UUIDHelpers::toUUID(uuid_str), *request.mutable_uuid());
+
     for (const auto & part : parts)
     {
         auto new_part = request.add_parts();
