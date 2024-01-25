@@ -46,7 +46,7 @@ namespace
                 }
             };
 
-            FunctionOverloadResolverPtr func_builder_cast = CastOverloadResolver<CastType::nonAccurate>::createImpl(false);
+            FunctionOverloadResolverPtr func_builder_cast = CastOverloadResolver<CastType::nonAccurate, false>::createImpl(false);
             auto func_cast = func_builder_cast->build(cast_args);
             return func_cast->execute(cast_args, result_type, arguments[0].column->size());
         }
