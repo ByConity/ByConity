@@ -42,32 +42,32 @@ Projection
                         │     │  │              Where: Runtime Filters: {sr_returned_date_sk, sr_ticket_number}
                         │     │  │              Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number, sr_return_quantity]
                         │     │  └─ Inner Join
-                        │     │     │     Condition: ss_item_sk == i_item_sk
-                        │     │     ├─ Repartition Exchange
-                        │     │     │  │     Partition by: {ss_item_sk}
-                        │     │     │  └─ Inner Join
-                        │     │     │     │     Condition: ss_store_sk == s_store_sk
-                        │     │     │     ├─ Inner Join
-                        │     │     │     │  │     Condition: ss_sold_date_sk == d_date_sk
-                        │     │     │     │  │     Runtime Filters Builder: {d_date_sk}
-                        │     │     │     │  ├─ Filter
-                        │     │     │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
-                        │     │     │     │  │  └─ TableScan tpcds1000.store_sales
-                        │     │     │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
-                        │     │     │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_quantity]
-                        │     │     │     │  └─ Broadcast Exchange
-                        │     │     │     │     └─ Filter
-                        │     │     │     │        │     Condition: (d_moy = 9) AND (d_year = 1999)
-                        │     │     │     │        └─ TableScan tpcds1000.date_dim
-                        │     │     │     │                 Where: (d_moy = 9) AND (d_year = 1999)
-                        │     │     │     │                 Outputs: [d_date_sk, d_year, d_moy]
-                        │     │     │     └─ Broadcast Exchange
-                        │     │     │        └─ TableScan tpcds1000.store
-                        │     │     │                 Outputs: [s_store_sk, s_store_id, s_store_name]
-                        │     │     └─ Repartition Exchange
-                        │     │        │     Partition by: {i_item_sk}
-                        │     │        └─ TableScan tpcds1000.item
-                        │     │                 Outputs: [i_item_sk, i_item_id, i_item_desc]
+                        │     │     │     Condition: ss_store_sk == s_store_sk
+                        │     │     ├─ Inner Join
+                        │     │     │  │     Condition: ss_item_sk == i_item_sk
+                        │     │     │  ├─ Repartition Exchange
+                        │     │     │  │  │     Partition by: {ss_item_sk}
+                        │     │     │  │  └─ Inner Join
+                        │     │     │  │     │     Condition: ss_sold_date_sk == d_date_sk
+                        │     │     │  │     │     Runtime Filters Builder: {d_date_sk}
+                        │     │     │  │     ├─ Filter
+                        │     │     │  │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                        │     │     │  │     │  └─ TableScan tpcds1000.store_sales
+                        │     │     │  │     │           Where: Runtime Filters: {ss_sold_date_sk}
+                        │     │     │  │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_quantity]
+                        │     │     │  │     └─ Broadcast Exchange
+                        │     │     │  │        └─ Filter
+                        │     │     │  │           │     Condition: (d_moy = 9) AND (d_year = 1999)
+                        │     │     │  │           └─ TableScan tpcds1000.date_dim
+                        │     │     │  │                    Where: (d_moy = 9) AND (d_year = 1999)
+                        │     │     │  │                    Outputs: [d_date_sk, d_year, d_moy]
+                        │     │     │  └─ Repartition Exchange
+                        │     │     │     │     Partition by: {i_item_sk}
+                        │     │     │     └─ TableScan tpcds1000.item
+                        │     │     │              Outputs: [i_item_sk, i_item_id, i_item_desc]
+                        │     │     └─ Broadcast Exchange
+                        │     │        └─ TableScan tpcds1000.store
+                        │     │                 Outputs: [s_store_sk, s_store_id, s_store_name]
                         │     └─ Broadcast Exchange
                         │        └─ Filter
                         │           │     Condition: (d_year_1 = 1999) AND (d_moy_1 >= 9) AND (d_moy_1 <= 12)
