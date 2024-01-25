@@ -2020,6 +2020,8 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
         }
         else if (command.isRequireMutationStage(getInMemoryMetadata()))
         {
+            LOG_DEBUG(log, "column {} need check conversion", command.column_name);
+
             /// This alter will override data on disk. Let's check that it doesn't
             /// modify immutable column.
             if (columns_alter_type_forbidden.count(command.column_name))
@@ -2067,8 +2069,11 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
 
     if (!columns_to_check_conversion.empty())
     {
+        auto context_copy = Context::createCopy(getContext());
+        context_copy->setSetting("disable_str_to_arraystr_cast", Field{true});
+
         auto old_header = old_metadata.getSampleBlock();
-        performRequiredConversions(old_header, columns_to_check_conversion, getContext());
+        performRequiredConversions(old_header, columns_to_check_conversion, context_copy);
     }
 
     for (const auto & part : getDataPartsVector())

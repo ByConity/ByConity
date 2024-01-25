@@ -1446,7 +1446,6 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, query_cache_ttl, 60, "After this time in seconds entries in the query cache become stale", 0) \
     M(Bool, query_cache_share_between_users, false, "Allow other users to read entry in the query cache", 0) \
     M(Bool, create_view_check_column_names, true, "When executing CREATE VIEW queries, whether check column names are consistent with select query", 0) \
-    M(Bool, rewrite_unknown_left_join_identifier, true, "Whether to rewrite unknown left join identifier, this is a deprecated feature but Aeolus SQL depends on it", 0) \
     \
     /** settings in cnch **/ \
     M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
@@ -1561,7 +1560,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select (Obsolete setting).", 0) \
     M(Bool, enable_replace_group_by_literal_to_symbol, false, "Obsolete setting, does nothing.", 0) \
     M(Bool, enable_replace_order_by_literal_to_symbol, false, "Obsolete setting, does nothing.", 0) \
-    M(Bool, enable_topn_filtering_optimization, false, "Obsolete setting, Whether enable TopNFilterting optimization", 0) \
     /** Ingestion */ \
     M(Seconds, ingest_column_memory_lock_timeout, 5, "The time that spend on wait for memory lock", 0) \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
@@ -1648,6 +1646,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
     M(Bool, enable_remove_unused_cte, true, "Whether enable remove unused cte", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
+    M(Bool, enable_topn_filtering_optimization, false, "Whether enable TopNFilterting optimization", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
     M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
     M(Bool, optimizer_index_projection_support, true, "Use indexprojection in optimizer mode", 0) \
@@ -1716,12 +1715,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_partial_sorting_through_exchange, true, "Whether to enable PushPartialSortingThroughExchange rules", 0) \
     M(Bool, enable_push_partial_limit_through_exchange, true, "Whether to enable PushPartialLimitThroughExchange rules", 0) \
     M(Bool, enable_push_partial_distinct_through_exchange, true, "Whether to enable PushPartialDistinctThroughExchange rules", 0) \
-    M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
-    M(String, topn_filtering_algorithm_for_unsorted_stream, "SortAndLimit", "The default topn filtering algorithm for unsorted stream, can be one of: 'SortAndLimit', 'Heap'", 0) \
-    M(Bool, enable_create_topn_filtering_for_aggregating, false, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
+    M(Bool, enable_create_topn_filtering_for_aggregating, true, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
     M(Bool, enable_push_topn_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
-    M(Bool, enable_push_topn_filtering_through_union, true, "Whether to enable PushTopNFilteringThroughUnion rules", 0) \
     M(Bool, enable_cascades_optimizer, true, "Whether to enable CascadesOptimizer", 0) \
     M(Bool, enable_iterative_rewriter, true, "Whether to enable InterativeRewriter", 0) \
     M(Float, multi_join_keys_correlated_coefficient, 0.8, "Coefficient about multi join keys, the smaller the value, the smaller the estimated join cardnlity, do nothing when equals 1.0", 0) \
@@ -1816,7 +1812,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_parquert_orc_split, false, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \
     \
     /** Exchange settings */ \
-    M(UInt64, min_compatible_brpc_minor_version, 2, "Min compatble version of inter server BRPC protocol", 0) \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, \
@@ -1949,6 +1944,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
     /** for inverted index*/ \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
+    M(Bool, disable_str_to_arraystr_cast, false, "disable String to Array(String) CAST", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.

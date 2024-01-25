@@ -3079,11 +3079,14 @@ public:
 
     FunctionCast(ContextPtr context_, const char * name_, MonotonicityForRange && monotonicity_for_range_
         , const DataTypes & argument_types_, const DataTypePtr & return_type_
-        , std::optional<Diagnostic> diagnostic_, CastType cast_type_, bool adaptive_cast_ = false, bool cast_ipv4_ipv6_default_on_conversion_error_ = false)
+        , std::optional<Diagnostic> diagnostic_, CastType cast_type_, bool adaptive_cast_ = false
+        , bool cast_ipv4_ipv6_default_on_conversion_error_ = false
+        , bool disable_str_to_arraystr_cast_ = false)
         : name(name_), monotonicity_for_range(std::move(monotonicity_for_range_))
         , argument_types(argument_types_), return_type(return_type_), diagnostic(std::move(diagnostic_))
         , cast_type(cast_type_)
         , cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_)
+        , disable_str_to_arraystr_cast(disable_str_to_arraystr_cast_)
         , context(context_)
         , adaptive_cast(adaptive_cast_)
     {
@@ -3134,6 +3137,7 @@ private:
     std::optional<Diagnostic> diagnostic;
     CastType cast_type;
     bool cast_ipv4_ipv6_default_on_conversion_error;
+    bool disable_str_to_arraystr_cast;
     ContextPtr context;
     bool adaptive_cast;
 
@@ -3399,7 +3403,7 @@ private:
     WrapperType createArrayWrapper(const DataTypePtr & from_type_untyped, const DataTypeArray & to_type) const
     {
         /// Conversion from String through parsing.
-        if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
+        if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()) && !disable_str_to_arraystr_cast)
         {
             return &ConvertImplGenericFromString<ColumnString>::execute;
         }
@@ -3535,6 +3539,7 @@ private:
         };
     }
 
+    /// The case of: tuple([key1, key2, ..., key_n], [value1, value2, ..., value_n])
     WrapperType createMapToMapWrapper(const DataTypes & from_kv_types, const DataTypes & to_kv_types) const
     {
         return [element_wrappers = getElementWrappers(from_kv_types, to_kv_types), from_kv_types, to_kv_types]
@@ -4231,21 +4236,35 @@ public:
     static FunctionOverloadResolverPtr create(ContextPtr context)
     {
         const auto & settings = context->getSettingsRef();
-        return createImpl(context, settings.cast_keep_nullable, {}, settings.adaptive_type_cast, settings.cast_ipv4_ipv6_default_on_conversion_error);
+        return createImpl(
+            context, settings.cast_keep_nullable, 
+            {}, settings.adaptive_type_cast, 
+            settings.cast_ipv4_ipv6_default_on_conversion_error, 
+            settings.disbale_str_to_arraystr_cast
+        );
     }
 
-    static FunctionOverloadResolverPtr createImpl(ContextPtr context, bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false)
+    static FunctionOverloadResolverPtr createImpl(ContextPtr context, bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, 
+        bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false, bool disable_str_to_arraystr_cast = false)
     {
-        return std::make_unique<CastOverloadResolver>(context, keep_nullable, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error, std::move(diagnostic));
+        return std::make_unique<CastOverloadResolver>(context, keep_nullable, adaptive_cast, 
+            cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_array_str_cast, std::move(diagnostic));
     }
 
-    static FunctionOverloadResolverPtr createImpl(bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false)
+    static FunctionOverloadResolverPtr createImpl(bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, 
+        bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false, bool disable_str_to_arraystr_cast = false)
     {
-        return std::make_unique<CastOverloadResolver>(ContextPtr(), keep_nullable, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error, std::move(diagnostic));
+        return std::make_unique<CastOverloadResolver>(ContextPtr(), keep_nullable, adaptive_cast, 
+            cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_arraystr_cast, std::move(diagnostic));
     }
 
-    explicit CastOverloadResolver(ContextPtr context_, bool keep_nullable_, bool adaptive_cast_ = false, bool cast_ipv4_ipv6_default_on_conversion_error_ = false, std::optional<Diagnostic> diagnostic_ = {})
-        : keep_nullable(keep_nullable_), diagnostic(std::move(diagnostic_)), adaptive_cast(adaptive_cast_), cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_), context(context_)
+    explicit CastOverloadResolver(ContextPtr context_, bool keep_nullable_, bool adaptive_cast_ = false, 
+        bool cast_ipv4_ipv6_default_on_conversion_error_ = false, bool disable_str_to_arraystr_cast_ = false, 
+        std::optional<Diagnostic> diagnostic_ = {})
+        : keep_nullable(keep_nullable_), diagnostic(std::move(diagnostic_)), adaptive_cast(adaptive_cast_)
+        , cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_)
+        , diable_str_to_arraystr_cast(disable_str_to_arraystr_cast_)
+        , disablcontext(context_)
     {}
 
     String getName() const override { return name; }
@@ -4264,7 +4283,8 @@ protected:
             data_types[i] = arguments[i].type;
 
         auto monotonicity = MonotonicityHelper::getMonotonicityInformation(arguments.front().type, return_type.get());
-        return std::make_unique<FunctionCast>(context, name, std::move(monotonicity), data_types, return_type, diagnostic, cast_type, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error);
+        return std::make_unique<FunctionCast>(context, name, std::move(monotonicity), data_types, return_type, 
+            diagnostic, cast_type, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_arraystr_cast);
     }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -4307,6 +4327,7 @@ private:
     std::optional<Diagnostic> diagnostic;
     bool adaptive_cast;
     bool cast_ipv4_ipv6_default_on_conversion_error;
+    bool disable_str_to_arraystr_cast;
     ContextPtr context;
 };
 
