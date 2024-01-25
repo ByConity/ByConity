@@ -4264,7 +4264,7 @@ public:
         : keep_nullable(keep_nullable_), diagnostic(std::move(diagnostic_)), adaptive_cast(adaptive_cast_)
         , cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_)
         , disable_str_to_arraystr_cast(disable_str_to_arraystr_cast_)
-        , disablcontext(context_)
+        , context(context_)
     {}
 
     String getName() const override { return name; }
