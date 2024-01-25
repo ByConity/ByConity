@@ -101,6 +101,7 @@ message Partitioning {
   required uint64 buckets = 4;
   required bool enforce_round_robin = 5;
   required Component.Enum component = 6;
+  required bool exactly_match = 7;
 }
 
 // possibly nullptr
