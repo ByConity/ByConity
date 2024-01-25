@@ -2020,8 +2020,6 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
         }
         else if (command.isRequireMutationStage(getInMemoryMetadata()))
         {
-            LOG_DEBUG(log, "column {} need check conversion", command.column_name);
-
             /// This alter will override data on disk. Let's check that it doesn't
             /// modify immutable column.
             if (columns_alter_type_forbidden.count(command.column_name))
