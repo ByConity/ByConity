@@ -83,7 +83,7 @@ jobs:
         run: |
           cd /CI/
           echo "Bring up ByConity Cluster S3"
-          docker-compose -f docker-compose-s3.yml -p s3_ci up -d
+          docker compose -f docker-compose-s3.yml -p s3_ci up -d
           docker ps --filter name=$COMPOSE_PROJECT_NAME
       - name: Run ByConity FuntionalStateless for S3 (w.o optimizer)
         continue-on-error: true
@@ -114,7 +114,7 @@ jobs:
           cd /CI/
           sleep 1000
           echo "Bring down ByConity Cluster S3"
-          docker-compose -f docker-compose-s3.yml down 
+          docker compose -f docker-compose-s3.yml down 
           docker ps --filter name=$COMPOSE_PROJECT_NAME
           sleep 30
            
@@ -122,7 +122,7 @@ jobs:
         run: |
           echo "Bring up ByConity Cluster HDFS"
           cd /CI/
-          docker-compose up -d
+          docker compose up -d
           sleep 10
           hdfs_config/script/create_users.sh
 
@@ -289,8 +289,8 @@ jobs:
       - name: Analyse Result
         run:
           /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
-      - name: Cleanup docker-compose HDFS
+      - name: Cleanup docker compose HDFS
         if: always()
         run: |
           cd /CI/
-          docker-compose down --volumes
+          docker compose down --volumes
