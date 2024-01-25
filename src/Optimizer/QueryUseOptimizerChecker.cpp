@@ -293,6 +293,7 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
         reason = "unsupported function";
         return false;
     }
+
     else if (functionIsInOrGlobalInOperator(fun.name) && fun.arguments->getChildren().size() == 2)
     {
         if (auto * identifier = fun.arguments->getChildren()[1]->as<ASTIdentifier>())

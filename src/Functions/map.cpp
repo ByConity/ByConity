@@ -934,6 +934,9 @@ public:
 
     bool isVariadic() const override { return true; }
 
+    /// As we overrided executeImplDryRun and return empty result, constant folding of this funtion will got empty result.
+    bool isSuitableForConstantFolding() const override { return false; }
+
     size_t getNumberOfArguments() const override { return 0; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -1031,6 +1034,13 @@ public:
         {
             return result_type->createColumnConst(input_rows_count, Array{})->convertToFullColumnIfConst();
         }
+    }
+
+    /// override executeImplDryRun to prevent calling getMapKeys multi times under 
+    /// same txn id, which may cause worker create table multi times
+    ColumnPtr executeImplDryRun(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
+    {
+        return result_type->createColumnConst(input_rows_count, Array{})->convertToFullColumnIfConst();
     }
 
 private:
