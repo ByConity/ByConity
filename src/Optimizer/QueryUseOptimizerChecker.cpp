@@ -294,12 +294,6 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
         return false;
     }
 
-    if (Poco::toLower(fun.name) == "getmapkeys" && context.context->getSettingsRef().enable_auto_query_forwarding)
-    {
-        reason = "unsupported getMapKeys function";
-        return false;
-    }
-
     else if (functionIsInOrGlobalInOperator(fun.name) && fun.arguments->getChildren().size() == 2)
     {
         if (auto * identifier = fun.arguments->getChildren()[1]->as<ASTIdentifier>())

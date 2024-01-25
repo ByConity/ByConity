@@ -384,7 +384,6 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
     ColumnPtr res_col;
     auto function_ret_type = function_base->getResultType();
     if (options.evaluate_constant_expression && function_base->isSuitableForConstantFolding()
-        && !functionWithInnerQuery(function->name) // function with inner query can't be forwarded in cnch.
         && !functionIsDictGet(function->name) // 01852_dictionary_found_rate_long
         && !functionIsInOrGlobalInOperator(function->name))
     {
