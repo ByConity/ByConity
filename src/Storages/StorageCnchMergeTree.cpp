@@ -292,8 +292,12 @@ void StorageCnchMergeTree::read(
         Pipe pipe(std::make_shared<NullSource>(std::move(fetch_column_header)));
         /// Stage 2: (partial) aggregation and projection if any
         auto query = getBasicSelectQuery(query_info.query);
-        InterpreterSelectQuery(query, local_context, std::move(pipe), SelectQueryOptions(processed_stage)).buildQueryPlan(query_plan);
-        return;
+        // not support join query
+        if (const auto & select = query->as<ASTSelectQuery>(); select && !select->join())
+        {
+            InterpreterSelectQuery(query, local_context, std::move(pipe), SelectQueryOptions(processed_stage)).buildQueryPlan(query_plan);
+            return;
+        }
     }
 
     auto modified_query_ast = query_info.query->clone();
@@ -302,14 +306,9 @@ void StorageCnchMergeTree::read(
         header, {}, storage_snapshot, processed_stage, StorageID{"system", "one"}, scalars, false, local_context->getExternalTables());
 
     LOG_TRACE(log, "Original query before rewrite: {}", queryToString(query_info.query));
-    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), prepare_result.local_table_name);
+    modified_query_ast = rewriteSelectQuery(modified_query_ast, getDatabaseName(), prepare_result.local_table_name);
 
     LOG_TRACE(log, "After query rewrite: {}", queryToString(modified_query_ast));
-
-    const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
-
-    ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
-        header, processed_stage, StorageID{"system", "one"}, scalars, false, local_context->getExternalTables());
 
     ClusterProxy::executeQuery(query_plan, select_stream_factory, log, modified_query_ast, local_context, worker_group);
 
@@ -3296,14 +3295,6 @@ void StorageCnchMergeTree::resetObjectSchemas(const ObjectAssembledSchema & asse
 void StorageCnchMergeTree::refreshAssembledSchema(const ObjectAssembledSchema & assembled_schema,  std::vector<TxnTimestamp> txn_ids)
 {
     object_schemas.refreshAssembledSchema(assembled_schema, txn_ids);
-}
-
-void StorageCnchMergeTree::checkSchemaForBitEngineTable(const ContextPtr & context_) const
-{
-    if (context_->getServerType() != ServerType::cnch_server)
-        return;
-
-    MergeTreeMetaBase::checkSchemaForBitEngineTable(context_);
 }
 
 std::unique_ptr<MergeTreeSettings> StorageCnchMergeTree::getDefaultSettings() const

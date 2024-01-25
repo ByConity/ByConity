@@ -47,7 +47,8 @@ public:
         StorageID main_table_,
         const Scalars & scalars_,
         bool has_virtual_shard_num_column_,
-        const Tables & external_tables);
+        const Tables & external_tables,
+        ExpressionActionsPtr actions_for_remote_ = nullptr);
 
     /// TableFunction in a query.
     SelectStreamFactory(
