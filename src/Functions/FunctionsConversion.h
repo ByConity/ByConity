@@ -4240,7 +4240,7 @@ public:
             context, settings.cast_keep_nullable, 
             {}, settings.adaptive_type_cast, 
             settings.cast_ipv4_ipv6_default_on_conversion_error, 
-            settings.disbale_str_to_arraystr_cast
+            settings.disable_str_to_arraystr_cast
         );
     }
 
@@ -4248,7 +4248,7 @@ public:
         bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false, bool disable_str_to_arraystr_cast = false)
     {
         return std::make_unique<CastOverloadResolver>(context, keep_nullable, adaptive_cast, 
-            cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_array_str_cast, std::move(diagnostic));
+            cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_arraystr_cast, std::move(diagnostic));
     }
 
     static FunctionOverloadResolverPtr createImpl(bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, 
@@ -4263,7 +4263,7 @@ public:
         std::optional<Diagnostic> diagnostic_ = {})
         : keep_nullable(keep_nullable_), diagnostic(std::move(diagnostic_)), adaptive_cast(adaptive_cast_)
         , cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_)
-        , diable_str_to_arraystr_cast(disable_str_to_arraystr_cast_)
+        , disable_str_to_arraystr_cast(disable_str_to_arraystr_cast_)
         , disablcontext(context_)
     {}
 
