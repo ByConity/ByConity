@@ -3126,7 +3126,7 @@ namespace Catalog
                 while (begin < end)
                 {
                     UndoResources tmp{begin, end};
-                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), uuid, tmp);
+                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid, tmp);
                     begin = end;
                     end = std::min(resources.end(), begin + max_commit_size_one_batch);
                 }
@@ -3143,7 +3143,7 @@ namespace Catalog
                 while (begin < end)
                 {
                     UndoResources tmp{std::make_move_iterator(begin), std::make_move_iterator(end)};
-                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), uuid, tmp);
+                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid, tmp);
                     begin = end;
                     end = std::min(resources.end(), begin + max_commit_size_one_batch);
                 }

@@ -41,6 +41,8 @@ void formatAST(const IAST &ast,
 
 String serializeAST(const IAST & ast, bool one_line = true);
 
+String serializeASTWithOutAlias(const IAST & ast);
+
 inline WriteBuffer & operator<<(WriteBuffer & buf, const IAST & ast)
 {
     formatAST(ast, buf, false, true);

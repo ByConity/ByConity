@@ -621,7 +621,6 @@
     "s3": [
         "46016_outfile_failed_select",
         "02114_compression_in_query",
-        "00926_adaptive_index_granularity_pk",
         "01496_attach_from_path_without_delta",
         "01498_attach_from_self_with_exception",
         "01499_attach_from_other_with_exception",

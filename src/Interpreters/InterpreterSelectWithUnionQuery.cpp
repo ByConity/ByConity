@@ -60,9 +60,8 @@ namespace ErrorCodes
 }
 
 InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
-        const ASTPtr & query_ptr_, ContextPtr context_,
-        const SelectQueryOptions & options_, const Names & required_result_column_names)
-    : IInterpreterUnionOrSelectQuery(query_ptr_, context_, options_)
+    const ASTPtr & query_ptr_, ContextPtr context_, const SelectQueryOptions & options_, const Names & required_result_column_names)
+    : IInterpreterUnionOrSelectQuery(query_ptr_, context_, options_), log(&Poco::Logger::get("InterpreterSelectWithUnionQuery"))
 {
     ASTSelectWithUnionQuery * ast = query_ptr->as<ASTSelectWithUnionQuery>();
     bool require_full_header = ast->hasNonDefaultUnionMode();
@@ -532,6 +531,26 @@ QueryPipeline InterpreterSelectWithUnionQuery::executeTEALimit(QueryPipelinePtr 
     {
         comma = false;
         postQuery << " ORDER BY ";
+
+        if (ast.list_of_selects->children.size() == 1)
+        {
+            auto & select_ast = ast.list_of_selects->children[0];
+
+            if (auto * select = select_ast->as<ASTSelectQuery>())
+            {
+                if (select->orderBy())
+                {
+                    for (auto & elem : select->orderBy()->children)
+                    {
+                        if (comma)
+                            postQuery << ", ";
+                        comma = true;
+                        postQuery << serializeAST(*elem, true);
+                    }
+                }
+            }
+        }
+
         for (auto &elem : tea_limit->order_expr_list->children)
         {
             if (comma) postQuery << ", ";
@@ -539,6 +558,8 @@ QueryPipeline InterpreterSelectWithUnionQuery::executeTEALimit(QueryPipelinePtr 
             postQuery<< serializeAST(*elem, true);
         }
     }
+
+    LOG_TRACE(log, "tealimit rewrited query: {}", postQuery.str());
 
     // evaluate the internal SQL and get the result
     return executeQuery(postQuery.str(), context->getQueryContext(), true).pipeline;
