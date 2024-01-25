@@ -145,6 +145,13 @@ public:
             assigned_resource.bucket_numbers = required_bucket_numbers;
     }
 
+    void setResourceReplicated(const UUID & storage_id, bool replicated)
+    {
+        std::lock_guard lock(mutex);
+        auto & assigned_resource = assigned_table_resource.at(storage_id);
+        assigned_resource.replicated = replicated;
+    }
+
     /// Send resource to worker
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
     /// allocate and send resource to worker_group

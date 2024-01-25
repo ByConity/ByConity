@@ -1597,7 +1597,7 @@ void StorageCnchMergeTree::collectResource(
     const String & local_table_name,
     const std::set<Int64> & required_bucket_numbers,
     const StorageSnapshotPtr & storage_snapshot,
-    WorkerEngineType engine_type,
+    WorkerEngineType /*engine_type*/,
     bool replicated)
 {
     auto cnch_resource = local_context->getCnchServerResource();
