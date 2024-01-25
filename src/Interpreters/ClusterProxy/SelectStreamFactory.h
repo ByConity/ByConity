@@ -80,6 +80,8 @@ private:
     Scalars scalars;
     bool has_virtual_shard_num_column = false;
     Tables external_tables;
+
+    ExpressionActionsPtr actions_for_remote;
 };
 
 }
