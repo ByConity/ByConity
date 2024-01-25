@@ -2873,10 +2873,11 @@ public:
 
     FunctionCast(const char * name_, MonotonicityForRange && monotonicity_for_range_
         , const DataTypes & argument_types_, const DataTypePtr & return_type_
-        , std::optional<Diagnostic> diagnostic_, CastType cast_type_, bool adaptive_cast_ = false)
+        , std::optional<Diagnostic> diagnostic_, CastType cast_type_, bool adaptive_cast_ = false
+        , bool ddl_check_ = false)
         : name(name_), monotonicity_for_range(std::move(monotonicity_for_range_))
         , argument_types(argument_types_), return_type(return_type_), diagnostic(std::move(diagnostic_))
-        , cast_type(cast_type_), adaptive_cast(adaptive_cast_)
+        , cast_type(cast_type_), adaptive_cast(adaptive_cast_), ddl_check(ddl_check_)
     {
     }
 
@@ -2925,6 +2926,7 @@ private:
     std::optional<Diagnostic> diagnostic;
     CastType cast_type;
     bool adaptive_cast;
+    bool ddl_check;
 
     static WrapperType createFunctionAdaptor(FunctionPtr function, const DataTypePtr & from_type)
     {
@@ -3188,7 +3190,7 @@ private:
     WrapperType createArrayWrapper(const DataTypePtr & from_type_untyped, const DataTypeArray & to_type) const
     {
         /// Conversion from String through parsing.
-        if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
+        if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()) && !ddl_check)
         {
             return &ConvertImplGenericFromString<ColumnString>::execute;
         }
@@ -3918,16 +3920,16 @@ public:
     }
 };
 
-template<CastType cast_type>
+template<CastType cast_type, bool ddl_check>
 class CastOverloadResolver : public IFunctionOverloadResolver
 {
 public:
     using MonotonicityForRange = FunctionCast::MonotonicityForRange;
     using Diagnostic = FunctionCast::Diagnostic;
 
-    static constexpr auto accurate_cast_name = "accurateCast";
-    static constexpr auto accurate_cast_or_null_name = "accurateCastOrNull";
-    static constexpr auto cast_name = "CAST";
+    static constexpr auto accurate_cast_name = ddl_check ? "accurate_Cast" : "accurateCast";
+    static constexpr auto accurate_cast_or_null_name = ddl_check ? "accurate_CastOrNull" : "accurateCastOrNull";
+    static constexpr auto cast_name = ddl_check ? "_CAST" : "CAST";
 
     static constexpr auto name = cast_type == CastType::accurate
         ? accurate_cast_name
@@ -3965,7 +3967,8 @@ protected:
             data_types[i] = arguments[i].type;
 
         auto monotonicity = MonotonicityHelper::getMonotonicityInformation(arguments.front().type, return_type.get());
-        return std::make_unique<FunctionCast>(name, std::move(monotonicity), data_types, return_type, diagnostic, cast_type, adaptive_cast);
+        return std::make_unique<FunctionCast>(name, std::move(monotonicity), data_types, return_type, 
+            diagnostic, cast_type, adaptive_cast, ddl_check);
     }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override

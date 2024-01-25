@@ -1565,7 +1565,7 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
     if (!columns_to_check_conversion.empty())
     {
         auto old_header = old_metadata.getSampleBlock();
-        performRequiredConversions(old_header, columns_to_check_conversion, getContext());
+        performRequiredConversions(old_header, columns_to_check_conversion, getContext(), true);
     }
 
     if (old_metadata.hasSettingsChanges())

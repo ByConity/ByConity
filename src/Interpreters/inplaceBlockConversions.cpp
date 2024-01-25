@@ -88,7 +88,7 @@ ASTPtr defaultRequiredExpressions(const Block & block, const NamesAndTypesList &
     return default_expr_list;
 }
 
-ASTPtr convertRequiredExpressions(Block & block, const NamesAndTypesList & required_columns)
+ASTPtr convertRequiredExpressions(Block & block, const NamesAndTypesList & required_columns, bool ddl_check = false)
 {
     ASTPtr conversion_expr_list = std::make_shared<ASTExpressionList>();
     for (const auto & required_column : required_columns)
@@ -101,7 +101,7 @@ ASTPtr convertRequiredExpressions(Block & block, const NamesAndTypesList & requi
             continue;
 
         auto cast_func = makeASTFunction(
-            "CAST", std::make_shared<ASTIdentifier>(required_column.name), std::make_shared<ASTLiteral>(required_column.type->getName()));
+            ddl_check ? "_CAST" : "CAST", std::make_shared<ASTIdentifier>(required_column.name), std::make_shared<ASTLiteral>(required_column.type->getName()));
 
         conversion_expr_list->children.emplace_back(setAlias(cast_func, required_column.name));
 
@@ -136,9 +136,9 @@ ActionsDAGPtr createExpressions(
 
 }
 
-void performRequiredConversions(Block & block, const NamesAndTypesList & required_columns, ContextPtr context)
+void performRequiredConversions(Block & block, const NamesAndTypesList & required_columns, ContextPtr context, bool ddl_check)
 {
-    ASTPtr conversion_expr_list = convertRequiredExpressions(block, required_columns);
+    ASTPtr conversion_expr_list = convertRequiredExpressions(block, required_columns, ddl_check);
     if (conversion_expr_list->children.empty())
         return;
 

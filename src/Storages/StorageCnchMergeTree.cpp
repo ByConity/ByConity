@@ -2043,7 +2043,7 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
     if (!columns_to_check_conversion.empty())
     {
         auto old_header = old_metadata.getSampleBlock();
-        performRequiredConversions(old_header, columns_to_check_conversion, getContext());
+        performRequiredConversions(old_header, columns_to_check_conversion, getContext(), true);
     }
 
     for (const auto & part : getDataPartsVector())

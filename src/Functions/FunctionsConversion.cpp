@@ -68,9 +68,12 @@ REGISTER_FUNCTION(Conversion)
     factory.registerFunction<FunctionToUnixTimestamp>();
     factory.registerAlias("unix_timestamp", NameToUnixTimestamp::name, FunctionFactory::CaseInsensitive);
 
-    factory.registerFunction<CastOverloadResolver<CastType::nonAccurate>>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<CastOverloadResolver<CastType::accurate>>();
-    factory.registerFunction<CastOverloadResolver<CastType::accurateOrNull>>();
+    factory.registerFunction<CastOverloadResolver<CastType::nonAccurate, true>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<CastOverloadResolver<CastType::accurate, true>>();
+    factory.registerFunction<CastOverloadResolver<CastType::accurateOrNull, true>>();
+    factory.registerFunction<CastOverloadResolver<CastType::nonAccurate, false>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<CastOverloadResolver<CastType::accurate, false>>();
+    factory.registerFunction<CastOverloadResolver<CastType::accurateOrNull, false>>();
 
     factory.registerFunction<FunctionToUInt8OrZero>();
     factory.registerFunction<FunctionToUInt16OrZero>();

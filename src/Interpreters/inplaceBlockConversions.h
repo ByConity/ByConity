@@ -29,6 +29,7 @@ ActionsDAGPtr evaluateMissingDefaults(
     bool null_as_default = false);
 
 /// Tries to convert columns in block to required_columns
-void performRequiredConversions(Block & block, const NamesAndTypesList & required_columns, ContextPtr context);
+void performRequiredConversions(Block & block, const NamesAndTypesList & required_columns, 
+    ContextPtr context, bool ddl_check = false);
 
 }
