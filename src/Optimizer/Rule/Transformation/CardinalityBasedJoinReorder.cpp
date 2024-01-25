@@ -29,6 +29,19 @@ PatternPtr CardinalityBasedJoinReorder::getPattern() const
         .result();
 }
 
+struct InterJoinNodeInfo
+{
+    UInt64 row_count;
+    PlanNodePtr join_node;
+    GroupId left_child_group_id;
+    GroupId right_child_group_id;
+
+    bool operator<(const InterJoinNodeInfo & rhs) const
+    {
+        return std::make_tuple(row_count, join_node->getId(), left_child_group_id, right_child_group_id) < std::make_tuple(rhs.row_count, rhs.join_node->getId(), rhs.left_child_group_id, rhs.right_child_group_id);
+    }
+};
+
 TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto * multi_join_node = dynamic_cast<MultiJoinNode *>(node.get());
@@ -59,7 +72,7 @@ TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, con
     std::sort(
         ordered_base_nodes.begin(),
         ordered_base_nodes.end(),
-        [](const std::pair<UInt64, GroupId> & lhs, const std::pair<UInt64, GroupId> & rhs) { return lhs.first < rhs.first; });
+        [](const std::pair<UInt64, GroupId> & lhs, const std::pair<UInt64, GroupId> & rhs) { return lhs < rhs; });
 
     PlanNodes results;
 
@@ -81,8 +94,7 @@ TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, con
 
         while (true)
         {
-            // row_count,  new_join_node, left_child_group_id, right_child_group_id
-            std::vector<std::tuple<UInt64, PlanNodePtr, GroupId, GroupId>> inter_join_nodes;
+            std::vector<InterJoinNodeInfo> inter_join_nodes;
 
             bool is_final_join = remaining_base_nodes.size() == 1;
 
@@ -120,41 +132,32 @@ TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, con
                     row_count = stat->getRowCount();
                 }
 
-                inter_join_nodes.emplace_back(row_count, new_join_node, current_group_id, group_id);
+                inter_join_nodes.emplace_back(InterJoinNodeInfo{row_count, new_join_node, current_group_id, group_id});
             }
             
-            std::sort(inter_join_nodes.begin(), inter_join_nodes.end(), [](const auto & lhs, const auto & rhs) {
-                if (std::get<0>(lhs) != std::get<0>(rhs))
-                    return std::get<0>(lhs) < std::get<0>(rhs);
-                if (std::get<2>(lhs) != std::get<2>(rhs))
-                    return std::get<2>(lhs) < std::get<2>(rhs);
-                if (std::get<3>(lhs) != std::get<3>(rhs))
-                    return std::get<3>(lhs) < std::get<3>(rhs);
-
-                return std::get<1>(lhs)->getId() < std::get<1>(rhs)->getId();
-            });
+            std::sort(inter_join_nodes.begin(), inter_join_nodes.end());
 
             const auto & min_join_node = inter_join_nodes.at(0);
             if (!is_final_join) // record inter join into group.
             {
                 GroupExprPtr join_expr;
                 rule_context.optimization_context->getOptimizerContext().recordPlanNodeIntoGroup(
-                    std::get<1>(min_join_node), join_expr, RuleType::CARDILALITY_BASED_JOIN_REORDER);
+                    min_join_node.join_node, join_expr, RuleType::CARDILALITY_BASED_JOIN_REORDER);
                 auto new_group_id = join_expr->getGroupId();
                 for (auto type : blockRules())
                     join_expr->setRuleExplored(type);
 
-                for (const auto & left_group_id : group_id_map.at(std::get<2>(min_join_node)))
+                for (const auto & left_group_id : group_id_map.at(min_join_node.left_child_group_id))
                     group_id_map[new_group_id].insert(left_group_id);
-                for (const auto & right_group_id : group_id_map.at(std::get<3>(min_join_node)))
+                for (const auto & right_group_id : group_id_map.at(min_join_node.right_child_group_id))
                     group_id_map[new_group_id].insert(right_group_id);
 
                 current_group_id = new_group_id;
-                remaining_base_nodes.erase(std::get<3>(min_join_node));
+                remaining_base_nodes.erase(min_join_node.right_child_group_id);
             }
             else // just return the final join. don't record.
             {
-                auto join_order = std::get<1>(min_join_node);
+                auto join_order = min_join_node.join_node;
                 JoinReorderUtils::pruneJoinColumns(output_symbols, join_order, rule_context.context);
                 results.emplace_back(join_order);
                 break;

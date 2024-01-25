@@ -31,6 +31,7 @@
 #include <Interpreters/LogicalExpressionsOptimizer.h>
 #include <Interpreters/MarkTableIdentifiersVisitor.h>
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
+#include <Interpreters/PredicateExpressionsOptimizer.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/QueryNormalizer.h>
 #include <Interpreters/SelectIntersectExceptQueryVisitor.h>
@@ -470,7 +471,7 @@ namespace
 
     void postRewriteSelectQuery(ASTPtr & node, SelectQueryRewriteContext & rewrite_context, ContextMutablePtr context, int & graphviz_index)
     {
-        // auto & select_query = node->as<ASTSelectQuery &>();
+        auto & select_query = node->as<ASTSelectQuery &>();
         const auto & settings = context->getSettingsRef();
         auto & tables_with_columns = rewrite_context.tables_with_columns;
         auto & result = *(rewrite_context.result);
@@ -490,6 +491,10 @@ namespace
         }
 
         // 5. Call `TreeOptimizer` since some optimizations will change the query result
+        if (select_query.having()
+            && (!select_query.group_by_with_cube && !select_query.group_by_with_rollup && !select_query.group_by_with_grouping_sets
+                && !select_query.group_by_with_totals))
+            PredicateExpressionsOptimizer(context, tables_with_columns, settings).tryMovePredicatesFromHavingToWhere(select_query);
         TreeOptimizer::apply(node, result, tables_with_columns, context, false);
 
         result.collectUsedColumns(context, node, true, settings.rewrite_unknown_left_join_identifier);
