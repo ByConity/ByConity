@@ -42,20 +42,12 @@ CloudMergeTreeMergeTask::CloudMergeTreeMergeTask(
 
 void CloudMergeTreeMergeTask::executeImpl()
 {
+    auto heartbeat_timeout = getContext()->getSettingsRef().cloud_task_auto_stop_timeout.value;
     auto lock = storage.lockForShare(RWLockImpl::NO_QUERY, storage.getSettings()->lock_acquire_timeout_for_background_operations);
 
     auto & cloud_table = dynamic_cast<StorageCloudMergeTree &>(*params.storage.get());
     MergeTreeDataMerger merger(cloud_table, params, getContext(), manipulation_entry->get(), [&]() {
-        if (isCancelled())
-            return true;
-
-        auto last_touch_time = getManipulationListElement()->last_touch_time.load(std::memory_order_relaxed);
-
-        /// TODO: add settings
-        if (time(nullptr) - last_touch_time > 600)
-            setCancelled();
-
-        return isCancelled();
+        return isCancelled(heartbeat_timeout);
     });
 
     auto merged_part = merger.mergePartsToTemporaryPart();
@@ -92,9 +84,13 @@ void CloudMergeTreeMergeTask::executeImpl()
         temp_parts.push_back(std::move(drop_part));
     }
 
+    /// 0 rows part may come from unique table or DELETE mutation, and we can safely mark it as deleted.
+    if (merged_part->rows_count == 0)
+        merged_part->deleted = true;
+
     temp_parts.push_back(std::move(merged_part));
 
-    if (isCancelled())
+    if (isCancelled(heartbeat_timeout))
         throw Exception("Merge task " + params.task_id + " is cancelled", ErrorCodes::ABORTED);
 
     CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Merge, params.task_id);
