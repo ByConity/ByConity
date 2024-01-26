@@ -44,9 +44,7 @@ Chunk JNIArrowSource::generate()
         THROW_RESULT_NOT_OK(record_batch);
         auto table = arrow::Table::FromRecordBatches(schema, {record_batch.ValueOrDie()});
         THROW_RESULT_NOT_OK(table);
-        std::cout << table.ValueOrDie()->ToString() << std::endl;
         arrow_column_to_ch_column->arrowTableToCHChunk(res, table.ValueOrDie());
-        std::cout << res.getNumRows() << std::endl;
     }
     return res;
 }

@@ -37,10 +37,6 @@ public:
 
     // each partition is identified by a `key1=val1/key2=val2`
     virtual ApacheHive::PartitionsStatsResult getPartitionStats(const String & db_name, const String & table_name, const Strings& col_names, const Strings& partition_keys, const std::vector<Strings>& partition_vals ) = 0;
-
-    /// Normally hive files are fetched directly with dist
-    /// This method is for JNIHiveMetaClient
-    virtual HiveFiles getFilesInPartition(const HivePartitionPtr &) { return {}; }
 };
 using IMetaClientPtr = std::shared_ptr<IMetaClient>;
 

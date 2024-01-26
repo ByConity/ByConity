@@ -408,6 +408,7 @@ struct ContextSharedPart
     BackgroundSchedulePool::TaskHolder meta_checker;
 
     std::optional<CnchHiveSettings> cnchhive_settings;
+    std::optional<CnchHiveSettings> las_settings;
     std::optional<MergeTreeSettings> merge_tree_settings; /// Settings of MergeTree* engines.
     std::optional<CnchFileSettings> cnch_file_settings;   /// Settings of CnchFile engines.
     std::optional<MergeTreeSettings> replicated_merge_tree_settings; /// Settings of ReplicatedMergeTree* engines.
@@ -3991,6 +3992,20 @@ const CnchHiveSettings & Context::getCnchHiveSettings() const
     }
 
     return *shared->cnchhive_settings;
+}
+
+const CnchHiveSettings & Context::getCnchLasSettings() const
+{
+    auto lock = getLock();
+
+    if (!shared->las_settings)
+    {
+        const auto & config = getConfigRef();
+        CnchHiveSettings las_settings;
+        las_settings.loadFromConfig("las", config);
+        shared->las_settings.emplace(las_settings);
+    }
+    return *shared->las_settings;
 }
 
 const MergeTreeSettings & Context::getMergeTreeSettings() const

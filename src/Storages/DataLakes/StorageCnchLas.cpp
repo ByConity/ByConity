@@ -98,12 +98,8 @@ PrepareContextResult StorageCnchLas::prepareReadContext(
     read_properties["buffer_size"] = std::to_string(settings.max_read_buffer_size);
 
     watch.restart();
-    HiveFiles hive_files;
-    for (const auto & partition : partitions)
-    {
-        HiveFiles res = hive_client->getFilesInPartition(partition);
-        hive_files.insert(hive_files.end(), std::make_move_iterator(res.begin()), std::make_move_iterator(res.end()));
-    }
+    size_t num_workers = local_context->getCurrentWorkerGroup()->getShardsInfo().size();
+    HiveFiles hive_files = jni_meta_client->getFilesInPartition(partitions, num_workers, static_cast<size_t>(num_streams));
 
     LOG_TRACE(log, "Elapsed {} ms to get {} FileSplits", watch.elapsedMilliseconds(), hive_files.size());
     PrepareContextResult result{.hive_files = std::move(hive_files)};
@@ -165,23 +161,42 @@ void registerStorageLas(StorageFactory & factory)
     factory.registerStorage("CnchLas", [](const StorageFactory::Arguments & args)
     {
         ASTs & engine_args = args.engine_args;
-        if (engine_args.size() != 3)
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Storage CnchHudi require 3 arguments: hive_metastore_url, hudi_db_name and hudi_table_name.");
+
+        String hive_metastore_url;
+        String hive_database;
+        String hive_table;
 
         for (auto & engine_arg : engine_args)
             engine_arg = evaluateConstantExpressionOrIdentifierAsLiteral(engine_arg, args.getLocalContext());
 
-        String hive_metastore_url = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
-        String hive_database = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
-        String hive_table = engine_args[2]->as<ASTLiteral &>().value.safeGet<String>();
+        if (engine_args.size() == 3)
+        {
+            hive_metastore_url = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
+            hive_database = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
+            hive_table = engine_args[2]->as<ASTLiteral &>().value.safeGet<String>();
+        }
+        else if (engine_args.size() == 2)
+        {
+            hive_database = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
+            hive_table = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
+        }
+        else
+        {
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Storage CnchHudi require 2 or 3 arguments: {[hive_metastore_url, ] db_name, able_name}.");
+        }
 
         StorageInMemoryMetadata metadata;
-        std::shared_ptr<CnchHiveSettings> hive_settings = std::make_shared<CnchHiveSettings>(args.getContext()->getCnchHiveSettings());
+        std::shared_ptr<CnchHiveSettings> las_settings = std::make_shared<CnchHiveSettings>(args.getContext()->getCnchLasSettings());
         if (args.storage_def->settings)
         {
-            hive_settings->loadFromQuery(*args.storage_def);
+            las_settings->loadFromQuery(*args.storage_def);
             metadata.settings_changes = args.storage_def->settings->ptr();
+        }
+
+        if (hive_metastore_url.empty())
+        {
+            hive_metastore_url = las_settings->hive_metastore_url;
         }
 
         if (!args.columns.empty())
@@ -204,7 +219,7 @@ void registerStorageLas(StorageFactory & factory)
             std::move(metadata),
             args.getContext(),
             args.hive_client,
-            hive_settings);
+            las_settings);
     },
     features);
 }

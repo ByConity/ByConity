@@ -51,11 +51,13 @@ JNIHiveMetastoreClient::getPartitionsByFilter(const String &, const String &, co
     return partitions_spec.partitions;
 }
 
-HiveFiles JNIHiveMetastoreClient::getFilesInPartition(const HivePartitionPtr & partition)
+HiveFiles JNIHiveMetastoreClient::getFilesInPartition(const HivePartitions & partitions, size_t min_split_num, size_t max_threads)
 {
     Protos::PartitionPaths required_partitions;
-    required_partitions.set_split_num(1);
-    required_partitions.add_paths(partition->location);
+    required_partitions.set_split_num(min_split_num);
+    required_partitions.set_max_threads(max_threads);
+    for (const auto & partition : partitions)
+        required_partitions.add_paths(partition->location);
 
     String input_splits_bytes = jni_metaclient->getFilesInPartition(required_partitions.SerializeAsString());
     Protos::InputSplits input_splits;
@@ -64,7 +66,7 @@ HiveFiles JNIHiveMetastoreClient::getFilesInPartition(const HivePartitionPtr & p
     for (const auto & input_split : input_splits.input_splits()) {
         auto it = hive_files.emplace_back(std::make_shared<HiveInputSplitFile>(input_split, properties));
         it->format = IHiveFile::FileFormat::InputSplit;
-        it->partition = partition;
+        it->partition = partitions.at(input_split.partition_index());
     }
     return hive_files;
 }

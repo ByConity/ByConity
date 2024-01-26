@@ -44,7 +44,7 @@ public:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "getAllDatabases is not implement");
     }
 
-    HiveFiles getFilesInPartition(const HivePartitionPtr & partition) override;
+    HiveFiles getFilesInPartition(const HivePartitions & partitions, size_t min_split_num, size_t max_threads);
 
     std::unordered_map<String, String> & getProperties() { return properties; }
 
