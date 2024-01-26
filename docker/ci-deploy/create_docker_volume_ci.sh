@@ -17,3 +17,7 @@ docker rm dummy
 docker container create --name dummy -v ${CONFIG_VOL_FOR_S3}:/config_for_s3_storage hello-world
 docker cp /CI/config_for_s3_storage/ dummy:/
 docker rm dummy
+
+echo "config_vol_for_s3 ${CONFIG_VOL_FOR_S3}"
+docker run --rm -v ${CONFIG_VOL_FOR_S3}:/config_for_s3_storage byconity/debian:buster-runit-fdb7.1.27 /bin/bash -c "ls / && ls /config_for_s3_storage"
+docker run --rm -v ${CONFIG_VOL_FOR_S3}:/config byconity/debian:buster-runit-fdb7.1.27 /bin/bash -c "ls / && ls /config"
