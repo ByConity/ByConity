@@ -339,6 +339,7 @@ ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<T> & predic
     if (predicates.size() == 1)
         return predicates[0]->clone(); // TODO: remove clone, check tpcds correctness
 
+    ASTSet<T> distinct; // todo: templatize EqualityASTSet
     std::vector<ASTPtr> args;
     for (auto & arg : predicates)
     {
@@ -346,11 +347,14 @@ ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<T> & predic
             return PredicateConst::TRUE_VALUE;
         if (isFalsePredicate(arg))
             continue;
-        args.emplace_back(arg->clone()); // TODO: remove clone, check tpcds correctness
+        if (distinct.emplace(arg).second)
+            args.emplace_back(arg->clone()); // TODO: remove clone, check tpcds correctness
     }
 
     if (args.empty())
         return default_ast;
+    if (args.size() == 1)
+        return args[0];
 
     return makeASTFunction(PredicateConst::OR, args);
 }
