@@ -2,6 +2,7 @@
 #include <thread>
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <Protos/DataModelHelpers.h>
+#include <Storages/CnchStorageCache.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <gtest/gtest.h>
@@ -534,4 +535,46 @@ TEST_F(CacheManagerTest, AsyncReset) {
     EXPECT_EQ(cache_manager->getAllActiveTables().size(), 0);
 
     cache_manager->shutDown();
+}
+
+TEST_F(CacheManagerTest, RawStorageCacheRenameTest)
+{
+    // init storage cache
+    auto context = getContext().context;
+    CnchStorageCachePtr storageCachePtr = std::make_shared<CnchStorageCache>(1000);
+
+    String create_query_1 = "create table db_test.test UUID '00000000-0000-0000-0000-000000000001' (id Int32) ENGINE=CnchMergeTree order by id";
+    String create_query_2 = "create table db_test.test UUID '00000000-0000-0000-0000-000000000002' (id Int32) ENGINE=CnchMergeTree order by id";
+
+    StoragePtr storage1 = CacheTestMock::createTable(create_query_1, context);
+    StoragePtr storage2 = CacheTestMock::createTable(create_query_2, context);
+    StoragePtr get_by_name = nullptr, get_by_uuid = nullptr;
+
+    // test insert into storage cache and get
+    storageCachePtr->insert(storage1->getStorageID(), TxnTimestamp{UInt64{1}}, storage1);
+    get_by_name = storageCachePtr->get("db_test", "test");
+    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
+    EXPECT_NE(get_by_name, nullptr);
+    EXPECT_NE(get_by_uuid, nullptr);
+    EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
+    EXPECT_EQ(get_by_uuid->getStorageID().database_name, "db_test");
+    EXPECT_EQ(get_by_uuid->getStorageID().table_name, "test");
+
+    // test insert storage with different uuid but the same table name (mock rename).
+    storageCachePtr->insert(storage2->getStorageID(), TxnTimestamp{UInt64{2}}, storage2);
+    get_by_name = storageCachePtr->get("db_test", "test");
+    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
+    EXPECT_NE(get_by_name, nullptr);
+    EXPECT_NE(get_by_uuid, nullptr);
+    EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
+    EXPECT_EQ(get_by_uuid->getStorageID().database_name, "db_test");
+    EXPECT_EQ(get_by_uuid->getStorageID().table_name, "test");
+
+    // test insert old storage again. should fail to update cache.
+    storageCachePtr->insert(storage1->getStorageID(), TxnTimestamp{UInt64{1}}, storage1);
+    get_by_name = storageCachePtr->get("db_test", "test");
+    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
+    EXPECT_EQ(get_by_uuid, nullptr);
+    EXPECT_NE(get_by_name, nullptr);
+    EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
 }

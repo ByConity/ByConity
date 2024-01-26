@@ -66,7 +66,7 @@ public:
     /// Submit write exchange data task, the task will be run in global thread pool
     void submitWriteTask(DiskPartitionWriterPtr writer, ThreadGroupStatusPtr thread_group);
     /// create processors, this executor will read exchange data, and send them through brpc
-    Processors createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context) const;
+    static Processors createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context);
     /// cancel all exchange read data tasks in query_id, exchange_id.
     void cancel(UInt64 query_unique_id, UInt64 exchange_id);
     void submitCleanupTask(UInt64 query_unique_id);
@@ -91,6 +91,7 @@ public:
     }
     /// one round of gc, this method is not thread-safe
     void gc();
+    std::vector<std::unique_ptr<ReadBufferFromFileBase>> readFiles(const ExchangeDataKey & key) const;
 
 private:
     Protos::AliveQueryInfo readQueryInfo(UInt64 query_unique_id) const;
@@ -114,7 +115,6 @@ private:
     using ReadTaskPtr = std::shared_ptr<ReadTask>;
     /// finish senders of a specific task, so that downstream wont wait until timeout
     static void finishSenders(const ReadTaskPtr & task, BroadcastStatusCode code, String message);
-    std::vector<std::unique_ptr<ReadBufferFromFileBase>> filterFileBuffers(const ExchangeDataKey & key) const;
 
     Poco::Logger * logger;
     bthread::Mutex mutex;

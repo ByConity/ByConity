@@ -628,7 +628,7 @@ String DiskExchangeDataManager::getFileName(const ExchangeDataKey & key) const
     return file_path;
 }
 
-std::vector<std::unique_ptr<ReadBufferFromFileBase>> DiskExchangeDataManager::filterFileBuffers(const ExchangeDataKey & key) const
+std::vector<std::unique_ptr<ReadBufferFromFileBase>> DiskExchangeDataManager::readFiles(const ExchangeDataKey & key) const
 {
     std::vector<String> file_names;
     auto file_path = path / std::to_string(key.query_unique_id);
@@ -681,10 +681,10 @@ void DiskExchangeDataManager::createWriteTaskDirectory(UInt64 query_unique_id, c
     }
 }
 
-Processors DiskExchangeDataManager::createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context) const
+Processors DiskExchangeDataManager::createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context)
 {
     auto key = sender->getDataKey();
-    auto source = std::make_shared<DiskExchangeDataSource>(header, filterFileBuffers(*key));
+    auto source = std::make_shared<DiskExchangeDataSource>(header, key, query_context);
     String name = BroadcastExchangeSink::generateName(key->exchange_id);
     ExchangeOptions exchange_options = ExchangeUtils::getExchangeOptions(query_context);
     auto sink = std::make_shared<BroadcastExchangeSink>(
