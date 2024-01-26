@@ -24,6 +24,10 @@
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
+#include <MergeTreeCommon/IMergeTreePartMeta.h>
+#include <Processors/Merges/Algorithms/Graphite.h>
+#include <Common/SimpleIncrement.h>
+#include <Storages/ColumnsDescription.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
 #include <Storages/extractKeyExpressionList.h>
 #include <Transaction/TxnTimestamp.h>
@@ -174,6 +178,7 @@ public:
     }
 
     bool supportsSubcolumns() const override { return true; }
+    bool supportsDynamicSubcolumns() const override { return true; }
     bool supportsPrewhere() const override { return true; }
     bool supportsSampling() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
@@ -197,6 +202,13 @@ public:
     ///  out_states will contain snapshot of each part state
     DataPartsVector getDataPartsVector(
         const DataPartStates & affordable_states, DataPartStateVector * out_states = nullptr, bool require_projection_parts = false) const;
+
+    DataPartsVector getDataPartsVectorUnlocked(
+        const DataPartStates & affordable_states,
+        const DataPartsLock & lock,
+        DataPartStateVector * out_states = nullptr,
+        bool require_projection_parts = false) const;
+
     /// Returns all parts in specified partition
     DataPartsVector getDataPartsVectorInPartition(DataPartState /*state*/, const String & /*partition_id*/) const;
 
@@ -385,6 +397,13 @@ public:
     bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
     UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
 
+    /// Snapshot for MergeTree contains the current set of data parts
+    /// at the moment of the start of query.
+    struct SnapshotData : public StorageSnapshot::Data
+    {
+        DataPartsVector parts;
+    };
+
     void addMutationEntry(const CnchMergeTreeMutationEntry & entry);
     void removeMutationEntry(TxnTimestamp create_time);
     Strings getPlainMutationEntries();
@@ -394,6 +413,14 @@ public:
 
     virtual bool supportsOptimizer() const override { return true; }
 
+    void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
+
+    // TODO: @lianwenlong not thread safe if storage cache enabled
+    virtual StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
+
+    /// The same as above but does not hold vector of data parts.
+    virtual StorageSnapshotPtr getStorageSnapshotWithoutParts(const StorageMetadataPtr & metadata_snapshot) const;
+
 protected:
     friend class IMergeTreeDataPart;
     friend class MergeTreeDataPartCNCH;
@@ -401,6 +428,11 @@ protected:
     friend struct ReplicatedMergeTreeTableMetadata;
     friend class StorageReplicatedMergeTree;
     friend class MergeTreeDataWriter;
+
+    /// Current description of columns of data type Object.
+    /// It changes only when set of parts is changed and is
+    /// protected by @data_parts_mutex.
+    ColumnsDescription object_columns;
 
     bool require_part_metadata;
 

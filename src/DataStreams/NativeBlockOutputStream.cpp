@@ -85,7 +85,7 @@ static void writeData(const IDataType & type, const ColumnPtr & column, WriteBuf
                 auto full_type = lc_type->getFullLowCardinalityTypePtr();
                 auto serialization = full_type->getDefaultSerialization();
                 ISerialization::SerializeBinaryBulkStatePtr state;
-                serialization->serializeBinaryBulkStatePrefix(settings, state);
+                serialization->serializeBinaryBulkStatePrefix(*full_column, settings, state);
                 serialization->serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
                 serialization->serializeBinaryBulkStateSuffix(settings, state);
                 return ;
@@ -95,7 +95,7 @@ static void writeData(const IDataType & type, const ColumnPtr & column, WriteBuf
     auto serialization = type.getDefaultSerialization();
 
     ISerialization::SerializeBinaryBulkStatePtr state;
-    serialization->serializeBinaryBulkStatePrefix(settings, state);
+    serialization->serializeBinaryBulkStatePrefix(*full_column, settings, state);
     serialization->serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
     serialization->serializeBinaryBulkStateSuffix(settings, state);
 }

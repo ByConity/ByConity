@@ -114,7 +114,7 @@ void serializeColumn(const ColumnPtr & column, const DataTypePtr & data_type, Wr
     auto serialization = data_type->getDefaultSerialization();
 
     ISerialization::SerializeBinaryBulkStatePtr state;
-    serialization->serializeBinaryBulkStatePrefix(settings, state);
+    serialization->serializeBinaryBulkStatePrefix(*full_column, settings, state);
     serialization->serializeBinaryBulkWithMultipleStreams(*full_column, 0, 0, settings, state);
     serialization->serializeBinaryBulkStateSuffix(settings, state);
 }

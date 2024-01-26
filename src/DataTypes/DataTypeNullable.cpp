@@ -81,14 +81,14 @@ ColumnPtr DataTypeNullable::getSubcolumn(const String & subcolumn_name, const IC
     return nested_data_type->getSubcolumn(subcolumn_name, column_nullable.getNestedColumn());
 }
 
-SerializationPtr DataTypeNullable::getSubcolumnSerialization(
-    const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const
-{
-    if (subcolumn_name == "null")
-        return std::make_shared<SerializationTupleElement>(base_serialization_getter(DataTypeUInt8()), subcolumn_name, false);
+// SerializationPtr DataTypeNullable::getSubcolumnSerialization(
+//     const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const
+// {
+//     if (subcolumn_name == "null")
+//         return std::make_shared<SerializationTupleElement>(base_serialization_getter(DataTypeUInt8()), subcolumn_name, false);
 
-    return nested_data_type->getSubcolumnSerialization(subcolumn_name, base_serialization_getter);
-}
+//     return nested_data_type->getSubcolumnSerialization(subcolumn_name, base_serialization_getter);
+// }
 
 SerializationPtr DataTypeNullable::doGetDefaultSerialization() const
 {

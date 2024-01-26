@@ -69,6 +69,23 @@ enum class CNCHStorageMediumType
 String toStr(CNCHStorageMediumType tp);
 CNCHStorageMediumType fromStr(const String & type_str);
 
+enum class WorkerEngineType : uint8_t
+{
+    CLOUD,
+    DICT,
+};
+
+inline static String toString(WorkerEngineType type)
+{
+    switch (type)
+    {
+        case WorkerEngineType::CLOUD:
+            return "Cloud";
+        case WorkerEngineType::DICT:
+            return "DictCloud";
+    }
+}
+
 class CnchStorageCommonHelper
 {
 public:

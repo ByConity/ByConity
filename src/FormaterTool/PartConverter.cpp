@@ -190,9 +190,10 @@ void PartConverter::execute()
         out->writeSuffix();
     };
 
+    auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), getContext());
     for (auto & part : data_parts)
     {
-        auto input = std::make_shared<MergeTreeSequentialSource>(*storage, storage->getInMemoryMetadataPtr(), part, column_names, false, true);
+        auto input = std::make_shared<MergeTreeSequentialSource>(*storage, storage_snapshot, part, column_names, false, true);
         QueryPipeline pipeline;
         pipeline.init(Pipe(std::move(input)));
         pipeline.setMaxThreads(1);

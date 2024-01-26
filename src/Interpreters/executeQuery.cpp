@@ -116,7 +116,7 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/SensitiveDataMasker.h>
-#include "Interpreters/Context_fwd.h"
+#include <Interpreters/Context_fwd.h>
 
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>

@@ -25,6 +25,7 @@
 #include <Interpreters/ClusterProxy/IStreamFactory.h>
 #include <Interpreters/StorageID.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/StorageSnapshot.h>
 
 namespace DB
 {
@@ -32,21 +33,28 @@ namespace DB
 namespace ClusterProxy
 {
 
+using ColumnsDescriptionByShardNum = std::unordered_map<UInt32, ColumnsDescription>;
+
 class SelectStreamFactory final : public IStreamFactory
 {
 public:
     /// Database in a query.
     SelectStreamFactory(
         const Block & header_,
+        const ColumnsDescriptionByShardNum & objects_by_shard_,
+        const StorageSnapshotPtr & storage_snapshot_,
         QueryProcessingStage::Enum processed_stage_,
         StorageID main_table_,
         const Scalars & scalars_,
         bool has_virtual_shard_num_column_,
-        const Tables & external_tables);
+        const Tables & external_tables,
+        ExpressionActionsPtr actions_for_remote_ = nullptr);
 
     /// TableFunction in a query.
     SelectStreamFactory(
         const Block & header_,
+        const ColumnsDescriptionByShardNum & objects_by_shard_,
+        const StorageSnapshotPtr & storage_snapshot_,
         QueryProcessingStage::Enum processed_stage_,
         ASTPtr table_func_ptr_,
         const Scalars & scalars_,
@@ -64,12 +72,16 @@ public:
 
 private:
     const Block header;
+    const ColumnsDescriptionByShardNum objects_by_shard;
+    const StorageSnapshotPtr storage_snapshot;
     QueryProcessingStage::Enum processed_stage;
     StorageID main_table = StorageID::createEmpty();
     ASTPtr table_func_ptr;
     Scalars scalars;
     bool has_virtual_shard_num_column = false;
     Tables external_tables;
+
+    ExpressionActionsPtr actions_for_remote;
 };
 
 }

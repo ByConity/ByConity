@@ -1002,7 +1002,7 @@ void MergeTreeDataPartWriterOnDisk::writeColumn(
     {
         ISerialization::SerializeBinaryBulkSettings serialize_settings;
         serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
-        serializations[name]->serializeBinaryBulkStatePrefix(serialize_settings, it->second);
+        serializations[name]->serializeBinaryBulkStatePrefix(column, serialize_settings, it->second);
     }
 
     const auto & global_settings = storage.getContext()->getSettingsRef();
@@ -1090,7 +1090,8 @@ void MergeTreeDataPartWriterOnDisk::writeColumn(
 
         if (write_final_mark)
             writeFinalMark(name_and_type, offset_columns, serialize_settings.path);
-
+        
+                
         serializations[name]->enumerateStreams(finalizeStreams(name), serialize_settings.path);
     }
 

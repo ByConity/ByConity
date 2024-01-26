@@ -66,9 +66,10 @@ public:
     /// Add columns from ordered_names that are not present in the block.
     /// Missing columns are added in the order specified by ordered_names.
     /// num_rows is needed in case if all res_columns are nullptr.
-    void fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool check_column_size = true);
+    void fillMissingColumns(
+        Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool check_column_size = true) const;
     /// Evaluate defaulted columns if necessary.
-    void evaluateMissingDefaults(Block additional_columns, Columns & res_columns);
+    void evaluateMissingDefaults(Block additional_columns, Columns & res_columns) const;
 
     /// If part metadata is not equal to storage metadata, than
     /// try to perform conversions of columns.
@@ -160,6 +161,10 @@ protected:
     std::set<String> dup_implicit_keys;
     Names names; // only initialized if duplicate implicit key exit
 
+    /// Actual column names and types of columns in part,
+    /// which may differ from table metadata.
+    NamesAndTypes columns_to_read;
+    
     UncompressedCache * uncompressed_cache;
     MarkCache * mark_cache;
 

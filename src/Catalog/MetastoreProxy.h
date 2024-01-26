@@ -22,6 +22,7 @@
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 // #include <Transaction/ICnchTransaction.h>
 #include <sstream>
+#include <unordered_map>
 #include <unordered_set>
 #include <Catalog/IMetastore.h>
 #include <CloudServices/CnchBGThreadCommon.h>
@@ -36,6 +37,7 @@
 #include <cppkafka/cppkafka.h>
 #include <google/protobuf/repeated_field.h>
 #include <common/types.h>
+#include <Storages/StorageSnapshot.h>
 #include <Access/IAccessEntity.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Interpreters/SQLBinding/SQLBinding.h>
@@ -95,6 +97,7 @@ namespace DB::Catalog
 #define PARTGC_BG_JOB_STATUS "PARTGC_BGJS_"
 #define CONSUMER_BG_JOB_STATUS "CONSUMER_BGJS_"
 #define DEDUPWORKER_BG_JOB_STATUS "DEDUPWORKER_BGJS_"
+#define OBJECT_SCHEMA_ASSEMBLE_BG_JOB_STATUS "OBJECT_SCHEMA_ASSEMBLE_BGJS_"
 #define PREALLOCATE_VW "PVW_"
 #define DICTIONARY_STORE_PREFIX "DIC_"
 #define RESOURCE_GROUP_PREFIX "RG_"
@@ -113,6 +116,9 @@ namespace DB::Catalog
 #define MATERIALIZEDMYSQL_PREFIX "MMYSQL_"
 #define MATERIALIZEDMYSQL_BG_JOB_STATUS "MATERIALIZEDMYSQL_BGJS_"
 #define DETACHED_DELETE_BITMAP_PREFIX "DDLB_"
+#define OBJECT_PARTIAL_SCHEMA_PREFIX "PS_"
+#define OBJECT_ASSEMBLED_SCHEMA_PREFIX "AS_"
+#define OBJECT_PARTIAL_SCHEMA_STATUS_PREFIX "PSS_"
 #define PARTITION_PARTS_METRICS_SNAPSHOT_PREFIX "PPS_"
 #define TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX "TTS_"
 #define DICTIONARY_BUCKET_UPDATE_TIME_PREFIX "DBUT_"
@@ -142,6 +148,10 @@ static EntityMetastorePrefix getEntityMetastorePrefix(EntityType type)
             throw Exception("Access Entity not implemented", ErrorCodes::METASTORE_ACCESS_ENTITY_NOT_IMPLEMENTED);
     }
 }
+
+using SerializedObjectSchemas = std::unordered_map<String, String>;
+using SerializedObjectSchemaStatuses = std::unordered_map<TxnTimestamp, String, TxnTimestampHasher>;
+using SerializedObjectSchema = String;
 
 static std::shared_ptr<MetastoreFDBImpl> getFDBInstance(const String & cluster_config_path)
 {
@@ -592,6 +602,16 @@ public:
         return allDedupWorkerBGJobStatusKeyPrefix(name_space) + uuid;
     }
 
+    static std::string allObjectSchemaAssembleBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + OBJECT_SCHEMA_ASSEMBLE_BG_JOB_STATUS;
+    }
+
+    static std::string objectSchemaAssembleBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allObjectSchemaAssembleBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
     static UUID parseUUIDFromBGJobStatusKey(const std::string & key);
 
     static std::string preallocateVW(const std::string & name_space, const std::string & uuid)
@@ -763,6 +783,26 @@ public:
     static String trashItemsPrefix(const String & name_space, const String & uuid)
     {
         return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
+    }
+
+    static String partialSchemaPrefix(const String & name_space, const String & table_uuid)
+    {
+         return escapeString(name_space) + "_" + OBJECT_PARTIAL_SCHEMA_PREFIX + table_uuid + "_";
+    }
+
+    static String partialSchemaKey(const String & name_space, const String & table_uuid, const UInt64 & txn_id)
+    {
+        return escapeString(name_space) + "_" + OBJECT_PARTIAL_SCHEMA_PREFIX + table_uuid + "_" + toString(txn_id);
+    }
+
+    static String assembledSchemaKey(const String & name_space, const String & table_uuid)
+    {
+        return escapeString(name_space) + "_" + OBJECT_ASSEMBLED_SCHEMA_PREFIX + table_uuid;
+    }
+
+    static String partialSchemaStatusKey(const String & name_space, const UInt64 & txn_id)
+    {
+        return escapeString(name_space) + "-" + OBJECT_PARTIAL_SCHEMA_STATUS_PREFIX + "_" + toString(txn_id);
     }
 
     static String partitionPartsMetricsSnapshotPrefix(const String & name_space, const String & table_uuid, const String & partition_id)
@@ -1105,6 +1145,25 @@ public:
      * @param limit Limit the results, disabled by passing 0.
      */
     IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
+    
+    //Object column schema related API
+    static String extractTxnIDFromPartialSchemaKey(const String & partial_schema_key);
+    void appendObjectPartialSchema(
+        const String & name_space, const String & table_uuid, const UInt64 & txn_id, const SerializedObjectSchema & partial_schema);
+    SerializedObjectSchema getObjectPartialSchema(const String & name_space, const String & table_uuid, const UInt64 & txn_id);
+    SerializedObjectSchemas scanObjectPartialSchemas(const String & name_space, const String & table_uuid, const UInt64 & limit_size);
+    SerializedObjectSchema getObjectAssembledSchema(const String & name_space, const String & table_uuid);
+    bool resetObjectAssembledSchemaAndPurgePartialSchemas(
+        const String & name_space,
+        const String & table_uuid,
+        const SerializedObjectSchema & old_assembled_schema,
+        const SerializedObjectSchema & new_assembled_schema,
+        const std::vector<TxnTimestamp> & partial_schema_txnids);
+
+    SerializedObjectSchemaStatuses batchGetObjectPartialSchemaStatuses(const String & name_space, const std::vector<TxnTimestamp> & txn_ids);
+    void batchDeletePartialSchemaStatus(const String & name_space, const std::vector<TxnTimestamp> & txn_ids);
+    void updateObjectPartialSchemaStatus(const String &name_space, const TxnTimestamp & txn_id, const ObjectPartialSchemaStatus & status);
+
     IMetaStore::IteratorPtr getAllDeleteBitmaps(const String & name_space, const String & table_uuid);
 
     /**

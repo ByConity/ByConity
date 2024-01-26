@@ -353,4 +353,5 @@ struct StorageInMemoryMetadata
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 using MultiVersionStorageMetadataPtr = MultiVersion<StorageInMemoryMetadata>;
 
+String listOfColumns(const NamesAndTypesList & available_columns);
 }

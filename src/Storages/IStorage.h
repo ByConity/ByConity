@@ -44,6 +44,10 @@
 #include <Common/HostWithPorts.h>
 #include <Common/RWLock.h>
 #include <Common/TypePromotion.h>
+#include <Common/HostWithPorts.h>
+#include <ResourceManagement/CommonData.h>
+#include <Storages/StorageSnapshot.h>
+#include <Transaction/TxnTimestamp.h>
 
 #include <optional>
 #include <shared_mutex>
@@ -187,6 +191,10 @@ public:
     /// Support trivial count optimization for high level storage, only TRUE for StorageCnchMergeTree
     virtual bool supportsTrivialCount() const { return false; }
 
+    /// Returns true if the storage supports storing of dynamic subcolumns.
+    /// For now it makes sense only for data type Object.
+    virtual bool supportsDynamicSubcolumns() const { return false; }
+
     /// Requires squashing small blocks to large for optimal storage.
     /// This is true for most storages that store data on disk.
     virtual bool prefersLargeBlocks() const { return true; }
@@ -243,6 +251,9 @@ public:
     virtual bool isBucketTable() const {return false;}
     virtual UInt64 getTableHashForClusterBy() const {return 0;}
 
+    /// Return true if there is at least one part containing lightweight deleted mask.
+    virtual bool hasLightweightDeletedMask() const { return false; }
+    
     /// Return true if storage can execute lightweight delete.
     virtual bool supportsLightweightDelete() const { return false; }
 
@@ -324,7 +335,7 @@ public:
       * since it cannot return Complete for intermediate queries never.
       */
     virtual QueryProcessingStage::Enum
-    getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const
+    getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const
     {
         return QueryProcessingStage::FetchColumns;
     }
@@ -385,7 +396,7 @@ public:
       */
     virtual Pipe read(
         const Names & /*column_names*/,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & /*query_info*/,
         ContextPtr /*context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
@@ -397,7 +408,7 @@ public:
     virtual void read(
         QueryPlan & query_plan,
         const Names & /*column_names*/,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & /*query_info*/,
         ContextPtr /*context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
@@ -408,7 +419,7 @@ public:
     virtual void read(
         QueryPlan & query_plan,
         const Names & /*column_names*/,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & /*query_info*/,
         ContextPtr /*context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
@@ -689,6 +700,18 @@ public:
     ///
     /// Does not takes underlying Storage (if any) into account.
     virtual std::optional<UInt64> lifetimeBytes() const { return {}; }
+
+    /// Creates a storage snapshot from given metadata.
+    virtual StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr /*query_context*/) const
+    {
+        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
+    }
+
+    /// Creates a storage snapshot from given metadata and columns, which are used in query.
+    virtual StorageSnapshotPtr getStorageSnapshotForQuery(const StorageMetadataPtr & metadata_snapshot, const ASTPtr & /*query*/, ContextPtr query_context) const
+    {
+        return getStorageSnapshot(metadata_snapshot, query_context);
+    }
 
     bool is_detached{false};
 

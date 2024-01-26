@@ -41,6 +41,8 @@ message SubmitManipulationTaskReq
   optional string mutate_commands = 10;
   /// used to mark task of bucket table
   optional bool is_bucket_table = 11;
+  /// used for json column merge
+  optional string dynamic_object_column_schema = 12;
 }
 
 message SubmitManipulationTaskResp
@@ -435,6 +437,8 @@ message SendResourcesReq
   /// data parts
   repeated TableDataParts data_parts = 5;
   optional string disk_cache_mode = 6;
+  repeated UDFInfo udf_infos = 7;
+  repeated string dynamic_object_column_schema = 8;
 }
 
 message SendResourcesResp

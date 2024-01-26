@@ -310,6 +310,21 @@ public:
         return typeid(rhs) == typeid(ColumnString);
     }
 
+    double getRatioOfDefaultRows(double sample_ratio) const override
+    {
+        return getRatioOfDefaultRowsImpl<ColumnString>(sample_ratio);
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return getNumberOfDefaultRowsImpl<ColumnString>();
+    }
+
+    void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override
+    {
+        return getIndicesOfNonDefaultRowsImpl<ColumnString>(indices, from, limit);
+    }
+
     Chars & getChars() { return chars; }
     const Chars & getChars() const { return chars; }
 

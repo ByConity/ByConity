@@ -547,8 +547,7 @@ NameToNameVector MergeTreeDataMutator::collectFilesForRenames(
             [&](const ISerialization::SubstreamPath & substream_path)
             {
                 ++stream_counts[ISerialization::getFileNameForStream(column, substream_path)];
-            },
-            {});
+            });
     }
 
     NameToNameVector rename_vector;

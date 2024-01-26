@@ -613,6 +613,14 @@ if (USE_LIBPQXX)
     dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${LIBPQXX_INCLUDE_DIR})
 endif()
 
+if (USE_SIMDJSON)
+    dbms_target_link_libraries(PUBLIC simdjson)
+endif()
+
+if (USE_RAPIDJSON)
+    dbms_target_link_libraries(PUBLIC rapidjson)
+endif()
+
 if(USE_CPP_JIEBA)
     dbms_target_link_libraries(PUBLIC ${CPP_JIEBA_LIBRARY})
 endif()
@@ -620,7 +628,6 @@ endif()
 if (USE_TSQUERY)
     dbms_target_link_libraries(PUBLIC ${TSQUERY_LIBRARY})
 endif()
-
 
 if (TARGET ch_contrib::ulid)
     dbms_target_link_libraries (PUBLIC ch_contrib::ulid)
@@ -639,6 +646,7 @@ if (USE_NLP)
 endif()
 
 dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${PARALLEL_HASHMAP_INCLUDE_DIR})
+dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${MAGIC_ENUM_INCLUDE_DIR})
 
 include ("${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake")
 

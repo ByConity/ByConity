@@ -78,7 +78,7 @@ private:
         const IMergeTreeDataPart * parent_part);
 
     void prepareColumnNamesAndTypes(
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         const MergeTreeMetaBase::MergingParams & merging_params,
         Names & all_column_names,
         Names & gathering_column_names,

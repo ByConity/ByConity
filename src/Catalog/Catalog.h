@@ -16,6 +16,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <set>
 #include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
@@ -34,12 +35,15 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
+#include "common/types.h"
+#include <Common/Config/MetastoreConfig.h>
 #include <Common/Configurations.h>
 #include <Common/DNSResolver.h>
 #include <Common/HostWithPorts.h>
-#include <Common/Config/MetastoreConfig.h>
 #include <common/getFQDNOrHostName.h>
-#include "Catalog/IMetastore.h"
+#include "Storages/IStorage_fwd.h"
+#include <Storages/StorageSnapshot.h>
+#include <Catalog/IMetastore.h>
 // #include <Access/MaskingPolicyDataModel.h>
 
 namespace DB::ErrorCodes
@@ -755,12 +759,32 @@ public:
 
     DeleteBitmapMetaPtrVector listDetachedDeleteBitmaps(const MergeTreeMetaBase & storage, const AttachFilter & filter);
 
+    // Append partial object column schema in Txn
+    void
+    appendObjectPartialSchema(const StoragePtr & table, const TxnTimestamp & txn_id, const MutableMergeTreeDataPartsCNCHVector & parts);
+    ObjectAssembledSchema tryGetTableObjectAssembledSchema(const UUID & table_uuid) const;
+    std::vector<TxnTimestamp> filterUncommittedObjectPartialSchemas(std::vector<TxnTimestamp> & unfiltered_partial_schema_txnids);
+    // @param limit_size -1 means no limit , read all partial schemas as possible
+    ObjectPartialSchemas tryGetTableObjectPartialSchemas(const UUID & table_uuid, const int & limit_size = -1) const;
+    bool resetObjectAssembledSchemaAndPurgePartialSchemas(
+        const UUID & table_uuid,
+        const ObjectAssembledSchema & old_assembled_schema,
+        const ObjectAssembledSchema & new_assembled_schema,
+        const std::vector<TxnTimestamp> & partial_schema_txnids);
+
+    ObjectPartialSchemaStatuses batchGetObjectPartialSchemaStatuses(const std::vector<TxnTimestamp> & txn_ids, const int & batch_size = 10000);
+    void batchDeleteObjectPartialSchemaStatus(const std::vector<TxnTimestamp> & txn_ids);
+    void commitObjectPartialSchema(const TxnTimestamp & txn_id);
+    void abortObjectPartialSchema(const TxnTimestamp & txn_id);
+    void initStorageObjectSchema(StoragePtr & res);
+
     // Access Entities
     std::optional<AccessEntityModel> tryGetAccessEntity(EntityType type, const String & name);
     std::vector<AccessEntityModel> getAllAccessEntities(EntityType type);
     std::optional<String> tryGetAccessEntityName(const UUID & uuid);
     void dropAccessEntity(EntityType type, const UUID & uuid, const String & name);
     void putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, AccessEntityModel & old_access_entity, bool replace_if_exists = true);
+
 
 private:
     Poco::Logger * log = &Poco::Logger::get("Catalog");

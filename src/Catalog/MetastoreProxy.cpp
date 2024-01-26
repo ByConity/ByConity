@@ -26,10 +26,12 @@
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
-#include "common/types.h"
+#include <common/types.h>
 #include <common/logger_useful.h>
-#include "Catalog/MetastoreByteKVImpl.h"
-#include "Interpreters/executeQuery.h"
+#include <Catalog/MetastoreByteKVImpl.h>
+#include <Interpreters/executeQuery.h>
+#include <Storages/MergeTree/IMetastore.h>
+#include <Storages/StorageSnapshot.h>
 
 namespace DB::ErrorCodes
 {
@@ -1585,6 +1587,11 @@ void MetastoreProxy::setBGJobStatus(const String & name_space, const String & uu
             dedupWorkerBGJobStatusKey(name_space, uuid),
             String{BGJobStatusInCatalog::serializeToChar(status)}
         );
+    else if (type == CnchBGThreadType::ObjectSchemaAssemble)
+        metastore_ptr->put(
+            objectSchemaAssembleBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 }
@@ -1604,6 +1611,8 @@ std::optional<CnchBGThreadStatus> MetastoreProxy::getBGJobStatus(const String & 
         metastore_ptr->get(mmysqlBGJobStatusKey(name_space, uuid), status_store_data);
     else if (type == CnchBGThreadType::DedupWorker)
         metastore_ptr->get(dedupWorkerBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::ObjectSchemaAssemble)
+        metastore_ptr->get(objectSchemaAssembleBGJobStatusKey(name_space, uuid), status_store_data);
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 
@@ -1638,6 +1647,8 @@ std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(co
                 return metastore_ptr->getByPrefix(allMmysqlBGJobStatusKeyPrefix(name_space));
             else if (type == CnchBGThreadType::DedupWorker)
                 return metastore_ptr->getByPrefix(allDedupWorkerBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::ObjectSchemaAssemble)
+                return metastore_ptr->getByPrefix(allObjectSchemaAssembleBGJobStatusKeyPrefix(name_space));
             else
                 throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
         };
@@ -1678,6 +1689,9 @@ void MetastoreProxy::dropBGJobStatus(const String & name_space, const String & u
             break;
         case CnchBGThreadType::DedupWorker:
             metastore_ptr->drop(dedupWorkerBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::ObjectSchemaAssemble:
+            metastore_ptr->drop(objectSchemaAssembleBGJobStatusKey(name_space, uuid));
             break;
         default:
             throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
@@ -2708,6 +2722,139 @@ IMetaStore::IteratorPtr MetastoreProxy::getDetachedDeleteBitmapsInRange(
 IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
 {
     return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
+}
+
+String MetastoreProxy::extractTxnIDFromPartialSchemaKey(const String &partial_schema_key)
+{
+    auto pos = partial_schema_key.find_last_of('_');
+    return partial_schema_key.substr(pos + 1, String::npos);
+}
+
+void MetastoreProxy::appendObjectPartialSchema(
+    const String & name_space, const String & table_uuid, const UInt64 & txn_id, const SerializedObjectSchema & partial_schema)
+{
+    BatchCommitRequest batch_write;
+    batch_write.AddPut(SinglePutRequest(partialSchemaKey(name_space, table_uuid, txn_id), partial_schema));
+    batch_write.AddPut(SinglePutRequest(
+        partialSchemaStatusKey(name_space, txn_id),
+        ObjectSchemas::serializeObjectPartialSchemaStatus(ObjectPartialSchemaStatus::Running)));
+
+    BatchCommitResponse store_response;
+    metastore_ptr->batchWrite(batch_write, store_response);
+}
+
+SerializedObjectSchema MetastoreProxy::getObjectPartialSchema(const String &name_space, const String &table_uuid, const UInt64 &txn_id)
+{
+    SerializedObjectSchema partial_schema;
+    metastore_ptr->get(partialSchemaKey(name_space, table_uuid, txn_id), partial_schema);
+    if (partial_schema.empty())
+        return "";
+    
+    return partial_schema;
+}
+
+SerializedObjectSchemas MetastoreProxy::scanObjectPartialSchemas(const String &name_space, const String &table_uuid, const UInt64 &limit_size)
+{
+    auto scan_prefix = partialSchemaPrefix(name_space, table_uuid);
+    UInt64 scan_limit = limit_size <= 0 ? 0 : limit_size;
+
+    auto scan_iterator = metastore_ptr->getByPrefix(scan_prefix, scan_limit);
+    SerializedObjectSchemas serialized_object_schemas;
+    while (scan_iterator->next())
+    {
+        auto key = scan_iterator->key();
+        serialized_object_schemas.emplace(extractTxnIDFromPartialSchemaKey(key), scan_iterator->value());
+    }
+
+    return serialized_object_schemas;
+}
+
+SerializedObjectSchema MetastoreProxy::getObjectAssembledSchema(const String &name_space, const String &table_uuid)
+{
+    SerializedObjectSchema assembled_schema;
+    metastore_ptr->get(assembledSchemaKey(name_space, table_uuid), assembled_schema);
+    if (assembled_schema.empty())
+        return "";
+    
+    return assembled_schema;
+}
+
+bool MetastoreProxy::resetObjectAssembledSchemaAndPurgePartialSchemas(
+    const String & name_space,
+    const String & table_uuid,
+    const SerializedObjectSchema & old_assembled_schema,
+    const SerializedObjectSchema & new_assembled_schema,
+    const std::vector<TxnTimestamp> & partial_schema_txnids)
+{
+    Poco::Logger * log = &Poco::Logger::get(__func__);
+
+    BatchCommitRequest batch_write;
+    bool if_not_exists = false;
+    if (old_assembled_schema.empty())
+        if_not_exists = true;
+
+    auto update_request = SinglePutRequest(assembledSchemaKey(name_space, table_uuid), new_assembled_schema, old_assembled_schema);
+    update_request.if_not_exists = if_not_exists;
+    batch_write.AddPut(update_request);
+
+    for (const auto & txn_id : partial_schema_txnids)
+        batch_write.AddDelete(partialSchemaKey(name_space, table_uuid, txn_id.toUInt64()));
+
+    BatchCommitResponse store_response;
+    try
+    {
+        metastore_ptr->batchWrite(batch_write, store_response);
+        return true;
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
+        {
+            LOG_WARNING(
+                log,
+                fmt::format(
+                    "Object schema refresh CAS put fail with old schema:{} and new schema:{}", old_assembled_schema, new_assembled_schema));
+            return false;
+        }
+        else
+            throw e;
+    }
+}
+
+SerializedObjectSchemaStatuses MetastoreProxy::batchGetObjectPartialSchemaStatuses(const String &name_space, const std::vector<TxnTimestamp> &txn_ids)
+{
+    Strings keys;
+    for (const auto & txn_id : txn_ids)
+        keys.emplace_back(partialSchemaStatusKey(name_space, txn_id.toUInt64()));
+    auto serialized_statuses_in_metastore = metastore_ptr->multiGet(keys);
+    SerializedObjectSchemaStatuses  serialized_statuses;
+    serialized_statuses.reserve(serialized_statuses_in_metastore.size());
+    for (size_t i = 0; i < serialized_statuses_in_metastore.size(); i++)
+    {
+        auto txn_id = txn_ids[i];
+        auto status = serialized_statuses_in_metastore[i].first;
+        if (status.empty())
+            serialized_statuses.emplace(txn_id, ObjectSchemas::serializeObjectPartialSchemaStatus(ObjectPartialSchemaStatus::Finished));
+        else
+            serialized_statuses.emplace(txn_id, status);
+    }
+
+    return serialized_statuses;
+}
+
+void MetastoreProxy::batchDeletePartialSchemaStatus(const String &name_space, const std::vector<TxnTimestamp> &txn_ids)
+{
+    BatchCommitRequest batch_delete;
+    for (const auto & txn_id : txn_ids)
+        batch_delete.AddDelete(partialSchemaStatusKey(name_space, txn_id.toUInt64()));
+
+    BatchCommitResponse delete_result;
+    metastore_ptr->batchWrite(batch_delete, delete_result);
+}
+
+void MetastoreProxy::updateObjectPartialSchemaStatus(const String &name_space, const TxnTimestamp &txn_id, const ObjectPartialSchemaStatus & status)
+{
+    metastore_ptr->put(partialSchemaStatusKey(name_space, txn_id), ObjectSchemas::serializeObjectPartialSchemaStatus(status));
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getAllDeleteBitmaps(const String & name_space, const String & table_uuid)

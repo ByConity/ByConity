@@ -101,7 +101,7 @@ public:
     MergeTreeReadPool(
         const size_t threads_, const size_t sum_marks_, const size_t min_marks_for_concurrent_read_,
         RangesInDataParts && parts_, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter,
-        const MergeTreeMetaBase & data_, const StorageMetadataPtr & metadata_snapshot_,
+        const MergeTreeMetaBase & data_, const StorageSnapshotPtr & storage_snapshot_,
         const SelectQueryInfo & query_info_,
         const bool check_columns_, const Names & column_names_,
         const BackoffSettings & backoff_settings_, size_t preferred_block_size_bytes_,
@@ -126,7 +126,7 @@ private:
         const RangesInDataParts & parts, const size_t min_marks_for_concurrent_read);
 
     const MergeTreeMetaBase & data;
-    StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
     const Names column_names;
     bool do_not_steal_tasks;
     bool predict_block_size_bytes;

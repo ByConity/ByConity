@@ -35,7 +35,7 @@ namespace ErrorCodes
 
 MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     const MergeTreeMetaBase & storage_,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     const MergeTreeMetaBase::DataPartPtr & owned_data_part_,
     ImmutableDeleteBitmapPtr delete_bitmap_,
     UInt64 max_block_size_rows_,
@@ -53,8 +53,8 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     bool quiet)
     :
     MergeTreeBaseSelectProcessor{
-        metadata_snapshot_->getSampleBlockForColumns(required_columns_, storage_.getVirtuals(), storage_.getStorageID()),
-        storage_, metadata_snapshot_, query_info_, std::move(actions_settings), max_block_size_rows_,
+        storage_snapshot_->getSampleBlockForColumns(required_columns_),
+        storage_, storage_snapshot_, query_info_, std::move(actions_settings), max_block_size_rows_,
         preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_,
         reader_settings_, use_uncompressed_cache_, virt_column_names_},
     required_columns{std::move(required_columns_)},
@@ -92,12 +92,12 @@ try
     is_first_task = false;
 
     task_columns = getReadTaskColumns(
-        storage, metadata_snapshot, data_part,
+        storage, storage_snapshot, data_part,
         required_columns, prewhere_info, index_context, check_columns);
 
     auto size_predictor = (preferred_block_size_bytes == 0)
         ? nullptr
-        : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, metadata_snapshot->getSampleBlock());
+        : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, storage_snapshot->metadata->getSampleBlock());
 
     /// will be used to distinguish between PREWHERE and WHERE columns when applying filter
     const auto & column_names = task_columns.columns.getNames();

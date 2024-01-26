@@ -207,7 +207,7 @@ std::string IStorageURLBase::getReadMethod() const
 
 std::vector<std::pair<std::string, std::string>> IStorageURLBase::getReadURIParams(
     const Names & /*column_names*/,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
     const SelectQueryInfo & /*query_info*/,
     ContextPtr /*context*/,
     QueryProcessingStage::Enum & /*processed_stage*/,
@@ -218,7 +218,7 @@ std::vector<std::pair<std::string, std::string>> IStorageURLBase::getReadURIPara
 
 std::function<void(std::ostream &)> IStorageURLBase::getReadPOSTDataCallback(
     const Names & /*column_names*/,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
     const SelectQueryInfo & /*query_info*/,
     ContextPtr /*context*/,
     QueryProcessingStage::Enum & /*processed_stage*/,
@@ -230,7 +230,7 @@ std::function<void(std::ostream &)> IStorageURLBase::getReadPOSTDataCallback(
 
 Pipe IStorageURLBase::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
@@ -238,7 +238,7 @@ Pipe IStorageURLBase::read(
     unsigned /*num_streams*/)
 {
     auto request_uri = uri;
-    auto params = getReadURIParams(column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size);
+    auto params = getReadURIParams(column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size);
     for (const auto & [param, value] : params)
         request_uri.addQueryParameter(param, value);
 
@@ -246,14 +246,14 @@ Pipe IStorageURLBase::read(
         request_uri,
         getReadMethod(),
         getReadPOSTDataCallback(
-            column_names, metadata_snapshot, query_info,
+            column_names, storage_snapshot, query_info,
             local_context, processed_stage, max_block_size),
         format_name,
         format_settings,
         getName(),
-        getHeaderBlock(column_names, metadata_snapshot),
+        getHeaderBlock(column_names, storage_snapshot),
         local_context,
-        metadata_snapshot->getColumns(),
+        storage_snapshot->metadata->getColumns(),
         max_block_size,
         ConnectionTimeouts::getHTTPTimeouts(local_context),
         chooseCompressionMethod(request_uri.getPath(), compression_method)));
@@ -262,14 +262,14 @@ Pipe IStorageURLBase::read(
 
 Pipe StorageURLWithFailover::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
     unsigned /*num_streams*/)
 {
-    auto params = getReadURIParams(column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size);
+    auto params = getReadURIParams(column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size);
     WriteBufferFromOwnString error_message;
     error_message << "Detailed description:";
 
@@ -285,14 +285,14 @@ Pipe StorageURLWithFailover::read(
                 request_uri,
                 getReadMethod(),
                 getReadPOSTDataCallback(
-                    column_names, metadata_snapshot, query_info,
+                    column_names, storage_snapshot, query_info,
                     local_context, processed_stage, max_block_size),
                 format_name,
                 format_settings,
                 getName(),
-                getHeaderBlock(column_names, metadata_snapshot),
+                getHeaderBlock(column_names, storage_snapshot),
                 local_context,
-                metadata_snapshot->getColumns(),
+                storage_snapshot->metadata->getColumns(),
                 max_block_size,
                 ConnectionTimeouts::getHTTPTimeouts(local_context),
                 chooseCompressionMethod(request_uri.getPath(), compression_method));

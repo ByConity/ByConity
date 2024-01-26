@@ -49,7 +49,7 @@ namespace ErrorCodes
 MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     Block header,
     const MergeTreeMetaBase & storage_,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     const SelectQueryInfo & query_info_,
     ExpressionActionsSettings actions_settings,
     UInt64 max_block_size_rows_,
@@ -60,7 +60,7 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     const Names & virt_column_names_)
     : SourceWithProgress(transformHeader(std::move(header), getPrewhereInfo(query_info_), storage_.getPartitionValueType(), virt_column_names_, getIndexContext(query_info_), query_info_.read_bitmap_index))
     , storage(storage_)
-    , metadata_snapshot(metadata_snapshot_)
+    , storage_snapshot(storage_snapshot_)
     , prewhere_info(getPrewhereInfo(query_info_))
     , index_context(getIndexContext(query_info_))
     , max_block_size_rows(max_block_size_rows_)
@@ -201,7 +201,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
 
     reader = task->data_part->getReader(
         task->task_columns.columns,
-        metadata_snapshot,
+        storage_snapshot->metadata,
         mark_ranges,
         owned_uncompressed_cache.get(),
         owned_mark_cache.get(),
@@ -240,7 +240,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
 
         pre_reader = task->data_part->getReader(
             task->task_columns.pre_columns,
-            metadata_snapshot,
+            storage_snapshot->metadata,
             mark_ranges,
             owned_uncompressed_cache.get(),
             owned_mark_cache.get(),

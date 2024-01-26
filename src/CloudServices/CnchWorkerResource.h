@@ -18,6 +18,7 @@
 #include <Interpreters/StorageID.h>
 #include <Storages/IStorage_fwd.h>
 #include <Databases/IDatabase.h>
+#include <Storages/ColumnsDescription.h>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -33,7 +34,7 @@ class CloudTablesBlockSource;
 class CnchWorkerResource
 {
 public:
-    void executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists = false);
+    void executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists = false, const ColumnsDescription & object_columns = {});
     StoragePtr getTable(const StorageID & table_id) const;
     DatabasePtr getDatabase(const String & database_name) const;
     bool isCnchTableInWorker(const StorageID & table_id) const;

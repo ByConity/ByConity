@@ -559,7 +559,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
 
             if (!JoinCommon::isJoinCompatibleTypes(left_type, right_type))
             {
-                auto common_type = getLeastSupertype({left_type, right_type}, allow_extended_type_conversion);
+                auto common_type = getLeastSupertype(DataTypes{left_type, right_type}, allow_extended_type_conversion);
                 left_key = left_planner.addColumn(makeCastFunction(std::make_shared<ASTIdentifier>(left_key), common_type)).first;
                 right_key = right_planner.addColumn(makeCastFunction(std::make_shared<ASTIdentifier>(right_key), common_type)).first;
                 need_project = true;

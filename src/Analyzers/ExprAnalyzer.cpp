@@ -655,7 +655,7 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
     {
         DataTypePtr super_type = nullptr;
         if (enable_implicit_type_conversion)
-            super_type = getLeastSupertype({lhs_type, rhs_type}, allow_extended_conversion);
+            super_type = getLeastSupertype(DataTypes{lhs_type, rhs_type}, allow_extended_conversion);
         if (!super_type)
             throw Exception("Incompatible types for IN prediacte", ErrorCodes::TYPE_MISMATCH);
         if (!lhs_type->equals(*super_type))

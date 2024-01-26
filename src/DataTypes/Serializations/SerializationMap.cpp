@@ -13,6 +13,7 @@
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 #include <Common/quoteString.h>
+#include <DataTypes/DataTypeMap.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
@@ -297,17 +298,25 @@ void SerializationMap::deserializeTextCSV(IColumn & column, ReadBuffer & istr, c
     deserializeText(column, rb, settings);
 }
 
-
-void SerializationMap::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+void SerializationMap::enumerateStreams(
+    EnumerateStreamsSettings & settings,
+    const StreamCallback & callback,
+    const SubstreamData & data) const
 {
-    nested->enumerateStreams(callback, path);
+    auto next_data = SubstreamData(nested)
+        .withType(data.type ? assert_cast<const DataTypeMap &>(*data.type).getNestedType() : nullptr)
+        .withColumn(data.column ? assert_cast<const ColumnMap &>(*data.column).getNestedColumnPtr() : nullptr)
+        .withSerializationInfo(data.serialization_info);
+
+    nested->enumerateStreams(settings, callback, next_data);
 }
 
 void SerializationMap::serializeBinaryBulkStatePrefix(
+    const IColumn & column,
     SerializeBinaryBulkSettings & settings,
     SerializeBinaryBulkStatePtr & state) const
 {
-    nested->serializeBinaryBulkStatePrefix(settings, state);
+    nested->serializeBinaryBulkStatePrefix(extractNestedColumn(column), settings, state);
 }
 
 void SerializationMap::serializeBinaryBulkStateSuffix(

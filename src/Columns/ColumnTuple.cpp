@@ -503,18 +503,18 @@ void ColumnTuple::getExtremes(Field & min, Field & max) const
     max = max_tuple;
 }
 
-void ColumnTuple::forEachSubcolumn(ColumnCallback callback)
+void ColumnTuple::forEachSubcolumn(MutableColumnCallback callback)
 {
     for (auto & column : columns)
         callback(column);
 }
 
 
-void ColumnTuple::forEachSubcolumnRecursively(ColumnCallback callback)
+void ColumnTuple::forEachSubcolumnRecursively(RecursiveMutableColumnCallback callback)
 {
     for (auto & column : columns)
     {
-        callback(column);
+        callback(*column);
         column->forEachSubcolumnRecursively(callback);
     }
 }
@@ -567,6 +567,21 @@ ColumnPtr ColumnTuple::compress() const
                 column = column->decompress();
             return ColumnTuple::create(compressed);
         });
+}
+
+double ColumnTuple::getRatioOfDefaultRows(double sample_ratio) const
+{
+    return getRatioOfDefaultRowsImpl<ColumnTuple>(sample_ratio);
+}
+
+UInt64 ColumnTuple::getNumberOfDefaultRows() const
+{
+    return getNumberOfDefaultRowsImpl<ColumnTuple>();
+}
+
+void ColumnTuple::getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const
+{
+    return getIndicesOfNonDefaultRowsImpl<ColumnTuple>(indices, from, limit);
 }
 
 }

@@ -164,16 +164,16 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues(MutableColumnPtr colum
     /// If there are references to states in final column, we must hold their ownership
     /// by holding arenas and source.
 
-    auto callback = [&](auto & subcolumn)
+    auto callback = [&](IColumn & subcolumn)
     {
-        if (auto * aggregate_subcolumn = typeid_cast<ColumnAggregateFunction *>(subcolumn.get()))
+        if (auto * aggregate_subcolumn = typeid_cast<ColumnAggregateFunction *>(&subcolumn))
         {
             aggregate_subcolumn->foreign_arenas = concatArenas(column_aggregate_func.foreign_arenas, column_aggregate_func.my_arena);
             aggregate_subcolumn->src = column_aggregate_func.getPtr();
         }
     };
 
-    callback(res);
+    callback(*res);
     res->forEachSubcolumnRecursively(callback);
 
     for (auto * val : data)
@@ -349,7 +349,7 @@ ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_
 {
     size_t size = data.size();
     if (size != filter.size())
-        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of filter ({}) doesn't match size of column ({})", filter.size(), size);
 
     if (size == 0)
         return cloneEmpty();
@@ -370,7 +370,6 @@ ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_
 
     return res;
 }
-
 
 ColumnPtr ColumnAggregateFunction::permute(const Permutation & perm, size_t limit) const
 {

@@ -11,7 +11,7 @@ namespace DB
 class SerializationBigString final : public ISerialization
 {
 public:
-    void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
+    void enumerateStreams(EnumerateStreamsSettings & settings, const StreamCallback & callback, const SubstreamData & data) const override;
 
     void serializeBinaryBulkWithMultipleStreams(const IColumn & column, size_t offset,
         size_t limit, SerializeBinaryBulkSettings & settings, SerializeBinaryBulkStatePtr & state) const override;

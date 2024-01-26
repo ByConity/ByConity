@@ -17,7 +17,7 @@
 
 #include <Common/ProfileEvents.h>
 #include <Common/filesystemHelpers.h>
-#include <DataTypes/MapHelpers.h>
+#include <DataTypes/ObjectUtils.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
@@ -37,8 +37,11 @@
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
-#include <WorkerTasks/ManipulationTaskParams.h>
 #include <WorkerTasks/CnchMergePrefetcher.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
+#include <Common/ProfileEvents.h>
+#include <Common/filesystemHelpers.h>
+#include <Storages/CnchTablePartitionMetrics.h>
 
 namespace ProfileEvents
 {
@@ -131,7 +134,7 @@ MergeTreeDataMerger::~MergeTreeDataMerger()
 }
 
 void MergeTreeDataMerger::prepareColumnNamesAndTypes(
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const MergeTreeMetaBase::MergingParams & merging_params,
     Names & all_column_names,
     Names & gathering_column_names,
@@ -140,8 +143,11 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes(
     NamesAndTypesList & gathering_columns,
     NamesAndTypesList & merging_columns)
 {
+    auto metadata_snapshot = storage_snapshot->metadata;
     all_column_names = metadata_snapshot->getColumns().getNamesOfPhysical();
     storage_columns = metadata_snapshot->getColumns().getAllPhysical();
+
+    extendObjectColumns(storage_columns, storage_snapshot->object_columns, false);
 
     Names sort_key_columns_vec = metadata_snapshot->getSortingKey().expression->getRequiredColumns();
     std::set<String> key_columns(sort_key_columns_vec.cbegin(), sort_key_columns_vec.cend());
@@ -314,8 +320,10 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     NamesAndTypesList gathering_columns;
     NamesAndTypesList merging_columns;
 
+    auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot, context);
+
     prepareColumnNamesAndTypes(
-        metadata_snapshot,
+        storage_snapshot,
         merging_params,
         all_column_names,
         gathering_column_names,
@@ -424,7 +432,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
 
         auto input = std::make_unique<MergeTreeSequentialSource>(
             data,
-            metadata_snapshot,
+            storage_snapshot,
             part,
             merging_column_names,
             read_with_direct_io,
@@ -668,7 +676,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
 
                 auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
                     data,
-                    metadata_snapshot,
+                    storage_snapshot,
                     source_data_parts[part_num],
                     Names{column_name},
                     read_with_direct_io,

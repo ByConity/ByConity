@@ -84,7 +84,7 @@ static ASTPtr getSelectQuery(const SelectQueryInfo & query_info)
 
 Pipe StorageSystemCnchMaterializedMySQL::read(
     const Names & /*column_names*/,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
     SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -98,7 +98,7 @@ Pipe StorageSystemCnchMaterializedMySQL::read(
     auto select_query = getSelectQuery(query_info);
     Block header = materializeBlock(InterpreterSelectQuery(select_query, context, QueryProcessingStage::Complete).getSampleBlock());
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
-                                            header, QueryProcessingStage::Complete, StorageID("system", "materialized_mysql"), {}, false, {});
+                                            header, {}, {}, QueryProcessingStage::Complete, StorageID("system", "materialized_mysql"), {}, false, {});
 
     /// Set `query_info.cluster` to forward query to all instances of `server cluster`
     query_info.cluster = context->mockCnchServersCluster();

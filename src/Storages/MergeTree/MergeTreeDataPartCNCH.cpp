@@ -1060,8 +1060,7 @@ ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & colu
             auto mrk_checksum = checksums->files.find(file_name + index_granularity_info.marks_file_extension);
             if (mrk_checksum != checksums->files.end())
                 size.marks += mrk_checksum->second.file_size;
-        },
-        {});
+        });
 
     return size;
 }
@@ -1231,9 +1230,9 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                 preload_level);
             segments.insert(segments.end(), std::make_move_iterator(seg.begin()), std::make_move_iterator(seg.end()));
         };
-        ISerialization::SubstreamPath substream_path;
+
         auto serialization = getSerializationForColumn(real_column);
-        serialization->enumerateStreams(callback, substream_path);
+        serialization->enumerateStreams(callback);
     };
 
     for (const NameAndTypePair & column : *columns_ptr)

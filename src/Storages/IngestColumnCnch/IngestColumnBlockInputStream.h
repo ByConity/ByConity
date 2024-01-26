@@ -5,6 +5,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/Context_fwd.h>
+#include "Storages/StorageSnapshot.h"
 
 namespace DB
 {
@@ -33,8 +34,8 @@ private:
     StoragePtr source_storage;
     StorageCloudMergeTree * target_cloud_merge_tree;
     StorageCloudMergeTree * source_cloud_merge_tree;
-    StorageMetadataPtr target_meta_data_ptr;
-    StorageMetadataPtr source_meta_data_ptr;
+    StorageSnapshotPtr target_storage_snapshot;
+    StorageSnapshotPtr source_storage_snapshot;
     Names ordered_key_names;
     Names ingest_column_names;
     String partition_id;

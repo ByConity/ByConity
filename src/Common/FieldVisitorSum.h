@@ -53,6 +53,7 @@ public:
     bool operator() (IPv6 &) const;
     bool operator() (AggregateFunctionStateData &) const;
     bool operator() (BitMap64 &) const;
+    bool operator() (Object &) const;
 
     template <typename T>
     bool operator() (DecimalField<T> & x) const

@@ -53,6 +53,7 @@ public:
     String operator() (const DecimalField<Decimal256> & x) const;
     String operator() (const AggregateFunctionStateData & x) const;
     String operator() (const BitMap64 & x) const;
+    String operator() (const Object & x) const;
 };
 
 }

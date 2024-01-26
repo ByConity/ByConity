@@ -138,6 +138,7 @@ message FieldType {
     SketchBinary = 30;
     IPv4 = 31;
     IPv6 = 32;
+    Object = 33;
     NegativeInfinity = 254;
     PositiveInfinity = 255;
   }

@@ -238,4 +238,17 @@ void FieldVisitorHash::operator() (const BitMap64 & x) const
         applyVisitor(*this, Field(*it));
 }
 
+void FieldVisitorHash::operator() (const Object & x) const
+{
+    UInt8 type = Field::Types::Object;
+    hash.update(type);
+    hash.update(x.size());
+
+    for (const auto & [key, value]: x)
+    {
+        hash.update(key);
+        applyVisitor(*this, value);
+    }
+}
+
 }

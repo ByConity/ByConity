@@ -869,7 +869,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
             {
                 try
                 {
-                    output_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                    output_type = getLeastSupertype(DataTypes{left_type, right_type}, allow_extended_conversion);
                 }
                 catch (DB::Exception & ex)
                 {
@@ -961,7 +961,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
             {
                 try
                 {
-                    output_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                    output_type = getLeastSupertype(DataTypes{left_type, right_type}, allow_extended_conversion);
                 }
                 catch (DB::Exception & ex)
                 {
@@ -1159,7 +1159,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
                             {
                                 try
                                 {
-                                    super_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                                    super_type = getLeastSupertype(DataTypes{left_type, right_type}, allow_extended_conversion);
                                 }
                                 catch (DB::Exception & ex)
                                 {

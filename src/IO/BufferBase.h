@@ -139,6 +139,10 @@ public:
         target.bytes = bytes;
     }
 
+    BufferBase(const BufferBase &) = default;
+
+    BufferBase & operator=(const BufferBase &) = default;
+
     virtual ~BufferBase()
     {
         // dummy function

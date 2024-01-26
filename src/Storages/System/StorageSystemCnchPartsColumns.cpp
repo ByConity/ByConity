@@ -192,8 +192,17 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
 
     Block header = materializeBlock(InterpreterSelectQuery(ast, context, QueryProcessingStage::Complete).getSampleBlock());
 
+    auto metadata_snapshot = table->getInMemoryMetadataPtr();
+    auto storage_snapshot = table->getStorageSnapshot(metadata_snapshot, context);
     ClusterProxy::SelectStreamFactory stream_factory = ClusterProxy::SelectStreamFactory(
-        header, QueryProcessingStage::Complete, StorageID{"system", "cnch_parts_columns"}, Scalars{}, false, {});
+        header,
+        {},
+        storage_snapshot, 
+        QueryProcessingStage::Complete, 
+        StorageID{"system", "cnch_parts_columns"}, 
+        Scalars{}, 
+        false, 
+        {});
 
     QueryPlan query_plan;
     ClusterProxy::executeQuery(query_plan, stream_factory, log, ast, context, worker_group);

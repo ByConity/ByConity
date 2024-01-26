@@ -138,4 +138,21 @@ String FieldVisitorDump::operator() (const BitMap64 & x) const
     return wb.str();
 }
 
+String FieldVisitorDump::operator() (const Object & x) const
+{
+    WriteBufferFromOwnString wb;
+
+    wb << "Object_(";
+    for (auto it = x.begin(); it != x.end(); ++it)
+    {
+        if (it != x.begin())
+            wb << ", ";
+        wb << "(" << it->first << ", " << applyVisitor(*this, it->second) << ")";
+    }
+    wb << ')';
+
+    return wb.str();
+
+}
+
 }

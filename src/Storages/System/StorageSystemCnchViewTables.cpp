@@ -53,7 +53,7 @@ StorageSystemCnchViewTables::StorageSystemCnchViewTables(const StorageID & table
 
 Pipe StorageSystemCnchViewTables::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -67,7 +67,7 @@ Pipe StorageSystemCnchViewTables::read(
 
     NameSet names_set(column_names.begin(), column_names.end());
 
-    Block sample_block = metadata_snapshot->getSampleBlock();
+    Block sample_block = storage_snapshot->metadata->getSampleBlock();
     Block header;
 
     std::vector<UInt8> columns_mask(sample_block.columns());

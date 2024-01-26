@@ -104,4 +104,18 @@ void FieldVisitorWriteBinary::operator() (const BitMap64 & x, WriteBuffer & buf)
     writeString(buffer.data(), bytes, buf);
 }
 
+void FieldVisitorWriteBinary::operator() (const Object & x, WriteBuffer & buf) const
+{
+    const size_t size = x.size();
+    writeBinary(size, buf);
+
+    for (const auto & [key, value] : x)
+    {
+        const UInt8 type = value.getType();
+        writeBinary(type, buf);
+        writeBinary(key, buf);
+        Field::dispatch([&buf] (const auto & val) { FieldVisitorWriteBinary()(val, buf); }, value);
+    }
+}
+
 }

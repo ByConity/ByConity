@@ -45,7 +45,7 @@ public:
     MergeTreeBaseSelectProcessor(
         Block header,
         const MergeTreeMetaBase & storage_,
-        const StorageMetadataPtr & metadata_snapshot_,
+        const StorageSnapshotPtr & storage_snapshot_,
         const SelectQueryInfo & query_info_,
         ExpressionActionsSettings actions_settings,
         UInt64 max_block_size_rows_,
@@ -83,7 +83,7 @@ protected:
 
 protected:
     const MergeTreeMetaBase & storage;
-    StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
 
     PrewhereInfoPtr prewhere_info;
     std::unique_ptr<PrewhereExprInfo> prewhere_actions;

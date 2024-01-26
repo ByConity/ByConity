@@ -33,7 +33,7 @@ StorageSystemCnchTrashItemsInfo::StorageSystemCnchTrashItemsInfo(const StorageID
 
 Pipe StorageSystemCnchTrashItemsInfo::read(
     const Names & column_names,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
     SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -59,7 +59,7 @@ Pipe StorageSystemCnchTrashItemsInfo::read(
     QueryPlan query_plan;
     Poco::Logger * log = &Poco::Logger::get("SystemTrashItemsInfo");
     ClusterProxy::SelectStreamFactory stream_factory = ClusterProxy::SelectStreamFactory(
-        header, QueryProcessingStage::Complete, StorageID{"system", "cnch_trash_items_info_local"}, Scalars{}, false, {});
+        header, {}, {}, QueryProcessingStage::Complete, StorageID{"system", "cnch_trash_items_info_local"}, Scalars{}, false, {});
 
     //set cluster in query_info
     query_info.cluster = context->mockCnchServersCluster();

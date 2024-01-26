@@ -1138,6 +1138,7 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Clustering, isCnchMergeTree>>("PART_CLUSTERING");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Consumer, isCnchKafka>>("CONSUMER");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::DedupWorker, isCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::ObjectSchemaAssemble, isCnchMergeTree>>("OBJECT_SCHEMA_ASSEMBLE");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::MaterializedMySQL, isMaterializedMySQL>>("MATERIALIZED_MYSQL");
 }
 

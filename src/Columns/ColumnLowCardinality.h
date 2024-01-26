@@ -323,7 +323,7 @@ public:
             return idx.getPositions()->allocatedBytes() + getDictionary().allocatedBytes();
     }
 
-    void forEachSubcolumn(ColumnCallback callback) override
+    void forEachSubcolumn(MutableColumnCallback callback) override
     {
         if (full_state)
         {
@@ -338,22 +338,22 @@ public:
             callback(dictionary.getColumnUniquePtr());
     }
 
-    void forEachSubcolumnRecursively(ColumnCallback callback) override
+    void forEachSubcolumnRecursively(RecursiveMutableColumnCallback callback) override
     {
 
         if (isFullState())
         {
-            callback(nested_column);
+            callback(*nested_column);
             nested_column->forEachSubcolumnRecursively(callback);
         }
 
-        callback(idx.getPositionsPtr());
+        callback(*idx.getPositionsPtr());
         idx.getPositionsPtr()->forEachSubcolumnRecursively(callback);
 
         /// Column doesn't own dictionary if it's shared.
         if (!dictionary.isShared())
         {
-            callback(dictionary.getColumnUniquePtr());
+            callback(*dictionary.getColumnUniquePtr());
             dictionary.getColumnUniquePtr()->forEachSubcolumnRecursively(callback);
         }
     }
@@ -369,6 +369,21 @@ public:
             return idx.getPositions()->structureEquals(*rhs_low_cardinality->idx.getPositions())
                 && dictionary.getColumnUnique().structureEquals(rhs_low_cardinality->dictionary.getColumnUnique());
         return false;
+    }
+
+    double getRatioOfDefaultRows(double sample_ratio) const override
+    {
+        return getIndexes().getRatioOfDefaultRows(sample_ratio);
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return getIndexes().getNumberOfDefaultRows();
+    }
+
+    void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override
+    {
+        return getIndexes().getIndicesOfNonDefaultRows(indices, from, limit);
     }
 
     bool valuesHaveFixedSize() const override
@@ -482,6 +497,7 @@ public:
 
         const ColumnPtr & getPositions() const { return positions; }
         WrappedPtr & getPositionsPtr() { return positions; }
+        const WrappedPtr & getPositionsPtr() const { return positions; }
         size_t getPositionAt(size_t row) const;
         void insertPosition(UInt64 position);
         void insertPositionsRange(const IColumn & column, UInt64 offset, UInt64 limit);

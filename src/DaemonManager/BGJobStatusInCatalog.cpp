@@ -126,6 +126,7 @@ IBGJobStatusPersistentStoreProxy::CacheClearer CatalogBGJobStatusPersistentStore
 
     if (catalog) // catalog is nullptr in unittest
         statuses_cache = catalog->getBGJobStatuses(type);
+        
     is_cache_prefetched = true;
     return CacheClearer{this};
 }

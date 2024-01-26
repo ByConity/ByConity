@@ -57,7 +57,7 @@ MergeTreeFillDeleteWithDefaultValueSource::MergeTreeFillDeleteWithDefaultValueSo
 
     /// Add columns because we don't want to read empty blocks
     injectRequiredColumns(storage, metadata_snapshot, data_part, columns_to_read, "");
-    NamesAndTypesList columns_for_reader = metadata_snapshot->getColumns().getByNames(ColumnsDescription::AllPhysical, columns_to_read, false);
+    NamesAndTypesList columns_for_reader = metadata_snapshot->getColumns().getByNames(GetColumnsOptions::AllPhysical, columns_to_read);
 
     MergeTreeReaderSettings reader_settings =
     {

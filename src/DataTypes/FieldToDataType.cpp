@@ -31,6 +31,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <DataTypes/DataTypeBitMap64.h>
+#include <DataTypes/DataTypeObject.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Common/Exception.h>
@@ -152,9 +153,9 @@ DataTypePtr FieldToDataType::operator() (const Array & x) const
     element_types.reserve(x.size());
 
     for (const Field & elem : x)
-        element_types.emplace_back(applyVisitor(FieldToDataType(), elem));
+        element_types.emplace_back(applyVisitor(FieldToDataType(allow_convertion_to_string), elem));
 
-    return std::make_shared<DataTypeArray>(getLeastSupertype(element_types));
+    return std::make_shared<DataTypeArray>(getLeastSupertype(element_types, allow_convertion_to_string));
 }
 
 
@@ -167,7 +168,7 @@ DataTypePtr FieldToDataType::operator() (const Tuple & tuple) const
     element_types.reserve(tuple.size());
 
     for (const auto & element : tuple)
-        element_types.push_back(applyVisitor(FieldToDataType(), element));
+        element_types.push_back(applyVisitor(FieldToDataType(allow_convertion_to_string), element));
 
     return std::make_shared<DataTypeTuple>(element_types);
 }
@@ -185,7 +186,9 @@ DataTypePtr FieldToDataType::operator() (const Map & map) const
         value_types.push_back(applyVisitor(FieldToDataType(), elem.second));
     }
 
-    return std::make_shared<DataTypeMap>(getLeastSupertype(key_types), getLeastSupertype(value_types));
+    return std::make_shared<DataTypeMap>(
+        getLeastSupertype(key_types, allow_convertion_to_string),
+        getLeastSupertype(value_types, allow_convertion_to_string));
 }
 
 DataTypePtr FieldToDataType::operator() (const AggregateFunctionStateData & x) const
@@ -197,6 +200,12 @@ DataTypePtr FieldToDataType::operator() (const AggregateFunctionStateData & x) c
 DataTypePtr FieldToDataType::operator() (const BitMap64 &) const
 {
     return std::make_shared<DataTypeBitMap64>();
+}
+
+DataTypePtr FieldToDataType::operator() (const Object &) const
+{
+    /// TODO: Do we need different parameters for type Object?
+    return std::make_shared<DataTypeObject>("json", false);
 }
 
 }

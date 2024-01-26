@@ -30,6 +30,7 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
+#include <DataTypes/ObjectUtils.h>
 
 #include <common/logger_useful.h>
 #include <Processors/Pipe.h>
@@ -62,29 +63,39 @@ namespace ClusterProxy
 
 SelectStreamFactory::SelectStreamFactory(
     const Block & header_,
+    const ColumnsDescriptionByShardNum & objects_by_shard_,
+    const StorageSnapshotPtr & storage_snapshot_,
     QueryProcessingStage::Enum processed_stage_,
     StorageID main_table_,
     const Scalars & scalars_,
     bool has_virtual_shard_num_column_,
-    const Tables & external_tables_)
+    const Tables & external_tables_,
+    ExpressionActionsPtr actions_for_remote_)
     : header(header_),
+    objects_by_shard(objects_by_shard_),
+    storage_snapshot(storage_snapshot_),
     processed_stage{processed_stage_},
     main_table(std::move(main_table_)),
     table_func_ptr{nullptr},
     scalars{scalars_},
     has_virtual_shard_num_column(has_virtual_shard_num_column_),
-    external_tables{external_tables_}
+    external_tables{external_tables_},
+    actions_for_remote{actions_for_remote_}
 {
 }
 
 SelectStreamFactory::SelectStreamFactory(
     const Block & header_,
+    const ColumnsDescriptionByShardNum & objects_by_shard_,
+    const StorageSnapshotPtr & storage_snapshot_,
     QueryProcessingStage::Enum processed_stage_,
     ASTPtr table_func_ptr_,
     const Scalars & scalars_,
     bool has_virtual_shard_num_column_,
     const Tables & external_tables_)
     : header(header_),
+    objects_by_shard(objects_by_shard_),
+    storage_snapshot(storage_snapshot_),
     processed_stage{processed_stage_},
     table_func_ptr{table_func_ptr_},
     scalars{scalars_},
@@ -248,6 +259,10 @@ void SelectStreamFactory::createForShard(
                 modified_header.insert(std::move(col));
         }
     }
+
+    auto it = objects_by_shard.find(shard_info.shard_num);
+    if (it != objects_by_shard.end())
+        replaceMissedSubcolumnsByConstants(storage_snapshot->object_columns, it->second, query_ast);
 
     auto emplace_local_stream = [&]()
     {

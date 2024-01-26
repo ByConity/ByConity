@@ -25,7 +25,7 @@
 #include <Storages/MergeTree/MergeTreePrefetchedReaderCNCH.h>
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypeFactory.h>
-#include "Core/Defines.h"
+#include <Core/Defines.h>
 
 namespace DB
 {
@@ -36,20 +36,29 @@ namespace ErrorCodes
 
 MergeTreeSequentialSource::MergeTreeSequentialSource(
     const MergeTreeMetaBase & storage_,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     MergeTreeMetaBase::DataPartPtr data_part_,
     Names columns_to_read_,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
     bool quiet,
     CnchMergePrefetcher::PartFutureFiles* future_files)
-    : MergeTreeSequentialSource(storage_, metadata_snapshot_,
-    data_part_, data_part_->getDeleteBitmap(), columns_to_read_, read_with_direct_io_,
-    take_column_types_from_storage, quiet, future_files) {}
+    : MergeTreeSequentialSource(
+        storage_,
+        storage_snapshot_,
+        data_part_,
+        data_part_->getDeleteBitmap(),
+        columns_to_read_,
+        read_with_direct_io_,
+        take_column_types_from_storage,
+        quiet,
+        future_files)
+{
+}
 
 MergeTreeSequentialSource::MergeTreeSequentialSource(
     const MergeTreeMetaBase & storage_,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     MergeTreeMetaBase::DataPartPtr data_part_,
     ImmutableDeleteBitmapPtr delete_bitmap_,
     Names columns_to_read_,
@@ -58,10 +67,9 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     bool quiet,
     CnchMergePrefetcher::PartFutureFiles* future_files,
     BitEngineReadType bitengine_read_type)
-    : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(
-            columns_to_read_, storage_.getVirtuals(), storage_.getStorageID(), bitengine_read_type))
+    : SourceWithProgress(storage_snapshot_->getSampleBlockForColumns(columns_to_read_, {}, bitengine_read_type))
     , storage(storage_)
-    , metadata_snapshot(metadata_snapshot_)
+    , storage_snapshot(storage_snapshot_)
     , data_part(std::move(data_part_))
     , delete_bitmap(std::move(delete_bitmap_))
     , columns_to_read(std::move(columns_to_read_))
@@ -73,12 +81,14 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     addTotalRowsApprox(data_part->rows_count - num_deletes);
 
     /// Add columns because we don't want to read empty blocks
-    injectRequiredColumns(storage, metadata_snapshot, data_part, columns_to_read,
+    injectRequiredColumns(storage, storage_snapshot->metadata, data_part, columns_to_read,
         future_files == nullptr ? "" : future_files->getFixedInjectedColumn());
     NamesAndTypesList columns_for_reader;
     if (take_column_types_from_storage)
     {
-        columns_for_reader = metadata_snapshot->getColumns().getByNames(ColumnsDescription::AllPhysical, columns_to_read, false);
+        auto options = GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects();
+        columns_for_reader = storage_snapshot->getColumnsByNames(options, columns_to_read);
+
         if (bitengine_read_type != BitEngineReadType::ONLY_SOURCE)
             columns_for_reader = columns_for_reader.addTypes(columns_for_reader.getNames(), bitengine_read_type);
     }
@@ -116,14 +126,14 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
         reader_settings.convert_nested_to_subcolumns = true;
 
         reader = std::make_unique<MergeTreePrefetchedReaderCNCH>(
-            data_part, columns_for_reader, metadata_snapshot, nullptr,
+            data_part, columns_for_reader, storage_snapshot->metadata, nullptr,
             MarkRanges{MarkRange(0, data_part->getMarksCount())}, reader_settings,
             future_files
         );
     }
     else
     {
-        reader = data_part->getReader(columns_for_reader, metadata_snapshot,
+        reader = data_part->getReader(columns_for_reader, storage_snapshot->metadata,
             MarkRanges{MarkRange(0, data_part->getMarksCount())},
             /* uncompressed_cache = */ nullptr, mark_cache.get(), reader_settings, nullptr, {}, {}, internal_progress_callback);
     }

@@ -57,8 +57,8 @@ public:
 
     SerializationPtr getSerialization(const String & column_name, const StreamExistenceCallback & callback) const override;
 
-    SerializationPtr getSubcolumnSerialization(
-        const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const override;
+    // SerializationPtr getSubcolumnSerialization(
+    //     const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const override;
 
     SerializationPtr doGetDefaultSerialization() const override;
 

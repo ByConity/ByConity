@@ -39,7 +39,7 @@ class MergeTreeReverseSelectProcessor : public MergeTreeBaseSelectProcessor
 public:
     MergeTreeReverseSelectProcessor(
         const MergeTreeMetaBase & storage,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr storage_snapshot_,
         const MergeTreeMetaBase::DataPartPtr & owned_data_part,
         ImmutableDeleteBitmapPtr delete_bitmap,
         UInt64 max_block_size_rows,

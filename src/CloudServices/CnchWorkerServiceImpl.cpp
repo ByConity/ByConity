@@ -48,8 +48,9 @@
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
 #include <brpc/stream.h>
-#include "Common/Configurations.h"
-#include "Common/Exception.h"
+#include <Common/Configurations.h>
+#include <Storages/ColumnsDescription.h>
+#include <Common/Exception.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -184,6 +185,8 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         auto * data = dynamic_cast<StorageCloudMergeTree *>(storage.get());
         if (!data)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table {} is not CloudMergeTree", storage->getStorageID().getNameForLogs());
+        if (request->has_dynamic_object_column_schema())
+            data->resetObjectColumns(ColumnsDescription::parse(request->dynamic_object_column_schema()));
 
         auto params = ManipulationTaskParams(storage);
         params.type = static_cast<ManipulationType>(request->type());
@@ -632,8 +635,14 @@ void CnchWorkerServiceImpl::sendResources(
         {
             /// create a copy of session_context to avoid modify settings in SessionResource
             auto context_for_create = Context::createCopy(query_context);
-            for (const auto & create_query : request->create_queries())
-                worker_resource->executeCreateQuery(context_for_create, create_query, true);
+            for (int i = 0; i < request->create_queries_size(); i++)
+            {
+                auto create_query = request->create_queries().at(i);
+                auto object_columns = request->dynamic_object_column_schema().at(i);
+
+                worker_resource->executeCreateQuery(context_for_create, create_query, false, ColumnsDescription::parse(object_columns));
+            }
+
 
             LOG_DEBUG(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
         }

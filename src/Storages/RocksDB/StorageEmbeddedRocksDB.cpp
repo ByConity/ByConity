@@ -161,14 +161,14 @@ class EmbeddedRocksDBSource : public SourceWithProgress
 public:
     EmbeddedRocksDBSource(
         const StorageEmbeddedRocksDB & storage_,
-        const StorageMetadataPtr & metadata_snapshot_,
+        const StorageSnapshotPtr & storage_snapshot_,
         FieldVectorPtr keys_,
         FieldVector::const_iterator begin_,
         FieldVector::const_iterator end_,
         const size_t max_block_size_)
-        : SourceWithProgress(metadata_snapshot_->getSampleBlock())
+        : SourceWithProgress(storage_snapshot_->metadata->getSampleBlock())
         , storage(storage_)
-        , metadata_snapshot(metadata_snapshot_)
+        , storage_snapshot(storage_snapshot_)
         , keys(std::move(keys_))
         , begin(begin_)
         , end(end_)
@@ -192,7 +192,7 @@ public:
         std::vector<std::string> serialized_keys(num_keys);
         std::vector<rocksdb::Slice> slices_keys(num_keys);
 
-        const auto & sample_block = metadata_snapshot->getSampleBlock();
+        const auto & sample_block = storage_snapshot->metadata->getSampleBlock();
         const auto & key_column = sample_block.getByName(storage.primary_key);
         auto columns = sample_block.cloneEmptyColumns();
         size_t primary_key_pos = sample_block.getPositionByName(storage.primary_key);
@@ -235,7 +235,7 @@ public:
 private:
     const StorageEmbeddedRocksDB & storage;
 
-    const StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
     FieldVectorPtr keys;
     FieldVector::const_iterator begin;
     FieldVector::const_iterator end;
@@ -285,24 +285,24 @@ void StorageEmbeddedRocksDB::initDb()
 
 Pipe StorageEmbeddedRocksDB::read(
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr /*context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
         size_t max_block_size,
         unsigned num_streams)
 {
-    metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
+    storage_snapshot->check(column_names);
 
     FieldVectorPtr keys;
     bool all_scan = false;
 
-    auto primary_key_data_type = metadata_snapshot->getSampleBlock().getByName(primary_key).type;
+    auto primary_key_data_type = storage_snapshot->metadata->getSampleBlock().getByName(primary_key).type;
     std::tie(keys, all_scan) = getFilterKeys(primary_key, primary_key_data_type, query_info);
     if (all_scan)
     {
         auto reader = std::make_shared<EmbeddedRocksDBBlockInputStream>(
-                *this, metadata_snapshot, max_block_size);
+                *this, storage_snapshot, max_block_size);
         return Pipe(std::make_shared<SourceFromInputStream>(reader));
     }
     else
@@ -327,7 +327,7 @@ Pipe StorageEmbeddedRocksDB::read(
             size_t end = num_keys * (thread_idx + 1) / num_threads;
 
             pipes.emplace_back(std::make_shared<EmbeddedRocksDBSource>(
-                    *this, metadata_snapshot, keys, keys->begin() + begin, keys->begin() + end, max_block_size));
+                    *this, storage_snapshot, keys, keys->begin() + begin, keys->begin() + end, max_block_size));
         }
         return Pipe::unitePipes(std::move(pipes));
     }

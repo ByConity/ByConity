@@ -488,7 +488,7 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
                 // Hack: ColumnPruning::selectColumnWithMinSize ignores subcolumn, by checking `NameAndTypePair::subcolumn_delimiter_position`.
                 // This is unexpected, so we rebuild the NameAndTypePair
                 candidate_columns.emplace_back(
-                    pair.first, columns_desc.getColumnOrSubcolumn(ColumnsDescription::AllPhysical, pair.first).type);
+                    pair.first, columns_desc.getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, pair.first).type);
         }
         else
         {

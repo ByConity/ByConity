@@ -274,8 +274,8 @@ void IngestPartition::checkColumnStructure(const StorageInMemoryMetadata & targe
 {
     for (const auto & col_name : names)
     {
-        const auto & target = target_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
-        const auto & src = src_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
+        const auto & target = target_data.getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, col_name);
+        const auto & src = src_data.getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, col_name);
 
         if (target.name != src.name)
             throw Exception("Column structure mismatch, found different names of column " + backQuoteIfNeed(col_name),
@@ -499,7 +499,7 @@ bool IngestPartition::ingestPartition()
         /// No need to add implicit map column
         if (isMapImplicitKey(name))
             column_name = parseMapNameFromImplicitColName(name);
-        auto column = target_meta->getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
+        auto column = target_meta->getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, column_name);
         ingested_header.insertUnique(ColumnWithTypeAndName(column.type, column.name));
     }
 
@@ -526,6 +526,7 @@ IngestPartition::IngestSources IngestPartition::generateSourceBlocks(MergeTreeDa
     auto settings = context->getSettingsRef();
     IngestPartition::IngestSources src_blocks;
     auto match_type = std::make_shared<DataTypeUInt8>();
+    auto storage_snapshot = source_data.getStorageSnapshot(source_data.getInMemoryMetadataPtr(), context);
 
     for (auto & read_part : parts_to_read)
     {
@@ -534,7 +535,7 @@ IngestPartition::IngestSources IngestPartition::generateSourceBlocks(MergeTreeDa
 
 
         auto source_input = std::make_shared<MergeTreeSequentialSource>(source_data,
-                                                                        source_data.getInMemoryMetadataPtr(),
+                                                                        storage_snapshot,
                                                                         read_part,
                                                                         nullptr,
                                                                         all_columns_with_partition_key,
@@ -593,7 +594,7 @@ IngestParts IngestPartition::generateIngestParts(MergeTreeData & data, const Mer
 
 ASTPtr IngestPartition::getDefaultFilter(const String & column_name)
 {
-    auto name_type = target_table->getInMemoryMetadata().getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
+    auto name_type = target_table->getInMemoryMetadata().getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, column_name);
     Field value = name_type.type->getDefault();
     auto literal = std::make_shared<ASTLiteral>(value);
     auto identifier = std::make_shared<ASTIdentifier>(column_name);
@@ -869,8 +870,9 @@ void IngestPartition::ingestWidePart(MergeTreeData & data,
      * and source block has 2 too. if 2 of target block is not read, a new part will be generated,
      * so that we get duplicated key.
      */
+    auto storage_snapshot = data.getStorageSnapshot(data.getInMemoryMetadataPtr(), context);
     auto source_input = std::make_shared<MergeTreeSequentialSource>(data,
-                                                                    data.getInMemoryMetadataPtr(),
+                                                                    storage_snapshot,
                                                                     target_part,
                                                                     nullptr,
                                                                     all_columns,
@@ -937,8 +939,10 @@ void IngestPartition::ingestCompactPart(
 {
     bool read_with_direct_io = settings.min_bytes_to_use_direct_io != 0 &&
                                 target_part->getBytesOnDisk() >= settings.min_bytes_to_use_direct_io;
+
+    auto storage_snapshot = data.getStorageSnapshot(data.getInMemoryMetadataPtr(), {});
     auto source_input = std::make_shared<MergeTreeSequentialSource>(data,
-                                                                    data.getInMemoryMetadataPtr(),
+                                                                    storage_snapshot,
                                                                     target_part,
                                                                     nullptr,
                                                                     part_columns.getNames(),
