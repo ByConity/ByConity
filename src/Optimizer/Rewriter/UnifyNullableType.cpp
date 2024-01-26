@@ -25,6 +25,7 @@
 #include <Interpreters/join_common.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <QueryPlan/AggregatingStep.h>
+#include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitStep.h>
 #include <QueryPlan/MergeSortingStep.h>
@@ -365,4 +366,20 @@ PlanNodePtr UnifyNullableVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & n
     return unique_node;
 }
 
+PlanNodePtr UnifyNullableVisitor::visitCTERefNode(CTERefNode & node, Void & v)
+{
+    auto cte_step = node.getStep();
+    auto cte_id = cte_step->getId();
+    auto cte_plan = cte_helper.acceptAndUpdate(cte_id, *this, v);
+
+    const auto & cte_output_stream = cte_plan->getStep()->getOutputStream().header;
+
+    DataStream output_stream;
+    for (const auto & output : cte_step->getOutputColumns())
+        output_stream.header.insert(ColumnWithTypeAndName{cte_output_stream.getByName(output.second).type, output.first});
+
+    auto cte_ref_step = std::make_unique<CTERefStep>(output_stream, cte_step->getId(), cte_step->getOutputColumns(), cte_step->hasFilter());
+    auto cte_ref_node = CTERefNode::createPlanNode(context->nextNodeId(), std::move(cte_ref_step), PlanNodes{}, node.getStatistics());
+    return cte_ref_node;
+}
 }
