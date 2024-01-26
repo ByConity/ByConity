@@ -25,6 +25,8 @@ public:
         size_t /*max_block_size*/,
         unsigned /*num_streams*/) override;
 
+    bool isSystemStorage() const override { return true; }
+
 protected:
     explicit StorageSystemCnchKafkaTables(const StorageID & table_id_);
 };
