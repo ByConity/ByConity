@@ -78,7 +78,6 @@ jobs:
           echo "Create volumes for ByConity Cluster"
           /bin/bash create_docker_volume_ci.sh
           mkdir -p /Artifacts
-
       - name: Create ByConity Cluster S3
         run: |
           cd /CI/

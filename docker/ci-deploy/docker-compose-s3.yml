@@ -12,7 +12,7 @@ services:
   tso:
     # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     image: byconity/debian:buster-runit-fdb7.1.27
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && fdbcli -C /config/fdb.cluster --exec \"configure new single memory\" && mkdir -p /var/log/byconity && tso-server --config-file /config/tso.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && fdbcli -C /config/fdb.cluster --exec \"configure new single memory\" && tso-server --config-file /config/tso.yml"
     depends_on:
       - fdb
       - minio
@@ -34,6 +34,26 @@ services:
       - binary_volume:/opt/byconity/bin/
       - config_volume_for_s3:/config/
     container_name: "${COMPOSE_PROJECT_NAME}_resource-manager-s3-0"
+    cap_add:
+      - SYS_PTRACE
+  server:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+      - CI_JOB_NAME=github 
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_resource-manager-s3-0:28989 && clickhouse-server --config-file /config/server.yml"
+    depends_on:
+      - tso
+      - resource-manager
+      - minio
+    ports:
+      - "${CLICKHOUSE_PORT_TCP}:52145"
+      - "${CLICKHOUSE_PORT_HTTP}:21557"
+    container_name: "${COMPOSE_PROJECT_NAME}_server-s3-0"
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume_for_s3:/config/
     cap_add:
       - SYS_PTRACE
 
