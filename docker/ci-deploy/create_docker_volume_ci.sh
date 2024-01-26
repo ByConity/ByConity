@@ -16,5 +16,6 @@ docker rm dummy
 
 docker container create --name dummy -v ${CONFIG_VOL_FOR_S3}:/config_for_s3_storage hello-world
 docker cp /CI/config_for_s3_storage/ dummy:/
+docker run hello-world /bin/bash -c "ls / && ls /config_for_s3_storage"
 docker rm dummy
 
