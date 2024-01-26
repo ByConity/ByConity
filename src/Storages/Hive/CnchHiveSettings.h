@@ -46,6 +46,7 @@ struct Settings;
     M(UInt64, max_read_row_group_threads, 32, "", 0) \
     M(Bool, cnch_temporary_table, 0, "", 0) \
     M(Bool, enable_local_disk_cache, false, "", 0)  \
+    M(String, hive_metastore_url, "", "Hive metastore url", 0) \
     M(String, hdfs_fs, "", "Hdfs namenode url", 0) \
     M(String, endpoint, "", "S3 endpoint", 0) \
     M(String, ak_id, "", "S3 access key", 0) \

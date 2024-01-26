@@ -178,8 +178,7 @@ Strings CnchBGThreadPartitionSelector::selectForMerge(const StoragePtr & storage
 
     std::unique_lock lock(mutex);
     auto estimators = container[uuid];
-    /// TODO: (zuochuang.zema) lock guard the whole scope or just copy elements?
-    // lock.unlock();
+    lock.unlock();
     
     /// Sometimes there might not be enough data in system.server_part_log, eg: server start without binding K8s PVC.
     /// Then we need to select more partitions from Catalog (by round-robin strategy).
@@ -217,8 +216,6 @@ Strings CnchBGThreadPartitionSelector::selectForMerge(const StoragePtr & storage
     /// candidates.size() <= n
     if (auto size = candidates.size(); size <= n)
     {
-        lock.unlock();
-
         Strings all;
         all.reserve(size);
         for (const auto & candidate : candidates)
@@ -251,7 +248,6 @@ Strings CnchBGThreadPartitionSelector::selectForMerge(const StoragePtr & storage
             [](auto & lhs, auto & rhs) { return lhs->merge_speed < rhs->merge_speed; }
         );
     }
-    lock.unlock();
 
     for (const auto & candidate : candidates)
     {
@@ -277,8 +273,7 @@ Strings CnchBGThreadPartitionSelector::selectForGC(const StoragePtr & storage)
 
     std::unique_lock lock(mutex);
     auto estimators = container[uuid];
-    /// TODO: (zuochuang.zema) lock guard the whole scope or just copy elements?
-    // lock.unlock();
+    lock.unlock();
     
     if (estimators.empty())
     {
@@ -310,7 +305,6 @@ Strings CnchBGThreadPartitionSelector::selectForGC(const StoragePtr & storage)
         candidates.end(),
         [](auto & lhs, auto & rhs) { return lhs->gc_speed < rhs->gc_speed; }
     );
-    lock.unlock();
 
     for (const auto & candidate : candidates)
     {

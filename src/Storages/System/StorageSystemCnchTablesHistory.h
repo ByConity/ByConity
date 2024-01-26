@@ -37,6 +37,8 @@ public:
         const size_t max_block_size,
         const unsigned num_streams) override;
 
+    bool isSystemStorage() const override { return true; }
+
 protected:
     StorageSystemCnchTablesHistory(const StorageID & table_id_);
 };

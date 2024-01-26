@@ -1277,6 +1277,7 @@ public:
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
     const StorageS3Settings & getStorageS3Settings() const;
     const CnchHiveSettings & getCnchHiveSettings() const;
+    const CnchHiveSettings & getCnchLasSettings() const;
     const CnchFileSettings & getCnchFileSettings() const;
 
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
