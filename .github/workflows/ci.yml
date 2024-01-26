@@ -84,6 +84,7 @@ jobs:
           cd /CI/
           echo "Bring up ByConity Cluster S3"
           docker compose -f docker-compose-s3.yml up -d
+          sleep 10
           docker ps --filter name=$COMPOSE_PROJECT_NAME
       - name: Run ByConity FuntionalStateless for S3 (w.o optimizer)
         continue-on-error: true
