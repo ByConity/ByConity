@@ -231,6 +231,7 @@ BlockInputStreamPtr ClickHouseDictionarySource::createStreamForQuery(const Strin
     {
         auto query_context = Context::createCopy(context);
         query_context->setSetting("enable_auto_query_forwarding", false);
+        query_context->setSetting("enable_optimizer", false);
         if (!configuration.tenant_id.empty())
             pushTenantId(configuration.tenant_id);
         auto block_io = executeQuery(query, query_context, true);
@@ -241,7 +242,9 @@ BlockInputStreamPtr ClickHouseDictionarySource::createStreamForQuery(const Strin
     }
     else
     {
-        stream = std::make_shared<RemoteBlockInputStream>(pool, query, empty_sample_block, context);
+        auto query_context = Context::createCopy(context);
+        query_context->setSetting("enable_optimizer", false);
+        stream = std::make_shared<RemoteBlockInputStream>(pool, query, empty_sample_block, query_context);
     }
 
     if (result_size_hint)
