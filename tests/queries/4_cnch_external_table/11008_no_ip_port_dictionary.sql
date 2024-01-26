@@ -1,3 +1,4 @@
+set enable_auto_query_forwarding=0;
 CREATE DATABASE IF NOT EXISTS test_rd01238 Engine = Cnch;
 DROP TABLE IF EXISTS test_rd01238.table_for_no_ip_port_dict;
 CREATE TABLE test_rd01238.table_for_no_ip_port_dict(id UInt64, a UInt64, b Int32, c String) ENGINE = CnchMergeTree() ORDER BY id;
