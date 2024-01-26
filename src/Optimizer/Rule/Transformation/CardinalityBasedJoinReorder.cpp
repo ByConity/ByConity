@@ -143,7 +143,11 @@ TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, con
                 GroupExprPtr join_expr;
                 rule_context.optimization_context->getOptimizerContext().recordPlanNodeIntoGroup(
                     min_join_node.join_node, join_expr, RuleType::CARDILALITY_BASED_JOIN_REORDER);
+                                    
                 auto new_group_id = join_expr->getGroupId();
+                
+                // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "CardinalityBased generate new join in new group id={}", new_group_id);
+
                 for (auto type : blockRules())
                     join_expr->setRuleExplored(type);
 

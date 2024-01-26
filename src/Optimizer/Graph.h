@@ -46,7 +46,7 @@ public:
         }
     };
 
-    static Graph build(const std::vector<GroupId> & groups, UnionFind<String> & union_find, ASTPtr filter, const Memo & memo);
+    static Graph build(const std::vector<GroupId> & groups, const UnionFind<String> & union_find, ASTPtr filter, const Memo & memo);
     std::vector<Partition> cutPartitions() const;
 
     const std::vector<GroupId> & getNodes() const { return nodes; }

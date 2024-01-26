@@ -40,7 +40,6 @@ GroupExprPtr Memo::insertGroupExpr(GroupExprPtr group_expr, CascadesContext & co
         }
     }
 
-    group_expr->setGroupId(target);
     // Lookup in hash table
     auto it = group_expressions.find(group_expr);
     // duplicate group expression
@@ -55,13 +54,13 @@ GroupExprPtr Memo::insertGroupExpr(GroupExprPtr group_expr, CascadesContext & co
     if (target == UNDEFINED_GROUP)
     {
         group_id = addNewGroup();
-        // LOG_DEBUG(context.getLog(), "New Group Id " << group_id << "; Rule Type: "
-        //                                             << static_cast<int>(group_expr->getProducerRule()));
+        // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "New Group Id {}; Rule Type {}",  group_id, static_cast<int>(group_expr->getProduceRule()));
     }
     else
     {
         group_id = target;
     }
+    group_expr->setGroupId(target);
 
     auto group = getGroupById(group_id);
     group->addExpression(group_expr, context);

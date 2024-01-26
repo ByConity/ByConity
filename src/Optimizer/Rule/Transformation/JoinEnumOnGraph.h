@@ -64,10 +64,11 @@ public:
     explicit JoinSet(GroupId group_id_) { groups.emplace_back(group_id_); }
 
     const std::vector<GroupId> & getGroups() const { return groups; }
+    bool operator<(const JoinSet & rhs) const { return groups < rhs.groups; }
     bool operator==(const JoinSet & rhs) const { return groups == rhs.groups; }
     bool operator!=(const JoinSet & rhs) const { return !(rhs == *this); }
 
-    UnionFind<String> & getUnionFind() { return union_find; }
+    const UnionFind<String> & getUnionFind() const { return union_find; }
 
     const ASTPtr & getFilter() const { return filter; }
 
@@ -90,6 +91,6 @@ struct JoinSetHash
     }
 };
 
-using JoinSets = std::unordered_set<JoinSet, JoinSetHash>;
+using JoinSets = std::set<JoinSet>;
 
 }

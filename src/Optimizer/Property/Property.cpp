@@ -55,7 +55,7 @@ bool Partitioning::satisfy(const Partitioning & requirement, const Constants & c
         return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
             && getPartitioningColumns() == requirement.getPartitioningColumns();
 
-                switch (requirement.component)
+    switch (requirement.component)
     {
         case Component::COORDINATOR: {
             if (component == Component::WORKER)
@@ -75,7 +75,7 @@ bool Partitioning::satisfy(const Partitioning & requirement, const Constants & c
             break;
     }
 
-                switch (requirement.getPartitioningHandle())
+    switch (requirement.getPartitioningHandle())
     {
         case Handle::FIXED_HASH:
             return getPartitioningColumns() == requirement.getPartitioningColumns()

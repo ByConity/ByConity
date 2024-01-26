@@ -246,6 +246,7 @@ static GroupId buildJoinNode(
     context->getOptimizerContext().recordPlanNodeIntoGroup(join_node, join_expr, RuleType::JOIN_ENUM_ON_GRAPH, join_expr->getGroupId());
     join_expr->setRuleExplored(RuleType::INNER_JOIN_COMMUTATION);
 
+    // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "JoinEnumOnGraph generate new join in new group id={}", join_expr->getGroupId());
     return join_expr->getGroupId();
 }
 

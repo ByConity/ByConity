@@ -15,6 +15,7 @@
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <QueryPlan/PlanPattern.h>
 #include <QueryPlan/ProjectionStep.h>
+#include <Optimizer/JoinOrderUtils.h>
 
 namespace DB
 {
@@ -153,6 +154,9 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
             if (!new_join_node)
                 return nullptr; // it's unreachable in general.
 
+            // const auto & join_step = static_cast<const JoinStep &>(*new_join_node->getStep());
+            // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "join_keys_in_cardinality_based={} vs {}", fmt::join(join_step.getLeftKeys(), ","), fmt::join(join_step.getRightKeys(), ","));
+
             GroupId new_group_id = 0;
             ++new_join_cnt;
             if (new_join_cnt < graph.getNodes().size() - 1)
@@ -161,6 +165,9 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
                 rule_context.optimization_context->getOptimizerContext().recordPlanNodeIntoGroup(
                     new_join_node, join_expr, RuleType::SELECTIVITY_BASED_JOIN_REORDER);
                 new_group_id = join_expr->getGroupId();
+                
+                // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "SelectivityBased generate new join in new group id={}", new_group_id);
+    
                 for (auto type : blockRules())
                     join_expr->setRuleExplored(type);
             }

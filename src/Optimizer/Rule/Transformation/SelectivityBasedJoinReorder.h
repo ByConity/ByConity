@@ -61,8 +61,11 @@ struct EdgeSelectivityCompare
 
         if (a.left_symbol != b.left_symbol)
             return a.left_symbol < b.left_symbol;
+        
+        if (a.right_symbol != b.right_symbol)
+            return a.right_symbol < b.right_symbol;
 
-        return a.right_symbol < b.right_symbol;
+        return std::make_tuple(a.left_id, a.right_id) < std::make_tuple(b.left_id, b.right_id);
     }
 };
 }
