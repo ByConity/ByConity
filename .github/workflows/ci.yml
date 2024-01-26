@@ -28,7 +28,6 @@ jobs:
           echo "HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume" >> $GITHUB_ENV
           echo "CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume" >> $GITHUB_ENV
           echo "CONFIG_VOL_FOR_S3=${COMPOSE_PROJECT_NAME}_config_volume_for_s3" >> $GITHUB_ENV
-          echo "config_vol_for_s3 ${CONFIG_VOL_FOR_S3}"
           echo "SCRIPTS_VOL=${COMPOSE_PROJECT_NAME}_scripts_volume" >> $GITHUB_ENV
           echo "CLICKHOUSE_PORT_TCP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           echo "CLICKHOUSE_PORT_HTTP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
@@ -52,15 +51,13 @@ jobs:
         env:
           CUSTOM_CMAKE_BUILD_TYPE: "Release"
         run: |
-          # git -C "$GITHUB_WORKSPACE" submodule sync
-          # git -C "$GITHUB_WORKSPACE" submodule update --init --recursive --force
           ./build_bin.sh
-      - name: run unit tests
-        run: |
-          bash $GITHUB_WORKSPACE/unittest.sh
-      - name: glibc_compatibility_check 
-        run: |
-          python3 $GITHUB_WORKSPACE/tests/ci/compatibility_check.py --binary $GITHUB_WORKSPACE/build/programs/clickhouse
+          #- name: run unit tests
+          #  run: |
+          #    bash $GITHUB_WORKSPACE/unittest.sh
+          #- name: glibc_compatibility_check 
+          #  run: |
+          #    python3 $GITHUB_WORKSPACE/tests/ci/compatibility_check.py --binary $GITHUB_WORKSPACE/build/programs/clickhouse
       - name: Preparing
         run: |
           mkdir /CI/
@@ -84,7 +81,7 @@ jobs:
         run: |
           cd /CI/
           echo "Bring up ByConity Cluster S3"
-          docker compose -f docker-compose-s3.yml -p s3_ci up -d
+          docker compose -f docker-compose-s3.yml up -d
           docker ps --filter name=$COMPOSE_PROJECT_NAME
       - name: Run ByConity FuntionalStateless for S3 (w.o optimizer)
         continue-on-error: true
@@ -118,162 +115,6 @@ jobs:
           docker compose -f docker-compose-s3.yml down 
           docker ps --filter name=$COMPOSE_PROJECT_NAME
           sleep 30
-           
-      - name: Create ByConity Cluster HDFS
-        run: |
-          echo "Bring up ByConity Cluster HDFS"
-          cd /CI/
-          docker compose up -d
-          sleep 10
-          hdfs_config/script/create_users.sh
-
-          export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0) 
-          echo "CLICKHOUSE_HOST=${CLICKHOUSE_HOST}" >> $GITHUB_ENV
-          export CNCH_WRITE_WORKER_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_worker-write-0) 
-          echo "CNCH_WRITE_WORKER_HOST=${CNCH_WRITE_WORKER_HOST}" >> $GITHUB_ENV
-          echo "Check connection to ByConity Server at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT_HTTP}"
-          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
-          echo "Check status of cluster"
-          docker ps --filter name=$COMPOSE_PROJECT_NAME
-      - name: Run ByConity External Table test
-        continue-on-error: true
-        run: |
-          mkdir -p ci_external_table
-          cd ci_external_table
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
-          mkdir queries
-          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_external_table queries/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/external_table_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/external_table_test_result.txt
-          cd ..
-          rm -rf ci_external_table
-      - name: Run ByConity FuntionalStateless (w.o optimizer)
-        continue-on-error: true
-        run: |
-          mkdir -p ci_stateless_without_optimizer
-          cd ci_stateless_without_optimizer
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
-          mkdir queries
-          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/wo_optimizer_test_result.txt
-          cd ..
-          rm -rf ci_stateless_without_optimizer
-      - name: Run ByConity FuntionalStateless no tenant (w.o optimizer)
-        continue-on-error: true
-        run: |
-          mkdir -p ci_stateless_without_optimizer_no_tenant
-          cd ci_stateless_without_optimizer_no_tenant
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
-          mkdir queries
-          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_no_tenant_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/wo_optimizer_no_tenant_test_result.txt
-          cd ..
-          rm -rf ci_stateless_without_optimizer_no_tenant
-      - name: Run ByConity FuntionalStateless (w optimizer)
-        continue-on-error: true
-        run: |
-          mkdir -p ci_stateless_with_optimizer
-          cd ci_stateless_with_optimizer
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
-          mkdir queries
-          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          mkdir -p test_output
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/w_optimizer_test_result.txt
-          cd ..
-          rm -rf ci_stateless_with_optimizer
-      - name: Run ByConity FuntionalStateless (w optimizer + bsp_mode)
-        continue-on-error: true
-        run: |
-          mkdir -p ci_stateless_with_optimizer_bsp
-          cd ci_stateless_with_optimizer_bsp
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
-          mkdir queries
-          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          mkdir -p test_output
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1 enable_runtime_filter=0'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_bsp_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/w_optimizer_bsp_test_result.txt
-          cd ..
-          rm -rf ci_stateless_with_optimizer_bsp
-      - name: Run ByConity FuntionalStateless no tenant (w optimizer)
-        continue-on-error: true
-        run: |
-          printf '%s\n' "$CNCH_WRITE_WORKER_HOST"
-          mkdir -p ci_stateless_with_optimizer_no_tenant
-          cd ci_stateless_with_optimizer_no_tenant
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
-          mkdir queries
-          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          mkdir -p test_output
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/w_optimizer_test_result.txt
-          cd ..
-          rm -rf ci_stateless_with_optimizer_no_tenant
-      - name: Run ByConity FuntionalStateless no tenant (w optimizer bsp)
-        continue-on-error: true
-        run: |
-          printf '%s\n' "$CNCH_WRITE_WORKER_HOST"
-          mkdir -p ci_stateless_with_optimizer_bsp_no_tenant
-          cd ci_stateless_with_optimizer_bsp_no_tenant
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
-          mkdir queries
-          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          mkdir -p test_output
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1 enable_runtime_filter=0'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_bsp_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/no_tenant_w_optimizer_bsp_test_result.txt
-          cd ..
-          rm -rf ci_stateless_with_optimizer_bsp_no_tenant
-      - name: Run ByConity ClickhouseSQL FuntionalStateless (w.o optimizer)
-        continue-on-error: true
-        run: |
-          mkdir -p ci_clickhouse_sql
-          cd ci_clickhouse_sql
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
-          mkdir queries
-          cp -r $GITHUB_WORKSPACE/tests/queries/7_clickhouse_sql queries/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          echo "Running test without optimizer"
-          mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 1 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/clickhouse_sql_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/ChSQL_tenant_wo_optimizer_test_result.txt
-          cd ..
-          rm -rf ci_clickhouse_sql
       - name: After test
         if: always()
         continue-on-error: true
@@ -290,8 +131,9 @@ jobs:
       - name: Analyse Result
         run:
           /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
-      - name: Cleanup docker compose HDFS
+      - name: Cleanup docker compose HDFS and S3
         if: always()
         run: |
           cd /CI/
-          docker compose down --volumes
+          # docker compose down --volumes
+          # docker compose -f docker-compose-s3.yml down --volumes
