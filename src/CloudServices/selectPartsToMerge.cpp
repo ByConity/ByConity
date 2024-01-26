@@ -133,6 +133,13 @@ ServerSelectPartsDecision selectPartsToMerge(
 
             IMergeSelector::Part part_info;
             part_info.size = part->part_model().size();
+            auto p_part = part->tryGetPreviousPart();
+            while (p_part)
+            {
+                part_info.size += p_part->part_model().size();
+                p_part = p_part->tryGetPreviousPart();
+            }
+
             part_info.rows = part->rowsCount();
             time_t part_commit_time = TxnTimestamp(part->getCommitTime()).toSecond();
             part_info.age = current_time > part_commit_time ? current_time - part_commit_time : 0;
