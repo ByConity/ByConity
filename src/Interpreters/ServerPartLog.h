@@ -32,7 +32,7 @@ struct ServerPartLogElement
 
     Type event_type = INSERT_PART;
     time_t event_time = 0;
-    UInt64 txn_id;
+    UInt64 txn_id = 0;
 
     String database_name;
     String table_name;

@@ -524,40 +524,29 @@ struct ContextSharedPart
         if (meta_checker)
             meta_checker->deactivate();
 
-        std::unique_ptr<CnchBGThreadsMapArray> delete_cnch_bg_threads_array;
-        std::unique_ptr<TransactionCoordinatorRcCnch> delete_cnch_txn_coordinator;
-        CnchServerManagerPtr delete_server_manager;
-        CnchTopologyMasterPtr delete_topology_master;
-        PartCacheManagerPtr delete_cache_manager;
-        NvmCachePtr delete_nvm_cache;
-        QueueManagerPtr delete_queue_manager;
-        WorkerStatusManagerPtr delete_worker_status_manager;
-        {
-            auto lock = std::lock_guard(mutex);
-            delete_cnch_bg_threads_array = std::move(cnch_bg_threads_array);
-            delete_cnch_txn_coordinator = std::move(cnch_txn_coordinator);
-            delete_server_manager = std::move(server_manager);
-            delete_topology_master = std::move(topology_master);
-            delete_cache_manager = std::move(cache_manager);
-            delete_nvm_cache = std::move(nvm_cache);
-            delete_queue_manager = queue_manager;
-            delete_worker_status_manager = worker_status_manager;
-        }
-        /// do the heavy work w/o context lock
-        delete_cnch_bg_threads_array.reset();
-        delete_cnch_txn_coordinator.reset();
-        if (delete_server_manager)
-            delete_server_manager->shutDown();
-        if (delete_topology_master)
-            delete_topology_master->shutDown();
-        if (delete_cache_manager)
-            delete_cache_manager->shutDown();
-        if (delete_nvm_cache)
-            delete_nvm_cache->shutDown();
-        if (delete_queue_manager)
-            delete_queue_manager->shutdown();
-        if (delete_worker_status_manager)
-            delete_worker_status_manager->shutdown();
+        if (cnch_bg_threads_array)
+            cnch_bg_threads_array->shutdown();
+
+        if (cnch_txn_coordinator)
+            cnch_txn_coordinator->shutdown();
+
+        if (server_manager)
+            server_manager->shutDown();
+
+        if (topology_master)
+            topology_master->shutDown();
+
+        if (cache_manager)
+            cache_manager->shutDown();
+
+        if (nvm_cache)
+            nvm_cache->shutDown();
+
+        if (queue_manager)
+            queue_manager->shutdown();
+
+        if (worker_status_manager)
+            worker_status_manager->shutdown();
 
 
         std::unique_ptr<SystemLogs> delete_system_logs;
