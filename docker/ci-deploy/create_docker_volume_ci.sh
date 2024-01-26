@@ -14,7 +14,7 @@ docker container create --name dummy -v ${SCRIPTS_VOL}:/mnt/scripts hello-world
 docker cp /CI/hive/scripts/ dummy:/mnt/
 docker rm dummy
 
-docker container create --name dummy -v ${CONFIG_VOL_FOR_S3}:/config hello-world
+docker container create --name dummy -v ${CONFIG_VOL_FOR_S3}:/config_for_s3_storage hello-world
 docker cp /CI/config_for_s3_storage/ dummy:/
 docker rm dummy
 
