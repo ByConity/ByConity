@@ -33,7 +33,9 @@ void CnchStorageCache::insert(const StorageID & storage_id, const UInt64 ts, con
         inner_container->insert(storage_id.database_name, full_name);
     if (storage_id.hasUUID())
     {
+        // erase both by name and uuid to make sure update to bimap succeed.
         uuid_to_table_names.left.erase(storage_id.uuid);
+        uuid_to_table_names.right.erase(full_name);
         uuid_to_table_names.insert({storage_id.uuid, full_name});
     }
 }
