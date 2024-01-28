@@ -6,8 +6,8 @@ service_discovery:
   server:
     psm: data.cnch.server
     node:
-      host: COMPOSE_PROJECT_NAME_server-0
-      hostname: COMPOSE_PROJECT_NAME_server-0
+      host: COMPOSE_PROJECT_NAME_server-s3-0
+      hostname: COMPOSE_PROJECT_NAME_server-s3-0
       ports:
         port:
         -
