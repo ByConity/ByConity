@@ -36,15 +36,19 @@ daemon_manager:
       interval: 3000
       disable: 0
 
-hdfs_addr: "hdfs://COMPOSE_PROJECT_NAME-hdfs-namenode:9000"
 storage_configuration:
   disks:
-    hdfs_disk:
-      path: /user/clickhouse/
-      type: bytehdfs
     local_disk:
       path: /var/byconity/data/
       type: local
+    s3_disk:
+      path: data123/
+      type: s3
+      endpoint: http://minio:9000
+      bucket: cnch
+      ak_id: minio
+      ak_secret: minio123
+      is_virtual_hosted_style: false
   policies:
     default:
       volumes:
@@ -53,7 +57,9 @@ storage_configuration:
           disk: local_disk
     cnch_default_hdfs:
       volumes:
-        hdfs:
-          default: hdfs_disk
-          disk: hdfs_disk
+        s3:
+          default: s3_disk
+          disk: s3_disk
+  # To avoid break hard-coded test cases.
+  cnch_default_policy: cnch_default_hdfs
 cnch_config: /config/cnch-config.yml

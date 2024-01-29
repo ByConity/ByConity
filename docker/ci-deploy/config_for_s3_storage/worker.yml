@@ -37,12 +37,17 @@ format_schema_path: /var/byconity/format_schemas/
 perQuery: 1
 storage_configuration:
   disks:
-    hdfs_disk:
-      path: /user/clickhouse/
-      type: bytehdfs
     local_disk:
       path: /var/byconity/data/
       type: local
+    s3_disk:
+      path: data123/
+      type: s3
+      endpoint: http://minio:9000
+      bucket: cnch
+      ak_id: minio
+      ak_secret: minio123
+      is_virtual_hosted_style: false
   policies:
     default:
       volumes:
@@ -51,9 +56,11 @@ storage_configuration:
           disk: local_disk
     cnch_default_hdfs:
       volumes:
-        hdfs:
-          default: hdfs_disk
-          disk: hdfs_disk
+        s3:
+          default: s3_disk
+          disk: s3_disk
+  # To avoid break hard-coded test cases.
+  cnch_default_policy: cnch_default_hdfs
 cnch_kafka_log:
   database: cnch_system
   table: cnch_kafka_log
