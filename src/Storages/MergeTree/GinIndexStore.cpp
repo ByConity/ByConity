@@ -686,13 +686,12 @@ GinPostingsCachePtr PostingsCacheForStore::getPostings(const String & query_stri
 }
 
 GinIndexStoreFactory::GinIndexStoreFactory(const GinIndexStoreCacheSettings & settings)
-    : cache_shard_num(settings.cache_shard_num)
-      , stores_lru_cache(
-        cache_shard_num,
+    : stores_lru_cache(
+        settings.cache_shard_num,
         BucketLRUCache<String, GinIndexStore, std::hash<String>, GinIndexStoreWeightFunction>::Options{
             .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
-            .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / cache_shard_num)),
-            .max_size = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / cache_shard_num)),
+            .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
+            .max_size = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / settings.cache_shard_num)),
             .max_nums = std::numeric_limits<size_t>::max(),
             .enable_customize_evict_handler = false
         })
