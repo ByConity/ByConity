@@ -77,7 +77,6 @@ jobs:
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config_for_s3_storage/daemon-manager.yml
           echo "Create volumes for ByConity Cluster"
           /bin/bash create_docker_volume_ci.sh
-          mkdir -p /Artifacts
       - name: Create ByConity Cluster S3
         run: |
           echo "Bring up ByConity Cluster S3"
@@ -92,7 +91,6 @@ jobs:
           curl --retry 11 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
           echo "Check status of cluster"
           docker ps --filter name=$COMPOSE_PROJECT_NAME
-          mkdir -p /test_output
       - name: Run ByConity FuntionalStateless for S3 (w.o optimizer)
         continue-on-error: true
         run: |
@@ -116,7 +114,6 @@ jobs:
         continue-on-error: true
         run: |
           docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/log/byconity /test_output/$2/log' sh || true
-          mv /test_output /Artifacts/test_output_for_s3 || true
       - name: Stop ByConity Cluster S3
         continue-on-error: true
         run: |
@@ -141,7 +138,6 @@ jobs:
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
           echo "Check status of cluster"
           docker ps --filter name=$COMPOSE_PROJECT_NAME
-          mkdir -p /test_output
       - name: Run ByConity External Table test
         continue-on-error: true
         run: |
