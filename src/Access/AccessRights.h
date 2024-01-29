@@ -103,11 +103,11 @@ public:
         const AccessFlags & flags,
         const AccessFlags & min_flags_with_children,
         const AccessFlags & max_flags_with_children,
-        const std::string_view & database,
-        const std::string_view & table,
-        const std::string_view & column)>;
+        std::string_view database,
+        std::string_view table,
+        std::string_view column,
+        bool grant_option)>;
     void modifyFlags(const ModifyFlagsFunction & function);
-    void modifyFlagsWithGrantOption(const ModifyFlagsFunction & function);
 
     friend bool operator ==(const AccessRights & left, const AccessRights & right);
     friend bool operator !=(const AccessRights & left, const AccessRights & right) { return !(left == right); }
