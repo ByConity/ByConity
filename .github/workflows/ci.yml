@@ -15,7 +15,7 @@ jobs:
     name: Build binary and run stateless tests
     # Use digest instead of tag to avoid network issue, original image byconity/byconity-ci:24Jan16
     container: byconity/byconity-ci:24Jan16
-    runs-on: id3 
+    runs-on: id2 
     steps:
       - name: Preload docker images
         run: |
@@ -121,7 +121,7 @@ jobs:
       - name: Stop ByConity Cluster S3
         run: |
           cd /CI/
-          sleep 1000
+          sleep 100000
           echo "Bring down ByConity Cluster S3"
           docker compose -f docker-compose-s3.yml down 
           docker ps --filter name=$COMPOSE_PROJECT_NAME
