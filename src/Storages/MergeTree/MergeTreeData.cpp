@@ -1564,11 +1564,10 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
 
     if (!columns_to_check_conversion.empty())
     {
-        auto context_copy = Context::createCopy(getContext());
-        context_copy->setSetting("disable_str_to_arraystr_cast", Field{true});
+        const_cast<Context &>(*getContext())->setSetting("disable_str_to_arraystr_cast", Field{true});
 
         auto old_header = old_metadata.getSampleBlock();
-        performRequiredConversions(old_header, columns_to_check_conversion, context_copy);
+        performRequiredConversions(old_header, columns_to_check_conversion, getContext());
     }
 
     if (old_metadata.hasSettingsChanges())
