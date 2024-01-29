@@ -165,7 +165,7 @@ public:
             {
                 ++hits;
                 normalGet(key, cache_lock);
-                return val_pair.first;
+                return std::make_pair(val_pair.first, false);
             }
 
             auto & token = insert_tokens[key];
@@ -523,7 +523,7 @@ private:
             ++current_count;
         }
 
-        size_t weight = weight_function(*mapped);
+        size_t weight = mapped ? weight_function(*mapped) : 0;
         container.set(key, Cell(weight, timestamp(), iter, mapped));
         current_size += weight;
 
