@@ -91,11 +91,11 @@ jobs:
           curl --retry 11 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
           echo "Check status of cluster"
           docker ps --filter name=$COMPOSE_PROJECT_NAME
-      - name: Run ByConity FuntionalStateless for S3 (w.o optimizer)
+      - name: Run ByConity FuntionalStateless for S3 (w optimizer)
         continue-on-error: true
         run: |
-          mkdir -p ci_stateless_without_optimizer_s3
-          cd ci_stateless_without_optimizer_s3
+          mkdir -p ci_stateless_w_optimizer_s3
+          cd ci_stateless_w_optimizer_s3
           export EXTRA_OPTIONS='enable_optimizer_fallback=0'
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
@@ -105,10 +105,10 @@ jobs:
           cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries/
           mkdir -p test_output
           ./clickhouse-test --s3 --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_s3_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/wo_optimizer_s3_test_result.txt
+          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_w_optimizer_s3_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/w_optimizer_s3_test_result.txt
           cd ..
-          rm -rf ci_stateless_without_optimizer_s3
+          rm -rf ci_stateless_w_optimizer_s3
       - name: After S3 tests
         if: always()
         continue-on-error: true
