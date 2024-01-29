@@ -325,12 +325,9 @@ struct GinIndexStoreCacheSettings
 
 struct GinIndexStoreWeightFunction
 {
-    size_t operator()(const GinIndexStorePtr & cache_item) const
+    size_t operator()(const GinIndexStore & cache_item) const
     {
-        if (!cache_item)
-            return 0;
-
-        return cache_item->cacheWeight();
+        return cache_item.cacheWeight();
     }
 };
 
