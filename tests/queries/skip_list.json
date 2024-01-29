@@ -628,6 +628,7 @@
         "01500_attach_from_path_with_exception",
         "10027_bucket",
         "11007_atomic_attach_parts",
-        "11007_attach_commit_time_bug"
+        "11007_attach_commit_time_bug",
+        "00653_verification_monotonic_data_load"
     ]
 }
