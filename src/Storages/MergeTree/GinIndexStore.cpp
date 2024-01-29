@@ -687,27 +687,14 @@ GinPostingsCachePtr PostingsCacheForStore::getPostings(const String & query_stri
 
 GinIndexStoreFactory::GinIndexStoreFactory(const GinIndexStoreCacheSettings & settings)
     : cache_shard_num(settings.cache_shard_num)
-      , store_locks(new std::mutex[cache_shard_num])
-      , part_to_indexes(new std::unordered_map<String, std::set<String>>[cache_shard_num])
       , stores_lru_cache(
         cache_shard_num,
-        BucketLRUCache<String, GinIndexStoreCacheItem, std::hash<String>, GinIndexStoreWeightFunction>::Options{
+        BucketLRUCache<String, GinIndexStore, std::hash<String>, GinIndexStoreWeightFunction>::Options{
             .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
             .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / cache_shard_num)),
             .max_size = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / cache_shard_num)),
             .max_nums = std::numeric_limits<size_t>::max(),
-            .enable_customize_evict_handler = true,
-            .customize_evict_handler = 
-                [this](
-                    const String & key, const std::shared_ptr<GinIndexStoreCacheItem>& item, size_t sz) {
-                    return onEvictGinIndexStore(key, item, sz);
-                },
-            .customize_post_evict_handler =
-                [this](
-                    const std::vector<std::pair<String, std::shared_ptr<GinIndexStoreCacheItem>>> & removed_elements,
-                    const std::vector<std::pair<String, std::shared_ptr<GinIndexStoreCacheItem>>> & updated_elements) {
-                    afterEvictGinIndexStore(removed_elements, updated_elements);
-                },
+            .enable_customize_evict_handler = false
         })
 {
 
@@ -719,101 +706,22 @@ GinIndexStorePtr GinIndexStoreFactory::get(const String & name, GinDataPartHelpe
     String key = part_path + ":" + name;
 
     auto& shard = stores_lru_cache.shard(key);
-    std::shared_ptr<GinIndexStoreCacheItem> cache_result = shard.get(key);
-    if (cache_result && cache_result->first == GinIndexStoreCacheState::Cached)
-        return cache_result->second;
+    GinIndexStorePtr cache_result = shard.get(key);
+    if (cache_result)
+        return cache_result;
 
-    GinIndexStorePtr store = std::make_shared<GinIndexStore>(name, std::move(storage_info));
-    if (!store->exists())
-        return nullptr;
+    auto result = shard.getOrSet(key, [&](){
+        GinIndexStorePtr store = std::make_shared<GinIndexStore>(name, std::move(storage_info));
+        if (!store->exists())
+            return nullptr;
 
-    GinIndexStoreDeserializer deserializer(store);
-    deserializer.readSegments();
-    deserializer.readSegmentDictionaries();
+        GinIndexStoreDeserializer deserializer(store);
+        deserializer.readSegments();
+        deserializer.readSegmentDictionaries();
+        return store;
+    });
 
-    bool inserted = shard.emplace(
-        key, 
-        std::make_shared<GinIndexStoreCacheItem>(std::make_pair(GinIndexStoreCacheState::Caching, nullptr))
-    );
-    if (inserted)
-    {
-        {
-            size_t shard_num = std::hash<String>()(part_path) % cache_shard_num;
-            std::unique_lock<std::mutex> guard(store_locks[shard_num]);
-            part_to_indexes[shard_num][part_path].insert(key);
-            LOG_DEBUG(&Poco::Logger::get("ginIndexStoreCache"), "ginIndexStore insert index {} part {} shard {}", 
-                name, key, shard_num);
-        }
-        shard.update(key, std::make_shared<GinIndexStoreCacheItem>(std::make_pair(GinIndexStoreCacheState::Cached, store)));
-    }
-
-    return store;
-}
-
-void GinIndexStoreFactory::remove(const String & part_path)
-{
-    size_t shard_num = std::hash<String>()(part_path) % cache_shard_num;
-    std::lock_guard<std::mutex> guard(store_locks[shard_num]);
-
-    auto iter = part_to_indexes[shard_num].find(part_path);
-    if (iter == part_to_indexes[shard_num].end())
-        return;
-
-    for (const auto & item : iter->second)
-    {
-        auto& shard = stores_lru_cache.shard(item);
-        shard.erase(item);
-    }
-    
-    part_to_indexes[shard_num].erase(part_path);
-}
-
-std::pair<bool, std::shared_ptr<GinIndexStoreCacheItem>> GinIndexStoreFactory::onEvictGinIndexStore(
-    [[maybe_unused]]const String & key, const std::shared_ptr<GinIndexStoreCacheItem>& item, size_t)
-{
-    if (item->first != GinIndexStoreCacheState::Cached)
-    {
-        return {false, nullptr};
-    }
-
-    return {false, std::make_shared<GinIndexStoreCacheItem>(std::make_pair(GinIndexStoreCacheState::Deleting, nullptr))};
-}
-
-void GinIndexStoreFactory::afterEvictGinIndexStore(
-    [[maybe_unused]] const std::vector<std::pair<String, std::shared_ptr<GinIndexStoreCacheItem>>>& removed_elements,
-    const std::vector<std::pair<String, std::shared_ptr<GinIndexStoreCacheItem>>>& updated_elements)
-{
-    for (const auto & pair : updated_elements)
-    {
-        auto key = pair.first;
-        Strings items;
-        splitInto<':'>(items, key);
-        auto part_path = items.empty() ? "" : items.front();
-
-        size_t shard_num = std::hash<String>()(part_path) % cache_shard_num;
-
-        auto & cache_item = pair.second;
-        if (cache_item->first != GinIndexStoreCacheState::Cached) 
-        {
-            LOG_DEBUG(
-                &Poco::Logger::get("GinIndexStoreFactory"),
-                "afterEvictGinIndexStore part {} index {} shard {} state {}", 
-                part_path, key, shard_num, cache_item->first);
-            continue;
-        }
-
-        {
-            std::lock_guard<std::mutex> guard(store_locks[shard_num]);
-            part_to_indexes[shard_num][part_path].erase(key);
-            if (part_to_indexes[shard_num][part_path].empty())
-            {
-                 part_to_indexes[shard_num].erase(part_path);
-            }
-        }
-
-        auto& shard = stores_lru_cache.shard(key);
-        shard.erase(key);
-    }
+    return result.first;
 }
 
 }

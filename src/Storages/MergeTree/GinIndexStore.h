@@ -312,7 +312,7 @@ struct PostingsCacheForStore
 
 struct GinIndexStoreCacheSettings
 {
-    size_t lru_max_size {std::numeric_limits<size_t>::max()};
+    size_t lru_max_size {5368709120/*5GB*/};
 
     // Cache mapping bucket size
     size_t mapping_bucket_size {5000};
@@ -323,23 +323,14 @@ struct GinIndexStoreCacheSettings
     size_t cache_shard_num {8};
 };
 
-enum class GinIndexStoreCacheState
-{
-    Caching,
-    Cached,
-    Deleting,
-};
-using GinIndexStoreCacheItem = std::pair<GinIndexStoreCacheState, GinIndexStorePtr>;
-
 struct GinIndexStoreWeightFunction
 {
-    size_t operator()(const GinIndexStoreCacheItem & cache_item) const
+    size_t operator()(const GinIndexStorePtr & cache_item) const
     {
-        const auto & store = cache_item.second;
-        if (!store)
+        if (!cache_item)
             return 0;
 
-        return store->cacheWeight();
+        return cache_item->cacheWeight();
     }
 };
 
@@ -352,29 +343,14 @@ public:
     ///Get GinIndexStore by using index name and data part
     GinIndexStorePtr get(const String & name, GinDataPartHelperPtr && storage_info);
 
-    /// Remove all Gin index files which are under the same part_path
-    void remove(const String & part_path);
-
     /// GinIndexStores indexed by part file path
     using GinIndexStores = std::unordered_map<std::string, GinIndexStorePtr>;
 
 private:
-    std::pair<bool, std::shared_ptr<GinIndexStoreCacheItem>> onEvictGinIndexStore(
-        [[maybe_unused]]const String & key, const std::shared_ptr<GinIndexStoreCacheItem>& item, size_t);
-
-    
-    void afterEvictGinIndexStore(
-        [[maybe_unused]] const std::vector<std::pair<String, std::shared_ptr<GinIndexStoreCacheItem>>>& removed_elements,
-        const std::vector<std::pair<String, std::shared_ptr<GinIndexStoreCacheItem>>>& updated_elements); 
-
-private:
     size_t cache_shard_num;
-    std::unique_ptr<std::mutex[]> store_locks;
-
-    std::unique_ptr<std::unordered_map<String, std::set<String>>[]> part_to_indexes; //part path to gin index files
 
     ShardCache<String, std::hash<String>, 
-        BucketLRUCache<String, GinIndexStoreCacheItem, std::hash<String>, GinIndexStoreWeightFunction>> stores_lru_cache;
+        BucketLRUCache<String, GinIndexStore, std::hash<String>, GinIndexStoreWeightFunction>> stores_lru_cache;
 };
 
 }
