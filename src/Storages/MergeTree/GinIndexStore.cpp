@@ -710,7 +710,7 @@ GinIndexStorePtr GinIndexStoreFactory::get(const String & name, GinDataPartHelpe
     if (cache_result)
         return cache_result;
 
-    auto result = shard.getOrSet(key, [&](){
+    auto result = shard.getOrSet(key, [&]() -> GinIndexStorePtr {
         GinIndexStorePtr store = std::make_shared<GinIndexStore>(name, std::move(storage_info));
         if (!store->exists())
             return nullptr;
