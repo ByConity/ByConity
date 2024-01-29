@@ -1,0 +1,159 @@
+service_discovery:
+  mode: local
+  cluster: default
+  disable_cache: false
+  cache_timeout: 5
+  server:
+    psm: data.cnch.server
+    node:
+      host: COMPOSE_PROJECT_NAME_server-s3-0
+      hostname: COMPOSE_PROJECT_NAME_server-s3-0
+      ports:
+        port:
+        -
+          name: PORT2
+          value: 21557
+        -
+          name: PORT1
+          value: 30605
+        -
+          name: PORT0
+          value: 52145
+        -
+          name: PORT4
+          value: 27651
+        -
+          name: PORT3
+          value: 45443
+        -
+          name: PORT5
+          value: 47447
+        -
+          name: PORT6
+          value: 60611
+  resource_manager:
+    psm: data.cnch.resource_manager
+    node:
+      host: COMPOSE_PROJECT_NAME_resource-manager-s3-0
+      hostname: COMPOSE_PROJECT_NAME_resource-manager-s3-0
+      ports:
+        port:
+          name: PORT0
+          value: 28989
+  daemon_manager:
+    psm: data.cnch.daemon_manager
+    node:
+      host: COMPOSE_PROJECT_NAME_daemon-manager-s3-0
+      hostname: COMPOSE_PROJECT_NAME_daemon-manager-s3-0
+      ports:
+        port:
+          name: PORT0
+          value: 17553
+  tso:
+    psm: data.cnch.tso
+    node:
+      host: COMPOSE_PROJECT_NAME_tso-s3-0
+      hostname: COMPOSE_PROJECT_NAME_tso-s3-0
+      ports:
+        port:
+        -
+          name: PORT0
+          value: 18845
+        -
+          name: PORT2
+          value: 9181
+  vw_psm: data.cnch.vw
+  vw:
+    psm: data.cnch.vw
+    node:
+    -
+      host: COMPOSE_PROJECT_NAME_worker-write-s3-0
+      hostname: COMPOSE_PROJECT_NAME_worker-write-s3-0
+      ports:
+        port:
+        -
+          name: PORT2
+          value: 21557
+        -
+          name: PORT1
+          value: 30605
+        -
+          name: PORT0
+          value: 52145
+        -
+          name: PORT4
+          value: 27651
+        -
+          name: PORT3
+          value: 45443
+        -
+          name: PORT5
+          value: 47447
+        -
+          name: PORT6
+          value: 60611
+      vw_name: vw_write
+    -
+      host: COMPOSE_PROJECT_NAME_worker-default-s3-0
+      hostname: COMPOSE_PROJECT_NAME_worker-default-s3-0
+      ports:
+        port:
+        -
+          name: PORT2
+          value: 21557
+        -
+          name: PORT1
+          value: 30605
+        -
+          name: PORT0
+          value: 52145
+        -
+          name: PORT4
+          value: 27651
+        -
+          name: PORT3
+          value: 45443
+        -
+          name: PORT5
+          value: 47447
+        -
+          name: PORT6
+          value: 60611
+      vw_name: vw_default
+    -
+      host: COMPOSE_PROJECT_NAME_worker-default-s3-1
+      hostname: COMPOSE_PROJECT_NAME_worker-default-s3-1
+      ports:
+        port:
+        -
+          name: PORT2
+          value: 21557
+        -
+          name: PORT1
+          value: 30605
+        -
+          name: PORT0
+          value: 52145
+        -
+          name: PORT4
+          value: 27651
+        -
+          name: PORT3
+          value: 45443
+        -
+          name: PORT5
+          value: 47447
+        -
+          name: PORT6
+          value: 60611
+
+catalog:
+  name_space: default
+catalog_service:
+  type: fdb
+  fdb:
+    cluster_file: /config/fdb.cluster
+external_catalog_mgr:
+  type: fdb
+  fdb:
+    cluster_file: /config/fdb/cluster
