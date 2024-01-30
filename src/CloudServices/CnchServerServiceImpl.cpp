@@ -38,12 +38,14 @@
 #include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/DedupWorkerStatus.h>
+#include <CloudServices/CnchBGThreadsMap.h>
 #include <Catalog/CatalogUtils.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
 #include <Storages/PartCacheManager.h>
 #include <Access/AccessControlManager.h>
 #include <Access/KVAccessStorage.h>
+
 
 #if USE_MYSQL
 #include <Storages/StorageMaterializeMySQL.h>
@@ -659,7 +661,7 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
     RPCHelpers::serviceHandler(
         done,
         response,
-        [request = request, response = response, done = done, log = log] {
+        [request = request, response = response, done = done, global_context = getContext(), log = log] {
             brpc::ClosureGuard done_guard(done);
 
             try
@@ -669,10 +671,8 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
                 auto type = CnchBGThreadType(request->type());
                 if (type >= CnchBGThreadType::ServerMinType && type <= CnchBGThreadType::ServerMaxType)
                 {
-#if 0
-                    auto threads = global_context.getCnchBGThreads(type);
+                    auto threads = global_context->getCnchBGThreadsMap(type);
                     res = threads->getStatusMap();
-#endif
                 }
                 else
                 {
@@ -703,7 +703,7 @@ void CnchServerServiceImpl::getNumBackgroundThreads(
 {
 }
 void CnchServerServiceImpl::controlCnchBGThread(
-    google::protobuf::RpcController * /*cntl*/,
+    google::protobuf::RpcController * cntl,
     const Protos::ControlCnchBGThreadReq * request,
     Protos::ControlCnchBGThreadResp * response,
     google::protobuf::Closure * done)
@@ -712,7 +712,7 @@ void CnchServerServiceImpl::controlCnchBGThread(
     RPCHelpers::serviceHandler(
         done,
         response,
-        [request = request, response = response, done = done, & global_context = *context_ptr, log = log] {
+        [cntl = cntl, request = request, response = response, done = done, & global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);
 
             try
@@ -722,6 +722,10 @@ void CnchServerServiceImpl::controlCnchBGThread(
                     storage_id = RPCHelpers::createStorageID(request->storage_id());
                 auto type = CnchBGThreadType(request->type());
                 auto action = CnchBGThreadAction(request->action());
+                auto & controller = static_cast<brpc::Controller &>(*cntl);
+                LOG_DEBUG(log, "Received controlBGThread for {} type {} action {} from {}",
+                    storage_id.empty() ? "empty storage" : storage_id.getNameForLogs(),
+                    toString(type), toString(action), butil::endpoint2str(controller.remote_side()).c_str());
                 global_context.controlCnchBGThread(storage_id, type, action);
             }
             catch (...)
