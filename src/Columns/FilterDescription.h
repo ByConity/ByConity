@@ -15,10 +15,11 @@ struct ConstantFilterDescription
     bool always_false = false;
     bool always_true = false;
 
-    ConstantFilterDescription() {}
+    ConstantFilterDescription() = default;
     explicit ConstantFilterDescription(const IColumn & column);
 };
 
+ConstantFilterDescription merge(const ConstantFilterDescription & lhs, const ConstantFilterDescription & rhs);
 
 /// Obtain a filter from non constant Column, that may have type: UInt8, Nullable(UInt8).
 struct FilterDescription

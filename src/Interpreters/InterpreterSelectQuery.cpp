@@ -113,6 +113,9 @@
 #include <common/types.h>
 #include "Formats/FormatSettings.h"
 #include "IO/WriteBufferFromString.h"
+#include "Interpreters/TreeRewriter.h"
+#include "Storages/SelectQueryInfo.h"
+#include <sstream>
 
 
 namespace DB
@@ -131,6 +134,22 @@ namespace ErrorCodes
     extern const int INVALID_LIMIT_EXPRESSION;
     extern const int INVALID_WITH_FILL_EXPRESSION;
     extern const int ACCESS_DENIED;
+    extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
+}
+
+static ASTPtr createPredicateFromArrays(const std::vector<ASTPtr> & exprs)
+{
+    if (exprs.empty()) return nullptr;
+    if (exprs.size() == 1) return exprs[0];
+    auto function = std::make_shared<ASTFunction>();
+
+    function->name = "and";
+    function->arguments = std::make_shared<ASTExpressionList>();
+    function->children.push_back(function->arguments);
+    for (const auto & expr : exprs)
+        function->arguments->children.push_back(expr);
+
+    return function;
 }
 
 /// Assumes `storage` is set and the table filter (row-level security) is not empty.
@@ -417,7 +436,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     SubqueriesForSets subquery_for_sets;
     PreparedSets prepared_sets;
 
-    auto analyze = [&] (bool try_move_to_prewhere)
+    auto analyze = [&] (bool try_move_to_prewhere, bool storage_support_late_materialize)
     {
         /// Allow push down and other optimizations for VIEW: replace with subquery and rewrite it.
         ASTPtr view_table;
@@ -461,7 +480,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         //     where_with_bitmap_index_optimizer.optimize(query_ptr);
         // }
 
-        if (try_move_to_prewhere && storage && query.where() && !query.prewhere())
+        if (storage && query.where() && !query.prewhere())
         {
             /// PREWHERE optimization: transfer some condition from WHERE to PREWHERE if enabled and viable
             if (const auto & column_sizes = storage->getColumnSizes(); !column_sizes.empty())
@@ -474,22 +493,50 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                 SelectQueryInfo current_info;
                 current_info.query = query_ptr;
                 current_info.syntax_analyzer_result = syntax_analyzer_result;
-
-                MergeTreeWhereOptimizer{
-                    current_info,
-                    context,
-                    std::move(column_compressed_sizes),
-                    metadata_snapshot,
-                    syntax_analyzer_result->requiredSourceColumns(),
-                    log};
+                if (storage_support_late_materialize)
+                {
+#ifndef NDEBUG
+                    LOG_DEBUG(log, "use late materialize strategy");
+#endif
+                    atomic_predicates_expr = MergeTreeWhereOptimizer{
+                        current_info,
+                        context,
+                        std::move(column_compressed_sizes),
+                        metadata_snapshot,
+                        syntax_analyzer_result->requiredSourceColumns(),
+                        log,
+                        MaterializeStrategy::LATE_MATERIALIZE}.getAtomicPredicatesExpressions();
+                }
+                else if (try_move_to_prewhere)
+                {
+                    MergeTreeWhereOptimizer{
+                        current_info,
+                        context,
+                        std::move(column_compressed_sizes),
+                        metadata_snapshot,
+                        syntax_analyzer_result->requiredSourceColumns(),
+                        log};
+                }
             }
+            LOG_TRACE(log,"Query after where optimizer: {}", query.formatForErrorMessage());
         }
 
-        if (query.prewhere() && query.where())
+        if (query.where() && query.prewhere())
         {
             /// Filter block in WHERE instead to get better performance
             query.setExpression(
                 ASTSelectQuery::Expression::WHERE, makeASTFunction("and", query.prewhere()->clone(), query.where()->clone()));
+        }
+
+        /// Same trick above for early materialize
+        if (query.where() && !atomic_predicates_expr.empty())
+        {
+            /// Accumulating predicates
+            auto p = atomic_predicates_expr.back();
+            for (int i = static_cast<int>(atomic_predicates_expr.size()) - 2; i >= 0; --i)
+                p = makeASTFunction("and",atomic_predicates_expr[i], p);
+            query.setExpression(
+                ASTSelectQuery::Expression::WHERE, makeASTFunction("and", query.where()->clone(), p->clone()));
         }
 
         query_analyzer = std::make_unique<SelectQueryExpressionAnalyzer>(
@@ -572,7 +619,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         result_header = getSampleBlockImpl();
     };
 
-    analyze(shouldMoveToPrewhere());
+    analyze(shouldMoveToPrewhere(), storageSupportsLateMaterialize());
 
     bool need_analyze_again = false;
     if (analysis_result.prewhere_constant_filter_description.always_false || analysis_result.prewhere_constant_filter_description.always_true)
@@ -586,9 +633,15 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     if (analysis_result.where_constant_filter_description.always_false || analysis_result.where_constant_filter_description.always_true)
     {
         if (analysis_result.where_constant_filter_description.always_true)
-            query.setExpression(ASTSelectQuery::Expression::WHERE, {});
+            query.setExpression(ASTSelectQuery::Expression::WHERE, createPredicateFromArrays(atomic_predicates_expr));
         else
             query.setExpression(ASTSelectQuery::Expression::WHERE, std::make_shared<ASTLiteral>(0u));
+        need_analyze_again = true;
+    }
+    if (analysis_result.em_constant_filter_description.always_false || analysis_result.em_constant_filter_description.always_true)
+    {
+        if (analysis_result.em_constant_filter_description.always_false)
+        query.setExpression(ASTSelectQuery::Expression::WHERE, std::make_shared<ASTLiteral>(0u));
         need_analyze_again = true;
     }
 
@@ -602,7 +655,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         /// Do not try move conditions to PREWHERE for the second time.
         /// Otherwise, we won't be able to fallback from inefficient PREWHERE to WHERE later.
-        analyze(/* try_move_to_prewhere = */ false);
+        analyze(/* try_move_to_prewhere = */ false, false);
     }
 
     /// If there is no WHERE, filter blocks as usual
@@ -635,11 +688,16 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         storage_snapshot->addProjection(query_info.projection->desc);
     
     LOG_TRACE(log, "query: " + queryToString(query));
-    // std::ostringstream ostr;
-    // for (auto & c : required_columns)
-    //     ostr << c << ", ";
-    // LOG_TRACE(log, "required_columns: " + ostr.str());
-    // LOG_TRACE(log, "result_header: " + result_header.dumpStructure());
+    std::ostringstream ostr;
+    for (auto & c : required_columns)
+        ostr << c << ", ";
+    LOG_TRACE(log, "required_columns: " + ostr.str());
+    LOG_TRACE(log, "result_header: " + result_header.dumpStructure());
+    ostr = std::ostringstream();
+    size_t i = 0;
+    for (const auto & p : analysis_result.atomic_predicates)
+        ostr << "STEP " << i++ << "\n" << p->dump() << "\n";
+    LOG_TRACE(log, "predicate chain: \n" + ostr.str());
     /// Blocks used in expression analysis contains size 1 const columns for constant folding and
     ///  null non-const columns to avoid useless memory allocations. However, a valid block sample
     ///  requires all columns to be of size 0, thus we need to sanitize the block here.
@@ -759,7 +817,7 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
         && options.to_stage > QueryProcessingStage::WithMergeableState;
 
     analysis_result = ExpressionAnalysisResult(
-        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header);
+        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, atomic_predicates_expr);
 
     // required columns without bitmap index
     NoBitmapIndexRequiredSourceColumnsVisitor::Data columns_context;
@@ -777,8 +835,8 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
         }
     }
 
-    if (analysis_result.prewhere_info 
-        && analysis_result.prewhere_info->index_context 
+    if (analysis_result.prewhere_info
+        && analysis_result.prewhere_info->index_context
         && analysis_result.prewhere_info->index_context->has(MergeTreeIndexInfo::Type::BITMAP))
     {
         if (auto * bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(analysis_result.prewhere_info->index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()))
@@ -791,6 +849,24 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
             }
         }
     }
+
+    for (auto & p : analysis_result.atomic_predicates)
+    {
+        if (p && p->index_context && p->index_context->has(MergeTreeIndexInfo::Type::BITMAP))
+        {
+            if (auto * bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(p->index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()))
+            {
+                for (auto it = bitmap_index_info->index_column_name_set.begin(); it != bitmap_index_info->index_column_name_set.end(); ++it)
+                {
+                    if (required_in_non_bitmap_index_functions.count(*it))
+                    {
+                        bitmap_index_info->non_removable_index_columns.emplace(*it);
+                    }
+                }
+            }
+        }
+    }
+
 
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
@@ -1748,14 +1824,46 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
 
 bool InterpreterSelectQuery::shouldMoveToPrewhere()
 {
+    if (storageSupportsLateMaterialize()) return false;
     const Settings & settings = context->getSettingsRef();
     const ASTSelectQuery & query = getSelectQuery();
-    return settings.optimize_move_to_prewhere && (!query.final() || settings.optimize_move_to_prewhere_if_final);
+    return (settings.optimize_move_to_prewhere && (!query.final() || settings.optimize_move_to_prewhere_if_final));
+}
+
+bool InterpreterSelectQuery::storageSupportsLateMaterialize()
+{
+    /// The effect of early materialize can be similar to prewhere, if user
+    /// disable prewhere we should also disable early materialize as well.
+    if (!context->getSettingsRef().optimize_move_to_prewhere)
+        return false;
+    if (!storage)
+        return false;
+    auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+    if (!merge_tree)
+        return false;
+    const auto table_settings = merge_tree->getSettings();
+    const ASTSelectQuery & query = getSelectQuery();
+    return (table_settings->enable_late_materialize && !query.final());
 }
 
 void InterpreterSelectQuery::addPrewhereAliasActions()
 {
     auto & expressions = analysis_result;
+    /// Try to make row-level filter as the first stage in chain reader first
+    if (expressions.filter_info)
+    {
+        const bool storage_support_em = !input && !input_pipe && storageSupportsLateMaterialize();
+        if (storage_support_em && !expressions.prewhere_info)
+        {
+            auto & row_filter = expressions.atomic_predicates.emplace_back(std::make_shared<AtomicPredicate>());
+            row_filter->predicate_actions = std::move(expressions.filter_info->actions);
+            row_filter->filter_column_name = std::move(expressions.filter_info->column_name);
+            row_filter->is_row_filter = true;
+            row_filter->remove_filter_column = expressions.filter_info->do_remove_column;
+            expressions.filter_info = nullptr;
+        }
+    }
+
     if (expressions.filter_info)
     {
         if (!expressions.prewhere_info)
@@ -1966,7 +2074,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         const auto & func = desc.function;
         std::optional<UInt64> num_rows{};
 
-        if (!query.prewhere() && !query.where() && !query_info.partition_filter)
+        if (!query.prewhere() && !query.where() && !query_info.partition_filter && atomic_predicates_expr.empty())
         {
             num_rows = storage->totalRows(context);
         }
@@ -1978,6 +2086,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             temp_query_info.sets = query_analyzer->getPreparedSets();
             if (query_info.partition_filter)
                 temp_query_info.partition_filter = query_info.partition_filter->clone();
+            temp_query_info.atomic_predicates_expr = atomic_predicates_expr;
 
             num_rows = storage->totalRowsByPartitionPredicate(temp_query_info, context);
         }
@@ -2059,6 +2168,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         && !query.limit_with_ties
         && !query.prewhere()
         && !query.where()
+        && atomic_predicates_expr.empty()
         && !query.groupBy()
         && !query.having()
         && !query.orderBy()
@@ -2116,6 +2226,9 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         query_info.sets = query_analyzer->getPreparedSets();
         auto & prewhere_info = analysis_result.prewhere_info;
 
+        /// Whether we will use late materialize for fetching columns... The
+        bool late_materialize = !analysis_result.atomic_predicates.empty();
+
         if (prewhere_info)
             query_info.prewhere_info = prewhere_info;
 
@@ -2132,6 +2245,22 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 LOG_DEBUG(log, query_info.index_context->toString());
             if (query_info.prewhere_info && query_info.prewhere_info->index_context)
                 LOG_DEBUG(log, fmt::format("pre-index: {}", query_info.prewhere_info->index_context->toString()));
+        }
+
+        if (late_materialize)
+        {
+            query_info.atomic_predicates_expr = std::move(atomic_predicates_expr);
+            query_info.atomic_predicates = std::move(analysis_result.atomic_predicates);
+            /// Tompstone predicate for the last reader in chain
+            if (query_info.index_context)
+            {
+                query_info.atomic_predicates.emplace_front(std::make_shared<AtomicPredicate>());
+                query_info.atomic_predicates.front()->index_context = query_info.index_context;
+            }
+            else
+            {
+                query_info.atomic_predicates.emplace_front(nullptr);
+            }
         }
 
         /// Create optimizer with prepared actions.
@@ -2202,6 +2331,10 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
          * If it is distributed stages, we call read function to create ReadFromStorageStep so that it only contains infomation
          * can be serialized / deserialized between workers.
          */
+        // std::stringstream ss;
+        // for (auto & col : required_columns)
+        //     ss << col << ", ";
+        // fmt::print(stderr, "Fetching column: {}\n", ss.str());
         if (options.distributed_stages)
             storage->read(query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams, true);
         else

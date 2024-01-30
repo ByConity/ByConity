@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/FilterWithRowUtils.h>
 #include <Common/formatReadable.h>
 #include <common/range.h>
+#include <Storages/SelectQueryInfo.h>
 
 
 namespace ProfileEvents
@@ -61,7 +62,8 @@ MergeTreeReadPool::MergeTreeReadPool(
     , column_names{column_names_}
     , do_not_steal_tasks{do_not_steal_tasks_}
     , predict_block_size_bytes{preferred_block_size_bytes_ > 0}
-    , prewhere_info{getPrewhereInfo(query_info_)}
+    , prewhere_info(getPrewhereInfo(query_info_))
+    , atomic_predicates(getAtomicPredicates(query_info_))
     , parts_ranges{std::move(parts_)}
 {
     /// parts don't contain duplicate MergeTreeDataPart's.
@@ -243,7 +245,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
         per_part_sum_marks.push_back(sum_marks);
 
         auto task_columns =
-            getReadTaskColumns(data, storage_snapshot, part.data_part, column_names, prewhere_info, index_context, check_columns);
+            getReadTaskColumns(data, storage_snapshot, part.data_part, column_names, prewhere_info, index_context, atomic_predicates, check_columns);
 
         PerPartParams params;
         const auto & required_column_names = task_columns.columns.getNames();
@@ -378,5 +380,27 @@ void MergeTreeReadPool::fillPerThreadInfo(
     }
 }
 
+
+void MergeTreeReadPool::updateGranuleStats(const std::unordered_map<String, size_t> & stats)
+{
+    const std::lock_guard lk{mutex};
+    for (const auto & [col, val] : stats)
+    {
+        per_column_read_granules[col] += val;
+    }
+}
+MergeTreeReadPool::~MergeTreeReadPool()
+{
+#ifndef NDEBUG
+    std::unordered_set<String> printed;
+    std::vector<std::pair<String, size_t>> ordered_list(per_column_read_granules.begin(), per_column_read_granules.end());
+    sort(ordered_list.begin(), ordered_list.end(), [](const auto & lhs, const auto & rhs) {
+        return lhs.second > rhs.second;
+    });
+
+    for (const auto & [col, sz] : ordered_list)
+        LOG_TRACE(log, "{} : {}\n", col, sz);
+#endif
+}
 
 }

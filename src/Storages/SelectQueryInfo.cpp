@@ -19,6 +19,8 @@
 #include <Protos/plan_node_utils.pb.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTSelectQuery.h>
 
 namespace DB
 {
@@ -72,9 +74,58 @@ std::shared_ptr<InterpreterSelectQuery> SelectQueryInfo::buildQueryInfoFromQuery
     return interpreter;
 }
 
+ASTPtr getFilterFromQueryInfo(const SelectQueryInfo & query_info, bool clone)
+{
+    const ASTSelectQuery & select = query_info.query->as<ASTSelectQuery &>();
+    if (select.where())
+        return clone ? select.where()->clone() : select.where();
+    if (select.prewhere())
+        return clone ? select.prewhere()->clone() : select.prewhere();
+    if (!query_info.atomic_predicates_expr.empty())
+    {
+        ASTPtr filter_query;
+        if (query_info.atomic_predicates_expr.size() == 1)
+        {
+            filter_query =  query_info.atomic_predicates_expr[0];
+        }
+        else
+        {
+            auto function = std::make_shared<ASTFunction>();
+            function->name = "and";
+            function->arguments = std::make_shared<ASTExpressionList>();
+            function->children.push_back(function->arguments);
+            for (const auto & expr : query_info.atomic_predicates_expr)
+            {
+                function->arguments->children.push_back(expr);
+            }
+            filter_query = filter_query ? makeASTFunction("and", std::move(filter_query), std::move(function)) : std::move(function);
+        }
+        return clone ? filter_query->clone() : filter_query;
+    }
+    return nullptr;
+}
+
+String AtomicPredicate::dump() const
+{
+    std::stringstream ss;
+    if (predicate_actions)
+        ss << "Predicate: \n" << predicate_actions->dumpDAG() << "\n";
+    ss << "Filter column name: " << filter_column_name << "\n";
+    ss << "Is row filter: " << is_row_filter << "\n";
+    if (index_context)
+        ss << "Index context: \n" << index_context->toString() << "\n";
+    ss << "Remove filter column: " << remove_filter_column << "\n";
+    return ss.str();
+}
+
 const PrewhereInfoPtr & getPrewhereInfo(const SelectQueryInfo & query_info)
 {
     return query_info.projection ? query_info.projection->prewhere_info : query_info.prewhere_info;
+}
+
+const std::deque<AtomicPredicatePtr> & getAtomicPredicates(const SelectQueryInfo & query_info)
+{
+    return query_info.atomic_predicates;
 }
 
 MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info)

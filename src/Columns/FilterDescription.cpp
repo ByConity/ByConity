@@ -87,4 +87,13 @@ FilterDescription::FilterDescription(const IColumn & column_)
         ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
 }
 
+ConstantFilterDescription merge(const ConstantFilterDescription & lhs, const ConstantFilterDescription & rhs)
+{
+    ConstantFilterDescription res;
+    res.always_false = lhs.always_false || rhs.always_false;
+    res.always_true = lhs.always_true && rhs.always_true;
+    return res;
 }
+
+}
+

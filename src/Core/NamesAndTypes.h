@@ -134,6 +134,9 @@ public:
     /// Leave only the columns whose names are in the `names`. In `names` there can be superfluous columns.
     NamesAndTypesList filter(const Names & names) const;
 
+    /// Leave only the column `name`
+    NamesAndTypesList filter(const String & name) const;
+
     /// Unlike `filter`, returns columns in the order in which they go in `names`.
     /// bitengine_read_type is used in BitEngineDictionaryManager or BiEngine parts merging job
     NamesAndTypesList addTypes(const Names & names, BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) const;

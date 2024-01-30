@@ -713,19 +713,20 @@ KeyCondition::KeyCondition(
     /** Evaluation of expressions that depend only on constants.
       * For the index to be used, if it is written, for example `WHERE Date = toDate(now())`.
       */
-    Block block_with_constants = getBlockWithConstants(query_info.query, query_info.syntax_analyzer_result, context);
+    // Block block_with_constants = getBlockWithConstants(query_info.query, query_info.syntax_analyzer_result, context);
 
     for (const auto & [name, _] : query_info.syntax_analyzer_result->array_join_result_to_source)
         array_joined_columns.insert(name);
-
-    const ASTSelectQuery & select = query_info.query->as<ASTSelectQuery &>();
-    if (select.where() || select.prewhere())
+    if (auto filter = getFilterFromQueryInfo(query_info); filter != nullptr)
     {
-        ASTPtr filter_query;
-        if (select.where() && select.prewhere())
-            filter_query = makeASTFunction("and", select.where(), select.prewhere());
-        else
-            filter_query = select.where() ? select.where() : select.prewhere();
+        /** Evaluation of expressions that depend only on constants.
+          * For the index to be used, if it is written, for example `WHERE Date = toDate(now())`.
+          */
+        /// TODO @wanghaoyu.0428: fix this, can do without cloning query?
+        auto query_clone = query_info.query->clone();
+        auto & select_clone = query_clone->as<ASTSelectQuery &>();
+        select_clone.setExpression(ASTSelectQuery::Expression::WHERE, filter->clone());
+        Block block_with_constants = getBlockWithConstants(query_clone, query_info.syntax_analyzer_result, context);
 
         /** When non-strictly monotonic functions are employed in functional index (e.g. ORDER BY toStartOfHour(dateTime)),
           * the use of NOT operator in predicate will result in the indexing algorithm leave out some data.
@@ -734,7 +735,7 @@ KeyCondition::KeyCondition(
           * To overcome the problem, before parsing the AST we transform it to its semantically equivalent form where all NOT's
           * are pushed down and applied (when possible) to leaf nodes.
           */
-        traverseAST(cloneASTWithInversionPushDown(filter_query), context, block_with_constants);
+        traverseAST(cloneASTWithInversionPushDown(filter), context, block_with_constants);
     }
     else
     {

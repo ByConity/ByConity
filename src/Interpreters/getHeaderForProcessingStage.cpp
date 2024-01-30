@@ -107,6 +107,19 @@ Block getHeaderForProcessingStage(
                 if (prewhere_info.remove_prewhere_column)
                     header.erase(prewhere_info.prewhere_column_name);
             }
+            else if (!query_info.atomic_predicates.empty())
+            {
+                for (auto it = query_info.atomic_predicates.rbegin(); it != query_info.atomic_predicates.rend(); ++it)
+                {
+                    const auto & predicate = *it;
+                    if (predicate && predicate->predicate_actions)
+                    {
+                        header = predicate->predicate_actions->updateHeader(std::move(header));
+                        if (predicate->remove_filter_column)
+                            header.erase(predicate->filter_column_name);
+                    }
+                }
+            }
             return header;
         }
         case QueryProcessingStage::WithMergeableState:

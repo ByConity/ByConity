@@ -1,3 +1,4 @@
+#include <memory>
 #include <Processors/Transforms/FilterTransform.h>
 
 #include <Interpreters/ExpressionActions.h>
@@ -134,7 +135,6 @@ void FilterTransform::transform(Chunk & chunk)
 
     size_t num_columns = columns.size();
     ColumnPtr filter_column = columns[filter_column_position];
-
     /** It happens that at the stage of analysis of expressions (in sample_block) the columns-constants have not been calculated yet,
         *  and now - are calculated. That is, not all cases are covered by the code above.
         * This happens if the function returns a constant for a non-constant argument.
@@ -155,9 +155,9 @@ void FilterTransform::transform(Chunk & chunk)
     FilterDescription filter_and_holder(*filter_column);
 
     /** Let's find out how many rows will be in result.
-      * To do this, we filter out the first non-constant column
-      *  or calculate number of set bytes in the filter.
-      */
+    * To do this, we filter out the first non-constant column
+    *  or calculate number of set bytes in the filter.
+    */
     size_t first_non_constant_column = num_columns;
     for (size_t i = 0; i < num_columns; ++i)
     {

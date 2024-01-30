@@ -42,18 +42,13 @@ public:
         const StorageSnapshotPtr & storage_snapshot_,
         const MergeTreeMetaBase::DataPartPtr & owned_data_part,
         ImmutableDeleteBitmapPtr delete_bitmap,
-        UInt64 max_block_size_rows,
-        size_t preferred_block_size_bytes,
-        size_t preferred_max_column_in_block_size_bytes,
         Names required_columns_,
-        MarkRanges mark_ranges,
-        bool use_uncompressed_cache,
+        MarkRanges mark_ranges_,
         const SelectQueryInfo & query_info_,
-        ExpressionActionsSettings actions_settings,
-        bool check_columns,
-        const MergeTreeReaderSettings & reader_settings,
-        const Names & virt_column_names = {},
-        size_t part_index_in_query = 0,
+        bool check_columns_,
+        const MergeTreeStreamSettings & stream_settings_,
+        const Names & virt_column_names_ = {},
+        size_t part_index_in_query_ = 0,
         bool quiet = false);
 
     ~MergeTreeSelectProcessor() override;
@@ -66,8 +61,6 @@ public:
 protected:
 
     bool getNewTask() override;
-
-private:
 
     /// Used by Task
     Names required_columns;

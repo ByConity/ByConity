@@ -471,6 +471,9 @@ enum StealingCacheMode : UInt64
     /* Metastore settings */\
     M(Bool, enable_metastore, false, "Use KV metastore to manage data parts.", 0) \
     M(Bool, enable_persistent_checksum, true, "[Deprecated] Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
+    /* Early materialze settings */\
+    M(Bool, enable_late_materialize, false, "Use early materialize pipelined instead of prewhere while reading from merge tree", 0) \
+    /** Obsolete settings. Kept for backward compatibility only. */ \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
     /*keep enable_preload_parts for compitable*/ \

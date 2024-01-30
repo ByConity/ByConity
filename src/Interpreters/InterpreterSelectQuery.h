@@ -159,6 +159,7 @@ private:
 
     void addPrewhereAliasActions();
     bool shouldMoveToPrewhere();
+    bool storageSupportsLateMaterialize();
 
     Block getSampleBlockImpl();
 
@@ -248,6 +249,9 @@ private:
     StorageMetadataPtr metadata_snapshot;
     bool has_join = false;
     StorageSnapshotPtr storage_snapshot;
+
+    /// (column, predicate ast) already sorted by column size
+    std::vector<ASTPtr> atomic_predicates_expr;
 };
 
 }
