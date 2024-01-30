@@ -1933,7 +1933,9 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
     M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
     /*start of bulk synchronous parallel section*/ \
-    M(Bool, bsp_mode, false, "if enabled, query will execute in bsp mode", 0) \
+    M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
+    M(Bool, bsp_shuffle_reduce_locality_enabled, true, "Whether to compute locality preferences for reduce tasks", 0) \
+    M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
     /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \

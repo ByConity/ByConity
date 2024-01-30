@@ -2,7 +2,6 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/NodeSelector.h>
-#include <Interpreters/sendPlanSegment.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 
@@ -13,7 +12,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-void setPlansegmentParallelIndex(
+void setParallelIndexAndSourceAddrs(
     PlanSegment * plan_segment_ptr,
     DAGGraph * dag_graph_ptr,
     NodeSelectorResult * result,
@@ -36,7 +35,7 @@ void setPlansegmentParallelIndex(
 
         auto source_iter = result->source_addresses.end();
 
-        // if input mode is local, set parallel index to 1
+        // if input mode is local, set parallel index
         if (auto it = dag_graph_ptr->id_to_segment.find(plan_segment_input_id); it != dag_graph_ptr->id_to_segment.end())
         {
             for (auto & plan_segment_output : it->second->getPlanSegmentOutputs())
@@ -98,38 +97,32 @@ NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_con
     return result;
 }
 
-NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context)
+NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr)
 {
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
     size_t parallel_index = 0;
-    const auto & worker_group = query_context->getCurrentWorkerGroup();
-    for (auto i : cluster_nodes.rank_worker_ids)
+    for (const auto & worker : cluster_nodes.rank_workers)
     {
         parallel_index++;
         if (parallel_index > plan_segment_ptr->getParallelSize())
             break;
-        const auto & worker_endpoint = worker_group->getHostWithPortsVec()[i];
-        auto worker_address = getRemoteAddress(worker_endpoint, query_context);
-        result.worker_nodes.emplace_back(worker_address, NodeType::Remote, worker_endpoint.id);
+        result.worker_nodes.emplace_back(worker);
     }
     return result;
 }
 
-NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context)
+NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr)
 {
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
-    const auto & worker_group = query_context->getCurrentWorkerGroup();
     size_t parallel_index = 0;
-    for (auto i : cluster_nodes.rank_worker_ids)
+    for (const auto & worker : cluster_nodes.rank_workers)
     {
         parallel_index++;
         if (parallel_index > plan_segment_ptr->getParallelSize())
             break;
-        const auto & worker_endpoint = worker_group->getHostWithPortsVec()[i];
-        auto worker_address = getRemoteAddress(worker_endpoint, query_context);
-        result.worker_nodes.emplace_back(worker_address, NodeType::Remote, worker_endpoint.id);
+        result.worker_nodes.emplace_back(worker);
     }
     return result;
 }
@@ -159,9 +152,22 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
         }
         return result;
     }
+
+    if (!query_context->getSettingsRef().bsp_shuffle_reduce_locality_enabled)
+    {
+        for (size_t i = 0; i < plan_segment_ptr->getParallelSize(); i++)
+        {
+            result.worker_nodes.emplace_back(WorkerNode{});
+        }
+        return result;
+    }
+
     auto local_address = getLocalAddress(*query_context);
     for (const AddressInfo & addr : query_context->getExchangeDataTracker()->getExchangeDataAddrs(
-             plan_segment_ptr, 0, plan_segment_ptr->getParallelSize(), cluster_nodes.rank_worker_ids.size()))
+             plan_segment_ptr,
+             0,
+             plan_segment_ptr->getParallelSize(),
+             query_context->getSettingsRef().bsp_shuffle_reduce_locality_fraction))
     {
         if (addr == local_address)
             return result;
@@ -186,7 +192,7 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
     else if (is_source)
     {
         node_select_policy = NodeSelectorPolicy::SourcePolicy;
-        result = source_node_selector.select(plan_segment_ptr, query_context);
+        result = source_node_selector.select(plan_segment_ptr);
     }
     else
     {
@@ -196,28 +202,26 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
             result = locality_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
             if (result.worker_nodes.empty() || result.worker_nodes.size() != plan_segment_ptr->getParallelSize())
             {
-                // TODO(WangTao): change it to warning and fix it.
-                LOG_INFO(
+                LOG_WARNING(
                     log,
                     "Select result size {} of plansegment {} doesn't equal to parallel size {}, fallback to compute selector",
                     result.worker_nodes.size(),
                     segment_id,
                     plan_segment_ptr->getParallelSize());
-                result = compute_node_selector.select(plan_segment_ptr, query_context);
+                result = compute_node_selector.select(plan_segment_ptr);
             }
         }
         else
         {
-            result = compute_node_selector.select(plan_segment_ptr, query_context);
+            result = compute_node_selector.select(plan_segment_ptr);
         }
     }
 
-    setPlansegmentParallelIndex(plan_segment_ptr, dag_graph_ptr, &result, log, node_select_policy);
+    setParallelIndexAndSourceAddrs(plan_segment_ptr, dag_graph_ptr, &result, log, node_select_policy);
     auto it = dag_graph_ptr->id_to_segment.find(segment_id);
     if (it == dag_graph_ptr->id_to_segment.end())
         throw Exception("Logical error: plan segment segment can not be found", ErrorCodes::LOGICAL_ERROR);
 
-    dag_graph_ptr->id_to_address.emplace(std::make_pair(segment_id, result.getAddress()));
     LOG_TRACE(log, "Select node for plansegment {} result {}", segment_id, result.toString());
     return result;
 }

@@ -32,10 +32,37 @@ enum class TaskStatus : uint8_t
 /// Indicates a plan segment.
 struct SegmentTask
 {
-    SegmentTask(size_t task_id_, bool is_source_ = false) : task_id(task_id_), is_source(is_source_) { }
+    explicit SegmentTask(size_t task_id_, bool is_source_ = false) : task_id(task_id_), is_source(is_source_)
+    {
+    }
     // plan segment id.
     size_t task_id;
     bool is_source;
+};
+
+/// Indicates a plan segment instance.
+struct SegmentTaskInstance
+{
+    SegmentTaskInstance(size_t task_id_, size_t parallel_index_) : task_id(task_id_), parallel_index(parallel_index_)
+    {
+    }
+    // plan segment id.
+    size_t task_id;
+    size_t parallel_index;
+
+    inline bool operator==(SegmentTaskInstance const & rhs) const
+    {
+        return (this->task_id == rhs.task_id && this->parallel_index == rhs.parallel_index);
+    }
+
+    class Hash
+    {
+    public:
+        size_t operator()(const SegmentTaskInstance & key) const
+        {
+            return (key.task_id << 13) + key.parallel_index;
+        }
+    };
 };
 
 using SegmentTaskPtr = std::shared_ptr<SegmentTask>;
@@ -78,12 +105,15 @@ public:
         , dag_graph_ptr(dag_graph_ptr_)
         , cluster_nodes(query_context_)
         , node_selector(cluster_nodes, query_context, dag_graph_ptr)
+        , local_address(getLocalAddress(*query_context))
         , log(&Poco::Logger::get("Scheduler"))
     {
+        cluster_nodes.rank_workers.emplace_back(local_address, NodeType::Local, "");
     }
     virtual ~IScheduler() = default;
     // Pop tasks from queue and schedule them.
     void schedule();
+    virtual void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) = 0;
     /// TODO(WangTao): add staus for result
     virtual void onSegmentScheduled(const SegmentTask & task) = 0;
     virtual void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) = 0;
@@ -99,6 +129,8 @@ protected:
     const String query_id;
     ContextPtr query_context;
     std::shared_ptr<DAGGraph> dag_graph_ptr;
+    std::mutex segment_bufs_mutex;
+    std::unordered_map<size_t, std::shared_ptr<butil::IOBuf>> segment_bufs;
     // Generated per dag graph. The tasks whose number of dependencies will be enqueued.
     PlanSegmentTopology plansegment_topology;
     std::mutex plansegment_topology_mutex;
@@ -107,29 +139,27 @@ protected:
     ClusterNodes cluster_nodes;
     // Select nodes for tasks.
     NodeSelector node_selector;
+    AddressInfo local_address;
     Poco::Logger * log;
     bool time_to_handle_finish_task = false;
 
-    std::mutex nodes_alloc_mutex;
-    std::condition_variable nodes_alloc_cv;
-    bool has_available_worker = true;
-    std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> busy_nodes;
-    std::unordered_map<size_t, std::unordered_map<UInt64, AddressInfo>> segment_parallel_nodes;
-
     String error_msg;
-    bool stopped = false;
+    std::atomic<bool> stopped{false};
 
     void genTopology();
     void genSourceTasks();
     bool getBatchTaskToSchedule(BatchTaskPtr & task);
-    void sendResource(SegmentTask task, PlanSegment * plan_segment_ptr);
-    TaskResult scheduleTask(const SegmentTask & task, PlanSegment * plan_segment_ptr);
+    void sendResource(PlanSegment * plan_segment_ptr);
+    void dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx);
+    TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);
     void prepareFinalTask();
 
     NodeSelector::SelectorResultMap node_selector_result;
 };
 
 // Once the dependencies scheduled, the segment would be scheduled.
+//
+// IScheduler::genTopology -> IScheduler::scheduleTask -> MPPScheduler::submitTasks -> IScheduler::dispatchTask -rpc-> Worker node
 class MPPScheduler : public IScheduler
 {
 public:
@@ -139,6 +169,7 @@ public:
     }
 
 private:
+    void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) override;
     void onSegmentScheduled(const SegmentTask & task) override;
     // We do nothing on task finished.
     void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) override
@@ -152,14 +183,29 @@ private:
 using MPPSchedulerPtr = std::unique_ptr<MPPScheduler>;
 
 // Only if the dependencies were executed done, the segment would be scheduled.
+//
+// IScheduler::genTopology -> IScheduler::scheduleTask -> BSPScheduler::submitTasks
+//                                                                  |
+//                                                        IScheduler::dispatchTask -rpc-> Worker node
+//                                                                  |                       | rpc
+//                                                                  <--------- BSPScheduler::onSegmentFinished
 class BSPScheduler : public IScheduler
 {
+    struct PendingTaskIntances
+    {
+        // nodes -> [segment instance who prefer to be scheduled to it]
+        std::unordered_map<AddressInfo, std::unordered_set<SegmentTaskInstance, SegmentTaskInstance::Hash>, AddressInfo::Hash> for_nodes;
+        // segment isntances who have no preference.
+        std::unordered_set<SegmentTaskInstance, SegmentTaskInstance::Hash> no_prefs;
+    };
+
 public:
     BSPScheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
         : IScheduler(query_id_, query_context_, dag_graph_ptr_)
     {
     }
 
+    void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) override;
     // We do nothing on task scheduled.
     void onSegmentScheduled(const SegmentTask & task) override
     {
@@ -171,7 +217,17 @@ public:
     void updateSegmentStatusCounter(const size_t & segment_id, const UInt64 & parallel_index);
 
 private:
+    std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
+    void triggerDispatch(const std::vector<WorkerNode> & available_workers);
+
     std::mutex segment_status_counter_mutex;
     std::unordered_map<size_t, std::unordered_set<UInt64>> segment_status_counter;
+
+    std::mutex nodes_alloc_mutex;
+    // segment id -> nodes running its instance
+    std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> occupied_workers;
+    // segment id -> [segment instance, node]
+    std::unordered_map<size_t, std::unordered_map<UInt64, AddressInfo>> segment_parallel_locations;
+    PendingTaskIntances pending_task_instances;
 };
 }

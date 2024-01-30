@@ -2,12 +2,14 @@
 
 #include <memory>
 #include <set>
+#include <string_view>
 #include <time.h>
 #include <Client/Connection.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/DAGGraph.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/sendPlanSegment.h>
 #include <Parsers/queryToString.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
@@ -21,18 +23,6 @@
 
 namespace DB
 {
-struct ClusterNodes
-{
-    explicit ClusterNodes(ContextPtr & query_context)
-    {
-        // Pick workers per policy.
-        AdaptiveScheduler adaptive_scheduler(query_context);
-        rank_worker_ids = query_context->getSettingsRef().enable_adaptive_scheduler ? adaptive_scheduler.getHealthyWorkerRank()
-                                                                                    : adaptive_scheduler.getRandomWorkerRank();
-    }
-    std::vector<size_t> rank_worker_ids;
-};
-
 enum class NodeSelectorPolicy : int8_t
 {
     InvalidPolicy,
@@ -50,7 +40,8 @@ enum class NodeType : uint8_t
 struct WorkerNode
 {
     WorkerNode() = default;
-    WorkerNode(const AddressInfo & address_, NodeType type_ = NodeType::Remote, String id_ = "") : address(address_), type(type_), id(id_)
+    explicit WorkerNode(const AddressInfo & address_, NodeType type_ = NodeType::Remote, String id_ = "")
+        : address(address_), type(type_), id(id_)
     {
     }
     AddressInfo address;
@@ -59,6 +50,31 @@ struct WorkerNode
 };
 
 using WorkerNodes = std::vector<WorkerNode>;
+
+struct ClusterNodes
+{
+    explicit ClusterNodes(ContextPtr & query_context)
+    {
+        // Pick workers per policy.
+        AdaptiveScheduler adaptive_scheduler(query_context);
+        rank_worker_ids = query_context->getSettingsRef().enable_adaptive_scheduler ? adaptive_scheduler.getHealthyWorkerRank()
+                                                                                    : adaptive_scheduler.getRandomWorkerRank();
+
+
+        const auto & worker_group = query_context->tryGetCurrentWorkerGroup();
+        if (worker_group)
+        {
+            for (auto i : rank_worker_ids)
+            {
+                const auto & worker_endpoint = worker_group->getHostWithPortsVec()[i];
+                auto worker_address = getRemoteAddress(worker_endpoint, query_context);
+                rank_workers.emplace_back(worker_address, NodeType::Remote, worker_endpoint.id);
+            }
+        }
+    }
+    std::vector<size_t> rank_worker_ids;
+    std::vector<WorkerNode> rank_workers;
+};
 
 struct NodeSelectorResult
 {
@@ -69,6 +85,7 @@ struct NodeSelectorResult
         {
         }
 
+        // = 0 when the exchange mode to the source is LOCAL_XX_NEED_REPARTITION. Otherwise keep it empty.
         std::optional<size_t> parallel_index;
         AddressInfos addresses;
         String toString() const
@@ -152,14 +169,14 @@ class SourceNodeSelector : public CommonNodeSelector<SourceNodeSelector>
 {
 public:
     SourceNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
-    NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context);
+    NodeSelectorResult select(PlanSegment * plan_segment_ptr);
 };
 
 class ComputeNodeSelector : public CommonNodeSelector<ComputeNodeSelector>
 {
 public:
     ComputeNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
-    NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context);
+    NodeSelectorResult select(PlanSegment * plan_segment_ptr);
 };
 
 class NodeSelector
