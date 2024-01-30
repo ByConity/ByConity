@@ -2113,6 +2113,7 @@ enum PreloadLevelSettings : UInt64
     \
     M(Bool, enable_cache_reader_buffer_reuse, false, "Decpreated settings, only a place holder", 0) \
     M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
+    M(Bool, enable_select_query_forwarding, false, "Auto forward select query to target server when having multiple servers", 0) \
     \
     M(Bool, merge_partition_stats,false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
