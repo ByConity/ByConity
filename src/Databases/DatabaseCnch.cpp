@@ -279,17 +279,11 @@ void DatabaseCnch::drop(ContextPtr local_context)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
     // get the lock of tables in current database
-    std::vector<StoragePtr> tables_to_drop;
     std::vector<IntentLockPtr> locks;
 
-    for (auto iterator = getTablesIterator(getContext(), [](const String &) { return true; }); iterator->isValid(); iterator->next())
+    for (auto iterator = getTablesIteratorLightweight(getContext(), [](const String &) { return true; }); iterator->isValid(); iterator->next())
     {
-        StoragePtr table = iterator->table();
-        if (!table)
-            continue;
-        const auto & storage_id = table->getStorageID();
-        locks.emplace_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, storage_id.database_name, storage_id.table_name));
-        tables_to_drop.emplace_back(table);
+        locks.emplace_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database_name, iterator->name()));
     }
 
     for (const auto & lock : locks)
