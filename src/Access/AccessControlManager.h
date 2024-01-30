@@ -49,6 +49,10 @@ public:
     AccessControlManager();
     ~AccessControlManager() override;
 
+    /// Initializes access storage (user directories).
+    void setUpFromMainConfig(const Poco::Util::AbstractConfiguration & config_, const String & config_path_,
+                             const zkutil::GetZooKeeper & get_zookeeper_function_);
+
     /// Parses access entities from a configuration loaded from users.xml.
     /// This function add UsersConfigAccessStorage if it wasn't added before.
     void setUsersConfig(const Poco::Util::AbstractConfiguration & users_config_);
@@ -116,6 +120,12 @@ public:
     UUID login(const Credentials & credentials, const Poco::Net::IPAddress & address) const;
     void setExternalAuthenticatorsConfig(const Poco::Util::AbstractConfiguration & config);
 
+    void setSelectFromSystemDatabaseRequiresGrant(bool enable) { select_from_system_db_requires_grant = enable; }
+    bool doesSelectFromSystemDatabaseRequireGrant() const { return select_from_system_db_requires_grant; }
+
+    void setSelectFromInformationSchemaRequiresGrant(bool enable) { select_from_information_schema_requires_grant = enable; }
+    bool doesSelectFromInformationSchemaRequireGrant() const { return select_from_information_schema_requires_grant; }
+
     std::shared_ptr<const ContextAccess> getContextAccess(
         const UUID & user_id,
         const std::vector<UUID> & current_roles,
@@ -164,6 +174,9 @@ private:
     std::unique_ptr<SettingsProfilesCache> settings_profiles_cache;
     std::unique_ptr<ExternalAuthenticators> external_authenticators;
     std::unique_ptr<CustomSettingsPrefixes> custom_settings_prefixes;
+   
+    std::atomic_bool select_from_system_db_requires_grant = false;
+    std::atomic_bool select_from_information_schema_requires_grant = false;
 };
 
 }

@@ -129,21 +129,9 @@ enum PreloadLevelSettings : UInt64
       "The maximum number of threads to execute the ALTER requests. By default, it is determined automatically.", \
       0) \
     M(UInt64, max_read_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to read from the filesystem.", 0) \
-    M(UInt64, \
-      max_distributed_connections, \
-      1024, \
-      "The maximum number of connections for distributed processing of one query (should be greater than max_threads).", \
-      0) \
-    M(UInt64, \
-      max_query_size, \
-      262144, \
-      "Which part of the query can be read into RAM for parsing (the remaining data for INSERT, if any, is read later)", \
-      0) \
-    M(UInt64, \
-      interactive_delay, \
-      100000, \
-      "The interval in microseconds to check if the request is cancelled, and to send progress info.", \
-      0) \
+    M(UInt64, max_distributed_connections, 1024, "The maximum number of connections for distributed processing of one query (should be greater than max_threads).", 0) \
+    M(UInt64, max_query_size, DBMS_DEFAULT_MAX_QUERY_SIZE, "Which part of the query can be read into RAM for parsing (the remaining data for INSERT, if any, is read later)", 0) \
+    M(UInt64, interactive_delay, 100000, "The interval in microseconds to check if the request is cancelled, and to send progress info.", 0) \
     M(Seconds, connect_timeout, DBMS_DEFAULT_CONNECT_TIMEOUT_SEC, "Connection timeout if there are no replicas.", 0) \
     M(Milliseconds, \
       connect_timeout_with_failover_ms, \
@@ -1949,6 +1937,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
     \
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
+    M(Bool, throw_exception_when_mysql_connection_failed, false, "For mysql database engine, whether throw exception when mysql connection failed. If it is set to true, clickhouse may shutdown during restarting due to mysql connection failure", 0) \
     /** for inverted index*/ \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
 

@@ -328,6 +328,20 @@ void AccessControlManager::addStoragesFromUserDirectoriesConfig(
     }
 }
 
+void AccessControlManager::setUpFromMainConfig(const Poco::Util::AbstractConfiguration & config_, const String & config_path_,
+                                        const zkutil::GetZooKeeper & get_zookeeper_function_)
+{
+    if (config_.has("custom_settings_prefixes"))
+        setCustomSettingsPrefixes(config_.getString("custom_settings_prefixes"));
+   
+    /// Optional improvements in access control system.
+    /// The default values are false because we need to be compatible with earlier access configurations
+    setSelectFromSystemDatabaseRequiresGrant(config_.getBool("access_control_improvements.select_from_system_db_requires_grant", false));
+    setSelectFromInformationSchemaRequiresGrant(config_.getBool("access_control_improvements.select_from_information_schema_requires_grant", false));
+
+    addStoragesFromMainConfig(config_, config_path_, get_zookeeper_function_);
+}
+
 
 void AccessControlManager::addStoragesFromMainConfig(
     const Poco::Util::AbstractConfiguration & config,

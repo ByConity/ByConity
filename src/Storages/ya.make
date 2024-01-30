@@ -212,6 +212,7 @@ SRCS(
     System/StorageSystemUsers.cpp
     System/StorageSystemZeros.cpp
     System/StorageSystemZooKeeper.cpp
+    System/attachInformationSchemaTables.cpp
     System/attachSystemTables.cpp
     TTLDescription.cpp
     VirtualColumnUtils.cpp
