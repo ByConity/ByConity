@@ -194,7 +194,7 @@ void DiskExchangeDataManager::submitReadTask(
                     getCurrentExceptionMessage(false));
                 tryLogCurrentException(logger, msg);
                 if (!addr_cp.empty())
-                    reportError(query_id, addr, code, msg);
+                    reportError(task_cp->query_id, addr_cp, code, msg);
             }
 
             finishSenders(task_cp, code, msg);
