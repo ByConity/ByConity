@@ -101,7 +101,7 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
     txn->async_post_commit = opt.async_post_commit;
 
     ProfileEvents::increment((opt.read_only ? ProfileEvents::CnchTxnReadTxnCreated : ProfileEvents::CnchTxnWriteTxnCreated));
-    LOG_DEBUG(log, "Created txn {}\n", txn->getTransactionRecord().toString());
+    LOG_DEBUG(log, "Created txn {}", txn->getTransactionRecord().toString());
     return txn;
 }
 
@@ -121,7 +121,7 @@ ProxyTransactionPtr TransactionCoordinatorRcCnch::createProxyTransaction(
     /// add txn to its primary txn's secondary txn list
     auto *primary_txn = getTransaction(txn->getPrimaryTransactionID())->as<CnchExplicitTransaction>();
     if (primary_txn) primary_txn->addSecondaryTransaction(txn);
-    LOG_DEBUG(log, "Created proxy txn {}\n", txn->getTransactionRecord().toString());
+    LOG_DEBUG(log, "Created proxy txn {}", txn->getTransactionRecord().toString());
     return txn;
 }
 
@@ -240,7 +240,7 @@ void TransactionCoordinatorRcCnch::eraseActiveTimestamp(const TransactionCnchPtr
     auto tables_it = timestamp_to_tables.find(ts);
     if (tables_it == timestamp_to_tables.end())
     {
-        LOG_TRACE(log, "No need to erase active timestamp for txn {}\n", txn->getTransactionID().toUInt64());
+        LOG_TRACE(log, "No need to erase active timestamp for txn {}", txn->getTransactionID().toUInt64());
         return;
     }
 
@@ -283,7 +283,7 @@ std::optional<TxnTimestamp> TransactionCoordinatorRcCnch::getMinActiveTimestamp(
         {
             if ((cur_ts.toMillisecond() - it->toMillisecond()) > expired_interval)
             {
-                LOG_TRACE(log, "Clean outdated timestamp {}\n", *it);
+                LOG_TRACE(log, "Clean outdated timestamp {}", *it);
                 timestamp_to_tables.erase(*it);
                 it = timestamps_it->second.erase(it);
             }
@@ -295,7 +295,7 @@ std::optional<TxnTimestamp> TransactionCoordinatorRcCnch::getMinActiveTimestamp(
     }
     catch (const Exception & e)
     {
-        LOG_WARNING(log, "Failed to clean outdated timestamps for {} {}\n", storage_id.getNameForLogs(), e.displayText());
+        LOG_WARNING(log, "Failed to clean outdated timestamps for {} {}", storage_id.getNameForLogs(), e.displayText());
     }
 
     if (timestamps_it->second.empty())
@@ -327,7 +327,7 @@ void TransactionCoordinatorRcCnch::scanActiveTransactions()
             }
         }
 
-        LOG_INFO(log, "Background txn scanner expires {} transactions\n", deleted_txn_list.size());
+        LOG_INFO(log, "Background txn scanner expires {} transactions", deleted_txn_list.size());
         ProfileEvents::increment(ProfileEvents::CnchTxnExpired, deleted_txn_list.size());
 
         for (const auto & txn : deleted_txn_list)
