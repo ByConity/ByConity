@@ -4870,6 +4870,8 @@ UInt64 Context::tryGetTimestamp(const String & pretty_func_name) const
     }
     catch (...)
     {
+        if (!getCnchConfigRef().getBool("tso_service.use_fallback", false))
+            throw;
         tryLogCurrentException(
             pretty_func_name.c_str(), fmt::format("Unable to reach TSO from {} during call to tryGetTimestamp", tryGetTSOLeaderHostPort()));
         return TxnTimestamp::fallbackTS();
