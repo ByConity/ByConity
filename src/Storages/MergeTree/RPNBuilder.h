@@ -8,6 +8,7 @@
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Common/typeid_cast.h>
+#include <Interpreters/TreeRewriter.h>
 
 
 namespace DB
@@ -25,26 +26,15 @@ public:
     RPNBuilder(const SelectQueryInfo & query_info, ContextPtr context_, const AtomFromASTFunc & atomFromAST_)
         : WithContext(context_), atomFromAST(atomFromAST_)
     {
-        /** Evaluation of expressions that depend only on constants.
-          * For the index to be used, if it is written, for example `WHERE Date = toDate(now())`.
-          */
-        block_with_constants = KeyCondition::getBlockWithConstants(query_info.query, query_info.syntax_analyzer_result, getContext());
-
-        /// Transform WHERE section to Reverse Polish notation
-        const ASTSelectQuery & select = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-        if (select.where())
+        if (auto filter = getFilterFromQueryInfo(query_info); filter != nullptr)
         {
-            traverseAST(select.where());
-
-            if (select.prewhere())
-            {
-                traverseAST(select.prewhere());
-                rpn.emplace_back(RPNElement::FUNCTION_AND);
-            }
-        }
-        else if (select.prewhere())
-        {
-            traverseAST(select.prewhere());
+            /** Evaluation of expressions that depend only on constants.
+              * For the index to be used, if it is written, for example `WHERE Date = toDate(now())`.
+              */
+            // auto analyzed_result = TreeRewriter(getContext()).analyze(filter, query_info.syntax_analyzer_result->required_source_columns);
+        
+            block_with_constants = KeyCondition::getBlockWithConstants(filter, query_info.syntax_analyzer_result, getContext());
+            traverseAST(filter);
         }
         else
         {

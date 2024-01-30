@@ -1,8 +1,12 @@
 #pragma once
 #include <QueryPlan/ISourceStep.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
+//#include <Storages/MergeTree/MergeTreeBaseSelectProcessor.h>
 #include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
 #include <Parsers/ASTSampleRatio.h>
+#include <Interpreters/ExpressionActionsSettings.h>
+#include <Interpreters/ExtractExpressionInfoVisitor.h>
+#include <Core/Names.h>
 
 namespace DB
 {
@@ -10,6 +14,17 @@ namespace DB
 using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
 using RelativeSize = boost::rational<ASTSampleRatio::BigNum>;
 class Pipe;
+
+struct MergeTreeStreamSettings
+{
+    UInt64 min_marks_for_concurrent_read;
+    UInt64 max_block_size;
+    UInt64 preferred_block_size_bytes;
+    UInt64 preferred_max_column_in_block_size_bytes;
+    bool use_uncompressed_cache;
+    ExpressionActionsSettings actions_settings;
+    MergeTreeReaderSettings reader_settings = {};
+};
 
 struct MergeTreeDataSelectSamplingData
 {
@@ -135,6 +150,12 @@ public:
     const Names & real_column_names,
     bool sample_factor_column_queried,
     Poco::Logger * log);
+
+    ContextPtr getContext() const { return context; }
+    const SelectQueryInfo & getQueryInfo() const { return query_info; }
+    StorageMetadataPtr getStorageMetadata() const { return storage_snapshot->getMetadataForQuery(); }
+
+    void requestReadingInOrder(size_t prefix_size, int direction, size_t limit);
     ReadFromMergeTree::AnalysisResult getAnalysisResult() const;
 private:
     const MergeTreeReaderSettings reader_settings;
@@ -173,7 +194,7 @@ private:
     Pipe readInOrder(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, bool use_uncompressed_cache);
 
     template<typename TSource>
-    ProcessorPtr createSource(const RangesInDataPart & part, const Names & required_columns, bool use_uncompressed_cache);
+    ProcessorPtr createSource(const RangesInDataPart & part, const Names & required_columns,const MergeTreeStreamSettings & stream_settings);
 
     Pipe spreadMarkRangesAmongStreams(
         RangesInDataParts && parts_with_ranges,

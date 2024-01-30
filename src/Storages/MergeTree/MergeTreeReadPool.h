@@ -107,6 +107,8 @@ public:
         const BackoffSettings & backoff_settings_, size_t preferred_block_size_bytes_,
         const bool do_not_steal_tasks_ = false);
 
+    ~MergeTreeReadPool();
+
     MergeTreeReadTaskPtr getTask(const size_t min_marks_to_read, const size_t thread, const Names & ordered_names);
 
     /** Each worker could call this method and pass information about read performance.
@@ -116,6 +118,9 @@ public:
     void profileFeedback(const ReadBufferFromFileBase::ProfileInfo info);
 
     Block getHeader() const;
+
+    void updateGranuleStats(const std::unordered_map<String, size_t> & stats);
+
 
 private:
     std::vector<size_t> fillPerPartInfo(
@@ -132,7 +137,7 @@ private:
     bool predict_block_size_bytes;
     std::vector<PerPartParams> per_part_params;
     PrewhereInfoPtr prewhere_info;
-
+    std::deque<AtomicPredicatePtr> atomic_predicates;
     struct Part
     {
         MergeTreeMetaBase::DataPartPtr data_part;
@@ -164,6 +169,8 @@ private:
     std::set<size_t> remaining_thread_tasks;
 
     RangesInDataParts parts_ranges;
+
+    std::unordered_map<String, size_t> per_column_read_granules;
 
     mutable std::mutex mutex;
 

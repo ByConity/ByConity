@@ -26,6 +26,8 @@
 #include <Storages/SelectQueryInfo.h>
 
 #include <boost/noncopyable.hpp>
+#include <Core/Names.h>
+#include <Parsers/IAST_fwd.h>
 
 #include <memory>
 #include <set>
@@ -46,6 +48,12 @@ using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 /// Push down where partition predicate to query info partition_filter
 void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryInfo & query_info, ContextPtr context);
 
+enum class MaterializeStrategy : Int32
+{
+    PREWHERE = 0,
+    LATE_MATERIALIZE = 1,
+};
+
 /** Identifies WHERE expressions that can be placed in PREWHERE by calculating respective
  *  sizes of columns used in particular expression and identifying "good" conditions of
  *  form "column_name = constant", where "constant" is outside some `threshold` specified in advance.
@@ -58,12 +66,15 @@ class MergeTreeWhereOptimizer : private boost::noncopyable
 {
 public:
     MergeTreeWhereOptimizer(
-        SelectQueryInfo & query_info,
-        ContextPtr context,
+        SelectQueryInfo & query_info_,
+        ContextPtr context_,
         std::unordered_map<std::string, UInt64> column_sizes_,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageMetadataPtr & metadata_snapshot_,
         const Names & queried_columns_,
-        Poco::Logger * log_);
+        Poco::Logger * log_,
+        MaterializeStrategy materialize_strategy_ = MaterializeStrategy::PREWHERE);
+
+    std::vector<ASTPtr> && getAtomicPredicatesExpressions();
 
 private:
     void optimize(ASTSelectQuery & select) const;
@@ -86,13 +97,20 @@ private:
         }
 
         /// Is condition a better candidate for moving to PREWHERE?
-        bool operator< (const Condition & rhs) const
+        bool operator < (const Condition & rhs) const
         {
             return tuple() < rhs.tuple();
         }
     };
 
     using Conditions = std::list<Condition>;
+
+    /// Move predicates to prewhere
+    void optimizePrewhere(Conditions & where_conditions, ASTSelectQuery & select) const;
+
+    /// Support for implementation of pipelined early materialization as described in
+    /// https://15721.courses.cs.cmu.edu/spring2020/papers/13-execution/shrinivas-icde2013.pdf
+    void optimizeLateMaterialize(Conditions where_conditions, ASTSelectQuery & select) const;
 
     void analyzeImpl(Conditions & res, const ASTPtr & node, bool is_final) const;
 
@@ -122,6 +140,15 @@ private:
 
     bool isSubsetOfTableColumns(const NameSet & identifiers) const;
 
+    bool isValidPartitionColumn(const IAST * condition) const;
+
+    bool isSubsetOfPartitionKeyExpressions(const ASTPtr & node) const;
+
+    bool defaultExpressionDependOnOtherColumns(const String & column_name) const;
+
+    void evaluateConditionsForEMP(Conditions & conditions, const NameSet & prohibited) const;
+
+
     /** ARRAY JOIN'ed columns as well as arrayJoin() result cannot be used in PREWHERE, therefore expressions
       *    containing said columns should not be moved to PREWHERE at all.
       *    We assume all AS aliases have been expanded prior to using this class
@@ -145,6 +172,12 @@ private:
     NameSet array_joined_names;
     const StorageMetadataPtr & metadata_snapshot;
     bool enable_ab_index_optimization;
+
+    /// Late materialize
+    MaterializeStrategy materialize_strategy;
+    bool aggresive_pushdown = false;
+    Names partition_columns;
+    mutable std::vector<ASTPtr> atomic_predicates_expr;
 };
 
 

@@ -1,4 +1,5 @@
 #include <Interpreters/Set.h>
+#include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/JSONBuilder.h>
 #include <Columns/ColumnSet.h>

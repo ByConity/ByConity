@@ -17,6 +17,9 @@
 #include <Storages/MergeTree/MergeTreeSelectProcessor.h>
 #include <Storages/MergeTree/MergeTreeReverseSelectProcessor.h>
 #include <Storages/MergeTree/MergeTreeThreadSelectBlockInputProcessor.h>
+#include <Storages/MergeTree/LateMaterialize/MergeTreeSelectProcessorLM.h>
+#include <Storages/MergeTree/LateMaterialize/MergeTreeReverseSelectProcessorLM.h>
+#include <Storages/MergeTree/LateMaterialize/MergeTreeThreadSelectProcessorLM.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/VirtualColumnUtils.h>
@@ -82,7 +85,7 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & con
         .checksum_on_read = context->getSettingsRef().checksum_on_read,
         .read_source_bitmap = !context->getSettingsRef().use_encoded_bitmap,
     };
-    
+
     settings.setDiskCacheSteaing(data.getSettings()->disk_cache_stealing_mode);
     return settings;
 }
@@ -176,12 +179,19 @@ ReadFromMergeTree::ReadFromMergeTree(
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
     Poco::Logger * log_,
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_)
-    : ISourceStep(DataStream{.header = MergeTreeBaseSelectProcessor::transformHeader(
-        storage_snapshot_->getSampleBlockForColumns(real_column_names_),
-        getPrewhereInfo(query_info_),
-        data_.getPartitionValueType(),
-        virt_column_names_,
-        getIndexContext(query_info_), query_info_.read_bitmap_index)})
+    : ISourceStep(DataStream{
+    .header = query_info_.atomic_predicates.empty()
+        ? MergeTreeBaseSelectProcessor::transformHeader(
+                storage_snapshot_->getSampleBlockForColumns(real_column_names_),
+                    getPrewhereInfo(query_info_),
+                    data_.getPartitionValueType(),
+                    virt_column_names_,
+                    getIndexContext(query_info_), query_info_.read_bitmap_index)
+        : MergeTreeBaseSelectProcessorLM::transformHeader(
+                storage_snapshot_->getSampleBlockForColumns(real_column_names_),
+            query_info_,
+            data_.getPartitionValueType(),
+            virt_column_names_)})
     , reader_settings(getMergeTreeReaderSettings(context_, data_))
     , prepared_parts(std::move(parts_))
     , delete_bitmap_getter(std::move(delete_bitmap_getter_))
@@ -256,22 +266,47 @@ Pipe ReadFromMergeTree::readFromPool(
 
     auto * logger = &Poco::Logger::get(data.getLogName() + " (SelectExecutor)");
     LOG_DEBUG(logger, "Reading approx. {} rows with {} streams", total_rows, max_streams);
-
-    for (size_t i = 0; i < max_streams; ++i)
+    MergeTreeStreamSettings stream_settings {
+        .min_marks_for_concurrent_read = min_marks_for_concurrent_read,
+        .max_block_size = max_block_size,
+        .preferred_block_size_bytes = settings.preferred_block_size_bytes,
+        .preferred_max_column_in_block_size_bytes = settings.preferred_max_column_in_block_size_bytes,
+        .use_uncompressed_cache = use_uncompressed_cache,
+        .actions_settings = actions_settings,
+        .reader_settings = reader_settings
+    };
+    if (!query_info.atomic_predicates.empty())
     {
-        auto source = std::make_shared<MergeTreeThreadSelectBlockInputProcessor>(
-            i, pool, min_marks_for_concurrent_read, max_block_size,
-            settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes,
-            data, storage_snapshot, use_uncompressed_cache,
-            query_info, actions_settings, reader_settings, virt_column_names);
-
-        if (i == 0)
+        for (size_t i = 0; i < max_streams; ++i)
         {
-            /// Set the approximate number of rows for the first source only
-            source->addTotalRowsApprox(total_rows);
-        }
+            auto source = std::make_shared<MergeTreeThreadSelectProcessorLM>(
+                i, pool, data, storage_snapshot,
+                query_info, stream_settings, virt_column_names);
 
-        pipes.emplace_back(std::move(source));
+            if (i == 0)
+            {
+                /// Set the approximate number of rows for the first source only
+                source->addTotalRowsApprox(total_rows);
+            }
+
+            pipes.emplace_back(std::move(source));
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < max_streams; ++i)
+        {
+            auto source = std::make_shared<MergeTreeThreadSelectBlockInputProcessor>(
+                i, pool, data, storage_snapshot, query_info, stream_settings, virt_column_names);
+
+            if (i == 0)
+            {
+                /// Set the approximate number of rows for the first source only
+                source->addTotalRowsApprox(total_rows);
+            }
+
+            pipes.emplace_back(std::move(source));
+        }
     }
 
     return Pipe::unitePipes(std::move(pipes));
@@ -281,12 +316,11 @@ template<typename TSource>
 ProcessorPtr ReadFromMergeTree::createSource(
     const RangesInDataPart & part,
     const Names & required_columns,
-    bool use_uncompressed_cache)
+    const MergeTreeStreamSettings & stream_settings)
 {
     return std::make_shared<TSource>(
-            data, storage_snapshot, part.data_part, std::move(combineFilterBitmap(part, delete_bitmap_getter)), max_block_size, preferred_block_size_bytes,
-            preferred_max_column_in_block_size_bytes, required_columns, part.ranges, use_uncompressed_cache,
-            query_info, actions_settings, true, reader_settings, virt_column_names, part.part_index_in_query);
+                data, storage_snapshot, part.data_part, std::move(combineFilterBitmap(part, delete_bitmap_getter)), required_columns, part.ranges,
+                query_info, true, stream_settings, virt_column_names, part.part_index_in_query);
 }
 
 Pipe ReadFromMergeTree::readInOrder(
@@ -296,13 +330,36 @@ Pipe ReadFromMergeTree::readInOrder(
     bool use_uncompressed_cache)
 {
     Pipes pipes;
-    for (const auto & part : parts_with_range)
-    {
-        auto source = read_type == ReadType::InReverseOrder
-                    ? createSource<MergeTreeReverseSelectProcessor>(part, required_columns, use_uncompressed_cache)
-                    : createSource<MergeTreeSelectProcessor>(part, required_columns, use_uncompressed_cache);
+    MergeTreeStreamSettings stream_settings{
+        .max_block_size = max_block_size,
+        .preferred_block_size_bytes = preferred_block_size_bytes,
+        .preferred_max_column_in_block_size_bytes = preferred_max_column_in_block_size_bytes,
+        .use_uncompressed_cache = use_uncompressed_cache,
+        .actions_settings = actions_settings,
+        .reader_settings = reader_settings
+    };
 
-        pipes.emplace_back(std::move(source));
+    if (!query_info.atomic_predicates.empty())
+    {
+        for (const auto & part : parts_with_range)
+        {
+            auto source = read_type == ReadType::InReverseOrder
+                        ? createSource<MergeTreeReverseSelectProcessorLM>(part, required_columns, stream_settings)
+                        : createSource<MergeTreeSelectProcessorLM>(part, required_columns, stream_settings);
+
+            pipes.emplace_back(std::move(source));
+        }
+    }
+    else
+    {
+        for (const auto & part : parts_with_range)
+        {
+            auto source = read_type == ReadType::InReverseOrder
+                        ? createSource<MergeTreeReverseSelectProcessor>(part, required_columns, stream_settings)
+                        : createSource<MergeTreeSelectProcessor>(part, required_columns, stream_settings);
+
+            pipes.emplace_back(std::move(source));
+        }
     }
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
@@ -915,7 +972,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     }
 
     // storage_snapshot->check(result.column_names_to_read);
-    
+
     // Build and check if primary key is used when necessary
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     Names primary_key_columns = primary_key.column_names;

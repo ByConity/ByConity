@@ -360,6 +360,11 @@ NamesAndTypesList NamesAndTypesList::filter(const Names & names) const
     return filter(NameSet(names.begin(), names.end()));
 }
 
+NamesAndTypesList NamesAndTypesList::filter(const String & name) const
+{
+    return filter(NameSet{name});
+}
+
 NamesAndTypesList NamesAndTypesList::addTypes(const Names & names, BitEngineReadType bitengine_read_type) const
 {
     /// NOTE: It's better to make a map in `IStorage` than to create it here every time again.

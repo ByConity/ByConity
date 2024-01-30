@@ -26,11 +26,14 @@
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <sparsehash/dense_hash_map>
+#include <DataTypes/IDataType.h>
+#include <Storages/MergeTree/MergeTreeRangeReader.h>
 
 namespace DB
 {
 
 class IDataType;
+class DelayedStream;
 
 /// Reads the data between pairs of marks in the same part. When reading consecutive ranges, avoids unnecessary seeks.
 /// When ranges are almost consecutive, seeks are fast because they are performed inside the buffer.

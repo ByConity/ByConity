@@ -29,11 +29,17 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTSubquery.h>
+#include <Parsers/IAST_fwd.h>
 #include <Parsers/formatAST.h>
 #include <Interpreters/misc.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/NestedUtils.h>
 #include <common/map.h>
+#include <iterator>
+#include <optional>
+#include <fmt/core.h>
+#include <fmt/format.h>
+#include <Core/Names.h>
 
 #include <Interpreters/PartitionPredicateVisitor.h>
 #include <Interpreters/TreeRewriter.h>
@@ -47,34 +53,64 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
+    extern const int LOGICAL_ERROR;
 }
 
 /// Conditions like "x = N" are considered good if abs(N) > threshold.
 /// This is used to assume that condition is likely to have good selectivity.
 static constexpr auto threshold = 2;
 
+static bool containSubQuery(const ASTPtr & pred)
+{
+    if (!pred)
+        return false;
+    if (auto * select = pred->as<ASTSelectQuery>(); select)
+        return true;
+    for (const auto & child : pred->children)
+        if (containSubQuery(child))
+            return true;
+    return false;
+}
+
+static bool containIdentifiers(const ASTPtr & expr)
+{
+    if (!expr)
+        return false;
+    if (const auto & identifier = expr->as<ASTIdentifier>(); identifier)
+        return true;
+    for (const auto & child : expr->children)
+        if (containIdentifiers(child))
+            return true;
+    return false;
+}
+
 
 MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
-    SelectQueryInfo & query_info,
-    ContextPtr context,
+    SelectQueryInfo & query_info_,
+    ContextPtr context_,
     std::unordered_map<std::string, UInt64> column_sizes_,
     const StorageMetadataPtr & metadata_snapshot_,
     const Names & queried_columns_,
-    Poco::Logger * log_)
+    Poco::Logger * log_,
+    MaterializeStrategy materialize_strategy_)
     : table_columns{collections::map<std::unordered_set>(
         metadata_snapshot_->getColumns().getAllPhysical(), [](const NameAndTypePair & col) { return col.name; })}
     , queried_columns{queried_columns_}
     , sorting_key_names{NameSet(
           metadata_snapshot_->getSortingKey().column_names.begin(), metadata_snapshot_->getSortingKey().column_names.end())}
-    , block_with_constants{KeyCondition::getBlockWithConstants(query_info.query->clone(), query_info.syntax_analyzer_result, context)}
+    , block_with_constants{KeyCondition::getBlockWithConstants(query_info_.query->clone(), query_info_.syntax_analyzer_result, context_)}
     , log{log_}
     , column_sizes{std::move(column_sizes_)}
     , metadata_snapshot{metadata_snapshot_}
-    , enable_ab_index_optimization{context->getSettingsRef().enable_ab_index_optimization}
+    , enable_ab_index_optimization{context_->getSettingsRef().enable_ab_index_optimization}
+    , materialize_strategy{materialize_strategy_}
+    , aggresive_pushdown{context_->getSettingsRef().late_materialize_aggressive_push_down}
+    , partition_columns(metadata_snapshot_->getPartitionKey().column_names)
 {
+    ASTSelectQuery & query = query_info_.query->as<ASTSelectQuery &>();
+
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     if (!primary_key.column_names.empty())
         first_primary_key_column = primary_key.column_names[0];
@@ -86,8 +122,8 @@ MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
             total_size_of_queried_columns += it->second;
     }
 
-    determineArrayJoinedNames(query_info.query->as<ASTSelectQuery &>());
-    optimize(query_info.query->as<ASTSelectQuery &>());
+    determineArrayJoinedNames(query);
+    optimize(query);
 }
 
 
@@ -177,7 +213,8 @@ void MergeTreeWhereOptimizer::analyzeImpl(Conditions & res, const ASTPtr & node,
             /// Only table columns are considered. Not array joined columns. NOTE We're assuming that aliases was expanded.
             && isSubsetOfTableColumns(cond.identifiers)
             /// Do not move conditions involving all queried columns.
-            && cond.identifiers.size() < queried_columns.size();
+            && ((materialize_strategy == MaterializeStrategy::LATE_MATERIALIZE && aggresive_pushdown)
+                || cond.identifiers.size() < queried_columns.size());
 
         if (cond.viable)
             cond.good = isConditionGood(node);
@@ -314,6 +351,17 @@ void MergeTreeWhereOptimizer::optimize(ASTSelectQuery & select) const
         return;
 
     Conditions where_conditions = analyze(select.where(), select.final());
+
+    if (materialize_strategy == MaterializeStrategy::PREWHERE)
+        optimizePrewhere(where_conditions, select);
+    else if (materialize_strategy == MaterializeStrategy::LATE_MATERIALIZE)
+        optimizeLateMaterialize(where_conditions, select);
+    else
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown materialize strategy");
+}
+
+void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, ASTSelectQuery & select) const
+{
     Conditions prewhere_conditions;
 
     UInt64 total_size_of_moved_conditions = 0;
@@ -414,6 +462,145 @@ void MergeTreeWhereOptimizer::optimize(ASTSelectQuery & select) const
     select.setExpression(ASTSelectQuery::Expression::PREWHERE, reconstruct(prewhere_conditions));
 
     LOG_DEBUG(log, "MergeTreeWhereOptimizer: condition \"{}\" moved to PREWHERE", select.prewhere());
+}
+
+void MergeTreeWhereOptimizer::optimizeLateMaterialize(Conditions where_conditions, ASTSelectQuery & select) const
+{
+    Conditions tmp_conditions;
+    std::vector<Condition> conditions;
+    UInt64 total_size_of_moved_conditions = 0;
+
+    /// Move condition and all other conditions depend on the same set of columns to
+    /// tmp_conditions w/o any restriction of how many condition should we move
+    auto move_condition = [&](Conditions::iterator cond_it, bool array_set_check = false) {
+        tmp_conditions.splice(tmp_conditions.end(), where_conditions, cond_it);
+
+        if (array_set_check)
+            return;
+
+        total_size_of_moved_conditions += cond_it->columns_size;
+
+        /// Move all other viable conditions that depend on the same set of columns.
+        for (auto jt = where_conditions.begin(); jt != where_conditions.end();)
+        {
+            if (jt->viable && jt->columns_size == cond_it->columns_size && jt->identifiers == cond_it->identifiers)
+                tmp_conditions.splice(tmp_conditions.end(), where_conditions, jt++);
+            else
+                ++jt;
+        }
+    };
+
+    /// Firstly, move ab index if there is any, always use for early materialize
+    LOG_DEBUG(log, "MergeTreeWhereOptimizer: try to use bitmap index");
+    NameSet indexed_columns; /// indexed columns, will always be read at the last stage in chain, so we won't move condition that required these columns
+    for (auto it = where_conditions.begin(); it != where_conditions.end();)
+    {
+        if (isArraySetCheck(it->node))
+        {
+            auto move_it = it++;
+            indexed_columns.insert(move_it->identifiers.begin(), move_it->identifiers.end());
+            move_condition(move_it, true);
+            continue;
+        }
+        ++it;
+    }
+
+    /// When moving for EMP, following conditions applied:
+    /// - Condition with >= 2 identifiers can't be moved (may relax later)
+    /// - Condition that is subset of partition expression can't be moved
+    /// - Condition that required any column in indexed_columns
+    evaluateConditionsForEMP(where_conditions, indexed_columns);
+
+    /// Seperate bitmap index from other conditions. The reason is when we have a condition like
+    /// `len(x) = 10 and arraySetCheck(x,1)`, if we keep both condition in a stage then in that
+    /// stage we need to read column `x`, which is not necessary for `arraySetCheck`. The better
+    /// strategy is making `arraySetCheck(x,1)` the first stage in chain and `len(x) = 10` should
+    /// be kept in WHERE. If we have many conditions, we have high change to skip reading some
+    /// granules of `x`
+    auto bitmap_conditions = std::move(tmp_conditions);
+
+    while (!where_conditions.empty())
+    {
+        auto it = std::min_element(where_conditions.begin(), where_conditions.end());
+
+        if (!it->viable)
+            break;
+
+        if (containsArraySetCheck(it->node))
+            break;
+
+        bool moved_enough = false;
+        if (!aggresive_pushdown && total_size_of_queried_columns > 0)
+        {
+            /// If we know size of queried columns use it as threshold. 40% ratio is just a guess.
+            moved_enough = total_size_of_moved_conditions > 0
+                && (total_size_of_moved_conditions + it->columns_size) * 2.5 > total_size_of_queried_columns;
+        }
+        if (moved_enough)
+            break;
+        move_condition(it);
+    }
+
+    for (auto && condition : tmp_conditions)
+    {
+        conditions.emplace_back(std::move(condition));
+    }
+//#ifndef NDEBUG
+//    fmt::print("Prewhere conditions with single columns\n");
+//    for (auto & cond : conditions)
+//    {
+//        fmt::print("{} {} {}\n", cond.column_names, cond.column_size, cond.node->formatForErrorMessage());
+//    }
+//#endif
+
+    /// Merge all predicates with same required input columns
+    size_t cnt = 0;
+    for (size_t i = 0; i < conditions.size();)
+    {
+        size_t start = i++;
+        while (i < conditions.size() && conditions[i].identifiers == conditions[start].identifiers)
+            ++i;
+        if (i > start + 1) /// More than 2 predicates, merge to `predicates[start]` with a 'and'
+        {
+            const auto function = std::make_shared<ASTFunction>();
+            function->name = "and";
+            function->arguments = std::make_shared<ASTExpressionList>();
+            function->children.push_back(function->arguments);
+            for (size_t j = start; j < i; ++j)
+            {
+                function->arguments->children.push_back(conditions[j].node);
+            }
+            conditions[start].node = std::move(function);
+        }
+        if (start > cnt)
+            conditions[cnt] = std::move(conditions[start]);
+        ++cnt;
+    }
+    conditions.erase(conditions.begin() + cnt, conditions.end());
+
+    /// TODO: @canh find the most reasonable way to order columns
+    std::reverse(conditions.begin(), conditions.end()); /// Last condition in array is first reader in chain
+
+    /// Construct final column with predicate list
+    for (auto & pred : conditions)
+        atomic_predicates_expr.emplace_back(pred.node);
+
+    /// If there's any bitmap index, make it the first reader in chain
+    for (auto & pred : bitmap_conditions)
+        atomic_predicates_expr.emplace_back(pred.node);
+
+
+#ifndef NDEBUG
+    fmt::print(stderr, "MergeTreeWhereOptimizer: prewhere predicate map by column:\n");
+    for (const auto & pred : atomic_predicates_expr)
+    {
+        fmt::print(stderr, "{}\n", pred);
+    }
+    LOG_DEBUG(log, "Prewhere predicate map by column:\n {}", fmt::join(atomic_predicates_expr, "\n"));
+#endif
+
+    select.setExpression(ASTSelectQuery::Expression::WHERE, reconstruct(where_conditions));
+
 }
 
 
@@ -549,6 +736,79 @@ void MergeTreeWhereOptimizer::determineArrayJoinedNames(ASTSelectQuery & select)
 
     for (const auto & ast : array_join_expression_list->children)
         array_joined_names.emplace(ast->getAliasOrColumnName());
+}
+
+void MergeTreeWhereOptimizer::evaluateConditionsForEMP(Conditions & conditions, const NameSet & prohibited) const
+{
+    for (auto & cond : conditions)
+    {
+        Names intersect;
+        std::set_intersection(prohibited.begin(), prohibited.end(), cond.identifiers.begin(), cond.identifiers.end(), std::back_inserter(intersect));
+        cond.viable &= intersect.empty() && cond.identifiers.size() == 1 && !isSubsetOfPartitionKeyExpressions(cond.node) && !containSubQuery(cond.node) && !defaultExpressionDependOnOtherColumns(*cond.identifiers.begin());
+    }
+}
+
+bool MergeTreeWhereOptimizer::isValidPartitionColumn(const IAST * condition) const
+{
+    const auto *const function = typeid_cast<const ASTFunction *>(condition);
+    if (!function || partition_columns.empty())
+        return false;
+
+    // Here we consider the expression which only contains one ASTIdentifier/ASTFunction and the other
+    // arguments must be ASTLiteral.
+    // The flag represents whether we have found a partition-key column (Function or Identifier)
+    for (auto & arg_child : function->arguments->children)
+    {
+        const auto & identifier = typeid_cast<const ASTIdentifier *>(arg_child.get());
+        const auto & func = typeid_cast<const ASTFunction *>(arg_child.get());
+
+        // Function or Identifier can only appear once
+        if (!identifier && !func) continue;
+
+        // Whether a Function or Identifer is a partition key
+        for (const auto & name : partition_columns)
+        {
+            if (func || identifier)
+            {
+                if (name == arg_child->getAliasOrColumnName())
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool MergeTreeWhereOptimizer::isSubsetOfPartitionKeyExpressions(const ASTPtr & node) const
+{
+    if (partition_columns.empty()) return false;
+    if (const auto * func = node->as<ASTFunction>(); func && (func->name == "and" || func->name == "or" || func->name == "not"))
+    {
+        for (const auto & elem : func->arguments->children)
+            if (isSubsetOfPartitionKeyExpressions(elem)) return true;
+    }
+    else
+    {
+        NameSet identifiers;
+
+        collectIdentifiersNoSubqueries(node, identifiers);
+
+        if (isSubsetOfTableColumns(identifiers) && isValidPartitionColumn(node.get()))
+            return true;
+    }
+    return false;
+}
+
+bool MergeTreeWhereOptimizer::defaultExpressionDependOnOtherColumns(const String & column_name) const
+{
+    auto column_default = metadata_snapshot->getColumns().getDefault(column_name);
+    if (!column_default)
+        return false;
+    return containIdentifiers(column_default->expression);
+}
+
+std::vector<ASTPtr> && MergeTreeWhereOptimizer::getAtomicPredicatesExpressions()
+{
+    return std::move(atomic_predicates_expr);
 }
 
 void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryInfo & query_info, ContextPtr context)

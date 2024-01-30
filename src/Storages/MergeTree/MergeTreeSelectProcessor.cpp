@@ -38,25 +38,18 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     const StorageSnapshotPtr & storage_snapshot_,
     const MergeTreeMetaBase::DataPartPtr & owned_data_part_,
     ImmutableDeleteBitmapPtr delete_bitmap_,
-    UInt64 max_block_size_rows_,
-    size_t preferred_block_size_bytes_,
-    size_t preferred_max_column_in_block_size_bytes_,
     Names required_columns_,
     MarkRanges mark_ranges_,
-    bool use_uncompressed_cache_,
     const SelectQueryInfo & query_info_,
-    ExpressionActionsSettings actions_settings,
     bool check_columns_,
-    const MergeTreeReaderSettings & reader_settings_,
+    const MergeTreeStreamSettings & stream_settings_,
     const Names & virt_column_names_,
     size_t part_index_in_query_,
     bool quiet)
     :
     MergeTreeBaseSelectProcessor{
         storage_snapshot_->getSampleBlockForColumns(required_columns_),
-        storage_, storage_snapshot_, query_info_, std::move(actions_settings), max_block_size_rows_,
-        preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_,
-        reader_settings_, use_uncompressed_cache_, virt_column_names_},
+        storage_, storage_snapshot_, query_info_, stream_settings_, virt_column_names_},
     required_columns{std::move(required_columns_)},
     data_part{owned_data_part_},
     delete_bitmap{std::move(delete_bitmap_)},
@@ -93,9 +86,9 @@ try
 
     task_columns = getReadTaskColumns(
         storage, storage_snapshot, data_part,
-        required_columns, prewhere_info, index_context, check_columns);
+        required_columns, prewhere_info, index_context, {}, check_columns);
 
-    auto size_predictor = (preferred_block_size_bytes == 0)
+    auto size_predictor = (stream_settings.preferred_block_size_bytes == 0)
         ? nullptr
         : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, storage_snapshot->metadata->getSampleBlock());
 
@@ -104,7 +97,7 @@ try
     column_name_set = NameSet{column_names.begin(), column_names.end()};
 
     task = std::make_unique<MergeTreeReadTask>(
-        data_part, delete_bitmap, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns, 
+        data_part, delete_bitmap, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns,
         prewhere_info && prewhere_info->remove_prewhere_column, task_columns.should_reorder, std::move(size_predictor));
 
     if (!reader)

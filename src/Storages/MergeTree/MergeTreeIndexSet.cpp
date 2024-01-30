@@ -7,6 +7,8 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <Poco/Logger.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
@@ -250,23 +252,10 @@ MergeTreeIndexConditionSet::MergeTreeIndexConditionSet(
         if (!key_columns.count(name))
             key_columns.insert(name);
 
-    const auto & select = query.query->as<ASTSelectQuery &>();
-
-    if (select.where() && select.prewhere())
-        expression_ast = makeASTFunction(
-                "and",
-                select.where()->clone(),
-                select.prewhere()->clone());
-    else if (select.where())
-        expression_ast = select.where()->clone();
-    else if (select.prewhere())
-        expression_ast = select.prewhere()->clone();
-
-    useless = checkASTUseless(expression_ast);
+    expression_ast = getFilterFromQueryInfo(query, true);
     /// Do not proceed if index is useless for this query.
-    if (useless)
+    if (useless = checkASTUseless(expression_ast); useless)
         return;
-
     /// Replace logical functions with bit functions.
     /// Working with UInt8: last bit = can be true, previous = can be false (Like src/Storages/MergeTree/BoolMask.h).
     traverseAST(expression_ast);

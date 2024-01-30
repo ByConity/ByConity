@@ -32,6 +32,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/ProjectionsDescription.h>
 #include <Storages/MergeTree/Index/MergeTreeIndexHelper.h>
+#include <vector>
 
 namespace DB
 {
@@ -50,6 +51,9 @@ using ActionsDAGPtr = std::shared_ptr<ActionsDAG>;
 
 struct PrewhereInfo;
 using PrewhereInfoPtr = std::shared_ptr<PrewhereInfo>;
+
+struct AtomicPredicate;
+using AtomicPredicatePtr = std::shared_ptr<AtomicPredicate>;
 
 struct FilterInfo;
 using FilterInfoPtr = std::shared_ptr<FilterInfo>;
@@ -93,6 +97,27 @@ struct PrewhereInfo
             : prewhere_actions(std::move(prewhere_actions_)), prewhere_column_name(std::move(prewhere_column_name_)) {}
 
     std::string dump() const;
+};
+
+/// An atomic predicate expression associated with a group of columns
+struct AtomicPredicate
+{
+    ActionsDAGPtr predicate_actions;
+    /// Name of the filter column after executing the predicate action
+    String filter_column_name;
+    /// Is this predicate a row level filter? If yes, then we MUST filter the block with this fitlter first
+    /// before execute any other predicates to prevent predicate injection attack. Currently, row-level filter
+    /// comes from 2 sources: (1) delete bitmap for unique table and (2) row-level policy conditions.
+    bool is_row_filter = false;
+    /// Is this predicate is actually a bitmap index? If yes, then we don't read the actual column but read the
+    /// index instead.
+    MergeTreeIndexContextPtr index_context;
+    /// Should we keep the filter column or not, unused for now
+    [[maybe_unused]] bool remove_filter_column = false;
+    AtomicPredicate() = default;
+    explicit AtomicPredicate(ActionsDAGPtr prewhere_actions_, String prewhere_column_name_)
+            : predicate_actions(std::move(prewhere_actions_)), filter_column_name(std::move(prewhere_column_name_)) {}
+    String dump() const;
 };
 
 /// Helper struct to store all the information about the filter expression.
@@ -205,6 +230,13 @@ struct SelectQueryInfo
     /// Read from local table
     bool read_local_table = true;
 
+    /// predicate ast
+    std::vector<ASTPtr> atomic_predicates_expr;
+    /// atomic predicate, may > predicate ast
+    std::deque<AtomicPredicatePtr> atomic_predicates;
+
+    void serialize(WriteBuffer &) const;
+    void deserialize(ReadBuffer &);
     /// Read from index
     bool read_bitmap_index = false;
 
@@ -232,7 +264,18 @@ struct SelectQueryInfo
     static std::shared_ptr<InterpreterSelectQuery> buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info);
 };
 
+/// Collect all query 's predicates from query info, mainly used for collecting index.
+///  The predicates may come from 3 sources:
+/// - query.where()
+/// - query.prewhere()
+/// - atomic_predicates_expr
+ASTPtr getFilterFromQueryInfo(const SelectQueryInfo & query_info, bool clone = false);
+
+/// Helper function for dealing with projection
 const PrewhereInfoPtr & getPrewhereInfo(const SelectQueryInfo & query_info);
+
+const std::deque<AtomicPredicatePtr> & getAtomicPredicates(const SelectQueryInfo & query_info);
+
 MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info);
 
 }

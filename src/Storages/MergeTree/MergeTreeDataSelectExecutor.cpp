@@ -880,6 +880,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     {
         for (const auto & index : metadata_snapshot->getSecondaryIndices())
         {
+            LOG_TRACE(&Poco::Logger::get("filterPartsByPrimaryKeyAndSkipIndexes"),"Creating index {} {}\n", index.name, index.type);
             auto index_helper = MergeTreeIndexFactory::instance().get(index);
             auto condition = index_helper->createIndexCondition(query_info, context);
             if (!condition->alwaysUnknownOrTrue())
@@ -1417,7 +1418,6 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
     bool map_column_keys_column_queried = false;
 
     selectColumnNames(column_names_to_return, data, real_column_names, virt_column_names, sample_factor_column_queried, map_column_keys_column_queried);
-
     auto read_from_merge_tree = std::make_unique<ReadFromMergeTree>(
         parts,
         delete_bitmap_getter,

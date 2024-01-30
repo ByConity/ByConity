@@ -863,10 +863,8 @@ void TableScanStep::optimizeWhereIntoPrewhre(ContextPtr context)
 
 SelectQueryInfo TableScanStep::fillQueryInfo(ContextPtr context)
 {
-    auto * query = query_info.query->as<ASTSelectQuery>();
     SelectQueryInfo copy_query_info = query_info;
-    makeSetsForIndex(query->where(), context, copy_query_info.sets);
-    makeSetsForIndex(query->prewhere(), context, copy_query_info.sets);
+    makeSetsForIndex(getFilterFromQueryInfo(query_info), context, copy_query_info.sets);
     if (query_info.partition_filter)
         makeSetsForIndex(query_info.partition_filter, context, copy_query_info.sets);
     return copy_query_info;
