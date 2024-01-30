@@ -2610,11 +2610,12 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         auto txn_id = txn->getPrimaryTransactionID().toUInt64();
         new_part_model.mutable_part_info()->set_mutation(txn_id);
         new_part_model.set_txnid(txn_id);
-        new_part_model.clear_commit_time();
         new_part_model.set_delete_flag(false);
         new_part_model.set_staging_txn_id(staged_part->info.mutation);
         // storage may not have part columns info (CloudMergeTree), so set columns/columns_commit_time manually
         auto new_part = createPartFromModelCommon(*this, new_part_model);
+        /// Attention: commit time has been force set in createPartFromModelCommon method, we must clear commit time here. Otherwise, it will be visible event if the txn rollback.
+        new_part->commit_time = IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME;
         new_part->setColumnsPtr(std::make_shared<NamesAndTypesList>(staged_part->getColumns()));
         new_part->columns_commit_time = staged_part->columns_commit_time;
         if (txn->isSecondary())
