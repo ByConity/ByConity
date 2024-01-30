@@ -1,18 +1,22 @@
+#include <atomic>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <memory>
 #include <CloudServices/CnchServerResource.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <Interpreters/NodeSelector.h>
 #include <Interpreters/Scheduler.h>
+#include <Interpreters/WorkerStatusManager.h>
 #include <Interpreters/sendPlanSegment.h>
-#include <common/types.h>
+#include <butil/iobuf.h>
 #include <Common/Stopwatch.h>
 #include <Common/time.h>
-#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
-#include <butil/iobuf.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -29,14 +33,52 @@ bool IScheduler::addBatchTask(BatchTaskPtr batch_task)
 
 bool IScheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
 {
-    return queue.pop(task);
+    return queue.tryPop(task, timespec_to_duration(query_context->getQueryExpirationTimeStamp()).count() / 1000);
 }
 
-TaskResult IScheduler::scheduleTask(const SegmentTask & task, PlanSegment * plan_segment_ptr)
+void IScheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
+{
+    const auto & selector_info = node_selector_result[task.task_id];
+    const auto & worker_node = selector_info.worker_nodes[idx];
+    PlanSegmentExecutionInfo execution_info;
+    execution_info.parallel_id = idx;
+    std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
+    {
+        std::unique_lock<std::mutex> lk(segment_bufs_mutex);
+        plan_segment_buf_ptr = segment_bufs[task.task_id];
+    }
+    if (worker_node.type == NodeType::Local)
+    {
+        sendPlanSegmentToAddress(local_address, plan_segment_ptr, execution_info, query_context, dag_graph_ptr, plan_segment_buf_ptr);
+    }
+    else
+    {
+        const auto worker_group = query_context->tryGetCurrentWorkerGroup();
+        sendPlanSegmentToAddress(
+            worker_node.address,
+            plan_segment_ptr,
+            execution_info,
+            query_context,
+            dag_graph_ptr,
+            plan_segment_buf_ptr,
+            worker_group ? WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_node.id) : WorkerId{});
+    }
+
+    if (const auto & id_to_addr_iter = dag_graph_ptr->id_to_address.find(task.task_id);
+        id_to_addr_iter != dag_graph_ptr->id_to_address.end())
+    {
+        id_to_addr_iter->second.push_back(worker_node.address);
+    }
+    else
+    {
+        dag_graph_ptr->id_to_address.emplace(task.task_id, AddressInfos{worker_node.address});
+    }
+}
+
+TaskResult IScheduler::scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
     TaskResult res;
-    sendResource(task.task_id, plan_segment_ptr);
-    const auto local_address = getLocalAddress(*query_context);
+    sendResource(plan_segment_ptr);
     if (query_context->getSettingsRef().bsp_mode)
     {
         for (const auto & output : plan_segment_ptr->getPlanSegmentOutputs())
@@ -68,6 +110,10 @@ TaskResult IScheduler::scheduleTask(const SegmentTask & task, PlanSegment * plan
         Protos::PlanSegment plansegment_proto;
         plan_segment_ptr->toProto(plansegment_proto);
         plansegment_proto.SerializeToZeroCopyStream(&wrapper);
+        {
+            std::unique_lock<std::mutex> lk(segment_bufs_mutex);
+            segment_bufs.emplace(task.task_id, std::move(plan_segment_buf_ptr));
+        }
     }
     else
     {
@@ -75,75 +121,8 @@ TaskResult IScheduler::scheduleTask(const SegmentTask & task, PlanSegment * plan
         plan_segment_ptr->setCoordinatorAddress(local_address);
     }
 
-    std::unordered_set<size_t> idx_to_schedule;
-    for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
-        idx_to_schedule.insert(i);
-    UInt32 parallel_id = 0;
-    while (!idx_to_schedule.empty())
-    {
-        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        if (!has_available_worker
-            && !nodes_alloc_cv.wait_until(
-                lk, timespec_to_timepoint(query_context->getQueryExpirationTimeStamp()), [this]() { return has_available_worker; }))
-            throw Exception("Wait for available workers timedout", ErrorCodes::WAIT_FOR_RESOURCE_TIMEOUT);
-        for (auto idx_iter = idx_to_schedule.begin(); idx_iter != idx_to_schedule.end();)
-        {
-            const auto & idx = *idx_iter;
-            auto & worker_node = selector_info.worker_nodes[idx];
-            const auto & iter = busy_nodes.find(task.task_id);
-            // If the target node is busy, skip it.
-            if (iter != busy_nodes.end() && iter->second.contains(worker_node.address))
-            {
-                idx_iter++;
-                continue;
-            }
-            execution_info.parallel_id = parallel_id++;
-            if (worker_node.type == NodeType::Local)
-            {
-                sendPlanSegmentToAddress(
-                    local_address, plan_segment_ptr, execution_info, query_context, dag_graph_ptr, plan_segment_buf_ptr);
-            }
-            else
-            {
-                const auto worker_group = query_context->tryGetCurrentWorkerGroup();
-                sendPlanSegmentToAddress(
-                    worker_node.address,
-                    plan_segment_ptr,
-                    execution_info,
-                    query_context,
-                    dag_graph_ptr,
-                    plan_segment_buf_ptr,
-                    worker_group ? WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_node.id)
-                                 : WorkerId{});
-            }
-            if (iter != busy_nodes.end())
-            {
-                iter->second.insert(worker_node.address);
-            }
-            else
-            {
-                std::unordered_set<AddressInfo, AddressInfo::Hash> nodes{worker_node.address};
-                busy_nodes.emplace(task.task_id, std::move(nodes));
-            }
-            const auto & parallel_nodes_iter = segment_parallel_nodes.find(task.task_id);
-            if (parallel_nodes_iter != segment_parallel_nodes.end())
-            {
-                parallel_nodes_iter->second.insert({idx, worker_node.address});
-            }
-            else
-            {
-                std::unordered_map<UInt64, AddressInfo> info{std::make_pair(idx, worker_node.address)};
-                segment_parallel_nodes.emplace(task.task_id, std::move(info));
-            }
+    submitTasks(plan_segment_ptr, task);
 
-            idx_iter = idx_to_schedule.erase(idx_iter);
-        }
-        has_available_worker = false;
-    }
-    {
-        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        has_available_worker = true;
-    }
     dag_graph_ptr->joinAsyncRpcPerStage();
     res.status = TaskStatus::Success;
     return res;
@@ -156,35 +135,28 @@ void IScheduler::schedule()
     genSourceTasks();
     BatchTaskPtr batch_task;
     
-    auto local_address = getLocalAddress(*query_context);
     /// Leave final segment alone.
     while (true)
     {
         if (dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
             break;
         getBatchTaskToSchedule(batch_task);
-        if (stopped)
+        if (stopped.load(std::memory_order_acquire))
         {
             LOG_INFO(log, "Schedule interrupted");
             return;
         }
         for (auto task : *batch_task)
         {
-            auto iter = dag_graph_ptr->id_to_segment.find(task.task_id);
-
-            if (iter == dag_graph_ptr->id_to_segment.end())
-            {
-                throw Exception("Logical error: segment " + std::to_string(task.task_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-            }
             LOG_DEBUG(log, "Schedule segment {}", task.task_id);
             if (task.task_id == 0)
             {
                 prepareFinalTask();
                 break;
             }
-            auto plan_segment_ptr = iter->second;
+            auto * plan_segment_ptr = dag_graph_ptr->getPlanSegmentPtr(task.task_id);
             plan_segment_ptr->setCoordinatorAddress(local_address);
-            scheduleTask(task, plan_segment_ptr);
+            scheduleTask(plan_segment_ptr, task);
             onSegmentScheduled(task);
         }
     }
@@ -203,9 +175,6 @@ void IScheduler::genSourceTasks()
         LOG_TRACE(log, "Generate task for source segment {}", source_id);
         if (source_id == dag_graph_ptr->final)
             continue;
-        auto it = dag_graph_ptr->id_to_segment.find(source_id);
-        if (it == dag_graph_ptr->id_to_segment.end())
-            throw Exception("Logical error: source segment" + std::to_string(source_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 
         batch_task->emplace_back(source_id, true);
         plansegment_topology.erase(source_id);
@@ -234,11 +203,10 @@ void IScheduler::genTopology()
     }
 }
 
-void IScheduler::sendResource(SegmentTask task, PlanSegment * plan_segment_ptr)
+void IScheduler::sendResource(PlanSegment * plan_segment_ptr)
 {
     if (query_context->getSettingsRef().bsp_mode)
     {
-        LOG_TRACE(log, "Send resource for segment {}", task.task_id);
         ResourceOption option;
         for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
         {
@@ -259,20 +227,18 @@ void IScheduler::sendResource(SegmentTask task, PlanSegment * plan_segment_ptr)
 
 void IScheduler::prepareFinalTask()
 {
-    if (stopped)
+    if (stopped.load(std::memory_order_acquire))
     {
         LOG_INFO(log, "Schedule interrupted before schedule final task");
         return;
     }
-    auto final_it = dag_graph_ptr->id_to_segment.find(dag_graph_ptr->final);
-    if (final_it == dag_graph_ptr->id_to_segment.end())
-        throw Exception("Logical error: final segment is not found", ErrorCodes::LOGICAL_ERROR);
+    PlanSegment * final_segment = dag_graph_ptr->getPlanSegmentPtr(dag_graph_ptr->final);
 
     const auto & final_address_info = getLocalAddress(*query_context);
     LOG_DEBUG(log, "Set address {} for final segment", final_address_info.toString());
-    final_it->second->setCoordinatorAddress(final_address_info);
+    final_segment->setCoordinatorAddress(final_address_info);
 
-    for (auto & plan_segment_input : final_it->second->getPlanSegmentInputs())
+    for (auto & plan_segment_input : final_segment->getPlanSegmentInputs())
     {
         // segment has more than one input which one is table
         if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
@@ -294,9 +260,6 @@ void IScheduler::removeDepsAndEnqueueTask(const SegmentTask & task)
     auto batch_task = std::make_shared<BatchTask>();
     const auto & task_id = task.task_id;
     LOG_TRACE(log, "Remove dependency {} for segments", task_id);
-    auto it = dag_graph_ptr->id_to_segment.find(task_id);
-    if (it == dag_graph_ptr->id_to_segment.end())
-        throw Exception(String("Logical error: segment ") + std::to_string(task_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 
     for (auto & [id, dependencies] : plansegment_topology)
     {
@@ -315,22 +278,51 @@ void IScheduler::removeDepsAndEnqueueTask(const SegmentTask & task)
 }
 
 /// MPP schduler logic
+void MPPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
+{
+    const auto & selector_info = node_selector_result[task.task_id];
+    for (size_t idx = 0; idx < selector_info.worker_nodes.size(); idx++)
+    {
+        dispatchTask(plan_segment_ptr, task, idx);
+    }
+}
+
 void MPPScheduler::onSegmentScheduled(const SegmentTask & task)
 {
     removeDepsAndEnqueueTask(task);
 }
 
 /// BSP scheduler logic
+void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
+{
+    (void)plan_segment_ptr;
+    const auto selector_info = node_selector_result[task.task_id];
+    for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
+    {
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        // Is it solid to check empty address via hostname?
+        if (selector_info.worker_nodes[i].address.getHostName().empty())
+        {
+            pending_task_instances.no_prefs.emplace(task.task_id, i);
+        }
+        else
+        {
+            pending_task_instances.for_nodes[selector_info.worker_nodes[i].address].emplace(task.task_id, i);
+        }
+    }
+    triggerDispatch(cluster_nodes.rank_workers);
+}
+
 void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled)
 {
     if (is_succeed)
     {
-        removeDepsAndEnqueueTask({segment_id});
+        removeDepsAndEnqueueTask(SegmentTask{segment_id});
     }
     // on exception
     if (!is_succeed && !is_canceled)
     {
-        stopped = true;
+        stopped.store(true, std::memory_order_release);
         // emplace a fake task.
         auto batch_task = std::make_shared<BatchTask>();
         batch_task->emplace_back(0);
@@ -381,10 +373,89 @@ void BSPScheduler::updateSegmentStatusCounter(const size_t & segment_id, const U
         onSegmentFinished(segment_id, /*is_succeed=*/true, /*is_canceled=*/true);
     }
 
-    std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-    const auto & addr = segment_parallel_nodes[segment_id][parallel_index];
-    busy_nodes[segment_id].erase(addr);
-    has_available_worker = true;
-    nodes_alloc_cv.notify_all();
+    AddressInfo available_worker;
+    {
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        available_worker = segment_parallel_locations[segment_id][parallel_index];
+        occupied_workers[segment_id].erase(available_worker);
+    }
+    triggerDispatch({WorkerNode{available_worker}});
+}
+
+std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const AddressInfo & worker)
+{
+    if (pending_task_instances.for_nodes.contains(worker))
+    {
+        for (auto instance = pending_task_instances.for_nodes[worker].begin(); instance != pending_task_instances.for_nodes[worker].end();)
+        {
+            const auto & node_iter = occupied_workers.find(instance->task_id);
+            // If the target node is busy, skip it.
+            if (node_iter != occupied_workers.end() && node_iter->second.contains(worker))
+            {
+                instance++;
+                continue;
+            }
+            else
+            {
+                pending_task_instances.for_nodes[worker].erase(instance);
+                return std::make_pair(true, *instance);
+            }
+        }
+    }
+
+    for (auto no_pref = pending_task_instances.no_prefs.begin(); no_pref != pending_task_instances.no_prefs.end();)
+    {
+        const auto & node_iter = occupied_workers.find(no_pref->task_id);
+        // If the target node is busy, skip it.
+        if (node_iter != occupied_workers.end() && node_iter->second.contains(worker))
+        {
+            no_pref++;
+            continue;
+        }
+        else
+        {
+            pending_task_instances.no_prefs.erase(no_pref);
+            return std::make_pair(true, *no_pref);
+        }
+    }
+    return std::make_pair(false, SegmentTaskInstance(0, 0));
+}
+
+void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_workers)
+{
+    for (const auto & worker : available_workers)
+    {
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        const auto & address = worker.address;
+        const auto & [has_result, result] = getInstanceToSchedule(address);
+        if (!has_result)
+            continue;
+
+        auto & worker_node = node_selector_result[result.task_id].worker_nodes[result.parallel_index];
+        if (worker_node.address.getHostName().empty())
+            worker_node.address = address;
+
+        dispatchTask(dag_graph_ptr->getPlanSegmentPtr(result.task_id), SegmentTask{result.task_id}, result.parallel_index);
+
+        const auto & node_iter = occupied_workers.find(result.task_id);
+        if (node_iter != occupied_workers.end())
+        {
+            node_iter->second.insert(address);
+        }
+        else
+        {
+            occupied_workers.emplace(result.task_id, std::unordered_set<AddressInfo, AddressInfo::Hash>{address});
+        }
+        const auto & parallel_nodes_iter = segment_parallel_locations.find(result.task_id);
+        if (parallel_nodes_iter != segment_parallel_locations.end())
+        {
+            parallel_nodes_iter->second.insert({result.parallel_index, address});
+        }
+        else
+        {
+            segment_parallel_locations.emplace(
+                result.task_id, std::unordered_map<UInt64, AddressInfo>{std::make_pair(result.parallel_index, address)});
+        }
+    }
 }
 }

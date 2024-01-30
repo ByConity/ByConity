@@ -123,7 +123,7 @@ public:
     bool checkQueryAlive(const String & query_id);
     // Get the most locality-friendly addresses for specified partition range.
     std::vector<AddressInfo>
-    getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index, size_t node_num);
+    getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index, double locality_fraction);
 
 private:
     ExchangeStatuses & getExchangeStatusesRef(const String & query_id, UInt64 exchange_id);

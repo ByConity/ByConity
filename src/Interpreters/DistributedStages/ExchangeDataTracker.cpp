@@ -105,7 +105,7 @@ bool ExchangeStatusTracker::checkQueryAlive(const String & query_id)
 }
 
 std::vector<AddressInfo> ExchangeStatusTracker::getExchangeDataAddrs(
-    PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index, size_t node_num)
+    PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index, double locality_fraction)
 {
     std::vector<AddressInfo> addrs;
     std::unordered_map<UInt64, std::unordered_map<AddressInfo, size_t, AddressInfo::Hash>> acc;
@@ -137,20 +137,21 @@ std::vector<AddressInfo> ExchangeStatusTracker::getExchangeDataAddrs(
         }
     }
 
-    std::unordered_set<AddressInfo, AddressInfo::Hash> already_scheduled;
     for (UInt64 i = start_parallel_index; i < end_parallel_index; i++)
     {
-        if (already_scheduled.size() == node_num)
-        {
-            already_scheduled.clear();
-        }
         const auto & partition_acc = acc[i];
         size_t max_size = 0;
         AddressInfo cur_addr;
         bool decided = false;
+        size_t total_size = 0;
+        for (const auto & [_, output_size] : partition_acc)
+        {
+            total_size += output_size;
+        }
         for (const auto & [addr, output_size] : partition_acc)
         {
-            if (!already_scheduled.contains(addr) && output_size >= max_size)
+            // TODO(WangTao): support multi candidate nodes.
+            if (output_size >= max_size && total_size > 0 && static_cast<double>(output_size) / total_size > locality_fraction)
             {
                 max_size = output_size;
                 cur_addr = addr;
@@ -160,7 +161,10 @@ std::vector<AddressInfo> ExchangeStatusTracker::getExchangeDataAddrs(
         if (decided)
         {
             addrs.emplace_back(cur_addr);
-            already_scheduled.insert(cur_addr);
+        }
+        else
+        {
+            addrs.emplace_back(AddressInfo{});
         }
     }
 
