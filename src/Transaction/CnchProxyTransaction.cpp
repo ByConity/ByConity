@@ -47,7 +47,8 @@ CnchProxyTransaction::CnchProxyTransaction(const ContextPtr & context_, CnchServ
         .setID(txn_id)
         .setInitiator(txnInitiatorToString(CnchTransactionInitiator::Txn))
         .setStatus(CnchTransactionStatus::Running)
-        .setType(CnchTransactionType::Implicit);
+        .setType(CnchTransactionType::Implicit)
+        .setPrimaryID(primary_txn_id);
     txn_record = std::move(record);
 }
 
