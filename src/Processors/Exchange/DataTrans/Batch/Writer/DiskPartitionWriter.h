@@ -39,10 +39,17 @@ public:
         return BroadcastSenderType::Disk;
     }
     BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
-    String getFileName() const;
     inline ExchangeDataKeyPtr getKey() const
     {
         return key;
+    }
+    void waitDone(size_t timeout_ms)
+    {
+        std::unique_lock<bthread::Mutex> lock(done_mutex);
+        if (!done_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&]() { return done; }))
+        {
+            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, fmt::format("wait for {} done timeout", *key));
+        }
     }
 
 private:
@@ -60,7 +67,6 @@ private:
     DiskPtr disk;
     Block header;
     ExchangeDataKeyPtr key;
-    std::unique_ptr<WriteBufferFromFileBase> buf;
     Poco::Logger * log;
     /// data_queue is used here to ensure thread-safety(by background write task) when multiple write/finish are called from different threads
     /// TODO @lianxuechao optimize for single-thread case

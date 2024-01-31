@@ -89,6 +89,10 @@ namespace ErrorCodes
     extern const int FILE_DOESNT_EXIST;
 }
 
+namespace
+{
+    const size_t disk_partition_wait_done_timeout_ms = 20000;
+}
 
 String DiskExchangeDataManagerOptions::toString() const
 {
@@ -338,8 +342,27 @@ void DiskExchangeDataManager::cleanup(uint64_t query_unique_id)
         if (rbegin != rend)
             std::transform(rbegin, rend, std::back_inserter(read_on_the_run), [](auto & iter) { return iter.second; });
     }
+    bool wait_failed = false;
     for (auto & writer : write_on_the_run)
-        writer->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled by cleanup");
+    {
+        auto status = writer->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled by cleanup");
+        if (status.code != BroadcastStatusCode::SEND_CANCELLED)
+            LOG_WARNING(logger, "key:{} finish status.code:{} status.message:{}", *writer->getKey(), status.code, status.message);
+    }
+    try
+    {
+        UInt64 timeout_ms = time_in_milliseconds(std::chrono::system_clock::now()) + disk_partition_wait_done_timeout_ms;
+        for (auto & writer : write_on_the_run)
+        {
+            auto curr = time_in_milliseconds(std::chrono::system_clock::now());
+            writer->waitDone(curr < timeout_ms ? timeout_ms - curr : 0); /// might throw
+        }
+    }
+    catch (...)
+    {
+        wait_failed = true;
+        tryLogCurrentException(logger, fmt::format("wait for disk_partition_writer done failed for query_unique_id:{}", query_unique_id));
+    }
     {
         /// wbegin and wend is recalculated, as other tasks might have modified the iterator, same for rbegin and rend below
         std::unique_lock<bthread::Mutex> lock(mutex);
@@ -359,7 +382,7 @@ void DiskExchangeDataManager::cleanup(uint64_t query_unique_id)
     }
     bool removed = false;
     auto disk_cp = disk; // copied to avoid disk being release during execution
-    if (!is_shutdown.load(std::memory_order_acquire) && disk_cp->exists(file_path))
+    if (!wait_failed && !is_shutdown.load(std::memory_order_acquire) && disk_cp->exists(file_path))
     {
         removed = true;
         disk_cp->removeRecursive(file_path);
