@@ -257,6 +257,10 @@ void CnchBGThreadsMapArray::shutdown()
     }
 
     pool.wait();
+
+    /// `cleaner` must be stopped as well
+    if (cleaner)
+        cleaner->deactivate();
 }
 
 void CnchBGThreadsMapArray::cleanThread()
