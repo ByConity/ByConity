@@ -96,7 +96,7 @@ void MetastoreProxy::addExternalCatalog(const String & name_space, const Protos:
                     ErrorCodes::METASTORE_DB_UUID_CAS_ERROR);
         }
         else
-            throw e;
+            throw;
     }
 }
 
@@ -151,7 +151,7 @@ void MetastoreProxy::addDatabase(const String & name_space, const Protos::DataMo
                         ErrorCodes::METASTORE_DB_UUID_CAS_ERROR);
         }
         else
-            throw e;
+            throw;
     }
 }
 
@@ -384,7 +384,7 @@ void MetastoreProxy::createTable(const String & name_space, const UUID & db_uuid
                     ErrorCodes::METASTORE_TABLE_NAME_CAS_ERROR);
             }
         }
-        throw e;
+        throw;
     }
 }
 
@@ -404,7 +404,7 @@ void MetastoreProxy::createUDF(const String & name_space, const DB::Protos::Data
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE) {
             throw Exception("UDF with function name - " + name + " in database - " +  database + " already exists.", ErrorCodes::FUNCTION_ALREADY_EXISTS);
         }
-        throw e;
+        throw;
     }
 }
 
@@ -940,7 +940,7 @@ void MetastoreProxy::createRootPath(const String & root_path)
                 throw Exception("Failed to create new root path because of path id collision, please try again.", ErrorCodes::METASTORE_ROOT_PATH_ID_NOT_UNIQUE);
             }
         }
-        throw e;
+        throw;
     }
 }
 
@@ -1142,7 +1142,7 @@ bool MetastoreProxy::writeIntent(const String & name_space, const String & inten
             }
         }
         else
-            throw e;
+            throw;
     }
     return false;
 }
@@ -1230,7 +1230,7 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
                 if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
                     LOG_WARNING(log, "CAS fail when cleaning the intent: " + intent_names[idx]);
                 else
-                    throw e;
+                    throw;
             }
         }
     }
@@ -1540,7 +1540,7 @@ void MetastoreProxy::setTableClusterStatus(const String & name_space, const Stri
             throw Exception(error_message, ErrorCodes::METASTORE_TABLE_TDH_CAS_ERROR);
         }
         else
-            throw e;
+            throw;
     }
 }
 
@@ -2817,7 +2817,7 @@ bool MetastoreProxy::resetObjectAssembledSchemaAndPurgePartialSchemas(
             return false;
         }
         else
-            throw e;
+            throw;
     }
 }
 
@@ -2960,7 +2960,7 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
                     ErrorCodes::METASTORE_ACCESS_ENTITY_EXISTS_ERROR);
             }
         }
-        throw e;
+        throw;
     }
 }
 

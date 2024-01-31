@@ -426,7 +426,7 @@ size_t ReadBufferFromS3::readBigAt(char * to, size_t n, size_t range_begin, cons
         {
             if (!S3::processReadException(e, log, bucket, key, range_begin, ++attempt)
                 || attempt >= max_single_read_retries)
-                throw e;
+                throw;
 
             sleepForMilliseconds(sleep_backoff_ms);
             sleep_backoff_ms *= 2;

@@ -52,7 +52,7 @@ void CnchMergePrefetcher::PartFutureFiles::schedulePrefetchTask(FutureSegment & 
         {
             tryLogCurrentException("CnchMergePrefetcher", "Fail to copy " + remote_abs_path + " to " + local_path);
             e.addMessage("(while coping " + remote_abs_path + " to " + local_path + ")");
-            throw e;
+            throw;
         }
         catch (...)
         {

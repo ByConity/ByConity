@@ -231,12 +231,12 @@ void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr 
                         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "backup vw choose {}", vw);
                         break;
                     }
-                    catch(const Exception & e)
+                    catch (const Exception &)
                     {
                         if (idx == backup_vws.size() - 1)
                         {
                             LOG_DEBUG(&Poco::Logger::get("executeQuery"), "none of backup vws are available");
-                            throw e;
+                            throw;
                         }
                     }
                 }

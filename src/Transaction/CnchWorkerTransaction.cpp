@@ -242,7 +242,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
             // depends on kv implementation, such as bytekv, some error codes are uncertain case like LOCK_TIMEOUT, 
             // instead of call the rollback explicitly, it is better to let server executes the clean logic to make sure the correct state transition.
-            throw e;
+            throw;
         }
     }
     catch (...)

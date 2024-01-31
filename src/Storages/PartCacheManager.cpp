@@ -1054,7 +1054,7 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
             meta_ptr->load_parts_by_partition = true;
 
         fallback_cache_status();
-        throw e;
+        throw;
     }
     catch (...)
     {

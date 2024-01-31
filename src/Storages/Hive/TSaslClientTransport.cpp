@@ -255,13 +255,13 @@ void TSaslClientTransport::doSaslNegotiation()
             }
         }
     }
-    catch (const TException & e)
+    catch (const TException &)
     {
         // If we hit an exception, that means the Sasl negotiation failed. We explicitly
         // reset the negotiation state here since the caller may retry an open() which would
         // start a new connection negotiation.
         resetSaslNegotiationState();
-        throw e;
+        throw;
     }
 }
 

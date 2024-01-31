@@ -364,10 +364,10 @@ StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_conte
             return res;
         }
     }
-    catch (Exception & e)
+    catch (const Exception & e)
     {
         if (e.code() != ErrorCodes::UNKNOWN_TABLE)
-            throw e;
+            throw;
     }
     return nullptr;
 }

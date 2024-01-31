@@ -45,11 +45,13 @@ void ZipHelper::unzipFile(const std::string & source, const std::string & target
 
         Poco::File tmp_part(temp_path);
         tmp_part.renameTo(target);
-    } catch (Exception & e) {
+    }
+    catch (const Exception &)
+    {
         Poco::File tmp_path(temp_path);
         if (tmp_path.exists())
             tmp_path.remove(true);
-        throw e;
+        throw;
     }
 }
 
