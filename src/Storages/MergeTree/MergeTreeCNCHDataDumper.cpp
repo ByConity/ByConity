@@ -173,26 +173,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     }
     new_part->fromLocalPart(*local_part);
     String new_part_rel_path = new_part->getFullRelativePath();
-    String data_file_rel_path = joinPaths({new_part_rel_path, "data"});
-    bool remove_existing_directory = false;
-    switch(disk->getType())
-    {
-        case DiskType::Type::ByteS3: {
-            // use DiskByteS3::existsFile instead, this method runs faster than DiskByteS3::exists
-            if (std::static_pointer_cast<DiskByteS3>(disk)->existsFile(data_file_rel_path))
-            {
-                remove_existing_directory = true;
-            }
-            break;
-        }
-        default: {
             if (disk->exists(new_part_rel_path))
-            {
-                remove_existing_directory = true;
-            }
-        }
-    }
-    if (remove_existing_directory)
     {
         LOG_WARNING(log, "Removing old temporary directory  {}", disk->getPath() + new_part_rel_path);
         disk->removeRecursive(new_part_rel_path);
@@ -278,6 +259,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     }
 
     /// Write data file
+    String data_file_rel_path = joinPaths({new_part_rel_path, "data"});
     CNCHDataMeta meta;
     {
         /// When we write part, we will attach generator's id into this part.
