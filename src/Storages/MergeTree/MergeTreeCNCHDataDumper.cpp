@@ -16,7 +16,6 @@
 #include "Storages/MergeTree/MergeTreeCNCHDataDumper.h"
 
 #include <Disks/HDFS/DiskHDFS.h>
-#include <Disks/DiskByteS3.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
@@ -173,7 +172,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     }
     new_part->fromLocalPart(*local_part);
     String new_part_rel_path = new_part->getFullRelativePath();
-            if (disk->exists(new_part_rel_path))
+    if (disk->exists(new_part_rel_path))
     {
         LOG_WARNING(log, "Removing old temporary directory  {}", disk->getPath() + new_part_rel_path);
         disk->removeRecursive(new_part_rel_path);
