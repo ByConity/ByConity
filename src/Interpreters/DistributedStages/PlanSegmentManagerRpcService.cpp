@@ -487,8 +487,9 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     ErrorCodes::LOGICAL_ERROR);
             }
             ReadBufferFromBrpcBuf settings_read_buf(settings_io_buf);
-            /// Sets an extra row policy based on `client_info.initial_user`
-            query_context->setInitialRowPolicy();
+            /// Sets an extra row policy based on `client_info.initial_user`. 
+            /// Not saft since KVAccessStorage will call rpc inside lock
+            // query_context->setInitialRowPolicy();
 
             /// apply settings changed
             const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::BINARY);
