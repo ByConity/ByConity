@@ -779,6 +779,8 @@ TableScanStep::TableScanStep(
     , log(&Poco::Logger::get("TableScanStep"))
     , alias(alias_)
 {
+    storage = DatabaseCatalog::instance().getTable(storage_id, context);
+    storage_id.uuid = storage->getStorageUUID();
     formatOutputStream(context);
 }
 
@@ -790,9 +792,6 @@ void TableScanStep::formatOutputStream(ContextPtr context)
     {
         column_names.emplace_back(item.first);
     }
-
-    storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    storage_id.uuid = storage->getStorageUUID();
 
    // TODO: in long term, we should use different constructor for server/worker
     Block header = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context)->getSampleBlockForColumns(getRequiredColumns());
