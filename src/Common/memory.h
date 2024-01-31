@@ -1,7 +1,9 @@
 #pragma once
 
 #include <new>
+#include <malloc.h>
 #include <Common/CurrentMemoryTracker.h>
+#include <Common/config.h>
 #include <common/defines.h>
 
 #if USE_JEMALLOC
