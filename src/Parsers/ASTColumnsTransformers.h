@@ -51,6 +51,17 @@ public:
             res->parameters = parameters->clone();
         return res;
     }
+    void toLowerCase() override 
+    {
+        boost::to_lower(func_name); 
+        boost::to_lower(column_name_prefix);
+    }
+
+    void toUpperCase() override 
+    {
+        boost::to_upper(func_name); 
+        boost::to_upper(column_name_prefix);
+    }
     void transform(ASTs & nodes) const override;
     String func_name;
     String column_name_prefix;
@@ -74,6 +85,7 @@ public:
         clone->cloneChildren();
         return clone;
     }
+    void toLowerCase() override { boost::to_lower(original_pattern); }
     void transform(ASTs & nodes) const override;
     void setPattern(String pattern);
     bool isColumnMatching(const String & column_name) const;
@@ -100,6 +112,8 @@ public:
             replacement->children.push_back(replacement->expr);
             return replacement;
         }
+
+        void toLowerCase() override { boost::to_lower(name); }
 
         String name;
         ASTPtr expr;

@@ -77,6 +77,17 @@ bool ParserUpdateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
     }
 
+    query->children.push_back(query->assignment_list);
+    query->children.push_back(query->where_condition);
+    if (query->order_by_expr)
+        query->children.push_back(query->order_by_expr);
+    if (query->limit_value)
+        query->children.push_back(query->limit_value);
+    if (query->limit_offset)
+        query->children.push_back(query->limit_offset);
+    if (query->settings_ast)
+        query->children.push_back(query->settings_ast);
+
     return true;
 }
 

@@ -73,6 +73,7 @@
 #include <Interpreters/ApplyWithGlobalVisitor.h>
 #include <Interpreters/CnchQueryMetrics/QueryMetricLogHelper.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/IdentifierNameNormalizer.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
@@ -927,6 +928,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         /// to allow settings to take effect.
         if (input_ast == nullptr)
             interpretSettings(ast, context);
+
+        if (context->getServerType() == ServerType::cnch_server && context->hasQueryContext())
+        {
+            if (context->getSettingsRef().text_case_option == TextCaseOption::LOWERCASE) 
+                IdentifierNameNormalizer().visit<true>(ast.get());
+            else if (context->getSettingsRef().text_case_option == TextCaseOption::UPPERCASE)
+                IdentifierNameNormalizer().visit<false>(ast.get());
+        }
 
         if (auto * explain_select_query = ast->as<ASTExplainQuery>())
         {

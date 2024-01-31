@@ -48,6 +48,16 @@ public:
         return res;
     }
 
+    void toLowerCase() override 
+    {
+        boost::to_lower(column_name);
+    }
+
+    void toUpperCase() override 
+    {
+        boost::to_upper(column_name);
+    }
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
     {

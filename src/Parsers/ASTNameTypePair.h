@@ -41,6 +41,9 @@ public:
     String getID(char delim) const override { return "NameTypePair" + (delim + name); }
     ASTPtr clone() const override;
 
+    void toLowerCase() override { boost::to_lower(name); }
+    void toUpperCase() override { boost::to_upper(name); }
+
     ASTType getType() const override { return ASTType::ASTNameTypePair; }
 
     void serialize(WriteBuffer & buf) const override;

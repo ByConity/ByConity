@@ -38,6 +38,17 @@ public:
     ASTPtr clone() const override;
 
     void setFieldName(String field_name_) { field_name = field_name_; }
+    void toLowerCase() override 
+    {
+        ASTWithAlias::toLowerCase();
+        boost::to_lower(field_name); 
+    }
+
+    void toUpperCase() override 
+    {
+        ASTWithAlias::toUpperCase();
+        boost::to_upper(field_name); 
+    }
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;

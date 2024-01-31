@@ -59,6 +59,20 @@ public:
         return ptr;
     }
 
+    void toLowerCase() override 
+    { 
+        ASTWithAlias::toLowerCase();
+        boost::to_lower(cte_name); 
+        boost::to_lower(database_of_view); 
+    }
+
+    void toUpperCase() override 
+    { 
+        ASTWithAlias::toUpperCase();
+        boost::to_upper(cte_name); 
+        boost::to_upper(database_of_view); 
+    }
+
     void updateTreeHashImpl(SipHash & hash_state) const override;
 
     bool isWithClause() const { return !cte_name.empty(); }

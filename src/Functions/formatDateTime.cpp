@@ -2195,7 +2195,6 @@ REGISTER_FUNCTION(FormatDateTime)
 
     factory.registerFunction<FunctionFromUnixTimestamp>();
     factory.registerAlias("fromUnixTimestamp", "FROM_UNIXTIME");
-    factory.registerAlias("from_unixtime", "FROM_UNIXTIME");
     factory.registerFunction<FunctionFROM_UNIXTIMEAdaptive>();
 
     factory.registerFunction<FunctionFormatDateTimeInJodaSyntax>();

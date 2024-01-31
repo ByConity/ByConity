@@ -139,6 +139,16 @@ public:
         return res;
     }
 
+    void toLowerCase() override 
+    {
+        table_expression->toLowerCase();
+    }
+
+    void toUpperCase() override 
+    {
+        table_expression->toUpperCase();
+    }
+
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
     {

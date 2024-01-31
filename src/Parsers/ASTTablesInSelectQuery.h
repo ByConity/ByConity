@@ -82,6 +82,26 @@ struct ASTTableExpression : public IAST
 
     ASTType getType() const override { return ASTType::ASTTableExpression; }
 
+    void toLowerCase() override 
+    {
+        if (database_and_table_name)
+            database_and_table_name->toLowerCase();
+        else if (table_function)
+            table_function->toLowerCase();
+        else
+            subquery->toLowerCase();
+    }
+
+    void toUpperCase() override 
+    {
+        if (database_and_table_name)
+            database_and_table_name->toUpperCase();
+        else if (table_function)
+            table_function->toUpperCase();
+        else
+            subquery->toUpperCase();
+    }
+
     void serialize(WriteBuffer & buf) const override;
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);

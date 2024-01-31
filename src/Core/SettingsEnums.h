@@ -273,7 +273,7 @@ enum class DiskCacheMode
     SKIP_DISK_CACHE,
 };
 
-DECLARE_SETTING_ENUM(DiskCacheMode);
+DECLARE_SETTING_ENUM(DiskCacheMode)
 
 enum class StatisticsCachePolicy
 {
@@ -296,7 +296,26 @@ enum class BackupVWMode
     BACKUP_ONLY,
 };
 
-DECLARE_SETTING_ENUM(BackupVWMode);
+DECLARE_SETTING_ENUM(BackupVWMode)
 
 DECLARE_SETTING_ENUM(MaterializedViewConsistencyCheckMethod)
+
+enum class SpanHierarchy : int
+{
+    TRACE = 0,
+    DEBUG = 1,
+    INFO = 2
+};
+
+DECLARE_SETTING_ENUM(SpanHierarchy)
+
+enum class TextCaseOption
+{
+    MIXED,
+    LOWERCASE,
+    UPPERCASE,
+};
+
+DECLARE_SETTING_ENUM(TextCaseOption)
+
 }

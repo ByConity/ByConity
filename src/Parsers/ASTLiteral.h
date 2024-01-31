@@ -65,6 +65,18 @@ public:
 
     ASTPtr clone() const override;
 
+    void toLowerCase() override 
+    { 
+        ASTWithAlias::toLowerCase();
+        boost::to_lower(unique_column_name);
+    }
+
+    void toUpperCase() override 
+    { 
+        ASTWithAlias::toUpperCase();
+        boost::to_upper(unique_column_name);
+    }
+
     void updateTreeHashImpl(SipHash & hash_state) const override;
 
     void serialize(WriteBuffer & buf) const override;

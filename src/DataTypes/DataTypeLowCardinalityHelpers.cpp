@@ -29,6 +29,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
 
 #include <Common/assert_cast.h>
 
@@ -41,6 +42,11 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
     extern const int TYPE_MISMATCH;
 }
+
+DataTypePtr removeLowCardinalityAndNullable(const DataTypePtr & type)
+{
+    return removeNullable(removeLowCardinality(type));
+};
 
 DataTypePtr recursiveRemoveLowCardinality(const DataTypePtr & type)
 {

@@ -81,6 +81,10 @@ public:
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
 
+    void toLowerCase() override;
+
+    void toUpperCase() override;
+
     /// All the global identifiers will be rewritten in multi-tenant context settings.
     /// Todo: we will rewrite all the global identifiers one by one: database name, user name, vw name...
     virtual void rewriteCnchDatabaseName(const Context * context = nullptr);

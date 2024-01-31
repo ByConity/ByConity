@@ -40,6 +40,18 @@ public:
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
 
+    void toLowerCase() override 
+    { 
+        ASTWithAlias::toLowerCase();
+        boost::to_lower(comparator);
+    }
+
+    void toUpperCase() override 
+    { 
+        ASTWithAlias::toUpperCase();
+        boost::to_upper(comparator);
+    }
+
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;

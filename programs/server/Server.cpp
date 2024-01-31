@@ -70,6 +70,7 @@
 #include <Server/ProtocolServerAdapter.h>
 #include <Server/ServerHelper.h>
 #include <Server/TCPHandlerFactory.h>
+#include <Server/TCPServer.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <Statistics/CacheManager.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
@@ -1684,7 +1685,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 servers->emplace_back(
                     port_name,
                     "MySQL compatibility protocol: " + address.toString(),
-                    std::make_unique<Poco::Net::TCPServer>(
+                    std::make_unique<TCPServer>(
                         new MySQLHandlerFactory(*this),
                         server_pool,
                         socket,

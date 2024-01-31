@@ -80,15 +80,6 @@ namespace
     };
 
 
-    /// version() - returns the current version as a string.
-    class FunctionVersion : public FunctionConstantBase<FunctionVersion, String, DataTypeString>
-    {
-    public:
-        static constexpr auto name = "version";
-        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionVersion>(context); }
-        explicit FunctionVersion(ContextPtr context) : FunctionConstantBase(VERSION_STRING, context->isDistributed()) {}
-    };
-
     /// revision() - returns the current revision.
     class FunctionRevision : public FunctionConstantBase<FunctionRevision, UInt32, DataTypeUInt32>
     {
@@ -158,11 +149,6 @@ REGISTER_FUNCTION(Timezone)
 REGISTER_FUNCTION(Uptime)
 {
     factory.registerFunction<FunctionUptime>();
-}
-
-REGISTER_FUNCTION(Version)
-{
-    factory.registerFunction<FunctionVersion>(FunctionFactory::CaseInsensitive);
 }
 
 REGISTER_FUNCTION(Revision)

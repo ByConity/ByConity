@@ -67,7 +67,7 @@ using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 
 REGISTER_FUNCTION(Extract)
 {
-    factory.registerFunction<FunctionExtract>();
+    factory.registerFunction<FunctionExtract>(FunctionFactory::CaseInsensitive);
 }
 
 }
