@@ -23,7 +23,8 @@ class MySQLClient
 {
 public:
     MySQLClient(const String & host_, UInt16 port_, const String & user_, const String & password_);
-    MySQLClient(MySQLClient && other);
+    MySQLClient(MySQLClient & other) noexcept;
+    MySQLClient(MySQLClient && other) noexcept;
 
     void connect();
     void disconnect();
@@ -59,7 +60,7 @@ private:
     std::shared_ptr<WriteBuffer> out;
     std::unique_ptr<Poco::Net::StreamSocket> socket;
     std::optional<Poco::Net::SocketAddress> address;
-    std::shared_ptr<PacketEndpoint> packet_endpoint;
+    MySQLProtocol::PacketEndpointPtr packet_endpoint;
 
     void handshake();
     void registerSlaveOnMaster(UInt32 slave_id);

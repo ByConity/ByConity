@@ -30,15 +30,16 @@ namespace Authentication
 
 static const size_t SCRAMBLE_LENGTH = 20;
 
-Native41::Native41()
+/** Generate a random string using ASCII characters but avoid separator character,
+  * produce pseudo random numbers between with about 7 bit worth of entropy between 1-127.
+  * https://github.com/mysql/mysql-server/blob/8.0/mysys/crypt_genhash_impl.cc#L427
+  */
+static String generateScramble()
 {
+    String scramble;
     scramble.resize(SCRAMBLE_LENGTH + 1, 0);
     Poco::RandomInputStream generator;
 
-    /** Generate a random string using ASCII characters but avoid separator character,
-      * produce pseudo random numbers between with about 7 bit worth of entropty between 1-127.
-      * https://github.com/mysql/mysql-server/blob/8.0/mysys/crypt_genhash_impl.cc#L427
-      */
     for (size_t i = 0; i < SCRAMBLE_LENGTH; ++i)
     {
         generator >> scramble[i];
@@ -46,14 +47,18 @@ Native41::Native41()
         if (scramble[i] == '\0' || scramble[i] == '$')
             scramble[i] = scramble[i] + 1;
     }
+
+    return scramble;
 }
 
-Native41::Native41(const String & password, const String & auth_plugin_data)
+Native41::Native41() : scramble(generateScramble()) { }
+
+Native41::Native41(const String & password_, const String & scramble_)
 {
     /// https://dev.mysql.com/doc/internals/en/secure-password-authentication.html
     /// SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
     Poco::SHA1Engine engine1;
-    engine1.update(password);
+    engine1.update(password_);
     const Poco::SHA1Engine::Digest & password_sha1 = engine1.digest();
 
     Poco::SHA1Engine engine2;
@@ -61,15 +66,13 @@ Native41::Native41(const String & password, const String & auth_plugin_data)
     const Poco::SHA1Engine::Digest & password_double_sha1 = engine2.digest();
 
     Poco::SHA1Engine engine3;
-    engine3.update(auth_plugin_data.data(), auth_plugin_data.size());
+    engine3.update(scramble_.data(), scramble_.size());
     engine3.update(password_double_sha1.data(), password_double_sha1.size());
     const Poco::SHA1Engine::Digest & digest = engine3.digest();
 
     scramble.resize(SCRAMBLE_LENGTH);
-    for (size_t i = 0; i < SCRAMBLE_LENGTH; i++)
-    {
+    for (size_t i = 0; i < SCRAMBLE_LENGTH; ++i)
         scramble[i] = static_cast<unsigned char>(password_sha1[i] ^ digest[i]);
-    }
 }
 
 void Native41::authenticate(
@@ -123,16 +126,7 @@ Sha256Password::Sha256Password(RSA & public_key_, RSA & private_key_, Poco::Logg
      *  This plugin must do the same to stay consistent with historical behavior if it is set to operate as a default plugin. [1]
      *  https://github.com/mysql/mysql-server/blob/8.0/sql/auth/sql_authentication.cc#L3994
      */
-    scramble.resize(SCRAMBLE_LENGTH + 1, 0);
-    Poco::RandomInputStream generator;
-
-    for (size_t i = 0; i < SCRAMBLE_LENGTH; ++i)
-    {
-        generator >> scramble[i];
-        scramble[i] &= 0x7f;
-        if (scramble[i] == '\0' || scramble[i] == '$')
-            scramble[i] = scramble[i] + 1;
-    }
+    scramble = generateScramble();
 }
 
 void Sha256Password::authenticate(
@@ -144,8 +138,10 @@ void Sha256Password::authenticate(
         packet_endpoint->sendPacket(AuthSwitchRequest(getName(), scramble), true);
 
         if (packet_endpoint->in->eof())
-            throw Exception("Client doesn't support authentication method " + getName() + " used by ClickHouse. Specifying user password using 'password_double_sha1_hex' may fix the problem.",
-                            ErrorCodes::MYSQL_CLIENT_INSUFFICIENT_CAPABILITIES);
+            throw Exception(ErrorCodes::MYSQL_CLIENT_INSUFFICIENT_CAPABILITIES,
+                            "Client doesn't support authentication method {} used by ClickHouse. "
+                            "Specifying user password using 'password_double_sha1_hex' may fix the problem.",
+                            getName());
 
         AuthSwitchResponse response;
         packet_endpoint->receivePacket(response);
@@ -165,7 +161,7 @@ void Sha256Password::authenticate(
         SCOPE_EXIT(BIO_free(mem));
         if (PEM_write_bio_RSA_PUBKEY(mem, &public_key) != 1)
         {
-            throw Exception("Failed to write public key to memory. Error: " + getOpenSSLErrors(), ErrorCodes::OPENSSL_ERROR);
+            throw Exception(ErrorCodes::OPENSSL_ERROR, "Failed to write public key to memory. Error: {}", getOpenSSLErrors());
         }
         char * pem_buf = nullptr;
 #    pragma GCC diagnostic push
@@ -208,13 +204,13 @@ void Sha256Password::authenticate(
         {
             if (!sent_public_key)
                 LOG_WARNING(log, "Client could have encrypted password with different public key since it didn't request it from server.");
-            throw Exception("Failed to decrypt auth data. Error: " + getOpenSSLErrors(), ErrorCodes::OPENSSL_ERROR);
+            throw Exception(ErrorCodes::OPENSSL_ERROR, "Failed to decrypt auth data. Error: {}", getOpenSSLErrors());
         }
 
         password.resize(plaintext_size);
         for (int i = 0; i < plaintext_size; i++)
         {
-            password[i] = plaintext[i] ^ static_cast<unsigned char>(scramble[i % scramble.size()]);
+            password[i] = plaintext[i] ^ static_cast<unsigned char>(scramble[i % SCRAMBLE_LENGTH]);
         }
     }
     else if (is_secure_connection)

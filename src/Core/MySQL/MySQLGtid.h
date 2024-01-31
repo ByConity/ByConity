@@ -28,6 +28,8 @@ public:
     void tryMerge(size_t i);
 
     static void tryShrink(GTIDSet & set, unsigned int i, Interval & current);
+
+    bool contains(const GTIDSet & gtid_set) const;
 };
 
 class GTIDSets
@@ -35,11 +37,36 @@ class GTIDSets
 public:
     std::vector<GTIDSet> sets;
 
-    void parse(const String gtid_format_);
+    void parse(String gtid_format_);
     void update(const GTID & other);
 
     String toString() const;
     String toPayload() const;
+    bool contains(const GTIDSet & gtid_set) const;
+    bool contains(const GTIDSets & gtid_sets) const;
 };
+
+inline bool operator==(const GTID & left, const GTID & right)
+{
+    return left.uuid == right.uuid
+           && left.seq_no == right.seq_no;
+}
+
+inline bool operator==(const GTIDSet::Interval & left, const GTIDSet::Interval & right)
+{
+    return left.start == right.start
+           && left.end == right.end;
+}
+
+inline bool operator==(const GTIDSet & left, const GTIDSet & right)
+{
+    return left.uuid == right.uuid
+           && left.intervals == right.intervals;
+}
+
+inline bool operator==(const GTIDSets & left, const GTIDSets & right)
+{
+    return left.sets == right.sets;
+}
 
 }

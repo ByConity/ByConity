@@ -7,6 +7,7 @@
 #include <Core/MySQL/PacketsGeneric.h>
 #include <Core/MySQL/PacketsConnection.h>
 #include <Core/MySQL/PacketsProtocolText.h>
+#include <IO/ReadBufferFromString.h>
 #include "IServer.h"
 
 #if !defined(ARCADIA_BUILD)
@@ -24,11 +25,16 @@ namespace CurrentMetrics
 
 namespace DB
 {
+class ReadBufferFromPocoSocket;
+class TCPServer;
+
 /// Handler for MySQL wire protocol connections. Allows to connect to ClickHouse using MySQL client.
 class MySQLHandler : public Poco::Net::TCPServerConnection
 {
+    /// statement_id -> statement
+    using PreparedStatements = std::unordered_map<UInt32, String>;
 public:
-    MySQLHandler(IServer & server_, const Poco::Net::StreamSocket & socket_, bool ssl_enabled, size_t connection_id_);
+    MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poco::Net::StreamSocket & socket_, bool ssl_enabled, uint32_t connection_id_);
 
     void run() final;
 
@@ -38,7 +44,7 @@ protected:
     /// Enables SSL, if client requested.
     void finishHandshake(MySQLProtocol::ConnectionPhase::HandshakeResponse &);
 
-    void comQuery(ReadBuffer & payload);
+    void comQuery(ReadBuffer & payload, bool binary_protocol);
 
     void comFieldList(ReadBuffer & payload);
 
@@ -48,12 +54,24 @@ protected:
 
     void authenticate(const String & user_name, const String & auth_plugin_name, const String & auth_response);
 
+    void comStmtPrepare(ReadBuffer & payload);
+
+    void comStmtExecute(ReadBuffer & payload);
+
+    void comStmtClose(ReadBuffer & payload);
+
+    /// Contains statement_id if the statement was emplaced successfully
+    std::optional<UInt32> emplacePreparedStatement(String statement);
+    /// Contains statement as a buffer if we could find previously stored statement using provided statement_id
+    std::optional<ReadBufferFromString> getPreparedStatement(UInt32 statement_id);
+    void erasePreparedStatement(UInt32 statement_id);
     virtual void authPluginSSL();
     virtual void finishHandshakeSSL(size_t packet_size, char * buf, size_t pos, std::function<void(size_t)> read_bytes, MySQLProtocol::ConnectionPhase::HandshakeResponse & packet);
 
     IServer & server;
+    TCPServer & tcp_server;
     Poco::Logger * log;
-    UInt64 connection_id = 0;
+    uint32_t connection_id = 0;
 
     uint32_t server_capabilities = 0;
     uint32_t client_capabilities = 0;
@@ -63,12 +81,19 @@ protected:
     MySQLProtocol::PacketEndpointPtr packet_endpoint;
     ContextMutablePtr connection_context;
 
-    using ReplacementFn = std::function<String(const String & query)>;
-    using Replacements = std::unordered_map<std::string, ReplacementFn>;
-    Replacements replacements;
+    using QueryReplacementFn = std::function<String(const String & query)>;
+    using QueriesReplacements = std::unordered_map<std::string, QueryReplacementFn>;
+    QueriesReplacements queries_replacements;
+
+    using SettingsReplacements = std::unordered_map<std::string, std::string>;
+    SettingsReplacements settings_replacements;
+
+    std::mutex prepared_statements_mutex;
+    UInt32 current_prepared_statement_id TSA_GUARDED_BY(prepared_statements_mutex) = 0;
+    PreparedStatements prepared_statements TSA_GUARDED_BY(prepared_statements_mutex);
 
     std::unique_ptr<MySQLProtocol::Authentication::IPlugin> auth_plugin;
-    std::shared_ptr<ReadBuffer> in;
+    std::shared_ptr<ReadBufferFromPocoSocket> in;
     std::shared_ptr<WriteBuffer> out;
     bool secure_connection = false;
 };
@@ -77,7 +102,7 @@ protected:
 class MySQLHandlerSSL : public MySQLHandler
 {
 public:
-    MySQLHandlerSSL(IServer & server_, const Poco::Net::StreamSocket & socket_, bool ssl_enabled, size_t connection_id_, RSA & public_key_, RSA & private_key_);
+    MySQLHandlerSSL(IServer & server_, TCPServer & tcp_server_, const Poco::Net::StreamSocket & socket_, bool ssl_enabled, uint32_t connection_id_, RSA & public_key_, RSA & private_key_);
 
 private:
     void authPluginSSL() override;

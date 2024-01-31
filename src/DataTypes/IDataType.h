@@ -503,6 +503,8 @@ inline bool isDateTime(const T & data_type) { return WhichDataType(data_type).is
 template <typename T>
 inline bool isDateTime64(const T & data_type) { return WhichDataType(data_type).isDateTime64(); }
 
+inline bool isEnum8(const DataTypePtr & data_type) { return WhichDataType(data_type).isEnum8(); }
+inline bool isEnum16(const DataTypePtr & data_type) { return WhichDataType(data_type).isEnum16(); }
 inline bool isEnum(const DataTypePtr & data_type) { return WhichDataType(data_type).isEnum(); }
 inline bool isDecimal(const DataTypePtr & data_type) { return WhichDataType(data_type).isDecimal(); }
 inline bool isTuple(const DataTypePtr & data_type) { return WhichDataType(data_type).isTuple(); }

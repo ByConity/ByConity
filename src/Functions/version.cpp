@@ -2,6 +2,7 @@
 #include <Functions/FunctionFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <Core/Field.h>
+#include <Interpreters/Context.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config_version.h>
@@ -16,9 +17,13 @@ class FunctionVersion : public IFunction
 {
 public:
     static constexpr auto name = "version";
-    static FunctionPtr create(ContextPtr)
+    static FunctionPtr create(ContextPtr context)
     {
-        return std::make_shared<FunctionVersion>();
+        return std::make_shared<FunctionVersion>(context->getSettingsRef().dialect_type == DialectType::MYSQL);
+    }
+
+    explicit FunctionVersion(bool is_mysql_) : is_mysql(is_mysql_)
+    {
     }
 
     String getName() const override
@@ -42,8 +47,10 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr &, size_t input_rows_count) const override
     {
-        return DataTypeString().createColumnConst(input_rows_count, VERSION_STRING);
+        return DataTypeString().createColumnConst(input_rows_count, is_mysql ? "5.1.0" : VERSION_STRING);
     }
+private:
+    bool is_mysql;
 };
 
 
