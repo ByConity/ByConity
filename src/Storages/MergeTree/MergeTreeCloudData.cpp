@@ -58,8 +58,10 @@ MergeTreeCloudData::MergeTreeCloudData(
         merging_params_,
         std::move(settings_),
         /// notice: cardinality of cloud merge tree table name is very high (including xids)
-        /// so if it's used in logger name, can lead to memleak
-        UUIDHelpers::UUIDToString(table_id_.uuid) + " (CloudMergeTree)",
+        /// so if it's used in logger name, can lead to memleak;
+        /// specially, kafka tasks won't create local tables with uuid, and they are always resident tasks,
+        /// thus we still use db-table name as logger name for them
+        (table_id_.hasUUID() ? UUIDHelpers::UUIDToString(table_id_.uuid) : table_id_.getFullTableName()) + " (CloudMergeTree)",
         false, /// require_part_metadata
         false  /// attach
     )

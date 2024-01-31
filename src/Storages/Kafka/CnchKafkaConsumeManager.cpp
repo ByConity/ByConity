@@ -161,7 +161,7 @@ void CnchKafkaConsumeManager::runImpl()
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
         {
             std::lock_guard lock(last_exception_mutex);
-            last_exception = std::to_string(LocalDateTime(time(nullptr))) + " : " + getCurrentExceptionMessage(false);
+            last_exception = LocalDateTime(time(nullptr)).toString() + " : " + getCurrentExceptionMessage(false);
         }
 
         /// TODO: add settings of backoff strategy for table-level; now the longest wait time maybe 102s
@@ -536,7 +536,7 @@ void CnchKafkaConsumeManager::checkConsumerStatus(ConsumerInfo & info, std::uniq
         if (!status.last_exception.empty())
         {
             std::lock_guard lock(last_exception_mutex);
-            last_exception = std::to_string(LocalDateTime(time(nullptr))) + " : " + status.last_exception;
+            last_exception = LocalDateTime(time(nullptr)).toString() + " : " + status.last_exception;
         }
 
         LOG_DEBUG(log, "Check consumer status succ for {} on host {}", storage_id.getTableName() + info.table_suffix

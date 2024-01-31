@@ -22,6 +22,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
@@ -39,6 +40,12 @@ namespace DB
 StorageSystemKafkaTables::StorageSystemKafkaTables(const StorageID & table_id_)
     : IStorage(table_id_)
 {
+    auto consumer_switch_datatype = std::make_shared<DataTypeEnum8>(
+            DataTypeEnum8::Values {
+            {"OFF",         static_cast<Int8>(false)},
+            {"ON",          static_cast<Int8>(true)},
+        });
+
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(ColumnsDescription({
         { "database",                   std::make_shared<DataTypeString>()  },
@@ -51,6 +58,7 @@ StorageSystemKafkaTables::StorageSystemKafkaTables(const StorageID & table_id_)
         { "max_block_size",             std::make_shared<DataTypeUInt64>()  },
         { "max_poll_interval_ms",       std::make_shared<DataTypeUInt64>()  },
         { "num_consumers",              std::make_shared<DataTypeUInt32>()  },
+        { "consumer_switch",            consumer_switch_datatype },
         { "consumer_tables",            std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
         { "consumer_hosts",             std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
         { "consumer_partitions",        std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
@@ -145,6 +153,7 @@ Pipe StorageSystemKafkaTables::read(
         res_columns[col_num++]->insert(kafka_table->getSettings().max_block_size.value);
         res_columns[col_num++]->insert(kafka_table->getSettings().max_poll_interval_ms.totalMilliseconds());
         res_columns[col_num++]->insert(consumer_infos.size());
+        res_columns[col_num++]->insert(kafka_table->tableIsActive());
 
         /// if the table is not consuming, such as dependencies is not ready, just print common info
         if (consumer_infos.empty())
