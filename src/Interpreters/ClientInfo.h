@@ -98,6 +98,7 @@ public:
     // OpenTelemetry trace context we received from client, or which we are going
     // to send to server.
     OpenTelemetryTraceContext client_trace_context;
+    TraceMeta trace_meta;
 
     /// All below are parameters related to initial query.
 

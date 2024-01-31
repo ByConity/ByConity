@@ -259,7 +259,15 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     /// the DataModelPart::txnID not equal to DataModelPart::part_info::mutation.
     /// To handle this case, we need to set txnID and part_info::mutation separately.
     /// And when getting txnID, use DataModelPart::txnID by default, and use mutation as fallback, see ServerDataPart::txnID() .
-    part_model.set_txnid(txn_id ? txn_id : part.info.mutation);
+    if (part.secondary_txn_id != IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+    {
+        /// If we in a interactive transaction, use primary txn's txnid for this part
+        part_model.set_txnid(part.info.mutation);
+    }
+    else
+    {
+        part_model.set_txnid(txn_id ? txn_id : part.info.mutation);
+    }
     part_model.set_bucket_number(part.bucket_number);
     part_model.set_table_definition_hash(part.table_definition_hash);
     part_model.set_commit_time(part.commit_time.toUInt64());

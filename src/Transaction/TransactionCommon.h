@@ -385,7 +385,7 @@ struct TransactionRecord
     /// helpers & debug methods
     bool isReadOnly() const { return read_only; }
     bool isPrepared() const { return pb_model.status() == CnchTransactionStatus::Running && prepared; }
-    bool isSecondary() const { return pb_model.has_primary_txn_id() && pb_model.type() == CnchTransactionType::Implicit; }
+    bool isSecondary() const { return pb_model.has_primary_txn_id() && pb_model.primary_txn_id() != pb_model.txn_id() && pb_model.type() == CnchTransactionType::Implicit; }
     bool isPrimary() const { return !isSecondary(); }
     bool ended() const
     {

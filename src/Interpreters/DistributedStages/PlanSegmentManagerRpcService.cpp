@@ -121,6 +121,14 @@ void PlanSegmentManagerRpcService::executeQuery(
         client_info.current_query_id = request->query_id() + "_" + std::to_string(request->plan_segment_id());
         client_info.current_address = Poco::Net::SocketAddress(request->current_host(), request->current_port());
 
+        client_info.rpc_port = request->current_exchange_port();
+
+        if (request->has_trace_meta())
+        {
+            client_info.trace_meta.traceparent = request->trace_meta().traceparent();
+            client_info.trace_meta.tracestate = request->trace_meta().tracestate();
+        }
+
         /// Prepare settings.
         SettingsChanges settings_changes;
         settings_changes.reserve(request->settings_size());
@@ -474,6 +482,8 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         client_info.current_query_id = client_info.initial_query_id + "_" + std::to_string(request->plan_segment_id());
         client_info.current_address = std::move(current_socket_address);
 
+        client_info.rpc_port = query_common->coordinator_address().exchange_port();
+
         /// Prepare settings.
         if (request->query_settings_buf_size() > 0)
         {
@@ -487,7 +497,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     ErrorCodes::LOGICAL_ERROR);
             }
             ReadBufferFromBrpcBuf settings_read_buf(settings_io_buf);
-            /// Sets an extra row policy based on `client_info.initial_user`. 
+            /// Sets an extra row policy based on `client_info.initial_user`.
             /// Not saft since KVAccessStorage will call rpc inside lock
             // query_context->setInitialRowPolicy();
 
