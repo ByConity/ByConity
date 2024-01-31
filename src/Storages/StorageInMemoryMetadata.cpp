@@ -605,6 +605,8 @@ Names StorageInMemoryMetadata::getSortingKeyColumns() const
 
 const KeyDescription & StorageInMemoryMetadata::getSamplingKey() const
 {
+    if (!isSamplingKeyDefined())
+        throw Exception("Can't get sampling key for no-sampling key table", ErrorCodes::BAD_ARGUMENTS);
     return sampling_key;
 }
 

@@ -112,7 +112,7 @@ struct ArrayElementNumImpl
     template <bool negative>
     static void vectorConst(
         const PaddedPODArray<T> & data, const ColumnArray::Offsets & offsets,
-        const ColumnArray::Offset index,
+        const ColumnArray::Offset index, const DataTypePtr value_type,
         PaddedPODArray<T> & result, ArrayImpl::NullMapBuilder & builder)
     {
         size_t size = offsets.size();
@@ -132,7 +132,7 @@ struct ArrayElementNumImpl
             }
             else
             {
-                result[i] = T();
+                result[i] = value_type->getDefault().get<T>();
 
                 if (builder)
                     builder.update();
@@ -147,7 +147,7 @@ struct ArrayElementNumImpl
     template <typename TIndex>
     static void vector(
         const PaddedPODArray<T> & data, const ColumnArray::Offsets & offsets,
-        const PaddedPODArray<TIndex> & indices,
+        const PaddedPODArray<TIndex> & indices, const DataTypePtr value_type,
         PaddedPODArray<T> & result, ArrayImpl::NullMapBuilder & builder)
     {
         size_t size = offsets.size();
@@ -177,7 +177,7 @@ struct ArrayElementNumImpl
             }
             else
             {
-                result[i] = T();
+                result[i] = value_type->getDefault().get<T>();
 
                 if (builder)
                     builder.update();
@@ -405,12 +405,16 @@ ColumnPtr FunctionArrayElement::executeNumberConst(
     if (!col_nested)
         return nullptr;
 
+    const DataTypeArray * array_type = typeid_cast<const DataTypeArray *>(arguments[0].type.get());
+    if (!array_type)
+        return nullptr;
+
     auto col_res = ColumnVector<DataType>::create();
 
     if (index.getType() == Field::Types::UInt64)
     {
         ArrayElementNumImpl<DataType>::template vectorConst<false>(
-            col_nested->getData(), col_array->getOffsets(), safeGet<UInt64>(index) - 1, col_res->getData(), builder);
+            col_nested->getData(), col_array->getOffsets(), safeGet<UInt64>(index) - 1, array_type->getNestedType(), col_res->getData(), builder);
     }
     else if (index.getType() == Field::Types::Int64)
     {
@@ -424,7 +428,7 @@ ColumnPtr FunctionArrayElement::executeNumberConst(
         /// arr[-2] is the element at offset 1 from the last and so on.
 
         ArrayElementNumImpl<DataType>::template vectorConst<true>(
-            col_nested->getData(), col_array->getOffsets(), -(UInt64(safeGet<Int64>(index)) + 1), col_res->getData(), builder);
+            col_nested->getData(), col_array->getOffsets(), -(UInt64(safeGet<Int64>(index)) + 1), array_type->getNestedType(), col_res->getData(), builder);
     }
     else
         throw Exception("Illegal type of array index", ErrorCodes::LOGICAL_ERROR);
@@ -445,11 +449,15 @@ ColumnPtr FunctionArrayElement::executeNumber(
 
     if (!col_nested)
         return nullptr;
+    
+    const DataTypeArray * array_type = typeid_cast<const DataTypeArray *>(arguments[0].type.get());
+    if (!array_type)
+        return nullptr;
 
     auto col_res = ColumnVector<DataType>::create();
 
     ArrayElementNumImpl<DataType>::template vector<IndexType>(
-        col_nested->getData(), col_array->getOffsets(), indices, col_res->getData(), builder);
+        col_nested->getData(), col_array->getOffsets(), indices, array_type->getNestedType(), col_res->getData(), builder);
 
     return col_res;
 }

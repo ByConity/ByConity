@@ -1,15 +1,20 @@
+#include <Common/Exception.h>
+#include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Functions/FunctionFactory.h>
+
+#include <memory>
+#include <regex>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_SYNTAX_FOR_DATA_TYPE;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int CANNOT_PARSE_TEXT;
 }
 
 class FunctionConvertTz : public IFunction
@@ -27,80 +32,58 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        if (arguments.size() != 3)
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Number of arguments for function {} doesn't match: passed {}",
-                getName(),
-                toString(arguments.size()));
-
-        return std::make_shared<DataTypeDateTime>("UTC");
+        const ColumnWithTypeAndName & to_tz = arguments[2];
+        return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromMysqlColumn(*to_tz.column));  
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type [[maybe_unused]] , size_t input_rows_count) const override
     {
         auto executeFunction = [&](const std::string & function_name, const ColumnsWithTypeAndName input, const DataTypePtr output_type) {
             auto func = FunctionFactory::instance().get(function_name, context);
             return func->build(input)->execute(input, output_type, input_rows_count);
         };
 
-        ColumnsWithTypeAndName date{arguments[0]};
-        auto origin = executeFunction("toDateTime", date, std::make_shared<DataTypeDateTime>("UTC"));
-
-        ColumnPtr from = arguments[1].column;
-        ColumnPtr to = arguments[2].column;
-
-        DataTypePtr number_type = std::make_shared<DataTypeNumber<Int32>>();
-        MutableColumnPtr diff_col{number_type->createColumn()};
-        auto & internal_data = dynamic_cast<ColumnVector<Int32> *>(diff_col.get())->getData();
-        internal_data.resize(input_rows_count);
-
-        for (size_t i = 0; i < input_rows_count; ++i)
-        {
-            int diff = checkAndGetMinutes(to->getDataAt(i)) - checkAndGetMinutes(from->getDataAt(i));
-            internal_data[i] = diff;
-        }
-
-        ColumnPtr diff_operand(std::move(diff_col));
-        ColumnsWithTypeAndName operands
-            = {{origin, std::make_shared<DataTypeDateTime>("UTC"), "date"}, {diff_operand, number_type, "diff"}};
-
-        auto result = executeFunction("addMinutes", operands, result_type);
-        return result;
+        const ColumnWithTypeAndName & date_expr = arguments[0];
+        const ColumnWithTypeAndName & from_tz = arguments[1];
+        const String from_tz_str = extractTimeZoneNameFromMysqlColumn(*from_tz.column);
+        const ColumnPtr from_tz_parsed = from_tz.type->createColumnConst(from_tz.column->size(), from_tz_str);
+        const auto date_time_type = std::make_shared<DataTypeDateTime>(from_tz_str);
+        const ColumnsWithTypeAndName to_date_time_operands = {date_expr, {from_tz_parsed, from_tz.type, from_tz.name}};
+        return executeFunction("toDateTime", to_date_time_operands, date_time_type);
     }
 
 private:
+    static const std::regex mysql_utc_offset_pattern;
+
     ContextPtr context;
 
-    inline int checkAndGetMinutes(StringRef s) const
+    static String extractTimeZoneNameFromMysqlColumn(const IColumn & column)
     {
-        if (s.size != 6)
-            throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE, "Illegal value for timezone. Should be '+HH:MM or -HH:MM'");
+        String time_zone_name = extractTimeZoneNameFromColumn(column);
+        if (time_zone_name.empty() ||
+            (time_zone_name[0] != '+' && time_zone_name[0] != '-'))
+            return time_zone_name;
 
-        int sign;
-        if (s.data[0] == '+')
-            sign = 1;
-        else if (s.data[0] == '-')
-            sign = -1;
-        else
-            throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE, "Illegal value for timezone. Should be '+HH:MM or -HH:MM'");
+        if (!std::regex_match(time_zone_name, mysql_utc_offset_pattern))
+            throw Exception(ErrorCodes::CANNOT_PARSE_TEXT, "UTC offset should match the regex ((+|-)\\d{1,2}:\\d{2})");
 
-        if (!isdigit(s.data[1]) || !isdigit(s.data[2]))
-            throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE, "Illegal value for timezone. Should be '+HH:MM or -HH:MM'");
-        int hour = (s.data[1] - '0') * 10 + s.data[2] - '0';
-
-        if (s.data[3] != ':')
-            throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE, "Illegal value for timezone. Should be '+HH:MM or -HH:MM'");
-
-        if (!isdigit(s.data[4]) || !isdigit(s.data[5]))
-            throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE, "Illegal value for timezone. Should be '+HH:MM or -HH:MM'");
-        int min = (s.data[4] - '0') * 10 + s.data[5] - '0';
-
-        return sign * (hour * 60 + min);
+        // Convert +H:MM into +0H:MM (Similarly -H:MM into -0H:MM)
+        if (time_zone_name.size() == 5)
+            time_zone_name.insert(time_zone_name.begin() + 1, '0');
+        // Fixed/UTC+HH:MM:00
+        time_zone_name = String("Fixed/UTC") + time_zone_name + ":00";
+        return time_zone_name;     
     }
+
 };
+
+// (+/-)HH:MM or (+/-)H:MM
+const std::regex FunctionConvertTz::mysql_utc_offset_pattern(R"((\+|-)\d{1,2}:\d{2})", std::regex_constants::ECMAScript);
+
 
 REGISTER_FUNCTION(ConvertTz)
 {

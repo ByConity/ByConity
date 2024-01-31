@@ -130,12 +130,15 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
             auto * insert_target = dynamic_cast<TableWriteStep::InsertTarget *>(target.get());
             auto target_storage = DatabaseCatalog::instance().getTable(insert_target->getStorageID(), settings.context);
 
-            auto host_ports = settings.context->getCnchTopologyMaster()->getTargetServer(
-                UUIDHelpers::UUIDToString(target_storage->getStorageUUID()), target_storage->getServerVwName(), true);
-            auto server_client = host_ports.empty() ? settings.context->getCnchServerClientPool().get()
-                                                    : settings.context->getCnchServerClientPool().get(host_ports);
-            auto txn = std::make_shared<CnchWorkerTransaction>(settings.context->getGlobalContext(), server_client);
-            const_cast<Context *>(settings.context.get())->setCurrentTransaction(txn);
+            if (settings.context->getCurrentTransaction() == nullptr || !settings.context->getCurrentTransaction()->isSecondary())
+            {
+                auto host_ports = settings.context->getCnchTopologyMaster()->getTargetServer(
+                    UUIDHelpers::UUIDToString(target_storage->getStorageUUID()), target_storage->getServerVwName(), true);
+                auto server_client = host_ports.empty() ? settings.context->getCnchServerClientPool().get()
+                                                        : settings.context->getCnchServerClientPool().get(host_ports);
+                auto txn = std::make_shared<CnchWorkerTransaction>(settings.context->getGlobalContext(), server_client);
+                const_cast<Context *>(settings.context.get())->setCurrentTransaction(txn);
+            }
 
             auto insert_target_header = getHeader(insert_target->getColumns());
             auto out_streams = createOutputStream(

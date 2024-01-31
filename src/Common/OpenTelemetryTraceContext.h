@@ -18,4 +18,9 @@ struct OpenTelemetryTraceContext
     std::string composeTraceparentHeader() const;
 };
 
+struct TraceMeta
+{
+    String traceparent;
+    String tracestate;
+};
 }

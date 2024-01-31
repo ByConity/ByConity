@@ -62,7 +62,7 @@ void TableWriteTransform::onFinish()
     stream->writeSuffix();
     TransactionCnchPtr txn = context->getCurrentTransaction();
     txn->setMainTableUUID(storage->getStorageUUID());
-    if (txn->getStatus() == CnchTransactionStatus::Running)
+    if (txn->getStatus() == CnchTransactionStatus::Running && !txn->isSecondary())
         txn->commitV2();
     LOG_DEBUG(&Poco::Logger::get("TableWriteTransform"), "Finish insert select commit in table write.");
     output.finish();
