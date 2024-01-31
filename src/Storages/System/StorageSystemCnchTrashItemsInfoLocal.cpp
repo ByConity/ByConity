@@ -35,7 +35,7 @@ StorageSystemCnchTrashItemsInfoLocal::StorageSystemCnchTrashItemsInfoLocal(const
 
 Pipe StorageSystemCnchTrashItemsInfoLocal::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -52,7 +52,7 @@ Pipe StorageSystemCnchTrashItemsInfoLocal::read(
     if (active_tables.empty())
         return {};
 
-    Block sample_block = metadata_snapshot->getSampleBlock();
+    Block sample_block = storage_snapshot->metadata->getSampleBlock();
     Block res_block;
 
     NameSet names_set(column_names.begin(), column_names.end());

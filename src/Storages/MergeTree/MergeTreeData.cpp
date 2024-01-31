@@ -29,9 +29,11 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/MapHelpers.h>
+#include <DataTypes/DataTypeObject.h>
+#include <Columns/ColumnObject.h>
 #include <Formats/FormatFactory.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
@@ -83,6 +85,7 @@
 #include <boost/algorithm/string/join.hpp>
 
 #include <common/scope_guard_safe.h>
+#include <DataTypes/ObjectUtils.h>
 
 #include <algorithm>
 #include <iomanip>
@@ -557,6 +560,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
         if (part_names_with_disks.empty() && wal_name_with_disks.empty())
         {
+            resetObjectColumnsFromActiveParts(part_lock);
             LOG_DEBUG(log, "There are no data parts");
             return;
         }
@@ -622,8 +626,8 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
         }
     }
 
+    resetObjectColumnsFromActiveParts({});
     calculateColumnSizesImpl();
-
 
     LOG_DEBUG(log, "Loaded data parts ({} items)", data_parts_indexes.size());
 }
@@ -1979,6 +1983,12 @@ bool MergeTreeData::renameTempPartAndReplace(
 
         modifyPartState(part_it, DataPartState::Committed);
         addPartContributionToColumnSizes(part);
+
+        if (covered_parts.empty())
+            updateObjectColumns(*part_it, lock);
+        else
+            resetObjectColumnsFromActiveParts(lock);
+
         addPartContributionToDataVolume(part);
     }
 
@@ -2048,9 +2058,10 @@ bool MergeTreeData::renameTempPartInDetachDirecotry(MutableDataPartPtr & new_par
     return true;
 }
 
-void MergeTreeData::removePartsFromWorkingSet(const MergeTreeData::DataPartsVector & remove, bool clear_without_timeout, DataPartsLock & /*acquired_lock*/)
+void MergeTreeData::removePartsFromWorkingSet(const MergeTreeData::DataPartsVector & remove, bool clear_without_timeout, DataPartsLock & acquired_lock)
 {
     auto remove_time = clear_without_timeout ? 0 : time(nullptr);
+    bool removed_active_part = false;
 
     for (const DataPartPtr & part : remove)
     {
@@ -2058,6 +2069,7 @@ void MergeTreeData::removePartsFromWorkingSet(const MergeTreeData::DataPartsVect
         {
             removePartContributionToColumnSizes(part);
             removePartContributionToDataVolume(part);
+            removed_active_part = true;
         }
 
         if (part->getState() == IMergeTreeDataPart::State::Committed || clear_without_timeout)
@@ -2069,17 +2081,24 @@ void MergeTreeData::removePartsFromWorkingSet(const MergeTreeData::DataPartsVect
         if (isInMemoryPart(part) && getSettings()->in_memory_parts_enable_wal)
             getWriteAheadLog()->dropPart(part->name);
     }
+
+    if (removed_active_part)
+        resetObjectColumnsFromActiveParts(acquired_lock);
 }
 
 void MergeTreeData::removePartsFromWorkingSetImmediatelyAndSetTemporaryState(const DataPartsVector & remove)
 {
     auto lock = lockParts();
+    bool removed_active_part = false;
 
     for (const auto & part : remove)
     {
         auto it_part = data_parts_by_info.find(part->info);
         if (it_part == data_parts_by_info.end())
             throw Exception("Part " + part->getNameWithState() + " not found in data_parts", ErrorCodes::LOGICAL_ERROR);
+
+        if (part->getState() == IMergeTreeDataPart::State::Committed)
+            removed_active_part = true;
 
         modifyPartState(part, IMergeTreeDataPart::State::Temporary);
         /// Erase immediately
@@ -2088,6 +2107,9 @@ void MergeTreeData::removePartsFromWorkingSetImmediatelyAndSetTemporaryState(con
         if (metastore)
             metastore->dropPart(*this, part);
     }
+
+    if (removed_active_part)
+        resetObjectColumnsFromActiveParts(lock);
 }
 
 void MergeTreeData::removePartsFromWorkingSet(const DataPartsVector & remove, bool clear_without_timeout, DataPartsLock * acquired_lock)
@@ -2187,6 +2209,8 @@ restore_covered)
     LOG_INFO(log, "Renaming {} to {}{} and forgetting it.", part_to_detach->relative_path, prefix, part_to_detach->name);
 
     auto lock = lockParts();
+    bool removed_active_part = false;
+    bool restored_active_part = false;
 
     auto it_part = data_parts_by_info.find(part_to_detach->info);
     if (it_part == data_parts_by_info.end())
@@ -2199,6 +2223,7 @@ restore_covered)
     {
         removePartContributionToDataVolume(part);
         removePartContributionToColumnSizes(part);
+        removed_active_part = true;
     }
     modifyPartState(it_part, DataPartState::Deleting);
 
@@ -2251,6 +2276,7 @@ restore_covered)
                     addPartContributionToColumnSizes(*it);
                     addPartContributionToDataVolume(*it);
                     modifyPartState(it, DataPartState::Committed); // iterator is not invalidated here
+                    restored_active_part = true;
                 }
 
                 pos = (*it)->info.max_block + 1;
@@ -2301,6 +2327,9 @@ restore_covered)
             LOG_ERROR(log, "The set of parts restored in place of {} looks incomplete. There might or might not be a data loss.{}", part->name, (error_parts.empty() ? "" : " Suspicious parts: " + error_parts));
         }
     }
+
+    if (removed_active_part || restored_active_part)
+        resetObjectColumnsFromActiveParts(lock);
 }
 
 
@@ -3397,7 +3426,7 @@ using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
 
 static void selectBestProjection(
     const MergeTreeDataSelectExecutor & reader,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const SelectQueryInfo & query_info,
     const Names & required_columns,
     ProjectionCandidate & candidate,
@@ -3426,7 +3455,7 @@ static void selectBestProjection(
     auto sum_marks = reader.estimateNumMarksToRead(
         projection_parts,
         candidate.required_columns,
-        metadata_snapshot,
+        storage_snapshot->metadata,
         candidate.desc->metadata,
         query_info, // TODO syntax_analysis_result set in index
         query_context,
@@ -3444,8 +3473,8 @@ static void selectBestProjection(
         sum_marks += reader.estimateNumMarksToRead(
             normal_parts,
             required_columns,
-            metadata_snapshot,
-            metadata_snapshot,
+            storage_snapshot->metadata,
+            storage_snapshot->metadata,
             query_info, // TODO syntax_analysis_result set in index
             query_context,
             settings.max_threads,
@@ -3462,8 +3491,9 @@ static void selectBestProjection(
 
 
 bool MergeTreeData::getQueryProcessingStageWithAggregateProjection(
-    ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
+    ContextPtr query_context, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const
 {
+    const auto & metadata_snapshot = storage_snapshot->metadata;
     const auto & settings = query_context->getSettingsRef();
     if (!settings.allow_experimental_projection_optimization || query_info.ignore_projections || query_info.is_projection_query)
         return false;
@@ -3681,7 +3711,7 @@ bool MergeTreeData::getQueryProcessingStageWithAggregateProjection(
             {
                 selectBestProjection(
                     reader,
-                    metadata_snapshot,
+                    storage_snapshot,
                     query_info,
                     analysis_result.required_columns,
                     candidate,
@@ -3719,7 +3749,7 @@ bool MergeTreeData::getQueryProcessingStageWithAggregateProjection(
                 {
                     selectBestProjection(
                         reader,
-                        metadata_snapshot,
+                        storage_snapshot,
                         query_info,
                         analysis_result.required_columns,
                         candidate,
@@ -3753,12 +3783,12 @@ bool MergeTreeData::getQueryProcessingStageWithAggregateProjection(
 QueryProcessingStage::Enum MergeTreeData::getQueryProcessingStage(
     ContextPtr query_context,
     QueryProcessingStage::Enum to_stage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info) const
 {
     if (to_stage >= QueryProcessingStage::Enum::WithMergeableState)
     {
-        if (getQueryProcessingStageWithAggregateProjection(query_context, metadata_snapshot, query_info))
+        if (getQueryProcessingStageWithAggregateProjection(query_context, storage_snapshot, query_info))
         {
             if (query_info.projection->desc->type == ProjectionDescription::Type::Aggregate)
                 return QueryProcessingStage::Enum::WithMergeableState;
@@ -4680,6 +4710,58 @@ void MergeTreeData::removeWriteAheadLog(const String & file_name) const
 {
     if (metastore)
         metastore->removeWAL(*this, file_name);
+}
+
+ColumnsDescription MergeTreeData::getConcreteObjectColumns(
+    boost::iterator_range<DataPartIteratorByStateAndInfo> range, const ColumnsDescription & storage_columns)
+{
+    return DB::getConcreteObjectColumns(
+        range.begin(), range.end(),
+        storage_columns, [](const auto & part) -> const auto & { return part->getColumns(); });
+}
+
+void MergeTreeData::resetObjectColumnsFromActiveParts(const DataPartsLock & /*lock*/)
+{
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    const auto & columns = metadata_snapshot->getColumns();
+    if (!hasDynamicSubcolumns(columns))
+        return;
+
+    auto range = getDataPartsStateRange(DataPartState::Committed);
+    object_columns = getConcreteObjectColumns(range, columns);
+}
+
+void MergeTreeData::updateObjectColumns(const DataPartPtr & part, const DataPartsLock & /*lock*/)
+{
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    const auto & columns = metadata_snapshot->getColumns();
+    if (!hasDynamicSubcolumns(columns))
+        return;
+
+    DB::updateObjectColumns(object_columns, columns, part->getColumns());
+}
+
+ColumnsDescription MergeTreeData::getConcreteObjectColumns(
+    const DataPartsVector & parts, const ColumnsDescription & storage_columns)
+{
+    return DB::getConcreteObjectColumns(
+        parts.begin(), parts.end(),
+        storage_columns, [](const auto & part) -> const auto & { return part->getColumns(); });
+}
+
+StorageSnapshotPtr MergeTreeData::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr  /*query_context*/) const
+{
+    auto snapshot_data = std::make_unique<SnapshotData>();
+
+    auto lock = lockParts();
+    snapshot_data->parts = getDataPartsVectorUnlocked({DataPartState::Committed}, lock);
+    return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns, std::move(snapshot_data));
+}
+
+StorageSnapshotPtr MergeTreeData::getStorageSnapshotWithoutParts(const StorageMetadataPtr & metadata_snapshot) const
+{
+    auto lock = lockParts();
+    return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns, std::make_unique<SnapshotData>());
 }
 
 CurrentlySubmergingEmergingTagger::~CurrentlySubmergingEmergingTagger()

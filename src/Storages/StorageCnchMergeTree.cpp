@@ -86,6 +86,9 @@
 #include <Common/RowExistsColumnInfo.h>
 #include <Common/parseAddress.h>
 #include <common/logger_useful.h>
+#include <DataTypes/ObjectUtils.h>
+#include <Storages/StorageSnapshot.h>
+#include <Transaction/TxnTimestamp.h>
 
 
 namespace ProfileEvents
@@ -103,6 +106,7 @@ namespace ErrorCodes
 {
     extern const int ILLEGAL_COLUMN;
     extern const int LOGICAL_ERROR;
+    extern const int BAD_ARGUMENTS;
     extern const int INDEX_NOT_USED;
     extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
     extern const int SUPPORT_IS_DISABLED;
@@ -186,15 +190,9 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 
-    /// check cluster by keys, for BitEngine, only when creating table first time
-    if (isBitEngineTable() && !attach_)
-        checkSchemaForBitEngineTable(context_);
-
     const auto & all_columns = getInMemoryMetadataPtr()->getColumns();
     MergeTreeBitmapIndex::checkValidBitmapIndexType(all_columns);
     MergeTreeSegmentBitmapIndex::checkSegmentBitmapStorageGranularity(all_columns, getSettings());
-
-    registerBitEngineDictionaries();
 }
 
 /// NOTE: it involve a RPC. We have a CnchStorageCache to avoid invoking this RPC frequently.
@@ -222,7 +220,7 @@ void StorageCnchMergeTree::loadMutations()
 }
 
 QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
-    ContextPtr local_context, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const
+    ContextPtr local_context, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const
 {
     const auto & settings = local_context->getSettingsRef();
     if (auto worker_group = local_context->tryGetCurrentWorkerGroup())
@@ -247,7 +245,7 @@ void StorageCnchMergeTree::shutdown()
 
 Pipe StorageCnchMergeTree::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
@@ -255,7 +253,7 @@ Pipe StorageCnchMergeTree::read(
     unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
@@ -263,14 +261,14 @@ Pipe StorageCnchMergeTree::read(
 void StorageCnchMergeTree::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t /*max_block_size*/,
     const unsigned /*num_streams*/)
 {
-    auto prepare_result = prepareReadContext(column_names, metadata_snapshot, query_info, local_context);
+    auto prepare_result = prepareReadContext(column_names, storage_snapshot->metadata, query_info, local_context);
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     auto worker_group = local_context->getCurrentWorkerGroup();
@@ -294,19 +292,23 @@ void StorageCnchMergeTree::read(
         Pipe pipe(std::make_shared<NullSource>(std::move(fetch_column_header)));
         /// Stage 2: (partial) aggregation and projection if any
         auto query = getBasicSelectQuery(query_info.query);
-        InterpreterSelectQuery(query, local_context, std::move(pipe), SelectQueryOptions(processed_stage)).buildQueryPlan(query_plan);
-        return;
+        // not support join query
+        if (const auto & select = query->as<ASTSelectQuery>(); select && !select->join())
+        {
+            InterpreterSelectQuery(query, local_context, std::move(pipe), SelectQueryOptions(processed_stage)).buildQueryPlan(query_plan);
+            return;
+        }
     }
 
+    auto modified_query_ast = query_info.query->clone();
+    const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
+    ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
+        header, {}, storage_snapshot, processed_stage, StorageID{"system", "one"}, scalars, false, local_context->getExternalTables());
+
     LOG_TRACE(log, "Original query before rewrite: {}", queryToString(query_info.query));
-    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), prepare_result.local_table_name);
+    modified_query_ast = rewriteSelectQuery(modified_query_ast, getDatabaseName(), prepare_result.local_table_name);
 
     LOG_TRACE(log, "After query rewrite: {}", queryToString(modified_query_ast));
-
-    const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
-
-    ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
-        header, processed_stage, StorageID{"system", "one"}, scalars, false, local_context->getExternalTables());
 
     ClusterProxy::executeQuery(query_plan, select_stream_factory, log, modified_query_ast, local_context, worker_group);
 
@@ -321,7 +323,8 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     if (local_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
         local_context->getCnchTransactionCoordinator().touchActiveTimestampByTable(getStorageID(), txn);
 
-    metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
+    auto storage_snapshot = getStorageSnapshot(metadata_snapshot, local_context);
+    storage_snapshot->check(column_names);
 
     auto worker_group = local_context->getCurrentWorkerGroup();
     healthCheckForWorkerGroup(local_context, worker_group);
@@ -354,7 +357,8 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
 
     String local_table_name = getCloudTableName(local_context);
     auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
-    collectResource(local_context, parts, local_table_name, bucket_numbers);
+
+    collectResource(local_context, parts, local_table_name, bucket_numbers, storage_snapshot);
 
     return {std::move(local_table_name), std::move(parts), {}, {}};
 }
@@ -1591,7 +1595,10 @@ void StorageCnchMergeTree::collectResource(
     ContextPtr local_context,
     ServerDataPartsVector & parts,
     const String & local_table_name,
-    const std::set<Int64> & required_bucket_numbers)
+    const std::set<Int64> & required_bucket_numbers,
+    const StorageSnapshotPtr & storage_snapshot,
+    WorkerEngineType /*engine_type*/,
+    bool replicated)
 {
     auto cnch_resource = local_context->getCnchServerResource();
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
@@ -1602,6 +1609,14 @@ void StorageCnchMergeTree::collectResource(
     //     setVirtualPartSize(local_context, parts, worker_group->getReadWorkers().size());
 
     cnch_resource->addDataParts(getStorageUUID(), parts, required_bucket_numbers);
+
+    if (storage_snapshot && !storage_snapshot->object_columns.empty())
+        cnch_resource->addDynamicObjectSchema(getStorageUUID(), storage_snapshot->object_columns);
+
+    if (replicated)
+    {
+        cnch_resource->setResourceReplicated(getStorageUUID(), replicated);
+    }
 }
 
 void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level, UInt64 ts)
@@ -1700,8 +1715,18 @@ PrunedPartitions StorageCnchMergeTree::getPrunedPartitions(
     return pruned_partitions;
 }
 
-ServerDataPartsVector
-StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
+void StorageCnchMergeTree::checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
+{
+    MergeTreeSettingsPtr current_settings = getChangedSettings(new_settings);
+
+    /// do not support compact map in CnchMergeTree
+    if (current_settings->enable_compact_map_data == true)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Compact map is not supported in CnchMergeTree.");
+
+    MergeTreeMetaBase::checkColumnsValidity(columns);
+}
+
+ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
 {
     Int64 primary_txn_id = local_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
     TxnTimestamp start_time = local_context->getCurrentTransaction()->getStartTime();
@@ -2236,7 +2261,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     alter_act.setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
 
     commands.apply(new_metadata, local_context);
-    checkColumnsValidity(new_metadata.columns);
+    checkColumnsValidity(new_metadata.columns, new_metadata.settings_changes);
 
     {
         String create_table_query = getCreateTableSql();
@@ -2585,11 +2610,12 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         auto txn_id = txn->getPrimaryTransactionID().toUInt64();
         new_part_model.mutable_part_info()->set_mutation(txn_id);
         new_part_model.set_txnid(txn_id);
-        new_part_model.clear_commit_time();
         new_part_model.set_delete_flag(false);
         new_part_model.set_staging_txn_id(staged_part->info.mutation);
         // storage may not have part columns info (CloudMergeTree), so set columns/columns_commit_time manually
         auto new_part = createPartFromModelCommon(*this, new_part_model);
+        /// Attention: commit time has been force set in createPartFromModelCommon method, we must clear commit time here. Otherwise, it will be visible event if the txn rollback.
+        new_part->commit_time = IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME;
         new_part->setColumnsPtr(std::make_shared<NamesAndTypesList>(staged_part->getColumns()));
         new_part->columns_commit_time = staged_part->columns_commit_time;
         if (txn->isSecondary())
@@ -3077,9 +3103,10 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
 
     select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));
     auto metadata_snapshot = getInMemoryMetadataPtr();
+    auto storage_snapshot = getStorageSnapshot(metadata_snapshot, local_context);
     /// So this step will throws if WHERE expression contains columns not in partition key, and it's a good thing
     TreeRewriterResult syntax_analyzer_result(
-        metadata_snapshot->partition_key.sample_block.getNamesAndTypesList(), shared_from_this(), metadata_snapshot, true);
+        metadata_snapshot->partition_key.sample_block.getNamesAndTypesList(), shared_from_this(), storage_snapshot, true);
     auto analyzed_result = TreeRewriter(local_context).analyzeSelect(query, std::move(syntax_analyzer_result));
     query_info.query = std::move(query);
     query_info.syntax_analyzer_result = std::move(analyzed_result);
@@ -3251,54 +3278,30 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
     }
 }
 
-void StorageCnchMergeTree::checkSchemaForBitEngineTable(const ContextPtr & context_) const
+void StorageCnchMergeTree::resetObjectColumns(ContextPtr query_context)
 {
-    if (context_->getServerType() != ServerType::cnch_server)
-        return;
-
-    MergeTreeMetaBase::checkSchemaForBitEngineTable(context_);
+    object_columns = object_schemas.assembleSchema(query_context, getInMemoryMetadataPtr());
 }
 
-void StorageCnchMergeTree::checkUnderlyingDictionaryTable(const BitEngineHelper::DictionaryDatabaseAndTable & dict_table)
+void StorageCnchMergeTree::appendObjectPartialSchema(const TxnTimestamp & txn_id, ObjectPartialSchema partial_schema)
 {
-    /// 1. check the cluster_by clause, it should keep consistent with the BitEngine table
-    auto context_v = getContext();
-    auto dict_storage = DatabaseCatalog::instance().getTable(StorageID{dict_table.database, dict_table.table}, context_v);
-
-    if (!dict_storage)
-    {
-        throw Exception(fmt::format("Fail to get StoragePtr of table {}.{}",
-            dict_table.database, dict_table.table), ErrorCodes::LOGICAL_ERROR);
-    }
-
-    /// 2. check dictionary key type
-    auto dict_physical_columns = dict_storage->getInMemoryMetadataPtr()->getColumns().getAllPhysical();
-    NameAndTypePair key_column, value_column;
-    for (const auto & column : dict_physical_columns)
-    {
-        if (column.name == "key")
-            key_column = column;
-        else if (column.name == "value")
-            value_column = column;
-    }
-
-    if (key_column.name.empty())
-        throw Exception("You should specify a column named `key`.", ErrorCodes::ILLEGAL_COLUMN);
-    if (value_column.name.empty())
-        throw Exception("You should specify a column named `value`.", ErrorCodes::ILLEGAL_COLUMN);
-
-    if (dict_table.dict_key_type == BitEngineHelper::KeyType::KEY_INTEGER &&
-        !WhichDataType(key_column.type).isUInt64())
-        throw Exception("Key column type should be UInt64 for a Integer BitEngine field",
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-    else if (dict_table.dict_key_type == BitEngineHelper::KeyType::KEY_STRING &&
-        !isString(key_column.type))
-        throw Exception("Key column type should be String for a String BitEngine field", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-    if (!WhichDataType(value_column.type).isUInt64())
-        throw Exception("Value column type should be UInt64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    object_schemas.appendPartialSchema(txn_id, partial_schema);
 }
 
+void StorageCnchMergeTree::resetObjectSchemas(const ObjectAssembledSchema & assembled_schema, const ObjectPartialSchemas & partial_schemas)
+{
+    object_schemas.reset(assembled_schema, partial_schemas);
+}
+
+void StorageCnchMergeTree::refreshAssembledSchema(const ObjectAssembledSchema & assembled_schema,  std::vector<TxnTimestamp> txn_ids)
+{
+    object_schemas.refreshAssembledSchema(assembled_schema, txn_ids);
+}
+
+std::unique_ptr<MergeTreeSettings> StorageCnchMergeTree::getDefaultSettings() const
+{
+    return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+}
 
 StorageID StorageCnchMergeTree::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
 {

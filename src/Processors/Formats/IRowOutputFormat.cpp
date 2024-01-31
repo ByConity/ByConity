@@ -27,6 +27,11 @@ void IRowOutputFormat::consume(DB::Chunk chunk)
     auto num_rows = chunk.getNumRows();
     const auto & columns = chunk.getColumns();
 
+    if (num_rows > 0 && chunk.getNumColumns() != serializations.size())
+    {
+        throw Exception("RowOutputFormat: serializations and chunk are mismatched", ErrorCodes::LOGICAL_ERROR);
+    }
+
     for (size_t row = 0; row < num_rows; ++row)
     {
         if (!first_row)

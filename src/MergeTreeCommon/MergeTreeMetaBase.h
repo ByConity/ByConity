@@ -20,11 +20,14 @@
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <MergeTreeCommon/IMergeTreePartMeta.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
-#include <Storages/BitEngine/BitEngineHelper.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
+#include <MergeTreeCommon/IMergeTreePartMeta.h>
+#include <Processors/Merges/Algorithms/Graphite.h>
+#include <Common/SimpleIncrement.h>
+#include <Storages/ColumnsDescription.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
 #include <Storages/extractKeyExpressionList.h>
 #include <Transaction/TxnTimestamp.h>
@@ -34,8 +37,6 @@ namespace DB
 {
 
 class MutationCommands;
-class BitEngineDictionaryManager;
-using BitEngineDictionaryManagerPtr = std::shared_ptr<BitEngineDictionaryManager>;
 
 class MergeTreeMetaBase : public IStorage, public WithMutableContext, public MergeTreeDataPartTypeHelper
 {
@@ -177,14 +178,13 @@ public:
     }
 
     bool supportsSubcolumns() const override { return true; }
+    bool supportsDynamicSubcolumns() const override { return true; }
     bool supportsPrewhere() const override { return true; }
     bool supportsSampling() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
 
     NamesAndTypesList getVirtuals() const override;
-
-    void checkColumnsValidity(const ColumnsDescription & columns) const override;
 
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand , ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot) const override;
 
@@ -202,6 +202,13 @@ public:
     ///  out_states will contain snapshot of each part state
     DataPartsVector getDataPartsVector(
         const DataPartStates & affordable_states, DataPartStateVector * out_states = nullptr, bool require_projection_parts = false) const;
+
+    DataPartsVector getDataPartsVectorUnlocked(
+        const DataPartStates & affordable_states,
+        const DataPartsLock & lock,
+        DataPartStateVector * out_states = nullptr,
+        bool require_projection_parts = false) const;
+
     /// Returns all parts in specified partition
     DataPartsVector getDataPartsVectorInPartition(DataPartState /*state*/, const String & /*partition_id*/) const;
 
@@ -390,31 +397,29 @@ public:
     bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
     UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
 
+    /// Snapshot for MergeTree contains the current set of data parts
+    /// at the moment of the start of query.
+    struct SnapshotData : public StorageSnapshot::Data
+    {
+        DataPartsVector parts;
+    };
+
     void addMutationEntry(const CnchMergeTreeMutationEntry & entry);
     void removeMutationEntry(TxnTimestamp create_time);
     Strings getPlainMutationEntries();
 
+    MergeTreeSettingsPtr getChangedSettings(const ASTPtr new_settings) const;
+    void checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+
     virtual bool supportsOptimizer() const override { return true; }
 
-    /// *********** START OF BitEngine-related members *********** ///
-    // BitEngine mode means the storage can work for BitEngine encode/decode
-    bool isBitEngineMode() const { return bitengine_dictionary_manager != nullptr; }
-    /// BitEngine table means the storage has `BitMap64 BitEngineEncode` clause,
-    /// that's to say, it's a `BitEngine table` in syntax.
-    bool isBitEngineTable() const { return !bitengine_columns.empty(); }
-    bool isBitEngineEncodeColumn(const String & name) const;
-    bool isBitEngineDictTable() const { return !getBitEngineConstraints().empty(); }
+    void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
 
-    ConstraintsDescription getBitEngineConstraints() const;
-    void checkBitEngineConstraints() const;
+    // TODO: @lianwenlong not thread safe if storage cache enabled
+    virtual StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
 
-    /// parse BitEngine column and construct BitEngineDictionaryManager, it's called after
-    /// all schema and constraints checks are passed
-    virtual void registerBitEngineDictionaries();
-
-    auto getBitEngineDictionaryManager() { return bitengine_dictionary_manager; }
-
-    /// *********** END OF BitEngine-related members *********** ///
+    /// The same as above but does not hold vector of data parts.
+    virtual StorageSnapshotPtr getStorageSnapshotWithoutParts(const StorageMetadataPtr & metadata_snapshot) const;
 
 protected:
     friend class IMergeTreeDataPart;
@@ -423,6 +428,11 @@ protected:
     friend struct ReplicatedMergeTreeTableMetadata;
     friend class StorageReplicatedMergeTree;
     friend class MergeTreeDataWriter;
+
+    /// Current description of columns of data type Object.
+    /// It changes only when set of parts is changed and is
+    /// protected by @data_parts_mutex.
+    ColumnsDescription object_columns;
 
     bool require_part_metadata;
 
@@ -562,26 +572,8 @@ protected:
     /// Checks whether the column is in the primary key, possibly wrapped in a chain of functions with single argument.
     bool isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(const ASTPtr & node, const StorageMetadataPtr & metadata_snapshot) const;
 
-    /// *********** START OF BitEngine-related members *********** ///
-    BitEngineDictionaryManagerPtr bitengine_dictionary_manager{nullptr};
-    BitEngineDictionaryTableMapping bitengine_dictionary_tables_mapping;
-    NamesAndTypesList bitengine_columns;
-
-    BitEngineDictionaryTableMapping parseUnderlyingDictionaryDependency(const String & mapping_str) const;
-    /// in initializing, parse BitEngine-related components (like columns, underlying_dictionary_table setting)
-    /// to check primarily whether there're illegal syntax
-    void parseAndCheckForBitEngine();
-
-    /// check whethere the underlying dictionary table is legal
-    virtual void checkUnderlyingDictionaryTable(const BitEngineHelper::DictionaryDatabaseAndTable &) {}
-
-    /// validate a giving BitEngineDictionaryTableMapping object
-    void checkSchemaForBitEngineTableImpl(const BitEngineDictionaryTableMapping  & dict_dependencies, const ContextPtr & context_) const;
-    /// validate the member bitengine_dictionary_tables_mapping
-    virtual void checkSchemaForBitEngineTable(const ContextPtr & context_) const;
-
-    /// *********** END OF BitEngine-related members *********** ///
-
+    /// Returns default settings for storage with possible changes from global config.
+    virtual std::unique_ptr<MergeTreeSettings> getDefaultSettings() const = 0;
 
 private:
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.

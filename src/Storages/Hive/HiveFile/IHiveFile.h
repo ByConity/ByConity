@@ -29,6 +29,7 @@ public:
         PARQUET,
         ORC,
         HUDI,
+        InputSplit,
     };
     static FileFormat fromHdfsInputFormatClass(const String & class_name);
     static FileFormat fromFormatName(const String & format_name);
@@ -110,7 +111,6 @@ using HiveFiles = std::vector<HiveFilePtr>;
 
 namespace RPCHelpers
 {
-    void serialize(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files);
     HiveFiles deserialize(
         const Protos::ProtoHiveFiles & proto,
         const ContextPtr & context,

@@ -114,7 +114,7 @@ void RuntimeFilterService::transferRuntimeFilter(
                 {
                     dispatch_request.set_ref_segment(segment_ids.size());
 
-                    String host_port = extractExchangeStatusHostPort(address);
+                    String host_port = extractExchangeHostPort(address);
                     std::shared_ptr<RpcClient> rpc_client
                         = RpcChannelPool::getInstance().getClient(host_port, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
                     std::shared_ptr<DB::Protos::RuntimeFilterService_Stub> command_service

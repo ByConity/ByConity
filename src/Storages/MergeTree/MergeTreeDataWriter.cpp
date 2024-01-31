@@ -19,28 +19,36 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <Storages/MergeTree/MergeTreeDataWriter.h>
-#include <Storages/MergeTree/MergedBlockOutputStream.h>
-#include <MergeTreeCommon/CnchBucketTableCommon.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 #include <Columns/ColumnConst.h>
-#include "common/logger_useful.h"
-#include "common/types.h"
-#include <Common/HashTable/HashMap.h>
-#include <Common/Exception.h>
-#include <Disks/createVolume.h>
-#include <Interpreters/AggregationCommon.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/InterpreterSelectQuery.h>
-#include <IO/HashingWriteBuffer.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeDate.h>
-#include <IO/WriteHelpers.h>
-#include <Common/typeid_cast.h>
 #include <Common/filesystemHelpers.h>
+#include <Common/typeid_cast.h>
+#include <Common/Exception.h>
+#include <Common/HashTable/HashMap.h>
 #include <DataStreams/ITTLAlgorithm.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeMap.h>
+#include <Disks/createVolume.h>
+#include <IO/HashingWriteBuffer.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/AggregationCommon.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <MergeTreeCommon/CnchBucketTableCommon.h>
+#include <Storages/MergeTree/MergeTreeDataWriter.h>
+#include <Storages/MergeTree/MergedBlockOutputStream.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
+#include <Common/Exception.h>
+#include <Common/HashTable/HashMap.h>
+#include <Common/filesystemHelpers.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/ObjectUtils.h>
+#include <Storages/MergeTree/MergeTreeIOSettings.h>
 
 #include <Parsers/queryToString.h>
 
@@ -347,6 +355,18 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     Block & block = block_with_partition.block;
     Int64 bucket_number = block_with_partition.bucket_info.bucket_number;
 
+    auto columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
+    auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot, context);
+
+    if (hasDynamicSubcolumns(metadata_snapshot->getColumns()))
+    {
+        convertDynamicColumnsToTuples(block, storage_snapshot);
+    }
+
+    for (auto & column : columns)
+        if (column.type->hasDynamicSubcolumns())
+            column.type = block.getByName(column.name).type;
+    
     static const String TMP_PREFIX = "tmp_insert_";
 
     /// This will generate unique name in scope of current server process.
@@ -455,7 +475,6 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     for (const auto & ttl_entry : move_ttl_entries)
         updateTTL(ttl_entry, move_ttl_infos, move_ttl_infos.moves_ttl[ttl_entry.result_column], block, false);
 
-    NamesAndTypesList columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
     ReservationPtr reservation = data.reserveSpacePreferringTTLRules(
         metadata_snapshot, expected_size, move_ttl_infos, time(nullptr), 0, true,
         nullptr, write_location);

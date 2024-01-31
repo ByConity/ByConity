@@ -25,6 +25,7 @@ namespace ErrorCodes
     /// Get name of error_code by identifier.
     /// Returns statically allocated string.
     std::string_view getName(ErrorCode error_code);
+    ErrorCode getErrorCodeByName(std::string_view error_name);
 
     struct Error
     {

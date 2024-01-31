@@ -162,7 +162,6 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
                 &Poco::Logger::get("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
             reason = checker.getReason();
         }
-
     }
     else if (node->as<ASTInsertQuery>())
     {
@@ -253,7 +252,7 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
     else
         context.is_add_totals.emplace(false);
 
-    QueryUseOptimizerContext child_context{.context = context.context, .ctes = context.ctes};
+    QueryUseOptimizerContext child_context{.context = context.context, .ctes = context.ctes, .is_add_totals = context.is_add_totals};
     collectWithTableNames(*select, child_context.ctes);
 
     for (const auto * table_expression : getTableExpressions(*select))
@@ -294,6 +293,7 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
         reason = "unsupported function";
         return false;
     }
+
     else if (functionIsInOrGlobalInOperator(fun.name) && fun.arguments->getChildren().size() == 2)
     {
         if (auto * identifier = fun.arguments->getChildren()[1]->as<ASTIdentifier>())

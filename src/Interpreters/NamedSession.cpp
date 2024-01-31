@@ -73,9 +73,11 @@ std::shared_ptr<NamedSession> NamedSessionsImpl<NamedSession>::acquireSession(
     /// Use existing session.
     const auto & session = it->second;
 
+    scheduleCloseSession(*session, lock);
+
     /// For cnch, it's of for session to not be unique, e.g. in union query, the sub-query will have same transaction id,
     /// therefore they shared same session on worker.
-    if constexpr (!std::is_same_v<NamedSession,NamedCnchSession>)
+    if constexpr (!std::is_same_v<NamedSession, NamedCnchSession>)
     {
         if (!session.unique())
             throw Exception("Session is locked by a concurrent client.", ErrorCodes::SESSION_IS_LOCKED);
@@ -162,7 +164,10 @@ std::chrono::steady_clock::duration NamedSessionsImpl<NamedSession>::closeSessio
                 scheduleCloseSession(*session->second, lock);
             }
             else
+            {
+                LOG_DEBUG(&Poco::Logger::get("NamedSession"), "release timed out session: {}", session->second->getID());
                 sessions.erase(session);
+            }
         }
     }
 

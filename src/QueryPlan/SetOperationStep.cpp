@@ -166,4 +166,12 @@ SetOperationStep::deserializeFromProtoBase(const Protos::SetOperationStep & prot
 
     return std::make_tuple(input_streams, output_stream, output_to_inputs);
 }
+
+NameToNameMap SetOperationStep::getOutToInput(size_t source_idx) const
+{
+    NameToNameMap res;
+    for (const auto & [out, inputs] : output_to_inputs)
+        res.emplace(out, inputs.at(source_idx));
+    return res;
+}
 }

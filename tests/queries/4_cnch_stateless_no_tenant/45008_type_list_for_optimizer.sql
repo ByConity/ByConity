@@ -34,6 +34,9 @@ insert into optimizer_unsupported values ('AggregateFunction')('SimpleAggregateF
 insert into optimizer_unsupported values ('Map')('Set')('Nested')('Nothing')('Array')('BitMap64')('BitMap32')('Tuple')('SketchBinary')('HllSketchBinary')('Base64ToBinary');
 -- graph type is not supported
 insert into optimizer_unsupported values ('MultiPolygon')('Point')('Polygon')('Ring');
+
+-- dynamic object type is not supported
+insert into optimizer_unsupported values ('JSON')('Object');
 insert into optimizer_unsupported values ('BigString');
 
 select '*** the following types are newly added, please contact optimizer team to determine if optimizer should support them';

@@ -17,6 +17,8 @@
 #include <optional>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <CloudServices/CnchWorkerClient.h>
+#include <Common/HostWithPorts.h>
+#include <Storages/ColumnsDescription.h>
 #include <Core/Types.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/WorkerGroupHandle.h>
@@ -86,6 +88,8 @@ struct AssignedResource
 
     std::unordered_set<String> part_names;
 
+    ColumnsDescription object_columns;
+
     void addDataParts(const ServerDataPartsVector & parts);
     void addDataParts(const FileDataPartsCNCHVector & parts);
     void addDataParts(const HiveFiles & parts);
@@ -141,6 +145,13 @@ public:
             assigned_resource.bucket_numbers = required_bucket_numbers;
     }
 
+    void setResourceReplicated(const UUID & storage_id, bool replicated)
+    {
+        std::lock_guard lock(mutex);
+        auto & assigned_resource = assigned_table_resource.at(storage_id);
+        assigned_resource.replicated = replicated;
+    }
+
     /// Send resource to worker
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
     /// allocate and send resource to worker_group
@@ -151,6 +162,14 @@ public:
         = std::function<std::vector<brpc::CallId>(CnchWorkerClientPtr, const std::vector<AssignedResource> &, const ExceptionHandlerPtr &)>;
     void sendResources(const ContextPtr & context, WorkerAction act);
     void cleanResource();
+
+    void addDynamicObjectSchema(const UUID & storage_id, const ColumnsDescription & object_columns_)
+    {
+        std::lock_guard lock(mutex);
+        auto & assigned_resource = assigned_table_resource.at(storage_id);
+
+        assigned_resource.object_columns = object_columns_;
+    }
 
     void setSendMutations(bool send_mutations_) { send_mutations = send_mutations_; }
 

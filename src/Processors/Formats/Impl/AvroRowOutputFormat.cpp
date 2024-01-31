@@ -22,7 +22,7 @@
 #include <DataTypes/DataTypeTuple.h>
 
 #include <Columns/ColumnArray.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnNullable.h>
@@ -111,6 +111,11 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             {
                 encoder.encodeInt(assert_cast<const ColumnUInt32 &>(column).getElement(row_num));
             }};
+        case TypeIndex::IPv4:
+            return {avro::IntSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                encoder.encodeInt(assert_cast<const ColumnIPv4 &>(column).getElement(row_num));
+            }};
         case TypeIndex::Int32:
             return {avro::IntSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
@@ -178,6 +183,15 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             {
                 const StringRef & s = assert_cast<const ColumnFixedString &>(column).getDataAt(row_num);
                 encoder.encodeFixed(reinterpret_cast<const uint8_t *>(s.data), s.size);
+            }};
+        }
+        case TypeIndex::IPv6:
+        {
+            auto schema = avro::FixedSchema(sizeof(IPv6), "ipv6_" + toString(type_name_increment));
+            return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                const std::string_view & s = assert_cast<const ColumnIPv6 &>(column).getDataAt(row_num).toView();
+                encoder.encodeFixed(reinterpret_cast<const uint8_t *>(s.data()), s.size());
             }};
         }
         case TypeIndex::Enum8:
@@ -316,7 +330,7 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
         }
         case TypeIndex::Map:
         {
-            const auto & map_type = assert_cast<const DataTypeByteMap &>(*data_type);
+            const auto & map_type = assert_cast<const DataTypeMap &>(*data_type);
             const auto & keys_type = map_type.getKeyType();
             if (!isStringOrFixedString(keys_type))
                 throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Avro Maps support only keys with type String, got {}", keys_type->getName());
@@ -333,8 +347,8 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
 
             return {schema, [keys_serializer, values_mapping](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
-                const ColumnByteMap & column_map = assert_cast<const ColumnByteMap &>(column);
-                const ColumnByteMap::Offsets & offsets = column_map.getOffsets();
+                const ColumnMap & column_map = assert_cast<const ColumnMap &>(column);
+                const ColumnMap::Offsets & offsets = column_map.getOffsets();
 
                 size_t offset = row_num == 0 ? 0 : offsets[row_num - 1];
                 size_t next_offset = offsets[row_num];

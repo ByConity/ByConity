@@ -26,6 +26,8 @@
 #include <Interpreters/StorageID.h>
 #include <Protos/EnumMacros.h>
 #include <Protos/enum.pb.h>
+#include <Protos/plan_node_utils.pb.h>
+#include <Protos/plan_segment_manager.pb.h>
 #include <QueryPlan/QueryPlan.h>
 
 namespace DB
@@ -158,10 +160,6 @@ public:
 
     const AddressInfos & getSourceAddress() const { return source_addresses; }
 
-    size_t getParallelIndex() const { return parallel_index; }
-
-    void setParallelIndex(size_t parallel_index_) { parallel_index = parallel_index_;}
-
     bool needKeepOrder() const { return keep_order; }
 
     void setKeepOrder(bool keep_order_) { keep_order = keep_order_; }
@@ -212,6 +210,9 @@ public:
 
     void deserialize(ReadBuffer & buf, ContextPtr) override;
 
+    void toProto(Protos::PlanSegmentOutput & proto);
+    void fillFromProto(const Protos::PlanSegmentOutput & proto);
+
     String toString(size_t indent = 0) const override;
 
 private:
@@ -236,7 +237,6 @@ class PlanSegment
 public:
 
     PlanSegment() = default;
-    PlanSegment(const ContextPtr & context_);
     PlanSegment(PlanSegment && ) = default;
     PlanSegment & operator=(PlanSegment &&) = default;
 
@@ -257,9 +257,13 @@ public:
 
     void serialize(WriteBuffer & buf) const;
 
-    void deserialize(ReadBuffer & buf);
+    void deserialize(ReadBuffer & buf, ContextMutablePtr context);
 
-    static PlanSegmentPtr deserializePlanSegment(ReadBuffer & buf, ContextPtr context);
+    void toProto(Protos::PlanSegment & proto);
+
+    void fillFromProto(const Protos::PlanSegment & proto, ContextMutablePtr context);
+
+    static PlanSegmentPtr deserializePlanSegment(ReadBuffer & buf, ContextMutablePtr context);
 
     size_t getPlanSegmentId() const { return segment_id; }
 
@@ -284,20 +288,13 @@ public:
     PlanSegmentOutputs getPlanSegmentOutputs() const { return outputs; }
 
     AddressInfo getCoordinatorAddress() const { return coordinator_address; }
-
-    AddressInfo getCurrentAddress() const { return current_address; }
+    const AddressInfo & getCoordinatorAddressRef() const { return coordinator_address; }
 
     void setCoordinatorAddress(const AddressInfo & coordinator_address_) { coordinator_address = coordinator_address_; }
 
-    void setCurrentAddress(const AddressInfo & current_address_) { current_address = current_address_; }
-
-    void setPlanSegmentToQueryPlan(QueryPlan::Node * node);
+    void setPlanSegmentToQueryPlan(QueryPlan::Node * node, ContextPtr & context);
 
     PlanSegmentPtr clone();
-
-    void setContext(const ContextPtr & context_);
-
-    ContextMutablePtr getContext() const { return context;}
 
     String toString() const;
 
@@ -311,19 +308,13 @@ public:
 
     void setParallelSize(size_t parallel_size_) { parallel = parallel_size_; }
 
-    void update();
+    void update(ContextPtr context);
 
     // register runtime filters for resource release
     void addRuntimeFilter(RuntimeFilterId id) { runtime_filters.emplace(id); }
     const std::unordered_set<RuntimeFilterId> & getRuntimeFilters() const { return runtime_filters; }
 
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
-    inline size_t getParallelIndex() const { return parallel_index; }
-    inline void setParallelIndex(size_t parallel_index_)
-    {
-        parallel_index = parallel_index_;
-    }
-
 private:
     size_t segment_id;
     String query_id;
@@ -334,14 +325,11 @@ private:
     PlanSegmentOutputs outputs;
 
     AddressInfo coordinator_address;
-    AddressInfo current_address;
     String cluster_name;
     size_t parallel;
     size_t exchange_parallel_size;
 
     std::unordered_set<RuntimeFilterId> runtime_filters;
-
-    ContextMutablePtr context;
 };
 
 class PlanSegmentTree

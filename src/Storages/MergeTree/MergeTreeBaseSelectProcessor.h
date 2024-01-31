@@ -29,6 +29,10 @@
 #include <Storages/SelectQueryInfo.h>
 
 #include <Processors/Sources/SourceWithProgress.h>
+#include <Interpreters/ExpressionActionsSettings.h>
+#include <Interpreters/ExtractExpressionInfoVisitor.h>
+#include <Core/Names.h>
+#include <QueryPlan/ReadFromMergeTree.h>
 
 namespace DB
 {
@@ -38,6 +42,7 @@ class UncompressedCache;
 class MarkCache;
 struct PrewhereExprInfo;
 
+
 /// Base class for MergeTreeThreadSelectProcessor and MergeTreeSelectProcessor
 class MergeTreeBaseSelectProcessor : public SourceWithProgress
 {
@@ -45,21 +50,21 @@ public:
     MergeTreeBaseSelectProcessor(
         Block header,
         const MergeTreeMetaBase & storage_,
-        const StorageMetadataPtr & metadata_snapshot_,
+        const StorageSnapshotPtr & storage_snapshot_,
         const SelectQueryInfo & query_info_,
-        ExpressionActionsSettings actions_settings,
-        UInt64 max_block_size_rows_,
-        UInt64 preferred_block_size_bytes_,
-        UInt64 preferred_max_column_in_block_size_bytes_,
-        const MergeTreeReaderSettings & reader_settings_,
-        bool use_uncompressed_cache_,
+        const MergeTreeStreamSettings & stream_settings_,
         const Names & virt_column_names_ = {});
 
     ~MergeTreeBaseSelectProcessor() override;
 
     static Block transformHeader(
-        Block block, const PrewhereInfoPtr & prewhere_info, const DataTypePtr & partition_value_type, const Names & virtual_columns, 
+        Block block, const PrewhereInfoPtr & prewhere_info, const DataTypePtr & partition_value_type, const Names & virtual_columns,
         const MergeTreeIndexContextPtr & index_context_, bool read_bitmap_index);
+    /// Two versions for header and chunk.
+    static void
+    injectVirtualColumns(Block & block, MergeTreeReadTask * task, const DataTypePtr & partition_value_type, const Names & virtual_columns);
+    static void
+    injectVirtualColumns(Chunk & chunk, MergeTreeReadTask * task, const DataTypePtr & partition_value_type, const Names & virtual_columns);
 
 protected:
     Chunk generate() final;
@@ -71,11 +76,6 @@ protected:
 
     Chunk readFromPartImpl();
 
-    /// Two versions for header and chunk.
-    static void
-    injectVirtualColumns(Block & block, MergeTreeReadTask * task, const DataTypePtr & partition_value_type, const Names & virtual_columns);
-    static void
-    injectVirtualColumns(Chunk & chunk, MergeTreeReadTask * task, const DataTypePtr & partition_value_type, const Names & virtual_columns);
 
     void initializeRangeReaders(MergeTreeReadTask & task);
     void initializeReaders(const MarkRanges & mark_ranges, const IMergeTreeReader::ValueSizeMap & avg_value_size_hints = IMergeTreeReader::ValueSizeMap{}, const ReadBufferFromFileBase::ProfileCallback & profile_callback = ReadBufferFromFileBase::ProfileCallback{});
@@ -83,19 +83,13 @@ protected:
 
 protected:
     const MergeTreeMetaBase & storage;
-    StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
 
     PrewhereInfoPtr prewhere_info;
     std::unique_ptr<PrewhereExprInfo> prewhere_actions;
     MergeTreeIndexContextPtr index_context;
 
-    UInt64 max_block_size_rows;
-    UInt64 preferred_block_size_bytes;
-    UInt64 preferred_max_column_in_block_size_bytes;
-
-    MergeTreeReaderSettings reader_settings;
-
-    bool use_uncompressed_cache;
+    MergeTreeStreamSettings stream_settings;
 
     Names virt_column_names;
 

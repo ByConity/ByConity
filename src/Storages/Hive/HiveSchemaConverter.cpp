@@ -9,7 +9,7 @@
 #include <Poco/Logger.h>
 #include "common/logger_useful.h"
 #include "DataTypes/DataTypeArray.h"
-#include "DataTypes/DataTypeByteMap.h"
+#include "DataTypes/DataTypeMap.h"
 #include "DataTypes/DataTypeDate.h"
 #include "DataTypes/DataTypeDate32.h"
 #include "DataTypes/DataTypeDateTime.h"
@@ -17,6 +17,7 @@
 #include "DataTypes/DataTypeDecimalBase.h"
 #include "DataTypes/DataTypeFixedString.h"
 #include "DataTypes/DataTypeNullable.h"
+#include "DataTypes/DataTypeTuple.h"
 #include "DataTypes/DataTypesDecimal.h"
 #include "Interpreters/Context.h"
 #include "Interpreters/InterpreterCreateQuery.h"
@@ -105,9 +106,10 @@ DataTypePtr HiveSchemaConverter::hiveTypeToCHType(const String & hive_type, bool
     {
         Strings res;
         boost::split(res, inner, boost::is_any_of(","), boost::token_compress_on);
+        // ck type key and value is not nullable
         auto key_type = hiveTypeToCHType(res.at(0), false);
         auto value_type = hiveTypeToCHType(res.at(1), false);
-        data_type = std::make_shared<DataTypeByteMap>(key_type, value_type);
+        data_type = std::make_shared<DataTypeMap>(key_type, value_type);
     }
     else if (type_keyword == "decimal")
     {
@@ -119,6 +121,19 @@ DataTypePtr HiveSchemaConverter::hiveTypeToCHType(const String & hive_type, bool
     }
     else if (type_keyword == "struct")
     {
+        // struct<F1:TYPE1,F2:TYPE2,F3:TYPE3..>
+        Strings components;
+        boost::split(components, inner, boost::is_any_of(","), boost::token_compress_on);
+        DataTypes child_types;
+        Strings child_names;
+        for (auto & component : components) {
+            Strings name_and_types;
+            boost::split(name_and_types, component, boost::is_any_of(":"), boost::token_compress_on);
+            child_names.emplace_back(name_and_types.at(0));
+            child_types.emplace_back(hiveTypeToCHType(name_and_types.at(1), true));
+        }
+
+        data_type = std::make_shared<DataTypeTuple>(child_types, child_names);
     }
 
     if (make_columns_nullable && data_type && data_type->canBeInsideNullable())

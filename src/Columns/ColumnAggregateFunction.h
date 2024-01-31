@@ -228,6 +228,21 @@ public:
         throw Exception("Method hasEqualValues is not supported for ColumnAggregateFunction", ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    double getRatioOfDefaultRows(double) const override
+    {
+        return 0.0;
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return 0;
+    }
+
+    void getIndicesOfNonDefaultRows(Offsets &, size_t, size_t) const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method getIndicesOfNonDefaultRows is not supported for ColumnAggregateFunction");
+    }
+
     void getPermutation(PermutationSortDirection direction, PermutationSortStability stability,
                         size_t limit, int nan_direction_hint, Permutation & res) const override;
 

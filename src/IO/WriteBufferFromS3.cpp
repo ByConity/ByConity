@@ -211,12 +211,6 @@ void WriteBufferFromS3::makeSinglepartUpload()
     if (size < 0)
         throw Exception("Failed to make single part upload. Buffer in invalid state", ErrorCodes::S3_ERROR);
 
-    if (size == 0)
-    {
-        LOG_DEBUG(log, "Skipping single part upload. Buffer is empty.");
-        return;
-    }
-
     Aws::S3::Model::PutObjectRequest req;
     req.SetBucket(bucket);
     req.SetKey(key);

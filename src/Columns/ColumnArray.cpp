@@ -189,6 +189,9 @@ StringRef ColumnArray::getDataAt(size_t n) const
       * For arrays of strings and arrays of arrays, the resulting chunk of memory may not be one-to-one correspondence with the elements,
       *  since it contains only the data laid in succession, but not the offsets.
       */
+    /// We are using pointer arithmetic on the addresses of the array elements.
+    if (!data->isFixedAndContiguous())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method getDataAt is not supported for {}", getName());
 
     size_t offset_of_first_elem = offsetAt(n);
     StringRef first = getData().getDataAtWithTerminatingZero(offset_of_first_elem);
@@ -626,7 +629,7 @@ ColumnPtr ColumnArray::filterString(const Filter & filt, ssize_t result_size_hin
 {
     size_t col_size = getOffsets().size();
     if (col_size != filt.size())
-        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of filter ({}) doesn't match size of column ({})", filt.size(), col_size);
 
     if (0 == col_size)
         return ColumnArray::create(data);
@@ -694,7 +697,7 @@ ColumnPtr ColumnArray::filterGeneric(const Filter & filt, ssize_t result_size_hi
 {
     size_t size = getOffsets().size();
     if (size != filt.size())
-        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of filter ({}) doesn't match size of column ({})", filt.size(), size);
 
     if (size == 0)
         return ColumnArray::create(data);
@@ -960,6 +963,20 @@ ColumnPtr ColumnArray::compress() const
         });
 }
 
+double ColumnArray::getRatioOfDefaultRows(double sample_ratio) const
+{
+    return getRatioOfDefaultRowsImpl<ColumnArray>(sample_ratio);
+}
+
+UInt64 ColumnArray::getNumberOfDefaultRows() const
+{
+    return getNumberOfDefaultRowsImpl<ColumnArray>();
+}
+
+void ColumnArray::getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const
+{
+    return getIndicesOfNonDefaultRowsImpl<ColumnArray>(indices, from, limit);
+}
 
 ColumnPtr ColumnArray::replicate(const Offsets & replicate_offsets) const
 {
@@ -1226,6 +1243,26 @@ ColumnPtr ColumnArray::replicateTuple(const Offsets & replicate_offsets) const
 void ColumnArray::gather(ColumnGathererStream & gatherer)
 {
     gatherer.gather(*this);
+}
+
+#if 0
+ColumnPtr ColumnArray::selectDefault() const
+{
+    size_t row_num = size();
+    auto res = ColumnVector<UInt8>::create(row_num, 1);
+    IColumn::Filter & filter = res->getData();
+    for (size_t i = 0; i < row_num; ++i)
+        filter[i] = sizeAt(i) == 0;
+    return res;
+}
+#endif
+
+size_t ColumnArray::getNumberOfDimensions() const
+{
+    const auto * nested_array = checkAndGetColumn<ColumnArray>(*data);
+    if (!nested_array)
+        return 1;
+    return 1 + nested_array->getNumberOfDimensions();   /// Every modern C++ compiler optimizes tail recursion.
 }
 
 }

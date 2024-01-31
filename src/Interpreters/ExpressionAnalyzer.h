@@ -180,6 +180,8 @@ public:
       */
     SetPtr isPlainStorageSetInSubquery(const ASTPtr & subquery_or_table_name);
 
+    bool hasByteMapColumn() const;
+
     MergeTreeIndexContextPtr getIndexContext() { return index_context; }
 
 protected:
@@ -228,6 +230,8 @@ protected:
     void getRootActionsForWindowFunctions(const ASTPtr & ast, bool no_makeset_for_subqueries, ActionsDAGPtr & actions);
 
     void analyzeBitmapIndex();
+
+    void getRootActionsWithOwnBitmapInfo(const ASTPtr & ast, bool no_subqueries, ActionsDAGPtr & actions, MergeTreeIndexContextPtr & own_index_context, bool only_consts = false);
 
     /** Add aggregation keys to aggregation_keys, aggregate functions to aggregate_descriptions,
       * Create a set of columns aggregated_columns resulting after the aggregation, if any,
@@ -301,6 +305,9 @@ struct ExpressionAnalysisResult
     /// Actions by every element of ORDER BY
     ManyExpressionActions order_by_elements_actions;
     ManyExpressionActions group_by_elements_actions;
+    /// Columns with predicates using in early materilization
+    std::deque<AtomicPredicatePtr> atomic_predicates;
+    ConstantFilterDescription em_constant_filter_description;
 
     ExpressionAnalysisResult() = default;
 
@@ -311,7 +318,8 @@ struct ExpressionAnalysisResult
         bool second_stage,
         bool only_types,
         const FilterDAGInfoPtr & filter_info,
-        const Block & source_header);
+        const Block & source_header,
+        const std::vector<ASTPtr> & additional_predicates = {});
 
     /// Filter for row-level security.
     bool hasFilter() const { return filter_info.get(); }
@@ -431,6 +439,7 @@ private:
     /// remove_filter is set in ExpressionActionsChain::finalize();
     /// Columns in `additional_required_columns` will not be removed (they can be used for e.g. sampling or FINAL modifier).
     ActionsDAGPtr appendPrewhere(ExpressionActionsChain & chain, bool only_types, const Names & additional_required_columns);
+    ActionsDAGPtr appendMaterializeStep(ExpressionActionsChain & chain, const ASTPtr & predicate, bool only_types, const Names & additional_required_columns);
     bool appendWhere(ExpressionActionsChain & chain, bool only_types);
     bool appendGroupBy(ExpressionActionsChain & chain, bool only_types, bool optimize_aggregation_in_order, ManyExpressionActions &);
     void appendAggregateFunctionsArguments(ExpressionActionsChain & chain, bool only_types);

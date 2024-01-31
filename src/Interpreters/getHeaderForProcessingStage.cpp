@@ -80,9 +80,8 @@ bool removeJoin(ASTSelectQuery & select, TreeRewriterResult & rewriter_result, C
 }
 
 Block getHeaderForProcessingStage(
-        const IStorage & storage,
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         const SelectQueryInfo & query_info,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage)
@@ -91,7 +90,7 @@ Block getHeaderForProcessingStage(
     {
         case QueryProcessingStage::FetchColumns:
         {
-            Block header = metadata_snapshot->getSampleBlockForColumns(column_names, storage.getVirtuals(), storage.getStorageID());
+            Block header = storage_snapshot->getSampleBlockForColumns(column_names);
             if (query_info.prewhere_info)
             {
                 auto & prewhere_info = *query_info.prewhere_info;
@@ -108,6 +107,19 @@ Block getHeaderForProcessingStage(
                 if (prewhere_info.remove_prewhere_column)
                     header.erase(prewhere_info.prewhere_column_name);
             }
+            else if (!query_info.atomic_predicates.empty())
+            {
+                for (auto it = query_info.atomic_predicates.rbegin(); it != query_info.atomic_predicates.rend(); ++it)
+                {
+                    const auto & predicate = *it;
+                    if (predicate && predicate->predicate_actions)
+                    {
+                        header = predicate->predicate_actions->updateHeader(std::move(header));
+                        if (predicate->remove_filter_column)
+                            header.erase(predicate->filter_column_name);
+                    }
+                }
+            }
             return header;
         }
         case QueryProcessingStage::WithMergeableState:
@@ -121,7 +133,7 @@ Block getHeaderForProcessingStage(
             removeJoin(*query->as<ASTSelectQuery>(), new_rewriter_result, context);
 
             auto stream = std::make_shared<OneBlockInputStream>(
-                    metadata_snapshot->getSampleBlockForColumns(column_names, storage.getVirtuals(), storage.getStorageID()));
+                    storage_snapshot->getSampleBlockForColumns(column_names));
             return InterpreterSelectQuery(query, context, stream, SelectQueryOptions(processed_stage).analyze()).getSampleBlock();
         }
     }

@@ -1,4 +1,5 @@
-#include <Storages/Hive/StorageCnchHive.h>
+#include "Storages/Hive/StorageCnchHive.h"
+#include <Protos/hive_models.pb.h>
 #if USE_HIVE
 
 #include <thrift/TToString.h>
@@ -45,6 +46,7 @@ namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_FORMAT;
+    extern const int SUPPORT_IS_DISABLED;
 }
 
 StorageCnchHive::StorageCnchHive(
@@ -52,32 +54,43 @@ StorageCnchHive::StorageCnchHive(
     const String & hive_metastore_url_,
     const String & hive_db_name_,
     const String & hive_table_name_,
-    StorageInMemoryMetadata metadata_,
+    std::optional<StorageInMemoryMetadata> metadata_,
     ContextPtr context_,
-    std::shared_ptr<CnchHiveSettings> settings_,
-    IMetaClientPtr client_from_catalog)
+    IMetaClientPtr meta_client,
+    std::shared_ptr<CnchHiveSettings> settings_)
     : IStorage(table_id_)
     , WithContext(context_)
     , hive_metastore_url(hive_metastore_url_)
     , hive_db_name(hive_db_name_)
     , hive_table_name(hive_table_name_)
+    , hive_client(meta_client)
     , storage_settings(settings_)
+{
+    if (metadata_)
+        initialize(*metadata_);
+}
+
+void StorageCnchHive::setHiveMetaClient(const IMetaClientPtr & client)
+{
+    hive_client = client;
+}
+
+void StorageCnchHive::initialize(StorageInMemoryMetadata metadata_)
 {
     try
     {
-        hive_client
-            = client_from_catalog != nullptr ? client_from_catalog : HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url,storage_settings);
+        if (!hive_client)
+            hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url, storage_settings);
+
         hive_table = hive_client->getTable(hive_db_name, hive_table_name);
     }
     catch (...)
     {
         hive_exception = std::current_exception();
-        // tryLogCurrentException(__PRETTY_FUNCTION__);
         return;
     }
 
-    HiveSchemaConverter converter(context_, hive_table);
-
+    HiveSchemaConverter converter(getContext(), hive_table);
     if (metadata_.columns.empty())
     {
         converter.convert(metadata_);
@@ -89,9 +102,6 @@ StorageCnchHive::StorageCnchHive(
         setInMemoryMetadata(metadata_);
     }
 }
-
-
-
 
 void StorageCnchHive::startup()
 {
@@ -108,7 +118,7 @@ bool StorageCnchHive::isBucketTable() const
 }
 
 QueryProcessingStage::Enum StorageCnchHive::getQueryProcessingStage(
-    ContextPtr local_context, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const
+    ContextPtr local_context, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const
 {
     const auto & local_settings = local_context->getSettingsRef();
 
@@ -212,6 +222,8 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     //     }
     //     pool.wait();
     // }
+
+    /// TODO: fix me
     for (const auto & partition : partitions)
     {
         list_partition(partition);
@@ -227,7 +239,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
 
 Pipe StorageCnchHive::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
@@ -235,7 +247,7 @@ Pipe StorageCnchHive::read(
     unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
@@ -243,14 +255,14 @@ Pipe StorageCnchHive::read(
 void StorageCnchHive::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t /*max_block_size*/,
     unsigned num_streams)
 {
-    PrepareContextResult result = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);
+    PrepareContextResult result = prepareReadContext(column_names, storage_snapshot->metadata, query_info, local_context, num_streams);
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     auto worker_group = getWorkerGroupForTable(local_context, shared_from_this());
@@ -270,6 +282,8 @@ void StorageCnchHive::read(
 
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
         header,
+        {},
+        storage_snapshot,
         processed_stage,
         StorageID::createEmpty(), /// Don't check whether table exists in cnch-worker
         scalars,
@@ -293,6 +307,7 @@ HivePartitions StorageCnchHive::selectPartitions(
     const SelectQueryInfo & query_info,
     const HiveWhereOptimizer & optimizer)
 {
+    /// non-partition table
     if (!metadata_snapshot->hasPartitionKey())
     {
         auto partition = std::make_shared<HivePartition>();
@@ -329,6 +344,38 @@ HivePartitions StorageCnchHive::selectPartitions(
     return partitions;
 }
 
+void StorageCnchHive::checkAlterSettings(const AlterCommands & commands) const
+{
+    static std::set<String> supported_settings = {
+        "cnch_vw_default",
+        "cnch_vw_read",
+        "cnch_server_vw",
+
+        "enable_local_disk_cache"
+    };
+
+    /// Check whether the value is legal for Setting.
+    /// For example, we have a setting item, `SettingBool setting_test`
+    /// If you submit a Alter query: "Alter table test modify setting setting_test='abc'"
+    /// Then, it will throw an Exception here, because we can't convert string 'abc' to a Bool.
+    auto settings_copy = *storage_settings;
+
+    for (auto & command : commands)
+    {
+        if (command.type != AlterCommand::MODIFY_SETTING)
+            continue;
+
+        for (auto & change : command.settings_changes)
+        {
+            if (!supported_settings.count(change.name))
+                throw Exception("Setting " + change.name + " cannot be modified", ErrorCodes::SUPPORT_IS_DISABLED);
+
+            settings_copy.set(change.name, change.value);
+        }
+    }
+}
+
+
 void StorageCnchHive::checkAlterIsPossible(const AlterCommands & commands, ContextPtr) const
 {
     for (const auto & command : commands)
@@ -343,6 +390,8 @@ void StorageCnchHive::checkAlterIsPossible(const AlterCommands & commands, Conte
 
 void StorageCnchHive::alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &)
 {
+    checkAlterSettings(params);
+
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
 
     params.apply(new_metadata, local_context);
@@ -391,6 +440,21 @@ std::optional<TableStatistics> StorageCnchHive::getTableStats(const Strings & co
     else
         LOG_TRACE(log, "no stats");
     return stats;
+}
+
+void StorageCnchHive::serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
+{
+    /// TODO: {caoliu} hack here
+    if (!hive_files.empty() && hive_files.front()->partition)
+    {
+        proto.set_sd_url(hive_files.front()->partition->location);
+    }
+
+    for (const auto & hive_file : hive_files)
+    {
+        auto * proto_file = proto.add_files();
+        hive_file->serialize(*proto_file);
+    }
 }
 
 std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister()
@@ -481,7 +545,7 @@ void registerStorageCnchHive(StorageFactory & factory)
             }
 
             return StorageCnchHive::create(
-                args.table_id, hive_metastore_url, hive_database, hive_table, std::move(metadata), args.getContext(), hive_settings, args.hive_client);
+                args.table_id, hive_metastore_url, hive_database, hive_table, metadata, args.getContext(), args.hive_client, hive_settings);
         },
         features);
 }

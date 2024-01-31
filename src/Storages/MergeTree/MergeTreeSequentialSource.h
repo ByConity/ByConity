@@ -38,7 +38,7 @@ public:
     /// the columns you want to read.
     MergeTreeSequentialSource(
         const MergeTreeMetaBase & storage_,
-        const StorageMetadataPtr & metadata_snapshot_,
+        const StorageSnapshotPtr & storage_snapshot_,
         MergeTreeMetaBase::DataPartPtr data_part_,
         Names columns_to_read_,
         bool read_with_direct_io_,
@@ -48,7 +48,7 @@ public:
 
     MergeTreeSequentialSource(
         const MergeTreeMetaBase & storage_,
-        const StorageMetadataPtr & metadata_snapshot_,
+        const StorageSnapshotPtr & storage_snapshot_,
         MergeTreeMetaBase::DataPartPtr data_part_,
         ImmutableDeleteBitmapPtr delete_bitmap_,
         Names columns_to_read_,
@@ -72,7 +72,7 @@ protected:
 private:
 
     const MergeTreeMetaBase & storage;
-    StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
 
     /// Data part will not be removed if the pointer owns it
     MergeTreeMetaBase::DataPartPtr data_part;

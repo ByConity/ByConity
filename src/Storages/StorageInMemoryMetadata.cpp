@@ -22,7 +22,7 @@
 #include <Storages/StorageInMemoryMetadata.h>
 
 #include <Core/ColumnWithTypeAndName.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/MapHelpers.h>
 #include <IO/Operators.h>
@@ -34,6 +34,8 @@
 #include <Parsers/ASTLiteral.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/quoteString.h>
+#include <DataTypes/DataTypeEnum.h>
+#include <Storages/ColumnsDescription.h>
 
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
@@ -449,7 +451,7 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
 
     for (const auto & name : column_names)
     {
-        auto column = getColumns().tryGetColumnOrSubcolumn(ColumnsDescription::All, name);
+        auto column = getColumns().tryGetColumnOrSubcolumn(GetColumnsOptions::All, name);
         if (column)
         {
             auto column_name = column->name;
@@ -464,23 +466,9 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
             res.insert({type->createColumn(), type, name});
         }
         else
-        {
-            bool found = false;
-            for (const auto & column_inner: getColumns())
-            {
-                if (column_inner.type->isMap() && column_inner.type->isMapKVStore() && isMapKVOfSpecialMapName(name, column_inner.name))
-                {
-                    auto type = typeid_cast<const DataTypeByteMap &>(*column_inner.type).getMapStoreType(name);
-                    res.insert({type->createColumn(), type, name});
-                    found = true;
-                    break;
-                }
-            }
-            if (!found)
-                throw Exception(
-                    "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
-                    ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
-        }
+            throw Exception(
+                "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
+                ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
     }
 
     return res;
@@ -617,6 +605,8 @@ Names StorageInMemoryMetadata::getSortingKeyColumns() const
 
 const KeyDescription & StorageInMemoryMetadata::getSamplingKey() const
 {
+    if (!isSamplingKeyDefined())
+        throw Exception("Can't get sampling key for no-sampling key table", ErrorCodes::BAD_ARGUMENTS);
     return sampling_key;
 }
 
@@ -724,18 +714,6 @@ namespace
     using UniqueStrings = google::sparsehash::dense_hash_set<StringRef, StringRefHash>;
 #endif
 
-    String listOfColumns(const NamesAndTypesList & available_columns)
-    {
-        WriteBufferFromOwnString ss;
-        for (auto it = available_columns.begin(); it != available_columns.end(); ++it)
-        {
-            if (it != available_columns.begin())
-                ss << ", ";
-            ss << it->name;
-        }
-        return ss.str();
-    }
-
     NamesAndTypesMap getColumnsMap(const NamesAndTypesList & columns)
     {
         NamesAndTypesMap res;
@@ -753,6 +731,35 @@ namespace
         strings.set_empty_key(StringRef());
         return strings;
     }
+
+    /*
+     * This function checks compatibility of enums. It returns true if:
+     * 1. Both types are enums.
+     * 2. The first type can represent all possible values of the second one.
+     * 3. Both types require the same amount of memory.
+     */
+    bool isCompatibleEnumTypes(const IDataType * lhs, const IDataType * rhs)
+    {
+        if (IDataTypeEnum const * enum_type = dynamic_cast<IDataTypeEnum const *>(lhs))
+        {
+            if (!enum_type->contains(*rhs))
+                return false;
+            return enum_type->getMaximumSizeOfValueInMemory() == rhs->getMaximumSizeOfValueInMemory();
+        }
+        return false;
+    }
+}
+
+String listOfColumns(const NamesAndTypesList & available_columns)
+{
+    WriteBufferFromOwnString ss;
+    for (auto it = available_columns.begin(); it != available_columns.end(); ++it)
+    {
+        if (it != available_columns.begin())
+            ss << ", ";
+        ss << it->name;
+    }
+    return ss.str();
 }
 
 void StorageInMemoryMetadata::check(const Names & column_names, const NamesAndTypesList & virtuals, const StorageID & storage_id) const
@@ -776,7 +783,7 @@ void StorageInMemoryMetadata::check(const Names & column_names, const NamesAndTy
         if (func_columns.contains(name))
             continue;
 
-        bool has_column = getColumns().hasColumnOrSubcolumn(ColumnsDescription::AllPhysical, name) || virtuals_map.count(name);
+        bool has_column = getColumns().hasColumnOrSubcolumn(GetColumnsOptions::AllPhysical, name) || virtuals_map.count(name);
 
         if (!has_column)
         {
@@ -815,7 +822,9 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns) 
                 "There is no column with name " + column.name + ". There are columns: " + listOfColumns(available_columns),
                 ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
 
-        if (!column.type->equals(*it->second))
+        if (!it->second->hasDynamicSubcolumns()
+            && !column.type->equals(*it->second)
+            && !isCompatibleEnumTypes(it->second, column.type.get()))
             throw Exception(
                 "Type mismatch for column " + column.name + ". Column has type " + it->second->getName() + ", got type "
                     + column.type->getName(),
@@ -858,7 +867,9 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns, 
                 "There is no column with name " + name + ". There are columns: " + listOfColumns(available_columns),
                 ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
 
-        if (!it->second->equals(*jt->second))
+        if (!it->second->hasDynamicSubcolumns()
+            && !it->second->equals(*jt->second)
+            && !isCompatibleEnumTypes(jt->second, it->second))
             throw Exception(
                 "Type mismatch for column " + name + ". Column has type " + jt->second->getName() + ", got type " + it->second->getName(),
                 ErrorCodes::TYPE_MISMATCH);
@@ -899,7 +910,9 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
                 "There is no column with name " + column.name + ". There are columns: " + listOfColumns(available_columns),
                 ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
 
-        if (!column.type->equals(*it->second))
+        if (!it->second->hasDynamicSubcolumns()
+            && !column.type->equals(*it->second)
+            && !isCompatibleEnumTypes(it->second, column.type.get()))
             throw Exception(
                 "Type mismatch for column " + column.name + ". Column has type " + it->second->getName() + ", got type "
                     + column.type->getName(),
@@ -915,16 +928,5 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
         }
     }
 }
-
-bool StorageInMemoryMetadata::hasMapColumn() const
-{
-    const NamesAndTypesList & available_columns = getColumns().getAllPhysical();
-    for (auto & column: available_columns)
-    {
-        if (column.type->isMap()) return true;
-    }
-    return false;
-}
-
 
 }

@@ -94,6 +94,20 @@ void FieldVisitorHash::operator() (const UUID & x) const
     hash.update(x);
 }
 
+void FieldVisitorHash::operator() (const IPv4 & x) const
+{
+    UInt8 type = Field::Types::IPv4;
+    hash.update(type);
+    hash.update(x);
+}
+
+void FieldVisitorHash::operator() (const IPv6 & x) const
+{
+    UInt8 type = Field::Types::IPv6;
+    hash.update(type);
+    hash.update(x);
+}
+
 void FieldVisitorHash::operator() (const Float64 & x) const
 {
     UInt8 type = Field::Types::Float64;
@@ -134,12 +148,10 @@ void FieldVisitorHash::operator() (const Map & x) const
     hash.update(x.size());
 
     for (const auto & elem : x)
-        applyVisitor(*this, elem);
-}
-
-void FieldVisitorHash::operator() ([[maybe_unused]] const ByteMap & x) const
-{
-    throw Exception("FieldVisitorHash Map type not implemented!", ErrorCodes::NOT_IMPLEMENTED);
+    {
+        applyVisitor(*this, elem.first);
+        applyVisitor(*this, elem.second);
+    }
 }
 
 void FieldVisitorHash::operator() (const Array & x) const
@@ -224,6 +236,19 @@ void FieldVisitorHash::operator() (const BitMap64 & x) const
 
     for (roaring::Roaring64MapSetBitForwardIterator it(x); it != x.end(); ++it)
         applyVisitor(*this, Field(*it));
+}
+
+void FieldVisitorHash::operator() (const Object & x) const
+{
+    UInt8 type = Field::Types::Object;
+    hash.update(type);
+    hash.update(x.size());
+
+    for (const auto & [key, value]: x)
+    {
+        hash.update(key);
+        applyVisitor(*this, value);
+    }
 }
 
 }

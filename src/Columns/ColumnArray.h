@@ -172,10 +172,18 @@ public:
 
     ColumnPtr compress() const override;
 
-    void forEachSubcolumn(ColumnCallback callback) override
+    void forEachSubcolumn(MutableColumnCallback callback) override
     {
         callback(offsets);
         callback(data);
+    }
+
+    void forEachSubcolumnRecursively(RecursiveMutableColumnCallback callback) override
+    {
+        callback(*offsets);
+        offsets->forEachSubcolumnRecursively(callback);
+        callback(*data);
+        data->forEachSubcolumnRecursively(callback);
     }
 
     bool structureEquals(const IColumn & rhs) const override
@@ -185,10 +193,16 @@ public:
         return false;
     }
 
+    double getRatioOfDefaultRows(double sample_ratio) const override;
+    UInt64 getNumberOfDefaultRows() const override;
+    void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override;
+
     bool isCollationSupported() const override { return getData().isCollationSupported(); }
 
     size_t ALWAYS_INLINE offsetAt(ssize_t i) const { return getOffsets()[i - 1]; }
     size_t ALWAYS_INLINE sizeAt(ssize_t i) const { return getOffsets()[i] - getOffsets()[i - 1]; }
+
+    size_t getNumberOfDimensions() const;
 
 private:
     WrappedPtr data;

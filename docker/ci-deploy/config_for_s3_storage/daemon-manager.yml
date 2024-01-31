@@ -1,0 +1,65 @@
+logger:
+  level: trace
+  log: /var/log/byconity/out.log
+  errorlog: /var/log/byconity/err.log
+  testlog: /var/log/byconity/test.log
+  size: 1000M
+  count: 10
+path: /var/byconity/
+timezone: Europe/Moscow
+daemon_manager:
+  port: 17553
+  daemon_jobs:
+    job:
+    -
+      name: PART_GC
+      interval: 10000
+      disable: 0
+    -
+      name: PART_MERGE
+      interval: 10000
+      disable: 0
+    -
+      name: CONSUMER
+      interval: 10000
+      disable: 0
+    -
+      name: GLOBAL_GC
+      interval: 5000
+      disable: 0
+    -
+      name: PART_CLUSTERING
+      interval: 30000
+      disable: 0
+    -
+      name: DEDUP_WORKER
+      interval: 3000
+      disable: 0
+
+storage_configuration:
+  disks:
+    local_disk:
+      path: /var/byconity/data/
+      type: local
+    s3_disk:
+      path: data123/
+      type: s3
+      endpoint: http://minio:9000
+      bucket: cnch
+      ak_id: minio
+      ak_secret: minio123
+      is_virtual_hosted_style: false
+  policies:
+    default:
+      volumes:
+        local:
+          default: local_disk
+          disk: local_disk
+    cnch_default_hdfs:
+      volumes:
+        s3:
+          default: s3_disk
+          disk: s3_disk
+  # To avoid break hard-coded test cases.
+  cnch_default_policy: cnch_default_hdfs
+cnch_config: /config/cnch-config.yml

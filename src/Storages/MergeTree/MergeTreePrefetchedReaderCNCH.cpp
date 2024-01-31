@@ -2,6 +2,7 @@
 #include <memory>
 #include <Storages/MergeTree/MergeTreePrefetchedReaderCNCH.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <DataTypes/ObjectUtils.h>
 #include "MarkRange.h"
 #include "MergeTreeIOSettings.h"
 #include "MergeTreeIndexGranularityInfo.h"
@@ -44,9 +45,11 @@ MergeTreePrefetchedReaderCNCH::MergeTreePrefetchedReaderCNCH(
     try
     {
         /// need to use columns from IMergeTreeReader to read converted subcolumns of nested columns
-        for (const NameAndTypePair& column : columns)
-            addStreams(column, profile_callback_, clock_type_,
-                &mocked_index_granularity_info);
+        for (const NameAndTypePair & column : columns)
+        {
+            auto column_in_part = getColumnFromPart(column);
+            addStreams(column_in_part, profile_callback_, clock_type_, &mocked_index_granularity_info);
+        }
     }
     catch (...)
     {
@@ -63,9 +66,10 @@ MergeTreePrefetchedReaderCNCH::~MergeTreePrefetchedReaderCNCH()
     {
         for (const NameAndTypePair& column : columns)
         {
-            auto serialization = data_part->getSerializationForColumn(column);
+            auto column_in_part = getColumnFromPart(column);
+            auto serialization = data_part->getSerializationForColumn(column_in_part);
             serialization->enumerateStreams([&](const ISerialization::SubstreamPath& substream_path) {
-                String stream_name = ISerialization::getFileNameForStream(column, substream_path);
+                String stream_name = ISerialization::getFileNameForStream(column_in_part, substream_path);
 
                 for (const auto& extension : {".bin", ".mrk"})
                     future_files->releaseSegment(stream_name + extension);

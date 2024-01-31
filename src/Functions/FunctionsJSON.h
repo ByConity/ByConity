@@ -2,9 +2,9 @@
 
 #include <Functions/IFunction.h>
 #include <Core/AccurateComparison.h>
-#include <Functions/DummyJSONParser.h>
-#include <Functions/SimdJSONParser.h>
-#include <Functions/RapidJSONParser.h>
+#include <Common/JSONParsers/DummyJSONParser.h>
+#include <Common/JSONParsers/SimdJSONParser.h>
+#include <Common/JSONParsers/RapidJSONParser.h>
 #include <Common/CpuId.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
@@ -1200,7 +1200,7 @@ public:
     {
         ColumnString & col_str = assert_cast<ColumnString &>(dest);
         auto & chars = col_str.getChars();
-        WriteBufferFromVector<ColumnString::Chars> buf(chars, WriteBufferFromVector<ColumnString::Chars>::AppendModeTag());
+        WriteBufferFromVector<ColumnString::Chars> buf(chars, AppendModeTag());
         Traverse::traverse(element, buf);
         buf.finalize();
         chars.push_back(0);
@@ -1228,7 +1228,7 @@ public:
     {
         ColumnString & col_str = assert_cast<ColumnString &>(dest);
         auto & chars = col_str.getChars();
-        WriteBufferFromVector<ColumnString::Chars> buf(chars, WriteBufferFromVector<ColumnString::Chars>::AppendModeTag());
+        WriteBufferFromVector<ColumnString::Chars> buf(chars, AppendModeTag());
         Traverse::traverse(element, buf, true);
         buf.finalize();
         chars.push_back(0);

@@ -103,6 +103,7 @@ public:
     AggregatingTransformParamsPtr map(const AggregatingTransformParamsPtr & param);
     ArrayJoinActionPtr map(const ArrayJoinActionPtr & array_join_action);
     GroupingDescription map(const GroupingDescription & desc);
+    SortDescription map(const SortDescription & sort_desc);
 
     LinkedHashMap<String, RuntimeFilterBuildInfos> map(const LinkedHashMap<String, RuntimeFilterBuildInfos> & infos);
     PlanNodeStatisticsEstimate map(const PlanNodeStatisticsEstimate & estimate);

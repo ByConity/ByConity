@@ -41,7 +41,7 @@ template <typename T>
 static inline void writeQuoted(const DecimalField<T> & x, WriteBuffer & buf)
 {
     writeChar('\'', buf);
-    writeText(x.getValue(), x.getScale(), buf);
+    writeText(x.getValue(), x.getScale(), buf, {});
     writeChar('\'', buf);
 }
 
@@ -60,6 +60,8 @@ String FieldVisitorDump::operator() (const UInt256 & x) const { return formatQuo
 String FieldVisitorDump::operator() (const Int128 & x) const { return formatQuotedWithPrefix(x, "Int128_"); }
 String FieldVisitorDump::operator() (const Int256 & x) const { return formatQuotedWithPrefix(x, "Int256_"); }
 String FieldVisitorDump::operator() (const UUID & x) const { return formatQuotedWithPrefix(x, "UUID_"); }
+String FieldVisitorDump::operator() (const IPv4 & x) const { return formatQuotedWithPrefix(x, "IPv4_"); }
+String FieldVisitorDump::operator() (const IPv6 & x) const { return formatQuotedWithPrefix(x, "IPv6_"); }
 
 
 String FieldVisitorDump::operator() (const String & x) const
@@ -110,31 +112,13 @@ String FieldVisitorDump::operator() (const Map & x) const
     {
         if (it != x.begin())
             wb << ", ";
-        wb << applyVisitor(*this, *it);
+        Field tuple = Tuple{it->first, it->second};
+        wb << applyVisitor(*this, tuple);
     }
     wb << ')';
 
     return wb.str();
 }
-
-String FieldVisitorDump::operator() (const ByteMap & x) const
-{
-    WriteBufferFromOwnString wb;
-
-    wb << "Map_{";
-    for (auto it = x.begin(); it != x.end(); ++it)
-    {
-        if (it != x.begin())
-            wb << ", ";
-        wb << applyVisitor(*this, it->first);
-        wb << ":";
-        wb << applyVisitor(*this, it->second);
-    }
-    wb << '}';
-
-    return wb.str();
-}
-
 
 String FieldVisitorDump::operator() (const AggregateFunctionStateData & x) const
 {
@@ -152,6 +136,23 @@ String FieldVisitorDump::operator() (const BitMap64 & x) const
     WriteBufferFromOwnString wb;
     wb << "BitMap64_" << x.toString();
     return wb.str();
+}
+
+String FieldVisitorDump::operator() (const Object & x) const
+{
+    WriteBufferFromOwnString wb;
+
+    wb << "Object_(";
+    for (auto it = x.begin(); it != x.end(); ++it)
+    {
+        if (it != x.begin())
+            wb << ", ";
+        wb << "(" << it->first << ", " << applyVisitor(*this, it->second) << ")";
+    }
+    wb << ')';
+
+    return wb.str();
+
 }
 
 }

@@ -12,7 +12,7 @@ Projection
             │  │     Partition by: {ss_addr_sk}
             │  └─ Inner Join
             │     │     Condition: ss_cdemo_sk == cd_demo_sk
-            │     │     Filter: ((cd_education_status = 'College') AND (ss_sales_price <= '100.00') AND (ss_sales_price >= '50.00') AND (cd_marital_status = 'S') AND (hd_dep_count = 1)) OR ((cd_marital_status = 'W') AND (cd_education_status = '2 yr Degree') AND (ss_sales_price <= '200.00') AND (ss_sales_price >= '150.00') AND (hd_dep_count = 1)) OR ((cd_education_status = 'Advanced Degree') AND (ss_sales_price <= '150.00') AND (ss_sales_price >= '100.00') AND (hd_dep_count = 3) AND (cd_marital_status = 'M'))
+            │     │     Filter: ((ss_sales_price <= '200') AND (ss_sales_price >= '150') AND (cd_marital_status = 'W') AND (cd_education_status = '2 yr Degree') AND (hd_dep_count = 1)) OR ((cd_education_status = 'College') AND (ss_sales_price >= '50') AND (ss_sales_price <= '100') AND (cd_marital_status = 'S') AND (hd_dep_count = 1)) OR ((ss_sales_price >= '100') AND (cd_education_status = 'Advanced Degree') AND (hd_dep_count = 3) AND (ss_sales_price <= '150') AND (cd_marital_status = 'M'))
             │     ├─ Repartition Exchange
             │     │  │     Partition by: {ss_cdemo_sk}
             │     │  └─ Inner Join

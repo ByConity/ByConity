@@ -560,7 +560,11 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTable
         {
             // Collect detached parts from catalog
             auto catalog = query_ctx->getCnchCatalog();
-            ServerDataPartsVector parts = catalog->listDetachedParts(tbl, filter);
+            ServerDataPartsVector all_parts = catalog->listDetachedParts(tbl, filter);
+
+            ServerDataPartsVector drop_ranges;
+            ServerDataPartsVector visible_parts = CnchPartsHelper::calcVisibleParts(all_parts,
+                false, false, &drop_ranges, nullptr, CnchPartsHelper::getLoggingOption(*query_ctx));
 
             DeleteBitmapMetaPtrVector bitmaps;
             if (is_unique_tbl)
@@ -572,7 +576,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTable
 
             PartsFromSources parts_from_sources(1);
             auto bitmap_it = bitmaps.begin();
-            for (auto & part : parts)
+            for (auto & part : visible_parts)
             {
                 auto cnch_part = part->toCNCHDataPart(tbl);
                 while (bitmap_it != bitmaps.end() && (*(*bitmap_it)) <= cnch_part->info)
@@ -798,10 +802,8 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
 
     S3PartsAttachMeta::Reader reader(task_meta, 16);
 
-    PartsFromSources parts_from_sources(1);
     MergeTreePartInfo info;
-
-    MutableMergeTreeDataPartsCNCHVector & parts = parts_from_sources[0];
+    MutableMergeTreeDataPartsCNCHVector parts;
     for (const auto & part_meta : reader.metas())
     {
         if (MergeTreePartInfo::tryParsePartName(part_meta.first, &info, tbl.format_version))
@@ -827,6 +829,15 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
         });
     }
     worker_pool.wait();
+
+    IMergeTreeDataPartsVector drop_ranges;
+    IMergeTreeDataPartsVector all_parts = fromCNCHPartsVec(parts);
+    IMergeTreeDataPartsVector visible_parts = CnchPartsHelper::calcVisibleParts(
+        all_parts, false, false, &drop_ranges, nullptr,
+        CnchPartsHelper::getLoggingOption(*query_ctx));
+
+    PartsFromSources parts_from_sources(1);
+    parts_from_sources.back() = toCNCHPartsVec(visible_parts);
 
     return parts_from_sources;
 }

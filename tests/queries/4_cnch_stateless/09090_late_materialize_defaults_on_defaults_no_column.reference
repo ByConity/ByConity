@@ -1,0 +1,36 @@
+1
+1
+1
+1
+1
+2
+2
+2
+2
+2
+3
+3
+3
+3
+3
+4
+4
+4
+4
+4
+5
+5
+5
+5
+5
+1	[]	[]	[]	0
+2	[]	[]	[]	0
+3	[]	[]	[]	0
+4	[]	[]	[]	0
+5	[]	[]	[]	0
+CREATE TABLE default.defaults_on_defaults\n(\n    `key` UInt64,\n    `Arr.C1` Array(UInt32) DEFAULT emptyArrayUInt32(),\n    `Arr.C2` Array(UInt32) DEFAULT arrayResize(emptyArrayUInt32(), length(Arr.C1)),\n    `Arr.C3` Array(UInt32) ALIAS arrayResize(emptyArrayUInt32(), length(Arr.C2)),\n    `Arr.C4` Array(UInt32) DEFAULT arrayResize(emptyArrayUInt32(), length(Arr.C3)),\n    `ArrLen` UInt64 DEFAULT length(Arr.C4)\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nSETTINGS min_bytes_for_wide_part = 0, index_granularity = 3, enable_late_materialize = 1, storage_policy = \'cnch_default_hdfs\'
+6
+6
+6
+6
+6

@@ -136,6 +136,9 @@ message FieldType {
     ByteMap = 28;
     BitMap64 = 29;
     SketchBinary = 30;
+    IPv4 = 31;
+    IPv6 = 32;
+    Object = 33;
     NegativeInfinity = 254;
     PositiveInfinity = 255;
   }
@@ -164,5 +167,14 @@ message TotalsMode {
     AFTER_HAVING_INCLUSIVE = 1;
     AFTER_HAVING_EXCLUSIVE = 2;
     AFTER_HAVING_AUTO = 3;
+  }
+}
+
+message TopNFilteringAlgorithm {
+  enum Enum {
+    Unspecified = 0;
+    SortAndLimit = 1;
+    Limit = 2;
+    Heap = 3;
   }
 }

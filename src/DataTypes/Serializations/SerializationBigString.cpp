@@ -131,14 +131,14 @@ DeserializeBinaryBulkStateBigString * checkAndGetBigStringDeserializeState(
 
 }
 
-void SerializationBigString::enumerateStreams(const StreamCallback & callback,
-    SubstreamPath & path) const
+void SerializationBigString::enumerateStreams(
+    EnumerateStreamsSettings & settings, const StreamCallback & callback, const SubstreamData &  /*data*/) const
 {
-    path.push_back(Substream::StringElements);
-    callback(path);
-    path.back() = Substream::StringOffsets;
-    callback(path);
-    path.pop_back();
+    settings.path.push_back(Substream::StringElements);
+    callback(settings.path);
+    settings.path.back() = Substream::StringOffsets;
+    callback(settings.path);
+    settings.path.pop_back();
 }
 
 void SerializationBigString::serializeBinaryBulkWithMultipleStreams(

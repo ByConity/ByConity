@@ -42,7 +42,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Common/HashTable/ClearableHashMap.h>
 #include <Common/assert_cast.h>
-#include <Core/TypeListNumber.h>
+#include <common/TypeLists.h>
 #include <Interpreters/castColumn.h>
 #include <common/range.h>
 
@@ -127,8 +127,8 @@ private:
         NumberExecutor(const UnpackedArrays & arrays_, const DataTypePtr & data_type_, ColumnPtr & result_)
             : arrays(arrays_), data_type(data_type_), result(result_) {}
 
-        template <typename T, size_t>
-        void operator()();
+        template <typename T>
+        void operator()(TypeList<T>);
     };
 
     struct DecimalExecutor
@@ -140,8 +140,8 @@ private:
         DecimalExecutor(const UnpackedArrays & arrays_, const DataTypePtr & data_type_, ColumnPtr & result_)
             : arrays(arrays_), data_type(data_type_), result(result_) {}
 
-        template <typename T, size_t>
-        void operator()();
+        template <typename T>
+        void operator()(TypeList<T>);
     };
 };
 
@@ -424,8 +424,8 @@ ColumnPtr FunctionArrayIntersect::executeImpl(const ColumnsWithTypeAndName & arg
 
     ColumnPtr result_column;
     auto not_nullable_nested_return_type = removeNullable(nested_return_type);
-    TypeListNativeNumbers::forEach(NumberExecutor(arrays, not_nullable_nested_return_type, result_column));
-    TypeListDecimalNumbers::forEach(DecimalExecutor(arrays, not_nullable_nested_return_type, result_column));
+    TypeListUtils::forEach(TypeListIntAndFloat{}, NumberExecutor(arrays, not_nullable_nested_return_type, result_column));
+    TypeListUtils::forEach(TypeListDecimal{}, DecimalExecutor(arrays, not_nullable_nested_return_type, result_column));
 
     using DateMap = ClearableHashMapWithStackMemory<DataTypeDate::FieldType,
         size_t, DefaultHash<DataTypeDate::FieldType>, INITIAL_SIZE_DEGREE>;
@@ -465,8 +465,8 @@ ColumnPtr FunctionArrayIntersect::executeImpl(const ColumnsWithTypeAndName & arg
     return result_column;
 }
 
-template <typename T, size_t>
-void FunctionArrayIntersect::NumberExecutor::operator()()
+template <typename T>
+void FunctionArrayIntersect::NumberExecutor::operator()(TypeList<T>)
 {
     using Container = ClearableHashMapWithStackMemory<T, size_t, DefaultHash<T>,
         INITIAL_SIZE_DEGREE>;
@@ -475,8 +475,8 @@ void FunctionArrayIntersect::NumberExecutor::operator()()
         result = execute<Container, ColumnVector<T>, true>(arrays, ColumnVector<T>::create());
 }
 
-template <typename T, size_t>
-void FunctionArrayIntersect::DecimalExecutor::operator()()
+template <typename T>
+void FunctionArrayIntersect::DecimalExecutor::operator()(TypeList<T>)
 {
     using Container = ClearableHashMapWithStackMemory<T, size_t, DefaultHash<T>,
         INITIAL_SIZE_DEGREE>;

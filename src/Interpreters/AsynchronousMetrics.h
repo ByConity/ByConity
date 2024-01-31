@@ -42,7 +42,8 @@ public:
         ContextPtr global_context_,
         int update_period_seconds,
         std::shared_ptr<std::vector<ProtocolServerAdapter>> servers_to_start_before_tables_,
-        std::shared_ptr<std::vector<ProtocolServerAdapter>> servers_);
+        std::shared_ptr<std::vector<ProtocolServerAdapter>> servers_,
+        Poco::Logger * log_);
 
     ~AsynchronousMetrics();
 
@@ -78,6 +79,7 @@ private:
     /// On first run we will only collect the values to subtract later.
     bool first_run = true;
     std::chrono::system_clock::time_point previous_update_time;
+    Poco::Logger * logger;
 
 #if defined(OS_LINUX)
     MemoryStatisticsOS memory_stat;
@@ -175,6 +177,12 @@ private:
 
     std::unordered_map<String /* device name */, NetworkInterfaceStatValues> network_interface_stats;
 
+    Stopwatch block_devices_rescan_delay;
+
+    void openSensors();
+    void openBlockDevices();
+    void openSensorsChips();
+    void openEDAC();
 #endif
 
     std::unique_ptr<ThreadFromGlobalPool> thread;

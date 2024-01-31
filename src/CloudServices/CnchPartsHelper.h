@@ -105,6 +105,12 @@ MergeTreeDataPartsCNCHVector toMergeTreeDataPartsCNCHVector(const IMergeTreeData
 MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, bool flatten, LoggingOption logging = DisableLogging);
 ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging = DisableLogging, bool move_source_parts = false);
 MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all_parts, bool flatten, LoggingOption logging = DisableLogging);
+IMergeTreeDataPartsVector calcVisibleParts(IMergeTreeDataPartsVector& all_parts,
+    bool collect_on_chain, bool skip_drop_ranges, IMergeTreeDataPartsVector* visible_alone_drop_ranges,
+    IMergeTreeDataPartsVector* invisible_dropped_parts, LoggingOption logging);
+ServerDataPartsVector calcVisibleParts(ServerDataPartsVector& all_parts,
+    bool collect_on_chain, bool skip_drop_ranges, ServerDataPartsVector* visible_alone_drop_ranges,
+    ServerDataPartsVector* invisible_dropped_parts, LoggingOption logging);
 
 /**
  * Compute end time for committed parts.

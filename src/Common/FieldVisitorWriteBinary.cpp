@@ -38,6 +38,8 @@ void FieldVisitorWriteBinary::operator() (const Int128 & x, WriteBuffer & buf) c
 void FieldVisitorWriteBinary::operator() (const UInt256 & x, WriteBuffer & buf) const { writeBinary(x, buf); }
 void FieldVisitorWriteBinary::operator() (const Int256 & x, WriteBuffer & buf) const { writeBinary(x, buf); }
 void FieldVisitorWriteBinary::operator() (const UUID & x, WriteBuffer & buf) const { writeBinary(x, buf); }
+void FieldVisitorWriteBinary::operator() (const IPv4 & x, WriteBuffer & buf) const { writeBinary(x, buf); }
+void FieldVisitorWriteBinary::operator() (const IPv6 & x, WriteBuffer & buf) const { writeBinary(x, buf); }
 void FieldVisitorWriteBinary::operator() (const DecimalField<Decimal32> & x, WriteBuffer & buf) const { writeBinary(x.getValue(), buf); }
 void FieldVisitorWriteBinary::operator() (const DecimalField<Decimal64> & x, WriteBuffer & buf) const { writeBinary(x.getValue(), buf); }
 void FieldVisitorWriteBinary::operator() (const DecimalField<Decimal128> & x, WriteBuffer & buf) const { writeBinary(x.getValue(), buf); }
@@ -74,39 +76,22 @@ void FieldVisitorWriteBinary::operator() (const Tuple & x, WriteBuffer & buf) co
     }
 }
 
-
 void FieldVisitorWriteBinary::operator() (const Map & x, WriteBuffer & buf) const
 {
     const size_t size = x.size();
     writeBinary(size, buf);
 
-    for (size_t i = 0; i < size; ++i)
+    if (size > 0)
     {
-        const UInt8 type = x[i].getType();
-        writeBinary(type, buf);
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, x[i]);
-    }
-}
-
-// FIXME
-void FieldVisitorWriteBinary::operator() (const ByteMap & x, WriteBuffer & buf) const
-{
-    UInt8 ktype = Field::Types::Null;
-    UInt8 vtype = Field::Types::Null;
-
-    const size_t size = x.size();
-    if (size)
-    {
-        ktype = x.front().first.getType();
-        vtype = x.front().second.getType();
-    }
-    writeBinary(ktype, buf);
-    writeBinary(vtype, buf);
-    writeBinary(size, buf);
-    for (ByteMap::const_iterator it = x.begin(); it != x.end(); ++it)
-    {
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->first);
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->second);
+        const UInt8 ktype = x.front().first.getType();
+        const UInt8 vtype = x.front().second.getType();
+        writeBinary(ktype, buf);
+        writeBinary(vtype, buf);
+        for (const auto & elem: x)
+        {
+            Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem.first);
+            Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem.second);
+        }
     }
 }
 
@@ -117,6 +102,20 @@ void FieldVisitorWriteBinary::operator() (const BitMap64 & x, WriteBuffer & buf)
     PODArray<char> buffer(bytes);
     x.write(buffer.data());
     writeString(buffer.data(), bytes, buf);
+}
+
+void FieldVisitorWriteBinary::operator() (const Object & x, WriteBuffer & buf) const
+{
+    const size_t size = x.size();
+    writeBinary(size, buf);
+
+    for (const auto & [key, value] : x)
+    {
+        const UInt8 type = value.getType();
+        writeBinary(type, buf);
+        writeBinary(key, buf);
+        Field::dispatch([&buf] (const auto & val) { FieldVisitorWriteBinary()(val, buf); }, value);
+    }
 }
 
 }

@@ -19,7 +19,7 @@
 #include <Columns/ColumnArray.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
@@ -208,67 +208,39 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
     FileStreamBuilders * stream_builders)
 {
     auto column_from_part = getColumnFromPart(column);
-    if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
+    if (column_from_part.type->isByteMap())
     {
-        // Scan the directory to get all implicit columns(stream) for the map type
-        const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column_from_part.type);
+        /// Scan the directory to get all implicit columns(stream) for the map type
+        const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column_from_part.type);
 
         for (auto & file : data_part->getChecksums()->files)
         {
-            // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
+            /// Need to use column_from_part to read the correct implicit column when renaming columns.
+            /// Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
             const String & file_name = file.first;
-            if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column.name))
+            if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column_from_part.name))
             {
-                auto key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
-                auto impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
-                // Special handing if implicit key is referenced too
+                auto key_name = parseKeyNameFromImplicitFileName(file_name, column_from_part.name);
+                auto impl_key_name = getImplicitColNameForMapKey(column_from_part.name, key_name);
+                /// Special handing if implicit key is referenced too
                 if (columns.contains(impl_key_name))
                 {
                     dup_implicit_keys.insert(impl_key_name);
                 }
 
+                /// compact map is not supported in CNCH
                 addStreamsIfNoBurden(
                     {impl_key_name, type_map.getValueTypeForImplicitColumn()},
-                    [map_col_name = column.name, this](const String& stream_name, const ISerialization::SubstreamPath& substream_path) -> String {
-                        String data_file_name = stream_name;
-                        if (data_part->versions->enable_compact_map_data)
-                        {
-                            data_file_name = ISerialization::getFileNameForStream(map_col_name, substream_path);
-                        }
-                        return data_file_name;
-                    },
                     profile_callback, internal_progress_cb, clock_type, stream_builders
                 );
 
-                map_column_keys.insert({column.name, key_name});
+                map_column_keys.insert({column_from_part.name, key_name});
             }
         }
-
-    }
-    else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
-    {
-        String map_col_name = parseMapNameFromImplicitColName(column.name);
-        addStreamsIfNoBurden(
-            {column.name, column.type},
-            [map_col_name, this](const String& stream_name,
-                    const ISerialization::SubstreamPath& substream_path) {
-                String data_file_name = stream_name;
-                if (data_part->versions->enable_compact_map_data)
-                {
-                    data_file_name = ISerialization::getFileNameForStream(
-                        map_col_name, substream_path);
-                }
-                return data_file_name;
-            },
-            profile_callback, internal_progress_cb, clock_type, stream_builders
-        );
     }
     else if (column.name != "_part_row_number")
     {
         addStreamsIfNoBurden(column_from_part,
-            [](const String & stream_name, [[maybe_unused]] const ISerialization::SubstreamPath& substream_path) {
-                return stream_name;
-            },
             profile_callback, internal_progress_cb, clock_type, stream_builders
         );
     }
@@ -322,7 +294,6 @@ void MergeTreeReaderCNCH::executeFileStreamBuilders(FileStreamBuilders& stream_b
 
 void MergeTreeReaderCNCH::addStreamsIfNoBurden(
     const NameAndTypePair & name_and_type,
-    const std::function<String(const String &, const ISerialization::SubstreamPath &)> & file_name_getter,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback,
     const ProgressCallback & internal_progress_cb,
     clockid_t clock_type, FileStreamBuilders * stream_builders)
@@ -333,7 +304,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         if (streams.count(stream_name))
             return;
 
-        String file_name = file_name_getter(stream_name, substream_path);
+        String file_name = stream_name;
         bool data_file_exists = data_part->getChecksums()->files.count(file_name + DATA_FILE_EXTENSION);
 
         if (!data_file_exists)
@@ -454,7 +425,7 @@ size_t MergeTreeReaderCNCH::skipUnnecessaryRows(size_t num_columns, size_t from_
         try
         {
             auto & cache = caches[column_from_part.getNameInStorage()];
-            if (type->isMap() && !type->isMapKVStore())
+            if (type->isByteMap())
                 skipped_rows = std::max(
                     skipped_rows,
                     skipMapDataNotKV(column_from_part, from_mark, continue_reading,
@@ -513,7 +484,7 @@ size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_ma
         {
             size_t column_size_before_reading = column->size();
             auto & cache = caches[column_from_part.getNameInStorage()];
-            if (type->isMap() && !type->isMapKVStore())
+            if (type->isByteMap())
                 readMapDataNotKV(column_from_part, column, from_mark, continue_reading,
                     current_task_last_mark, rows_to_read, res_col_to_idx, res_columns);
             else

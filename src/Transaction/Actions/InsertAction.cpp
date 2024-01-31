@@ -18,6 +18,7 @@
 #include <Catalog/Catalog.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <DataTypes/ObjectUtils.h>
 
 
 namespace DB
@@ -77,6 +78,9 @@ void InsertAction::executeV2()
 
     auto catalog = global_context.getCnchCatalog();
     catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, false, /*preallocate_mode=*/ false);
+
+    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().columns))
+        catalog->appendObjectPartialSchema(table, txn_id, parts);
 }
 
 /// Post progressing
@@ -89,6 +93,10 @@ void InsertAction::postCommit(TxnTimestamp commit_time)
     for (auto & part : parts)
         part->commit_time = commit_time;
 
+    // set commit flag for dynamic object column schema
+    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
+        global_context.getCnchCatalog()->commitObjectPartialSchema(txn_id);
+    
     ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, false);
 }
 
@@ -98,6 +106,10 @@ void InsertAction::abort()
     // skip part cache to avoid blocking by write lock of part cache for long time
     global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}});
 
+    // set commit flag for dynamic object column schema
+    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
+        global_context.getCnchCatalog()->abortObjectPartialSchema(txn_id);
+    
     ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, true);
 }
 

@@ -39,7 +39,9 @@ namespace DB
 
 class QueryStatus;
 class ExecutingGraph;
+class ReadProgressCallback;
 using ExecutingGraphPtr = std::unique_ptr<ExecutingGraph>;
+using ReadProgressCallbackPtr = std::unique_ptr<ReadProgressCallback>;
 
 struct PipelineExecutorOptions
 {
@@ -88,6 +90,10 @@ public:
         return is_execution_initialized;
     }
 
+    /// Set callback for read progress.
+    /// It would be called every time when processor reports read progress.
+    void setReadProgressCallback(ReadProgressCallbackPtr callback);
+
 private:
     Processors & processors;
     std::mutex processors_mutex;
@@ -97,6 +103,8 @@ private:
     bool report_processors_profile;
 
     ExecutingGraphPtr graph;
+
+    ReadProgressCallbackPtr read_progress_callback;
 
     using Stack = std::stack<UInt64>;
 

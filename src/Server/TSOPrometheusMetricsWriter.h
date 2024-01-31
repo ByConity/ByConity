@@ -38,6 +38,7 @@ private:
 
     static inline constexpr auto YIELD_LEADERSHIP_KEY = "num_yielded_leadership";
     static inline constexpr auto IS_LEADER_KEY = "is_leader";
+    static inline constexpr auto UPDATE_TS_STOPPED_KEY = "num_tso_update_ts_stopped";
 
     const std::unordered_map<String, String> metrics_namedoc_map =
     {

@@ -1,5 +1,6 @@
 #include <DataTypes/Serializations/SerializationArray.h>
 #include <DataTypes/Serializations/SerializationNumber.h>
+#include <DataTypes/Serializations/SerializationNamed.h>
 #include <Columns/ColumnArray.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -8,6 +9,8 @@
 
 #include <Formats/FormatSettings.h>
 #include <Formats/ProtobufReader.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypesNumber.h>
 
 namespace DB
 {
@@ -177,23 +180,68 @@ ColumnPtr arrayOffsetsToSizes(const IColumn & column)
     return column_sizes;
 }
 
-
-void SerializationArray::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+DataTypePtr SerializationArray::SubcolumnCreator::create(const DataTypePtr & prev) const
 {
-    path.push_back(Substream::ArraySizes);
-    callback(path);
-    path.back() = Substream::ArrayElements;
-    nested->enumerateStreams(callback, path);
-    path.pop_back();
+    return std::make_shared<DataTypeArray>(prev);
 }
 
+SerializationPtr SerializationArray::SubcolumnCreator::create(const SerializationPtr & prev) const
+{
+    return std::make_shared<SerializationArray>(prev);
+}
+
+ColumnPtr SerializationArray::SubcolumnCreator::create(const ColumnPtr & prev) const
+{
+    return ColumnArray::create(prev, offsets);
+}
+
+void SerializationArray::enumerateStreams(
+    EnumerateStreamsSettings & settings,
+    const StreamCallback & callback,
+    const SubstreamData & data) const
+{
+    const auto * type_array = data.type ? &assert_cast<const DataTypeArray &>(*data.type) : nullptr;
+    const auto * column_array = data.column ? &assert_cast<const ColumnArray &>(*data.column) : nullptr;
+    auto offsets = column_array ? column_array->getOffsetsPtr() : nullptr;
+
+    auto offsets_serialization =
+        std::make_shared<SerializationNamed>(
+            std::make_shared<SerializationNumber<UInt64>>(),
+                "size" + std::to_string(getArrayLevel(settings.path)), false);
+
+    auto offsets_column = offsets && !settings.position_independent_encoding
+        ? arrayOffsetsToSizes(*offsets)
+        : offsets;
+
+    settings.path.push_back(Substream::ArraySizes);
+    settings.path.back().data = SubstreamData(offsets_serialization)
+        .withType(type_array ? std::make_shared<DataTypeUInt64>() : nullptr)
+        .withColumn(std::move(offsets_column))
+        .withSerializationInfo(data.serialization_info);
+
+    callback(settings.path);
+
+    settings.path.back() = Substream::ArrayElements;
+    settings.path.back().data = data;
+    settings.path.back().creator = std::make_shared<SubcolumnCreator>(offsets);
+
+    auto next_data = SubstreamData(nested)
+        .withType(type_array ? type_array->getNestedType() : nullptr)
+        .withColumn(column_array ? column_array->getDataPtr() : nullptr)
+        .withSerializationInfo(data.serialization_info);
+
+    nested->enumerateStreams(settings, callback, next_data);
+    settings.path.pop_back();
+}
 
 void SerializationArray::serializeBinaryBulkStatePrefix(
+    const IColumn & column,
     SerializeBinaryBulkSettings & settings,
     SerializeBinaryBulkStatePtr & state) const
 {
     settings.path.push_back(Substream::ArrayElements);
-    nested->serializeBinaryBulkStatePrefix(settings, state);
+    const auto & column_array = assert_cast<const ColumnArray &>(column);
+    nested->serializeBinaryBulkStatePrefix(column_array.getData(), settings, state);
     settings.path.pop_back();
 }
 

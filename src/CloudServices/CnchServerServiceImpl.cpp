@@ -26,23 +26,26 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
-#include "Common/tests/gtest_global_context.h"
+#include <Common/RWLock.h>
+#include <Common/tests/gtest_global_context.h>
 #include <Statistics/AutoStatisticsHelper.h>
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
-#include <Access/AccessControlManager.h>
+#include <DataTypes/ObjectUtils.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/DedupWorkerStatus.h>
+#include <CloudServices/CnchBGThreadsMap.h>
 #include <Catalog/CatalogUtils.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
 #include <Storages/PartCacheManager.h>
 #include <Access/AccessControlManager.h>
 #include <Access/KVAccessStorage.h>
+
 
 #if USE_MYSQL
 #include <Storages/StorageMaterializeMySQL.h>
@@ -138,6 +141,17 @@ void CnchServerServiceImpl::commitParts(
                 cppkafka::TopicPartitionList tpl;
                 if (req->has_consumer_group())
                 {
+                    // check if table schema has changed before writing new parts. need reschedule consume task and update storage schema on work side if so.
+                    if (!parts.empty())
+                    {
+                        auto column_commit_time = storage->getPartColumnsCommitTime(*(parts[0]->getColumnsPtr()));
+                        if (column_commit_time != storage->commit_time.toUInt64())
+                        {
+                            LOG_WARNING(&Poco::Logger::get("CnchServerService"), "Kafka consumer cannot commit parts because of underlying table change. Will reschedule consume task.");
+                            throw Exception(ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP, "Commit fails because of storage schema change");
+                        }
+                    }
+
                     consumer_group = req->consumer_group();
                     tpl.reserve(req->tpl_size());
                     for (const auto & tp : req->tpl())
@@ -218,13 +232,15 @@ void CnchServerServiceImpl::createTransaction(
         try
         {
             TxnTimestamp primary_txn_id = request->has_primary_txn_id() ? TxnTimestamp(request->primary_txn_id()) : TxnTimestamp(0);
+            bool read_only = request->has_read_only() ? request->read_only() : false;
             CnchTransactionInitiator initiator
                 = request->has_primary_txn_id() ? CnchTransactionInitiator::Txn : CnchTransactionInitiator::Worker;
             auto transaction
                 = global_context.getCnchTransactionCoordinator().createTransaction(CreateTransactionOption()
                                                                                         .setPrimaryTransactionId(primary_txn_id)
                                                                                         .setType(CnchTransactionType::Implicit)
-                                                                                        .setInitiator(initiator));
+                                                                                        .setInitiator(initiator)
+                                                                                        .setReadOnly(read_only));
             auto & controller = static_cast<brpc::Controller &>(*cntl);
             transaction->setCreator(butil::endpoint2str(controller.remote_side()).c_str());
 
@@ -645,7 +661,7 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
     RPCHelpers::serviceHandler(
         done,
         response,
-        [request = request, response = response, done = done, log = log] {
+        [request = request, response = response, done = done, global_context = getContext(), log = log] {
             brpc::ClosureGuard done_guard(done);
 
             try
@@ -655,10 +671,8 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
                 auto type = CnchBGThreadType(request->type());
                 if (type >= CnchBGThreadType::ServerMinType && type <= CnchBGThreadType::ServerMaxType)
                 {
-#if 0
-                    auto threads = global_context.getCnchBGThreads(type);
+                    auto threads = global_context->getCnchBGThreadsMap(type);
                     res = threads->getStatusMap();
-#endif
                 }
                 else
                 {
@@ -689,7 +703,7 @@ void CnchServerServiceImpl::getNumBackgroundThreads(
 {
 }
 void CnchServerServiceImpl::controlCnchBGThread(
-    google::protobuf::RpcController * /*cntl*/,
+    google::protobuf::RpcController * cntl,
     const Protos::ControlCnchBGThreadReq * request,
     Protos::ControlCnchBGThreadResp * response,
     google::protobuf::Closure * done)
@@ -698,7 +712,7 @@ void CnchServerServiceImpl::controlCnchBGThread(
     RPCHelpers::serviceHandler(
         done,
         response,
-        [request = request, response = response, done = done, & global_context = *context_ptr, log = log] {
+        [cntl = cntl, request = request, response = response, done = done, & global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);
 
             try
@@ -708,6 +722,10 @@ void CnchServerServiceImpl::controlCnchBGThread(
                     storage_id = RPCHelpers::createStorageID(request->storage_id());
                 auto type = CnchBGThreadType(request->type());
                 auto action = CnchBGThreadAction(request->action());
+                auto & controller = static_cast<brpc::Controller &>(*cntl);
+                LOG_DEBUG(log, "Received controlBGThread for {} type {} action {} from {}",
+                    storage_id.empty() ? "empty storage" : storage_id.getNameForLogs(),
+                    toString(type), toString(action), butil::endpoint2str(controller.remote_side()).c_str());
                 global_context.controlCnchBGThread(storage_id, type, action);
             }
             catch (...)

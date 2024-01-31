@@ -61,6 +61,7 @@ endif()
 set_property(DIRECTORY PROPERTY EXCLUDE_FROM_ALL 1)
 
 add_subdirectory (abseil-cpp-cmake)
+add_subdirectory (magic-enum-cmake)
 add_subdirectory (boost-cmake)
 add_subdirectory (cctz-cmake)
 add_subdirectory (consistent-hashing)
@@ -98,8 +99,7 @@ endif ()
 
 if (USE_INTERNAL_RE2_LIBRARY)
     set(RE2_BUILD_TESTING 0 CACHE INTERNAL "")
-    add_subdirectory (re2)
-    add_subdirectory (re2_st)
+    add_subdirectory (re2-cmake)
 endif ()
 
 if (USE_INTERNAL_DOUBLE_CONVERSION_LIBRARY)
@@ -318,6 +318,7 @@ add_contrib (aws-cmake
     aws-cmake
 )
 
+add_subdirectory(corrosion-cmake)
 
 if (USE_BASE64)
     add_subdirectory (base64-cmake)
@@ -325,6 +326,10 @@ endif()
 
 if (USE_SIMDJSON)
     add_subdirectory (simdjson-cmake)
+endif()
+
+if (USE_RAPIDJSON)
+    add_subdirectory (rapidjson-cmake)
 endif()
 
 if (USE_BREAKPAD)
@@ -397,12 +402,26 @@ add_subdirectory(incubator-brpc)
 if(OPENSSL_INCLUDE_DIR)
     target_include_directories(brpc-static BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
 endif()
+add_subdirectory(hashidsxx-cmake)
+
+add_subdirectory(morton-nd-cmake)
+
+add_subdirectory(xxHash-cmake)
 
 if (ENABLE_BENCHMARK)
     add_subdirectory(benchmark)
 endif()
 
+add_subdirectory(ulid-c-cmake)
 add_subdirectory(hivemetastore-cmake)
+add_subdirectory(wyhash-cmake)
+if (USE_NLP)
+    add_subdirectory(libstemmer-c-cmake)
+    add_subdirectory(wordnet-blast-cmake)
+    add_subdirectory(lemmagen-c-cmake)
+    add_subdirectory (nlp-data-cmake)
+    add_subdirectory (cld2-cmake)
+endif()
 
 set(BUILD_SHARED_LIBS_BEFORE_MSGPACK ${BUILD_SHARED_LIBS})
 unset (BUILD_SHARED_LIBS)

@@ -144,6 +144,7 @@ enum class RuleType : UInt32
 
     CREATE_TOPN_FILTERING_FOR_AGGREGATING,
     PUSH_TOPN_FILTERING_THROUGH_PROJECTION,
+    PUSH_TOPN_FILTERING_THROUGH_UNION,
 
     PUSH_DOWN_APPLY_THROUGH_JOIN,
 
@@ -186,13 +187,13 @@ public:
         return empty;
     }
 
-    IQueryPlanStep::Type getTargetType()
+    std::unordered_set<IQueryPlanStep::Type> getTargetTypes()
     {
-        if (target_type == IQueryPlanStep::Type::UNDEFINED)
+        if (target_types.empty())
         {
-            target_type = getPattern()->getTargetType();
+            target_types = getPattern()->getTargetTypes();
         }
-        return target_type;
+        return target_types;
     }
 
     TransformResult transform(const PlanNodePtr & node, RuleContext & context);
@@ -204,7 +205,7 @@ protected:
     virtual TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) = 0;
 
 private:
-    IQueryPlanStep::Type target_type = IQueryPlanStep::Type::UNDEFINED;
+    std::unordered_set<IQueryPlanStep::Type> target_types;
 };
 
 class TransformResult final

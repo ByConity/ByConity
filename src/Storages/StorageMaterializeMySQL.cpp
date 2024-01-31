@@ -63,7 +63,7 @@ bool StorageMaterializeMySQL::needRewriteQueryWithFinal(const Names & column_nam
 
 Pipe StorageMaterializeMySQL::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum processed_stage,
@@ -71,7 +71,7 @@ Pipe StorageMaterializeMySQL::read(
     unsigned int num_streams)
 {
     /// If the background synchronization thread has exception.
-    return nested_storage->read(column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+    return nested_storage->read(column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
 }
 
 BlockOutputStreamPtr StorageMaterializeMySQL::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)

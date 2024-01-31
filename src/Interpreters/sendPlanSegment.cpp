@@ -3,62 +3,62 @@
 namespace DB
 {
 
-AddressInfo getLocalAddress(ContextPtr & query_context)
+AddressInfo getLocalAddress(const Context & query_context)
 {
     const auto & host = getHostIPFromEnv();
-    auto port = query_context->getTCPPort();
-    const ClientInfo & info = query_context->getClientInfo();
-    return AddressInfo(
-        host, port, info.current_user, info.current_password, query_context->getExchangePort(), query_context->getExchangeStatusPort());
+    auto port = query_context.getTCPPort();
+    const ClientInfo & info = query_context.getClientInfo();
+    return AddressInfo(host, port, info.current_user, info.current_password, query_context.getRPCPort());
 }
 
 AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_context)
 {
     const ClientInfo & info = query_context->getClientInfo();
     return AddressInfo(
-        host_with_ports.getHost(),
+        host_with_ports.host,
         host_with_ports.tcp_port,
         info.current_user,
         info.current_password,
-        host_with_ports.exchange_port,
-        host_with_ports.exchange_status_port);
+        host_with_ports.rpc_port);
 }
 
-void sendPlanSegmentToLocal(PlanSegment * plan_segment_ptr, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
-{
-    const auto local_address = getLocalAddress(query_context);
-    plan_segment_ptr->setCurrentAddress(local_address);
-
-    /// FIXME: deserializePlanSegment is heavy task, using executePlanSegmentRemotely can deserialize plansegment asynchronous
-    // executePlanSegmentLocally(*plan_segment_ptr, query_context);
-    LOG_TRACE(
-        &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
-        "begin sendPlanSegment locally: " + std::to_string(plan_segment_ptr->getPlanSegmentId()) + " : " + plan_segment_ptr->toString());
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, dag_graph_ptr->async_context);
-    if (dag_graph_ptr)
-    {
-        std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-        dag_graph_ptr->plan_send_addresses.emplace(std::move(local_address));
-    }
-}
-
-void sendPlanSegmentToRemote(
-    AddressInfo & addressinfo,
-    ContextPtr query_context,
+void sendPlanSegmentToAddress(
+    const AddressInfo & addressinfo,
     PlanSegment * plan_segment_ptr,
+    PlanSegmentExecutionInfo & execution_info,
+    ContextPtr query_context,
     std::shared_ptr<DAGGraph> dag_graph_ptr,
+    std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr,
     const WorkerId & worker_id)
 {
-    plan_segment_ptr->setCurrentAddress(addressinfo);
+    static auto * log = &Poco::Logger::get("SegmentScheduler::sendPlanSegment");
     LOG_TRACE(
-        &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
-        "begin sendPlanSegment remotely: " + std::to_string(plan_segment_ptr->getPlanSegmentId()) + " : " + plan_segment_ptr->toString());
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, dag_graph_ptr->async_context, worker_id);
-    if (dag_graph_ptr)
+        log,
+        "segment_id {}, address {} plansegment {}",
+        plan_segment_ptr->getPlanSegmentId(),
+        addressinfo.toString(),
+        plan_segment_ptr->toString());
+    execution_info.execution_address = addressinfo;
+    if (!dag_graph_ptr)
+        return;
+    if (plan_segment_buf_ptr)
     {
-        std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-        dag_graph_ptr->plan_send_addresses.emplace(addressinfo);
+        executePlanSegmentRemotelyWithPreparedBuf(
+            *plan_segment_ptr,
+            std::move(execution_info),
+            dag_graph_ptr->query_common_buf,
+            dag_graph_ptr->query_settings_buf,
+            *plan_segment_buf_ptr,
+            dag_graph_ptr->async_context,
+            *query_context.get(),
+            worker_id);
     }
+    else
+    {
+        executePlanSegmentRemotely(*plan_segment_ptr, execution_info, query_context, dag_graph_ptr->async_context, worker_id);
+    }
+    std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
+    dag_graph_ptr->plan_send_addresses.emplace(addressinfo);
 }
 
 } // namespace DB

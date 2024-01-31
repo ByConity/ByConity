@@ -30,6 +30,7 @@
 #include <sys/statvfs.h>
 #include <Poco/TemporaryFile.h>
 
+namespace fs = std::filesystem;
 
 namespace DB
 {
@@ -56,21 +57,35 @@ bool pathStartsWith(const std::filesystem::path & path, const std::filesystem::p
 /// Returns true if path starts with prefix path
 bool pathStartsWith(const String & path, const String & prefix_path);
 
+size_t getSizeFromFileDescriptor(int fd, const String & file_name = "");
+
 bool symlinkStartsWith(const String & path, const String & prefix_path);
 
-String joinPaths(const std::vector<String>& components, bool add_post_slash = false);
+/// Same as pathStartsWith, but without canonization, i.e. allowed to check symlinks.
+/// (Path is made absolute and normalized.)
+bool fileOrSymlinkPathStartsWith(const String & path, const String & prefix_path);
 
-size_t getSizeFromFileDescriptor(int fd, const String & file_name);
+String joinPaths(const std::vector<String> & components, bool add_post_slash = false);
 }
 
 namespace FS
 {
 bool createFile(const std::string & path);
-
+bool exists(const std::string & path);
+bool canExecute(const std::string & path);
 bool canRead(const std::string & path);
 bool canWrite(const std::string & path);
 
 time_t getModificationTime(const std::string & path);
 Poco::Timestamp getModificationTimestamp(const std::string & path);
 void setModificationTime(const std::string & path, time_t time);
+
+/// Return parent path for the specified path.
+inline String parentPath(const String & path)
+{
+    if (path.ends_with('/'))
+        return fs::path(path).parent_path().parent_path() / "";
+    return fs::path(path).parent_path() / "";
+}
+
 }

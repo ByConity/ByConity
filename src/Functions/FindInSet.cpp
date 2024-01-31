@@ -38,20 +38,20 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &/*result_type*/, size_t cnt) const override
     {
         ColumnPtr needle_column = arguments[0].column;
         if (!isString(arguments[0].type))
         {
             ColumnsWithTypeAndName args_src {arguments[0]};
-            needle_column = ConvertImplGenericToString::execute(args_src);
+            needle_column = ConvertImplGenericToString<ColumnString>::execute(args_src, std::make_shared<DataTypeString>(), cnt);
         }
 
         ColumnPtr haystack_column = arguments[1].column;
         if (!isString(arguments[1].type))
         {
             ColumnsWithTypeAndName args_src {arguments[1]};
-            haystack_column = ConvertImplGenericToString::execute(args_src);
+            haystack_column = ConvertImplGenericToString<ColumnString>::execute(args_src, std::make_shared<DataTypeString>(), cnt);
         }
 
         auto col_res = ColumnUInt64::create();

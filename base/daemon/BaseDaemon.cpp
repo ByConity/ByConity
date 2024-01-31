@@ -110,6 +110,7 @@ extern const int PROF_NOT_SET;
 /* Check whether prof:true has been set in MALLOC_CONF env
  * If not, set env
  */
+#if USE_JEMALLOC
 static bool checkProfEnv()
 {
     char *env_val = getenv("MALLOC_CONF");
@@ -130,8 +131,9 @@ static bool checkProfEnv()
     }
     return pass_check;
 }
+#endif
 
-DB::PipeFDs signal_pipe;
+static DB::PipeFDs signal_pipe;
 
 static constexpr size_t max_query_id_size = 127;
 

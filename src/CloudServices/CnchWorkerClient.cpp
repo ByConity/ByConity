@@ -22,6 +22,9 @@
 #include <Protos/RPCHelpers.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/IStorage.h>
+#include <DataTypes/ObjectUtils.h>
+#include <Storages/Hive/HiveFile/IHiveFile.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
@@ -72,6 +75,12 @@ void CnchWorkerClient::submitManipulationTask(
         request.set_mutation_commit_time(params.mutation_commit_time);
         WriteBufferFromString write_buf(*request.mutable_mutate_commands());
         params.mutation_commands->writeText(write_buf);
+    }
+
+    if (hasDynamicSubcolumns(storage.getInMemoryMetadata().columns))
+    {
+        request.set_dynamic_object_column_schema(
+            storage.getStorageSnapshot(storage.getInMemoryMetadataPtr(), nullptr)->object_columns.toString());
     }
 
     stub->submitManipulationTask(&cntl, &request, &response, nullptr);
@@ -320,7 +329,10 @@ brpc::CallId CnchWorkerClient::sendResources(
     for (const auto & resource : resources_to_send)
     {
         if (!resource.sent_create_query)
+        {
             request.add_create_queries(resource.create_table_query);
+            request.add_dynamic_object_column_schema(resource.object_columns.toString());
+        }
 
         /// parts
         auto & table_data_parts = *request.mutable_data_parts()->Add();
@@ -355,7 +367,8 @@ brpc::CallId CnchWorkerClient::sendResources(
         if (!resource.hive_parts.empty())
         {
             auto * mutable_hive_parts = table_data_parts.mutable_hive_parts();
-            RPCHelpers::serialize(*mutable_hive_parts, resource.hive_parts);
+            StorageCnchHive & hive_storage = dynamic_cast<StorageCnchHive &>(*resource.storage);
+            hive_storage.serializeHiveFiles(*mutable_hive_parts, resource.hive_parts);
         }
 
         if (!resource.file_parts.empty())

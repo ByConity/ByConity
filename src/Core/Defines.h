@@ -83,6 +83,8 @@
 /// the number is unmotivated
 #define DEFAULT_COUNT_OF_HTTP_CONNECTIONS_PER_ENDPOINT 15
 
+#define DEFAULT_HTTP_KEEP_ALIVE_TIMEOUT 10
+
 #define DBMS_DEFAULT_PATH "/var/lib/clickhouse/"
 
 #define KEEPER_DEFAULT_PATH "/var/lib/clickhouse-keeper/"
@@ -105,6 +107,9 @@
 /// Default limit on recursion depth of recursive descend parser.
 #define DBMS_DEFAULT_MAX_PARSER_DEPTH 2000
 
+/// Default limit on query size.
+#define DBMS_DEFAULT_MAX_QUERY_SIZE 262144
+
 /// Max depth of hierarchical dictionary
 #define DBMS_HIERARCHICAL_DICTIONARY_MAX_DEPTH 1000
 
@@ -115,8 +120,8 @@
 /// Version of ClickHouse inter server BRPC protocol.
 /// It's not necessary to increase this version number in most cases
 /// unless the serialization of plan segment has changed.
-#define DBMS_BRPC_PROTOCOL_MAJOR_VERSION 1
-#define DBMS_BRPC_PROTOCOL_MINOR_VERSION 1
+#define DBMS_BRPC_PROTOCOL_MAJOR_VERSION 2
+#define DBMS_BRPC_PROTOCOL_MINOR_VERSION 2
 
 #define TEST_KNOB_FORCE_META_REBUILD 0x08ull
 

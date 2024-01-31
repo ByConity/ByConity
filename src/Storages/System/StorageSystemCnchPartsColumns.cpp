@@ -3,6 +3,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <Interpreters/Context.h>
@@ -42,9 +43,12 @@ NamesAndTypesList StorageSystemCnchPartsColumns::getNamesAndTypes()
         {"partition", std::make_shared<DataTypeString>()},
         {"column", std::make_shared<DataTypeString>()},
         {"type", std::make_shared<DataTypeString>()},
-        {"column_bytes_on_disk", std::make_shared<DataTypeUInt64>()},
+        {"column_data_bytes_on_disk", std::make_shared<DataTypeUInt64>()},
         {"column_data_compressed_bytes", std::make_shared<DataTypeUInt64>()},
         {"column_data_uncompressed_bytes", std::make_shared<DataTypeUInt64>()},
+        {"column_skip_indice_bytes_on_disk", std::make_shared<DataTypeUInt64>()},
+        {"column_skip_indice_compressed_bytes", std::make_shared<DataTypeUInt64>()},
+        {"column_skip_indice_uncompressed_bytes", std::make_shared<DataTypeUInt64>()},
     };
 }
 
@@ -116,6 +120,8 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
                 partition = out.str();
             }
 
+            auto skipindices_size = part->getColumnsSkipIndicesSize();
+
             for (auto & column : columns)
             {
                 int index = 0;
@@ -126,10 +132,24 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
                 res_columns[index++]->insert(column.name);
                 res_columns[index++]->insert(column.type->getName());
 
-                ColumnSize column_size = part->getColumnSize(column.name, *column.type);
-                res_columns[index++]->insert(column_size.data_compressed + column_size.marks);
-                res_columns[index++]->insert(column_size.data_compressed);
-                res_columns[index++]->insert(column_size.data_uncompressed);
+                ColumnSize data_column_size = part->getColumnSize(column.name, *column.type);
+                res_columns[index++]->insert(data_column_size.data_compressed + data_column_size.marks);
+                res_columns[index++]->insert(data_column_size.data_compressed);
+                res_columns[index++]->insert(data_column_size.data_uncompressed);
+
+                auto skipindices_size_iter = skipindices_size.find(column.name);
+                if (skipindices_size_iter != skipindices_size.end())
+                {
+                    res_columns[index++]->insert(skipindices_size_iter->second.data_compressed + skipindices_size_iter->second.marks);
+                    res_columns[index++]->insert(skipindices_size_iter->second.data_compressed);
+                    res_columns[index++]->insert(skipindices_size_iter->second.data_uncompressed);
+                }
+                else
+                {
+                    res_columns[index++]->insert(0);
+                    res_columns[index++]->insert(0);
+                    res_columns[index++]->insert(0);
+                }
             }
         }
 
@@ -172,8 +192,17 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
 
     Block header = materializeBlock(InterpreterSelectQuery(ast, context, QueryProcessingStage::Complete).getSampleBlock());
 
+    auto metadata_snapshot = table->getInMemoryMetadataPtr();
+    auto storage_snapshot = table->getStorageSnapshot(metadata_snapshot, context);
     ClusterProxy::SelectStreamFactory stream_factory = ClusterProxy::SelectStreamFactory(
-        header, QueryProcessingStage::Complete, StorageID{"system", "cnch_parts_columns"}, Scalars{}, false, {});
+        header,
+        {},
+        storage_snapshot, 
+        QueryProcessingStage::Complete, 
+        StorageID{"system", "cnch_parts_columns"}, 
+        Scalars{}, 
+        false, 
+        {});
 
     QueryPlan query_plan;
     ClusterProxy::executeQuery(query_plan, stream_factory, log, ast, context, worker_group);

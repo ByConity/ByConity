@@ -62,7 +62,7 @@ void BrpcExchangeReceiverRegistryService::registry(
     SCOPE_EXIT({
         /// request is already released in done_guard, so all parameters have to be copied.
         if (sender_proxy && sender_stream_id != brpc::INVALID_STREAM_ID)
-            registerSenderToProxy(cntl, nullptr, sender_proxy, query_id, sender_stream_id, {}, key, coordinator_addr, false);
+            registerSenderToProxy(nullptr, sender_proxy, query_id, sender_stream_id, {}, key, coordinator_addr, false);
     });
 
     /// this done_guard guarantee to call done->Run() in any situation
@@ -110,7 +110,7 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
         auto processors = mgr->createProcessors(sender_proxy, std::move(header), std::move(query_context));
         SCOPE_EXIT({
             if (sender_proxy && sender_stream_id != brpc::INVALID_STREAM_ID)
-                registerSenderToProxy(cntl, mgr, sender_proxy, query_id, sender_stream_id, processors, key, coordinator_addr, true);
+                registerSenderToProxy(mgr, sender_proxy, query_id, sender_stream_id, processors, key, coordinator_addr, true);
         });
 
         /// this done_guard guarantee to call done->Run() in any situation
@@ -127,7 +127,6 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
 }
 
 void BrpcExchangeReceiverRegistryService::registerSenderToProxy(
-    brpc::Controller * cntl,
     const DiskExchangeDataManagerPtr & mgr,
     const BroadcastSenderProxyPtr & sender_proxy,
     const String & query_id,
@@ -155,7 +154,6 @@ void BrpcExchangeReceiverRegistryService::registerSenderToProxy(
         String err_msg = fmt::format(
             "registerSenderToProxy failed for query_id:{} key:{} by exception: {}", query_id, *key, getCurrentExceptionMessage(false));
         LOG_ERROR(log, err_msg);
-        cntl->SetFailed(err_msg);
     }
 }
 

@@ -28,8 +28,6 @@ void checkIngestColumns(const Strings & column_names, const StorageInMemoryMetad
 
 int compare(Columns & target_key_cols, Columns & src_key_cols, size_t n, size_t m);
 
-String getMapKey(const String & map_col_name, const String & map_implicit_name);
-
 std::optional<NameAndTypePair> tryGetMapColumn(const StorageInMemoryMetadata & meta_data, const String & col_name);
 
 MergeTreeMutableDataPartPtr createEmptyTempPart(

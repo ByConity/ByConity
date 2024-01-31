@@ -11,7 +11,7 @@
 
 namespace DB
 {
-Graph Graph::build(const std::vector<GroupId> & groups, UnionFind<String> & union_find, ASTPtr filter, const Memo & memo)
+Graph Graph::build(const std::vector<GroupId> & groups, const UnionFind<String> & union_find, ASTPtr filter, const Memo & memo)
 {
     Graph graph;
 

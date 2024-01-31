@@ -97,7 +97,7 @@ FROM
                     123 AS v2v2v2,
                     i_7id,
                     toDate(recvtime) AS my_date,
-                    uykyub ['mmm'] AS mmm
+                    uykyub {'mmm'} AS mmm
                 FROM
                     zx_test.table1
                 WHERE

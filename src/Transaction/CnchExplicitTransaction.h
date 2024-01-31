@@ -44,7 +44,7 @@ namespace DB
         TxnTimestamp rollback() override;
         TxnTimestamp abort() override;
         void clean(TxnCleanTask & task) override;
-        bool addSecondaryTransaction(const TransactionCnchPtr & txn);
+        void addSecondaryTransaction(const TransactionCnchPtr & txn);
         bool addStatement(const String & statement);
         const std::vector<String> & getStatements() const { return statements; }
         const std::vector<TransactionCnchPtr> & getSecondaryTransactions() const { return secondary_txns; }

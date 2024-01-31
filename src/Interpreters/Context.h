@@ -28,6 +28,8 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
 #include <Core/UUID.h>
+#include <DaemonManager/DaemonManagerClient_fwd.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <IO/ReadSettings.h>
 #include <Interpreters/ClientInfo.h>
@@ -35,10 +37,13 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/DistributedStages/ExchangeDataTracker.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Optimizer/OptimizerProfile.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <QueryPlan/SymbolAllocator.h>
+#include <Server/AsyncQueryManager.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/TxnTimestamp.h>
@@ -49,14 +54,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
-#include <CloudServices/CnchBGThreadPartitionSelector.h>
-#include <Transaction/TxnTimestamp.h>
-#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
-#include <Storages/HDFS/HDFSFileSystem.h>
-#include <DaemonManager/DaemonManagerClient_fwd.h>
-#include <DataStreams/BlockStreamProfileInfo.h>
-#include <Optimizer/OptimizerProfile.h>
-#include <Server/AsyncQueryManager.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config.h>
 #    include "config_core.h"
@@ -71,6 +69,7 @@
 #include <optional>
 #include <thread>
 #include <Common/DefaultCatalogName.h>
+#include <common/JSON.h>
 
 namespace Poco::Net
 {
@@ -181,7 +180,7 @@ class InternalResourceGroupManager;
 class VWResourceGroupManager;
 class Credentials;
 class GSSAcceptorContext;
-class SettingsConstraints;
+struct SettingsConstraintsAndProfileIDs;
 class RemoteHostFilter;
 struct StorageID;
 class IDisk;
@@ -231,6 +230,12 @@ class CnchWorkerResource;
 class CnchServerResource;
 using CnchWorkerResourcePtr = std::shared_ptr<CnchWorkerResource>;
 using CnchServerResourcePtr = std::shared_ptr<CnchServerResource>;
+
+#if USE_NLP
+    class SynonymsExtensions;
+    class Lemmatizers;
+#endif
+
 
 class Throttler;
 using ThrottlerPtr = std::shared_ptr<Throttler>;
@@ -417,6 +422,7 @@ private:
     std::optional<UUID> user_id;
     std::vector<UUID> current_roles;
     bool use_default_roles = false;
+    std::shared_ptr<const SettingsConstraintsAndProfileIDs> settings_constraints_and_current_profiles;
     std::shared_ptr<const ContextAccess> access;
     std::shared_ptr<const EnabledRowPolicies> initial_row_policy;
     CopyableAtomic<IResourceGroup *> resource_group{nullptr}; /// Current resource group.
@@ -432,7 +438,8 @@ private:
 
     QueryStatus * process_list_elem = nullptr; /// For tracking total resource usage for query.
     std::weak_ptr<ProcessListEntry> process_list_entry;
-    StorageID insertion_table = StorageID::createEmpty(); /// Saved insertion table in query context
+    StorageID insertion_table = StorageID::createEmpty();  /// Saved insertion table in query context
+    bool is_distributed = true;  /// Whether the current context it used for distributed query
 
     String default_format; /// Format, used when server formats data by itself and if query does not have FORMAT specification.
         /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
@@ -596,6 +603,8 @@ private:
 
     String async_query_id;
 
+    PlanSegmentInstanceId plan_segment_instance_id;
+
     bool read_from_client_finished = false;
 
     bool is_explain_query = false;
@@ -724,6 +733,11 @@ public:
     boost::container::flat_set<UUID> getCurrentRoles() const;
     boost::container::flat_set<UUID> getEnabledRoles() const;
     std::shared_ptr<const EnabledRolesInfo> getRolesInfo() const;
+
+    void setCurrentProfile(const String & profile_name);
+    void setCurrentProfile(const UUID & profile_id);
+    std::vector<UUID> getCurrentProfiles() const;
+    std::vector<UUID> getEnabledProfiles() const;
 
     /// Checks access rights.
     /// Empty database means the current database.
@@ -860,6 +874,9 @@ public:
     /// Id of initiating query for distributed queries; or current query id if it's not a distributed query.
     String getInitialQueryId() const;
 
+    void setPlanSegmentInstanceId(const PlanSegmentInstanceId & instance_id);
+    PlanSegmentInstanceId getPlanSegmentInstanceId() const;
+
     void setCurrentDatabase(const String & name);
     void setCurrentDatabase(const String & name, ContextPtr local_context);
 
@@ -874,7 +891,10 @@ public:
     void setInsertionTable(StorageID db_and_table) { insertion_table = std::move(db_and_table); }
     const StorageID & getInsertionTable() const { return insertion_table; }
 
-    String getDefaultFormat() const; /// If default_format is not specified, some global default format is returned.
+    void setDistributed(bool is_distributed_) { is_distributed = is_distributed_; }
+    bool isDistributed() const { return is_distributed; }
+
+    String getDefaultFormat() const;    /// If default_format is not specified, some global default format is returned.
     void setDefaultFormat(const String & name);
 
     MultiVersion<Macros>::Version getMacros() const;
@@ -888,6 +908,7 @@ public:
     void setSetting(const StringRef & name, const Field & value);
     void applySettingChange(const SettingChange & change);
     void applySettingsChanges(const SettingsChanges & changes);
+    void applySettingsChanges(const JSON & changes);
 
     /// Checks the constraints.
     void checkSettingsConstraints(const SettingChange & change) const;
@@ -896,7 +917,7 @@ public:
     void clampToSettingsConstraints(SettingsChanges & changes) const;
 
     /// Returns the current constraints (can return null).
-    std::shared_ptr<const SettingsConstraints> getSettingsConstraints() const;
+    std::shared_ptr<const SettingsConstraintsAndProfileIDs> getSettingsConstraintsAndCurrentProfiles() const;
 
     const EmbeddedDictionaries & getEmbeddedDictionaries() const;
     const ExternalDictionariesLoader & getExternalDictionariesLoader() const;
@@ -911,6 +932,10 @@ public:
     void loadDictionaries(const Poco::Util::AbstractConfiguration & config);
 
     void setExternalModelsConfig(const ConfigurationPtr & config, const std::string & config_name = "models_config");
+#if USE_NLP
+    SynonymsExtensions & getSynonymsExtensions() const;
+    Lemmatizers & getLemmatizers() const;
+#endif
 
     /// I/O formats.
     BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size) const;
@@ -956,6 +981,11 @@ public:
     UInt16 getTCPPort(const String & host, UInt16 rpc_port) const;
 
     std::optional<UInt16> getTCPPortSecure() const;
+
+    /// Register server ports during server starting up. No lock is held.
+    void registerServerPort(String port_name, UInt16 port);
+
+    UInt16 getServerPort(const String & port_name) const;
 
     /// The port that the server exchange ha log
     UInt16 getHaTCPPort() const;
@@ -1095,6 +1125,8 @@ public:
     /// if connected successfully (without exception) or our zookeeper client
     /// connection configured for some other cluster without our node.
     bool tryCheckClientConnectionToMyKeeperCluster() const;
+
+    UInt32 getZooKeeperSessionUptime() const;
 
 #if USE_NURAFT
     std::shared_ptr<KeeperDispatcher> & getKeeperDispatcher() const;
@@ -1245,6 +1277,7 @@ public:
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
     const StorageS3Settings & getStorageS3Settings() const;
     const CnchHiveSettings & getCnchHiveSettings() const;
+    const CnchHiveSettings & getCnchLasSettings() const;
     const CnchFileSettings & getCnchFileSettings() const;
 
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
@@ -1600,8 +1633,6 @@ private:
 
     template <typename... Args>
     void checkAccessImpl(const Args &... args) const;
-
-    void setProfile(const String & profile);
 
     EmbeddedDictionaries & getEmbeddedDictionariesImpl(bool throw_on_error) const;
 

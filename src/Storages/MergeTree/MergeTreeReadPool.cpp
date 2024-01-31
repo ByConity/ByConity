@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/FilterWithRowUtils.h>
 #include <Common/formatReadable.h>
 #include <common/range.h>
+#include <Storages/SelectQueryInfo.h>
 
 
 namespace ProfileEvents
@@ -47,7 +48,7 @@ MergeTreeReadPool::MergeTreeReadPool(
     RangesInDataParts && parts_,
     MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter_,
     const MergeTreeMetaBase & data_,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     const SelectQueryInfo & query_info_,
     const bool check_columns_,
     const Names & column_names_,
@@ -57,11 +58,12 @@ MergeTreeReadPool::MergeTreeReadPool(
     : backoff_settings{backoff_settings_}
     , backoff_state{threads_}
     , data{data_}
-    , metadata_snapshot{metadata_snapshot_}
+    , storage_snapshot{storage_snapshot_}
     , column_names{column_names_}
     , do_not_steal_tasks{do_not_steal_tasks_}
     , predict_block_size_bytes{preferred_block_size_bytes_ > 0}
-    , prewhere_info{getPrewhereInfo(query_info_)}
+    , prewhere_info(getPrewhereInfo(query_info_))
+    , atomic_predicates(getAtomicPredicates(query_info_))
     , parts_ranges{std::move(parts_)}
 {
     /// parts don't contain duplicate MergeTreeDataPart's.
@@ -182,7 +184,7 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
 
 Block MergeTreeReadPool::getHeader() const
 {
-    return metadata_snapshot->getSampleBlockForColumns(column_names, data.getVirtuals(), data.getStorageID());
+    return storage_snapshot->getSampleBlockForColumns(column_names);
 }
 
 void MergeTreeReadPool::profileFeedback(const ReadBufferFromFileBase::ProfileInfo info)
@@ -229,7 +231,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
     const RangesInDataParts & parts, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter, const MergeTreeIndexContextPtr & index_context, const bool check_columns)
 {
     std::vector<size_t> per_part_sum_marks;
-    Block sample_block = metadata_snapshot->getSampleBlock();
+    Block sample_block = storage_snapshot->metadata->getSampleBlock();
 
     for (const auto i : collections::range(0, parts.size()))
     {
@@ -243,7 +245,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
         per_part_sum_marks.push_back(sum_marks);
 
         auto task_columns =
-            getReadTaskColumns(data, metadata_snapshot, part.data_part, column_names, prewhere_info, index_context, check_columns);
+            getReadTaskColumns(data, storage_snapshot, part.data_part, column_names, prewhere_info, index_context, atomic_predicates, check_columns);
 
         PerPartParams params;
         const auto & required_column_names = task_columns.columns.getNames();
@@ -378,5 +380,27 @@ void MergeTreeReadPool::fillPerThreadInfo(
     }
 }
 
+
+void MergeTreeReadPool::updateGranuleStats(const std::unordered_map<String, size_t> & stats)
+{
+    const std::lock_guard lk{mutex};
+    for (const auto & [col, val] : stats)
+    {
+        per_column_read_granules[col] += val;
+    }
+}
+MergeTreeReadPool::~MergeTreeReadPool()
+{
+#ifndef NDEBUG
+    std::unordered_set<String> printed;
+    std::vector<std::pair<String, size_t>> ordered_list(per_column_read_granules.begin(), per_column_read_granules.end());
+    sort(ordered_list.begin(), ordered_list.end(), [](const auto & lhs, const auto & rhs) {
+        return lhs.second > rhs.second;
+    });
+
+    for (const auto & [col, sz] : ordered_list)
+        LOG_TRACE(log, "{} : {}\n", col, sz);
+#endif
+}
 
 }

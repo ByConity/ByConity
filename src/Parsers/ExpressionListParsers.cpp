@@ -271,26 +271,33 @@ bool ParserLeftAssociativeBinaryOperatorList::parseImpl(Pos & pos, ASTPtr & node
             ASTPtr elem;
             QuantifierType quantified_type_node = QuantifierType::ANY;
             bool have_quantifier_comparison =  false;
-            if (allow_any_all_operators && ParserKeyword("ANY").ignore(pos, expected))
+            if (allow_any_all_operators)
             {
-                quantified_type_node = QuantifierType::ANY;
-                have_quantifier_comparison = true;
+                auto old_pos = pos;
+                if (ParserKeyword("ANY").ignore(pos, expected) && ParserSubquery().parse(pos, elem, expected))
+                {
+                    quantified_type_node = QuantifierType::ANY;
+                    have_quantifier_comparison = true;
+                }
+                else if (ParserKeyword("ALL").ignore(pos, expected) && ParserSubquery().parse(pos, elem, expected))
+                {
+                    quantified_type_node = QuantifierType::ALL;
+                    have_quantifier_comparison = true;
+                }
+                else if (ParserKeyword("SOME").ignore(pos, expected) && ParserSubquery().parse(pos, elem, expected))
+                {
+                    quantified_type_node = QuantifierType::SOME;
+                    have_quantifier_comparison = true;
+                }
+                else
+                {
+                    pos = old_pos;
+                }
             }
-            else if (allow_any_all_operators && ParserKeyword("ALL").ignore(pos, expected))
-            {
-                quantified_type_node = QuantifierType::ALL;
-                have_quantifier_comparison = true;
-            }
-            else if (allow_any_all_operators && ParserKeyword("SOME").ignore(pos, expected))
-            {
-                quantified_type_node = QuantifierType::SOME;
-                have_quantifier_comparison = true;
-            }
-            else if (!(remaining_elem_parser ? remaining_elem_parser : first_elem_parser)->parse(pos, elem, expected))
+
+            if (!have_quantifier_comparison && !(remaining_elem_parser ? remaining_elem_parser : first_elem_parser)->parse(pos, elem, expected))
                 return false;
 
-            if (allow_any_all_operators && have_quantifier_comparison && !ParserSubquery().parse(pos, elem, expected))
-                return false;
             ASTPtr escape_elem;
             bool has_escape_char = false;
 
@@ -315,9 +322,9 @@ bool ParserLeftAssociativeBinaryOperatorList::parseImpl(Pos & pos, ASTPtr & node
                 exp_list->children.push_back(node);
                 exp_list->children.push_back(elem);
 
-            if (has_escape_char && function->name.size() >= 4 && functionIsLikeOperator(function->name))
-            {
-                exp_list->children.push_back(escape_elem);
+                if (has_escape_char && function->name.size() >= 4 && functionIsLikeOperator(function->name))
+                {
+                    exp_list->children.push_back(escape_elem);
 
                 if (function->name == "like")
                     function->name = "escapeLike";
@@ -327,6 +334,10 @@ bool ParserLeftAssociativeBinaryOperatorList::parseImpl(Pos & pos, ASTPtr & node
                     function->name = "escapeILike";
                 else if (function->name == "notILike")
                     function->name = "escapeNotILike";
+                else if (function->name == "rlike")
+                    function->name = "escapeRLike";
+                else if (function->name == "regexp")
+                    function->name = "escapeRegexp";
             }
             /** special exception for the access operator to the element of the array `x[y]`, which
               * contains the infix part '[' and the suffix ''] '(specified as' [')

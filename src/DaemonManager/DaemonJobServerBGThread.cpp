@@ -209,7 +209,10 @@ std::map<String, UInt64> fetchServerStartTimes(Context & context, CnchTopologyMa
         String rpc_address = host_port.getRPCAddress();
         CnchServerClientPtr client_ptr = context.getCnchServerClientPool().get(host_port);
         if (!client_ptr)
+        {
+            LOG_WARNING(log, "Not able to connect to server with rpc address {}", rpc_address);
             continue;
+        }
 
         try
         {
@@ -218,7 +221,7 @@ std::map<String, UInt64> fetchServerStartTimes(Context & context, CnchTopologyMa
         }
         catch (...)
         {
-            LOG_INFO(log, "Failed to reach server: {}", rpc_address);
+            LOG_INFO(log, "Failed to reach server with rpc address: {}", rpc_address);
         }
     }
 
@@ -553,8 +556,12 @@ std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>> fetchBGThreadF
         {
             CnchServerClientPtr client_ptr = context.getCnchServerClientPool().get(server);
             if (!client_ptr)
+            {
+                LOG_ERROR(log, "Not able to connect to server with address {}", server);
                 return {};
+            }
             auto tasks = client_ptr->getBackGroundStatus(type);
+            LOG_DEBUG(log, "Get {} jobs from server with address {}", tasks.size(), server);
             for (const auto & task : tasks)
             {
                 StorageID storage_id = RPCHelpers::createStorageID(task.storage_id());
@@ -1039,10 +1046,14 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
     for (const auto & cnch_server : cnch_servers)
     {
         if (!cnch_server)
+        {
+            LOG_WARNING(log, "Not able to connect to server with address {}", cnch_server->getRPCAddress());
             continue;
+        }
 
         server_start_times[cnch_server->getRPCAddress()] = cnch_server->getServerStartTime();
         auto tasks = cnch_server->getBackGroundStatus(type);
+        LOG_DEBUG(log, "Get {} jobs from server with address {}", tasks.size(), cnch_server->getRPCAddress());
         for (const auto & task : tasks)
         {
             StorageID storage_id = RPCHelpers::createStorageID(task.storage_id());
@@ -1138,6 +1149,7 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Clustering, isCnchMergeTree>>("PART_CLUSTERING");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Consumer, isCnchKafka>>("CONSUMER");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::DedupWorker, isCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::ObjectSchemaAssemble, isCnchMergeTree>>("OBJECT_SCHEMA_ASSEMBLE");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::MaterializedMySQL, isMaterializedMySQL>>("MATERIALIZED_MYSQL");
 }
 

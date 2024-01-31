@@ -40,7 +40,7 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &/*result_type*/, size_t cnt) const override
     {
         // XXX: optimize function if to_base = from_base ^ n or from_base = to_base ^ n.
         auto from_base = arguments[1].column->getInt(0);
@@ -56,7 +56,7 @@ public:
 
         if (!isString(arguments[0].type))
         {
-            data_column = ConvertImplGenericToString::execute(arguments);
+            data_column = ConvertImplGenericToString<ColumnString>::execute(arguments, std::make_shared<DataTypeString>(), cnt);
         }
 
         for (size_t i = 0; i < data_column->size(); ++i)

@@ -220,6 +220,9 @@ struct NameQuantilesExactInclusive { static constexpr auto name = "quantilesExac
 struct NameQuantileExactWeighted { static constexpr auto name = "quantileExactWeighted"; };
 struct NameQuantilesExactWeighted { static constexpr auto name = "quantilesExactWeighted"; };
 
+struct NameQuantileInterpolatedWeighted { static constexpr auto name = "quantileInterpolatedWeighted"; };
+struct NameQuantilesInterpolatedWeighted { static constexpr auto name = "quantilesInterpolatedWeighted"; };
+
 struct NameQuantileTiming { static constexpr auto name = "quantileTiming"; };
 struct NameQuantileTimingWeighted { static constexpr auto name = "quantileTimingWeighted"; };
 struct NameQuantilesTiming { static constexpr auto name = "quantilesTiming"; };
@@ -233,4 +236,12 @@ struct NameQuantilesTDigestWeighted { static constexpr auto name = "quantilesTDi
 struct NameQuantileBFloat16 { static constexpr auto name = "quantileBFloat16"; };
 struct NameQuantilesBFloat16 { static constexpr auto name = "quantilesBFloat16"; };
 
+// quantileTDigestWithSSize: for compatible with vanilla
+struct NameQuantileTDigestWithSSize { static constexpr auto name = "quantileTDigestWithSSize"; };
+struct NameQuantileTDigestWithSSizeWeighted { static constexpr auto name = "quantileTDigestWithSSizeWeighted"; };
+struct NameQuantilesTDigestWithSSize { static constexpr auto name = "quantilesTDigestWithSSize"; };
+struct NameQuantilesTDigestWithSSizeWeighted { static constexpr auto name = "quantilesTDigestWithSSizeWeighted"; };
+
+struct NameQuantileBFloat16Weighted { static constexpr auto name = "quantileBFloat16Weighted"; };
+struct NameQuantilesBFloat16Weighted { static constexpr auto name = "quantilesBFloat16Weighted"; };
 }

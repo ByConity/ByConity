@@ -34,9 +34,9 @@ Projection
                            │                 │     Group by: {}
                            │                 │     Aggregates: expr#avg(c_acctbal):=AggNull(avg)(c_acctbal_1)
                            │                 └─ Filter
-                           │                    │     Condition: (c_acctbal_1 > '0.00') AND (substring(c_phone_1, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
+                           │                    │     Condition: (c_acctbal_1 > '0') AND (substring(c_phone_1, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
                            │                    └─ TableScan tpch1000.customer
-                           │                             Where: (c_acctbal > '0.00') AND (substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
+                           │                             Where: (c_acctbal > '0') AND (substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
                            │                             Outputs: c_phone_1:=c_phone, c_acctbal_1:=c_acctbal
                            └─ Projection
                               │     Expressions: [o_custkey], build_side_non_null_symbol:=1

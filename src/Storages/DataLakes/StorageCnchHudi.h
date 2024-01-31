@@ -1,8 +1,8 @@
 #pragma once
 #include "Common/config.h"
-#include "Storages/Hive/DirectoryLister.h"
 #if USE_HIVE
 
+#include "Storages/Hive/DirectoryLister.h"
 #include "Storages/Hive/StorageCnchHive.h"
 
 namespace DB

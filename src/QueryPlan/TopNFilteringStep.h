@@ -6,6 +6,18 @@
 namespace DB
 {
 
+ENUM_WITH_PROTO_CONVERTER(
+    TopNFilteringAlgorithm, // enum name
+    Protos::TopNFilteringAlgorithm, // proto enum message
+    // currently equivalent to 'SortAndLimit'
+    (Unspecified, 0),
+    // sort block and take the first n rows of a block
+    (SortAndLimit, 1),
+    // skip sorting if data has been sorted
+    (Limit, 2),
+    // not supported yet, use a heap to maintain the top n values, and access data only once
+    (Heap, 3));
+
 /// TopNFilteringStep filter out data which cannot be in the top N.
 ///
 /// A possible implementation can be:
@@ -16,7 +28,12 @@ namespace DB
 class TopNFilteringStep : public ITransformingStep
 {
 public:
-    TopNFilteringStep(const DataStream & input_stream_, SortDescription sort_description_, UInt64 size_, TopNModel model_);
+    TopNFilteringStep(
+        const DataStream & input_stream_,
+        SortDescription sort_description_,
+        UInt64 size_,
+        TopNModel model_,
+        TopNFilteringAlgorithm algorithm = TopNFilteringAlgorithm::Unspecified);
 
     String getName() const override { return "TopNFiltering"; }
     Type getType() const override { return Type::TopNFiltering; }
@@ -32,10 +49,20 @@ public:
     const SortDescription & getSortDescription() const { return sort_description; }
     UInt64 getSize() const { return size; }
     TopNModel getModel() const { return model; }
+    void setAlgorithm(TopNFilteringAlgorithm algorithm_)
+    {
+        algorithm = algorithm_;
+    }
+    TopNFilteringAlgorithm getAlgorithm() const
+    {
+        return algorithm;
+    }
+
 private:
     SortDescription sort_description;
     UInt64 size;
     TopNModel model;
+    TopNFilteringAlgorithm algorithm;
 };
 
 }

@@ -48,10 +48,12 @@ public:
     bool operator() (Array &) const;
     bool operator() (Tuple &) const;
     bool operator() (Map &) const;
-    bool operator() (ByteMap &) const;
     bool operator() (UUID &) const;
+    bool operator() (IPv4 &) const;
+    bool operator() (IPv6 &) const;
     bool operator() (AggregateFunctionStateData &) const;
     bool operator() (BitMap64 &) const;
+    bool operator() (Object &) const;
 
     template <typename T>
     bool operator() (DecimalField<T> & x) const

@@ -14,6 +14,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <ctype.h>
 #include <fcntl.h>
@@ -88,6 +89,10 @@ namespace ErrorCodes
     extern const int FILE_DOESNT_EXIST;
 }
 
+namespace
+{
+    const size_t disk_partition_wait_done_timeout_ms = 20000;
+}
 
 String DiskExchangeDataManagerOptions::toString() const
 {
@@ -193,7 +198,7 @@ void DiskExchangeDataManager::submitReadTask(
                     getCurrentExceptionMessage(false));
                 tryLogCurrentException(logger, msg);
                 if (!addr_cp.empty())
-                    reportError(query_id, addr, code, msg);
+                    reportError(task_cp->query_id, addr_cp, code, msg);
             }
 
             finishSenders(task_cp, code, msg);
@@ -337,8 +342,27 @@ void DiskExchangeDataManager::cleanup(uint64_t query_unique_id)
         if (rbegin != rend)
             std::transform(rbegin, rend, std::back_inserter(read_on_the_run), [](auto & iter) { return iter.second; });
     }
+    bool wait_failed = false;
     for (auto & writer : write_on_the_run)
-        writer->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled by cleanup");
+    {
+        auto status = writer->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled by cleanup");
+        if (status.code != BroadcastStatusCode::SEND_CANCELLED)
+            LOG_WARNING(logger, "key:{} finish status.code:{} status.message:{}", *writer->getKey(), status.code, status.message);
+    }
+    try
+    {
+        UInt64 timeout_ms = time_in_milliseconds(std::chrono::system_clock::now()) + disk_partition_wait_done_timeout_ms;
+        for (auto & writer : write_on_the_run)
+        {
+            auto curr = time_in_milliseconds(std::chrono::system_clock::now());
+            writer->waitDone(curr < timeout_ms ? timeout_ms - curr : 0); /// might throw
+        }
+    }
+    catch (...)
+    {
+        wait_failed = true;
+        tryLogCurrentException(logger, fmt::format("wait for disk_partition_writer done failed for query_unique_id:{}", query_unique_id));
+    }
     {
         /// wbegin and wend is recalculated, as other tasks might have modified the iterator, same for rbegin and rend below
         std::unique_lock<bthread::Mutex> lock(mutex);
@@ -358,7 +382,7 @@ void DiskExchangeDataManager::cleanup(uint64_t query_unique_id)
     }
     bool removed = false;
     auto disk_cp = disk; // copied to avoid disk being release during execution
-    if (!is_shutdown.load(std::memory_order_acquire) && disk_cp->exists(file_path))
+    if (!wait_failed && !is_shutdown.load(std::memory_order_acquire) && disk_cp->exists(file_path))
     {
         removed = true;
         disk_cp->removeRecursive(file_path);
@@ -488,6 +512,7 @@ void DiskExchangeDataManager::gc()
         result_holders.push_back(std::move(holder));
     }
 
+    std::unordered_map<uint64_t, size_t> cnts;
     for (const auto & holder : result_holders)
     {
         try
@@ -499,10 +524,15 @@ void DiskExchangeDataManager::gc()
                     fmt::format("wait for heart beat response failed, error text:{}", holder.cntl->ErrorText()));
             for (const auto & not_alive_query : holder.response->not_alive_queries())
             {
-                Protos::AliveQueryInfo elm;
-                elm.set_query_unique_id(not_alive_query.query_unique_id());
-                elm.set_query_id(not_alive_query.query_id());
-                not_alive_queries.push_back(std::move(elm));
+                auto & cnt = cnts[not_alive_query.query_unique_id()];
+                cnt += 1;
+                if (cnt == result_holders.size())
+                {
+                    Protos::AliveQueryInfo elm;
+                    elm.set_query_unique_id(not_alive_query.query_unique_id());
+                    elm.set_query_id(not_alive_query.query_id());
+                    not_alive_queries.push_back(std::move(elm));
+                }
             }
         }
         catch (...)
@@ -621,7 +651,7 @@ String DiskExchangeDataManager::getFileName(const ExchangeDataKey & key) const
     return file_path;
 }
 
-std::vector<std::unique_ptr<ReadBufferFromFileBase>> DiskExchangeDataManager::filterFileBuffers(const ExchangeDataKey & key) const
+std::vector<std::unique_ptr<ReadBufferFromFileBase>> DiskExchangeDataManager::readFiles(const ExchangeDataKey & key) const
 {
     std::vector<String> file_names;
     auto file_path = path / std::to_string(key.query_unique_id);
@@ -674,10 +704,10 @@ void DiskExchangeDataManager::createWriteTaskDirectory(UInt64 query_unique_id, c
     }
 }
 
-Processors DiskExchangeDataManager::createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context) const
+Processors DiskExchangeDataManager::createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context)
 {
     auto key = sender->getDataKey();
-    auto source = std::make_shared<DiskExchangeDataSource>(header, filterFileBuffers(*key));
+    auto source = std::make_shared<DiskExchangeDataSource>(header, key, query_context);
     String name = BroadcastExchangeSink::generateName(key->exchange_id);
     ExchangeOptions exchange_options = ExchangeUtils::getExchangeOptions(query_context);
     auto sink = std::make_shared<BroadcastExchangeSink>(

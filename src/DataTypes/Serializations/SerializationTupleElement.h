@@ -21,11 +21,13 @@ public:
     const String & getElementName() const { return name; }
 
     void enumerateStreams(
+        EnumerateStreamsSettings & settings,
         const StreamCallback & callback,
-        SubstreamPath & path) const override;
+        const SubstreamData & data) const override;
 
     void serializeBinaryBulkStatePrefix(
-         SerializeBinaryBulkSettings & settings,
+        const IColumn & column,
+        SerializeBinaryBulkSettings & settings,
         SerializeBinaryBulkStatePtr & state) const override;
 
     void serializeBinaryBulkStateSuffix(

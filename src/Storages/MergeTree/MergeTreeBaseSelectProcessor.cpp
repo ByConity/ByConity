@@ -24,15 +24,18 @@
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Storages/MergeTree/Index/MergeTreeBitmapIndexReader.h>
+#include <QueryPlan/ReadFromMergeTree.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
 #include <Common/escapeForFileName.h>
+#include <Storages/SelectQueryInfo.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/MapHelpers.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -49,25 +52,16 @@ namespace ErrorCodes
 MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     Block header,
     const MergeTreeMetaBase & storage_,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     const SelectQueryInfo & query_info_,
-    ExpressionActionsSettings actions_settings,
-    UInt64 max_block_size_rows_,
-    UInt64 preferred_block_size_bytes_,
-    UInt64 preferred_max_column_in_block_size_bytes_,
-    const MergeTreeReaderSettings & reader_settings_,
-    bool use_uncompressed_cache_,
+    const MergeTreeStreamSettings & stream_settings_,
     const Names & virt_column_names_)
     : SourceWithProgress(transformHeader(std::move(header), getPrewhereInfo(query_info_), storage_.getPartitionValueType(), virt_column_names_, getIndexContext(query_info_), query_info_.read_bitmap_index))
     , storage(storage_)
-    , metadata_snapshot(metadata_snapshot_)
+    , storage_snapshot(storage_snapshot_)
     , prewhere_info(getPrewhereInfo(query_info_))
     , index_context(getIndexContext(query_info_))
-    , max_block_size_rows(max_block_size_rows_)
-    , preferred_block_size_bytes(preferred_block_size_bytes_)
-    , preferred_max_column_in_block_size_bytes(preferred_max_column_in_block_size_bytes_)
-    , reader_settings(reader_settings_)
-    , use_uncompressed_cache(use_uncompressed_cache_)
+    , stream_settings(stream_settings_)
     , virt_column_names(virt_column_names_)
     , partition_value_type(storage.getPartitionValueType())
 {
@@ -81,12 +75,12 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     {
         prewhere_actions = std::make_unique<PrewhereExprInfo>();
         if (prewhere_info->alias_actions)
-            prewhere_actions->alias_actions = std::make_shared<ExpressionActions>(prewhere_info->alias_actions, actions_settings);
+            prewhere_actions->alias_actions = std::make_shared<ExpressionActions>(prewhere_info->alias_actions, stream_settings.actions_settings);
 
         if (prewhere_info->row_level_filter)
-            prewhere_actions->row_level_filter = std::make_shared<ExpressionActions>(prewhere_info->row_level_filter, actions_settings);
+            prewhere_actions->row_level_filter = std::make_shared<ExpressionActions>(prewhere_info->row_level_filter, stream_settings.actions_settings);
 
-        prewhere_actions->prewhere_actions = std::make_shared<ExpressionActions>(prewhere_info->prewhere_actions, actions_settings);
+        prewhere_actions->prewhere_actions = std::make_shared<ExpressionActions>(prewhere_info->prewhere_actions, stream_settings.actions_settings);
 
         prewhere_actions->row_level_column_name = prewhere_info->row_level_column_name;
         prewhere_actions->prewhere_column_name = prewhere_info->prewhere_column_name;
@@ -133,7 +127,7 @@ Chunk MergeTreeBaseSelectProcessor::generate()
 
 void MergeTreeBaseSelectProcessor::initializeRangeReaders(MergeTreeReadTask & current_task)
 {
-    size_t filtered_ratio_to_use_skip_read = reader_settings.read_settings.filtered_ratio_to_use_skip_read;
+    size_t filtered_ratio_to_use_skip_read = stream_settings.reader_settings.read_settings.filtered_ratio_to_use_skip_read;
     if (prewhere_info)
     {
         if (reader->getColumns().empty() && !reader->hasBitmapIndexReader())
@@ -163,7 +157,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
     const IMergeTreeReader::ValueSizeMap & avg_value_size_hints,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback)
 {
-    if (use_uncompressed_cache)    
+    if (stream_settings.use_uncompressed_cache)
         owned_uncompressed_cache = storage.getContext()->getUncompressedCache();
 
     owned_mark_cache = storage.getContext()->getMarkCache();
@@ -201,11 +195,11 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
 
     reader = task->data_part->getReader(
         task->task_columns.columns,
-        metadata_snapshot,
+        storage_snapshot->metadata,
         mark_ranges,
         owned_uncompressed_cache.get(),
         owned_mark_cache.get(),
-        reader_settings,
+        stream_settings.reader_settings,
         index_executor.get(),
         avg_value_size_hints,
         profile_callback,
@@ -215,12 +209,12 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
     {
         if (!task->task_columns.bitmap_index_pre_columns.empty())
         {
-            pre_index_executor = prewhere_info->index_context ? 
+            pre_index_executor = prewhere_info->index_context ?
                 prewhere_info->index_context->getIndexExecutor(
                     task->data_part,
                     task->data_part->index_granularity,
                     storage.getSettings()->bitmap_index_segment_granularity,
-                    storage.getSettings()->bitmap_index_serializing_granularity, 
+                    storage.getSettings()->bitmap_index_serializing_granularity,
                     mark_ranges) : nullptr;
             if (pre_index_executor && pre_index_executor->valid())
                 pre_index_executor->initReader(MergeTreeIndexInfo::Type::BITMAP, task->task_columns.bitmap_index_pre_columns);
@@ -240,11 +234,11 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
 
         pre_reader = task->data_part->getReader(
             task->task_columns.pre_columns,
-            metadata_snapshot,
+            storage_snapshot->metadata,
             mark_ranges,
             owned_uncompressed_cache.get(),
             owned_mark_cache.get(),
-            reader_settings,
+            stream_settings.reader_settings,
             pre_index_executor.get(),
             avg_value_size_hints,
             profile_callback,
@@ -272,9 +266,9 @@ Chunk MergeTreeBaseSelectProcessor::readFromPartImpl()
     if (task->size_predictor)
         task->size_predictor->startBlock();
 
-    const UInt64 current_max_block_size_rows = max_block_size_rows;
-    const UInt64 current_preferred_block_size_bytes = preferred_block_size_bytes;
-    const UInt64 current_preferred_max_column_in_block_size_bytes = preferred_max_column_in_block_size_bytes;
+    const UInt64 current_max_block_size_rows = stream_settings.max_block_size;
+    const UInt64 current_preferred_block_size_bytes = stream_settings.preferred_block_size_bytes;
+    const UInt64 current_preferred_max_column_in_block_size_bytes = stream_settings.preferred_max_column_in_block_size_bytes;
     const MergeTreeIndexGranularity & index_granularity = task->data_part->index_granularity;
     const double min_filtration_ratio = 0.00001;
 

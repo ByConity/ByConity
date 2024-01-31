@@ -241,7 +241,7 @@ ASTPtr IdentifierToColumnReference::visitASTIdentifier(ASTPtr & node, Void &)
 {
     const auto & iden = node->as<ASTIdentifier &>();
     const auto & columns = storage_metadata->getColumns();
-    if (columns.hasColumnOrSubcolumn(ColumnsDescription::AllPhysical, iden.name()))
+    if (columns.hasColumnOrSubcolumn(GetColumnsOptions::AllPhysical, iden.name()))
         return std::make_shared<ASTTableColumnReference>(storage, unique_id, iden.name());
     return node;
 }

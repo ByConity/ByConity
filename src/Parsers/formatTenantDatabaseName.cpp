@@ -1,6 +1,7 @@
 #include <optional>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/SystemLog.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Common/CurrentThread.h>
 
@@ -53,7 +54,8 @@ String getCurrentCatalog()
     return empty_result;
 }
 
-static String internal_databases[] = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::TEMPORARY_DATABASE, "default"};
+static String internal_databases[]
+    = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::INFORMATION_SCHEMA, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, DatabaseCatalog::TEMPORARY_DATABASE, CNCH_SYSTEM_LOG_DB_NAME, "default"};
 
 static bool isInternalDatabaseName(const String & database_name)
 {

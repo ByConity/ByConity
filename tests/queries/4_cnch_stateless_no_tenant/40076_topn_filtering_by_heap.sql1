@@ -1,0 +1,102 @@
+-- this test can be enabled when test tag is supported, since single-node cluster and 2-nodes cluster give different result
+SET enable_optimizer = 1, enable_create_topn_filtering_for_aggregating = 1, topn_filtering_algorithm_for_unsorted_stream = 'Heap';
+SET max_threads=1, exchange_source_pipeline_threads=1;
+
+DROP TABLE IF EXISTS t40076_tf_by_heap;
+
+CREATE TABLE t40076_tf_by_heap
+(
+    r Int32,
+    a Int32,
+    b Nullable(Int32)
+) ENGINE = CnchMergeTree ORDER BY r
+SETTINGS index_granularity = 1024;
+
+INSERT INTO t40076_tf_by_heap
+SELECT
+    rand(1) AS r,
+    number % 100 AS a,
+    (intDiv(number, 100) = 0 ? NULL : intDiv(number, 100)) AS b
+FROM numbers(100000);
+
+-- { echo }
+-- test order by single column
+EXPLAIN PIPELINE SELECT a, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a
+ORDER BY a ASC
+LIMIT 10;
+
+SELECT a, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a
+ORDER BY a ASC
+LIMIT 10;
+
+SELECT a, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a
+ORDER BY a DESC
+LIMIT 10;
+
+-- test nulls direction
+EXPLAIN PIPELINE SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b DESC NULLS FIRST
+LIMIT 10;
+
+SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b DESC NULLS FIRST
+LIMIT 10;
+
+SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b DESC NULLS LAST
+LIMIT 10;
+
+SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b ASC NULLS FIRST
+LIMIT 10;
+
+SELECT b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY b
+ORDER BY b ASC NULLS LAST
+LIMIT 10;
+
+-- test order by multiple columns
+EXPLAIN PIPELINE SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a ASC, b ASC NULLS FIRST
+LIMIT 10;
+
+SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a ASC, b ASC NULLS FIRST
+LIMIT 10;
+
+SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a ASC, b DESC NULLS LAST
+LIMIT 10;
+
+SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a DESC, b ASC NULLS LAST
+LIMIT 10;
+
+SELECT a, b, count() as cnt
+FROM t40076_tf_by_heap
+GROUP BY a, b
+ORDER BY a DESC, b DESC NULLS FIRST
+LIMIT 10;

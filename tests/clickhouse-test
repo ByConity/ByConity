@@ -867,6 +867,7 @@ class BuildFlags():
     DATABASE_ORDINARY = 'database-ordinary'
     POLYMORPHIC_PARTS = 'polymorphic-parts'
     DATABASE_REPLICATED = 'database-replicated'
+    S3 = 's3'
 
 
 def collect_build_flags(client):
@@ -990,6 +991,9 @@ def main(args):
     build_flags = collect_build_flags(args.client)
     if args.replicated_database:
         build_flags.append(BuildFlags.DATABASE_REPLICATED)
+
+    if args.s3:
+        build_flags.append(BuildFlags.S3)
 
     if args.use_skip_list:
         tests_to_skip_from_list = collect_tests_to_skip(args.skip_list_path, build_flags)
@@ -1322,6 +1326,7 @@ if __name__ == '__main__':
     group.add_argument('--no-shard', action='store_false', default=None, dest='shard', help='Do not run shard related tests')
     parser.add_argument('--run', required=False, default=None, nargs='+', help='name of suites to be executed')
     parser.add_argument('--locate-asan-error-to-case', action='store_true', default=False,help='enable check asan erorr after each case finishs, no -j')
+    parser.add_argument('--s3', required=False, action='store_true', help='Only run tests for S3 environment')
 
     args = parser.parse_args()
 

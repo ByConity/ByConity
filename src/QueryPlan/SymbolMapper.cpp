@@ -350,6 +350,12 @@ ArrayJoinActionPtr SymbolMapper::map(const ArrayJoinActionPtr & array_join_actio
         array_join_action->function_builder);
 }
 
+SortDescription SymbolMapper::map(const SortDescription & sort_desc)
+{
+    SortDescription res;
+    std::transform(sort_desc.begin(), sort_desc.end(), std::back_inserter(res), [this](const auto & param) { return this->map(param); });
+    return res;
+}
 
 std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
 {
@@ -628,7 +634,8 @@ std::shared_ptr<TopNFilteringStep> SymbolMapper::map(const TopNFilteringStep & t
         map(topn_filter.getInputStreams()[0]),
         SortDescription{topn_filter.getSortDescription()},
         topn_filter.getSize(),
-        topn_filter.getModel());
+        topn_filter.getModel(),
+        topn_filter.getAlgorithm());
 }
 
 

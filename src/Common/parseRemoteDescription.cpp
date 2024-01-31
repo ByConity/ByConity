@@ -1,4 +1,6 @@
 #include "parseRemoteDescription.h"
+#include <Common/parseAddress.h>
+#include <Common/HostWithPorts.h>
 #include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
 #include <IO/WriteHelpers.h>
@@ -187,7 +189,9 @@ std::vector<std::pair<String, uint16_t>> parseRemoteDescriptionForExternalDataba
         }
         else
         {
-            result.emplace_back(removeBracketsIfIpv6(address.substr(0, colon)), DB::parseFromString<UInt16>(address.substr(colon + 1)));
+            /// support both ipv4 and ipv6 format
+            auto [remote_host_name, remote_port] = parseAddress(address, default_port);
+            result.emplace_back(std::make_pair(removeBracketsIfIpv6(remote_host_name), remote_port));
         }
     }
 

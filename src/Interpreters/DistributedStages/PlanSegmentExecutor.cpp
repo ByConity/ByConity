@@ -65,8 +65,8 @@
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include "Interpreters/Context_fwd.h"
-#include "Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h"
+#include <Interpreters/Context_fwd.h>
+#include <Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h>
 
 namespace ProfileEvents
 {
@@ -86,19 +86,20 @@ namespace ErrorCodes
 
 void PlanSegmentExecutor::prepareSegmentInfo() const
 {
-    query_log_element->client_info = plan_segment->getContext()->getClientInfo();
+    query_log_element->client_info = context->getClientInfo();
     query_log_element->segment_id = plan_segment->getPlanSegmentId();
     query_log_element->segment_parallel = plan_segment->getParallelSize();
-    query_log_element->segment_parallel_index = plan_segment->getParallelIndex();
+    query_log_element->segment_parallel_index = plan_segment_instance->info.parallel_id;
     query_log_element->type = QueryLogElementType::QUERY_START;
     query_log_element->event_time = time(nullptr);
     query_log_element->query_start_time = time(nullptr);
 }
 
-PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_)
+PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_)
     : context(std::move(context_))
-    , plan_segment(std::move(plan_segment_))
-    , plan_segment_outputs(plan_segment->getPlanSegmentOutputs())
+    , plan_segment_instance(std::move(plan_segment_instance_))
+    , plan_segment(plan_segment_instance->plan_segment.get())
+    , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
     , query_log_element(std::make_unique<QueryLogElement>())
 {
@@ -106,10 +107,11 @@ PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMu
     prepareSegmentInfo();
 }
 
-PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_)
+PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_, ExchangeOptions options_)
     : context(std::move(context_))
-    , plan_segment(std::move(plan_segment_))
-    , plan_segment_outputs(plan_segment->getPlanSegmentOutputs())
+    , plan_segment_instance(std::move(plan_segment_instance_))
+    , plan_segment(plan_segment_instance->plan_segment.get())
+    , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
     , options(std::move(options_))
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
     , query_log_element(std::make_unique<QueryLogElement>())
@@ -151,7 +153,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
 
         runtime_segment_status.query_id = plan_segment->getQueryId();
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
-        runtime_segment_status.parallel_index = plan_segment->getParallelIndex();
+        runtime_segment_status.parallel_index = plan_segment_instance->info.parallel_id;
         runtime_segment_status.is_succeed = true;
         runtime_segment_status.is_cancelled = false;
         runtime_segment_status.code = 0;
@@ -170,10 +172,10 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         query_log_element->exception_code = exception_code;
         query_log_element->stack_trace = exception_message;
 
-        const auto & host = extractExchangeStatusHostPort(plan_segment->getCurrentAddress());
+        const auto & host = extractExchangeHostPort(plan_segment_instance->info.execution_address);
         runtime_segment_status.query_id = plan_segment->getQueryId();
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
-        runtime_segment_status.parallel_index = plan_segment->getParallelIndex();
+        runtime_segment_status.parallel_index = plan_segment_instance->info.parallel_id;
         runtime_segment_status.is_succeed = false;
         runtime_segment_status.is_cancelled = false;
         runtime_segment_status.code = exception_code;
@@ -321,6 +323,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         runtime_segment_status.metrics.cpu_micros = CurrentThread::getGroup()->performance_counters[ProfileEvents::SystemTimeMicroseconds]
                 + CurrentThread::getGroup()->performance_counters[ProfileEvents::UserTimeMicroseconds];
     }
+    GraphvizPrinter::printPipeline(pipeline_executor->getProcessors(), pipeline_executor->getExecutingGraph(), context, plan_segment->getPlanSegmentId(), extractExchangeHostPort(plan_segment_instance->info.execution_address));
     for (const auto & sender : senders)
     {
         sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
@@ -354,7 +357,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     {
         query_log_element->segment_profiles = std::make_shared<std::vector<String>>();
         query_log_element->segment_profiles->emplace_back(
-            PlanSegmentDescription::getPlanSegmentDescription(plan_segment, true)
+            PlanSegmentDescription::getPlanSegmentDescription(plan_segment_instance->plan_segment, true)
                 ->jsonPlanSegmentDescriptionAsString(collectStepRuntimeProfiles(plan_segment->getPlanSegmentId(), pipeline)));
     }
 
@@ -373,7 +376,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 }
 
 static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(ContextMutablePtr& context)
-{   
+{
     QueryPlanOptimizationSettings settings = QueryPlanOptimizationSettings::fromContext(context);
     if(!settings.enable_optimizer)
     {
@@ -386,7 +389,8 @@ static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(ContextM
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 {
     QueryPipelinePtr pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        buildOptimizationSettingsWithCheck(context), BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context));
+        buildOptimizationSettingsWithCheck(context),
+        BuildQueryPipelineSettings::fromPlanSegment(plan_segment, plan_segment_instance->info, context));
     registerAllExchangeReceivers(*pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
     return pipeline;
 }
@@ -405,7 +409,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
     /// need to create directory in bsp_mode before submitting write task
     if (settings.bsp_mode)
     {
-        auto coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
+        auto coordinator_address = extractExchangeHostPort(plan_segment->getCoordinatorAddress());
         disk_exchange_mgr->createWriteTaskDirectory(current_tx_id, plan_segment->getQueryId(), coordinator_address);
     }
 
@@ -441,7 +445,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
             BroadcastSenderPtr sender;
             if (settings.bsp_mode)
             {
-                data_key->parallel_index = plan_segment->getParallelIndex();
+                data_key->parallel_index = plan_segment_instance->info.parallel_id;
                 auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key);
                 disk_exchange_mgr->submitWriteTask(writer, thread_group);
                 sender = writer;
@@ -460,7 +464,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
 
     pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
         buildOptimizationSettingsWithCheck(context),
-        BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context)
+        BuildQueryPipelineSettings::fromPlanSegment(plan_segment, plan_segment_instance->info, context)
     );
 
     pipeline->setTotalsPortToMainPortTransform();
@@ -848,7 +852,7 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
     {
         if (!options.need_send_plan_segment_status)
             return;
-        auto address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
+        auto address = extractExchangeHostPort(plan_segment->getCoordinatorAddress());
 
         std::shared_ptr<RpcClient> rpc_client
             = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
@@ -866,7 +870,7 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
         request.set_message(status.message);
         if (!sender_metrics.bytes_sent.empty())
         {
-            plan_segment->getCurrentAddress().toProto(*request.mutable_sender_metrics()->mutable_address());
+            plan_segment_instance->info.execution_address.toProto(*request.mutable_sender_metrics()->mutable_address());
             for (const auto & cur_plan_segment_output : plan_segment_outputs)
             {
                 size_t exchange_parallel_size = cur_plan_segment_output->getExchangeParallelSize();

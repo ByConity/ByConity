@@ -343,15 +343,15 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
         {
             auto is_server = context->getServerType() == ServerType::cnch_server;
             CnchServerClientPtr server_client;
-            if (const auto & client_info = context->getClientInfo(); client_info.rpc_port)
-            {
-                /// case: "insert select/infile" forward to worker | manipulation task | cnch system log flush | ingestion from kafka | etc
-                server_client = context->getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port);
-            }
-            else if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(context->getCurrentTransaction()); worker_txn)
+            if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(context->getCurrentTransaction()); worker_txn && worker_txn->tryGetServerClient())
             {
                 /// case: client submits INSERTs directly to worker
                 server_client = worker_txn->getServerClient();
+            }
+            else if (const auto & client_info = context->getClientInfo(); client_info.rpc_port)
+            {
+                /// case: "insert select/infile" forward to worker | manipulation task | cnch system log flush | ingestion from kafka | etc
+                server_client = context->getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port);
             }
             else
             {
@@ -654,11 +654,12 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
         fillPartModel(storage, *staged_part, new_part_model);
         new_part_model.mutable_part_info()->set_mutation(txn_id);
         new_part_model.set_txnid(txn_id);
-        new_part_model.clear_commit_time();
         new_part_model.set_delete_flag(false);
         new_part_model.set_staging_txn_id(staged_part->info.mutation);
         // storage may not have part columns info (CloudMergeTree), so set columns/columns_commit_time manually
         auto new_part = createPartFromModelCommon(storage, new_part_model);
+        /// Attention: commit time has been force set in createPartFromModelCommon method, we must clear commit time here. Otherwise, it will be visible event if the txn rollback.
+        new_part->commit_time = IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME;
         new_part->setColumnsPtr(std::make_shared<NamesAndTypesList>(staged_part->getColumns()));
         new_part->columns_commit_time = staged_part->columns_commit_time;
 
@@ -747,9 +748,8 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
 UUID CnchDataWriter::newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
 {
     UUID random_id = UUIDHelpers::generateV4();
-    PairInt64 random_id_pair = UUIDHelpers::UUIDToPairInt64(random_id);
-    UInt64& random_id_low = random_id_pair.low;
-    UInt64& random_id_high = random_id_pair.high;
+    UInt64& random_id_low = UUIDHelpers::getHighBytes(random_id);
+    UInt64& random_id_high = UUIDHelpers::getLowBytes(random_id);
     boost::hash_combine(random_id_low, part_info.min_block);
     boost::hash_combine(random_id_high, part_info.max_block);
     boost::hash_combine(random_id_low, part_info.mutation);

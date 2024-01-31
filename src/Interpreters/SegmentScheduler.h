@@ -58,7 +58,7 @@ using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
 // <query_id, <segment_id, set of segment's received status for each instance >>
 using RuntimeSegmentsStatusCounter = std::unordered_map<size_t, std::unordered_set<UInt64>>;
 // <query_id, <segment_id, status>>
-using SegmentStatusMap = std::map<String, std::map<size_t, RuntimeSegmentsStatusPtr>>;
+using SegmentStatusMap = std::unordered_map<String, std::unordered_map<size_t, RuntimeSegmentsStatusPtr>>;
 using BspSchedulerMap = std::unordered_map<String, std::shared_ptr<BSPScheduler>>;
 enum class OverflowMode;
 

@@ -2,7 +2,7 @@
 #include <Storages/IngestColumnCnch/IngestColumnHelper.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/StorageCloudMergeTree.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <common/range.h>
 
 namespace DB
@@ -482,7 +482,7 @@ void writeBlock(
             {
                 if (!map_implicit_columns.count(map_col->name))
                 {
-                    const auto & map_col_type = typeid_cast<const DataTypeByteMap &>(*(map_col->type));
+                    const auto & map_col_type = typeid_cast<const DataTypeMap &>(*(map_col->type));
                     map_implicit_columns.insert(
                         std::make_pair(map_col->name,
                             MapImplicitColumnData{
@@ -491,7 +491,7 @@ void writeBlock(
                                 map_col_type.getKeyType()}));
                 }
 
-                const String map_key = getMapKey(map_col->name, col_with_type_name.name);
+                const String map_key = parseKeyNameFromImplicitColName(col_with_type_name.name, map_col->name);
                 map_implicit_columns.at(map_col->name).src_value_columns.insert(
                     std::make_pair(map_key, col_with_type_name.column->filter(filter, 0)));
             }
@@ -573,7 +573,7 @@ MutableColumnPtr combineMapImplicitColumns(const DataTypePtr & key_data_type,
     MutableColumnPtr res_column = target_data_type->createColumn();
     for (size_t row_idx = 0; row_idx < rows; ++row_idx)
     {
-        ByteMap map;
+        Map map;
         std::for_each(src_value_columns.begin(),
             src_value_columns.end(),
             [& map, row_idx, & key_data_type] (const std::pair<String, ColumnPtr> & source_col)

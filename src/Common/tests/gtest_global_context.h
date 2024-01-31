@@ -26,6 +26,7 @@
 #include <Interpreters/Context.h>
 #include <Poco/SAX/InputSource.h>
 #include <Poco/Util/XMLConfiguration.h>
+#include <Poco/Util/MapConfiguration.h>
 #include <Common/time.h>
 
 // May update the config if need.
@@ -101,6 +102,8 @@ struct ContextHolder
 
         DB::DatabasePtr database = std::make_shared<DB::DatabaseMemory>("test_database", context);
         DB::DatabaseCatalog::instance().attachDatabase("test_database", database);
+        DB::ConfigurationPtr config_ptr = new Poco::Util::MapConfiguration;
+        context->setConfig(config_ptr);
     }
 
     void resetStoragePolicy() const {

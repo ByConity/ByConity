@@ -21,6 +21,7 @@ public:
     PredicateExpressionsOptimizer(ContextPtr context_, const TablesWithColumns & tables_with_columns_, const Settings & settings_);
 
     bool optimize(ASTSelectQuery & select_query);
+    bool tryMovePredicatesFromHavingToWhere(ASTSelectQuery & select_query);
 
 private:
     const bool enable_optimize_predicate_expression;
@@ -34,8 +35,6 @@ private:
 
     bool tryRewritePredicatesToTable(
         ASTPtr & table_element, const ASTs & table_predicates, const TableWithColumnNamesAndTypes & table_columns) const;
-
-    bool tryMovePredicatesFromHavingToWhere(ASTSelectQuery & select_query);
 };
 
 }

@@ -50,6 +50,7 @@ void TableFunctionCnchHive::parseArguments(const ASTPtr & ast_function_, Context
         hive_table_name,
         StorageInMemoryMetadata{},
         context_,
+        nullptr,
         hive_settings);
 
     storage->startup();

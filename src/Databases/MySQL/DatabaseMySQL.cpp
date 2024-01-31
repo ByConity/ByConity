@@ -281,16 +281,29 @@ std::map<String, UInt64> DatabaseMySQL::fetchTablesWithModificationTime(ContextP
 
     std::map<String, UInt64> tables_with_modification_time;
     StreamSettings mysql_input_stream_settings(local_context->getSettingsRef());
-    MySQLBlockInputStream result(mysql_pool.get(), query.str(), tables_status_sample_block, mysql_input_stream_settings);
-
-    while (Block block = result.read())
+    try
     {
-        size_t rows = block.rows();
-        for (size_t index = 0; index < rows; ++index)
+        MySQLBlockInputStream result(mysql_pool.get(), query.str(), tables_status_sample_block, mysql_input_stream_settings);
+
+        while (Block block = result.read())
         {
-            String table_name = (*block.getByPosition(0).column)[index].safeGet<String>();
-            tables_with_modification_time[table_name] = (*block.getByPosition(1).column)[index].safeGet<UInt64>();
+            size_t rows = block.rows();
+            for (size_t index = 0; index < rows; ++index)
+            {
+                String table_name = (*block.getByPosition(0).column)[index].safeGet<String>();
+                tables_with_modification_time[table_name] = (*block.getByPosition(1).column)[index].safeGet<UInt64>();
+            }
         }
+    }
+    catch (...)
+    {
+        /// Handle exception when fetchTablesWithModificationTime for Database MySQL, currently known code:
+        ///     POCO_EXCEPTION: for connection error
+        tryLogCurrentException(
+            &Poco::Logger::get("DatabaseMySQL(" + database_name + ")"),
+            "Call to fetchTablesWithModificationTime wasn't finished successfully");
+        if (local_context->getSettingsRef().throw_exception_when_mysql_connection_failed)
+            throw;
     }
 
     return tables_with_modification_time;

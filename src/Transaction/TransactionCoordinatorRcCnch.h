@@ -133,10 +133,8 @@ public:
 
     // create proxy transaction
     // used when forward query to other server (or worker)
-    ProxyTransactionPtr createProxyTransaction(
-        const HostWithPorts & host_ports,
-        TxnTimestamp primary_txn_id = {0}
-    );
+    ProxyTransactionPtr createProxyTransaction(const HostWithPorts & host_ports, TxnTimestamp primary_txn_id,
+        bool read_only);
 
     TransactionCnchPtr getTransaction(const TxnTimestamp & txn_id) const;
     bool isActiveTransaction(const TxnTimestamp & txn_id) const;

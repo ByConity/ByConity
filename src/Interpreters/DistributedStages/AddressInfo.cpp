@@ -26,8 +26,13 @@ AddressInfo::AddressInfo(const String &host_name_, UInt16 port_, const String &u
 AddressInfo::AddressInfo(const String &host_name_, UInt16 port_, const String &user_, const String &password_, UInt16 exchange_port_)
         : host_name(host_name_), port(port_), user(user_), password(password_), exchange_port(exchange_port_) {}
 
-AddressInfo::AddressInfo(const String &host_name_, UInt16 port_, const String &user_, const String &password_, UInt16 exchange_port_, UInt16 exchange_status_port_)
-        : host_name(host_name_), port(port_), user(user_), password(password_), exchange_port(exchange_port_), exchange_status_port(exchange_status_port_) {}
+AddressInfo::AddressInfo(const Protos::AddressInfo & proto) : host_name(proto.host_name()), port(proto.port()), exchange_port(proto.exchange_port())
+{
+    if (proto.has_user())
+        user = proto.user();
+    if (proto.has_password())
+        password = proto.password();
+}
 
 void AddressInfo::serialize(WriteBuffer &buf) const
 {
@@ -37,7 +42,6 @@ void AddressInfo::serialize(WriteBuffer &buf) const
     writeBinary(user, buf);
     writeBinary(password, buf);
     writeBinary(exchange_port, buf);
-    writeBinary(exchange_status_port, buf);
 }
 
 void AddressInfo::deserialize(ReadBuffer &buf)
@@ -48,7 +52,6 @@ void AddressInfo::deserialize(ReadBuffer &buf)
     readBinary(user, buf);
     readBinary(password, buf);
     readBinary(exchange_port, buf);
-    readBinary(exchange_status_port, buf);
 }
 
 void AddressInfo::toProto(Protos::AddressInfo & proto) const
@@ -58,7 +61,6 @@ void AddressInfo::toProto(Protos::AddressInfo & proto) const
     proto.set_user(user);
     proto.set_password(password);
     proto.set_exchange_port(exchange_port);
-    proto.set_exchange_status_port(exchange_status_port);
 }
 
 void AddressInfo::fillFromProto(const Protos::AddressInfo & proto)
@@ -68,33 +70,13 @@ void AddressInfo::fillFromProto(const Protos::AddressInfo & proto)
     user = proto.user();
     password = proto.password();
     exchange_port = proto.exchange_port();
-    exchange_status_port = proto.exchange_status_port();
 }
 
-std::vector<String> extractHostPorts(const AddressInfos &addresses)
+
+String AddressInfo::toString() const
 {
-    std::vector<String> ret;
-    for (const auto & address : addresses)
-        ret.emplace_back(createHostPortString(address.getHostName(), toString(address.getPort())));
-    return ret;
+    return fmt::format("host_name: {}, port: {}, exchange_port: {} user: {}", host_name, port, exchange_port, user);
 }
-
-std::vector<String> extractExchangeHostPorts(const AddressInfos & addresses)
-{
-    std::vector<String> ret;
-    for (const auto & address : addresses)
-        ret.emplace_back(createHostPortString(address.getHostName(), toString(address.getExchangePort())));
-    return ret;
-}
-
-std::vector<String> extractExchangeStatusHostPorts(const AddressInfos & addresses)
-{
-    std::vector<String> ret;
-    for (const auto & address : addresses)
-        ret.emplace_back(createHostPortString(address.getHostName(), toString(address.getExchangeStatusPort())));
-    return ret;
-}
-
 
 }
 

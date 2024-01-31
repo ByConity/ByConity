@@ -328,6 +328,20 @@ void AccessControlManager::addStoragesFromUserDirectoriesConfig(
     }
 }
 
+void AccessControlManager::setUpFromMainConfig(const Poco::Util::AbstractConfiguration & config_, const String & config_path_,
+                                        const zkutil::GetZooKeeper & get_zookeeper_function_)
+{
+    if (config_.has("custom_settings_prefixes"))
+        setCustomSettingsPrefixes(config_.getString("custom_settings_prefixes"));
+   
+    /// Optional improvements in access control system.
+    /// The default values are false because we need to be compatible with earlier access configurations
+    setSelectFromSystemDatabaseRequiresGrant(config_.getBool("access_control_improvements.select_from_system_db_requires_grant", false));
+    setSelectFromInformationSchemaRequiresGrant(config_.getBool("access_control_improvements.select_from_information_schema_requires_grant", false));
+
+    addStoragesFromMainConfig(config_, config_path_, get_zookeeper_function_);
+}
+
 
 void AccessControlManager::addStoragesFromMainConfig(
     const Poco::Util::AbstractConfiguration & config,
@@ -472,9 +486,10 @@ std::shared_ptr<const EnabledSettings> AccessControlManager::getEnabledSettings(
     return settings_profiles_cache->getEnabledSettings(user_id, settings_from_user, enabled_roles, settings_from_enabled_roles);
 }
 
-std::shared_ptr<const SettingsChanges> AccessControlManager::getProfileSettings(const String & profile_name) const
+
+std::shared_ptr<const SettingsProfilesInfo> AccessControlManager::getSettingsProfileInfo(const UUID & profile_id)
 {
-    return settings_profiles_cache->getProfileSettings(profile_name);
+    return settings_profiles_cache->getSettingsProfileInfo(profile_id);
 }
 
 const ExternalAuthenticators & AccessControlManager::getExternalAuthenticators() const

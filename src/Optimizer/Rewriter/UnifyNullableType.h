@@ -17,6 +17,7 @@
 
 #include <Interpreters/Context.h>
 #include <Optimizer/Rewriter/Rewriter.h>
+#include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 
 namespace DB
@@ -62,6 +63,7 @@ public:
     PlanNodePtr visitLimitNode(LimitNode &, Void &) override;
     PlanNodePtr visitEnforceSingleRowNode(EnforceSingleRowNode &, Void &) override;
     PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode &, Void &) override;
+    PlanNodePtr visitCTERefNode(CTERefNode &, Void &) override;
 };
 
 }

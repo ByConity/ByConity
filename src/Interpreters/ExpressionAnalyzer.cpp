@@ -67,6 +67,12 @@
 
 #include <Dictionaries/DictionaryStructure.h>
 
+#include <Common/checkStackSize.h>
+#include <Common/typeid_cast.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Interpreters/ActionsDAG.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
+#include <Parsers/IAST_fwd.h>
 #include <Core/NamesAndTypes.h>
 #include <common/logger_useful.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -105,6 +111,21 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int UNKNOWN_IDENTIFIER;
     extern const int UNKNOWN_TYPE_OF_AST_NODE;
+}
+
+static ASTPtr createPredicateFromArrays(const std::vector<ASTPtr> & exprs)
+{
+    if (exprs.empty()) return nullptr;
+    if (exprs.size() == 1) return exprs[0];
+    auto function = std::make_shared<ASTFunction>();
+
+    function->name = "and";
+    function->arguments = std::make_shared<ASTExpressionList>();
+    function->children.push_back(function->arguments);
+    for (const auto & expr : exprs)
+        function->arguments->children.push_back(expr);
+
+    return function;
 }
 
 namespace
@@ -150,6 +171,49 @@ bool sanitizeBlock(Block & block, bool throw_if_cannot_create_column)
             col.column = col.column->cloneEmpty();
     }
     return true;
+}
+
+void collectColumnsForDefaultEvaluation(const String & column_name, const ColumnsDescription & storage_columns, NameSet & required_for_default)
+{
+    checkStackSize();
+    const auto column_default = storage_columns.getDefault(column_name);
+    if (!column_default)
+        return;
+        /// collect identifiers required for evaluation
+    IdentifierNameSet identifiers;
+    column_default->expression->collectIdentifierNames(identifiers);
+    required_for_default.insert(identifiers.begin(), identifiers.end());
+    for (const auto & identifier : identifiers)
+    {
+        collectColumnsForDefaultEvaluation(identifier, storage_columns, required_for_default);
+    }
+}
+
+void sanitizeDataType(const DataTypePtr & type)
+{
+    if (!type)
+        throw Exception("Invalid null type for filter:, must be UInt8 or Nullable(UInt8)",
+                    ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+
+    if (type->getTypeId() == TypeIndex::Nullable)
+    {
+        const auto * nullable = dynamic_cast<const DataTypeNullable *>(type.get());
+        sanitizeDataType(nullable->getNestedType());
+        return;
+    }
+
+    if (type->getTypeId() == TypeIndex::LowCardinality)
+    {
+        const auto * lc = dynamic_cast<const DataTypeLowCardinality *>(type.get());
+        sanitizeDataType(lc->getDictionaryType());
+        return;
+    }
+
+    if(type->getTypeId() == TypeIndex::UInt8)
+        return;
+
+    throw Exception("Invalid type for filter: " + type->getName() + ", must be UInt8 or Nullable(UInt8)",
+                    ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER); 
 }
 
 ExpressionAnalyzerData::~ExpressionAnalyzerData() = default;
@@ -392,21 +456,25 @@ void ExpressionAnalyzer::analyzeAggregation()
                         if (!node)
                             throw Exception("Unknown identifier (in GROUP BY): " + column_name, ErrorCodes::UNKNOWN_IDENTIFIER);
 
-                        /// Constant expressions have non-null column pointer at this stage.
-                        if (node->column && isColumnConst(*node->column))
+                        /// Only removes constant keys if it's an initiator.
+                        if (getContext()->getClientInfo().distributed_depth == 0)
                         {
-                            select_query->group_by_with_constant_keys = true;
-
-                            /// But don't remove last key column if no aggregate functions, otherwise aggregation will not work.
-                            if (!aggregate_descriptions.empty() || size > 1)
+                            /// Constant expressions have non-null column pointer at this stage.
+                            if (node->column && isColumnConst(*node->column))
                             {
-                                if (i + 1 < static_cast<ssize_t>(size))
-                                    group_asts[i] = std::move(group_asts.back());
+                                select_query->group_by_with_constant_keys = true;
 
-                                group_asts.pop_back();
+                                /// But don't remove last key column if no aggregate functions, otherwise aggregation will not work.
+                                if (!aggregate_descriptions.empty() || size > 1)
+                                {
+                                    if (i + 1 < static_cast<ssize_t>(size))
+                                        group_asts[i] = std::move(group_asts.back());
 
-                                --i;
-                                continue;
+                                    group_asts.pop_back();
+
+                                    --i;
+                                    continue;
+                                }
                             }
                         }
 
@@ -548,6 +616,16 @@ void ExpressionAnalyzer::checkSample(ASTPtr & ast, std::map<String, size_t> & sa
         checkSample(child, sampled_table);
 }
 
+bool ExpressionAnalyzer::hasByteMapColumn() const
+{
+    for (auto & col : sourceColumns())
+    {
+        if (col.type->isByteMap())
+            return true;
+    }
+    return false;
+}
+
 void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables(bool do_global)
 {
     if (do_global && !getContext()->getSettingsRef().distributed_perfect_shard)
@@ -675,6 +753,16 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_makeset_for_
         false /* build_expression_with_window_functions */,
         index_context,
         metadata_snapshot);
+    ActionsVisitor(visitor_data, log.stream()).visit(ast);
+    actions = visitor_data.getActions();
+}
+
+void ExpressionAnalyzer::getRootActionsWithOwnBitmapInfo(const ASTPtr & ast, bool no_subqueries, ActionsDAGPtr & actions, MergeTreeIndexContextPtr & own_index_context, bool only_consts)
+{
+    LogAST log;
+    ActionsVisitor::Data visitor_data(getContext(), settings.size_limits_for_set, subquery_depth,
+                                   sourceColumns(), std::move(actions), prepared_sets, subqueries_for_sets,
+                                   no_subqueries, false, only_consts, !isRemoteStorage(), getAggregationKeysInfo(), false, own_index_context);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
@@ -1367,6 +1455,85 @@ SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bo
     return prewhere_actions;
 }
 
+ActionsDAGPtr SelectQueryExpressionAnalyzer::appendMaterializeStep(ExpressionActionsChain & chain, const ASTPtr & predicate, bool only_types, const Names & additional_required_columns)
+{
+    Names first_action_names;
+    if (!chain.steps.empty())
+        first_action_names = chain.steps.front()->getRequiredColumns().getNames();
+
+    auto & step = chain.lastStep(columns_after_bitmap_index);
+    getRootActions(predicate, only_types, step.actions());
+    String filter_column_name = predicate->getColumnName();
+    step.addRequiredOutput(filter_column_name);
+
+    ActionsDAGPtr filter_actions;
+    {
+        /// Remove unused source_columns from actions.
+        auto tmp_actions_dag = std::make_shared<ActionsDAG>(columns_after_bitmap_index);
+        getRootActions(predicate, only_types, tmp_actions_dag);
+        tmp_actions_dag->removeUnusedActions(NameSet{filter_column_name});
+
+        auto required_columns = tmp_actions_dag->getRequiredColumnsNames();
+        NameSet required_source_columns(required_columns.begin(), required_columns.end());
+        required_source_columns.insert(first_action_names.begin(), first_action_names.end());
+
+        /// Add required columns to required output in order not to remove them after prewhere execution.
+        /// TODO: add sampling and final execution to common chain.
+        for (const auto & column : additional_required_columns)
+        {
+            if (required_source_columns.count(column))
+                step.addRequiredOutput(column);
+        }
+
+        auto names = step.actions()->getNames();
+        NameSet name_set(names.begin(), names.end());
+
+        for (const auto & column : columns_after_bitmap_index)
+            if (required_source_columns.count(column.name) == 0)
+                name_set.erase(column.name);
+
+        Names required_output(name_set.begin(), name_set.end());
+        filter_actions = chain.getLastActions();
+        filter_actions->removeUnusedActions(required_output);
+    }
+
+    {
+        /// Add empty action with input = {filter actions output} + {unused source columns}
+        /// Reasons:
+        /// 1. Remove remove source columns which are used only in prewhere actions during prewhere actions execution.
+        ///    Example: select A prewhere B > 0. B can be removed at prewhere step.
+        /// 2. Store side columns which were calculated during prewhere actions execution if they are used.
+        ///    Example: select F(A) prewhere F(A) > 0. F(A) can be saved from prewhere step.
+        /// 3. Check if we can remove filter column at prewhere step. If we can, action will store single REMOVE_COLUMN.
+        ColumnsWithTypeAndName columns = filter_actions->getResultColumns();
+        auto required_columns = filter_actions->getRequiredColumns();
+        NameSet input_names;
+        NameSet unused_source_columns;
+
+        for (const auto & col : required_columns)
+            input_names.insert(col.name);
+
+        for (const auto & column : columns_after_bitmap_index)
+        {
+            if (input_names.count(column.name) == 0)
+            {
+                columns.emplace_back(column.type, column.name);
+                unused_source_columns.emplace(column.name);
+            }
+        }
+
+        chain.steps.emplace_back(std::make_unique<ExpressionActionsChain::ExpressionActionsStep>(
+            std::make_shared<ActionsDAG>(std::move(columns))));
+        chain.steps.back()->additional_input = std::move(unused_source_columns);
+        chain.getLastActions();
+        chain.addStep();
+    }
+
+    // fmt::print("Chain after adding em step: \n{}\n", chain.dumpChain());
+
+    return filter_actions;
+}
+
 bool SelectQueryExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, bool only_types)
 {
     const auto * select_query = getSelectQuery();
@@ -1823,13 +1990,14 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::simpleSelectActions()
 }
 
 ExpressionAnalysisResult::ExpressionAnalysisResult(
-    SelectQueryExpressionAnalyzer & query_analyzer,
-    const StorageMetadataPtr & metadata_snapshot,
-    bool first_stage_,
-    bool second_stage_,
-    bool only_types,
-    const FilterDAGInfoPtr & filter_info_,
-    const Block & source_header)
+        SelectQueryExpressionAnalyzer & query_analyzer,
+        const StorageMetadataPtr & metadata_snapshot,
+        bool first_stage_,
+        bool second_stage_,
+        bool only_types,
+        const FilterDAGInfoPtr & filter_info_,
+        const Block & source_header,
+        const std::vector<ASTPtr> & additional_predicates)
     : first_stage(first_stage_)
     , second_stage(second_stage_)
     , need_aggregate(query_analyzer.hasAggregation())
@@ -1871,6 +2039,8 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             finalized = true;
         }
 
+        // fmt::print("After finallize ---------- \n{}\n", chain.dumpChain());
+
         chain.clear();
     };
 
@@ -1878,6 +2048,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
     {
         query_analyzer.makeSetsForIndex(query.where());
         query_analyzer.makeSetsForIndex(query.prewhere());
+        query_analyzer.makeSetsForIndex(createPredicateFromArrays(additional_predicates));
     }
 
     {
@@ -1921,6 +2092,56 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                     /// If the filter column is a constant, record it.
                     if (column_elem.column)
                         prewhere_constant_filter_description = ConstantFilterDescription(*column_elem.column);
+                }
+            }
+        }
+
+        if (!additional_predicates.empty())
+        {
+            /// Collect columns needed for default evaluation
+            const auto & source_columns = query_analyzer.sourceColumns();
+            NameSet columns_for_default;
+            for (const auto & col : source_columns)
+                collectColumnsForDefaultEvaluation(col.name, metadata_snapshot->getColumns(), columns_for_default);
+
+            additional_required_columns_after_prewhere.insert(additional_required_columns_after_prewhere.end(), columns_for_default.begin(), columns_for_default.end());
+            Block sample = source_header;
+            ASTPtr current_ast = nullptr;
+            for (auto it = additional_predicates.rbegin(); it != additional_predicates.rend(); ++it)
+            {
+                const auto & predicate = *it;
+                /// Collect bitmap index on predicate first, at the same time generate the standalone action
+                /// for current predicate
+                auto tmp_actions = std::make_shared<ActionsDAG>(query_analyzer.sourceColumns());
+                auto own_index_context = std::make_shared<MergeTreeIndexContext>();
+                query_analyzer.getRootActionsWithOwnBitmapInfo(predicate, !first_stage, tmp_actions, own_index_context);
+                /// Santinizer the filter colums
+                const auto & node = tmp_actions->findInIndex(predicate->getColumnName());
+                sanitizeDataType(node.result_type);
+                /// Generate actions for `accumulated predicates`
+                current_ast = current_ast ? makeASTFunction("and", predicate, std::move(current_ast)) : predicate;
+                auto actions = query_analyzer.appendMaterializeStep(chain, current_ast, !first_stage, additional_required_columns_after_prewhere);
+
+                atomic_predicates.emplace_front(std::make_shared<AtomicPredicate>());
+                atomic_predicates.front()->predicate_actions = actions;
+                atomic_predicates.front()->filter_column_name = current_ast->getColumnName();
+                if (own_index_context->has(MergeTreeIndexInfo::Type::BITMAP))
+                    atomic_predicates.front()->index_context = std::move(own_index_context);
+
+                /// Constant folding if possible
+                if (actions && allowEarlyConstantFolding(*actions, settings))
+                {
+                    if (sanitizeBlock(sample))
+                    {
+                        ExpressionActions(
+                            actions, ExpressionActionsSettings::fromSettings(context->getSettingsRef())).execute(sample);
+                    }
+                    auto & column_elem = sample.getByName(predicate->getColumnName());
+                    /// If the filter column is a constant, record it.
+                    if (column_elem.column)
+                    {
+                        em_constant_filter_description = ConstantFilterDescription(*column_elem.column);
+                    }
                 }
             }
         }
@@ -2141,6 +2362,26 @@ void ExpressionAnalysisResult::finalize(const ExpressionActionsChain & chain, si
                 columns_to_remove.insert(name);
         }
 
+        columns_to_remove_after_prewhere = std::move(columns_to_remove);
+    }
+
+    if (!atomic_predicates.empty())
+    {
+        size_t step_id = 0;
+        NameSet columns_to_remove;
+        for (int i = static_cast<int>(atomic_predicates.size()) - 1; i >= 0; --i, step_id += 2)
+        {
+            const ExpressionActionsChain::Step & step = *chain.steps.at(step_id);
+            atomic_predicates[i]->predicate_actions->projectInput(false);
+
+            for (const auto & [name, can_remove] : step.required_output)
+            {
+                if (name == atomic_predicates[i]->filter_column_name)
+                    atomic_predicates[i]->remove_filter_column = can_remove;
+                else if (can_remove)
+                    columns_to_remove.insert(name);
+            } 
+        }
         columns_to_remove_after_prewhere = std::move(columns_to_remove);
     }
 

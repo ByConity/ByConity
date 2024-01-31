@@ -210,6 +210,21 @@ public:
     {
         throw Exception("Method hasEqualValues is not supported for ColumnUnique.", ErrorCodes::NOT_IMPLEMENTED);
     }
+
+    double getRatioOfDefaultRows(double) const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'getRatioOfDefaultRows' not implemented for ColumnUnique");
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'getNumberOfDefaultRows' not implemented for ColumnUnique");
+    }
+
+    void getIndicesOfNonDefaultRows(IColumn::Offsets &, size_t, size_t) const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'getIndicesOfNonDefaultRows' not implemented for ColumnUnique");
+    }
 };
 
 using ColumnUniquePtr = IColumnUnique::ColumnUniquePtr;

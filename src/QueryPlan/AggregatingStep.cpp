@@ -53,15 +53,21 @@ bool hasNonParallelAggregateFunctions(const AggregateDescriptions & aggregates)
     for (const auto & agg: aggregates)
     {
         auto agg_name = agg.function->getName();
-        if (startsWith(agg_name, "finderFunnel") ||
-            startsWith(agg_name, "finderGroupFunnel") ||
-            startsWith(agg_name, "pathSplit") ||
-            startsWith(agg_name, "pathCount") ||
-            startsWith(agg_name, "retention") ||
-            startsWith(agg_name, "attributionAnalysis") ||
+        // if (startsWith(agg_name, "finderFunnel") ||
+        //     startsWith(agg_name, "finderGroupFunnel") ||
+        //     startsWith(agg_name, "pathSplit") ||
+        //     startsWith(agg_name, "pathCount") ||
+        //     startsWith(agg_name, "retention") ||
+        //     startsWith(agg_name, "attributionAnalysis") ||
+        //     startsWith(agg_name, "attributionCorrelation") ||
+        //     startsWith(agg_name, "funnelRep") ||
+        //     agg_name == "sessionAnalysis" ||
+        //     agg_name == "vSessionAnalysis")
+        //     return true;
+
+        if (startsWith(agg_name, "pathCount") ||
             startsWith(agg_name, "attributionCorrelation") ||
-            agg_name == "sessionAnalysis" ||
-            agg_name == "vSessionAnalysis")
+            startsWith(agg_name, "funnelRep"))
             return true;
     }
 
@@ -540,7 +546,9 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                     if (missign_column_index < missing_columns.size() && missing_columns[missign_column_index] == i)
                     {
                         ++missign_column_index;
-                        auto column = ColumnConst::create(col.column->cloneResized(1), 0);
+                        auto column_with_default = col.column->cloneEmpty();
+                        col.type->insertDefaultInto(*column_with_default);
+                        auto column = ColumnConst::create(std::move(column_with_default), 0);
                         const auto * node = &dag->addColumn({ColumnPtr(std::move(column)), col.type, col.name});
                         node = &dag->materializeNode(*node);
                         index.push_back(node);

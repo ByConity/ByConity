@@ -1,9 +1,11 @@
 #include <common/map.h>
 #include <common/range.h>
 #include <DataTypes/Serializations/SerializationTuple.h>
+#include <DataTypes/Serializations/SerializationInfoTuple.h>
 #include <Core/Field.h>
 #include <Columns/ColumnTuple.h>
 #include <Common/assert_cast.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
@@ -281,10 +283,24 @@ void SerializationTuple::deserializeTextCSV(IColumn & column, ReadBuffer & istr,
     });
 }
 
-void SerializationTuple::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+void SerializationTuple::enumerateStreams(
+    EnumerateStreamsSettings & settings,
+    const StreamCallback & callback,
+    const SubstreamData & data) const
 {
-    for (const auto & elem : elems)
-        elem->enumerateStreams(callback, path);
+    const auto * type_tuple = data.type ? &assert_cast<const DataTypeTuple &>(*data.type) : nullptr;
+    const auto * column_tuple = data.column ? &assert_cast<const ColumnTuple &>(*data.column) : nullptr;
+    const auto * info_tuple = data.serialization_info ? &assert_cast<const SerializationInfoTuple &>(*data.serialization_info) : nullptr;
+
+    for (size_t i = 0; i < elems.size(); ++i)
+    {
+        auto next_data = SubstreamData(elems[i])
+            .withType(type_tuple ? type_tuple->getElement(i) : nullptr)
+            .withColumn(column_tuple ? column_tuple->getColumnPtr(i) : nullptr)
+            .withSerializationInfo(info_tuple ? info_tuple->getElementInfo(i) : nullptr);
+
+        elems[i]->enumerateStreams(settings, callback, next_data);
+    }
 }
 
 struct SerializeBinaryBulkStateTuple : public ISerialization::SerializeBinaryBulkState
@@ -332,6 +348,7 @@ static DeserializeBinaryBulkStateTuple * checkAndGetTupleDeserializeState(ISeria
 }
 
 void SerializationTuple::serializeBinaryBulkStatePrefix(
+    const IColumn & column,
     SerializeBinaryBulkSettings & settings,
     SerializeBinaryBulkStatePtr & state) const
 {
@@ -339,7 +356,7 @@ void SerializationTuple::serializeBinaryBulkStatePrefix(
     tuple_state->states.resize(elems.size());
 
     for (size_t i = 0; i < elems.size(); ++i)
-        elems[i]->serializeBinaryBulkStatePrefix(settings, tuple_state->states[i]);
+        elems[i]->serializeBinaryBulkStatePrefix(extractElementColumn(column, i), settings, tuple_state->states[i]);
 
     state = std::move(tuple_state);
 }

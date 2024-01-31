@@ -53,6 +53,8 @@ void registerInputFormatProcessorAvro(FormatFactory & factory);
 void registerOutputFormatProcessorAvro(FormatFactory & factory);
 void registerInputFormatProcessorRawBLOB(FormatFactory & factory);
 void registerOutputFormatProcessorRawBLOB(FormatFactory & factory);
+void registerInputFormatCapnProto(FormatFactory & factory);
+void registerOutputFormatCapnProto(FormatFactory & factory);
 
 /// Output only (presentational) formats.
 
@@ -77,7 +79,6 @@ void registerOutputFormatProcessorPostgreSQLWire(FormatFactory & factory);
 void registerInputFormatProcessorRegexp(FormatFactory & factory);
 void registerInputFormatProcessorJSONAsString(FormatFactory & factory);
 void registerInputFormatProcessorLineAsString(FormatFactory & factory);
-void registerInputFormatProcessorCapnProto(FormatFactory & factory);
 
 
 void registerFormats()
@@ -149,9 +150,8 @@ void registerFormats()
     registerInputFormatProcessorJSONAsString(factory);
     registerInputFormatProcessorLineAsString(factory);
 
-#if !defined(ARCADIA_BUILD)
-    registerInputFormatProcessorCapnProto(factory);
-#endif
+    registerInputFormatCapnProto(factory);
+    registerOutputFormatCapnProto(factory);
 }
 
 }

@@ -27,6 +27,7 @@
 #include <Common/Config/ConfigReloader.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Common/DNSResolver.h>
+#include <Core/ServerUUID.h>
 #include <Interpreters/DNSCacheUpdater.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Net/TCPServerParams.h>
@@ -369,6 +370,7 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
     }
 
     std::string include_from_path = config().getString("include_from", "/etc/metrika.xml");
+    DB::ServerUUID::load(path + "/uuid", log);
 
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 100));
 

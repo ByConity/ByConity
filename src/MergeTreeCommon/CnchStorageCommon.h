@@ -20,7 +20,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <Storages/BitEngine/BitEngineHelper.h>
 #include <Storages/DataPart_fwd.h>
 #include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <Transaction/Actions/DDLAlterAction.h>
@@ -69,6 +68,23 @@ enum class CNCHStorageMediumType
 
 String toStr(CNCHStorageMediumType tp);
 CNCHStorageMediumType fromStr(const String & type_str);
+
+enum class WorkerEngineType : uint8_t
+{
+    CLOUD,
+    DICT,
+};
+
+inline static String toString(WorkerEngineType type)
+{
+    switch (type)
+    {
+        case WorkerEngineType::CLOUD:
+            return "Cloud";
+        case WorkerEngineType::DICT:
+            return "DictCloud";
+    }
+}
 
 class CnchStorageCommonHelper
 {

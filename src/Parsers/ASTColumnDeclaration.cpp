@@ -115,6 +115,11 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "KV"  << (settings.hilite ? hilite_none : "");
     }
 
+    if (flags & TYPE_MAP_BYTE_STORE_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BYTE"  << (settings.hilite ? hilite_none : "");
+    }
+
     if (flags & TYPE_BITENGINE_ENCODE_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BitEngineEncode"  << (settings.hilite ? hilite_none : "");

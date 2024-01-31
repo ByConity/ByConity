@@ -26,6 +26,7 @@
 #include <Columns/IColumn.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+#include <Common/PODArray.h>
 
 
 namespace DB
@@ -207,6 +208,7 @@ public:
     }
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
+
     ColumnPtr replicate(const Offsets & offsets) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     ColumnPtr index(const IColumn & indexes, size_t limit) const override;
@@ -253,9 +255,15 @@ public:
         data->getExtremes(min, max);
     }
 
-    void forEachSubcolumn(ColumnCallback callback) override
+   void forEachSubcolumn(MutableColumnCallback callback) override
     {
         callback(data);
+    }
+
+    void forEachSubcolumnRecursively(ColumnCallback callback) override
+    {
+        callback(data);
+        data->forEachSubcolumnRecursively(callback);
     }
 
     bool structureEquals(const IColumn & rhs) const override
@@ -263,6 +271,27 @@ public:
         if (auto rhs_concrete = typeid_cast<const ColumnConst *>(&rhs))
             return data->structureEquals(*rhs_concrete->data);
         return false;
+    }
+
+    double getRatioOfDefaultRows(double) const override
+    {
+        return data->isDefaultAt(0) ? 1.0 : 0.0;
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return data->isDefaultAt(0) ? s : 0;
+    }
+
+    void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override
+    {
+        if (!data->isDefaultAt(0))
+        {
+            size_t to = limit && from + limit < size() ? from + limit : size();
+            indices.reserve(indices.size() + to - from);
+            for (size_t i = from; i < to; ++i)
+                indices.push_back(i);
+        }
     }
 
     bool isNullable() const override { return isColumnNullable(*data); }

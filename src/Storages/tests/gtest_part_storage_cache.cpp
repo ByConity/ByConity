@@ -2,6 +2,7 @@
 #include <thread>
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <Protos/DataModelHelpers.h>
+#include <Storages/CnchStorageCache.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <gtest/gtest.h>
@@ -51,11 +52,13 @@ Protos::DataModelPartVector createPartBatch(const String & partition_id, size_t 
     return res;
 }
 
-DataModelPartPtrVector createPartsBatch(const String & partition_id, size_t count) {
-    DataModelPartPtrVector ret;
+DataModelPartWithNameVector createPartsBatch(const String & partition_id, size_t count) {
+    DataModelPartWithNameVector ret;
     for (size_t i = 0; i< count; i++) {
         DataModelPartPtr part_model = createPart(partition_id, i, i, 0);
-        ret.emplace_back(part_model);
+        auto part_info = createPartInfoFromModel(part_model->part_info());
+        String part_name = part_info->getPartName();
+        ret.emplace_back(std::make_shared<DataModelPartWithName>(std::move(part_name), std::move(part_model)));
     }
     return ret;
 }
@@ -216,7 +219,7 @@ TEST_F(CacheManagerTest, GetPartsFromCache)
     (*it_p2)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartPtrVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
         load_from_func = true;
         return {};
     };
@@ -345,7 +348,7 @@ TEST_F(CacheManagerTest, getAndSetStatus) {
     (*it_p0)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartPtrVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
         load_from_func = true;
         return {};
     };
@@ -400,7 +403,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
     (*it_p0)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartPtrVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
         load_from_func = true;
         return {};
     };
@@ -420,7 +423,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
     current_topology_version = PairInt64{2, 1};
     cache_manager->mayUpdateTableMeta(*storage, current_topology_version);
 
-    auto new_load_func = [&](const Strings &, const Strings &) -> DataModelPartPtrVector {
+    auto new_load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
         load_from_func = true;
         return CacheTestMock::createPartsBatch("1000", 10);
     };
@@ -472,7 +475,7 @@ TEST_F(CacheManagerTest, DelayTest) {
 
 
     tds.emplace_back([cache_manager, storage, current_topology_version] {
-        auto load_func = [](const Strings &, const Strings &) -> DataModelPartPtrVector {
+        auto load_func = [](const Strings &, const Strings &) -> DataModelPartWithNameVector {
             std::this_thread::sleep_for(100ms);
             throw Poco::Exception("");
         };
@@ -486,7 +489,7 @@ TEST_F(CacheManagerTest, DelayTest) {
 
     tds.emplace_back([cache_manager, storage, current_topology_version] {
         std::this_thread::sleep_for(50ms);
-        auto load_func = [](const Strings &, const Strings &) -> DataModelPartPtrVector {
+        auto load_func = [](const Strings &, const Strings &) -> DataModelPartWithNameVector {
             std::this_thread::sleep_for(100ms);
             return CacheTestMock::createPartsBatch("1000", 10);
         };
@@ -532,4 +535,46 @@ TEST_F(CacheManagerTest, AsyncReset) {
     EXPECT_EQ(cache_manager->getAllActiveTables().size(), 0);
 
     cache_manager->shutDown();
+}
+
+TEST_F(CacheManagerTest, RawStorageCacheRenameTest)
+{
+    // init storage cache
+    auto context = getContext().context;
+    CnchStorageCachePtr storageCachePtr = std::make_shared<CnchStorageCache>(1000);
+
+    String create_query_1 = "create table db_test.test UUID '00000000-0000-0000-0000-000000000001' (id Int32) ENGINE=CnchMergeTree order by id";
+    String create_query_2 = "create table db_test.test UUID '00000000-0000-0000-0000-000000000002' (id Int32) ENGINE=CnchMergeTree order by id";
+
+    StoragePtr storage1 = CacheTestMock::createTable(create_query_1, context);
+    StoragePtr storage2 = CacheTestMock::createTable(create_query_2, context);
+    StoragePtr get_by_name = nullptr, get_by_uuid = nullptr;
+
+    // test insert into storage cache and get
+    storageCachePtr->insert(storage1->getStorageID(), TxnTimestamp{UInt64{1}}, storage1);
+    get_by_name = storageCachePtr->get("db_test", "test");
+    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
+    EXPECT_NE(get_by_name, nullptr);
+    EXPECT_NE(get_by_uuid, nullptr);
+    EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
+    EXPECT_EQ(get_by_uuid->getStorageID().database_name, "db_test");
+    EXPECT_EQ(get_by_uuid->getStorageID().table_name, "test");
+
+    // test insert storage with different uuid but the same table name (mock rename).
+    storageCachePtr->insert(storage2->getStorageID(), TxnTimestamp{UInt64{2}}, storage2);
+    get_by_name = storageCachePtr->get("db_test", "test");
+    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
+    EXPECT_NE(get_by_name, nullptr);
+    EXPECT_NE(get_by_uuid, nullptr);
+    EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
+    EXPECT_EQ(get_by_uuid->getStorageID().database_name, "db_test");
+    EXPECT_EQ(get_by_uuid->getStorageID().table_name, "test");
+
+    // test insert old storage again. should fail to update cache.
+    storageCachePtr->insert(storage1->getStorageID(), TxnTimestamp{UInt64{1}}, storage1);
+    get_by_name = storageCachePtr->get("db_test", "test");
+    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
+    EXPECT_EQ(get_by_uuid, nullptr);
+    EXPECT_NE(get_by_name, nullptr);
+    EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
 }

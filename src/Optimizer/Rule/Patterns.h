@@ -89,11 +89,20 @@ public:
         return with(std::move(sub_patterns));
     }
 
+    template <typename... T>
+    PatternBuilder & oneOf(const T &... sub_builders)
+    {
+        PatternPtrs sub_patterns;
+        ((sub_patterns.emplace_back(sub_builders.result())), ...);
+        return oneOf(std::move(sub_patterns));
+    }
+
 private:
     PatternBuilder & withSingle(PatternPtr sub_pattern);
     PatternBuilder & withAny(PatternPtr sub_pattern);
     PatternBuilder & withAll(PatternPtr sub_pattern);
     PatternBuilder & with(PatternPtrs sub_patterns);
+    PatternBuilder & oneOf(PatternPtrs sub_patterns);
 
     mutable PatternPtr current;
 };
@@ -133,6 +142,14 @@ inline PatternBuilder cte() { return typeOf(IQueryPlanStep::Type::CTERef); }
 PatternBuilder topN();
 inline PatternBuilder topNFiltering() { return typeOf(IQueryPlanStep::Type::TopNFiltering); }
 inline PatternBuilder explainAnalyze() { return typeOf(IQueryPlanStep::Type::ExplainAnalyze); }
+
+template <typename... T>
+PatternBuilder oneOf(const T &... sub_builders)
+{
+    PatternPtrs sub_patterns;
+    ((sub_patterns.emplace_back(sub_builders.result())), ...);
+    return PatternBuilder(std::make_unique<OneOfPattern>(std::move(sub_patterns)));
+}
 
 // miscellaneous
 inline PatternPredicate predicateNot(const PatternPredicate & predicate)

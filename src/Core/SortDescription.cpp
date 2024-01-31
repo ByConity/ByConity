@@ -136,4 +136,20 @@ JSONBuilder::ItemPtr explainSortDescription(const SortDescription & description,
 
     return json_array;
 }
+
+bool SortDescription::hasPrefix(const SortDescription & prefix) const
+{
+    if (prefix.empty())
+        return true;
+
+    if (prefix.size() > size())
+        return false;
+
+    for (size_t i = 0; i < prefix.size(); ++i)
+    {
+        if ((*this)[i] != prefix[i])
+            return false;
+    }
+    return true;
+}
 }

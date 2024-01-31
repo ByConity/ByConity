@@ -193,7 +193,7 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(boo
     {
         LOG_TRACE(log, "recalculateOrSnapshotPartitionsMetrics {}, force: {}", UUIDHelpers::UUIDToString(table_uuid), force);
 
-        if (meta_ptr->loading_metrics || meta_ptr->partition_metrics_loaded)
+        if (meta_ptr->loading_metrics || !meta_ptr->partition_metrics_loaded)
             continue;
 
         /// To avoid starvation of tasks, we need to wait indefinitely.

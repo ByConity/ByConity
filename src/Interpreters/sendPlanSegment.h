@@ -10,15 +10,16 @@
 namespace DB
 {
 
-AddressInfo getLocalAddress(ContextPtr & query_context);
+AddressInfo getLocalAddress(const Context & query_context);
 AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_context);
 
-void sendPlanSegmentToLocal(PlanSegment * plan_segment_ptr, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr);
-void sendPlanSegmentToRemote(
-    AddressInfo & addressinfo,
-    ContextPtr query_context,
+void sendPlanSegmentToAddress(
+    const AddressInfo & addressinfo,
     PlanSegment * plan_segment_ptr,
+    PlanSegmentExecutionInfo & execution_info,
+    ContextPtr query_context,
     std::shared_ptr<DAGGraph> dag_graph_ptr,
-    const WorkerId & worker_id);
+    std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr = nullptr,
+    const WorkerId & worker_id = WorkerId{});
 
 } // namespace DB

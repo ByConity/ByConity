@@ -17,6 +17,7 @@
 #include <Core/Settings.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 
 namespace DB
 {
@@ -38,10 +39,10 @@ BuildQueryPipelineSettings BuildQueryPipelineSettings::fromContext(ContextPtr fr
     return settings;
 }
 
-BuildQueryPipelineSettings BuildQueryPipelineSettings::fromPlanSegment(PlanSegment * plan_segment, ContextPtr context, bool is_explain)
+BuildQueryPipelineSettings BuildQueryPipelineSettings::fromPlanSegment(PlanSegment * plan_segment, const PlanSegmentExecutionInfo & info, ContextPtr context, bool is_explain)
 {
     auto settings = fromContext(context);
-    settings.distributed_settings = DistributedPipelineSettings::fromPlanSegment(plan_segment);
+    settings.distributed_settings = DistributedPipelineSettings::fromPlanSegment(plan_segment, info);
     settings.distributed_settings.is_explain = is_explain;
     settings.context = context;
     return settings;

@@ -156,7 +156,7 @@ void ExploreExpression::execute()
 
 void ApplyRule::execute()
 {
-    //    LOG_DEBUG(context->getOptimizerContext().getLog(), "Apply Rule GroupExpr " << group_expr->getGroupId());
+    // LOG_DEBUG(context->getOptimizerContext().getLog(), "Apply Rule GroupExpr={}, produce_rule={}", group_expr->getGroupId(), static_cast<int>(group_expr->getProduceRule()));
 
     if (group_expr->hasRuleExplored(rule->getType()))
         return;
@@ -756,7 +756,7 @@ void OptimizerTask::constructValidRules(
         // Check if we can apply the rule
         if (group_expr->hasRuleExplored(rule->getType()))
             continue;
-        if (group_expr->getStep()->getType() != rule->getTargetType())
+        if (!rule->getTargetTypes().count(group_expr->getStep()->getType()))
         {
             // match head pattern
             continue;

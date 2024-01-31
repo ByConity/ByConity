@@ -16,8 +16,6 @@
 #include "NativeChunkOutputStream.h"
 #include <Compression/CompressedWriteBuffer.h>
 #include <Core/Block.h>
-#include <Core/ProtocolDefines.h>
-#include <DataTypes/DataTypeLowCardinality.h>
 #include <IO/VarInt.h>
 #include <Common/typeid_cast.h>
 
@@ -30,8 +28,8 @@ namespace ErrorCodes
 
 
 NativeChunkOutputStream::NativeChunkOutputStream(
-    WriteBuffer & ostr_, UInt64 client_revision_, const Block & header_, bool remove_low_cardinality_)
-    : ostr(ostr_), client_revision(client_revision_), header(header_), remove_low_cardinality(remove_low_cardinality_)
+    WriteBuffer & ostr_, const Block & header_)
+    : ostr(ostr_), header(header_)
 {
 }
 
@@ -50,7 +48,7 @@ static void writeData(const IDataType & type, const ColumnPtr & column, WriteBuf
     auto serialization = type.getDefaultSerialization();
 
     ISerialization::SerializeBinaryBulkStatePtr state;
-    serialization->serializeBinaryBulkStatePrefix(settings, state);
+    serialization->serializeBinaryBulkStatePrefix(*full_column, settings, state);
     serialization->serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
     serialization->serializeBinaryBulkStateSuffix(settings, state);
 }
@@ -81,12 +79,6 @@ void NativeChunkOutputStream::write(const Chunk & chunk)
     {
         DataTypePtr data_type = header.getDataTypes().at(i);
         ColumnPtr column_ptr = chunk.getColumns()[i];
-        /// Send data to old clients without low cardinality type.
-        if (remove_low_cardinality || (client_revision && client_revision < DBMS_MIN_REVISION_WITH_LOW_CARDINALITY_TYPE))
-        {
-            column_ptr = recursiveRemoveLowCardinality(column_ptr);
-            data_type = recursiveRemoveLowCardinality(data_type);
-        }
 
         /// Name/Type, we don't need write name/type here.
         /// Data

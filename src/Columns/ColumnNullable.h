@@ -149,10 +149,18 @@ public:
 
     ColumnPtr compress() const override;
 
-    void forEachSubcolumn(ColumnCallback callback) override
+    void forEachSubcolumn(MutableColumnCallback callback) override
     {
         callback(nested_column);
         callback(null_map);
+    }
+
+    void forEachSubcolumnRecursively(RecursiveMutableColumnCallback callback) override
+    {
+        callback(*nested_column);
+        nested_column->forEachSubcolumnRecursively(callback);
+        callback(*null_map);
+        null_map->forEachSubcolumnRecursively(callback);
     }
 
     bool structureEquals(const IColumn & rhs) const override
@@ -160,6 +168,21 @@ public:
         if (auto rhs_nullable = typeid_cast<const ColumnNullable *>(&rhs))
             return nested_column->structureEquals(*rhs_nullable->nested_column);
         return false;
+    }
+
+    double getRatioOfDefaultRows(double sample_ratio) const override
+    {
+        return getRatioOfDefaultRowsImpl<ColumnNullable>(sample_ratio);
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return getNumberOfDefaultRowsImpl<ColumnNullable>();
+    }
+
+    void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override
+    {
+        getIndicesOfNonDefaultRowsImpl<ColumnNullable>(indices, from, limit);
     }
 
     bool isNullable() const override { return true; }

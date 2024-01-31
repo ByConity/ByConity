@@ -8,6 +8,7 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/IStorage.h>
 #include <Common/Exception.h>
+#include "Storages/StorageSnapshot.h"
 
 namespace DB
 {
@@ -23,17 +24,19 @@ SelectQueryInfo buildSelectQueryInfoForQuery(const ASTPtr & query, ContextPtr co
 
     StoragePtr storage;
     StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
 
     const auto * table_expression = getTableExpression(*select_query, 0);
     if (table_expression && table_expression->database_and_table_name)
     {
         storage = DatabaseCatalog::instance().getTable(StorageID{table_expression->database_and_table_name}, context);
         metadata_snapshot = storage->getInMemoryMetadataPtr();
+        storage_snapshot = storage->getStorageSnapshot(metadata_snapshot, context);
     }
 
     // fill syntax_analyzer_result
     query_info.syntax_analyzer_result
-        = TreeRewriter(context).analyzeSelect(query_info.query, TreeRewriterResult({}, storage, metadata_snapshot));
+        = TreeRewriter(context).analyzeSelect(query_info.query, TreeRewriterResult({}, storage, storage_snapshot));
 
     // fill prepared_set
     auto query_analyzer

@@ -1,4 +1,3 @@
-
 DROP TABLE IF EXISTS temp;
 CREATE TABLE temp
 (

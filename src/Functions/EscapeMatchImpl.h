@@ -4,19 +4,10 @@
 #include <common/types.h>
 #include <Common/Volnitsky.h>
 #include <Columns/ColumnString.h>
-#include "Regexps.h"
+#include <Functions/Regexps.h>
 
-#if !defined(ARCADIA_BUILD)
-#    include "config_functions.h"
-#    include <Common/config.h>
-#endif
-
-#if USE_RE2_ST
-#    include <re2_st/re2.h>
-#else
-#    include <re2/re2.h>
-#    define re2_st re2
-#endif
+#include <Common/config.h>
+#include <re2/re2.h>
 
 
 namespace DB
@@ -111,12 +102,12 @@ inline bool likePatternIsStrstr<true>(const String & pattern, String & res, cons
   * NOTE: We want to run regexp search for whole columns by one call (as implemented in function 'position')
   *  but for that, regexp engine must support \0 bytes and their interpretation as string boundaries.
   */
-template <bool like, bool revert = false, bool case_insensitive = false>
+template <typename Name, bool like, bool revert = false, bool case_insensitive = false>
 struct EscapeMatchImpl
 {
     static constexpr bool use_default_implementation_for_constants = true;
     static constexpr bool supports_start_pos = false;
-    static constexpr bool supports_escape_char = true;
+    static constexpr auto name = Name::name;
 
     using ResultType = UInt8;
 
@@ -124,17 +115,15 @@ struct EscapeMatchImpl
           VolnitskyCaseInsensitiveUTF8,
           VolnitskyUTF8>;
 
+    static ColumnNumbers getArgumentsThatAreAlwaysConstant() { return ColumnNumbers{1, 2};}
+
     static void vectorConstant(
         const ColumnString::Chars & data,
         const ColumnString::Offsets & offsets,
         const std::string & pattern,
         const char escape_char,
-        const ColumnPtr & start_pos,
         PaddedPODArray<UInt8> & res)
     {
-        if (start_pos != nullptr)
-            throw Exception("Functions 'like' and 'match' don't support start_pos argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
         if (offsets.empty())
             return;
 
@@ -182,17 +171,17 @@ struct EscapeMatchImpl
         {
             size_t size = offsets.size();
 
-            auto regexp = Regexps::get<like, true, case_insensitive>(pattern, escape_char);
+            const auto & regexp = Regexps::createRegexp<like, true, case_insensitive>(pattern, escape_char);
 
             std::string required_substring;
             bool is_trivial;
             bool required_substring_is_prefix; /// for `anchored` execution of the regexp.
 
-            regexp->getAnalyzeResult(required_substring, is_trivial, required_substring_is_prefix);
+            regexp.getAnalyzeResult(required_substring, is_trivial, required_substring_is_prefix);
 
             if (required_substring.empty())
             {
-                if (!regexp->getRE2()) /// An empty regexp. Always matches.
+                if (!regexp.getRE2()) /// An empty regexp. Always matches.
                 {
                     if (size)
                         memset(res.data(), 1, size * sizeof(res[0]));
@@ -203,11 +192,11 @@ struct EscapeMatchImpl
                     for (size_t i = 0; i < size; ++i)
                     {
                         res[i] = revert
-                            ^ regexp->getRE2()->Match(
-                                  re2_st::StringPiece(reinterpret_cast<const char *>(&data[prev_offset]), offsets[i] - prev_offset - 1),
+                            ^ regexp.getRE2()->Match(
+                                  re2::StringPiece(reinterpret_cast<const char *>(&data[prev_offset]), offsets[i] - prev_offset - 1),
                                   0,
                                   offsets[i] - prev_offset - 1,
-                                  re2_st::RE2::UNANCHORED,
+                                  re2::RE2::UNANCHORED,
                                   nullptr,
                                   0);
 
@@ -257,17 +246,17 @@ struct EscapeMatchImpl
 
                             if (required_substring_is_prefix)
                                 res[i] = revert
-                                    ^ regexp->getRE2()->Match(
-                                          re2_st::StringPiece(str_data, str_size),
+                                    ^ regexp.getRE2()->Match(
+                                          re2::StringPiece(str_data, str_size),
                                           reinterpret_cast<const char *>(pos) - str_data,
                                           str_size,
-                                          re2_st::RE2::UNANCHORED,
+                                          re2::RE2::UNANCHORED,
                                           nullptr,
                                           0);
                             else
                                 res[i] = revert
-                                    ^ regexp->getRE2()->Match(
-                                          re2_st::StringPiece(str_data, str_size), 0, str_size, re2_st::RE2::UNANCHORED, nullptr, 0);
+                                    ^ regexp.getRE2()->Match(
+                                          re2::StringPiece(str_data, str_size), 0, str_size, re2::RE2::UNANCHORED, nullptr, 0);
                         }
                     }
                     else
@@ -341,17 +330,17 @@ struct EscapeMatchImpl
         {
             size_t size = data.size() / n;
 
-            auto regexp = Regexps::get<like, true>(pattern);
+            const auto & regexp = Regexps::createRegexp<like, true, false>(pattern);
 
             std::string required_substring;
             bool is_trivial;
             bool required_substring_is_prefix; /// for `anchored` execution of the regexp.
 
-            regexp->getAnalyzeResult(required_substring, is_trivial, required_substring_is_prefix);
+            regexp.getAnalyzeResult(required_substring, is_trivial, required_substring_is_prefix);
 
             if (required_substring.empty())
             {
-                if (!regexp->getRE2()) /// An empty regexp. Always matches.
+                if (!regexp.getRE2()) /// An empty regexp. Always matches.
                 {
                     if (size)
                         memset(res.data(), 1, size * sizeof(res[0]));
@@ -362,11 +351,11 @@ struct EscapeMatchImpl
                     for (size_t i = 0; i < size; ++i)
                     {
                         res[i] = revert
-                            ^ regexp->getRE2()->Match(
-                                  re2_st::StringPiece(reinterpret_cast<const char *>(&data[offset]), n),
+                            ^ regexp.getRE2()->Match(
+                                  re2::StringPiece(reinterpret_cast<const char *>(&data[offset]), n),
                                   0,
                                   n,
-                                  re2_st::RE2::UNANCHORED,
+                                  re2::RE2::UNANCHORED,
                                   nullptr,
                                   0);
 
@@ -419,17 +408,17 @@ struct EscapeMatchImpl
 
                                 if (required_substring_is_prefix)
                                     res[i] = revert
-                                        ^ regexp->getRE2()->Match(
-                                            re2_st::StringPiece(str_data, n),
+                                        ^ regexp.getRE2()->Match(
+                                            re2::StringPiece(str_data, n),
                                             reinterpret_cast<const char *>(pos) - str_data,
                                             n,
-                                            re2_st::RE2::UNANCHORED,
+                                            re2::RE2::UNANCHORED,
                                             nullptr,
                                             0);
                                 else
                                     res[i] = revert
-                                        ^ regexp->getRE2()->Match(
-                                            re2_st::StringPiece(str_data, n), 0, n, re2_st::RE2::UNANCHORED, nullptr, 0);
+                                        ^ regexp.getRE2()->Match(
+                                            re2::StringPiece(str_data, n), 0, n, re2::RE2::UNANCHORED, nullptr, 0);
                             }
                         }
                         else

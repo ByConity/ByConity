@@ -26,7 +26,8 @@
 #include <Common/checkStackSize.h>
 #include <Common/RowExistsColumnInfo.h>
 #include <Common/typeid_cast.h>
-#include "Storages/ColumnsDescription.h"
+#include <DataTypes/NestedUtils.h>
+#include <Storages/ColumnsDescription.h>
 #include <Columns/ColumnConst.h>
 #include <unordered_set>
 
@@ -59,7 +60,7 @@ bool injectRequiredColumnsRecursively(
     /// stages.
     checkStackSize();
 
-    auto column_in_storage = storage_columns.tryGetColumnOrSubcolumn(ColumnsDescription::AllPhysical, column_name);
+    auto column_in_storage = storage_columns.tryGetColumnOrSubcolumn(GetColumnsOptions::AllPhysical, column_name);
     if (column_in_storage)
     {
         auto column_name_in_part = column_in_storage->getNameInStorage();
@@ -124,8 +125,15 @@ NameSet injectRequiredColumns(const MergeTreeMetaBase & storage,
             have_at_least_one_physical_column = true;
             continue;
         }
+
+        auto name_in_storage = Nested::extractTableName(columns[i]);
+        if (storage_columns.has(name_in_storage) && isObject(storage_columns.get(name_in_storage).type))
+        {
+            have_at_least_one_physical_column = true;
+            continue;
+        }
         /// We are going to fetch only physical columns
-        if (!storage_columns.hasColumnOrSubcolumn(ColumnsDescription::AllPhysical, columns[i]))
+        if (!storage_columns.hasColumnOrSubcolumn(GetColumnsOptions::AllPhysical, columns[i]))
             throw Exception("There is no physical column or subcolumn " + columns[i] + " in table.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
 
         have_at_least_one_physical_column |= injectRequiredColumnsRecursively(
@@ -140,7 +148,7 @@ NameSet injectRequiredColumns(const MergeTreeMetaBase & storage,
     if (!have_at_least_one_physical_column)
     {
         /// todo(weiping): temporariliy skip low cardinality for default injected column
-        if (!default_injected_column.empty() && !storage_columns.getColumnOrSubcolumn(ColumnsDescription::AllPhysical, default_injected_column).getTypeInStorage()->lowCardinality())
+        if (!default_injected_column.empty() && !storage_columns.getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, default_injected_column).getTypeInStorage()->lowCardinality())
         {
             columns.push_back(default_injected_column);
         }
@@ -298,25 +306,108 @@ void MergeTreeBlockSizePredictor::update(const Block & sample_block, const Colum
 
 MergeTreeReadTaskColumns getReadTaskColumns(
     const MergeTreeMetaBase & storage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const MergeTreeMetaBase::DataPartPtr & data_part,
     const Names & required_columns,
     const PrewhereInfoPtr & prewhere_info,
     const MergeTreeIndexContextPtr & index_context,
+    const std::deque<AtomicPredicatePtr> & atomic_predicates,
     bool check_columns)
 {
     Names column_names = required_columns;
     Names pre_column_names;
+    std::vector<Names> per_stage_column_names;
+    std::vector<NameSet> per_stage_bitmap_nameset;
 
     /// inject columns required for defaults evaluation
-    bool should_reorder = !injectRequiredColumns(storage, metadata_snapshot, data_part, column_names, "").empty();
+    bool should_reorder = !injectRequiredColumns(storage, storage_snapshot->getMetadataForQuery(), data_part, column_names, "").empty();
+    MergeTreeReadTaskColumns result;
 
-    if (prewhere_info)
+    if (!atomic_predicates.empty())
     {
-        if (prewhere_info->alias_actions)
-            pre_column_names = prewhere_info->alias_actions->getRequiredColumnsNames();
-        else
+        NameSet tbl_columns(column_names.begin(), column_names.end());
+        NameSet pre_name_set;
+        NameSet bitmap_name_set;
+        /// Start from lowest stage in chain
+        for (size_t i = atomic_predicates.size() - 1; i > 0; --i)
         {
+            const auto & p = atomic_predicates[i];
+            if (!p) continue;
+            auto cols = p->predicate_actions->getRequiredColumnsNames();
+            auto * bitmap_index_info = p->index_context ? dynamic_cast<BitmapIndexInfo *>(p->index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()) : nullptr;
+            auto bitmap_index_columns = bitmap_index_info ? bitmap_index_info->getIndexColumns(data_part) : std::pair<NameSet,NameSet>{};
+            const auto & index_names = bitmap_index_columns.first;
+            auto & bitmap_names = bitmap_index_columns.second;
+            bitmap_name_set.insert(bitmap_names.begin(), bitmap_names.end());
+            /// only consider columns from table
+            std::erase_if(cols, [&tbl_columns](const String & name) {return !tbl_columns.contains(name); });
+            /// In case we have both row-level policy predicate and normal predicate on same columns,
+            /// we cannot merge those predicates together but may need to execute those predicate on
+            /// 2 different stages. This logic make sure that the column is read only once. Note that
+            /// it's absolutely ok for a stage in chain to not read anything but only execute predicates.
+            std::erase_if(cols, [&pre_name_set](const String & name) { return !pre_name_set.emplace(name).second; });
+            /// Remove bitmap-indexed columns
+            std::erase_if(cols,[&index_names, &p, &bitmap_index_info](auto & col) {
+                // it's index column, and not in non removable
+                return index_names.count(col) > 0 && (!p || !bitmap_index_info || !bitmap_index_info->non_removable_index_columns.contains(col));
+            });
+            /// for default column read
+            if (!cols.empty())
+            {
+                const auto injected_pre_columns = injectRequiredColumns(storage, storage_snapshot->getMetadataForQuery(), data_part, cols, "");
+                tbl_columns.insert(injected_pre_columns.begin(), injected_pre_columns.end());
+                if (!injected_pre_columns.empty())
+                    should_reorder = true;
+            }
+            per_stage_column_names.emplace_back(std::move(cols));
+            per_stage_bitmap_nameset.emplace_back(std::move(bitmap_names));
+        }
+
+        /// No need for injected columns here, just let reader create default values for missing columns
+        Names final_stage_column_names;
+        for (const auto & name : column_names)
+            if (!pre_name_set.count(name))
+            final_stage_column_names.push_back(name);
+
+        /// Handle the last column group
+        const auto & p = atomic_predicates[0];
+        auto * bitmap_index_info = p->index_context ? dynamic_cast<BitmapIndexInfo *>(p->index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()) : nullptr;
+        auto bitmap_index_columns = bitmap_index_info ? bitmap_index_info->getIndexColumns(data_part) : std::pair<NameSet,NameSet>{};
+        const auto & index_names = bitmap_index_columns.first;
+        auto & bitmap_names = bitmap_index_columns.second;
+        /// last stage for default column read
+        if (!final_stage_column_names.empty())
+        {
+            const auto injected_pre_columns = injectRequiredColumns(storage, storage_snapshot->getMetadataForQuery(), data_part, final_stage_column_names, "");
+            tbl_columns.insert(injected_pre_columns.begin(), injected_pre_columns.end());
+            if (!injected_pre_columns.empty())
+                should_reorder = true;
+        }
+        /// For last stage, bitmap info can contain bitmap columns from previous stage
+        for (const auto & name : bitmap_name_set)
+        {
+            if (auto it = bitmap_names.find(name); it != bitmap_names.end())
+            bitmap_names.erase(it);
+        }
+        std::erase_if(final_stage_column_names,[&index_names, &p, &bitmap_index_info](auto & col) {
+            // it's index column, and not in non removable
+            return index_names.count(col) > 0 && (!p || !bitmap_index_info || !bitmap_index_info->non_removable_index_columns.contains(col));
+        });
+        per_stage_column_names.emplace_back(std::move(final_stage_column_names));
+        per_stage_bitmap_nameset.emplace_back(std::move(bitmap_names));
+
+        std::reverse(per_stage_column_names.begin(), per_stage_column_names.end());
+        std::reverse(per_stage_bitmap_nameset.begin(), per_stage_bitmap_nameset.end());
+        result.per_stage_bitmap_nameset = std::move(per_stage_bitmap_nameset);
+    }
+    else
+    {
+        if (prewhere_info)
+        {
+            if (prewhere_info->alias_actions)
+            pre_column_names = prewhere_info->alias_actions->getRequiredColumnsNames();
+            else
+            {
             pre_column_names = prewhere_info->prewhere_actions->getRequiredColumnsNames();
 
             if (prewhere_info->row_level_filter)
@@ -329,77 +420,81 @@ MergeTreeReadTaskColumns getReadTaskColumns(
                         pre_column_names.push_back(name);
                 }
             }
-        }
+            }
 
-        if (pre_column_names.empty())
+            if (pre_column_names.empty())
             pre_column_names.push_back(column_names[0]);
 
-        const auto injected_pre_columns = injectRequiredColumns(storage, metadata_snapshot, data_part, pre_column_names, "");
-        if (!injected_pre_columns.empty())
-            should_reorder = true;
+            const auto injected_pre_columns = injectRequiredColumns(storage, storage_snapshot->getMetadataForQuery(), data_part, pre_column_names, "");
+            if (!injected_pre_columns.empty())
+                should_reorder = true;
 
-        const NameSet pre_name_set(pre_column_names.begin(), pre_column_names.end());
+            const NameSet pre_name_set(pre_column_names.begin(), pre_column_names.end());
 
-        Names post_column_names;
-        for (const auto & name : column_names)
+            Names post_column_names;
+            for (const auto & name : column_names)
             if (!pre_name_set.count(name))
                 post_column_names.push_back(name);
 
-        column_names = post_column_names;
-    }
-
-    NameSet bitmap_column_names;
-    NameSet bitmap_pre_column_names;
-    NameSet index_name_set;
-
-    auto * bitmap_index_info = index_context ? dynamic_cast<BitmapIndexInfo *>(index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()) : nullptr;
-    std::tie(index_name_set, bitmap_column_names) = bitmap_index_info ? bitmap_index_info->getIndexColumns(data_part) : std::pair<NameSet,NameSet>{};
-    if (!bitmap_column_names.empty())
-    {
-        // remove the indexed columns from prewhere_columns and tasks columns to prevent from being read.
-        std::erase_if(pre_column_names, [&index_name_set, &bitmap_index_info](auto & col) {
-            // it's index column, and not in non removable
-            return index_name_set.count(col) > 0 && bitmap_index_info->non_removable_index_columns.count(col) <= 0;
-        });
-        std::erase_if(column_names, [&index_name_set, &bitmap_index_info](auto & col) {
-            return index_name_set.count(col) > 0 && bitmap_index_info->non_removable_index_columns.count(col) <= 0;
-        });
-
-        /// Collect the bitmap index columns for prewhere, no need to check for ready because it's subset of bitmap_index_info
-        /// and should be ready at this point
-        if (prewhere_info && prewhere_info->index_context)
-        {
-            auto * prewhere_bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(prewhere_info->index_context->get(MergeTreeIndexInfo::Type::BITMAP).get());
-            {
-                const auto & index_names = prewhere_bitmap_index_info->index_names;
-                for (const auto & index_name : index_names)
-                {
-                    bitmap_pre_column_names.emplace(index_name.first);
-                }
-            }
-            /// Do not read same bitmap columns in both prewhere and where
-            std::erase_if(bitmap_column_names, [&bitmap_pre_column_names](const auto & name){
-                return bitmap_pre_column_names.contains(name);
-            });
+            column_names = post_column_names;
         }
+
+        NameSet bitmap_column_names;
+        NameSet bitmap_pre_column_names;
+        NameSet index_name_set;
+
+        auto * bitmap_index_info
+            = index_context ? dynamic_cast<BitmapIndexInfo *>(index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()) : nullptr;
+        std::tie(index_name_set, bitmap_column_names)
+            = bitmap_index_info ? bitmap_index_info->getIndexColumns(data_part) : std::pair<NameSet, NameSet>{};
+        if (!bitmap_column_names.empty())
+        {
+            // remove the indexed columns from prewhere_columns and tasks columns to prevent from being read.
+            std::erase_if(pre_column_names, [&index_name_set, &bitmap_index_info](auto & col) {
+                // it's index column, and not in non removable
+                return index_name_set.count(col) > 0 && bitmap_index_info->non_removable_index_columns.count(col) <= 0;
+            });
+            std::erase_if(column_names, [&index_name_set, &bitmap_index_info](auto & col) {
+                return index_name_set.count(col) > 0 && bitmap_index_info->non_removable_index_columns.count(col) <= 0;
+            });
+
+            /// Collect the bitmap index columns for prewhere, no need to check for ready because it's subset of bitmap_index_info
+            /// and should be ready at this point
+            if (prewhere_info && prewhere_info->index_context)
+            {
+                auto * prewhere_bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(prewhere_info->index_context->get(MergeTreeIndexInfo::Type::BITMAP).get());
+                {
+                    const auto & index_names = prewhere_bitmap_index_info->index_names;
+                    for (const auto & index_name : index_names)
+                    {
+                        bitmap_pre_column_names.emplace(index_name.first);
+                    }
+                }
+                /// Do not read same bitmap columns in both prewhere and where
+                std::erase_if(bitmap_column_names, [&bitmap_pre_column_names](const auto & name){
+                    return bitmap_pre_column_names.contains(name);
+                });
+            }
+        }
+
+        result.bitmap_index_pre_columns = std::move(bitmap_pre_column_names);
+        result.bitmap_index_columns = std::move(bitmap_column_names);
     }
-
-    MergeTreeReadTaskColumns result;
-
-    result.bitmap_index_pre_columns = std::move(bitmap_pre_column_names);
-    result.bitmap_index_columns = std::move(bitmap_column_names);
-
     if (check_columns)
     {
-        const auto & columns = metadata_snapshot->getColumns();
-        result.pre_columns = columns.getByNames(ColumnsDescription::All, pre_column_names, true);
-        result.columns = columns.getByNames(ColumnsDescription::All, column_names, true);
+        auto options = GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withExtendedObjects();
+        result.pre_columns = storage_snapshot->getColumnsByNames(options, pre_column_names);
+        for (auto & names : per_stage_column_names)
+            result.per_stage_columns.emplace_back(storage_snapshot->getColumnsByNames(options, names));
+        result.columns = storage_snapshot->getColumnsByNames(options, column_names);
     }
     else
     {
         auto columns = data_part->getColumns();
         columns.push_back(NameAndTypePair("_part_row_number", std::make_shared<DataTypeUInt64>()));
         result.pre_columns = columns.addTypes(pre_column_names);
+        for (auto & names : per_stage_column_names)
+            result.per_stage_columns.emplace_back(columns.addTypes(names));
         result.columns = columns.addTypes(column_names);
     }
 

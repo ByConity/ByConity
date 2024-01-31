@@ -87,7 +87,7 @@ public:
 
     /// Query is resent to a replica, the query itself can be modified.
     std::atomic<bool> resent_query { false };
-
+    
     /// Read next block of data. Returns empty block if query is finished.
     Block read();
 

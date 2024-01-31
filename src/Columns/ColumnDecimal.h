@@ -170,11 +170,12 @@ public:
     Field operator[](size_t n) const override { return DecimalField(data[n], scale); }
     void get(size_t n, Field & res) const override { res = (*this)[n]; }
     bool getBool(size_t n) const override { return bool(data[n].value); }
-    Int64 getInt(size_t n) const override { return Int64(data[n].value) * scale; }
+    Int64 getInt(size_t n) const override { return Int64(data[n].value); }
     UInt64 get64(size_t n) const override;
     bool isDefaultAt(size_t n) const override { return data[n].value == 0; }
 
     ColumnPtr filter(const IColumn::Filter & filt, ssize_t result_size_hint) const override;
+
     ColumnPtr permute(const IColumn::Permutation & perm, size_t limit) const override;
     ColumnPtr index(const IColumn & indexes, size_t limit) const override;
 
@@ -198,6 +199,21 @@ public:
         return false;
     }
 
+    double getRatioOfDefaultRows(double sample_ratio) const override
+    {
+        return this->template getRatioOfDefaultRowsImpl<Self>(sample_ratio);
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return this->template getNumberOfDefaultRowsImpl<Self>();
+    }
+
+    void getIndicesOfNonDefaultRows(IColumn::Offsets & indices, size_t from, size_t limit) const override
+    {
+        return this->template getIndicesOfNonDefaultRowsImpl<Self>(indices, from, limit);
+    }
+
     ColumnPtr compress() const override;
 
 
@@ -213,6 +229,11 @@ protected:
     Container data;
     UInt32 scale;
 };
+
+template <class> class ColumnVector;
+template <class T> struct ColumnVectorOrDecimalT { using Col = ColumnVector<T>; };
+template <is_decimal T> struct ColumnVectorOrDecimalT<T> { using Col = ColumnDecimal<T>; };
+template <class T> using ColumnVectorOrDecimal = typename ColumnVectorOrDecimalT<T>::Col;
 
 template <typename T>
 template <typename Type>

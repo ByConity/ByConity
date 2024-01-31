@@ -5,6 +5,8 @@
 
 #include "Core/Types.h"
 #include "Storages/TableStatistics.h"
+#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+
 #include "hivemetastore/hive_metastore_types.h"
 
 namespace ApacheHive = Apache::Hadoop::Hive;

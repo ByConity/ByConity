@@ -15,7 +15,6 @@ namespace DB
 {
 class SelectivityBasedJoinReorder : public Rule
 {
-    using GroupIdToIds = std::unordered_map<GroupId, std::unordered_set<GroupId>>;
 public:
     explicit SelectivityBasedJoinReorder(size_t max_join_size_): max_join_size(max_join_size_) {}
     RuleType getType() const override { return RuleType::SELECTIVITY_BASED_JOIN_REORDER; }
@@ -62,8 +61,11 @@ struct EdgeSelectivityCompare
 
         if (a.left_symbol != b.left_symbol)
             return a.left_symbol < b.left_symbol;
+        
+        if (a.right_symbol != b.right_symbol)
+            return a.right_symbol < b.right_symbol;
 
-        return a.right_symbol < b.right_symbol;
+        return std::make_tuple(a.left_id, a.right_id) < std::make_tuple(b.left_id, b.right_id);
     }
 };
 }

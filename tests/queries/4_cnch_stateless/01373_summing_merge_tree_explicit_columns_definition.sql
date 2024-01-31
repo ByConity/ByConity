@@ -2,6 +2,6 @@ DROP TABLE IF EXISTS tt_error_1373;
 
 CREATE TABLE tt_error_1373
 ( a   Int64, d   Int64, val Int64 ) 
-ENGINE = CnchMergeTree((a, val)) PARTITION BY (a) ORDER BY (d); -- { serverError 36 }
+ENGINE = CnchMergeTree((a, val)) PARTITION BY (a) ORDER BY (d);
 
 DROP TABLE IF EXISTS tt_error_1373;

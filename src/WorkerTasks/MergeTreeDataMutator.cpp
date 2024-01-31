@@ -23,7 +23,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
@@ -35,7 +35,7 @@
 #include <Common/Endian.h>
 #include <Common/RowExistsColumnInfo.h>
 #include <Parsers/queryToString.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Common/FieldVisitorToString.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
@@ -502,59 +502,30 @@ void MergeTreeDataMutator::addColumnsForRecalculateProjections(
 NameSet MergeTreeDataMutator::collectFilesForClearMapKey(MergeTreeData::DataPartPtr source_part, const MutationCommands & commands)
 {
     NameSet clear_map_key_set;
+    const auto & metadata_snapshot = source_part->storage.getInMemoryMetadata();
     for (const auto & command : commands)
     {
         if (command.type != MutationCommand::Type::CLEAR_MAP_KEY)
             continue;
 
-        auto files = source_part->getChecksums()->files;
-
-        /// Collect all compacted file names of the implicit key name.
-        /// If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
+        /// Collect all file names of the implicit key name.
         NameSet file_set;
 
+        String map_name = command.column_name;
+        const auto & map_column = metadata_snapshot.columns.getPhysical(map_name);
+        const auto & map_type = typeid_cast<const DataTypeMap &>(*map_column.type);
         /// Remove all files of the implicit key name
         for (const auto & map_key_ast : command.map_keys->children)
         {
-            const auto & key = map_key_ast->as<ASTLiteral &>().value.get<std::string>();
-            /// TODO: support Int
-            String implicit_key_name = getImplicitColNameForMapKey(command.column_name, escapeForFileName("'" + key + "'"));
+            const auto * key_lit = map_key_ast->as<ASTLiteral>();
+            String key_name = convertToMapKeyString(map_type.getKeyType(), key_lit->getColumnName());
+
             for (const auto & [file, _] : source_part->getChecksums()->files)
             {
-                if (startsWith(file, implicit_key_name))
-                {
-                    if (source_part->versions->enable_compact_map_data)
-                    {
-                        file_set.emplace(getMapFileNameFromImplicitFileName(file));
-                    }
-                    /// TODO: mark delete.
-                    files.erase(file);
+                if (isMapBaseFile(file))
+                    continue;
+                if (isMapImplicitFileNameOfSpecialMapName(file, map_name) && parseKeyNameFromImplicitFileName(file, map_name) == key_name)
                     clear_map_key_set.emplace(file);
-                }
-            }
-        }
-
-        if (source_part->versions->enable_compact_map_data)
-        {
-            /// Check if all implicit keys of the map column have removed
-            bool has_other_implicit_column = false;
-            auto map_key_prefix = genMapKeyFilePrefix(command.column_name);
-
-            for (const auto & [file, _]: files)
-            {
-                if (startsWith(file, map_key_prefix))
-                {
-                    has_other_implicit_column = true;
-                    break;
-                }
-            }
-
-            if (!has_other_implicit_column)
-            {
-                for (const String & file: file_set)
-                {
-                    clear_map_key_set.emplace(file);
-                }
             }
         }
     }
@@ -576,8 +547,7 @@ NameToNameVector MergeTreeDataMutator::collectFilesForRenames(
             [&](const ISerialization::SubstreamPath & substream_path)
             {
                 ++stream_counts[ISerialization::getFileNameForStream(column, substream_path)];
-            },
-            {});
+            });
     }
 
     NameToNameVector rename_vector;
@@ -614,9 +584,9 @@ NameToNameVector MergeTreeDataMutator::collectFilesForRenames(
             auto column = source_part->getColumns().tryGetByName(command.column_name);
             if (column)
             {
-                if (column->type->isMap() && !column->type->isMapKVStore())
+                if (column->type->isByteMap())
                 {
-                    Strings files = source_part->getChecksums()->collectFilesForMapColumnNotKV(command.column_name);
+                    Strings files = source_part->getChecksums()->collectImplicitColumnFilesForByteMap(command.column_name);
                     for (auto & file : files)
                         rename_vector.emplace_back(file, "");
                 }
@@ -648,8 +618,20 @@ NameToNameVector MergeTreeDataMutator::collectFilesForRenames(
             auto column = source_part->getColumns().tryGetByName(command.column_name);
             if (column)
             {
-                auto serialization = source_part->getSerializationForColumn(*column);
-                serialization->enumerateStreams(callback);
+                if (column->type->isByteMap())
+                {
+                    Strings files = source_part->getChecksums()->collectImplicitColumnFilesForByteMap(command.column_name);
+                    for (auto & file_from : files)
+                    {
+                        String file_to = boost::replace_first_copy(file_from, escaped_name_from, escaped_name_to);
+                        rename_vector.emplace_back(file_from, file_to);
+                    }
+                }
+                else
+                {
+                    auto serialization = source_part->getSerializationForColumn(*column);
+                    serialization->enumerateStreams(callback);
+                }
             }
         }
     }
@@ -1068,6 +1050,14 @@ void MergeTreeDataMutator::mutateAllPartColumns(
 {
     if (mutating_stream == nullptr)
         throw Exception("Cannot mutate part columns with uninitialized mutations stream. It's a bug", ErrorCodes::LOGICAL_ERROR);
+    
+    if (new_data_part->versions->enable_compact_map_data)
+    {
+        LOG_WARNING(log, "Try to mutate all columns to new part {} with compact map enabled, enable_compact_map_data"
+            " will be forced to disable in new part.", new_data_part->name);
+
+        new_data_part->versions->enable_compact_map_data = 0;
+    }
 
     if (metadata_snapshot->hasPrimaryKey() || metadata_snapshot->hasSecondaryIndices())
         mutating_stream = std::make_shared<MaterializingBlockInputStream>(
@@ -1111,15 +1101,18 @@ void MergeTreeDataMutator::mutateAllPartColumns(
                 continue;
 
             auto & block = part_in_memory->block;
-            auto * map_column = dynamic_cast<ColumnByteMap *>(block.getByName(command.column_name).column->assumeMutable().get());
+            auto * map_column = dynamic_cast<ColumnMap *>(block.getByName(command.column_name).column->assumeMutable().get());
 
             if (map_column)
             {
                 NameSet clear_map_keys;
+                String map_name = command.column_name;
+                const auto & map_type = typeid_cast<const DataTypeMap &>(*block.getByName(command.column_name).type);
                 for (const auto & map_key_ast : command.map_keys->children)
                 {
-                    const auto & key = map_key_ast->as<ASTLiteral &>().value.get<std::string>();
-                    clear_map_keys.emplace(key);
+                    const auto * key_lit = map_key_ast->as<ASTLiteral>();
+                    String key_name = convertToMapKeyString(map_type.getKeyType(), key_lit->getColumnName());
+                    clear_map_keys.emplace(map_type.getKeyType()->stringToVisitorString(key_name));
                 }
                 map_column->removeKeys(clear_map_keys);
             }
@@ -1147,6 +1140,9 @@ void MergeTreeDataMutator::mutateSomePartColumns(
 {
     if (mutating_stream == nullptr)
         throw Exception("Cannot mutate part columns with uninitialized mutations stream. It's a bug", ErrorCodes::LOGICAL_ERROR);
+
+    if (new_data_part->versions->enable_compact_map_data)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot mutate part {} to compact part. It's a bug.", source_part->name);
 
     IMergedBlockOutputStream::WrittenOffsetColumns unused_written_offsets;
     MergedColumnOnlyOutputStream out(

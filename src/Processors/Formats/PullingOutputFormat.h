@@ -28,6 +28,7 @@ protected:
     void consume(Chunk chunk) override;
     void consumeTotals(Chunk chunk) override { totals = std::move(chunk); }
     void consumeExtremes(Chunk chunk) override { extremes = std::move(chunk); }
+    bool expectMaterializedColumns() const override { return false; }
 
 private:
     Chunk data;

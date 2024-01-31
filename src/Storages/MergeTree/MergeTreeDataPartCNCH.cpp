@@ -15,7 +15,16 @@
 
 #include "MergeTreeDataPartCNCH.h"
 
+#include <common/logger_useful.h>
+#include <Common/Exception.h>
+#include <Common/Priority.h>
+#include <Common/ElapsedTimeProfileEventIncrement.h>
+#include <Common/RowExistsColumnInfo.h>
+#include <Core/Settings.h>
+#include <Core/SettingsEnums.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
+#include <Interpreters/StorageID.h>
 #include <IO/LimitReadBuffer.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/FileDiskCacheSegment.h>
@@ -32,15 +41,6 @@
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
-#include <Common/ElapsedTimeProfileEventIncrement.h>
-#include <Common/Exception.h>
-#include <Common/Priority.h>
-#include <Common/RowExistsColumnInfo.h>
-#include <common/logger_useful.h>
-#include <Core/Settings.h>
-#include <Core/SettingsEnums.h>
-#include <DataTypes/DataTypeByteMap.h>
-#include <Interpreters/StorageID.h>
 
 namespace ProfileEvents
 {
@@ -239,7 +239,7 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair & column) const
         return bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end();
     };
 
-    if (column.type->isMap() && !column.type->isMapKVStore())
+    if (column.type->isByteMap())
     {
         for (auto & [file, _] : getChecksums()->files)
         {
@@ -912,7 +912,7 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
     std::string marks_file_name;
     for (auto & column : *columns_ptr)
     {
-        if (column.type->isMap() && !column.type->isMapKVStore())
+        if (column.type->isByteMap())
             continue;
         marks_file_name = index_granularity_info.getMarksFilePath(getFileNameForColumn(column));
         break;
@@ -1034,7 +1034,7 @@ ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & colu
         return size;
 
     // Special handling flattened map type
-    if (column.type->isMap() && !column.type->isMapKVStore())
+    if (column.type->isByteMap())
     {
         if (storage.getSettings()->enable_calculate_columns_size_without_map)
             return size;
@@ -1060,8 +1060,7 @@ ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & colu
             auto mrk_checksum = checksums->files.find(file_name + index_granularity_info.marks_file_extension);
             if (mrk_checksum != checksums->files.end())
                 size.marks += mrk_checksum->second.file_size;
-        },
-        {});
+        });
 
     return size;
 }
@@ -1203,12 +1202,11 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
 
     MarkCachePtr mark_cache_holder = storage.getContext()->getMarkCache();
     auto add_segments = [&, this, strategy = cache_strategy](
-                            const NameAndTypePair & real_column,
-                            const std::function<String(const String &, const ISerialization::SubstreamPath &)> & file_name_getter) {
+                            const NameAndTypePair & real_column) {
         ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
 
             String stream_name = ISerialization::getFileNameForStream(real_column, substream_path);
-            String file_name = file_name_getter(stream_name, substream_path);
+            String file_name = stream_name;
             ChecksumsPtr checksums = getChecksums();
             if (!checksums->files.count(file_name + DATA_FILE_EXTENSION))
             {
@@ -1232,17 +1230,17 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                 preload_level);
             segments.insert(segments.end(), std::make_move_iterator(seg.begin()), std::make_move_iterator(seg.end()));
         };
-        ISerialization::SubstreamPath substream_path;
+
         auto serialization = getSerializationForColumn(real_column);
-        serialization->enumerateStreams(callback, substream_path);
+        serialization->enumerateStreams(callback);
     };
 
     for (const NameAndTypePair & column : *columns_ptr)
     {
-        if (column.type->isMap() && !column.type->isMapKVStore())
+        if (column.type->isByteMap())
         {
             // Scan the directory to get all implicit columns(stream) for the map type
-            const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
+            const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column.type);
             for (auto & file : getChecksums()->files)
             {
                 // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
@@ -1251,29 +1249,14 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                 {
                     auto key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
                     String impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
-                    add_segments(
-                        {impl_key_name, type_map.getValueTypeForImplicitColumn()},
-                        [map_column_name = column.name,
-                         this](const String & stream_name, const ISerialization::SubstreamPath & substream_path) -> String {
-                            return versions->enable_compact_map_data ? ISerialization::getFileNameForStream(map_column_name, substream_path)
-                                                                     : stream_name;
-                        });
+                    /// compact map is not supported in CNCH
+                    add_segments({impl_key_name, type_map.getValueTypeForImplicitColumn()});
                 }
             }
         }
-        else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
-        {
-            String map_column_name = parseMapNameFromImplicitColName(column.name);
-            add_segments(column, [map_column_name, this](const String & stream_name, const ISerialization::SubstreamPath & substream_path) {
-                return versions->enable_compact_map_data ? ISerialization::getFileNameForStream(map_column_name, substream_path)
-                                                         : stream_name;
-            });
-        }
         else if (column.name != "_part_row_number")
         {
-            add_segments(column, [](const String & stream_name, const ISerialization::SubstreamPath &) {
-                return stream_name;
-            });
+            add_segments(column);
         }
     }
 

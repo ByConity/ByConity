@@ -145,7 +145,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitPlanNode(PlanNodeBase & 
 
     FPKeysAndOrdinaryKeys translated = VisitorUtil::accept(node.getChildren()[0], *this, join_info);
 
-    LOG_INFO(&Poco::Logger::get("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr());
+    // LOG_INFO(&Poco::Logger::get("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr());
 
     return translated.clearFPKeys();
 }
@@ -208,7 +208,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
         translated.fp_keys = common_fp_keys;
     }
 
-    LOG_INFO(&Poco::Logger::get("DataDependency"), "visitJoinNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr()); 
+    // LOG_INFO(&Poco::Logger::get("DataDependency"), "visitJoinNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr()); 
 
     bool is_inner_join = step.getKind() == ASTTableJoin::Kind::Inner;
     bool is_outer_join = step.isOuterJoin() && step.getKind() != ASTTableJoin::Kind::Full; // only allow left outer/right outer join.
@@ -723,7 +723,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitUnionNode(UnionNode & no
         });
     }
 
-    LOG_INFO(&Poco::Logger::get("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + result.keysStr());
+    // LOG_INFO(&Poco::Logger::get("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + result.keysStr());
 
     std::unordered_map<String, JoinInfo::JoinWinner> old_winners = join_info.reset(invalid_tables, join_infos);
     collectEliminableJoin(old_winners);
@@ -1227,7 +1227,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
     // 3-1. add new projection at pk side with cast function.
     if (!JoinCommon::isJoinCompatibleTypes(left_type, right_type))
     {
-        auto common_type = getLeastSupertype({left_type, right_type}, context->getSettingsRef().allow_extended_type_conversion);
+        auto common_type = getLeastSupertype(DataTypes{left_type, right_type}, context->getSettingsRef().allow_extended_type_conversion);
         if (!common_type->equals(*left_type))
             throw Exception(ErrorCodes::LOGICAL_ERROR, "EliminateByForeignKey::Eliminator logical error! fk type isn't the leastSupertType of pk type.");
         auto cast_function = makeCastFunction(std::make_shared<ASTIdentifier>(pk_name), common_type);

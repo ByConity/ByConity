@@ -77,15 +77,17 @@ public:
         throw Exception("Cannot convert Map to " + demangle(typeid(T).name()), ErrorCodes::CANNOT_CONVERT_TYPE);
     }
 
-    T operator() (const ByteMap &) const
+    T operator() (const Object &) const
     {
-        throw Exception("Cannot convert Map to " + demangle(typeid(T).name()), ErrorCodes::CANNOT_CONVERT_TYPE);
+        throw Exception("Cannot convert Object to " + demangle(typeid(T).name()), ErrorCodes::CANNOT_CONVERT_TYPE);
     }
 
     T operator() (const UInt64 & x) const { return T(x); }
     T operator() (const Int64 & x) const { return T(x); }
     T operator() (const Int128 & x) const { return T(x); }
     T operator() (const UUID & x) const { return T(x.toUnderType()); }
+    T operator() (const IPv4 & x) const { return T(x.toUnderType()); }
+    T operator() (const IPv6 & x) const { return T(x.toUnderType()); }
 
     T operator() (const Float64 & x) const
     {

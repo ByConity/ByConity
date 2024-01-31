@@ -31,8 +31,8 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <common/DateLUTImpl.h>
 #include <common/types.h>
 #include <Core/Block.h>
@@ -43,7 +43,6 @@
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnUnique.h>
 #include <Columns/ColumnMap.h>
-#include <Columns/ColumnByteMap.h>
 #include <Interpreters/castColumn.h>
 #include <algorithm>
 #include <fmt/format.h>
@@ -391,6 +390,36 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
         }
     }
 
+    static void fillIPv6ColumnFromBinaryData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    {
+        size_t total_size = 0;
+        for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
+        {
+            auto & chunk = dynamic_cast<arrow::BinaryArray &>(*(arrow_column->chunk(chunk_i)));
+            const size_t chunk_length = chunk.length();
+
+            for (size_t i = 0; i != chunk_length; ++i)
+            {
+                /// If at least one value size is not 16 bytes, fallback to reading String column and further cast to IPv6.
+                if (chunk.value_length(i) != sizeof(IPv6))
+                    return fillColumnWithStringData(arrow_column, internal_column);
+            }
+            total_size += chunk_length;
+        }
+
+        auto & data = assert_cast<ColumnIPv6 &>(internal_column).getData();
+        data.reserve(total_size * sizeof(IPv6));
+
+        for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
+        {
+            auto & chunk = dynamic_cast<arrow::BinaryArray &>(*(arrow_column->chunk(chunk_i)));
+            std::shared_ptr<arrow::Buffer> buffer = chunk.value_data();
+            const auto * raw_data = reinterpret_cast<const IPv6 *>(buffer->data());
+            data.insert_assume_reserved(raw_data, raw_data + chunk.length());
+        }
+        return;
+    }
+
     static void readColumnFromArrowColumn(
         std::shared_ptr<arrow::ChunkedArray> & arrow_column,
         IColumn & internal_column,
@@ -423,9 +452,12 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
         {
             case arrow::Type::STRING:
             case arrow::Type::BINARY:
-                //case arrow::Type::FIXED_SIZE_BINARY:
-                fillColumnWithStringData(arrow_column, internal_column);
+            {
+                if (WhichDataType(internal_column.getDataType()).isIPv6())
+                    fillIPv6ColumnFromBinaryData(arrow_column, internal_column);
+                else fillColumnWithStringData(arrow_column, internal_column);
                 break;
+            }
             case arrow::Type::FIXED_SIZE_BINARY:
                 fillColumnWithFixedStringData(arrow_column, internal_column);
                 break;
@@ -466,28 +498,12 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                     array_vector.emplace_back(std::move(chunk));
                 }
                 auto arrow_nested_column = std::make_shared<arrow::ChunkedArray>(array_vector);
-#ifdef USE_COMMUNITY_MAP
                 ColumnArray & column_array = arrow_column->type()->id() == arrow::Type::MAP
                     ? assert_cast<ColumnMap &>(internal_column).getNestedColumn()
                     : assert_cast<ColumnArray &>(internal_column);
 
                 readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, replace_null_with_default, dictionary_values);
                 fillOffsetsFromArrowListColumn(arrow_column, column_array.getOffsetsColumn());
-#else
-                ColumnPtr bytemap_nested = nullptr;
-                /// For ColumnByteMap, construct an ColumnArray to mock nested column in ColumnMap so that can use the same logic as ColumnMap.
-                if (arrow_column->type()->id() == arrow::Type::MAP)
-                {
-                    ColumnByteMap & map_column = assert_cast<ColumnByteMap &>(internal_column);
-                    bytemap_nested = ColumnArray::create(ColumnTuple::create(Columns{map_column.getKeyPtr(), map_column.getValuePtr()}), map_column.getOffsetsPtr());
-                }
-                ColumnArray & column_array = bytemap_nested
-                    ? assert_cast<ColumnArray &>(*(bytemap_nested->assumeMutable()))
-                    : assert_cast<ColumnArray &>(internal_column);
-
-                readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, replace_null_with_default, dictionary_values);
-                fillOffsetsFromArrowListColumn(arrow_column, column_array.getOffsetsColumn());
-#endif
                 break;
             }
             case arrow::Type::STRUCT:
@@ -633,7 +649,6 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
             const auto & dict_type = lc_type ? lc_type->getDictionaryType() : column_type;
             return std::make_shared<DataTypeLowCardinality>(getInternalType(arrow_dict_type->value_type(), dict_type, column_name, format_name));
         }
-#ifdef USE_COMMUNITY_MAP
         if (arrow_type->id() == arrow::Type::MAP)
         {
             const auto * arrow_map_type = typeid_cast<arrow::MapType *>(arrow_type.get());
@@ -646,20 +661,6 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                 getInternalType(arrow_map_type->item_type(), map_type->getValueType(), column_name, format_name)
                 );
         }
-#else
-        if (arrow_type->id() == arrow::Type::MAP)
-        {
-            const auto * arrow_map_type = typeid_cast<arrow::MapType *>(arrow_type.get());
-            const auto * map_type = typeid_cast<const DataTypeByteMap *>(column_type.get());
-            if (!map_type)
-                throw Exception{fmt::format("Cannot convert arrow MAP type to a not Map ClickHouse type {}.", column_type->getName()), ErrorCodes::CANNOT_CONVERT_TYPE};
-
-            return std::make_shared<DataTypeByteMap>(
-                getInternalType(arrow_map_type->key_type(), map_type->getKeyType(), column_name, format_name),
-                getInternalType(arrow_map_type->item_type(), map_type->getValueType(), column_name, format_name)
-                );
-        }
-#endif
         if (arrow_type->id() == arrow::Type::FIXED_SIZE_BINARY)
         {
             const auto * arrow_fixed_size_binary_type = typeid_cast<arrow::FixedSizeBinaryType *>(arrow_type.get());

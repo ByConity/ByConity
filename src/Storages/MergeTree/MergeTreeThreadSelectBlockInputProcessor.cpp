@@ -35,36 +35,28 @@ namespace DB
 MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcessor(
     const size_t thread_,
     const MergeTreeReadPoolPtr & pool_,
-    const size_t min_marks_to_read_,
-    const UInt64 max_block_size_rows_,
-    size_t preferred_block_size_bytes_,
-    size_t preferred_max_column_in_block_size_bytes_,
     const MergeTreeMetaBase & storage_,
-    const StorageMetadataPtr & metadata_snapshot_,
-    const bool use_uncompressed_cache_,
+    const StorageSnapshotPtr & storage_snapshot_,
     const SelectQueryInfo & query_info_,
-    ExpressionActionsSettings actions_settings,
-    const MergeTreeReaderSettings & reader_settings_,
+    const MergeTreeStreamSettings & stream_settings_,
     const Names & virt_column_names_)
     :
     MergeTreeBaseSelectProcessor{
-        pool_->getHeader(), storage_, metadata_snapshot_, query_info_, std::move(actions_settings), max_block_size_rows_,
-        preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_,
-        reader_settings_, use_uncompressed_cache_, virt_column_names_},
+        pool_->getHeader(), storage_, storage_snapshot_, query_info_, stream_settings_, virt_column_names_},
     thread{thread_},
     pool{pool_}
 {
     /// round min_marks_to_read up to nearest multiple of block_size expressed in marks
     /// If granularity is adaptive it doesn't make sense
     /// Maybe it will make sense to add settings `max_block_size_bytes`
-    if (max_block_size_rows && !storage.canUseAdaptiveGranularity())
+    if (auto max_block_size_rows = stream_settings.max_block_size; max_block_size_rows  && !storage.canUseAdaptiveGranularity())
     {
         size_t fixed_index_granularity = storage.getSettings()->index_granularity;
-        min_marks_to_read = (min_marks_to_read_ * fixed_index_granularity + max_block_size_rows - 1)
+        min_marks_to_read = (stream_settings.min_marks_for_concurrent_read * fixed_index_granularity + max_block_size_rows - 1)
             / max_block_size_rows * max_block_size_rows / fixed_index_granularity;
     }
     else
-        min_marks_to_read = min_marks_to_read_;
+        min_marks_to_read = stream_settings.min_marks_for_concurrent_read;
 
     ordered_names = getPort().getHeader().getNames();
 }

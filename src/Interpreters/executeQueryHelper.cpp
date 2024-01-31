@@ -42,6 +42,9 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
     }
     else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
     {
+        if (!context->getSettingsRef().enable_select_query_forwarding)
+            return {};
+
         ASTs tables;
         bool has_table_func = false;
         ASTSelectQuery::collectAllTables(ast.get(), tables, has_table_func);
@@ -100,7 +103,8 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     ProxyTransactionPtr proxy_txn;
     if (session_txn && session_txn->isPrimary())
     {
-        proxy_txn = context->getCnchTransactionCoordinator().createProxyTransaction(server, session_txn->getPrimaryTransactionID());
+        proxy_txn = context->getCnchTransactionCoordinator().createProxyTransaction(server, session_txn->getPrimaryTransactionID(),
+            isReadOnlyTransaction(ast.get()));
         context->setCurrentTransaction(proxy_txn);
         session_txn->as<CnchExplicitTransaction>()->addStatement(query);
     }
@@ -124,7 +128,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     // PipelineExecutor requires block header.
     LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
     Block header;
-    if (ast->as<ASTSelectWithUnionQuery>())
+    if (context->getSettingsRef().enable_select_query_forwarding && ast->as<ASTSelectWithUnionQuery>())
     {
         if (settings.enable_optimizer &&  QueryUseOptimizerChecker::check(ast, context))
             header = InterpreterSelectQueryUseOptimizer(ast, context, SelectQueryOptions(QueryProcessingStage::Complete).analyze()).getSampleBlock();

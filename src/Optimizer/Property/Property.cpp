@@ -142,7 +142,7 @@ Partitioning Partitioning::translate(const std::unordered_map<String, String> & 
         else // note: don't discard column
             translate_columns.emplace_back(column);
     }
-    return Partitioning{handle, translate_columns, require_handle, buckets, enforce_round_robin, component};
+    return Partitioning{handle, translate_columns, require_handle, buckets, enforce_round_robin, component, exactly_match};
 }
 
 
@@ -155,6 +155,7 @@ void Partitioning::toProto(Protos::Partitioning & proto) const
     proto.set_buckets(buckets);
     proto.set_enforce_round_robin(enforce_round_robin);
     proto.set_component(Partitioning::ComponentConverter::toProto(component));
+    proto.set_exactly_match(exactly_match);
 }
 
 Partitioning Partitioning::fromProto(const Protos::Partitioning & proto)
@@ -167,7 +168,8 @@ Partitioning Partitioning::fromProto(const Protos::Partitioning & proto)
     auto buckets = proto.buckets();
     auto enforce_round_robin = proto.enforce_round_robin();
     auto component = Partitioning::ComponentConverter::fromProto(proto.component());
-    return Partitioning(handle, columns, require_handle, buckets, enforce_round_robin, component);
+    auto exactly_match = proto.exactly_match();
+    return Partitioning(handle, columns, require_handle, buckets, enforce_round_robin, component, exactly_match);
 }
 
 String Partitioning::toString() const
@@ -192,6 +194,8 @@ String Partitioning::toString() const
                     + "]";
                 if (enforce_round_robin)
                     result += "RR";
+                if (exactly_match)
+                    result += " EM";
                 return result;
             }
         case Handle::FIXED_ARBITRARY:

@@ -61,12 +61,15 @@ public:
     size_t getSizeOfValueInMemory() const override;
     bool onlyNull() const override;
     bool canBeInsideLowCardinality() const override { return nested_data_type->canBeInsideLowCardinality(); }
-    bool canBeMapValueType() const override { return nested_data_type->canBeMapValueType(); }
+
+    /// DataTypeNullable cannot be ByteMap value type, but we need to compatible old invalid tables,
+    /// this will be checked in MergeTreeMetaBase::checkColumnsValidity for newly created tables
+    bool canBeByteMapValueType() const override { return nested_data_type->canBeByteMapValueType(); }
 
     DataTypePtr tryGetSubcolumnType(const String & subcolumn_name) const override;
     ColumnPtr getSubcolumn(const String & subcolumn_name, const IColumn & column) const override;
-    SerializationPtr getSubcolumnSerialization(
-        const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const override;
+    // SerializationPtr getSubcolumnSerialization(
+    //     const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const override;
 
     const DataTypePtr & getNestedType() const { return nested_data_type; }
 

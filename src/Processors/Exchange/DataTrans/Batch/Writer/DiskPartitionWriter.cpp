@@ -39,7 +39,6 @@ DiskPartitionWriter::DiskPartitionWriter(ContextPtr context_, DiskExchangeDataMa
     , key(std::move(key_))
     , log(&Poco::Logger::get("DiskPartitionWriter"))
     , data_queue(std::make_shared<BoundedDataQueue<Chunk>>(context->getSettingsRef().exchange_remote_receiver_queue_size))
-    , low_cardinality_allow_in_native_format(context->getSettings().low_cardinality_allow_in_native_format)
     , enable_disk_writer_metrics(context->getSettingsRef().log_query_exchange)
 {
     auto query_expiration_ts = context->getQueryExpirationTimeStamp();
@@ -116,7 +115,6 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
         is_modifier = true;
         SCOPE_EXIT({
             data_queue->close();
-            buf = nullptr; /// this operation should close the file
         });
         if (status_code == BroadcastStatusCode::ALL_SENDERS_DONE)
         {
@@ -132,10 +130,8 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
                 status_code = static_cast<BroadcastStatusCode>(sender_metrics.finish_code.load(std::memory_order_acquire));
                 return BroadcastStatus(status_code, true, sender_metrics.message);
             }
-            chassert(buf); /// buf must be created at this point
             if (enable_disk_writer_metrics)
                 s.start();
-            buf->sync();
             /// commit file by renaming
             disk->replaceFile(mgr->getTemporaryFileName(*key), mgr->getFileName(*key));
             if (enable_disk_writer_metrics)
@@ -167,9 +163,9 @@ void DiskPartitionWriter::runWriteTask()
     Stopwatch s;
     if (enable_disk_writer_metrics)
         s.start();
-    buf = mgr->createFileBufferForWrite(key);
+    auto buf = mgr->createFileBufferForWrite(key);
     auto stream
-        = std::make_unique<NativeChunkOutputStream>(*buf, DBMS_TCP_PROTOCOL_VERSION, header, !low_cardinality_allow_in_native_format);
+        = std::make_unique<NativeChunkOutputStream>(*buf, header);
     if (enable_disk_writer_metrics)
         writer_metrics.create_file_ms << s.elapsedMilliseconds();
 
@@ -203,16 +199,16 @@ void DiskPartitionWriter::runWriteTask()
             s.restart();
         }
     }
-    {
-        std::unique_lock<bthread::Mutex> lock(done_mutex);
-        done = true;
-    }
-    done_cv.notify_all();
+
+    buf->sync();
+
+    SCOPE_EXIT({
+        {
+            std::unique_lock<bthread::Mutex> lock(done_mutex);
+            done = true;
+        }
+        done_cv.notify_all();
+    });
 }
 
-String DiskPartitionWriter::getFileName() const
-{
-    chassert(buf);
-    return buf->getFileName();
-}
 } // namespace DB

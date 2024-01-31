@@ -32,9 +32,11 @@
 #include "common/logger_useful.h"
 #include <Common/Exception.h>
 #include <common/JSON.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <DataTypes/ObjectUtils.h>
+#include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include <Storages/HDFS/HDFSCommon.h>
-#include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Poco/Logger.h>
 
 namespace DB
@@ -47,12 +49,12 @@ namespace ErrorCodes
     extern const int EMPTY_PARTITION_IN_DATA_MODEL_PART;
 }
 
-DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model)
+DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, Protos::DataModelPart && part_model, String && part_name)
 {
-    DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(part_model);
+    DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(std::move(part_model), std::move(part_name));
 
     /// Partition and Minmax index
-    ReadBufferFromString partition_minmax_buf(part_model.partition_minmax());
+    ReadBufferFromString partition_minmax_buf(part_model_wrapper->part_model->partition_minmax());
     if (unlikely(storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING))
         throw Exception("MergeTree data format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
 
@@ -66,14 +68,17 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
     return part_model_wrapper;
 }
 
-DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart & part_model)
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(Protos::DataModelPart && part_model, String && part_name)
 {
     DataModelPartWrapperPtr part_model_wrapper = std::make_shared<DataModelPartWrapper>();
 
     part_model_wrapper->info = createPartInfoFromModel(part_model.part_info());
-    part_model_wrapper->name = part_model_wrapper->info->getPartName();
+    if (part_name.empty())
+        part_model_wrapper->name = part_model_wrapper->info->getPartName();
+    else
+        part_model_wrapper->name = std::move(part_name);
 
-    part_model_wrapper->part_model = std::make_shared<Protos::DataModelPart>(part_model);
+    part_model_wrapper->part_model = std::make_shared<Protos::DataModelPart>(std::move(part_model));
     auto & inside_part_model = *(part_model_wrapper->part_model);
     if (!inside_part_model.has_deleted())
         inside_part_model.set_deleted(false);
@@ -254,7 +259,15 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     /// the DataModelPart::txnID not equal to DataModelPart::part_info::mutation.
     /// To handle this case, we need to set txnID and part_info::mutation separately.
     /// And when getting txnID, use DataModelPart::txnID by default, and use mutation as fallback, see ServerDataPart::txnID() .
-    part_model.set_txnid(txn_id ? txn_id : part.info.mutation);
+    if (part.secondary_txn_id != IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+    {
+        /// If we in a interactive transaction, use primary txn's txnid for this part
+        part_model.set_txnid(part.info.mutation);
+    }
+    else
+    {
+        part_model.set_txnid(txn_id ? txn_id : part.info.mutation);
+    }
     part_model.set_bucket_number(part.bucket_number);
     part_model.set_table_definition_hash(part.table_definition_hash);
     part_model.set_commit_time(part.commit_time.toUInt64());
@@ -281,6 +294,14 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     else
     {
         /// If the parts columns not match any storage version. Store it instead of columns_commit_time
+        part_model.set_columns(part.getColumns().toString());
+    }
+
+    if (DB::hasDynamicSubcolumns(storage.getInMemoryMetadata().columns))
+    {
+        if (auto commit_time = DB::getColumnsCommitTimeForJSONTable(storage, *(part.getColumnsPtr())))
+            part_model.set_columns_commit_time(commit_time);
+
         part_model.set_columns(part.getColumns().toString());
     }
 
@@ -361,9 +382,21 @@ void fillPartsModelForSend(
         part_model = part->part_model();
         part_model.set_commit_time(part->getCommitTime());
         part_model.set_virtual_part_size(part->getVirtualPartSize());
+
+        auto table_has_dynamic_subcolumns = hasDynamicSubcolumns(storage.getInMemoryMetadataPtr()->columns);
+        if (table_has_dynamic_subcolumns)
+        {
+            if (part_model.has_columns())
+            {
+                continue;
+            }
+        }
+
         if (part_model.has_columns_commit_time() && sent_columns_commit_time.count(part_model.columns_commit_time()) == 0)
         {
-            part_model.set_columns(storage.getPartColumns(part_model.columns_commit_time())->toString());
+            auto storage_columns = storage.getPartColumns(part_model.columns_commit_time());
+
+            part_model.set_columns(storage_columns->toString());
             sent_columns_commit_time.insert(part_model.columns_commit_time());
         }
         part_model.set_disk_cache_host_port(part->disk_cache_host_port);
@@ -426,7 +459,7 @@ createServerPartsFromModels(const MergeTreeMetaBase & storage, const pb::Repeate
 
     for (const auto & part_model : parts_model)
     {
-        res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, part_model)));
+        res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, Protos::DataModelPart(part_model))));
     }
 
     return res;
@@ -437,7 +470,7 @@ ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage
     auto part_model = std::make_shared<Protos::DataModelPart>();
     fillPartModel(storage, *part, *part_model);
 
-    auto res = std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, *part_model));
+    auto res = std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, std::move(*part_model)));
     if (auto prev_part = part->tryGetPreviousPart())
         res->setPreviousPart(createServerPartFromDataPart(storage, prev_part));
     return res;

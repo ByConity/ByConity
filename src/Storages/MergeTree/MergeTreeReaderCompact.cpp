@@ -21,10 +21,10 @@
 
 #include <Storages/MergeTree/MergeTreeReaderCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Common/ProfileEventsTimer.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
@@ -170,21 +170,16 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
             if (name_and_type->name == "_part_row_number")
                 continue;
 
-            NameAndTypePair column_from_part;
-
-            if (isMapKV(name_and_type->name))
+            if (name_and_type->isSubcolumn())
             {
-                auto & part_all_columns = data_part->getColumns();
-                auto map_column = std::find_if(part_all_columns.begin(), part_all_columns.end(), [&](auto & val) {
-                    return val.name + ".key" == name_and_type->name || val.name + ".value" == name_and_type->name;
-                });
-                if (map_column == part_all_columns.end())
-                    throw Exception("Map column of map kv type doesn't exist.", ErrorCodes::LOGICAL_ERROR);
-                map_kv_to_origin_col[name_and_type->name] = *map_column;
-                column_from_part = getColumnFromPart(*map_column);
+                auto storage_column_from_part = getColumnFromPart(
+                    {name_and_type->getNameInStorage(), name_and_type->getTypeInStorage()});
+
+                if (!storage_column_from_part.type->tryGetSubcolumnType(name_and_type->getSubcolumnName()))
+                    continue;
             }
-            else
-                column_from_part = getColumnFromPart(*name_and_type);
+
+            NameAndTypePair column_from_part = getColumnFromPart(*name_and_type);
 
             auto position = compact_part->getColumnPositionWithoutMap(column_from_part.name);
             if (!position && typeid_cast<const DataTypeArray *>(column_from_part.type.get()))
@@ -204,10 +199,10 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
                 continue;
 
             auto column_from_part = getColumnFromPart(column);
-            if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
+            if (column_from_part.type->isByteMap())
             {
                 // Scan the directory to get all implicit columns(stream) for the map type
-                const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column_from_part.type);
+                const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column_from_part.type);
 
                 String key_name;
                 String impl_key_name;
@@ -233,7 +228,7 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
                     }
                 }
             }
-            else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
+            else if (isMapImplicitKey(column.name)) // check if it's an implicit key and not KV
             {
                 addByteMapStreams({column.name, column.type}, parseMapNameFromImplicitColName(column.name), profile_callback_, clock_type_);
             }
@@ -312,7 +307,7 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
         res_col_to_idx[name] = i;
 
         // Each implicit map column is stored in a seperate file whose column_postition is nullptr.
-        if ((type->isMap() && !type->isMapKVStore()) || isMapImplicitKeyNotKV(name) || column_positions[i] || name == "_part_row_number")
+        if ((type->isByteMap()) || isMapImplicitKey(name) || column_positions[i] || name == "_part_row_number")
         {
             if (res_columns[i] == nullptr)
                 res_columns[i] = type->createColumn();
@@ -353,40 +348,17 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
                 size_t column_size_before_reading = column->size();
                 auto & cache = caches[column_from_part.getNameInStorage()];
 
-                if (type->isMap() && !type->isMapKVStore())
+                if (type->isByteMap())
                     readMapDataNotKV(
                         column_from_part, column, from_mark, continue_reading, current_task_last_mark, rows_to_read, res_col_to_idx, res_columns);
-                else if (isMapImplicitKeyNotKV(name))
+                else if (isMapImplicitKey(name))
                     readData(column_from_part, column, from_mark, continue_reading, current_task_last_mark, rows_to_read, cache);
                 else
                 {
                     if (!data_reader)
                         throw Exception("Compact data reader is not initialized but used.", ErrorCodes::LOGICAL_ERROR);
-                    if (map_kv_to_origin_col.count(name_and_type->name))
-                    {
-                        auto map_col = map_kv_to_origin_col[name_and_type->name];
-                        ColumnPtr map_column = map_col.type->createColumn();
-                        readCompactData(map_col, map_column, from_mark, *column_positions[pos], rows_to_read, read_only_offsets[pos]);
-                        const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(*map_column);
-                        if (map_col.name + ".key" == name_and_type->name)
-                        {
-                            auto key_store_column = column_map.getKeyStorePtr();
-                            if (column->empty())
-                                column = key_store_column;
-                            else
-                                column->assumeMutable()->insertRangeFrom(*key_store_column, 0, key_store_column->size());
-                        }
-                        else /// handle .value
-                        {
-                            auto value_store_column = column_map.getValueStorePtr();
-                            if (column->empty())
-                                column = value_store_column;
-                            else
-                                column->assumeMutable()->insertRangeFrom(*value_store_column, 0, value_store_column->size());
-                        }
-                    }
-                    else
-                        readCompactData(column_from_part, column, from_mark, *column_positions[pos], rows_to_read, read_only_offsets[pos]);
+
+                    readCompactData(column_from_part, column, from_mark, *column_positions[pos], rows_to_read, read_only_offsets[pos]);
                 }
 
                 if (column->empty())
@@ -442,6 +414,7 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
 
     next_mark = from_mark;
     next_row_number_to_read += read_rows;
+
     return read_rows;
 }
 

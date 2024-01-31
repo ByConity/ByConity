@@ -22,10 +22,12 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 #include <Core/NamesAndTypes.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
-
+#include <Storages/SelectQueryInfo.h>
+#include <Storages/MergeTree/LateMaterialize/MergeTreeRangeReaderLM.h>
 
 namespace DB
 {
@@ -60,6 +62,10 @@ struct MergeTreeReadTaskColumns
     NameSet bitmap_index_pre_columns;
     /// resulting block may require reordering in accordance with `ordered_names`
     bool should_reorder;
+    /// column names to read in each stage in chain when using early materialize read
+    std::vector<NamesAndTypesList> per_stage_columns;
+    /// nameset for bitmap column for each stage
+    std::vector<NameSet> per_stage_bitmap_nameset;
 };
 
 /// A batch of work for MergeTreeThreadSelectBlockInputStream
@@ -88,8 +94,15 @@ struct MergeTreeReadTask
     /// Used to save current range processing status
     MergeTreeRangeReader range_reader;
     MergeTreeRangeReader pre_range_reader;
+    MergeTreeRangeReaderLM * msr_range_reader = nullptr;
 
-    bool isFinished() const { return mark_ranges.empty() && range_reader.isCurrentRangeFinished(); }
+    bool isFinished() const
+    {
+        if (!msr_range_reader)
+            return mark_ranges.empty() && range_reader.isCurrentRangeFinished();
+        else
+            return mark_ranges.empty() && msr_range_reader->isCurrentRangeFinished();
+    }
 
     MergeTreeReadTask(
         const MergeTreeMetaBase::DataPartPtr & data_part_, ImmutableDeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
@@ -103,11 +116,12 @@ struct MergeTreeReadTask
 
 MergeTreeReadTaskColumns getReadTaskColumns(
     const MergeTreeMetaBase & storage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const MergeTreeMetaBase::DataPartPtr & data_part,
     const Names & required_columns,
     const PrewhereInfoPtr & prewhere_info,
     const MergeTreeIndexContextPtr & index_context,
+    const std::deque<AtomicPredicatePtr> & atomic_predicates,
     bool check_columns);
 
 struct MergeTreeBlockSizePredictor

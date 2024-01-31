@@ -17,12 +17,11 @@
 
 #include <Common/ProfileEvents.h>
 #include <Common/filesystemHelpers.h>
-#include <DataTypes/MapHelpers.h>
+#include <DataTypes/ObjectUtils.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
-#include <DataTypes/IDataType.h>
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/CollapsingSortedTransform.h>
@@ -38,8 +37,11 @@
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
-#include <WorkerTasks/ManipulationTaskParams.h>
 #include <WorkerTasks/CnchMergePrefetcher.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
+#include <Common/ProfileEvents.h>
+#include <Common/filesystemHelpers.h>
+#include <Storages/CnchTablePartitionMetrics.h>
 
 namespace ProfileEvents
 {
@@ -132,7 +134,7 @@ MergeTreeDataMerger::~MergeTreeDataMerger()
 }
 
 void MergeTreeDataMerger::prepareColumnNamesAndTypes(
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const MergeTreeMetaBase::MergingParams & merging_params,
     Names & all_column_names,
     Names & gathering_column_names,
@@ -141,8 +143,11 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes(
     NamesAndTypesList & gathering_columns,
     NamesAndTypesList & merging_columns)
 {
+    auto metadata_snapshot = storage_snapshot->metadata;
     all_column_names = metadata_snapshot->getColumns().getNamesOfPhysical();
     storage_columns = metadata_snapshot->getColumns().getAllPhysical();
+
+    extendObjectColumns(storage_columns, storage_snapshot->object_columns, false);
 
     Names sort_key_columns_vec = metadata_snapshot->getSortingKey().expression->getRequiredColumns();
     std::set<String> key_columns(sort_key_columns_vec.cbegin(), sort_key_columns_vec.cend());
@@ -279,7 +284,7 @@ MergeAlgorithm MergeTreeDataMerger::chooseMergeAlgorithm(
     {
         for (const auto & column : gathering_columns)
         {
-            if (column.type->isMap() || column.type->lowCardinality())
+            if (column.type->isByteMap() || column.type->lowCardinality() || isBitmap64(column.type))
             {
                 return MergeAlgorithm::Vertical;
             }
@@ -315,8 +320,10 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     NamesAndTypesList gathering_columns;
     NamesAndTypesList merging_columns;
 
+    auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot, context);
+
     prepareColumnNamesAndTypes(
-        metadata_snapshot,
+        storage_snapshot,
         merging_params,
         all_column_names,
         gathering_column_names,
@@ -366,12 +373,12 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         std::swap(old_gathering_columns, gathering_columns);
         for (auto & column : old_gathering_columns)
         {
-            if (column.type->isMap() && !column.type->isMapKVStore())
+            if (column.type->isByteMap())
             {
                 auto [curr, end] = getMapColumnRangeFromOrderedFiles(column.name, merged_column_to_size);
                 for (; curr != end; ++curr)
                     gathering_columns.emplace_back(
-                        curr->first, dynamic_cast<const DataTypeByteMap *>(column.type.get())->getValueTypeForImplicitColumn());
+                        curr->first, dynamic_cast<const DataTypeMap *>(column.type.get())->getValueTypeForImplicitColumn());
             }
             else
             {
@@ -425,7 +432,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
 
         auto input = std::make_unique<MergeTreeSequentialSource>(
             data,
-            metadata_snapshot,
+            storage_snapshot,
             part,
             merging_column_names,
             read_with_direct_io,
@@ -586,6 +593,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     while (!check_cancel() && (block = merged_stream->read()))
     {
         rows_written += block.rows();
+
         to->write(block);
 
         manipulation_entry->rows_written = merged_stream->getProfileInfo().rows;
@@ -614,8 +622,8 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         throw Exception(
             "Written " + toString(rows_written) + " rows, but output rowid is " + toString(output_rowid), ErrorCodes::LOGICAL_ERROR);
 
+
     // gather columns
-    size_t normal_columns_gathered = 0;
     MergeTreeDataPartChecksums additional_column_checksums;
     if (merge_alg == MergeAlgorithm::Vertical)
     {
@@ -650,14 +658,10 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             /*can_use_adaptive_granularity = */ new_data_part->index_granularity_info.is_adaptive,
             /* rewrite_primary_key = */ false,
             /*blocks_are_granules_size = */ false,
-            context->getSettingsRef().optimize_map_column_serialization);
+            context->getSettingsRef().optimize_map_column_serialization,
+            /* enable_disk_based_key_index_ = */ false);
 
-        for (auto & [column_name, column_type] : gathering_columns)
-        {
-            if (column_type->isMap() && !column_type->isMapKVStore())
-                continue;
-            // gather each column
-            /// Prepare progress
+        auto gather_column = [&](const String & column_name) {
             Float64 progress_before = manipulation_entry->progress.load(std::memory_order_relaxed);
             Float64 column_weight = column_sizes->columnWeight(column_name);
             MergeStageProgress column_progress(progress_before, column_weight);
@@ -672,13 +676,14 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
 
                 auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
                     data,
-                    metadata_snapshot,
+                    storage_snapshot,
                     source_data_parts[part_num],
                     Names{column_name},
                     read_with_direct_io,
-                    /*take_column_types_from_storage*/ true,
+                    /*take_column_types_from_storage*/ true, /// default is true, in bitengine may set false,
                     /*quiet*/ false,
                     future_files);
+
                 column_part_source->setProgressCallback(
                     ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, column_progress));
 
@@ -752,8 +757,14 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             manipulation_entry->bytes_written_uncompressed.fetch_add(
                 column_gathered_stream.getProfileInfo().bytes, std::memory_order_relaxed);
             manipulation_entry->progress.store(progress_before + column_weight, std::memory_order_relaxed);
+        };
 
-            normal_columns_gathered += 1;
+        for (auto & [column_name, column_type] : gathering_columns)
+        {
+            if (column_type->isByteMap())
+                continue;
+
+            gather_column(column_name);
         }
 
         LOG_DEBUG(log, "Gathered {} columns in vertical merge, read {} rows for each column, part name is {}", gathering_columns.size(), rows_written, new_data_part->name);

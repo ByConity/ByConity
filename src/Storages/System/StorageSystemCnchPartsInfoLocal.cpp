@@ -63,7 +63,7 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
 
 Pipe StorageSystemCnchPartsInfoLocal::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -80,7 +80,7 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
     if (active_tables.empty())
         return {};
 
-    Block sample_block = metadata_snapshot->getSampleBlock();
+    Block sample_block = storage_snapshot->metadata->getSampleBlock();
     Block res_block;
 
     NameSet names_set(column_names.begin(), column_names.end());
@@ -227,31 +227,6 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                     res_columns[dest_index++]->insert(metrics_data.total_parts_size);
                 if (columns_mask[src_index++])
                     res_columns[dest_index++]->insert(metrics_data.total_rows_count);
-                if (columns_mask[src_index++])
-                {
-                    ReadyState state = ReadyState::Unloaded;
-                    if (entry->loading_metrics)
-                        state = ReadyState::Loading;
-                    if (entry->partition_metrics_loaded)
-                        state = ReadyState::Loaded;
-                    res_columns[dest_index++]->insert(state);
-                }
-                if (columns_mask[src_index++])
-                    res_columns[dest_index++]->insert(it->second->partition_info_ptr->metrics_ptr->isRecalculating());
-                if (columns_mask[src_index++])
-                {
-                    UInt64 last_update_time = metrics_data.last_update_time;
-                    if (last_update_time == TxnTimestamp::maxTS())
-                        last_update_time = current_ts;
-                    res_columns[dest_index++]->insert(TxnTimestamp(last_update_time).toSecond());
-                }
-                if (columns_mask[src_index++])
-                {
-                    UInt64 last_snapshot_time = metrics_data.last_snapshot_time;
-                    if (last_snapshot_time == TxnTimestamp::maxTS())
-                        last_snapshot_time = current_ts;
-                    res_columns[dest_index++]->insert(TxnTimestamp(last_snapshot_time).toSecond());
-                }
             }
             else
             {
@@ -264,14 +239,31 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                     res_columns[dest_index++]->insert(0);
                 if (columns_mask[src_index++])
                     res_columns[dest_index++]->insert(0);
-                if (columns_mask[src_index++])
-                    res_columns[dest_index++]->insert(0);
-                if (columns_mask[src_index++])
-                    res_columns[dest_index++]->insert(0);
-                if (columns_mask[src_index++])
-                    res_columns[dest_index++]->insert(0);
-                if (columns_mask[src_index++])
-                    res_columns[dest_index++]->insert(0);
+            }
+            if (columns_mask[src_index++])
+            {
+                ReadyState state = ReadyState::Unloaded;
+                if (entry->loading_metrics)
+                    state = ReadyState::Loading;
+                if (entry->partition_metrics_loaded)
+                    state = ReadyState::Loaded;
+                res_columns[dest_index++]->insert(state);
+            }
+            if (columns_mask[src_index++])
+                res_columns[dest_index++]->insert(it->second->partition_info_ptr->metrics_ptr->isRecalculating());
+            if (columns_mask[src_index++])
+            {
+                UInt64 last_update_time = metrics_data.last_update_time;
+                if (last_update_time == TxnTimestamp::maxTS())
+                    last_update_time = current_ts;
+                res_columns[dest_index++]->insert(TxnTimestamp(last_update_time).toSecond());
+            }
+            if (columns_mask[src_index++])
+            {
+                UInt64 last_snapshot_time = metrics_data.last_snapshot_time;
+                if (last_snapshot_time == TxnTimestamp::maxTS())
+                    last_snapshot_time = current_ts;
+                res_columns[dest_index++]->insert(TxnTimestamp(last_snapshot_time).toSecond());
             }
         }
     }

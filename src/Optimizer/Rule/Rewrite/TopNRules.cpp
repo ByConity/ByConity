@@ -4,13 +4,28 @@
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/SortingStep.h>
+#include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TopNFilteringStep.h>
 
 namespace DB
 {
+
+namespace
+{
+    UInt64 getMaxRowsToUseTopnFiltering(const ContextPtr & context)
+    {
+        UInt64 res = context->getSettingsRef().max_rows_to_use_topn_filtering;
+        // better consider row count also
+        if (res == 0)
+            res = context->getSettingsRef().max_block_size / 10;
+        return res;
+    }
+};
+
 PatternPtr CreateTopNFilteringForAggregating::getPattern() const
 {
     // TopN -> Aggregating -> !TopNFiltering
+    // by this pattern, we also assume GROUP WITH TOTALS is not matched
     return Patterns::topN()
         .withSingle(Patterns::aggregating().withSingle(Patterns::any().matching(
             [](const PlanNodePtr & node, auto &) { return node->getStep()->getType() != IQueryPlanStep::Type::TopNFiltering; })))
@@ -19,15 +34,26 @@ PatternPtr CreateTopNFilteringForAggregating::getPattern() const
 
 TransformResult CreateTopNFilteringForAggregating::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
-    // TODO: in long term, TopNFilteringStep should be generated according to property and/or cost
-    if (!context.context->getSettingsRef().enable_topn_filtering_optimization)
+    const auto & topn_step = dynamic_cast<const SortingStep &>(*node->getStep());
+
+    if (topn_step.getLimit() > getMaxRowsToUseTopnFiltering(context.context))
         return {};
 
-    const auto & topn_step = dynamic_cast<const SortingStep &>(*node->getStep());
     auto & aggregate_node = node->getChildren()[0];
     const auto & aggregate_step = dynamic_cast<const AggregatingStep &>(*aggregate_node->getStep());
 
     NameSet agg_keys{aggregate_step.getKeys().begin(), aggregate_step.getKeys().end()};
+
+    for (const auto & set_param : aggregate_step.getGroupingSetsParams())
+    {
+        for (auto it = agg_keys.begin(); it != agg_keys.end();)
+        {
+            if (std::find(set_param.used_key_names.begin(), set_param.used_key_names.end(), *it) == set_param.used_key_names.end())
+                it = agg_keys.erase(it);
+            else
+                ++it;
+        }
+    }
 
     // if topN sort column is from an aggregate function, fail to rewrite
     for (const auto & sort_column_desc : topn_step.getSortDescription())
@@ -76,7 +102,7 @@ TransformResult PushTopNThroughProjection::transformImpl(PlanNodePtr node, const
             source->getStep()->getOutputStream(),
             new_sort,
             topn_step->getLimit(),
-            topn_step->isPartial(), 
+            topn_step->isPartial(),
             topn_step->getPrefixDescription()),
         {source});
 
@@ -119,4 +145,37 @@ TransformResult PushTopNFilteringThroughProjection::transformImpl(PlanNodePtr no
     return TransformResult{projection};
 }
 
+PatternPtr PushTopNFilteringThroughUnion::getPattern() const
+{
+    return Patterns::topNFiltering().withSingle(Patterns::unionn()).result();
+}
+
+TransformResult PushTopNFilteringThroughUnion::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    const auto & topn_filter_step = dynamic_cast<const TopNFilteringStep &>(*node->getStep());
+    auto unionn = node->getChildren()[0];
+    auto & unionn_step = dynamic_cast<UnionStep &>(*unionn->getStep());
+    PlanNodes new_unionn_children;
+
+    for (size_t idx = 0; idx < unionn->getChildren().size(); ++idx)
+    {
+        auto mappings = unionn_step.getOutToInput(idx);
+        auto symbol_mapper = SymbolMapper::simpleMapper(mappings);
+        auto source = unionn->getChildren().at(idx);
+
+        auto new_source = PlanNodeBase::createPlanNode(
+            context.context->nextNodeId(),
+            std::make_shared<TopNFilteringStep>(
+                source->getStep()->getOutputStream(),
+                symbol_mapper.map(topn_filter_step.getSortDescription()),
+                topn_filter_step.getSize(),
+                topn_filter_step.getModel()),
+            {source});
+
+        new_unionn_children.push_back(new_source);
+    }
+
+    unionn->replaceChildren(new_unionn_children);
+    return TransformResult{unionn};
+}
 }

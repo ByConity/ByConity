@@ -53,16 +53,36 @@ PatternRawPtrs Pattern::getChildrenPatterns() const
 
 // By convention, the head pattern is a TypeOfPattern,
 // which indicates which plan node type this pattern is targeted to
-IQueryPlanStep::Type Pattern::getTargetType() const
+std::unordered_set<IQueryPlanStep::Type> Pattern::getTargetTypes() const
 {
     PatternRawPtr pattern = this;
     while (pattern->getPrevious())
         pattern = pattern->getPrevious();
 
     if (const auto * type_of_pattern = dynamic_cast<const TypeOfPattern *>(pattern))
-        return type_of_pattern->type;
+        return {type_of_pattern->type};
+    else if (const auto * or_pattern = dynamic_cast<const OneOfPattern *>(pattern))
+    {
+        std::unordered_set<IQueryPlanStep::Type> result;
+        for (const auto & sub_pat : or_pattern->getSubPatterns())
+        {
+            auto sub_res = sub_pat->getTargetTypes();
+            result.insert(sub_res.begin(), sub_res.end());
+        }
+        return result;
+    }
     else
-        throw Exception("Head pattern must be a TypeOfPattern, illegal pattern found: " + toString(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Head pattern must be a TypeOfPattern or OneOfPattern, illegal pattern found: " + toString(), ErrorCodes::LOGICAL_ERROR);
+}
+
+IQueryPlanStep::Type Pattern::getTargetType() const
+{
+    auto types = getTargetTypes();
+    if (types.size() != 1)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "pattern's target type is not unique");
+
+    return *types.begin();
 }
 
 String Pattern::toString() const
@@ -174,6 +194,28 @@ void WithPattern::accept(PatternVisitor & pattern_visitor) const
     pattern_visitor.visitWithPattern(*this);
 }
 
+PatternRawPtrs OneOfPattern::getSubPatterns() const
+{
+    PatternRawPtrs res;
+    for (const auto & sub : sub_patterns)
+        res.emplace_back(sub.get());
+    return res;
+}
+
+std::optional<Match> OneOfPattern::accept(const PlanNodePtr & node, Captures & captures) const
+{
+    for (const auto & sub_pattern : sub_patterns)
+        if (auto sub_res = sub_pattern->match(node, captures))
+            return sub_res;
+
+    return std::nullopt;
+}
+
+void OneOfPattern::accept(PatternVisitor & pattern_visitor) const
+{
+    pattern_visitor.visitOneOfPattern(*this);
+}
+
 void PatternPrinter::appendLine(const std::string & str)
 {
     if (first)
@@ -246,4 +288,15 @@ void PatternPrinter::visitFilterPattern(const FilterPattern & pattern)
     appendLine("filter by: " + pattern.name);
 }
 
+void PatternPrinter::visitOneOfPattern(const OneOfPattern & pattern)
+{
+    visitPrevious(pattern);
+    appendLine("or:");
+    for (auto & sub_pattern : pattern.getSubPatterns())
+    {
+        level++;
+        sub_pattern->accept(*this);
+        level--;
+    }
+}
 }

@@ -69,7 +69,6 @@ private:
         clockid_t clock_type, FileStreamBuilders* stream_builders);
     void executeFileStreamBuilders(FileStreamBuilders& stream_builders);
     void addStreamsIfNoBurden(const NameAndTypePair& name_and_type,
-        const std::function<String(const String&, const ISerialization::SubstreamPath&)>& file_name_getter,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback,
         const ProgressCallback & internal_progress_cb,
         clockid_t clock_type, FileStreamBuilders* stream_builders);

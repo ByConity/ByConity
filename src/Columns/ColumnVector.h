@@ -356,6 +356,21 @@ public:
         return typeid(rhs) == typeid(ColumnVector<T>);
     }
 
+    double getRatioOfDefaultRows(double sample_ratio) const override
+    {
+        return this->template getRatioOfDefaultRowsImpl<Self>(sample_ratio);
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return this->template getNumberOfDefaultRowsImpl<Self>();
+    }
+
+    void getIndicesOfNonDefaultRows(IColumn::Offsets & indices, size_t from, size_t limit) const override
+    {
+        return this->template getIndicesOfNonDefaultRowsImpl<Self>(indices, from, limit);
+    }
+
     ColumnPtr compress() const override;
 
     /// Replace elements that match the filter with zeroes. If inverted replaces not matched elements.
@@ -422,5 +437,7 @@ extern template class ColumnVector<Int256>;
 extern template class ColumnVector<Float32>;
 extern template class ColumnVector<Float64>;
 extern template class ColumnVector<UUID>;
+extern template class ColumnVector<IPv4>;
+extern template class ColumnVector<IPv6>;
 
 }

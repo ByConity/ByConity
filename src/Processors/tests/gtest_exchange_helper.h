@@ -109,7 +109,8 @@ protected:
     uint64_t interval_ms = 10000;
     size_t rows = 7;
     UInt64 exchange_id = 1;
-    UInt64 parallel_idx = 0;
+    UInt32 parallel_idx = 0;
+    const String host = "localhost:6666";
     const String rpc_host = "127.0.0.1:8001";
     size_t write_segment_id = 0;
     size_t read_segment_id = 1;

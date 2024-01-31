@@ -7,6 +7,7 @@
 #include <Access/User.h>
 #include <Access/EnabledRolesInfo.h>
 #include <Access/EnabledSettings.h>
+#include <Access/SettingsProfilesInfo.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Common/Exception.h>
 #include <Common/quoteString.h>
@@ -41,9 +42,17 @@ namespace
     }
 
 
-    AccessRights addImplicitAccessRights(const AccessRights & access)
+    AccessRights addImplicitAccessRights(const AccessRights & access, const AccessControlManager & manager)
     {
-        auto modifier = [&](const AccessFlags & flags, const AccessFlags & min_flags_with_children, const AccessFlags & max_flags_with_children, const std::string_view & database, const std::string_view & table, const std::string_view & column) -> AccessFlags
+        AccessFlags max_flags;
+
+        auto modifier = [&](const AccessFlags & flags,
+                            const AccessFlags & min_flags_with_children,
+                            const AccessFlags & max_flags_with_children,
+                            std::string_view database,
+                            std::string_view table,
+                            std::string_view column,
+                            bool /* grant_option */) -> AccessFlags
         {
             size_t level = !database.empty() + !table.empty() + !column.empty();
             AccessFlags res = flags;
@@ -112,14 +121,80 @@ namespace
                 res |= show_databases;
             }
 
+            max_flags |= res;
+
             return res;
         };
 
         AccessRights res = access;
         res.modifyFlags(modifier);
 
-        /// Anyone has access to the "system" database.
-        res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE);
+        /// If "select_from_system_db_requires_grant" is enabled we provide implicit grants only for a few tables in the system database.
+        if (manager.doesSelectFromSystemDatabaseRequireGrant())
+        {
+            const char * always_accessible_tables[] = {
+                /// Constant tables
+                "one",
+
+                /// "numbers", "numbers_mt", "zeros", "zeros_mt" were excluded because they can generate lots of values and
+                /// that can decrease performance in some cases.
+
+                "contributors",
+                "licenses",
+                "time_zones",
+                "collations",
+
+                "formats",
+                "privileges",
+                "data_type_families",
+                "table_engines",
+                "table_functions",
+                "aggregate_function_combinators",
+
+                "functions", /// Can contain user-defined functions
+
+                /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
+                "databases",
+                "tables",
+                "columns",
+
+                /// Specific to the current session
+                "settings",
+                "current_roles",
+                "enabled_roles",
+                "quota_usage"
+            };
+
+            for (const auto * table_name : always_accessible_tables)
+                res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE, table_name);
+
+            if (max_flags.contains(AccessType::SHOW_USERS))
+                res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE, "users");
+
+            if (max_flags.contains(AccessType::SHOW_ROLES))
+                res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE, "roles");
+
+            if (max_flags.contains(AccessType::SHOW_ROW_POLICIES))
+                res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE, "row_policies");
+
+            if (max_flags.contains(AccessType::SHOW_SETTINGS_PROFILES))
+                res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE, "settings_profiles");
+
+            if (max_flags.contains(AccessType::SHOW_QUOTAS))
+                res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE, "quotas");
+        }
+        else
+        {
+            res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE);
+        }
+
+        /// If "select_from_information_schema_requires_grant" is enabled we don't provide implicit grants for the information_schema database.
+        if (!manager.doesSelectFromInformationSchemaRequireGrant())
+        {
+            res.grant(AccessType::SELECT, DatabaseCatalog::INFORMATION_SCHEMA);
+            res.grant(AccessType::SELECT, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
+        }
+
         return res;
     }
 
@@ -219,7 +294,7 @@ void ContextAccess::setRolesInfo(const std::shared_ptr<const EnabledRolesInfo> &
 void ContextAccess::calculateAccessRights() const
 {
     access = std::make_shared<AccessRights>(mixAccessRightsFromUserAndRoles(*user, *roles_info));
-    access_with_implicit = std::make_shared<AccessRights>(addImplicitAccessRights(*access));
+    access_with_implicit = std::make_shared<AccessRights>(addImplicitAccessRights(*access, *manager));
 
     if (trace_log)
     {
@@ -300,30 +375,31 @@ std::shared_ptr<const ContextAccess> ContextAccess::getFullAccess()
         auto full_access = std::shared_ptr<ContextAccess>(new ContextAccess);
         full_access->is_full_access = true;
         full_access->access = std::make_shared<AccessRights>(AccessRights::getFullAccess());
-        full_access->access_with_implicit = std::make_shared<AccessRights>(addImplicitAccessRights(*full_access->access));
+        full_access->access_with_implicit = full_access->access;
         return full_access;
     }();
     return res;
 }
 
 
-std::shared_ptr<const Settings> ContextAccess::getDefaultSettings() const
+SettingsChanges ContextAccess::getDefaultSettings() const
 {
     std::lock_guard lock{mutex};
     if (enabled_settings)
-        return enabled_settings->getSettings();
-    static const auto everything_by_default = std::make_shared<Settings>();
-    return everything_by_default;
+    {
+        if (auto info = enabled_settings->getInfo())
+            return info->settings;
+    }
+    return {};
 }
 
-
-std::shared_ptr<const SettingsConstraints> ContextAccess::getSettingsConstraints() const
+std::shared_ptr<const SettingsProfilesInfo> ContextAccess::getDefaultProfileInfo() const
 {
     std::lock_guard lock{mutex};
     if (enabled_settings)
-        return enabled_settings->getConstraints();
-    static const auto no_constraints = std::make_shared<SettingsConstraints>();
-    return no_constraints;
+        return enabled_settings->getInfo();
+    static const auto everything_by_default = std::make_shared<SettingsProfilesInfo>(*manager);
+    return everything_by_default;
 }
 
 

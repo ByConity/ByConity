@@ -40,11 +40,11 @@
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/RemoteBlockInputStream.h>
 
-#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <Core/Field.h>
 
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
 #include <Common/ZooKeeper/KeeperException.h>
@@ -84,14 +84,8 @@ std::optional<NameAndTypePair> IngestPartition::tryGetMapColumn(const StorageInM
         auto & columns = meta_data.getColumns();
         for (auto & nt : (columns.getOrdinary()))
         {
-            if (nt.type->isMap())
-            {
-                if (nt.type->isMapKVStore() ? (col_name == nt.name + ".key" || col_name == nt.name + ".value")
-                                            : startsWith(col_name, getMapKeyPrefix(nt.name)))
-                {
-                    return nt;
-                }
-            }
+            if (nt.type->isByteMap() && startsWith(col_name, getMapKeyPrefix(nt.name)))
+                return nt;
         }
     }
 
@@ -129,7 +123,7 @@ void IngestPartition::writeNewPart(const StorageInMemoryMetadata & meta_data, co
                     target_column_types.push_back(map_col.type);
                     target_column_names.push_back(map_col.name);
 
-                    const auto & map_col_type = typeid_cast<const DataTypeByteMap &>(*map_col.type);
+                    const auto & map_col_type = typeid_cast<const DataTypeMap &>(*map_col.type);
                     key_types.emplace(map_col.name, map_col_type.getKeyType());
                 }
 
@@ -157,7 +151,7 @@ void IngestPartition::writeNewPart(const StorageInMemoryMetadata & meta_data, co
                     if (target_column_types[i]->isMap())
                     {
                         auto & key_type = key_types[target_column_names[i]];
-                        ByteMap map;
+                        Map map;
 
                         for (auto & entry : src_columns[target_column_names[i]])
                         {
@@ -264,7 +258,7 @@ void IngestPartition::checkIngestColumns(const StorageInMemoryMetadata & meta_da
         if (!all_columns.emplace(col_name).second)
             throw Exception("Ingest duplicate column " + backQuoteIfNeed(col_name), ErrorCodes::DUPLICATE_COLUMN);
 
-        if (isMapImplicitKeyNotKV(col_name))
+        if (isMapImplicitKey(col_name))
         {
             has_map_implicite_key = true;
             continue;
@@ -280,8 +274,8 @@ void IngestPartition::checkColumnStructure(const StorageInMemoryMetadata & targe
 {
     for (const auto & col_name : names)
     {
-        const auto & target = target_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
-        const auto & src = src_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
+        const auto & target = target_data.getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, col_name);
+        const auto & src = src_data.getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, col_name);
 
         if (target.name != src.name)
             throw Exception("Column structure mismatch, found different names of column " + backQuoteIfNeed(col_name),
@@ -503,9 +497,9 @@ bool IngestPartition::ingestPartition()
     {
         auto column_name = name;
         /// No need to add implicit map column
-        if (isMapImplicitKeyNotKV(name))
+        if (isMapImplicitKey(name))
             column_name = parseMapNameFromImplicitColName(name);
-        auto column = target_meta->getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
+        auto column = target_meta->getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, column_name);
         ingested_header.insertUnique(ColumnWithTypeAndName(column.type, column.name));
     }
 
@@ -532,6 +526,7 @@ IngestPartition::IngestSources IngestPartition::generateSourceBlocks(MergeTreeDa
     auto settings = context->getSettingsRef();
     IngestPartition::IngestSources src_blocks;
     auto match_type = std::make_shared<DataTypeUInt8>();
+    auto storage_snapshot = source_data.getStorageSnapshot(source_data.getInMemoryMetadataPtr(), context);
 
     for (auto & read_part : parts_to_read)
     {
@@ -540,7 +535,7 @@ IngestPartition::IngestSources IngestPartition::generateSourceBlocks(MergeTreeDa
 
 
         auto source_input = std::make_shared<MergeTreeSequentialSource>(source_data,
-                                                                        source_data.getInMemoryMetadataPtr(),
+                                                                        storage_snapshot,
                                                                         read_part,
                                                                         nullptr,
                                                                         all_columns_with_partition_key,
@@ -599,7 +594,7 @@ IngestParts IngestPartition::generateIngestParts(MergeTreeData & data, const Mer
 
 ASTPtr IngestPartition::getDefaultFilter(const String & column_name)
 {
-    auto name_type = target_table->getInMemoryMetadata().getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
+    auto name_type = target_table->getInMemoryMetadata().getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, column_name);
     Field value = name_type.type->getDefault();
     auto literal = std::make_shared<ASTLiteral>(value);
     auto identifier = std::make_shared<ASTIdentifier>(column_name);
@@ -875,8 +870,9 @@ void IngestPartition::ingestWidePart(MergeTreeData & data,
      * and source block has 2 too. if 2 of target block is not read, a new part will be generated,
      * so that we get duplicated key.
      */
+    auto storage_snapshot = data.getStorageSnapshot(data.getInMemoryMetadataPtr(), context);
     auto source_input = std::make_shared<MergeTreeSequentialSource>(data,
-                                                                    data.getInMemoryMetadataPtr(),
+                                                                    storage_snapshot,
                                                                     target_part,
                                                                     nullptr,
                                                                     all_columns,
@@ -943,8 +939,10 @@ void IngestPartition::ingestCompactPart(
 {
     bool read_with_direct_io = settings.min_bytes_to_use_direct_io != 0 &&
                                 target_part->getBytesOnDisk() >= settings.min_bytes_to_use_direct_io;
+
+    auto storage_snapshot = data.getStorageSnapshot(data.getInMemoryMetadataPtr(), {});
     auto source_input = std::make_shared<MergeTreeSequentialSource>(data,
-                                                                    data.getInMemoryMetadataPtr(),
+                                                                    storage_snapshot,
                                                                     target_part,
                                                                     nullptr,
                                                                     part_columns.getNames(),
@@ -970,7 +968,7 @@ void IngestPartition::ingestCompactPart(
     NamesAndTypesList compact_out_columns;
     for (auto & column : part_columns)
     {
-        if (isMapImplicitKeyNotKV(column.name))
+        if (isMapImplicitKey(column.name))
             continue;
 
         compact_out_columns.push_back(column);
@@ -1117,7 +1115,7 @@ Block IngestPartition::blockJoinBlocks(MergeTreeData & data,
         std::unordered_map<String, Names> implicit_names_mapping;
         for (auto & col_name : ingest_column_names)
         {
-            if (isMapImplicitKeyNotKV(col_name))
+            if (isMapImplicitKey(col_name))
             {
                 auto map_col_name = parseMapNameFromImplicitColName(col_name);
                 implicit_names_mapping[map_col_name].push_back(col_name);
@@ -1138,12 +1136,11 @@ Block IngestPartition::blockJoinBlocks(MergeTreeData & data,
              * map1{'k1'}, map1{'k2'}, implicit column k1 and k2 should compact to map1
              */
             auto it = implicit_names_mapping.find(column_with_type_name.name);
-            auto * map_column = const_cast<ColumnByteMap *>(
-                                    typeid_cast<const ColumnByteMap *>(column_with_type_name.column.get()));
+            auto * map_column = const_cast<ColumnMap *>(typeid_cast<const ColumnMap *>(column_with_type_name.column.get()));
             if (it != implicit_names_mapping.end() && map_column)
             {
                 std::unordered_map<String, ColumnPtr> implicit_columns;
-                auto const & map_key_type = dynamic_cast<const DataTypeByteMap*>(column_with_type_name.type.get())->getKeyType();
+                auto const & map_key_type = dynamic_cast<const DataTypeMap *>(column_with_type_name.type.get())->getKeyType();
                 for (auto & col_name : it->second)
                 {
                     /// Attention: key_name has been quoted, we need to remove the quote.

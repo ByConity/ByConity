@@ -79,6 +79,8 @@ public:
      */
     virtual void resetParser();
 
+    virtual void setReadBuffer(ReadBuffer & in_);
+    
     virtual const BlockMissingValues & getMissingValues() const
     {
         static const BlockMissingValues none;

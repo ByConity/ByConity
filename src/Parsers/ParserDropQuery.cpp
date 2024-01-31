@@ -28,6 +28,8 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ParserKeyword s_no_delay("NO DELAY");
     ParserKeyword s_sync("SYNC");
 
+    ParserKeyword s_schema("SCHEMA");
+
     ASTPtr catalog;
     ASTPtr database;
     ASTPtr table;
@@ -49,7 +51,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
             return false;
         tryRewriteHiveCatalogName(catalog, pos.getContext());
     }
-    else if (s_database.ignore(pos, expected))
+    else if (s_database.ignore(pos, expected) || s_schema.ignore(pos, expected))
     {
         if (s_if_exists.ignore(pos, expected))
             if_exists = true;

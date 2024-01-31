@@ -21,4 +21,9 @@ void IInputFormat::resetParser()
     getPort().getInputPort().reopen();
 }
 
+void IInputFormat::setReadBuffer(ReadBuffer & in_)
+{
+    in = in_;
+}
+
 }

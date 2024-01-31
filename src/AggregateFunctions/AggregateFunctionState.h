@@ -74,6 +74,8 @@ public:
         nested_func->destroy(place);
     }
 
+    void destroyUpToState(AggregateDataPtr __restrict) const noexcept override {}
+
     bool hasTrivialDestructor() const override
     {
         return nested_func->hasTrivialDestructor();
@@ -112,6 +114,11 @@ public:
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         assert_cast<ColumnAggregateFunction &>(to).getData().push_back(place);
+    }
+
+    void insertMergeResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
+    {
+        assert_cast<ColumnAggregateFunction &>(to).insertFrom(place);
     }
 
     /// Aggregate function or aggregate function state.

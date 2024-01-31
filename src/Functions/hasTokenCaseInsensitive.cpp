@@ -1,12 +1,10 @@
-#include "FunctionsStringSearch.h"
 #include <Functions/FunctionFactory.h>
-#include "HasTokenImpl.h"
+#include <Functions/FunctionsStringSearch.h>
+#include <Functions/HasTokenImpl.h>
+
 #include <Common/Volnitsky.h>
 
-
 namespace DB
-{
-namespace
 {
 
 struct NameHasTokenCaseInsensitive
@@ -14,14 +12,21 @@ struct NameHasTokenCaseInsensitive
     static constexpr auto name = "hasTokenCaseInsensitive";
 };
 
-using FunctionHasTokenCaseInsensitive
-    = FunctionsStringSearch<HasTokenImpl<VolnitskyCaseInsensitiveToken, false>, NameHasTokenCaseInsensitive>;
+struct NameHasTokenCaseInsensitiveOrNull
+{
+    static constexpr auto name = "hasTokenCaseInsensitiveOrNull";
+};
 
-}
+using FunctionHasTokenCaseInsensitive
+    = FunctionsStringSearch<HasTokenImpl<NameHasTokenCaseInsensitive, VolnitskyCaseInsensitive, false>>;
+using FunctionHasTokenCaseInsensitiveOrNull
+    = FunctionsStringSearch<HasTokenImpl<NameHasTokenCaseInsensitiveOrNull, VolnitskyCaseInsensitive, false>, ExecutionErrorPolicy::Null>;
 
 REGISTER_FUNCTION(HasTokenCaseInsensitive)
 {
-    factory.registerFunction<FunctionHasTokenCaseInsensitive>();
+    factory.registerFunction<FunctionHasTokenCaseInsensitive>(DB::FunctionFactory::CaseInsensitive);
+
+    factory.registerFunction<FunctionHasTokenCaseInsensitiveOrNull>(DB::FunctionFactory::CaseInsensitive);
 }
 
 }

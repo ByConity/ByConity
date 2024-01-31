@@ -471,6 +471,9 @@ enum StealingCacheMode : UInt64
     /* Metastore settings */\
     M(Bool, enable_metastore, false, "Use KV metastore to manage data parts.", 0) \
     M(Bool, enable_persistent_checksum, true, "[Deprecated] Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
+    /* Early materialze settings */\
+    M(Bool, enable_late_materialize, false, "Use early materialize pipelined instead of prewhere while reading from merge tree", 0) \
+    /** Obsolete settings. Kept for backward compatibility only. */ \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
     /*keep enable_preload_parts for compitable*/ \
@@ -517,7 +520,6 @@ enum StealingCacheMode : UInt64
     M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \
 \
     M(String, remote_storage_type, "hdfs", "Table's storage type[deprcated]", 0) \
-    \
     /** BitEngine related settings */ \
     M(UInt64, bitengine_split_index, 0, "Copatible setting for split BitEngine dict data, no real use", 0) \
     M(Float, bitengine_encode_loss_rate, 0.1, "The threshold that BitEngine discard some data and no exception will be thrown when encoding", 0) \
@@ -528,6 +530,10 @@ enum StealingCacheMode : UInt64
     M(Bool, enable_hybrid_allocation, false, "Whether or not enable hybrid allocation, default disabled", 0) \
     M(UInt64, min_rows_per_vp, 2000000, "Minimum size of a virtual part", 0) \
     M(Float, part_to_vw_size_ratio, 0.1, "Part to vw worker size's ration", 0) \
+    /** JSON related settings start*/ \
+    M(UInt64, json_subcolumns_threshold, 1000, "Max number of json sub columns", 0) \
+    M(UInt64, json_partial_schema_assemble_batch_size, 100, "Batch size to assemble dynamic object column schema", 0) \
+    /** JSON related settings end*/ \
     \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \

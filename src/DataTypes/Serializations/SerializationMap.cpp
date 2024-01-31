@@ -13,6 +13,7 @@
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 #include <Common/quoteString.h>
+#include <DataTypes/DataTypeMap.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
@@ -49,10 +50,8 @@ void SerializationMap::serializeBinary(const Field & field, WriteBuffer & ostr) 
     writeVarUInt(map.size(), ostr);
     for (const auto & elem : map)
     {
-        const auto & tuple = elem.safeGet<const Tuple>();
-        assert(tuple.size() == 2);
-        key->serializeBinary(tuple[0], ostr);
-        value->serializeBinary(tuple[1], ostr);
+        key->serializeBinary(elem.first, ostr);
+        value->serializeBinary(elem.second, ostr);
     }
 }
 
@@ -63,10 +62,8 @@ void SerializationMap::deserializeBinary(Field & field, ReadBuffer & istr) const
     field = Map(size);
     for (auto & elem : field.get<Map &>())
     {
-        Tuple tuple(2);
-        key->deserializeBinary(tuple[0], istr);
-        value->deserializeBinary(tuple[1], istr);
-        elem = std::move(tuple);
+        key->deserializeBinary(elem.first, istr);
+        value->deserializeBinary(elem.second, istr);
     }
 }
 
@@ -90,10 +87,7 @@ void SerializationMap::serializeTextImpl(
     ValueWriter && value_writer) const
 {
     const auto & column_map = assert_cast<const ColumnMap &>(column);
-
-    const auto & nested_array = column_map.getNestedColumn();
-    const auto & nested_tuple = column_map.getNestedData();
-    const auto & offsets = nested_array.getOffsets();
+    const auto & offsets = column_map.getOffsets();
 
     size_t offset = offsets[row_num - 1];
     size_t next_offset = offsets[row_num];
@@ -104,9 +98,9 @@ void SerializationMap::serializeTextImpl(
         if (i != offset)
             writeChar(',', ostr);
 
-        key_writer(ostr, key, nested_tuple.getColumn(0), i);
+        key_writer(ostr, key, column_map.getKey(), i);
         writeChar(':', ostr);
-        value_writer(ostr, value, nested_tuple.getColumn(1), i);
+        value_writer(ostr, value, column_map.getValue(), i);
     }
     writeChar('}', ostr);
 }
@@ -115,13 +109,17 @@ template <typename Reader>
 void SerializationMap::deserializeTextImpl(IColumn & column, ReadBuffer & istr, Reader && reader, const FormatSettings & settings) const
 {
     auto & column_map = assert_cast<ColumnMap &>(column);
+    auto & offsets = column_map.getOffsets();
+    auto & key_column = column_map.getKey();
+    auto & value_column = column_map.getValue();
 
-    auto & nested_array = column_map.getNestedColumn();
-    auto & nested_tuple = column_map.getNestedData();
-    auto & offsets = nested_array.getOffsets();
-
-    auto & key_column = nested_tuple.getColumn(0);
-    auto & value_column = nested_tuple.getColumn(1);
+    if (settings.map.parse_null_map_as_empty && checkStringByFirstCharacterAndAssertTheRest("null", istr))
+    {
+        /// Still push a zero-length offset
+        offsets.push_back((offsets.empty() ? 0 : offsets.back()) + 0);
+        /// Early return if got a null
+        return;
+    }
 
     if (settings.map.parse_null_map_as_empty && checkStringByFirstCharacterAndAssertTheRest("null", istr))
     {
@@ -226,12 +224,11 @@ void SerializationMap::serializeText(const IColumn & column, size_t row_num, Wri
 
 void SerializationMap::deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
-    deserializeTextImpl(column, istr,
-        [&settings](ReadBuffer & buf, const SerializationPtr & subcolumn_serialization, IColumn & subcolumn)
-        {
-            subcolumn_serialization->deserializeTextQuoted(subcolumn, buf, settings);
-        },
-        settings);
+    auto reader = [&settings](ReadBuffer & buf, const SerializationPtr & subcolumn_serialization, IColumn & subcolumn) {
+        subcolumn_serialization->deserializeTextQuoted(subcolumn, buf, settings);
+    };
+
+    deserializeTextImpl(column, istr, reader, settings);
 }
 
 void SerializationMap::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
@@ -252,34 +249,34 @@ void SerializationMap::serializeTextJSON(const IColumn & column, size_t row_num,
 
 void SerializationMap::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
-    deserializeTextImpl(column, istr,
-        [&settings](ReadBuffer & buf, const SerializationPtr & subcolumn_serialization, IColumn & subcolumn)
-        {
-            subcolumn_serialization->deserializeTextJSON(subcolumn, buf, settings);
-        },
-        settings);
+    auto reader = [&settings](ReadBuffer & buf, const SerializationPtr & subcolumn_serialization, IColumn & subcolumn) {
+        subcolumn_serialization->deserializeTextJSON(subcolumn, buf, settings);
+    };
+
+    deserializeTextImpl(column, istr, reader, settings);
 }
 
 void SerializationMap::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
 {
     const auto & column_map = assert_cast<const ColumnMap &>(column);
-    const auto & offsets = column_map.getNestedColumn().getOffsets();
+    const auto & offsets = column_map.getOffsets();
 
     size_t offset = offsets[row_num - 1];
     size_t next_offset = offsets[row_num];
 
-    const auto & nested_data = column_map.getNestedData();
+    const auto & key_column = column_map.getKey();
+    const auto & value_column = column_map.getValue();
 
     writeCString("<map>", ostr);
     for (size_t i = offset; i < next_offset; ++i)
     {
         writeCString("<elem>", ostr);
         writeCString("<key>", ostr);
-        key->serializeTextXML(nested_data.getColumn(0), i, ostr, settings);
+        key->serializeTextXML(key_column, i, ostr, settings);
         writeCString("</key>", ostr);
 
         writeCString("<value>", ostr);
-        value->serializeTextXML(nested_data.getColumn(1), i, ostr, settings);
+        value->serializeTextXML(value_column, i, ostr, settings);
         writeCString("</value>", ostr);
         writeCString("</elem>", ostr);
     }
@@ -301,17 +298,25 @@ void SerializationMap::deserializeTextCSV(IColumn & column, ReadBuffer & istr, c
     deserializeText(column, rb, settings);
 }
 
-
-void SerializationMap::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+void SerializationMap::enumerateStreams(
+    EnumerateStreamsSettings & settings,
+    const StreamCallback & callback,
+    const SubstreamData & data) const
 {
-    nested->enumerateStreams(callback, path);
+    auto next_data = SubstreamData(nested)
+        .withType(data.type ? assert_cast<const DataTypeMap &>(*data.type).getNestedType() : nullptr)
+        .withColumn(data.column ? assert_cast<const ColumnMap &>(*data.column).getNestedColumnPtr() : nullptr)
+        .withSerializationInfo(data.serialization_info);
+
+    nested->enumerateStreams(settings, callback, next_data);
 }
 
 void SerializationMap::serializeBinaryBulkStatePrefix(
+    const IColumn & column,
     SerializeBinaryBulkSettings & settings,
     SerializeBinaryBulkStatePtr & state) const
 {
-    nested->serializeBinaryBulkStatePrefix(settings, state);
+    nested->serializeBinaryBulkStatePrefix(extractNestedColumn(column), settings, state);
 }
 
 void SerializationMap::serializeBinaryBulkStateSuffix(

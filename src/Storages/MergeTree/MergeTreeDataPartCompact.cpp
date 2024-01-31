@@ -21,7 +21,6 @@
 
 #include "MergeTreeDataPartCompact.h"
 #include <DataTypes/NestedUtils.h>
-#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <Storages/MergeTree/MergeTreeReaderCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterCompact.h>
@@ -91,7 +90,7 @@ IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCompact::getWriter(
     const BitmapBuildInfo & /* bitmap_build_info */) const
 {
     /// Handle implicit col when merging. Because it will use Vertical algorithm when there has map column and all map columns will in gathering column, each implicit map column will be handled one by one.
-    if (columns_list.size() == 1 && isMapImplicitKeyNotKV(columns_list.front().name))
+    if (columns_list.size() == 1 && isMapImplicitKey(columns_list.front().name))
         return std::make_unique<MergeTreeDataPartWriterCompact>(
             shared_from_this(),
             columns_list,
@@ -141,7 +140,7 @@ void MergeTreeDataPartCompact::calculateEachColumnSizes(ColumnSizeByName & each_
     // Special handling flattened map type
     for (const NameAndTypePair & column : *columns_ptr)
     {
-        if (column.type->isMap() && !column.type->isMapKVStore())
+        if (column.type->isByteMap())
         {
             ColumnSize size = getMapColumnSizeNotKV(checksums, column);
             each_columns_size[column.name] = size;
@@ -211,7 +210,7 @@ bool MergeTreeDataPartCompact::hasColumnFiles(const NameAndTypePair & column) co
         return bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end();
     };
 
-    if (column.type->isMap() && !column.type->isMapKVStore())
+    if (column.type->isByteMap())
     {
         for (auto & [file, _] : getChecksums()->files)
         {
@@ -233,7 +232,7 @@ void MergeTreeDataPartCompact::setColumnsPtr(const NamesAndTypesListPtr & new_co
     size_t pos_without_map = 0;
     for (const auto & column : *new_columns_ptr)
     {
-        if (!column.type->isMap() || column.type->isMapKVStore())
+        if (!column.type->isByteMap())
         {
             columns_without_bytemap_col_size++;
             column_name_to_position_without_map.emplace(column.name, pos_without_map);

@@ -74,10 +74,15 @@ String Range::toString() const
 }
 
 
-/// Example: for `Hello\_World% ...` string it returns `Hello_World`, and for `%test%` returns an empty string.
-static String extractFixedPrefixFromLikePattern(const String & like_pattern)
+/// Returns the prefix of like_pattern before the first wildcard, e.g. 'Hello\_World% ...' --> 'Hello\_World'
+/// We call a pattern "perfect prefix" if:
+/// - (1) the pattern has a wildcard
+/// - (2) the first wildcard is '%' and is only followed by nothing or other '%'
+/// e.g. 'test%' or 'test%% has perfect prefix 'test', 'test%x', 'test%_' or 'test_' has no perfect prefix.
+String extractFixedPrefixFromLikePattern(std::string_view like_pattern, bool requires_perfect_prefix)
 {
     String fixed_prefix;
+    fixed_prefix.reserve(like_pattern.size());
 
     const char * pos = like_pattern.data();
     const char * end = pos + like_pattern.size();
@@ -86,10 +91,13 @@ static String extractFixedPrefixFromLikePattern(const String & like_pattern)
         switch (*pos)
         {
             case '%':
-                [[fallthrough]];
             case '_':
+                if (requires_perfect_prefix)
+                {
+                    bool is_prefect_prefix = std::all_of(pos, end, [](auto c) { return c == '%'; });
+                    return is_prefect_prefix ? fixed_prefix : "";
+                }
                 return fixed_prefix;
-
             case '\\':
                 ++pos;
                 if (pos == end)
@@ -97,39 +105,137 @@ static String extractFixedPrefixFromLikePattern(const String & like_pattern)
                 [[fallthrough]];
             default:
                 fixed_prefix += *pos;
-                break;
         }
 
         ++pos;
     }
-
+    /// If we can reach this code, it means there was no wildcard found in the pattern, so it is not a perfect prefix
+    if (requires_perfect_prefix)
+        return "";
     return fixed_prefix;
 }
 
-static String extractFixedPrefixFromLikePattern(const String & like_pattern, const char escape_char)
+String extractFixedPrefixFromLikePattern(std::string_view like_pattern, bool requires_perfect_prefix, char escape_char)
 {
     String fixed_prefix;
+    fixed_prefix.reserve(like_pattern.size());
 
     const char * pos = like_pattern.data();
     const char * end = pos + like_pattern.size();
     while (pos < end)
     {
-        if (*pos == '%' || *pos == '_')
-            return fixed_prefix;
-        else if (*pos == escape_char)
-        {
+        if (*pos == escape_char) {
             ++pos;
             if (pos != end)
                 fixed_prefix += *pos;
-        }
-        else
-            fixed_prefix += *pos;
+        } else {
+            switch (*pos)
+            {
+                case '%':
+                case '_':
+                    if (requires_perfect_prefix)
+                    {
+                        bool is_prefect_prefix = std::all_of(pos, end, [](auto c) { return c == '%'; });
+                        return is_prefect_prefix ? fixed_prefix : "";
+                    }
+                    return fixed_prefix;
+                default:
+                    fixed_prefix += *pos;
+            }
 
-        ++pos;
+            ++pos;
+        }
+    }
+
+    /// If we can reach this code, it means there was no wildcard found in the pattern, so it is not a perfect prefix
+    if (requires_perfect_prefix)
+        return "";
+    return fixed_prefix;
+}
+
+
+/// for "^prefix..." string it returns "prefix"
+static String extractFixedPrefixFromRegularExpression(const String & regexp)
+{
+    if (regexp.size() <= 1 || regexp[0] != '^')
+        return {};
+
+    String fixed_prefix;
+    const char * begin = regexp.data() + 1;
+    const char * pos = begin;
+    const char * end = regexp.data() + regexp.size();
+
+    while (pos != end)
+    {
+        switch (*pos)
+        {
+            case '\0':
+                pos = end;
+                break;
+
+            case '\\':
+            {
+                ++pos;
+                if (pos == end)
+                    break;
+
+                switch (*pos)
+                {
+                    case '|':
+                    case '(':
+                    case ')':
+                    case '^':
+                    case '$':
+                    case '.':
+                    case '[':
+                    case '?':
+                    case '*':
+                    case '+':
+                    case '{':
+                        fixed_prefix += *pos;
+                        break;
+                    default:
+                        /// all other escape sequences are not supported
+                        pos = end;
+                        break;
+                }
+
+                ++pos;
+                break;
+            }
+
+            /// non-trivial cases
+            case '|':
+                fixed_prefix.clear();
+                [[fallthrough]];
+            case '(':
+            case '[':
+            case '^':
+            case '$':
+            case '.':
+            case '+':
+                pos = end;
+                break;
+
+            /// Quantifiers that allow a zero number of occurrences.
+            case '{':
+            case '?':
+            case '*':
+                if (!fixed_prefix.empty())
+                    fixed_prefix.pop_back();
+
+                pos = end;
+                break;
+            default:
+                fixed_prefix += *pos;
+                pos++;
+                break;
+        }
     }
 
     return fixed_prefix;
 }
+
 
 /** For a given string, get a minimum string that is strictly greater than all strings with this prefix,
   *  or return an empty string if there are no such strings.
@@ -168,9 +274,9 @@ KeyCondition::FunctionWithEscape KeyCondition::like_with_escape = [] (RPNElement
 
     String prefix;
     if (escape_char == '\\')
-        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), false);
     else
-        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), escape_char);
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), false, escape_char);
 
     if (prefix.empty())
         return false;
@@ -197,9 +303,9 @@ KeyCondition::FunctionWithEscape KeyCondition::not_like_with_escape = [] (RPNEle
 
     String prefix;
     if (escape_char == '\\')
-        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), true);
     else
-        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), escape_char);
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), true, escape_char);
 
     if (prefix.empty())
         return false;
@@ -366,7 +472,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
             if (value.getType() != Field::Types::String)
                 return false;
 
-            String prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+            String prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), /*requires_perfect_prefix*/ false);
             if (prefix.empty())
                 return false;
 
@@ -387,7 +493,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
             if (value.getType() != Field::Types::String)
                 return false;
 
-            String prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+            String prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), /*requires_perfect_prefix*/ true);
             if (prefix.empty())
                 return false;
 
@@ -395,8 +501,8 @@ const KeyCondition::AtomMap KeyCondition::atom_map
 
             out.function = RPNElement::FUNCTION_NOT_IN_RANGE;
             out.range = !right_bound.empty()
-                        ? Range(prefix, true, right_bound, false)
-                        : Range::createLeftBounded(prefix, true);
+                ? Range(prefix, true, right_bound, false)
+                : Range::createLeftBounded(prefix, true);
 
             return true;
         }
@@ -409,6 +515,32 @@ const KeyCondition::AtomMap KeyCondition::atom_map
                 return false;
 
             String prefix = value.get<const String &>();
+            if (prefix.empty())
+                return false;
+
+            String right_bound = firstStringThatIsGreaterThanAllStringsWithPrefix(prefix);
+
+            out.function = RPNElement::FUNCTION_IN_RANGE;
+            out.range = !right_bound.empty()
+                ? Range(prefix, true, right_bound, false)
+                : Range::createLeftBounded(prefix, true);
+
+            return true;
+        }
+    },
+    {
+        "match",
+        [] (RPNElement & out, const Field & value)
+        {
+            if (value.getType() != Field::Types::String)
+                return false;
+
+            const String & expression = value.get<const String &>();
+            // This optimization can't process alternation - this would require a comprehensive parsing of regular expression.
+            if (expression.find('|') != std::string::npos)
+                return false;
+
+            String prefix = extractFixedPrefixFromRegularExpression(expression);
             if (prefix.empty())
                 return false;
 
@@ -581,19 +713,20 @@ KeyCondition::KeyCondition(
     /** Evaluation of expressions that depend only on constants.
       * For the index to be used, if it is written, for example `WHERE Date = toDate(now())`.
       */
-    Block block_with_constants = getBlockWithConstants(query_info.query, query_info.syntax_analyzer_result, context);
+    // Block block_with_constants = getBlockWithConstants(query_info.query, query_info.syntax_analyzer_result, context);
 
     for (const auto & [name, _] : query_info.syntax_analyzer_result->array_join_result_to_source)
         array_joined_columns.insert(name);
-
-    const ASTSelectQuery & select = query_info.query->as<ASTSelectQuery &>();
-    if (select.where() || select.prewhere())
+    if (auto filter = getFilterFromQueryInfo(query_info); filter != nullptr)
     {
-        ASTPtr filter_query;
-        if (select.where() && select.prewhere())
-            filter_query = makeASTFunction("and", select.where(), select.prewhere());
-        else
-            filter_query = select.where() ? select.where() : select.prewhere();
+        /** Evaluation of expressions that depend only on constants.
+          * For the index to be used, if it is written, for example `WHERE Date = toDate(now())`.
+          */
+        /// TODO @wanghaoyu.0428: fix this, can do without cloning query?
+        auto query_clone = query_info.query->clone();
+        auto & select_clone = query_clone->as<ASTSelectQuery &>();
+        select_clone.setExpression(ASTSelectQuery::Expression::WHERE, filter->clone());
+        Block block_with_constants = getBlockWithConstants(query_clone, query_info.syntax_analyzer_result, context);
 
         /** When non-strictly monotonic functions are employed in functional index (e.g. ORDER BY toStartOfHour(dateTime)),
           * the use of NOT operator in predicate will result in the indexing algorithm leave out some data.
@@ -602,7 +735,7 @@ KeyCondition::KeyCondition(
           * To overcome the problem, before parsing the AST we transform it to its semantically equivalent form where all NOT's
           * are pushed down and applied (when possible) to leaf nodes.
           */
-        traverseAST(cloneASTWithInversionPushDown(filter_query), context, block_with_constants);
+        traverseAST(cloneASTWithInversionPushDown(filter), context, block_with_constants);
     }
     else
     {
@@ -612,7 +745,7 @@ KeyCondition::KeyCondition(
 
 bool KeyCondition::addCondition(const String & column, const Range & range)
 {
-    if (!key_columns.count(column))
+    if (!key_columns.contains(column))
         return false;
     rpn.emplace_back(RPNElement::FUNCTION_IN_RANGE, key_columns[column], range);
     rpn.emplace_back(RPNElement::FUNCTION_AND);
@@ -1295,7 +1428,6 @@ bool KeyCondition::isKeyPossiblyWrappedByMonotonicFunctionsImpl(
     return false;
 }
 
-
 static void castValueToType(const DataTypePtr & desired_type, Field & src_value, const DataTypePtr & src_type, const ASTPtr & node)
 {
     try
@@ -1481,7 +1613,7 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
                 }
                 else
                 {
-                    DataTypePtr common_type = tryGetLeastSupertype({key_expr_type_not_null, const_type});
+                    DataTypePtr common_type = tryGetLeastSupertype(DataTypes{key_expr_type_not_null, const_type});
 
                     if (!common_type)
                         return false;

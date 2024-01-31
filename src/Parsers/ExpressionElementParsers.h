@@ -191,7 +191,7 @@ protected:
     bool is_table_function;
 };
 
-// A special function parser for view table function.
+// A special function parser for view and viewIfPermitted table functions.
 // It parses an SELECT query as its argument and doesn't support getColumnName().
 class ParserTableFunctionView : public IParserDialectBase
 {
@@ -382,6 +382,7 @@ protected:
 
 
 /** String in single quotes.
+  * String in heredoc $here$txt$here$ equivalent to 'txt'.
   */
 class ParserStringLiteral : public IParserBase
 {

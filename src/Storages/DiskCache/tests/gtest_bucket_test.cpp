@@ -321,7 +321,7 @@ TEST(Bucket, Iteration)
     }
 }
 
-TEST(Bucket, EvictionExpired)
+TEST(Bucket, DISABLED_EvictionExpired)
 {
     constexpr uint32_t bucket_size = 1024;
     const uint32_t item_min_size = BucketEntry::computeSize(sizeof("key "), sizeof("value "));

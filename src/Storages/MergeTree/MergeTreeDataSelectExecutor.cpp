@@ -20,6 +20,9 @@
  */
 
 #include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
+#include "Common/Exception.h"
+#include "Common/formatIPv6.h"
+#include "common/logger_useful.h"
 #include <common/scope_guard_safe.h>
 #include "Storages/MergeTree/FilterWithRowUtils.h"
 #include <memory>
@@ -151,7 +154,7 @@ static RelativeSize convertAbsoluteSampleSizeToRelative(const ASTPtr & node, siz
 
 QueryPlanPtr MergeTreeDataSelectExecutor::read(
     const Names & column_names_to_return,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const SelectQueryInfo & query_info,
     ContextPtr context,
     const UInt64 max_block_size,
@@ -160,6 +163,8 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read) const
 {
     const auto & settings = context->getSettingsRef();
+    const auto & metadata_for_reading = storage_snapshot->getMetadataForQuery();
+
     auto parts = data.getDataPartsVector();
 
     if (settings.enable_ab_index_optimization)
@@ -170,7 +175,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     if (!query_info.projection)
     {
         MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter;
-        if (metadata_snapshot->hasUniqueKey())
+        if (metadata_for_reading->hasUniqueKey())
         {
             /// get a consistent snapshot of delete bitmaps for query,
             /// otherwise concurrent upserts that modify part's delete bitmap will cause incorrect query result
@@ -192,8 +197,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
             parts,
             delete_bitmap_getter,
             column_names_to_return,
-            metadata_snapshot,
-            metadata_snapshot,
+            storage_snapshot,
             query_info,
             context,
             max_block_size,
@@ -201,7 +205,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
             max_block_numbers_to_read);
 
         if (plan->isInitialized() && settings.allow_experimental_projection_optimization && settings.force_optimize_projection
-            && !metadata_snapshot->projections.empty())
+            && !metadata_for_reading->projections.empty())
             throw Exception(
                 "No projection is used when allow_experimental_projection_optimization = 1 and force_optimize_projection = 1",
                 ErrorCodes::PROJECTION_NOT_USED);
@@ -240,8 +244,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
             projection_parts,
             null_getter,
             query_info.projection->required_columns,
-            metadata_snapshot,
-            query_info.projection->desc->metadata,
+            storage_snapshot,
             query_info,
             context,
             max_block_size,
@@ -880,6 +883,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     {
         for (const auto & index : metadata_snapshot->getSecondaryIndices())
         {
+            LOG_TRACE(&Poco::Logger::get("filterPartsByPrimaryKeyAndSkipIndexes"),"Creating index {} {}\n", index.name, index.type);
             auto index_helper = MergeTreeIndexFactory::instance().get(index);
             auto condition = index_helper->createIndexCondition(query_info, context);
             if (!condition->alwaysUnknownOrTrue())
@@ -1391,8 +1395,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
     MergeTreeMetaBase::DataPartsVector parts,
     MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter,
     const Names & column_names_to_return,
-    const StorageMetadataPtr & metadata_snapshot_base,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const SelectQueryInfo & query_info,
     ContextPtr context,
     const UInt64 max_block_size,
@@ -1418,7 +1421,6 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
     bool map_column_keys_column_queried = false;
 
     selectColumnNames(column_names_to_return, data, real_column_names, virt_column_names, sample_factor_column_queried, map_column_keys_column_queried);
-
     auto read_from_merge_tree = std::make_unique<ReadFromMergeTree>(
         parts,
         delete_bitmap_getter,
@@ -1426,8 +1428,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
         virt_column_names,
         data,
         query_info,
-        metadata_snapshot,
-        metadata_snapshot_base,
+        storage_snapshot,
         context,
         max_block_size,
         num_streams,

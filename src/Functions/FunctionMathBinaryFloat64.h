@@ -47,7 +47,7 @@ private:
     {
         const auto check_argument_type = [this] (const IDataType * arg)
         {
-            if (!isNativeNumber(arg) && !(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE && isNumber(arg)))
+            if (!isNumber(arg))
                 throw Exception{"Illegal type " + arg->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         };

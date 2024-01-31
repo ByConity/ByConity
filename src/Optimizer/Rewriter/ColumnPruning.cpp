@@ -488,7 +488,7 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
                 // Hack: ColumnPruning::selectColumnWithMinSize ignores subcolumn, by checking `NameAndTypePair::subcolumn_delimiter_position`.
                 // This is unexpected, so we rebuild the NameAndTypePair
                 candidate_columns.emplace_back(
-                    pair.first, columns_desc.getColumnOrSubcolumn(ColumnsDescription::AllPhysical, pair.first).type);
+                    pair.first, columns_desc.getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, pair.first).type);
         }
         else
         {
@@ -980,7 +980,8 @@ PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & nod
         require.insert(item.column_name);
     }
     auto child = VisitorUtil::accept(*node.getChildren()[0], *this, require);
-    auto topn_filter_step = std::make_shared<TopNFilteringStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getSize(), step->getModel());
+    auto topn_filter_step = std::make_shared<TopNFilteringStep>(
+        child->getStep()->getOutputStream(), step->getSortDescription(), step->getSize(), step->getModel(), step->getAlgorithm());
     return TopNFilteringNode::createPlanNode(context->nextNodeId(), std::move(topn_filter_step), PlanNodes{child}, node.getStatistics());
 }
 

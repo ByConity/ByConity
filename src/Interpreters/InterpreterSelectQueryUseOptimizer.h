@@ -57,7 +57,7 @@ public:
         interpret_sub_query = true;
     }
 
-    QueryPlanPtr buildQueryPlan();
+    QueryPlanPtr buildQueryPlan(bool skip_optimize = false);
     std::pair<PlanSegmentTreePtr, std::set<StorageID>> getPlanSegment();
     QueryPlanPtr getPlanFromCache(UInt128 query_hash);
     bool addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan, AnalysisPtr analysis);

@@ -39,7 +39,11 @@ StoragePtr ITableFunction::execute(const ASTPtr & ast_function, ContextPtr conte
                                    ColumnsDescription cached_columns) const
 {
     ProfileEvents::increment(ProfileEvents::TableFunctionExecute);
-    context->checkAccess(AccessType::CREATE_TEMPORARY_TABLE | StorageFactory::instance().getSourceAccessType(getStorageTypeName()));
+    AccessFlags required_access =  StorageFactory::instance().getSourceAccessType(getStorageTypeName());
+    String function_name = getName();
+    if ((function_name != "null") && (function_name != "view") && (function_name != "viewIfPermitted"))
+        required_access |= AccessType::CREATE_TEMPORARY_TABLE;
+    context->checkAccess(required_access);
 
     if (cached_columns.empty())
         return executeImpl(ast_function, context, table_name, std::move(cached_columns));

@@ -133,7 +133,7 @@ public:
 
     std::unordered_map<String, std::pair<size_t, size_t>> getTableCacheInfo();
 
-    using LoadPartsFunc = std::function<DataModelPartPtrVector(const Strings&, const Strings&)>;
+    using LoadPartsFunc = std::function<DataModelPartWithNameVector(const Strings&, const Strings&)>;
 
     ServerDataPartsVector getOrSetServerDataPartsInPartitions(
         const IStorage & table,

@@ -127,6 +127,8 @@ private:
             Ptr<Float32>,
             Ptr<Float64>,
             Ptr<UUID>,
+            Ptr<IPv4>,
+            Ptr<IPv6>,
             Ptr<StringRef>,
             Ptr<Array>>
             maps;

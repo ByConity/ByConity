@@ -22,12 +22,11 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/MapHelpers.h>
-#include <common/logger_useful.h>
 #include <Common/escapeForFileName.h>
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Compression/CompressedDataIndex.h>
 #include <Columns/ColumnArray.h>
-#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
@@ -98,8 +97,18 @@ IMergeTreeReader::IMergeTreeReader(
     }
 
     columns_from_part.set_empty_key(StringRef());
+    
     for (const auto & column_from_part : part_columns)
         columns_from_part.emplace(column_from_part.name, &column_from_part.type);
+
+    // auto requested_columns = data_part_->getType() == MergeTreeDataPartType::WIDE ? Nested::convertToSubcolumns(columns_) : columns_;
+
+    // columns_to_read.reserve(requested_columns.size());
+
+    // for (const auto & column : requested_columns)
+    // {
+    //     columns_to_read.emplace_back(getColumnFromPart(column));
+    // }
 }
 
 IMergeTreeReader::~IMergeTreeReader() = default;
@@ -110,101 +119,15 @@ const IMergeTreeReader::ValueSizeMap & IMergeTreeReader::getAvgValueSizeHints() 
     return avg_value_size_hints;
 }
 
-
-static bool arrayHasNoElementsRead(const IColumn & column)
-{
-    const auto * column_array = typeid_cast<const ColumnArray *>(&column);
-
-    if (!column_array)
-        return false;
-
-    size_t size = column_array->size();
-    if (!size)
-        return false;
-
-    size_t data_size = column_array->getData().size();
-    if (data_size)
-        return false;
-
-    size_t last_offset = column_array->getOffsets()[size - 1];
-    return last_offset != 0;
-}
-
-void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool /* check_column_size */)
+void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool /* check_column_size */) const
 {
     try
     {
-        size_t num_columns = columns.size();
         size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
-        if (res_columns.size() != num_columns + num_bitmap_columns)
-            throw Exception("invalid number of columns passed to MergeTreeReader::fillMissingColumns. "
-                            "Expected " + toString(num_columns + num_bitmap_columns) + ", "
-                            "got " + toString(res_columns.size()), ErrorCodes::LOGICAL_ERROR);
-
-        /// For a missing column of a nested data structure we must create not a column of empty
-        /// arrays, but a column of arrays of correct length.
-
-        /// First, collect offset columns for all arrays in the block.
-        OffsetColumns offset_columns;
-        auto requested_column = columns.begin();
-        for (size_t i = 0; i < num_columns; ++i, ++requested_column)
-        {
-            if (res_columns[i] == nullptr)
-                continue;
-
-            if (const auto * array = typeid_cast<const ColumnArray *>(res_columns[i].get()))
-            {
-                String offsets_name = Nested::extractTableName(requested_column->name);
-                auto & offsets_column = offset_columns[offsets_name];
-
-                /// If for some reason multiple offsets columns are present for the same nested data structure,
-                /// choose the one that is not empty.
-                if (!offsets_column || offsets_column->empty())
-                    offsets_column = array->getOffsetsPtr();
-            }
-        }
-
-        should_evaluate_missing_defaults = false;
-
-        /// insert default values only for columns without default expressions
-        requested_column = columns.begin();
-        for (size_t i = 0; i < num_columns; ++i, ++requested_column)
-        {
-            auto & [name, type] = *requested_column;
-
-            if (res_columns[i] && arrayHasNoElementsRead(*res_columns[i]))
-                res_columns[i] = nullptr;
-
-            if (res_columns[i] == nullptr)
-            {
-                if (metadata_snapshot->getColumns().hasDefault(name))
-                {
-                    should_evaluate_missing_defaults = true;
-                    continue;
-                }
-
-                String offsets_name = Nested::extractTableName(name);
-                auto offset_it = offset_columns.find(offsets_name);
-                const auto * array_type = typeid_cast<const DataTypeArray *>(type.get());
-                if (offset_it != offset_columns.end() && array_type)
-                {
-                    const auto & nested_type = array_type->getNestedType();
-                    ColumnPtr offsets_column = offset_it->second;
-                    size_t nested_rows = typeid_cast<const ColumnUInt64 &>(*offsets_column).getData().back();
-
-                    ColumnPtr nested_column =
-                        nested_type->createColumnConstWithDefaultValue(nested_rows)->convertToFullColumnIfConst();
-
-                    res_columns[i] = ColumnArray::create(nested_column, offsets_column);
-                }
-                else
-                {
-                    /// We must turn a constant column into a full column because the interpreter could infer
-                    /// that it is constant everywhere but in some blocks (from other parts) it can be a full column.
-                    res_columns[i] = type->createColumnConstWithDefaultValue(num_rows)->convertToFullColumnIfConst();
-                }
-            }
-        }
+    
+        DB::fillMissingColumns(res_columns, num_rows, columns, metadata_snapshot, num_bitmap_columns);
+        should_evaluate_missing_defaults = std::any_of(
+            res_columns.begin(), res_columns.end(), [](const auto & column) { return column == nullptr; });
     }
     catch (Exception & e)
     {
@@ -214,7 +137,7 @@ void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_e
     }
 }
 
-void IMergeTreeReader::evaluateMissingDefaults(Block additional_columns, Columns & res_columns)
+void IMergeTreeReader::evaluateMissingDefaults(Block additional_columns, Columns & res_columns) const
 {
     try
     {
@@ -349,8 +272,11 @@ bool IMergeTreeReader::isLowCardinalityDictionary(const ISerialization::Substrea
     return substream_path.size() > 1 && substream_path[substream_path.size() - 2].type == ISerialization::Substream::Type::DictionaryKeys;
 }
 
-void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
-	const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type)
+void IMergeTreeReader::addByteMapStreams(
+    const NameAndTypePair & name_and_type,
+    const String & col_name,
+	const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+    clockid_t clock_type)
 {
     ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
         String implicit_stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
@@ -420,11 +346,14 @@ static ReadBuffer * getStream(
 
     String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
 
-    auto it = streams.find(stream_name);
-    if (it == streams.end())
+    auto check_vadility = [&](String & stream_name_) -> bool { return streams.find(stream_name_) != streams.end(); };
+
+    if ((!name_and_type.type->isKVMap() && !check_vadility(stream_name))
+        || (name_and_type.type->isKVMap() && !tryConvertToValidKVStreamName(stream_name, check_vadility)))
         return nullptr;
 
-    IMergeTreeReaderStream & stream = *it->second;
+    IMergeTreeReaderStream & stream = *streams[stream_name];
+
     // Adjust right mark MUST be executed before seek(), otherwise seek position may over until_postion
     stream.adjustRightMark(current_task_last_mark);
 
@@ -478,7 +407,7 @@ void IMergeTreeReader::prefetchForAllColumns(
         try
         {
             auto & cache = caches[column_from_part.getNameInStorage()];
-            if (type->isMap() && !type->isMapKVStore())
+            if (type->isByteMap())
                 prefetchForMapColumn(priority, column_from_part, from_mark, continue_reading, current_task_last_mark);
             else
                 prefetchForColumn(
@@ -505,7 +434,7 @@ void IMergeTreeReader::prefetchForMapColumn(
     // collect all the substreams based on map column's name and its keys substream.
     // and somehow construct runtime two implicit columns(key&value) representation.
     auto keys_iter = map_column_keys.equal_range(name);
-    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*type);
     DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
 
     for (auto kit = keys_iter.first; kit != keys_iter.second; ++kit)
@@ -563,7 +492,7 @@ void IMergeTreeReader::readMapDataNotKV(
     // collect all the substreams based on map column's name and its keys substream.
     // and somehow construct runtime two implicit columns(key&value) representation.
     auto keys_iter = map_column_keys.equal_range(name);
-    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*type);
     DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
 
     std::map<String, std::pair<size_t, const IColumn *>> impl_key_values;
@@ -595,7 +524,7 @@ void IMergeTreeReader::readMapDataNotKV(
 
     // after reading all implicit values columns based files(built by keys), it's time to
     // construct runtime ColumnMap(key_column, value_column).
-    dynamic_cast<ColumnByteMap *>(const_cast<IColumn *>(column.get()))
+    dynamic_cast<ColumnMap *>(const_cast<IColumn *>(column.get()))
         ->fillByExpandedColumns(type_map, impl_key_values, std::min(max_rows_to_read, data_part->rows_count - next_row_number_to_read));
 }
 
@@ -608,7 +537,7 @@ size_t IMergeTreeReader::skipMapDataNotKV(const NameAndTypePair& name_and_type,
     // collect all the substreams based on map column's name and its keys substream.
     // and somehow construct runtime two implicit columns(key&value) representation.
     auto keys_iter = map_column_keys.equal_range(name);
-    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*type);
     DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
 
     String impl_key_name;
@@ -691,12 +620,6 @@ size_t IMergeTreeReader::skipData(const NameAndTypePair & name_and_type,
         max_rows_to_skip, deserialize_settings, deserialize_state, &cache);
 }
 
-bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) const
-{
-    return storage.isBitEngineMode() && !settings.read_source_bitmap
-        && isBitmap64(column.type) && column.type->isBitEngineEncode();
-}
-
 bool IMergeTreeReader::hasBitmapIndexReader() const
 {
     if (index_executor && index_executor->valid())
@@ -764,11 +687,6 @@ NameAndTypePair IMergeTreeReader::columnTypeFromPart(const NameAndTypePair & req
             return required_column;
 
         return {String{it->first}, subcolumn_name, type, subcolumn_type};
-    }
-
-    if (checkBitEngineColumn({String{it->first}, *it->second}))
-    {
-        return {String{it->first}.append(BITENGINE_COLUMN_EXTENSION), type};
     }
 
     return {String{it->first}, type};

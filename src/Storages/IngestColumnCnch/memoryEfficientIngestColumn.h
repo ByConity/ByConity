@@ -4,6 +4,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Core/Settings.h>
 #include <Poco/Logger.h>
+#include <Storages/StorageSnapshot.h>
 #include <set>
 
 namespace DB
@@ -66,8 +67,8 @@ private:
     StorageCloudMergeTree & target_cloud_merge_tree;
     const StorageCloudMergeTree & source_cloud_merge_tree;
 
-    const StorageMetadataPtr & target_meta_data_ptr;
-    const StorageMetadataPtr & source_meta_data_ptr;
+    const StorageSnapshotPtr & target_storage_snapshot;
+    const StorageSnapshotPtr & source_storage_snapshot;
     const MergeTreeDataPartsVector & visible_target_parts;
     const MergeTreeDataPartsVector & visible_source_parts;
     const size_t number_of_threads_for_read_source_parts;

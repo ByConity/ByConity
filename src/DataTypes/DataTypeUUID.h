@@ -40,8 +40,11 @@ public:
     size_t getSizeOfValueInMemory() const override { return sizeof(UUID); }
     bool isCategorial() const override { return true; }
     bool canBeInsideLowCardinality() const override { return true; }
+    bool canBeMapKeyType() const override { return true; }
 
     SerializationPtr doGetDefaultSerialization() const override;
+    Field stringToVisitorField(const String & ins) const override;
+    String stringToVisitorString(const String & ins) const override;
 };
 
 }

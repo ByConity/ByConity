@@ -45,7 +45,6 @@ class ProcessListElement;
 class EnabledQuota;
 class QueryStatus;
 struct SortColumnDescription;
-using SortDescription = std::vector<SortColumnDescription>;
 
 /** Callback to track the progress of the query.
   * Used in IBlockInputStream and Context.

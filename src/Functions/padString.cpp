@@ -19,12 +19,13 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int TOO_LARGE_STRING_SIZE;
+    extern const int INDEX_OF_POSITIONAL_ARGUMENT_IS_OUT_OF_RANGE;
 }
 
 namespace
 {
     /// The maximum new padded length.
-    constexpr size_t MAX_NEW_LENGTH = 1000000;
+    constexpr ssize_t MAX_NEW_LENGTH = 1000000;
 
     /// Appends padding characters to a sink based on a pad string.
     /// Depending on how many padding characters are required to add
@@ -184,7 +185,7 @@ namespace
                     arguments[0]->getName(),
                     getName());
 
-            if (!isUnsignedInteger(arguments[1]))
+            if (!isInteger(arguments[1]))
                 throw Exception(
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                     "Illegal type {} of the second argument of function {}, should be unsigned integer",
@@ -281,10 +282,10 @@ namespace
             for (; !res_sink.isEnd(); res_sink.next(), strings.next(), lengths.next())
             {
                 auto str = strings.getWhole();
-                size_t current_length = getLengthOfSlice<is_utf8>(str);
+                ssize_t current_length = getLengthOfSlice<is_utf8>(str);
 
                 auto new_length_slice = lengths.getWhole();
-                size_t new_length = new_length_slice.elements->getUInt(new_length_slice.position);
+                ssize_t new_length = new_length_slice.elements->getInt(new_length_slice.position);
 
                 if (need_check_length)
                 {
@@ -293,6 +294,11 @@ namespace
                         throw Exception(
                             "New padded length (" + std::to_string(new_length) + ") is too big, maximum is: " + std::to_string(MAX_NEW_LENGTH),
                             ErrorCodes::TOO_LARGE_STRING_SIZE);
+                    }
+                    if (new_length < 0)
+                    {
+                        throw Exception(
+                            ErrorCodes::INDEX_OF_POSITIONAL_ARGUMENT_IS_OUT_OF_RANGE, "New padded length ({}) is negative", std::to_string(new_length));
                     }
                     if (is_const_length)
                     {

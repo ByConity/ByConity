@@ -31,6 +31,7 @@
 #include <boost/core/noncopyable.hpp>
 #include <Poco/Logger.h>
 #include <common/types.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 
 namespace DB
 {
@@ -69,20 +70,20 @@ struct SenderMetrics
 struct RuntimeSegmentsStatus
 {
     String query_id;
-    int32_t segment_id;
-    size_t parallel_index;
-    bool is_succeed;
-    bool is_cancelled;
+    int32_t segment_id{0};
+    size_t parallel_index{0};
+    bool is_succeed{true};
+    bool is_cancelled{false};
     RuntimeSegmentsMetrics metrics;
     String message;
-    int32_t code;
+    int32_t code{0};
 };
 
 class PlanSegmentExecutor : private boost::noncopyable
 {
 public:
-    explicit PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_);
-    explicit PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_);
+    explicit PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_);
+    explicit PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_, ExchangeOptions options_);
 
     ~PlanSegmentExecutor() noexcept;
 
@@ -98,7 +99,8 @@ protected:
 
 private:
     ContextMutablePtr context;
-    PlanSegmentPtr plan_segment;
+    PlanSegmentInstancePtr plan_segment_instance;
+    PlanSegment * plan_segment;
     PlanSegmentOutputs plan_segment_outputs;
     ExchangeOptions options;
     Poco::Logger * logger;

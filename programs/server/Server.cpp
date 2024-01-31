@@ -38,6 +38,7 @@
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
 #include <DataTypes/MapHelpers.h>
+#include <Core/ServerUUID.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
@@ -53,7 +54,6 @@
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
-#include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/ProcessList.h>
@@ -78,6 +78,11 @@
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/System/attachInformationSchemaTables.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Functions/registerFunctions.h>
+#include <TableFunctions/registerTableFunctions.h>
+#include <Formats/registerFormats.h>
 #include <Storages/registerStorages.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -413,6 +418,7 @@ void Server::createServer(const std::string & listen_host, const char * port_nam
     try
     {
         func(port);
+        global_context->registerServerPort(port_name, port);
     }
     catch (const Poco::Exception &)
     {
@@ -796,6 +802,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     StatusFile status{path + "status", StatusFile::write_full_info};
 
+    ServerUUID::load(path + "/uuid", log);
+
     /// Try to increase limit on number of open files.
     {
         rlimit rlim;
@@ -992,7 +1000,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros", log));
             global_context->setExternalAuthenticatorsConfig(*config);
-            global_context->setExternalModelsConfig(config);
 
             global_context->updateServerVirtualWarehouses(config);
 
@@ -1036,11 +1043,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
     auto & access_control = global_context->getAccessControlManager();
-    if (config().has("custom_settings_prefixes"))
-        access_control.setCustomSettingsPrefixes(config().getString("custom_settings_prefixes"));
 
     /// Initialize map separator, once change the default value, it's necessary to adapt the corresponding tests.
     checkAndSetMapSeparator(config().getString("map_separator", "__"));
+
+    /// Determine whether use map type as default.
+    setDefaultUseMapType(config().getBool("default_use_kv_map_type", false));
 
     /// Still need `users_config` for server-worker communication
     ConfigurationPtr users_config;
@@ -1059,7 +1067,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_ERROR(log, "Can't load config for users");
 
     /// Initialize access storages.
-    access_control.addStoragesFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });
+    access_control.setUpFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });
     access_control.addKVStorage(global_context);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
@@ -1373,6 +1381,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto & database_catalog = DatabaseCatalog::instance();
         /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
         attachSystemTablesServer(*database_catalog.getSystemDatabase(), has_zookeeper);
+        attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA, global_context));
+        attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, global_context));
         /// We load temporary database first, because projections need it.
         database_catalog.initializeAndLoadTemporaryDatabase();
         /// Then, load remaining databases
@@ -1519,7 +1529,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         /// This object will periodically calculate some metrics.
         AsynchronousMetrics async_metrics(
-            global_context, config().getUInt("asynchronous_metrics_update_period_s", 1), {}, servers);
+            global_context, config().getUInt("asynchronous_metrics_update_period_s", 1), {}, servers, log);
         attachSystemTablesAsync(*DatabaseCatalog::instance().getSystemDatabase(), async_metrics);
 
         for (const auto & listen_host : listen_hosts)

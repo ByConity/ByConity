@@ -247,11 +247,13 @@ void CnchExplicitTransaction::clean(TxnCleanTask &)
     }
 }
 
-bool CnchExplicitTransaction::addSecondaryTransaction(const TransactionCnchPtr & txn)
+void CnchExplicitTransaction::addSecondaryTransaction(const TransactionCnchPtr & txn)
 {
-    auto lock = getLock();
-    secondary_txns.push_back(txn);
-    return true;
+    if (!txn->isReadOnly())
+    {
+        auto lock = getLock();
+        secondary_txns.push_back(txn);
+    }
 }
 
 bool CnchExplicitTransaction::addStatement(const String & statement)

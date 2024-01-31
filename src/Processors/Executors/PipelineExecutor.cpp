@@ -30,12 +30,14 @@
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/printPipeline.h>
 #include <Processors/ISource.h>
+#include <Processors/ReadProgressCallback.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <common/scope_guard_safe.h>
+#include <Interpreters/sendPlanSegment.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
@@ -492,7 +494,7 @@ void collectProfileMetricRequest(
     request.set_output_rows(stats.output_rows);
     request.set_output_bytes(stats.output_bytes);
     request.set_step_id(processor->getStepId());
-    request.set_worker_address(extractExchangeStatusHostPort(current_address));
+    request.set_worker_address(extractExchangeHostPort(current_address));
 }
 
 void reportToCoordinator(
@@ -505,7 +507,7 @@ void reportToCoordinator(
 {
     try
     {
-        auto address = extractExchangeStatusHostPort(coordinator_address);
+        auto address = extractExchangeHostPort(coordinator_address);
         std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
@@ -532,7 +534,7 @@ void reportToCoordinator(
 {
     try
     {
-        auto address = extractExchangeStatusHostPort(coordinator_address);
+        auto address = extractExchangeHostPort(coordinator_address);
         std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
@@ -563,13 +565,14 @@ void PipelineExecutor::reportProcessorProfileOnCancel(const Processors & process
     if (process_list_element)
     {
         query_id = process_list_element->getClientInfo().initial_query_id;
-        auto weak_segment_process_list_entry = process_list_element->getContext()->getPlanSegmentProcessListEntry().lock();
+        auto context = process_list_element->getContext();
+        auto weak_segment_process_list_entry = context->getPlanSegmentProcessListEntry().lock();
         if (weak_segment_process_list_entry)
         {
             PlanSegmentProcessList::EntryPtr segment_process_list_entry = std::move(weak_segment_process_list_entry);
             segment_id = segment_process_list_entry->getSegmentId();
             coordinator_address = segment_process_list_entry->getCoordinatorAddress();
-            current_address = segment_process_list_entry->getCurrentAddress();
+            current_address = getLocalAddress(*context);
         }
 
         auto finish_time = std::chrono::system_clock::now();
@@ -587,18 +590,24 @@ void PipelineExecutor::reportProcessorProfile(const IProcessor * processor) cons
     if (process_list_element)
     {
         query_id = process_list_element->getClientInfo().initial_query_id;
-        auto weak_segment_process_list_entry = process_list_element->getContext()->getPlanSegmentProcessListEntry().lock();
+        auto context = process_list_element->getContext();
+        auto weak_segment_process_list_entry = context->getPlanSegmentProcessListEntry().lock();
         if (weak_segment_process_list_entry)
         {
             PlanSegmentProcessList::EntryPtr segment_process_list_entry = std::move(weak_segment_process_list_entry);
             segment_id = segment_process_list_entry->getSegmentId();
             coordinator_address = segment_process_list_entry->getCoordinatorAddress();
-            current_address = segment_process_list_entry->getCurrentAddress();
+            current_address = getLocalAddress(*context);
         }
-        
+
         if (segment_id > 0)
             reportToCoordinator(coordinator_address, current_address, processor, query_id, std::chrono::system_clock::now(), segment_id);
-    }   
+    }
+}
+
+void PipelineExecutor::setReadProgressCallback(ReadProgressCallbackPtr callback)
+{
+    read_progress_callback = std::move(callback);
 }
 
 void PipelineExecutor::cancel()
@@ -864,14 +873,14 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
 #endif
                 node->job();
 
-                if (need_processors_profiles) 
+                if (need_processors_profiles)
                 {
                     node->processor->elapsed_us += execution_time_watch->elapsedMicroseconds();
                     node->processor->work_count++;
                 }
 #ifndef NDEBUG
                 context->execution_time_ns += execution_time_watch->elapsed();
-#endif          
+#endif
             }
 
             if (node->exception)

@@ -34,14 +34,14 @@ struct NameReplaceRegexpAll
     static constexpr auto name = "replaceRegexpAll";
 };
 
-using FunctionReplaceRegexpAll = FunctionStringReplace<ReplaceRegexpImpl<false>, NameReplaceRegexpAll>;
+using FunctionReplaceRegexpAll = FunctionStringReplace<ReplaceRegexpImpl<NameReplaceRegexpAll, ReplaceRegexpTraits::Replace::All>, NameReplaceRegexpAll>;
 
 }
 
 REGISTER_FUNCTION(ReplaceRegexpAll)
 {
     factory.registerFunction<FunctionReplaceRegexpAll>();
-    factory.registerAlias("regexp_replace", NameReplaceRegexpAll::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("REGEXP_REPLACE", NameReplaceRegexpAll::name, FunctionFactory::CaseInsensitive);
 }
 
 }

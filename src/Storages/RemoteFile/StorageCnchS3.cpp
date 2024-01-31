@@ -99,16 +99,16 @@ void StorageCnchS3::readByLocal(
         FileDataPartsCNCHVector parts,
         QueryPlan & query_plan,
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr query_context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         unsigned num_streams)
 {
-    auto storage = StorageCloudS3::create(query_context, getStorageID(), metadata_snapshot->getColumns(), metadata_snapshot->getConstraints(), file_list, metadata_snapshot->getSettingsChanges(), arguments, settings, config);
+    auto storage = StorageCloudS3::create(getContext(), getStorageID(), storage_snapshot->metadata->getColumns(), storage_snapshot->metadata->getConstraints(), file_list, storage_snapshot->metadata->getSettingsChanges(), arguments, settings, config);
     storage->loadDataParts(parts);
-    return storage->read(query_plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
+    return storage->read(query_plan, column_names, storage_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
 }
 
 Strings StorageCnchS3::readFileList()

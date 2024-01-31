@@ -11,6 +11,7 @@
 #include <Common/HashTable/HashMap.h>
 #include <Common/typeid_cast.h>
 #include <common/StringRef.h>
+#include "DataTypes/IDataType.h"
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionFactory.h>
@@ -138,7 +139,7 @@ public:
             if (type_arr_to_nested->isValueRepresentedByNumber() && type_default->isValueRepresentedByNumber())
             {
                 /// We take the smallest common type for the elements of the array of values `to` and for `default`.
-                return getLeastSupertype({type_arr_to_nested, type_default});
+                return getLeastSupertype(DataTypes{type_arr_to_nested, type_default});
             }
 
             /// TODO More checks.

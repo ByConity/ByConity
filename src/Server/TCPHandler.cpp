@@ -375,7 +375,9 @@ void TCPHandler::runImpl()
             bool may_have_embedded_data = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
             /// Processing Query
             if (state.plan_segment)
-                executePlanSegmentInternal(std::move(state.plan_segment), query_context, true);
+            {
+                throw Exception("Unexpected plan_segment in state", ErrorCodes::LOGICAL_ERROR);
+            }
             else
             {
                 const char * begin = state.query.data();
@@ -1886,10 +1888,9 @@ void TCPHandler::initBlockOutput(const Block & block)
 {
     if (!state.block_out)
     {
+        const Settings & query_settings = query_context->getSettingsRef();
         if (!state.maybe_compressed_out)
         {
-            const Settings & query_settings = query_context->getSettingsRef();
-
             std::string method = Poco::toUpper(query_settings.network_compression_method.toString());
             std::optional<int> level;
             if (method == "ZSTD")
@@ -1911,7 +1912,7 @@ void TCPHandler::initBlockOutput(const Block & block)
             *state.maybe_compressed_out,
             client_tcp_protocol_version,
             block.cloneEmpty(),
-            !connection_context->getSettingsRef().low_cardinality_allow_in_native_format);
+            !query_settings.low_cardinality_allow_in_native_format);
     }
 }
 
@@ -1920,11 +1921,12 @@ void TCPHandler::initLogsBlockOutput(const Block & block)
     if (!state.logs_block_out)
     {
         /// Use uncompressed stream since log blocks usually contain only one row
+        const Settings & query_settings = query_context->getSettingsRef();
         state.logs_block_out = std::make_shared<NativeBlockOutputStream>(
             *out,
             client_tcp_protocol_version,
             block.cloneEmpty(),
-            !connection_context->getSettingsRef().low_cardinality_allow_in_native_format);
+            !query_settings.low_cardinality_allow_in_native_format);
     }
 }
 

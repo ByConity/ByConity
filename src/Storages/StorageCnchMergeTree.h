@@ -21,7 +21,9 @@
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <common/shared_ptr_helper.h>
-#include "Catalog/DataModelPartWrapper_fwd.h"
+#include <Storages/StorageSnapshot.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Transaction/TxnTimestamp.h>
 
 namespace DB
 {
@@ -44,6 +46,7 @@ public:
     bool supportsPrewhere() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
+    bool supportsDynamicSubcolumns() const override { return true; }
     bool supportsTrivialCount() const override { return true; }
 
     /// Whether support DELETE FROM. We only support for Unique MergeTree for now.
@@ -58,14 +61,14 @@ public:
     bool isRemote() const override { return true; }
 
     QueryProcessingStage::Enum
-    getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;
+    getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const override;
 
     void startup() override;
     void shutdown() override;
 
     Pipe read(
         const Names & /*column_names*/,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & /*query_info*/,
         ContextPtr /*local_context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
@@ -75,7 +78,7 @@ public:
     void read(
         QueryPlan & query_plan,
         const Names & /*column_names*/,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & /*query_info*/,
         ContextPtr /*local_context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
@@ -208,6 +211,13 @@ public:
 
     PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
 
+    void resetObjectColumns(ContextPtr query_context);
+
+    void appendObjectPartialSchema(const TxnTimestamp & txn_id, ObjectPartialSchema partial_schema);
+    void resetObjectSchemas(const ObjectAssembledSchema & assembled_schema, const ObjectPartialSchemas & partial_schemas);
+    void refreshAssembledSchema(const ObjectAssembledSchema & assembled_schema,  std::vector<TxnTimestamp> txn_ids);
+    void checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+
     /// parse bucket number set from where clause, only works for single-key cluster by
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
@@ -228,6 +238,11 @@ private:
     friend class DB::Catalog::Catalog;
     // Relative path to auxility storage disk root
     String relative_auxility_storage_path;
+
+    /// Current description of columns of data type Object.
+    /// It changes only when set of parts is changed and is
+    /// protected by @data_parts_mutex.
+    ObjectSchemas object_schemas;
 
     CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts) const;
 
@@ -260,7 +275,10 @@ private:
         ContextPtr local_context,
         ServerDataPartsVector & parts,
         const String & local_table_name,
-        const std::set<Int64> & required_bucket_numbers = {});
+        const std::set<Int64> & required_bucket_numbers = {},
+        const StorageSnapshotPtr & storage_snapshot = nullptr,
+        WorkerEngineType engine_type = WorkerEngineType::CLOUD,
+        bool replicated = false);
 
     /// NOTE: No need to implement this for CnchMergeTree as data processing is on CloudMergeTree.
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
@@ -280,17 +298,7 @@ private:
     /// If something is wrong, throws an exception.
     void checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const;
 
-
-    /// *********** START OF BitEngine-related members *********** ///
-
-    /// check whether bitengine table and dictionary table has same CLUSTER BY clause
-    /// only CnChMergeTree use it when creating table, CloudMergeTree doesn't need it because it's more difficult
-    /// to get underlying dict table.
-    void checkSchemaForBitEngineTable(const ContextPtr & context_) const override;
-
-    void checkUnderlyingDictionaryTable(const BitEngineHelper::DictionaryDatabaseAndTable & dict_table) override;
-
-    /// *********** END OF BitEngine-related members *********** ///
+    std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
 };
 
 using StorageCnchMergeTreePtr = std::shared_ptr<StorageCnchMergeTree>;

@@ -85,7 +85,7 @@ Projection
 CTEDef [1]
    Inner Join
    │     Condition: 
-   │     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))` > ('0.500000' * `expr#max(csales)`)
+   │     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))` > ('0.5' * `expr#max(csales)`)
    ├─ Aggregating
    │  │     Group by: {c_customer_sk}
    │  │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price)):=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price))
@@ -290,7 +290,7 @@ Projection
 CTEDef [1]
    Inner Join
    │     Condition: 
-   │     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))_8` > ('0.500000' * `expr#max(csales)_3`)
+   │     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))_8` > ('0.5' * `expr#max(csales)_3`)
    ├─ Aggregating
    │  │     Group by: {c_customer_sk_9}
    │  │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_8:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_6)

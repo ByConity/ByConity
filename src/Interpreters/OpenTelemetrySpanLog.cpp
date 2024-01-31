@@ -66,7 +66,8 @@ void OpenTelemetrySpanLogElement::appendToBlock(MutableColumns & columns) const
     Map map(attribute_names.size());
     for (size_t attr_idx = 0; attr_idx < map.size(); ++attr_idx)
     {
-        map[attr_idx] = Tuple{attribute_names[attr_idx], toString(attribute_values[attr_idx])};
+        map[attr_idx].first = toString(attribute_names[attr_idx]);
+        map[attr_idx].second = toString(attribute_values[attr_idx]);
     }
     columns[i++]->insert(map);
 }

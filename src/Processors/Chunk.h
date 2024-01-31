@@ -44,7 +44,8 @@ public:
         RepartitionChunkInfo = 5,
         SelectorInfo = 6,
         Totals = 7,
-        Extremes = 8
+        Extremes = 8,
+        FilterChunkInfo = 9
     };
 
     virtual ~ChunkInfo() = default;

@@ -26,11 +26,14 @@
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <sparsehash/dense_hash_map>
+#include <DataTypes/IDataType.h>
+#include <Storages/MergeTree/MergeTreeRangeReader.h>
 
 namespace DB
 {
 
 class IDataType;
+class DelayedStream;
 
 /// Reads the data between pairs of marks in the same part. When reading consecutive ranges, avoids unnecessary seeks.
 /// When ranges are almost consecutive, seeks are fast because they are performed inside the buffer.
@@ -66,9 +69,10 @@ public:
     /// Add columns from ordered_names that are not present in the block.
     /// Missing columns are added in the order specified by ordered_names.
     /// num_rows is needed in case if all res_columns are nullptr.
-    void fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool check_column_size = true);
+    void fillMissingColumns(
+        Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool check_column_size = true) const;
     /// Evaluate defaulted columns if necessary.
-    void evaluateMissingDefaults(Block additional_columns, Columns & res_columns);
+    void evaluateMissingDefaults(Block additional_columns, Columns & res_columns) const;
 
     /// If part metadata is not equal to storage metadata, than
     /// try to perform conversions of columns.
@@ -117,12 +121,6 @@ protected:
 
     void checkNumberOfColumns(size_t num_columns_to_read) const;
 
-    /// check whether a column is a BitEngine column,
-    /// if it is, the column will be replaced with `BITENGINE_COLUMN_EXTENSION`.
-    /// eg. a field `ids BitMap64 BitEngineEncode` is in the table schema,
-    /// in reading process, we'll read `ids_encoded_bitmap` in disk instead. And that's what we want.
-    bool checkBitEngineColumn(const NameAndTypePair & column) const;
-
     void addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
 
@@ -143,7 +141,7 @@ protected:
     size_t skipData(
         const NameAndTypePair & name_and_type, size_t from_mark, bool continue_reading,
         size_t current_task_last_mark, size_t max_rows_to_skip, ISerialization::SubstreamsCache & cache);
-    
+
     void deserializePrefix(
         const SerializationPtr & serialization,
         const NameAndTypePair & name_and_type,
@@ -166,6 +164,10 @@ protected:
     std::set<String> dup_implicit_keys;
     Names names; // only initialized if duplicate implicit key exit
 
+    /// Actual column names and types of columns in part,
+    /// which may differ from table metadata.
+    NamesAndTypes columns_to_read;
+    
     UncompressedCache * uncompressed_cache;
     MarkCache * mark_cache;
 

@@ -30,13 +30,14 @@ public:
 
     Pipe read(
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         const size_t max_block_size,
         const unsigned num_streams) override;
 
+    bool isSystemStorage() const override { return true; }
 
  protected:
     StorageSystemCnchTables(const StorageID & table_id_);

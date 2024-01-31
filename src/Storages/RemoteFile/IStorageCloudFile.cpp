@@ -381,7 +381,7 @@ IStorageCloudFile::IStorageCloudFile(
 
 Pipe IStorageCloudFile::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr query_context,
     QueryProcessingStage::Enum processed_stage,
@@ -390,14 +390,14 @@ Pipe IStorageCloudFile::read(
 {
     LOG_TRACE(log, " CloudFile column_names size = {}", column_names.size());
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(query_context), BuildQueryPipelineSettings::fromContext(query_context));
 }
 
 void IStorageCloudFile::read(
     DB::QueryPlan & query_plan,
     const DB::Names & column_names,
-    const DB::StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     DB::SelectQueryInfo & query_info,
     DB::ContextPtr query_context,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -410,11 +410,11 @@ void IStorageCloudFile::read(
         return;
 
     Names real_column_names = column_names;
-    NamesAndTypesList available_real_columns = metadata_snapshot->getColumns().getAllPhysical();
+    NamesAndTypesList available_real_columns = storage_snapshot->metadata->getColumns().getAllPhysical();
     if (real_column_names.empty())
         real_column_names.push_back(ExpressionActions::getSmallestColumn(available_real_columns));
 
-    metadata_snapshot->check(real_column_names, getVirtuals(), getStorageID());
+    storage_snapshot->check(real_column_names);
 
     auto cloud_file_source = std::make_unique<ReadFromCnchFile>(
         client,
@@ -423,7 +423,7 @@ void IStorageCloudFile::read(
         getVirtuals(),
         getStorageID(),
         query_info,
-        metadata_snapshot,
+        storage_snapshot->metadata,
         query_context,
         max_block_size,
         num_streams,

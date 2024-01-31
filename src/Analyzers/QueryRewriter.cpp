@@ -31,6 +31,7 @@
 #include <Interpreters/LogicalExpressionsOptimizer.h>
 #include <Interpreters/MarkTableIdentifiersVisitor.h>
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
+#include <Interpreters/PredicateExpressionsOptimizer.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/QueryNormalizer.h>
 #include <Interpreters/SelectIntersectExceptQueryVisitor.h>
@@ -43,6 +44,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
+#include <Storages/StorageSnapshot.h>
 
 namespace DB
 {
@@ -432,7 +434,10 @@ namespace
         }
 
         StoragePtr storage = joined_tables.getLeftTableStorage();
-        rewrite_context.result.emplace(source_columns, storage, storage ? storage->getInMemoryMetadataPtr() : nullptr);
+        StorageSnapshotPtr storage_snapshot = nullptr;
+        if (storage)
+            storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+        rewrite_context.result.emplace(source_columns, storage, storage_snapshot);
         auto & result = *(rewrite_context.result);
 
         if (tables_with_columns.size() > 1)
@@ -470,7 +475,7 @@ namespace
 
     void postRewriteSelectQuery(ASTPtr & node, SelectQueryRewriteContext & rewrite_context, ContextMutablePtr context, int & graphviz_index)
     {
-        // auto & select_query = node->as<ASTSelectQuery &>();
+        auto & select_query = node->as<ASTSelectQuery &>();
         const auto & settings = context->getSettingsRef();
         auto & tables_with_columns = rewrite_context.tables_with_columns;
         auto & result = *(rewrite_context.result);
@@ -485,14 +490,25 @@ namespace
                 for (const auto & col : result.analyzed_join->columnsFromJoinedTable())
                     all_source_columns_set.insert(col.name);
             }
-            normalizeNameAndAliases(node, result.aliases, all_source_columns_set, settings, context, result.storage,
-                                    result.metadata_snapshot, graphviz_index);
+            normalizeNameAndAliases(
+                node,
+                result.aliases,
+                all_source_columns_set,
+                settings,
+                context,
+                result.storage,
+                result.storage_snapshot ? result.storage_snapshot->metadata : nullptr,
+                graphviz_index);
         }
 
         // 5. Call `TreeOptimizer` since some optimizations will change the query result
+        if (select_query.having()
+            && (!select_query.group_by_with_cube && !select_query.group_by_with_rollup && !select_query.group_by_with_grouping_sets
+                && !select_query.group_by_with_totals))
+            PredicateExpressionsOptimizer(context, tables_with_columns, settings).tryMovePredicatesFromHavingToWhere(select_query);
         TreeOptimizer::apply(node, result, tables_with_columns, context, false);
 
-        result.collectUsedColumns(context, node, true);
+        result.collectUsedColumns(context, node, true, settings.rewrite_unknown_left_join_identifier);
     }
 
     class MarkTupleLiteralsAsLegacyData

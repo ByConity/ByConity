@@ -50,6 +50,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int S3_ERROR;
+    extern const int BAD_ARGUMENTS;
     extern const int CANNOT_SEEK_THROUGH_FILE;
     extern const int SEEK_POSITION_OUT_OF_BOUND;
 }
@@ -223,19 +224,21 @@ bool ReadBufferFromS3::nextImpl()
 
 off_t ReadBufferFromS3::seek(off_t offset_, int whence)
 {
-    if (offset_ == getPosition() && whence == SEEK_SET)
-        return offset_;
+    if (whence == SEEK_CUR)
+        offset_ = getPosition() + offset_;
+    else if (whence != SEEK_SET)
+        throw Exception("Seek expects SEEK_SET or SEEK_CUR as whence", ErrorCodes::BAD_ARGUMENTS);
 
-    read_all_range_successfully = false;
+    if (offset_ < 0)
+        throw Exception("Seek position is out of bounds. Offset: " + std::to_string(offset_), ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
+
+    if (offset_ == getPosition())
+        return offset_;
 
     if (impl && restricted_seek)
         throw Exception("Seek is allowed only before first read attempt from the buffer.", ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 
-    if (whence != SEEK_SET)
-        throw Exception("Only SEEK_SET mode is allowed.", ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
-
-    if (offset_ < 0)
-        throw Exception("Seek position is out of bounds. Offset: " + std::to_string(offset_), ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
+    read_all_range_successfully = false;
 
     if (!restricted_seek)
     {

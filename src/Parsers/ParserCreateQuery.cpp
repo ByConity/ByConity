@@ -1177,11 +1177,19 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserStorage storage_p(dt);
     ParserIdentifier name_p;
     ParserTableOverridesDeclarationList table_overrides_p;
+    ParserIdentifier id_p;
 
+    ParserKeyword s_schema("SCHEMA");
+    ParserKeyword s_default("DEFAULT");
+    ParserKeyword s_character_set("CHARACTER SET");
+    ParserKeyword s_collate("COLLATE");
+    
     ASTPtr database;
     ASTPtr storage;
     ASTPtr table_overrides;
     UUID uuid = UUIDHelpers::Nil;
+    ASTPtr character_set;
+    ASTPtr collate;
 
     String cluster_str;
     bool attach = false;
@@ -1195,7 +1203,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
             return false;
     }
 
-    if (!s_database.ignore(pos, expected))
+    if (!s_database.ignore(pos, expected) && !s_schema.ignore(pos, expected))
         return false;
 
     if (s_if_not_exists.ignore(pos, expected))
@@ -1220,6 +1228,19 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
             return false;
     }
 
+    s_default.ignore(pos, expected);
+    if (s_character_set.ignore(pos, expected)) 
+    {
+        if (!id_p.parse(pos, character_set, expected))
+            return false;
+    }
+    s_default.ignore(pos, expected);
+    if (s_collate.ignore(pos, expected))
+    {
+        if (!id_p.parse(pos, collate, expected))
+                return false;
+    }
+    
     storage_p.parse(pos, storage, expected);
 
     if (!table_overrides_p.parse(pos, table_overrides, expected))

@@ -39,8 +39,8 @@ void checkColumnStructure(const StorageInMemoryMetadata & target_data, const Sto
 {
     for (const auto & col_name : names)
     {
-        const auto & target = target_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
-        const auto & src = src_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
+        const auto & target = target_data.getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, col_name);
+        const auto & src = src_data.getColumns().getColumnOrSubcolumn(GetColumnsOptions::AllPhysical, col_name);
 
         if (target.name != src.name)
             throw Exception("Column structure mismatch, found different names of column " + backQuoteIfNeed(col_name),
@@ -126,7 +126,7 @@ void checkIngestColumns(const Strings & column_names, const StorageInMemoryMetad
         if (!all_columns.emplace(col_name).second)
             throw Exception("Ingest duplicate column " + backQuoteIfNeed(col_name), ErrorCodes::DUPLICATE_COLUMN);
 
-        if (isMapImplicitKeyNotKV(col_name))
+        if (isMapImplicitKey(col_name))
         {
             has_map_implicite_key = true;
             continue;
@@ -138,13 +138,6 @@ void checkIngestColumns(const Strings & column_names, const StorageInMemoryMetad
     }
 }
 
-String getMapKey(const String & map_col_name, const String & map_implicit_name)
-{
-    String prefix = String("__") + map_col_name + "__";
-    size_t key_len = map_implicit_name.size() - prefix.size();
-    return map_implicit_name.substr(prefix.size(), key_len);
-}
-
 std::optional<NameAndTypePair> tryGetMapColumn(const StorageInMemoryMetadata & meta_data, const String & col_name)
 {
     if (!meta_data.getColumns().hasPhysical(col_name) && isMapImplicitKey(col_name))
@@ -154,7 +147,7 @@ std::optional<NameAndTypePair> tryGetMapColumn(const StorageInMemoryMetadata & m
         {
             if (nt.type->isMap())
             {
-                if (nt.type->isMapKVStore() ? (col_name == nt.name + ".key" || col_name == nt.name + ".value")
+                if (nt.type->isKVMap() ? (col_name == nt.name + ".key" || col_name == nt.name + ".value")
                                             : startsWith(col_name, getMapKeyPrefix(nt.name)))
                 {
                     return nt;

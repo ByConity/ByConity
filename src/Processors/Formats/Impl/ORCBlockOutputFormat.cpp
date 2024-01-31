@@ -67,6 +67,7 @@ ORC_UNIQUE_PTR<orc::Type> ORCBlockOutputFormat::getORCType(const DataTypePtr & t
             return orc::createPrimitiveType(orc::TypeKind::SHORT);
         }
         case TypeIndex::UInt32: [[fallthrough]];
+        case TypeIndex::IPv4: [[fallthrough]];
         case TypeIndex::Int32:
         {
             return orc::createPrimitiveType(orc::TypeKind::INT);
@@ -95,6 +96,10 @@ ORC_UNIQUE_PTR<orc::Type> ORCBlockOutputFormat::getORCType(const DataTypePtr & t
         }
         case TypeIndex::FixedString: [[fallthrough]];
         case TypeIndex::String:
+        {
+            return orc::createPrimitiveType(orc::TypeKind::BINARY);
+        }
+        case TypeIndex::IPv6:
         {
             return orc::createPrimitiveType(orc::TypeKind::BINARY);
         }
@@ -299,6 +304,11 @@ void ORCBlockOutputFormat::writeColumn(
             writeNumbers<UInt32, orc::LongVectorBatch>(orc_column, column, null_bytemap, [](const UInt32 & value){ return value; });
             break;
         }
+        case TypeIndex::IPv4:
+        {
+            writeNumbers<IPv4, orc::LongVectorBatch>(orc_column, column, null_bytemap, [](const IPv4 & value){ return value.toUnderType(); });
+            break;
+        }
         case TypeIndex::Int64:
         {
             writeNumbers<Int64, orc::LongVectorBatch>(orc_column, column, null_bytemap, [](const Int64 & value){ return value; });
@@ -327,6 +337,11 @@ void ORCBlockOutputFormat::writeColumn(
         case TypeIndex::String:
         {
             writeStrings<ColumnString>(orc_column, column, null_bytemap);
+            break;
+        }
+        case TypeIndex::IPv6:
+        {
+            writeStrings<ColumnIPv6>(orc_column, column, null_bytemap);
             break;
         }
         case TypeIndex::DateTime:

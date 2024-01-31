@@ -348,12 +348,10 @@ struct StorageInMemoryMetadata
     /// contains only the columns of the table, and all the columns are different.
     /// If |need_all| is set, then checks that all the columns of the table are in the block.
     void check(const Block & block, bool need_all = false) const;
-
-    /// check if there exist map column
-    bool hasMapColumn() const;
 };
 
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 using MultiVersionStorageMetadataPtr = MultiVersion<StorageInMemoryMetadata>;
 
+String listOfColumns(const NamesAndTypesList & available_columns);
 }

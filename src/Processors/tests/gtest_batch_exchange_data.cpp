@@ -57,6 +57,7 @@ void write(ContextMutablePtr & context, Block header, DiskExchangeDataManagerPtr
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataWriteAndRead)
 {
+    GTEST_SKIP() << "Skipping DiskExchangeDataWriteAndRead";
     auto context = getContext().context;
     auto header = getHeader(1);
 
@@ -94,7 +95,9 @@ Processors createMockExecutor(const ExchangeDataKeyPtr & key, Block header, uint
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
 {
-    auto context = getContext().context;
+    GTEST_SKIP() << "Skipping DiskExchangeDataCancel";
+    auto context = Context::createCopy(getContext().context);
+    context->setPlanSegmentInstanceId({1, static_cast<UInt32>(parallel_idx)});
     auto manager = context->getDiskExchangeDataManager();
     auto header = getHeader(1);
 

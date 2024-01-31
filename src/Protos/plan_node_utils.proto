@@ -101,6 +101,7 @@ message Partitioning {
   required uint64 buckets = 4;
   required bool enforce_round_robin = 5;
   required Component.Enum component = 6;
+  required bool exactly_match = 7;
 }
 
 // possibly nullptr
@@ -201,10 +202,9 @@ message NameWithAliasPair {
 message AddressInfo {
   required string host_name = 1;
   required uint32 port = 2;
-  required bytes user = 3;
-  required bytes password = 4;
+  optional bytes user = 3;
+  optional bytes password = 4;
   required uint32 exchange_port = 5;
-  required uint32 exchange_status_port = 6;
 }
 
 message IPlanSegment {
@@ -224,6 +224,13 @@ message PlanSegmentInput {
   required bool keep_order = 3;
   repeated AddressInfo source_addresses = 4;
   optional StorageID storage_id = 5;
+}
+
+message PlanSegmentOutput {
+  required IPlanSegment base_plan_segment = 1;
+  optional string shuffle_hash_function = 2;
+  optional uint32 parallel_size = 3;
+  optional bool keep_order = 4;
 }
 
 message WindowFrame {
