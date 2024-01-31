@@ -210,6 +210,6 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeMap(DataTypeFactory & factory)
 {
-    factory.registerDataType("Map", create);
+    factory.registerDataType("Map", create, DataTypeFactory::CaseInsensitive);
 }
 }

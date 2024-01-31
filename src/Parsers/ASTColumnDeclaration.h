@@ -48,6 +48,8 @@ public:
 
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+    void toLowerCase() override { boost::to_lower(name); }
+    void toUpperCase() override { boost::to_upper(name); }
 };
 
 }

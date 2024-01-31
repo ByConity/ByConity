@@ -84,6 +84,28 @@ public:
         return query_ptr;
     }
 
+    void toLowerCase() override
+    {   
+        for (auto & elem: elements) 
+        {
+            boost::to_lower(elem.from.database);
+            boost::to_lower(elem.from.table);
+            boost::to_lower(elem.to.database);
+            boost::to_lower(elem.to.table);
+        }
+    }
+
+     void toUpperCase() override
+    {   
+        for (auto & elem: elements) 
+        {
+            boost::to_upper(elem.from.database);
+            boost::to_upper(elem.from.table);
+            boost::to_upper(elem.to.database);
+            boost::to_upper(elem.to.table);
+        }
+    }
+
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {

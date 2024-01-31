@@ -28,6 +28,7 @@ message TableIdentifier {
 }
 
 enum CnchDatabaseType { Cnch = 0; MaterializedMySQL = 1; }
+enum CnchTextCaseOption { Mixed = 0; LowerCase = 1; UpperCase = 2; }
 
 message DataModelDB {
   required string name = 1;
@@ -41,6 +42,7 @@ message DataModelDB {
   // create query, useful for CnchMaterializedMySQL
   optional string definition = 9;
   optional CnchDatabaseType type = 10;
+  optional CnchTextCaseOption text_case_option = 11;
 };
 
 message DataModelCatalog {

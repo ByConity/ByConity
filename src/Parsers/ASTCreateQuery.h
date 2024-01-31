@@ -166,6 +166,10 @@ public:
 
     bool isView() const { return is_ordinary_view || is_materialized_view || is_live_view; }
 
+    void toLowerCase() override;
+
+    void toUpperCase() override;
+
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };

@@ -23,7 +23,7 @@ namespace DB
 
 REGISTER_FUNCTION(Encrypt)
 {
-    factory.registerFunction<FunctionEncrypt<EncryptImpl>>();
+    factory.registerFunction<FunctionEncrypt<EncryptImpl>>(FunctionFactory::CaseInsensitive);
 }
 
 }

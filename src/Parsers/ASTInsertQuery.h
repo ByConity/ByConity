@@ -79,6 +79,24 @@ public:
         return res;
     }
 
+    void toLowerCase() override
+    {
+        if (!table_id.empty())
+        {
+            boost::to_lower(table_id.database_name);
+            boost::to_lower(table_id.table_name);
+        }
+    }
+
+    void toUpperCase() override
+    {
+        if (!table_id.empty())
+        {
+            boost::to_upper(table_id.database_name);
+            boost::to_upper(table_id.table_name);
+        }
+    }
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };

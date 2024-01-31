@@ -55,6 +55,24 @@ public:
 
     ASTPtr clone() const override { return std::make_shared<ASTShowAccessEntitiesQuery>(*this); }
 
+    void toLowerCase() override 
+    {
+        if (database_and_table_name)
+        {
+            boost::to_lower(database_and_table_name->first);
+            boost::to_lower(database_and_table_name->second);
+        }
+    }
+
+    void toUpperCase() override 
+    {
+        if (database_and_table_name)
+        {
+            boost::to_upper(database_and_table_name->first);
+            boost::to_upper(database_and_table_name->second);
+        }
+    }
+
     void replaceEmptyDatabase(const String & current_database);
 
 protected:

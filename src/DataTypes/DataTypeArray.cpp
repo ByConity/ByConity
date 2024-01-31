@@ -141,7 +141,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeArray(DataTypeFactory & factory)
 {
-    factory.registerDataType("Array", create);
+    factory.registerDataType("Array", create, DataTypeFactory::CaseInsensitive);
 }
 
 }

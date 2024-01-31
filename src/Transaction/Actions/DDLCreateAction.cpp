@@ -34,7 +34,7 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
 
     if (auto * p = std::get_if<CreateDatabaseParams>(&params))
     {
-        catalog->createDatabase(p->name, p->uuid, txn_id, commit_time, p->statement, p->engine_name);
+        catalog->createDatabase(p->name, p->uuid, txn_id, commit_time, p->statement, p->engine_name, p->text_case_option);
     }
     else if (auto * p = std::get_if<CreateSnapshotParams>(&params))
     {

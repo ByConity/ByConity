@@ -537,7 +537,7 @@ namespace Catalog
     }
 
     void Catalog::createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts,
-                                 const String & create_query, const String & engine_name)
+                                 const String & create_query, const String & engine_name, enum TextCaseOption text_case_option)
     {
         runWithMetricSupport(
             [&] {
@@ -564,6 +564,21 @@ namespace Catalog
 
                         db_data.set_definition(create_query);
                         db_data.set_type(DB::Protos::CnchDatabaseType::MaterializedMySQL);
+                    }
+
+                    switch (text_case_option)
+                    {
+                        case TextCaseOption::MIXED:
+                            db_data.set_text_case_option(DB::Protos::CnchTextCaseOption::Mixed);
+                            break;
+                        case TextCaseOption::LOWERCASE:
+                            db_data.set_text_case_option(DB::Protos::CnchTextCaseOption::LowerCase);
+                            break;
+                        case TextCaseOption::UPPERCASE:
+                            db_data.set_text_case_option(DB::Protos::CnchTextCaseOption::UpperCase);
+                            break;
+                        default:
+                            break;
                     }
 
                     meta_proxy->addDatabase(name_space, db_data);

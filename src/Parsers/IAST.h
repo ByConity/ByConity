@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <set>
 
+#include <boost/algorithm/string/case_conv.hpp>
 
 class SipHash;
 
@@ -261,6 +262,10 @@ public:
 
     void dumpTree(WriteBuffer & ostr, size_t indent = 0) const;
     std::string dumpTree(size_t indent = 0) const;
+
+    virtual void toLowerCase() {}
+
+    virtual void toUpperCase() {}
 
     /** Check the depth of the tree.
       * If max_depth is specified and the depth is greater - throw an exception.

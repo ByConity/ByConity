@@ -294,7 +294,7 @@ public:
     String to_database;
     String to_table;
 
-    /// Target column name
+    /// Target column namea
     ASTPtr rename_to;
 
     /// Which property user want to remove
@@ -305,6 +305,22 @@ public:
     ASTPtr clone() const override;
 
     ASTType getType() const override { return ASTType::ASTAlterCommand; }
+
+    void toLowerCase() override 
+    {
+        boost::to_lower(from_database);
+        boost::to_lower(from_table);
+        boost::to_lower(to_database);
+        boost::to_lower(to_table);
+    }
+
+    void toUpperCase() override 
+    {
+        boost::to_upper(from_database);
+        boost::to_upper(from_table);
+        boost::to_upper(to_database);
+        boost::to_upper(to_table);
+    }
 
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

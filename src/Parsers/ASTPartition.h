@@ -44,6 +44,10 @@ public:
 
     ASTPtr clone() const override;
 
+    void toLowerCase() override { boost::to_lower(fields_str); }
+
+    void toUpperCase() override { boost::to_upper(fields_str); }
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };

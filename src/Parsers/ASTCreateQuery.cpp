@@ -512,4 +512,20 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     }
 }
 
+void ASTCreateQuery::toLowerCase()
+{
+    boost::to_lower(database);
+    boost::to_lower(table);
+    boost::to_lower(as_database);
+    boost::to_lower(as_table);
+}
+
+void ASTCreateQuery::toUpperCase()
+{
+    boost::to_upper(database);
+    boost::to_upper(table);
+    boost::to_upper(as_database);
+    boost::to_upper(as_table);
+}
+
 }

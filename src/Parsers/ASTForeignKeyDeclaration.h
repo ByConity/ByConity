@@ -28,5 +28,15 @@ public:
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
+    void toLowerCase() override 
+    { 
+        boost::to_lower(fk_name);
+        boost::to_lower(ref_table_name);
+    }
+    void toUpperCase() override 
+    { 
+        boost::to_upper(fk_name);
+        boost::to_upper(ref_table_name);
+    }
 };
 }
