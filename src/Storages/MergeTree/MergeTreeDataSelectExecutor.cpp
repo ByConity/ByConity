@@ -20,6 +20,9 @@
  */
 
 #include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
+#include "Common/Exception.h"
+#include "Common/formatIPv6.h"
+#include "common/logger_useful.h"
 #include <common/scope_guard_safe.h>
 #include "Storages/MergeTree/FilterWithRowUtils.h"
 #include <memory>
