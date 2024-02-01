@@ -1668,7 +1668,11 @@ namespace Catalog
                 }
 
                 size_t size_before = res.size();
-                getVisibleServerDataParts(res, ts, this);
+
+                // TODO: should we remove the visibility check logic for trashed parts?
+                if (ts)
+                    getVisibleServerDataParts(res, ts, this);
+
                 LOG_DEBUG(
                     log,
                     "Get {}/{} visible parts in trash for table {} in {} ms, ts={}",

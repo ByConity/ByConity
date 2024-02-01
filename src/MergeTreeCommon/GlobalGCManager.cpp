@@ -107,7 +107,12 @@ namespace {
 
                 LOG_DEBUG(log, "Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs());
 
+                ServerDataPartsVector parts_in_trash = catalog->getTrashedPartsInPartitions(storage, {partition_id}, 0);
                 ServerDataPartsVector parts = catalog->getServerDataPartsInPartitions(storage, {partition_id}, {0}, &context);
+
+                LOG_DEBUG(log, "Will remove {} data parts and {} trashed parts from S3 storage.", parts.size(), parts_in_trash.size());
+                std::move(parts_in_trash.begin(), parts_in_trash.end(), std::back_inserter(parts));
+
                 for (auto & part : parts)
                 {
                     auto cnch_part = part->toCNCHDataPart(mergetree_meta);
