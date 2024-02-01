@@ -133,31 +133,32 @@ void IScheduler::schedule()
     Stopwatch sw;
     genTopology();
     genSourceTasks();
-    BatchTaskPtr batch_task;
-    
+
     /// Leave final segment alone.
-    while (true)
+    while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
     {
-        if (dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
-            break;
-        getBatchTaskToSchedule(batch_task);
         if (stopped.load(std::memory_order_acquire))
         {
             LOG_INFO(log, "Schedule interrupted");
             return;
         }
-        for (auto task : *batch_task)
+        /// nullptr means invalid task
+        BatchTaskPtr batch_task;
+        if (getBatchTaskToSchedule(batch_task) && batch_task)
         {
-            LOG_DEBUG(log, "Schedule segment {}", task.task_id);
-            if (task.task_id == 0)
+            for (auto task : *batch_task)
             {
-                prepareFinalTask();
-                break;
+                LOG_DEBUG(log, "Schedule segment {}", task.task_id);
+                if (task.task_id == 0)
+                {
+                    prepareFinalTask();
+                    break;
+                }
+                auto * plan_segment_ptr = dag_graph_ptr->getPlanSegmentPtr(task.task_id);
+                plan_segment_ptr->setCoordinatorAddress(local_address);
+                scheduleTask(plan_segment_ptr, task);
+                onSegmentScheduled(task);
             }
-            auto * plan_segment_ptr = dag_graph_ptr->getPlanSegmentPtr(task.task_id);
-            plan_segment_ptr->setCoordinatorAddress(local_address);
-            scheduleTask(plan_segment_ptr, task);
-            onSegmentScheduled(task);
         }
     }
 
@@ -324,9 +325,7 @@ void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed,
     {
         stopped.store(true, std::memory_order_release);
         // emplace a fake task.
-        auto batch_task = std::make_shared<BatchTask>();
-        batch_task->emplace_back(0);
-        addBatchTask(std::move(batch_task));
+        addBatchTask(nullptr);
     }
 }
 
