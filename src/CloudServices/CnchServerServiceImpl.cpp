@@ -1567,32 +1567,39 @@ void CnchServerServiceImpl::executeOptimize(
     Protos::ExecuteOptimizeQueryResp * response,
     google::protobuf::Closure *done)
 {
-    brpc::ClosureGuard done_guard(done);
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            
+            brpc::ClosureGuard done_guard(done);
+            try
+            {
+                auto enable_try = request->enable_try();
+                const auto & partition_id = request->partition_id();
 
-    try
-    {
-        auto enable_try = request->enable_try();
-        const auto & partition_id = request->partition_id();
+                auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+                LOG_TRACE(log, "Received OPTIMIZE query for {}", storage_id.getNameForLogs());
+                auto bg_thread = global_context->getCnchBGThread(CnchBGThreadType::MergeMutate, storage_id);
 
-        auto storage_id = RPCHelpers::createStorageID(request->storage_id());
-        auto bg_thread = getContext()->getCnchBGThread(CnchBGThreadType::MergeMutate, storage_id);
+                auto & database_catalog = DatabaseCatalog::instance();
+                auto istorage = database_catalog.getTable(storage_id, global_context);
 
-        auto & database_catalog = DatabaseCatalog::instance();
-        auto istorage = database_catalog.getTable(storage_id, getContext());
-
-        auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
-        auto task_id = merge_mutate_thread->triggerPartMerge(istorage, partition_id, false, enable_try, false);
-        if (request->mutations_sync())
-        {
-            auto timeout = request->has_timeout_ms() ? request->timeout_ms() : 0;
-            merge_mutate_thread->waitTasksFinish({task_id}, timeout);
+                auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
+                auto task_id = merge_mutate_thread->triggerPartMerge(istorage, partition_id, false, enable_try, false);
+                if (request->mutations_sync())
+                {
+                    auto timeout = request->has_timeout_ms() ? request->timeout_ms() : 0;
+                    merge_mutate_thread->waitTasksFinish({task_id}, timeout);
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
         }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    );
 }
 
 void CnchServerServiceImpl::forceRecalculateMetrics(
