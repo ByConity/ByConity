@@ -50,14 +50,13 @@ public:
     const static std::unordered_set<String> order_dependent_agg;
 
 private:
+    PlanNodePtr visitPlanNode(PlanNodeBase & node, RedundantSortContext & sort_context) override;
     PlanNodePtr visitProjectionNode(ProjectionNode & node, RedundantSortContext & sort_context) override;
     PlanNodePtr visitAggregatingNode(AggregatingNode & node, RedundantSortContext & sort_context) override;
     PlanNodePtr visitJoinNode(JoinNode & node, RedundantSortContext & sort_context) override;
     PlanNodePtr visitUnionNode(UnionNode & node, RedundantSortContext & sort_context) override;
     PlanNodePtr visitIntersectNode(IntersectNode & node, RedundantSortContext & sort_context) override;
     PlanNodePtr visitExceptNode(ExceptNode & node, RedundantSortContext & sort_context) override;
-    PlanNodePtr visitLimitNode(LimitNode & node, RedundantSortContext & sort_context) override;
-    PlanNodePtr visitLimitByNode(LimitByNode & node, RedundantSortContext & sort_context) override;
     PlanNodePtr visitSortingNode(SortingNode & node, RedundantSortContext & sort_context) override;
     PlanNodePtr visitCTERefNode(CTERefNode & node, RedundantSortContext & sort_context) override;
 
