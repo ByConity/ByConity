@@ -43,8 +43,11 @@ class MMappedFileCache;
 std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
     const std::string & filename_,
     const ReadSettings& settings_,
+    std::optional<size_t> read_hint = {},
+    std::optional<size_t> file_size = {},
     int flags_ = -1,
     char * existing_memory_ = nullptr,
-    size_t alignment = 0);
+    size_t alignment = 0,
+    bool use_external_buffer = false);
 
 }

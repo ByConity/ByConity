@@ -40,7 +40,8 @@ public:
         size_t alignment = 0,
         ThrottlerPtr total_network_throttler = nullptr,
         bool use_external_buffer_ = false,
-        off_t read_until_position_ = 0);
+        off_t read_until_position_ = 0,
+        std::optional<size_t> file_size = std::nullopt);
 
     ~ReadBufferFromByteHDFS() override;
 
@@ -63,7 +64,6 @@ public:
 private:
     std::unique_ptr<ReadBufferFromHDFSImpl> impl;
     ThrottlerPtr total_network_throttler;
-    std::optional<size_t> file_size;
 };
 
 }

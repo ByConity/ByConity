@@ -66,8 +66,11 @@
     M(UncompressedCacheHits, "") \
     M(UncompressedCacheMisses, "") \
     M(UncompressedCacheWeightLost, "") \
-    M(MMappedFileCacheHits, "") \
-    M(MMappedFileCacheMisses, "") \
+    M(MMappedFileCacheHits, "Number of times a file has been found in the MMap cache (for the 'mmap' read_method), so we didn't have to mmap it again.") \
+    M(MMappedFileCacheMisses, "Number of times a file has not been found in the MMap cache (for the 'mmap' read_method), so we had to mmap it again.") \
+    M(OpenedFileCacheHits, "Number of times a file has been found in the opened file cache, so we didn't have to open it again.") \
+    M(OpenedFileCacheMisses, "Number of times a file has been found in the opened file cache, so we had to open it again.") \
+    M(OpenedFileCacheMicroseconds, "Amount of time spent executing OpenedFileCache methods.") \
     M(IOBufferAllocs, "") \
     M(IOBufferAllocBytes, "") \
     M(ArenaAllocChunks, "") \
@@ -85,17 +88,27 @@
     M(LoadPrimaryIndexMicroseconds, "") \
     M(ChecksumsCacheHits, "") \
     M(ChecksumsCacheMisses, "") \
-    M(CreatedReadBufferOrdinary, "") \
+    M(CreatedReadBufferOrdinary, "Number of times ordinary read buffer was created for reading data (while choosing among other read methods).") \
+    M(CreatedReadBufferDirectIO, "Number of times a read buffer with O_DIRECT was created for reading data (while choosing among other read methods).") \
+    M(CreatedReadBufferDirectIOFailed, "Number of times a read buffer with O_DIRECT was attempted to be created for reading data (while choosing among other read methods), but the OS did not allow it (due to lack of filesystem support or other reasons) and we fallen back to the ordinary reading method.") \
     M(CreatedReadBufferAIO, "") \
     M(CreatedReadBufferAIOFailed, "") \
     M(CreatedReadBufferMMap, "") \
     M(CreatedReadBufferMMapFailed, "") \
     M(DiskReadElapsedMicroseconds, "Total time spent waiting for read syscall. This include reads from page cache.") \
     M(DiskWriteElapsedMicroseconds, "Total time spent waiting for write syscall. This include writes to page cache.") \
-    M(NetworkReceiveElapsedMicroseconds, "Total time spent waiting for data to receive or receiving data from network. Only ClickHouse-related network interaction is included, not by 3rd party libraries.") \
-    M(NetworkSendElapsedMicroseconds, "Total time spent waiting for data to send to network or sending data to network. Only ClickHouse-related network interaction is included, not by 3rd party libraries..") \
-    M(NetworkReceiveBytes, "Total number of bytes received from network. Only ClickHouse-related network interaction is included, not by 3rd party libraries.") \
-    M(NetworkSendBytes, "Total number of bytes send to network. Only ClickHouse-related network interaction is included, not by 3rd party libraries.") \
+    M(NetworkReceiveElapsedMicroseconds, \
+      "Total time spent waiting for data to receive or receiving data from network. Only ClickHouse-related network interaction is " \
+      "included, not by 3rd party libraries.") \
+    M(NetworkSendElapsedMicroseconds, \
+      "Total time spent waiting for data to send to network or sending data to network. Only ClickHouse-related network interaction is " \
+      "included, not by 3rd party libraries..") \
+    M(NetworkReceiveBytes, \
+      "Total number of bytes received from network. Only ClickHouse-related network interaction is included, not by 3rd party libraries.") \
+    M(NetworkSendBytes, \
+      "Total number of bytes send to network. Only ClickHouse-related network interaction is included, not by 3rd party libraries.") \
+    M(LocalReadThrottlerBytes, "Bytes passed through 'max_local_read_bandwidth_for_server'/'max_local_read_bandwidth' throttler.") \
+    M(LocalReadThrottlerSleepMicroseconds, "Total time a query was sleeping to conform 'max_local_read_bandwidth_for_server'/'max_local_read_bandwidth' throttling.") \
     M(ThrottlerSleepMicroseconds, "Total time a query was sleeping to conform the 'max_network_bandwidth' setting.") \
     \
     M(QueryMaskingRulesMatch, "Number of times query masking rules was successfully matched.") \
