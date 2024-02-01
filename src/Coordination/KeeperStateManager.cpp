@@ -272,7 +272,7 @@ nuraft::ptr<nuraft::srv_state> KeeperStateManager::read_state()
         try
         {
             ReadBufferFromFile read_buf(path);
-            auto content_size = read_buf.size(); /// TODO: getFileSize() (see https://github.com/ClickHouse/ClickHouse/pull/38227/files)
+            auto content_size = read_buf.getFileSize();
 
             if (content_size == 0)
                 return nullptr;

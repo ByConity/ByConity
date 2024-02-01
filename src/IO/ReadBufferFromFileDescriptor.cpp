@@ -34,6 +34,7 @@
 #include <Common/TerminalSize.h>
 #include <IO/Operators.h>
 #include <Interpreters/Context.h>
+#include <Common/filesystemHelpers.h>
 
 #if defined(__clang__) && __clang_major__ >= 13
 #pragma clang diagnostic ignored "-Wreserved-identifier"
@@ -46,6 +47,8 @@ namespace ProfileEvents
     extern const Event ReadBufferFromFileDescriptorReadBytes;
     extern const Event DiskReadElapsedMicroseconds;
     extern const Event Seek;
+    extern const Event LocalReadThrottlerBytes;
+    extern const Event LocalReadThrottlerSleepMicroseconds;
 }
 
 namespace CurrentMetrics
@@ -71,10 +74,81 @@ std::string ReadBufferFromFileDescriptor::getFileName() const
     return "(fd = " + toString(fd) + ")";
 }
 
+size_t ReadBufferFromFileDescriptor::readImpl(char * to, size_t min_bytes, size_t max_bytes, size_t offset)
+{
+    chassert(min_bytes <= max_bytes);
+
+    /// This is a workaround of a read past EOF bug in linux kernel with pread()
+    if (file_size.has_value() && offset >= *file_size)
+        return 0;
+
+    size_t bytes_read = 0;
+    while (bytes_read < min_bytes)
+    {
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
+
+        Stopwatch watch(profile_callback ? clock_type : CLOCK_MONOTONIC);
+
+        ssize_t res = 0;
+        size_t to_read = max_bytes - bytes_read;
+        {
+            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
+
+            if (use_pread)
+                res = ::pread(fd, to + bytes_read, to_read, offset + bytes_read);
+            else
+                res = ::read(fd, to + bytes_read, to_read);
+        }
+        if (!res)
+            break;
+
+        if (-1 == res && errno != EINTR)
+        {
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
+            throwFromErrnoWithPath(
+                fmt::format("Cannot read from file {}", getFileName()), getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+        }
+
+        if (res > 0)
+        {
+            bytes_read += res;
+            if (throttler)
+                throttler->add(res);
+        }
+
+
+        /// It reports real time spent including the time spent while thread was preempted doing nothing.
+        /// And it is Ok for the purpose of this watch (it is used to lower the number of threads to read from tables).
+        /// Sometimes it is better to use taskstats::blkio_delay_total, but it is quite expensive to get it
+        /// (NetlinkMetricsProvider has about 500K RPS).
+        watch.stop();
+        ProfileEvents::increment(ProfileEvents::DiskReadElapsedMicroseconds, watch.elapsedMicroseconds());
+
+        if (profile_callback)
+        {
+            ProfileInfo info;
+            info.bytes_requested = to_read;
+            info.bytes_read = res;
+            info.nanoseconds = watch.elapsed();
+            profile_callback(info);
+        }
+    }
+
+    if (bytes_read)
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, bytes_read);
+
+    return bytes_read;
+}
+
 
 bool ReadBufferFromFileDescriptor::nextImpl()
 {
-    size_t bytes_read = readImpl(internal_buffer.begin(), internal_buffer.size());
+     /// If internal_buffer size is empty, then read() cannot be distinguished from EOF
+    assert(!internal_buffer.empty());
+
+    size_t bytes_read = readImpl(internal_buffer.begin(), 1, internal_buffer.size(), file_offset_of_buffer_end);
+
+    file_offset_of_buffer_end += bytes_read;
 
     if (bytes_read)
     {
@@ -82,6 +156,7 @@ bool ReadBufferFromFileDescriptor::nextImpl()
         working_buffer.resize(bytes_read);
         return true;
     }
+
     return false;
 }
 
@@ -122,35 +197,60 @@ off_t ReadBufferFromFileDescriptor::seek(off_t offset, int whence)
     }
     else
     {
+        /// Position is out of the buffer, we need to do real seek.
+        off_t seek_pos = required_alignment > 1
+            ? new_pos / required_alignment * required_alignment
+            : new_pos;
+
+        off_t offset_after_seek_pos = new_pos - seek_pos;
+
+        /// First reset the buffer so the next read will fetch new data to the buffer.
+        resetWorkingBuffer();
+
         ProfileEvents::increment(ProfileEvents::Seek);
-        Stopwatch watch(profile_callback ? clock_type : CLOCK_MONOTONIC);
 
-        pos = working_buffer.end();
-        off_t res = ::lseek(fd, new_pos, SEEK_SET);
-        if (-1 == res)
-            throwFromErrnoWithPath("Cannot seek through file " + getFileName(), getFileName(),
+        if (!use_pread)
+        {
+            Stopwatch watch(profile_callback ? clock_type : CLOCK_MONOTONIC);
+
+            off_t res = ::lseek(fd, seek_pos, SEEK_SET);
+            if (-1 == res)
+                throwFromErrnoWithPath("Cannot seek through file " + getFileName(), getFileName(),
                 ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
-        file_offset_of_buffer_end = new_pos;
 
-        watch.stop();
-        ProfileEvents::increment(ProfileEvents::DiskReadElapsedMicroseconds, watch.elapsedMicroseconds());
+            /// Also note that seeking past the file size is not allowed.
+            if (res != seek_pos)
+                throw Exception(ErrorCodes::CANNOT_SEEK_THROUGH_FILE,
+                    "The 'lseek' syscall returned value ({}) that is not expected ({})", res, seek_pos);
 
-        return res;
+            watch.stop();
+            ProfileEvents::increment(ProfileEvents::DiskReadElapsedMicroseconds, watch.elapsedMicroseconds());
+        }
+
+        file_offset_of_buffer_end = seek_pos;
+
+        if (offset_after_seek_pos > 0)
+            ignore(offset_after_seek_pos);
+
+        return seek_pos;
     }
 }
 
 
 void ReadBufferFromFileDescriptor::rewind()
 {
-    ProfileEvents::increment(ProfileEvents::Seek);
-    off_t res = ::lseek(fd, 0, SEEK_SET);
-    if (-1 == res)
-        throwFromErrnoWithPath("Cannot seek through file " + getFileName(), getFileName(),
-            ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
+    if (!use_pread)
+    {
+        ProfileEvents::increment(ProfileEvents::Seek);
+        off_t res = ::lseek(fd, 0, SEEK_SET);
+        if (-1 == res)
+            throwFromErrnoWithPath("Cannot seek through file " + getFileName(), getFileName(), ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
+    }
 
     /// Clearing the buffer with existing data. New data will be read on subsequent call to 'next'.
     working_buffer.resize(0);
     pos = working_buffer.begin();
+    file_offset_of_buffer_end = 0;
 }
 
 
@@ -171,116 +271,22 @@ bool ReadBufferFromFileDescriptor::poll(size_t timeout_microseconds)
 }
 
 
-off_t ReadBufferFromFileDescriptor::size()
+size_t ReadBufferFromFileDescriptor::getFileSize()
 {
-    struct stat buf;
-    int res = fstat(fd, &buf);
-    if (-1 == res)
-        throwFromErrnoWithPath("Cannot execute fstat " + getFileName(), getFileName(), ErrorCodes::CANNOT_FSTAT);
-    return buf.st_size;
+    return getSizeFromFileDescriptor(fd, getFileName());
 }
 
-
-void ReadBufferFromFileDescriptor::setProgressCallback(ContextPtr context)
+bool ReadBufferFromFileDescriptor::checkIfActuallySeekable()
 {
-    auto file_progress_callback = context->getFileProgressCallback();
-
-    if (!file_progress_callback)
-        return;
-
-    setProfileCallback([file_progress_callback](const ProfileInfo & progress)
-    {
-        file_progress_callback(FileProgress(progress.bytes_read, 0));
-    });
+    struct stat stat;
+    auto res = ::fstat(fd, &stat);
+    return res == 0 && S_ISREG(stat.st_mode);
 }
 
-size_t ReadBufferFromFileDescriptor::readBig(char * to, size_t n)
+size_t ReadBufferFromFileDescriptor::readBigAt(char * to, size_t n, size_t offset, const std::function<bool(size_t)> &)
 {
-    /// Read from current working buffer if possible
-    size_t read_bytes = 0;
-    if (size_t remain = available(); remain > 0)
-    {
-        read_bytes = std::min(n, remain);
-
-        memcpy(to, pos, read_bytes);
-        pos += read_bytes;
-
-        if (read_bytes >= n)
-        {
-            bytes += read_bytes;
-            return n;
-        }
-    }
-
-    /// Already drain current working buffer
-    resetWorkingBuffer();
-
-    while (read_bytes < n)
-    {
-        size_t readed = readImpl(to + read_bytes, n - read_bytes);
-        if (readed == 0)
-        {
-            break;
-        }
-
-        read_bytes += readed;
-    }
-    bytes += read_bytes;
-    return read_bytes;
-}
-
-size_t ReadBufferFromFileDescriptor::readImpl(char * to, size_t n)
-{
-    size_t bytes_read = 0;
-    while (!bytes_read)
-    {
-        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
-
-        Stopwatch watch(profile_callback ? clock_type : CLOCK_MONOTONIC);
-
-        ssize_t res = 0;
-        {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
-
-            res = ::read(fd, to, n);
-        }
-        if (!res)
-            break;
-
-        if (-1 == res && errno != EINTR)
-        {
-            ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
-            throwFromErrnoWithPath("Cannot read from file " + getFileName(), getFileName(),
-                                   ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
-        }
-
-        if (res > 0)
-            bytes_read += res;
-
-        /// It reports real time spent including the time spent while thread was preempted doing nothing.
-        /// And it is Ok for the purpose of this watch (it is used to lower the number of threads to read from tables).
-        /// Sometimes it is better to use taskstats::blkio_delay_total, but it is quite expensive to get it
-        /// (TaskStatsInfoGetter has about 500K RPS).
-        watch.stop();
-        ProfileEvents::increment(ProfileEvents::DiskReadElapsedMicroseconds, watch.elapsedMicroseconds());
-
-        if (profile_callback)
-        {
-            ProfileInfo info;
-            info.bytes_requested = n;
-            info.bytes_read = res;
-            info.nanoseconds = watch.elapsed();
-            profile_callback(info);
-        }
-    }
-
-    file_offset_of_buffer_end += bytes_read;
-
-    if (bytes_read)
-    {
-        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, bytes_read);
-    }
-    return bytes_read;
+    chassert(use_pread);
+    return readImpl(to, n, n, offset);
 }
 
 }

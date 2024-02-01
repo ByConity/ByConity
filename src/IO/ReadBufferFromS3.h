@@ -46,7 +46,8 @@ public:
         UInt64 max_single_read_retries_ = 3,
         bool restricted_seek_ = true,
         bool use_external_buffer_ = false,
-        off_t read_until_position = 0);
+        off_t read_until_position = 0,
+        std::optional<size_t> file_size = std::nullopt);
 
     ~ReadBufferFromS3() override;
 
@@ -78,7 +79,6 @@ private:
     void tryIgnoreRemainingData();
 
     ReadSettings read_settings;
-    std::optional<size_t> file_size;
 
     bool restricted_seek;
     bool read_all_range_successfully = false;

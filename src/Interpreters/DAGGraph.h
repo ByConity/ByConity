@@ -36,6 +36,8 @@ struct DAGGraph
     void joinAsyncRpcPerStage();
     void joinAsyncRpcAtLast();
 
+    PlanSegment * getPlanSegmentPtr(size_t id);
+
     Source sources;
     size_t final = std::numeric_limits<size_t>::max();
     std::set<size_t> scheduled_segments;

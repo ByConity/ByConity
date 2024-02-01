@@ -216,7 +216,7 @@ public:
       * By default - the same as read.
       * Don't use for small reads.
       */
-    virtual size_t readBig(char * to, size_t n)
+    [[nodiscard]] virtual size_t readBig(char * to, size_t n)
     {
         return read(to, n);
     }

@@ -113,8 +113,8 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     {
         /// bytes to use AIO (this is hack)
         .read_settings = ReadSettings {
-            .buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
             .aio_threshold = read_with_direct_io ? 1UL : std::numeric_limits<size_t>::max(),
+            .buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
         },
         .save_marks_in_cache = false,
         .read_source_bitmap = true,

@@ -251,8 +251,9 @@ ReadBufferFromByteHDFS::ReadBufferFromByteHDFS(
     size_t alignment_,
     ThrottlerPtr total_network_throttler_,
     bool use_external_buffer_,
-    off_t read_until_position_)
-    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : buf_size_, existing_memory_, alignment_)
+    off_t read_until_position_,
+    std::optional<size_t> file_size_)
+    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : buf_size_, existing_memory_, alignment_, file_size_)
     , impl(std::make_unique<ReadBufferFromHDFSImpl>(hdfs_file_path_, pread_, hdfs_params_, read_until_position_))
     , total_network_throttler(total_network_throttler_)
 {

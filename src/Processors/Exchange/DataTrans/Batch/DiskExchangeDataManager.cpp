@@ -49,6 +49,7 @@
 #include <Protos/registry.pb.h>
 #include <QueryPlan/QueryPlan.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
+#include <asm-generic/errno-base.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
 #include <brpc/controller.h>
@@ -65,6 +66,7 @@
 #include <common/logger_useful.h>
 #include <common/sleep.h>
 #include <common/types.h>
+#include <IO/ReadSettings.h>
 
 
 namespace
@@ -402,7 +404,7 @@ PipelineExecutorPtr DiskExchangeDataManager::getExecutor(const ExchangeDataKeyPt
 
 Protos::AliveQueryInfo DiskExchangeDataManager::readQueryInfo(UInt64 query_unique_id) const
 {
-    auto buf = disk->readFile(path / std::to_string(query_unique_id) / "query_info");
+    auto buf = disk->readFile(path / std::to_string(query_unique_id) / "query_info", {.local_fs_method = LocalFSReadMethod::read});
     std::string str;
     readStringBinary(str, *buf);
     Protos::AliveQueryInfo query_info;
@@ -460,9 +462,9 @@ void DiskExchangeDataManager::gc()
             delete_files.push_back(path / file_name);
         }
         /// cant find query_info file, either it is not created yet, or query_info is corrupt
-        catch (Poco::Exception & e)
+        catch (ErrnoException & e)
         {
-            if (e.code() == ErrorCodes::FILE_DOESNT_EXIST)
+            if (e.getErrno() == ENOENT)
             {
                 std::unique_lock<bthread::Mutex> lock(mutex);
                 if (alive_queries.find(query_unique_id) == alive_queries.end())
@@ -470,7 +472,7 @@ void DiskExchangeDataManager::gc()
                     LOG_INFO(
                         logger,
                         fmt::format(
-                            "query info not found under directory:{} and query_unique_id:{} is not in alive_queries",
+                            "query info not found, directory:{} and query_unique_id:{} is not in alive_queries",
                             file_name,
                             query_unique_id));
                     delete_files.push_back(path / file_name);
@@ -478,13 +480,13 @@ void DiskExchangeDataManager::gc()
             }
             else
             {
-                tryLogCurrentException(__PRETTY_FUNCTION__);
+                tryLogCurrentException(logger, fmt::format("query info is corrupt, directory:{} and query_unique_id:{}", file_name, query_unique_id));
                 delete_files.push_back(path / file_name);
             }
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(logger, fmt::format("query info other exception, directory:{} and query_unique_id:{}", file_name, query_unique_id));
             delete_files.push_back(path / file_name);
         }
     }

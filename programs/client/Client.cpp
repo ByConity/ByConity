@@ -1915,7 +1915,7 @@ private:
                 if (need_render_progress)
                 {
                     /// Set total_bytes_to_read for current fd.
-                    FileProgress file_progress(0, std_in.size());
+                    FileProgress file_progress(0, std_in.getFileSize());
                     progress_indication.updateProgress(Progress(file_progress));
 
                     /// Set callback to be called on file progress.

@@ -64,8 +64,9 @@ ReadBufferFromS3::ReadBufferFromS3(
     UInt64 max_single_read_retries_,
     bool restricted_seek_,
     bool use_external_buffer_,
-    off_t read_until_position_)
-    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : read_settings_.buffer_size, nullptr, 0)
+    off_t read_until_position_,
+    std::optional<size_t> file_size_)
+    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : read_settings_.buffer_size, nullptr, 0, file_size_)
     , client_ptr(std::move(client_ptr_))
     , bucket(bucket_)
     , key(key_)

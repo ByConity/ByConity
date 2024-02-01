@@ -21,9 +21,7 @@
 
 #include <IO/createReadBufferFromFileBase.h>
 #include <IO/ReadBufferFromFile.h>
-#if defined(OS_LINUX) || defined(__FreeBSD__)
-#include <IO/ReadBufferAIO.h>
-#endif
+#include <IO/ReadBufferFromEmptyFile.h>
 #include <IO/MMapReadBufferFromFileWithCache.h>
 #include <Common/ProfileEvents.h>
 
@@ -35,41 +33,52 @@ namespace ProfileEvents
     extern const Event CreatedReadBufferAIOFailed;
     extern const Event CreatedReadBufferMMap;
     extern const Event CreatedReadBufferMMapFailed;
+    extern const Event CreatedReadBufferDirectIO;
+    extern const Event CreatedReadBufferDirectIOFailed;
 }
 
 namespace DB
 {
 
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
-    const std::string & filename_, const ReadSettings& settings_,
-    int flags_, char * existing_memory_, size_t alignment)
+namespace ErrorCodes
 {
-#if defined(OS_LINUX) || defined(__FreeBSD__)
-    if (settings_.aio_threshold && settings_.estimated_size >= settings_.aio_threshold)
-    {
-        /// Attempt to open a file with O_DIRECT
-        try
-        {
-            auto res = std::make_unique<ReadBufferAIO>(filename_, settings_.buffer_size, flags_, existing_memory_);
-            ProfileEvents::increment(ProfileEvents::CreatedReadBufferAIO);
-            return res;
-        }
-        catch (const ErrnoException &)
-        {
-            /// Fallback to cached IO if O_DIRECT is not supported.
-            ProfileEvents::increment(ProfileEvents::CreatedReadBufferAIOFailed);
-        }
-    }
-#else
-    (void)aio_threshold;
-    (void)estimated_size;
-#endif
+    extern const int LOGICAL_ERROR;
+    extern const int UNSUPPORTED_METHOD;
+}
 
-    if (!existing_memory_ && settings_.mmap_threshold && settings_.mmap_cache && settings_.estimated_size >= settings_.mmap_threshold)
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
+    const std::string & filename,
+    const ReadSettings & settings,
+    std::optional<size_t> read_hint,
+    std::optional<size_t> file_size,
+    int flags,
+    char * existing_memory,
+    size_t alignment,
+    bool /*use_external_buffer*/)
+{
+    if (file_size.has_value() && !*file_size)
+        return std::make_unique<ReadBufferFromEmptyFile>();
+
+    size_t estimated_size = 0;
+    if (read_hint.has_value())
+        estimated_size = *read_hint;
+    else if (file_size.has_value())
+        estimated_size = *file_size;
+
+    if (!existing_memory
+        && settings.local_fs_method == LocalFSReadMethod::mmap
+        && settings.mmap_threshold
+        && settings.mmap_cache
+        && estimated_size >= settings.mmap_threshold)
     {
         try
         {
-            auto res = std::make_unique<MMapReadBufferFromFileWithCache>(*(settings_.mmap_cache), filename_, 0);
+            std::unique_ptr<MMapReadBufferFromFileWithCache> res;
+            if (file_size)
+                res = std::make_unique<MMapReadBufferFromFileWithCache>(*settings.mmap_cache, filename, 0, *file_size);
+            else
+                res = std::make_unique<MMapReadBufferFromFileWithCache>(*settings.mmap_cache, filename, 0);
+
             ProfileEvents::increment(ProfileEvents::CreatedReadBufferMMap);
             return res;
         }
@@ -80,8 +89,138 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
         }
     }
 
+    auto create = [&](size_t buffer_size, size_t buffer_alignment, int actual_flags)
+    {
+        std::unique_ptr<ReadBufferFromFileBase> res;
+
+        if (settings.local_fs_method == LocalFSReadMethod::read)
+        {
+            res = std::make_unique<ReadBufferFromFile>(
+                filename,
+                buffer_size,
+                actual_flags,
+                existing_memory,
+                buffer_alignment,
+                file_size,
+                settings.local_throttler);
+        }
+        else if (settings.local_fs_method == LocalFSReadMethod::pread || settings.local_fs_method == LocalFSReadMethod::mmap)
+        {
+            res = std::make_unique<ReadBufferFromFilePReadWithDescriptorsCache>(
+                filename,
+                buffer_size,
+                actual_flags,
+                existing_memory,
+                buffer_alignment,
+                file_size,
+                settings.local_throttler);
+        }
+//         else if (settings.local_fs_method == LocalFSReadMethod::io_uring)
+//         {
+// #if USE_LIBURING
+//             auto global_context = Context::getGlobalContextInstance();
+//             if (!global_context)
+//                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot obtain io_uring reader (global context not initialized)");
+
+//             auto & reader = global_context->getIOURingReader();
+//             if (!reader.isSupported())
+//                 throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "io_uring is not supported by this system");
+
+//             res = std::make_unique<AsynchronousReadBufferFromFileWithDescriptorsCache>(
+//                 reader,
+//                 settings.priority,
+//                 filename,
+//                 buffer_size,
+//                 actual_flags,
+//                 existing_memory,
+//                 buffer_alignment,
+//                 file_size,
+//                 settings.local_throttler);
+// #else
+//             throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "Read method io_uring is only supported in Linux");
+// #endif
+//         }
+        // else if (settings.local_fs_method == LocalFSReadMethod::pread_threadpool)
+        // {
+        //     auto & reader = getThreadPoolReader(FilesystemReaderType::ASYNCHRONOUS_LOCAL_FS_READER);
+        //     res = std::make_unique<AsynchronousReadBufferFromFileWithDescriptorsCache>(
+        //         reader,
+        //         settings.priority,
+        //         filename,
+        //         buffer_size,
+        //         actual_flags,
+        //         existing_memory,
+        //         buffer_alignment,
+        //         file_size,
+        //         settings.local_throttler,
+        //         use_external_buffer);
+        // }
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown read method");
+
+        return res;
+    };
+
+#if defined(OS_LINUX) || defined(OS_FREEBSD)
+    if (settings.aio_threshold && estimated_size >= settings.aio_threshold)
+    {
+        /** O_DIRECT
+          * The O_DIRECT flag may impose alignment restrictions on the length and address of user-space buffers and the file offset of I/Os.
+          * In Linux alignment restrictions vary by filesystem and kernel version and might be absent entirely.
+          * However there is currently no filesystem-independent interface for an application to discover these restrictions
+          * for a given file or filesystem. Some filesystems provide their own interfaces for doing so, for example the
+          * XFS_IOC_DIOINFO operation in xfsctl(3).
+          *
+          * Under Linux 2.4, transfer sizes, and the alignment of the user buffer and the file offset must all be
+          * multiples of the logical block size of the filesystem. Since Linux 2.6.0, alignment to the logical block size
+          * of the underlying storage (typically 512 bytes) suffices.
+          *
+          * - man 2 open
+          */
+        constexpr size_t min_alignment = DEFAULT_AIO_FILE_BLOCK_SIZE;
+
+        auto align_up = [=](size_t value) { return (value + min_alignment - 1) / min_alignment * min_alignment; };
+
+        size_t buffer_alignment = alignment == 0 ? min_alignment : align_up(alignment);
+        size_t buffer_size = settings.local_fs_buffer_size;
+
+        if (buffer_size % min_alignment)
+        {
+            existing_memory = nullptr;  /// Cannot reuse existing memory as it has unaligned size.
+            buffer_size = align_up(buffer_size);
+        }
+
+        if (reinterpret_cast<uintptr_t>(existing_memory) % min_alignment)
+        {
+            existing_memory = nullptr;  /// Cannot reuse existing memory as it has unaligned offset.
+        }
+
+        /// Attempt to open a file with O_DIRECT
+        try
+        {
+            std::unique_ptr<ReadBufferFromFileBase> res = create(buffer_size, buffer_alignment, flags | O_DIRECT);
+            ProfileEvents::increment(ProfileEvents::CreatedReadBufferDirectIO);
+            return res;
+        }
+        catch (const ErrnoException &)
+        {
+            /// Fallback to cached IO if O_DIRECT is not supported.
+            ProfileEvents::increment(ProfileEvents::CreatedReadBufferDirectIOFailed);
+        }
+    }
+#endif
+
     ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
-    return std::make_unique<ReadBufferFromFile>(filename_, settings_.buffer_size, flags_, existing_memory_, alignment);
+
+    size_t buffer_size = settings.local_fs_buffer_size;
+    /// Check if the buffer can be smaller than default
+    if (read_hint.has_value() && *read_hint > 0 && *read_hint < buffer_size)
+        buffer_size = *read_hint;
+    if (file_size.has_value() && *file_size < buffer_size)
+        buffer_size = *file_size;
+
+    return create(buffer_size, alignment, flags);
+
 }
 
 }

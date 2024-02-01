@@ -34,6 +34,16 @@ void DAGGraph::joinAsyncRpcAtLast()
         joinAsyncRpcWithThrow();
 }
 
+PlanSegment * DAGGraph::getPlanSegmentPtr(size_t id)
+{
+    auto it = id_to_segment.find(id);
+    if (it == id_to_segment.end())
+    {
+        throw Exception("Logical error: segment " + std::to_string(id) + " not found", ErrorCodes::LOGICAL_ERROR);
+    }
+    return it->second;
+}
+
 std::vector<size_t> AdaptiveScheduler::getRandomWorkerRank()
 {
     std::vector<size_t> rank_worker_ids;
