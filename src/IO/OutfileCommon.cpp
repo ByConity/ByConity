@@ -4,17 +4,20 @@
 #include <IO/WriteBuffer.h>
 
 #include <IO/CompressionMethod.h>
+#include <IO/HTTPSender.h>
 #include <IO/OSSCommon.h>
 #include <IO/VETosCommon.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
+#include <ServiceDiscovery/IServiceDiscovery.h>
+#include <ServiceDiscovery/ServiceDiscoveryConsul.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <Common/config.h>
 
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTQueryWithOutput.h>
 
-#include <memory>
 #include <string>
 
 #if USE_AWS_S3
@@ -30,6 +33,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_OUTPUT_PATH;
     extern const int INTO_OUTFILE_NOT_ALLOWED;
     extern const int BAD_ARGUMENTS;
+    extern const int NETWORK_ERROR;
 }
 
 OutfileTarget::OutfileTarget(std::string uri_, std::string format_, std::string compression_method_str_, int compression_level_)
@@ -57,6 +61,14 @@ std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & 
             throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
 
         out_buf_raw = std::make_unique<WriteBufferFromFile>(uri, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
+    }
+    else if (scheme == "tos")
+    {
+        if (out_uri.getQueryParameters().empty())
+        {
+            throw Exception("Missing access key, please check configuration.", ErrorCodes::BAD_ARGUMENTS);
+        }
+        out_buf_raw = std::make_unique<WriteBufferFromOwnString>();
     }
 #if USE_HDFS
     else if (DB::isHdfsOrCfsScheme(scheme))
@@ -129,7 +141,7 @@ std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & 
 #endif
     else
     {
-        throw Exception("Path: " + uri + " is illegal, only support write query result ve_tos", ErrorCodes::ILLEGAL_OUTPUT_PATH);
+        throw Exception("Path: " + uri + " is illegal, scheme " + scheme + " is not supported.", ErrorCodes::ILLEGAL_OUTPUT_PATH);
     }
 
     out_buf = wrapWriteBufferWithCompressionMethod(std::move(out_buf_raw), compression_method, compression_level);
@@ -137,9 +149,54 @@ std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & 
     return out_buf;
 }
 
-void OutfileTarget::flushFile()
+void OutfileTarget::flushFile(ContextMutablePtr context)
 {
-    out_buf->finalize();
+    if (auto * out_tos_buf = dynamic_cast<WriteBufferFromOwnString *>(out_buf.get()))
+    {
+        try
+        {
+            const Poco::URI out_uri(uri);
+            std::string host = out_uri.getHost();
+            auto port = out_uri.getPort();
+
+            if (host.empty() || port == 0)
+            {
+                // choose a tos server randomly
+                ServiceDiscoveryClientPtr service_discovery = std::make_shared<ServiceDiscoveryConsul>(context->getConfigRef());
+                ServiceEndpoints tos_servers = service_discovery->lookupEndpoints(TOS_PSM);
+                if (tos_servers.empty())
+                    throw Exception("Can not find tos servers with PSM: " + String(TOS_PSM), ErrorCodes::NETWORK_ERROR);
+
+                auto generator = std::mt19937(std::random_device{}());
+                std::uniform_int_distribution<size_t> distribution(0, tos_servers.size() - 1);
+                ServiceEndpoint tos_server = tos_servers.at(distribution(generator));
+                host = tos_server.host;
+                port = tos_server.port;
+            }
+
+            String tos_server = std::get<0>(safeNormalizeHost(host)) + ":" + std::to_string(port);
+
+            Poco::URI tos_uri("http://" + tos_server + out_uri.getPath());
+            String access_key = out_uri.getQueryParameters().at(0).second;
+            HttpHeaders http_headers{{"X-Tos-Access", access_key}};
+
+            const Settings & settings = context->getSettingsRef();
+            ConnectionTimeouts timeouts(settings.http_connection_timeout, settings.http_send_timeout, settings.http_receive_timeout);
+
+            HTTPSender http_sender(tos_uri, Poco::Net::HTTPRequest::HTTP_PUT, timeouts, http_headers);
+            http_sender.send((*out_tos_buf).str());
+            http_sender.handleResponse();
+        }
+        catch (...)
+        {
+            out_tos_buf->finalize();
+            throw;
+        }
+    }
+    else
+    {
+        out_buf->finalize();
+    }
 }
 
 OutfileTargetPtr OutfileTarget::getOutfileTarget(

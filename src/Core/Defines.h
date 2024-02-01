@@ -43,6 +43,9 @@
 /// The size of the I/O buffer by default.
 #define DBMS_DEFAULT_BUFFER_SIZE 1048576ULL
 
+/// TOS PSM
+constexpr auto TOS_PSM = "toutiao.tos.tosapi";
+
 #define PADDING_FOR_SIMD 64
 
 /** Which blocks by default read the data (by number of rows).

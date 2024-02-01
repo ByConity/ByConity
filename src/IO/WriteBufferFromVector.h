@@ -97,7 +97,14 @@ public:
     {
         /// FIXME move final flush into the caller
         MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
-        finalize();
+        try
+        {
+            finalize();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
     }
 };
 
