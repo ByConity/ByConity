@@ -49,7 +49,7 @@ public:
     const auto &getSchemaPath() const { return settings.format_schema_path.value; }
     const auto &getConsumersNum() const { return settings.num_consumers.value; }
     const auto &getAvroSchemaRegistryUrl() const { return settings.avro_schema_registry_url.value; }
-    void getKafkaTableInfo(KafkaTableInfo & table_info);
+    void getKafkaTableInfo(KafkaTableInfo & table_info) const;
 
     bool useBytedanceKafka() const { return !settings.cluster.value.empty(); }
     String getGroupForBytekv() const;

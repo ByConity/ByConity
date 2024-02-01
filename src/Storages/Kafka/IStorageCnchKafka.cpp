@@ -140,7 +140,7 @@ String IStorageCnchKafka::getGroupForBytekv() const
     return settings.unique_group_prefix.value + "_" + settings.group_name.value;
 }
 
-void IStorageCnchKafka::getKafkaTableInfo(KafkaTableInfo & table_info)
+void IStorageCnchKafka::getKafkaTableInfo(KafkaTableInfo & table_info) const
 {
     table_info.database = getDatabaseName();
     table_info.table = getTableName();

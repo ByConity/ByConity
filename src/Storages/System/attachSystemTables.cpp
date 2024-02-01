@@ -41,14 +41,7 @@
 #include <Storages/System/StorageSystemGraphite.h>
 
 #include <Storages/System/StorageSystemCloudTables.h>
-#include <Storages/System/StorageSystemCnchFilesystemLock.h>
-#include <Storages/System/StorageSystemCnchKafkaTables.h>
-#include <Storages/System/StorageSystemCnchTransactions.h>
-#include <Storages/System/StorageSystemContributors.h>
-#include <Storages/System/StorageSystemDDLWorkerQueue.h>
 #include <Storages/System/StorageSystemDistributionQueue.h>
-#include <Storages/System/StorageSystemErrors.h>
-#include <Storages/System/StorageSystemKafkaTables.h>
 #include <Storages/System/StorageSystemMacros.h>
 #include <Storages/System/StorageSystemMergeTreeSettings.h>
 #include <Storages/System/StorageSystemMerges.h>
@@ -67,12 +60,22 @@
 #include <Storages/System/StorageSystemReplicas.h>
 #include <Storages/System/StorageSystemReplicatedFetches.h>
 #include <Storages/System/StorageSystemReplicationQueue.h>
-#include <Storages/System/StorageSystemResourceGroups.h>
 #include <Storages/System/StorageSystemSettings.h>
 #include <Storages/System/StorageSystemTableEngines.h>
 #include <Storages/System/StorageSystemTableFunctions.h>
 #include <Storages/System/StorageSystemTables.h>
 #include <Storages/System/StorageSystemZooKeeper.h>
+#include <Storages/System/StorageSystemContributors.h>
+#include <Storages/System/StorageSystemResourceGroups.h>
+#include <Storages/System/StorageSystemErrors.h>
+#include <Storages/System/StorageSystemDDLWorkerQueue.h>
+#if USE_RDKAFKA
+#include <Storages/System/StorageSystemKafkaTasks.h>
+#include <Storages/System/StorageSystemKafkaTables.h>
+#include <Storages/System/StorageSystemCnchKafkaTables.h>
+#endif
+#include <Storages/System/StorageSystemCnchTransactions.h>
+#include <Storages/System/StorageSystemCnchFilesystemLock.h>
 #include "Storages/System/StorageSystemExternalTables.h"
 
 #if !defined(ARCADIA_BUILD)
@@ -119,7 +122,6 @@
 #include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
 #include <Storages/System/StorageSystemCnchSnapshots.h>
-#include <Storages/System/StorageSystemCnchTransactions.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemCnchParts.h>
 #include <Storages/System/StorageSystemCnchPartsColumns.h>
@@ -235,6 +237,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemReplicatedFetches>(system_database, "replicated_fetches");
     attach<StorageSystemPartMovesBetweenShards>(system_database, "part_moves_between_shards");
 #if USE_RDKAFKA
+    attach<StorageSystemKafkaTasks>(system_database, "kafka_tasks");
     attach<StorageSystemKafkaTables>(system_database, "kafka_tables");
     attach<StorageSystemCnchKafkaTables>(system_database, "cnch_kafka_tables");
 #endif

@@ -362,10 +362,10 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
                 context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, binlog);
         }
     }
-    catch (const Exception & e)
+    catch (const Exception &)
     {
         tryLogCurrentException(storage.getLogger(), __PRETTY_FUNCTION__);
-        throw e;
+        throw;
     }
 
     if (auto part_log = context->getPartLog(storage.getDatabaseName()))

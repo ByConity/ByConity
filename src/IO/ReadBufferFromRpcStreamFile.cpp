@@ -68,10 +68,10 @@ ReadBufferFromRpcStreamFile::ReadBufferFromRpcStreamFile(
     {
         client->createReadStream();
     }
-    catch (const Exception & e)
+    catch (const Exception &)
     {
         ProfileEvents::increment(ProfileEvents::ReadBufferFromRpcStreamFileConnectFailed, 1);
-        throw e;
+        throw;
     }
 }
 
@@ -99,10 +99,10 @@ bool ReadBufferFromRpcStreamFile::nextImpl()
         current_file_offset += working_buffer.size();
         return ret;
     }
-    catch (const Exception & e)
+    catch (const Exception &)
     {
         ProfileEvents::increment(ProfileEvents::ReadBufferFromRpcStreamFileReadFailed, 1);
-        throw e;
+        throw;
     }
 }
 

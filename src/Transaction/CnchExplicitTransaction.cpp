@@ -112,14 +112,14 @@ TxnTimestamp CnchExplicitTransaction::commit()
                 }
             }
         }
-        catch (const Exception & e)
+        catch (const Exception &)
         {
             // if (e.code() != bytekv::sdk::Errorcode::REQUEST_TIMEOUT || !retry)
             // {
             //     ProfileEvents::increment(ProfileEvents::CnchTxnCommitV2Failed);
             //     throw;
             // }
-            throw e;
+            throw;
         }
 
         LOG_WARNING(

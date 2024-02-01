@@ -61,13 +61,13 @@ void HDFSDumper::uploadPartsToRemote(const String & local_path, const String & r
         {
             uploadFileToRemote(zip_file, remote_file);
         }
-        catch(Exception & e)
+        catch (const Exception &)
         {
             // clean incomplete file.
             if (hdfs_filesystem->exists(remote_file))
                 hdfs_filesystem->remove(remote_file);
 
-            throw e;
+            throw;
         }
     };
 
@@ -153,7 +153,7 @@ std::vector<std::pair<String, DiskPtr>> HDFSDumper::fetchPartsFromRemote(const D
                     ZipHelper zip;
                     zip.unzipFile(target_local_file, fs::path(full_local_path) / part_name);
                 }
-                catch (Exception & e)
+                catch (const Exception &)
                 {
                     /// remove dirty download file
                     Poco::File dirty_file(fs::path(full_local_path) / file_name);
@@ -165,7 +165,7 @@ std::vector<std::pair<String, DiskPtr>> HDFSDumper::fetchPartsFromRemote(const D
                     if (dirty_part.exists())
                         dirty_part.remove(true);
 
-                    throw e;
+                    throw;
                 }
 
             }
