@@ -446,36 +446,15 @@ enum PreloadLevelSettings : UInt64
     M(String, remote_filesystem_read_method, "threadpool", "Method of reading data from remote filesystem, one of: read, threadpool.", 0) \
     M(Bool, local_filesystem_read_prefetch, false, "Should use prefetching when reading data from local filesystem.", 0) \
     M(Bool, remote_filesystem_read_prefetch, true, "Should use prefetching when reading data from remote filesystem.", 0) \
+    M(UInt64, remote_fs_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The size of the buffer to read from the remote filesystem.", 0) \
     M(UInt64, merge_tree_min_rows_for_concurrent_read, (20 * 8192), "If at least as many lines are read from one file, the reading can be parallelized.", 0) \
     M(UInt64, merge_tree_min_bytes_for_concurrent_read, (24 * 10 * 1024 * 1024), "If at least as many bytes are read from one file, the reading can be parallelized.", 0) \
     M(UInt64, merge_tree_min_rows_for_seek, 0, "You can skip reading more than that number of rows at the price of one seek per file.", 0) \
-    M(UInt64, \
-      merge_tree_min_bytes_for_seek, \
-      0, \
-      "You can skip reading more than that number of bytes at the price of one seek per file.", \
-      0) \
-    M(UInt64, \
-      remote_read_min_bytes_for_seek, \
-      4 * DBMS_DEFAULT_BUFFER_SIZE, \
-      "Min bytes required for remote read (url, s3) to do seek, instead of read with ignore.", \
-      0) \
-    M(UInt64, \
-      merge_tree_coarse_index_granularity, \
-      8, \
-      "If the index segment can contain the required keys, divide it into as many parts and recursively check them.", \
-      0) \
-    M(UInt64, \
-      merge_tree_max_rows_to_use_cache, \
-      (128 * 8192), \
-      "The maximum number of rows per request, to use the cache of uncompressed data. If the request is large, the cache is not used. " \
-      "(For large queries not to flush out the cache.)", \
-      0) \
-    M(UInt64, \
-      merge_tree_max_bytes_to_use_cache, \
-      (192 * 10 * 1024 * 1024), \
-      "The maximum number of bytes per request, to use the cache of uncompressed data. If the request is large, the cache is not used. " \
-      "(For large queries not to flush out the cache.)", \
-      0) \
+    M(UInt64, merge_tree_min_bytes_for_seek, 0, "You can skip reading more than that number of bytes at the price of one seek per file.", 0) \
+    M(UInt64, remote_read_min_bytes_for_seek, 3 * DBMS_DEFAULT_BUFFER_SIZE, "Min bytes required for remote read (url, s3) to do seek, instead of read with ignore.", 0) \
+    M(UInt64, merge_tree_coarse_index_granularity, 8, "If the index segment can contain the required keys, divide it into as many parts and recursively check them.", 0) \
+    M(UInt64, merge_tree_max_rows_to_use_cache, (128 * 8192), "The maximum number of rows per request, to use the cache of uncompressed data. If the request is large, the cache is not used. (For large queries not to flush out the cache.)", 0) \
+    M(UInt64, merge_tree_max_bytes_to_use_cache, (192 * 10 * 1024 * 1024), "The maximum number of bytes per request, to use the cache of uncompressed data. If the request is large, the cache is not used. (For large queries not to flush out the cache.)", 0) \
     M(UInt64, merge_tree_calculate_columns_size_sample, 1000, "The number of the sample parts to calculate columns size.", 0) \
     M(Bool, do_not_merge_across_partitions_select_final, false, "Merge parts only in one partition in select final", 0) \
     \
