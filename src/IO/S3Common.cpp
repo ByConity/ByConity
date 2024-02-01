@@ -563,8 +563,24 @@ namespace S3
 
     bool S3Util::exists(const String & key) const
     {
-        auto res = listObjectsWithPrefix(key, std::nullopt, 1);
-        return !res.object_names.empty() && res.object_names.front() == key;
+        Aws::S3::Model::HeadObjectRequest request;
+        request.SetBucket(bucket);
+        request.SetKey(key);
+
+        Aws::S3::Model::HeadObjectOutcome outcome = client->HeadObject(request);
+
+        if (outcome.IsSuccess())
+        {
+            return true;
+        }
+        else if (outcome.GetError().GetResponseCode() == Aws::Http::HttpResponseCode::NOT_FOUND)
+        {
+            return false;
+        }
+        else
+        {
+            throw S3Exception(outcome.GetError());
+        }
     }
 
     // -----------------------------------------------------------------------
