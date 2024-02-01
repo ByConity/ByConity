@@ -961,6 +961,8 @@ public:
         // this field is determined when build pipeline, thus it doesn't need to be serialized.
         TwoLevelMode two_level_mode = TwoLevelMode::ADAPTIVE;
 
+        const bool enable_lc_group_by_opt;
+
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_,
@@ -972,7 +974,8 @@ public:
             size_t min_free_disk_space_,
             bool compile_aggregate_expressions_,
             size_t min_count_to_compile_aggregate_expression_,
-            const Block & intermediate_header_ = {})
+            const Block & intermediate_header_ = {},
+            bool enable_lc_group_by_opt_ = false)
             : src_header(src_header_),
             intermediate_header(intermediate_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
@@ -983,7 +986,8 @@ public:
             tmp_volume(tmp_volume_), max_threads(max_threads_),
             min_free_disk_space(min_free_disk_space_),
             compile_aggregate_expressions(compile_aggregate_expressions_),
-            min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_)
+            min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_),
+            enable_lc_group_by_opt(enable_lc_group_by_opt_)
         {
         }
 

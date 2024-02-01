@@ -258,6 +258,7 @@ void Aggregator::Params::toProto(Protos::AggregatorParams & proto) const
     proto.set_min_free_disk_space(min_free_disk_space);
     proto.set_compile_aggregate_expressions(compile_aggregate_expressions);
     proto.set_min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression);
+    proto.set_enable_lc_group_by_opt(enable_lc_group_by_opt);
 }
 
 Aggregator::Params Aggregator::Params::fromProto(const Protos::AggregatorParams & proto, ContextPtr context)
@@ -286,6 +287,7 @@ Aggregator::Params Aggregator::Params::fromProto(const Protos::AggregatorParams 
     auto min_free_disk_space = proto.min_free_disk_space();
     auto compile_aggregate_expressions = proto.compile_aggregate_expressions();
     auto min_count_to_compile_aggregate_expression = proto.min_count_to_compile_aggregate_expression();
+    auto enable_lc_group_by_opt = proto.enable_lc_group_by_opt();
     auto step = Aggregator::Params(
         src_header,
         keys,
@@ -302,7 +304,8 @@ Aggregator::Params Aggregator::Params::fromProto(const Protos::AggregatorParams 
         min_free_disk_space,
         compile_aggregate_expressions,
         min_count_to_compile_aggregate_expression,
-        intermediate_header);
+        intermediate_header,
+        enable_lc_group_by_opt);
 
     return step;
 }
@@ -483,6 +486,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     types_removed_nullable.reserve(params.keys.size());
     bool has_nullable_key = false;
     bool has_low_cardinality = false;
+    bool has_low_cardinality_without_opt = false;
 
     for (const auto & pos : params.keys)
     {
@@ -490,8 +494,15 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 
         if (type->lowCardinality())
         {
-            has_low_cardinality = true;
-            type = removeLowCardinality(type);
+            if (params.enable_lc_group_by_opt)
+            {
+                has_low_cardinality = true;
+                type = removeLowCardinality(type);
+            }
+            else
+            {
+                has_low_cardinality_without_opt = true;
+            }
         }
 
         if (type->isNullable())
@@ -523,6 +534,9 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
             }
         }
     }
+
+    if (has_low_cardinality_without_opt)
+        return AggregatedDataVariants::Type::serialized;
 
     if (has_nullable_key)
     {

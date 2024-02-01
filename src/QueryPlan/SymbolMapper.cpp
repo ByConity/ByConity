@@ -325,7 +325,8 @@ Aggregator::Params SymbolMapper::map(const Aggregator::Params & params)
         params.min_free_disk_space,
         params.compile_aggregate_expressions,
         params.min_count_to_compile_aggregate_expression,
-        map(params.intermediate_header)};
+        map(params.intermediate_header),
+        params.enable_lc_group_by_opt};
 }
 
 AggregatingTransformParamsPtr SymbolMapper::map(const AggregatingTransformParamsPtr & param)
