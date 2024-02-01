@@ -22,8 +22,8 @@ using FunctionEscapeLike = FunctionsStringSearch<EscapeLikeImpl>;
 
 REGISTER_FUNCTION(Like)
 {
-    factory.registerFunction<FunctionLike>();
-    factory.registerFunction<FunctionEscapeLike>();
+    factory.registerFunction<FunctionLike>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionEscapeLike>(FunctionFactory::CaseInsensitive);
 }
 
 }

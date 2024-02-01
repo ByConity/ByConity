@@ -21,6 +21,7 @@
 #include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Catalog/MetastoreProxy.h>
+#include <Core/SettingsEnums.h>
 #include <Core/Types.h>
 #include <Databases/Snapshot.h>
 #include <Protos/DataModelHelpers.h>
@@ -139,7 +140,7 @@ public:
     /////////////////////////////
 
     void createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts,
-                        const String & create_query = "", const String & engine_name = "");
+                        const String & create_query = "", const String & engine_name = "", enum TextCaseOption text_case_option = TextCaseOption::MIXED);
 
     DatabasePtr getDatabase(const String & database, const ContextPtr & context, const TxnTimestamp & ts = 0);
 

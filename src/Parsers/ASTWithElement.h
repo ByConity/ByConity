@@ -41,6 +41,10 @@ public:
 
     ASTPtr clone() const override;
 
+    void toLowerCase() override { boost::to_lower(name); }
+
+    void toUpperCase() override { boost::to_upper(name); }
+
     void serialize(WriteBuffer & buf) const override;
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);

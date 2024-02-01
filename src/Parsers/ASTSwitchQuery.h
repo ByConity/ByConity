@@ -44,6 +44,9 @@ public:
 
     ASTPtr clone() const override { return std::make_shared<ASTSwitchQuery>(*this); }
 
+    void toLowerCase() override { boost::to_lower(catalog); }
+
+    void toUpperCase() override { boost::to_upper(catalog); }
 protected:
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {

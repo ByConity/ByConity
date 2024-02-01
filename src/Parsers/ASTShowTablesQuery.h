@@ -64,6 +64,21 @@ public:
 
     ASTPtr clone() const override;
 
+    void toLowerCase() override 
+    {
+        boost::to_lower(cluster_str);
+        boost::to_lower(from);
+        boost::to_lower(from_catalog);
+        boost::to_lower(like);
+    }
+
+    void toUpperCase() override 
+    {
+        boost::to_upper(cluster_str);
+        boost::to_upper(from);
+        boost::to_upper(from_catalog);
+        boost::to_upper(like);
+    }
 protected:
     void formatLike(const FormatSettings & settings) const;
     void formatLimit(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const;

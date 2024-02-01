@@ -184,7 +184,7 @@ void DatabaseCnchMaterializedMySQL::createEntryInCnchCatalog(ContextPtr local_co
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    CreateActionParams params = CreateDatabaseParams{getDatabaseName(), getUUID(), create_query, getEngineName()};
+    CreateActionParams params = CreateDatabaseParams{getDatabaseName(), getUUID(), create_query, getEngineName(), local_context->getSettingsRef().text_case_option};
     auto create_db = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_db));
     txn->commitV1();

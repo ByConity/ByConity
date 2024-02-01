@@ -88,12 +88,17 @@ public:
     virtual Ptr convertToFullColumnIfConst() const { return getPtr(); }
 
     /// If column isn't ColumnLowCardinality, return itself.
-    /// If column is ColumnLowCardinality, transforms is to full column.
-    virtual Ptr convertToFullColumnIfLowCardinality() const { return getPtr(); }
+    /// If column is ColumnLowCardinality, transforms it to full column.
+    [[nodiscard]] virtual Ptr convertToFullColumnIfLowCardinality() const { return getPtr(); }
 
-        /// If column isn't ColumnSparse, return itself.
+    /// If column isn't ColumnSparse, return itself.
     /// If column is ColumnSparse, transforms it to full column.
     [[nodiscard]] virtual Ptr convertToFullColumnIfSparse() const { return getPtr(); }
+
+    [[nodiscard]] Ptr convertToFullIfNeeded() const
+    {
+        return convertToFullColumnIfSparse()->convertToFullColumnIfConst()->convertToFullColumnIfLowCardinality();
+    }
 
     /// Creates empty column with the same type.
     virtual MutablePtr cloneEmpty() const { return cloneResized(0); }

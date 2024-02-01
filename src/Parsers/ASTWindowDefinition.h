@@ -48,6 +48,10 @@ struct ASTWindowDefinition : public IAST
 
     ASTPtr clone() const override;
 
+    void toLowerCase() override { boost::to_lower(parent_window_name); }
+
+    void toUpperCase() override { boost::to_upper(parent_window_name); }
+
     String getID(char delimiter) const override;
 
     ASTType getType() const override { return ASTType::ASTWindowDefinition; }
@@ -71,6 +75,8 @@ struct ASTWindowListElement : public IAST
     ASTType getType() const override { return ASTType::ASTWindowListElement; }
 
     ASTPtr clone() const override;
+
+    void toLowerCase() override { boost::to_lower(name); }
 
     String getID(char delimiter) const override;
 

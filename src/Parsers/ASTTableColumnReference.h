@@ -44,6 +44,10 @@ public:
 
     ASTPtr clone() const override { return std::make_shared<ASTTableColumnReference>(storage, unique_id, column_name); }
 
+    void toLowerCase() override { boost::to_lower(column_name); }
+
+    void toUpperCase() override { boost::to_upper(column_name); }
+
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
 }

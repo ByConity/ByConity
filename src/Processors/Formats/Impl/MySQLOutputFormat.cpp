@@ -1,11 +1,12 @@
 #include <Processors/Formats/Impl/MySQLOutputFormat.h>
+#include <Common/formatReadable.h>
 #include <Core/MySQL/PacketsGeneric.h>
+#include <Core/MySQL/PacketsProtocolBinary.h>
 #include <Core/MySQL/PacketsProtocolText.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/FormatSettings.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
-
 
 namespace DB
 {
@@ -13,7 +14,7 @@ namespace DB
 using namespace MySQLProtocol;
 using namespace MySQLProtocol::Generic;
 using namespace MySQLProtocol::ProtocolText;
-
+using namespace MySQLProtocol::ProtocolBinary;
 
 MySQLOutputFormat::MySQLOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & settings_)
     : IOutputFormat(header_, out_)
@@ -24,19 +25,8 @@ MySQLOutputFormat::MySQLOutputFormat(WriteBuffer & out_, const Block & header_, 
     /// But it's also possible to specify MySQLWire as output format for clickhouse-client or clickhouse-local.
     /// There is no `sequence_id` stored in `settings_.mysql_wire` in this case, so we create a dummy one.
     sequence_id = settings_.mysql_wire.sequence_id ? settings_.mysql_wire.sequence_id : &dummy_sequence_id;
-}
-
-void MySQLOutputFormat::setContext(ContextPtr context_)
-{
-    context = context_;
-}
-
-void MySQLOutputFormat::initialize()
-{
-    if (initialized)
-        return;
-
-    initialized = true;
+    /// Switch between Text (COM_QUERY) and Binary (COM_EXECUTE_STMT) ResultSet
+    use_binary_result_set = settings_.mysql_wire.binary_protocol;
 
     const auto & header = getPort(PortKind::Main).getHeader();
     data_types = header.getDataTypes();
@@ -45,60 +35,97 @@ void MySQLOutputFormat::initialize()
     for (const auto & type : data_types)
         serializations.emplace_back(type->getDefaultSerialization());
 
-    packet_endpoint = MySQLProtocol::PacketEndpoint::create(out, *sequence_id);
+    packet_endpoint = std::make_shared<MySQLProtocol::PacketEndpoint>(out, *sequence_id);
+}
+
+void MySQLOutputFormat::setContext(ContextPtr context_)
+{
+    context = context_;
+}
+
+void MySQLOutputFormat::doWritePrefix()
+{
+    const auto & header = getPort(PortKind::Main).getHeader();
 
     if (header.columns())
     {
         packet_endpoint->sendPacket(LengthEncodedNumber(header.columns()));
 
-        for (size_t i = 0; i < header.columns(); i++)
+        for (size_t i = 0; i < header.columns(); ++i)
         {
             const auto & column_name = header.getColumnsWithTypeAndName()[i].name;
-            packet_endpoint->sendPacket(getColumnDefinition(column_name, data_types[i]->getTypeId()));
+            packet_endpoint->sendPacket(getColumnDefinition(column_name, data_types[i]));
         }
 
-        if (!(client_capabilities & Capability::CLIENT_DEPRECATE_EOF))
+        if (!(client_capabilities & Capability::CLIENT_DEPRECATE_EOF) && !use_binary_result_set)
         {
             packet_endpoint->sendPacket(EOFPacket(0, 0));
         }
     }
 }
 
-
 void MySQLOutputFormat::consume(Chunk chunk)
 {
-    initialize();
-
-    for (size_t i = 0; i < chunk.getNumRows(); i++)
+    if (!use_binary_result_set)
     {
-        ProtocolText::ResultSetRow row_packet(serializations, chunk.getColumns(), i);
-        packet_endpoint->sendPacket(row_packet);
+        for (size_t row = 0; row < chunk.getNumRows(); ++row)
+        {
+            ProtocolText::ResultSetRow row_packet(serializations, data_types, chunk.getColumns(), row);
+            packet_endpoint->sendPacket(row_packet);
+        }
+    }
+    else
+    {
+        for (size_t row = 0; row < chunk.getNumRows(); ++row)
+        {
+            ProtocolBinary::ResultSetRow row_packet(serializations, data_types, chunk.getColumns(), row);
+            packet_endpoint->sendPacket(row_packet);
+        }
     }
 }
 
 void MySQLOutputFormat::finalize()
 {
-    size_t affected_rows = 0;
-    std::string human_readable_info;
-    if (QueryStatus * process_list_elem = getContext()->getProcessListElement())
+    if (!use_binary_result_set)
     {
-        CurrentThread::finalizePerformanceCounters();
-        QueryStatusInfo info = process_list_elem->getInfo();
-        affected_rows = info.written_rows;
-        human_readable_info = fmt::format(
-            "Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
-            info.read_rows, ReadableSize(info.read_bytes), info.elapsed_seconds,
-            static_cast<size_t>(info.read_rows / info.elapsed_seconds),
-            ReadableSize(info.read_bytes / info.elapsed_seconds));
-    }
+        size_t affected_rows = 0;
+        std::string human_readable_info;
+        if (QueryStatus * process_list_elem = getContext()->getProcessListElement())
+        {
+            CurrentThread::finalizePerformanceCounters();
+            QueryStatusInfo info = process_list_elem->getInfo();
+            affected_rows = info.written_rows;
+            human_readable_info = fmt::format(
+                "Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
+                info.read_rows,
+                ReadableSize(info.read_bytes),
+                info.elapsed_seconds,
+                static_cast<size_t>(info.read_rows / info.elapsed_seconds),
+                ReadableSize(info.read_bytes / info.elapsed_seconds));
+        }
 
-    const auto & header = getPort(PortKind::Main).getHeader();
-    if (header.columns() == 0)
-        packet_endpoint->sendPacket(OKPacket(0x0, client_capabilities, affected_rows, 0, 0, "", human_readable_info), true);
-    else if (client_capabilities & CLIENT_DEPRECATE_EOF)
-        packet_endpoint->sendPacket(OKPacket(0xfe, client_capabilities, affected_rows, 0, 0, "", human_readable_info), true);
+        const auto & header = getPort(PortKind::Main).getHeader();
+        if (header.columns() == 0)
+            packet_endpoint->sendPacket(OKPacket(0x0, client_capabilities, affected_rows, 0, 0), true);
+        else if (client_capabilities & CLIENT_DEPRECATE_EOF)
+            packet_endpoint->sendPacket(OKPacket(0xfe, client_capabilities, affected_rows, 0, 0), true);
+        else
+            packet_endpoint->sendPacket(EOFPacket(0, 0), true);
+    }
     else
-        packet_endpoint->sendPacket(EOFPacket(0, 0), true);
+    {
+        size_t affected_rows = 0;
+        if (QueryStatus * process_list_elem = getContext()->getProcessListElement())
+        {
+            CurrentThread::finalizePerformanceCounters();
+            QueryStatusInfo info = process_list_elem->getInfo();
+            affected_rows = info.written_rows;
+        }
+        if (client_capabilities & CLIENT_DEPRECATE_EOF)
+            packet_endpoint->sendPacket(OKPacket(0xfe, client_capabilities, affected_rows, 0, 0), true);
+        else
+            packet_endpoint->sendPacket(EOFPacket(0, 0), true);
+    }
 }
 
 void MySQLOutputFormat::flush()

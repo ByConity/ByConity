@@ -175,4 +175,14 @@ IMPLEMENT_SETTING_ENUM(StatisticsCachePolicy, ErrorCodes::BAD_ARGUMENTS,
 IMPLEMENT_SETTING_ENUM(MaterializedViewConsistencyCheckMethod, ErrorCodes::BAD_ARGUMENTS,
     {{"NONE", MaterializedViewConsistencyCheckMethod::NONE},
      {"PARTITION", MaterializedViewConsistencyCheckMethod::PARTITION}})
+
+IMPLEMENT_SETTING_ENUM(
+    SpanHierarchy,
+    ErrorCodes::BAD_ARGUMENTS,
+    {{"TRACE", SpanHierarchy::TRACE}, {"DEBUG", SpanHierarchy::DEBUG}, {"INFO", SpanHierarchy::INFO}})
+
+IMPLEMENT_SETTING_ENUM(TextCaseOption, ErrorCodes::BAD_ARGUMENTS,
+    {{"MIXED", TextCaseOption::MIXED},
+     {"LOWERCASE", TextCaseOption::LOWERCASE},
+     {"UPPERCASE", TextCaseOption::UPPERCASE}})
 } // namespace DB

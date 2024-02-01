@@ -244,6 +244,29 @@ ASTPtr ASTIdentifier::deserialize(ReadBuffer & buf)
     identifier->deserializeImpl(buf);
     return identifier;
 }
+
+void ASTIdentifier::toLowerCase()
+{
+    ASTWithAlias::toLowerCase();
+    boost::to_lower(full_name);
+    for (auto &name_part : name_parts)
+        boost::to_lower(name_part);
+
+    if (semantic)
+        boost::to_lower(semantic->table);
+}
+
+void ASTIdentifier::toUpperCase()
+{
+    ASTWithAlias::toUpperCase();
+    boost::to_upper(full_name);
+    for (auto &name_part : name_parts)
+        boost::to_upper(name_part);
+
+    if (semantic)
+        boost::to_upper(semantic->table);
+}
+
 void ASTIdentifier::rewriteCnchDatabaseName(const Context *)
 {
     if (!cnch_rewritten)

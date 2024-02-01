@@ -16,6 +16,7 @@
 #pragma once
 
 #include <variant>
+#include <Core/SettingsEnums.h>
 #include <Core/UUID.h>
 #include <Interpreters/StorageID.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -29,6 +30,7 @@ struct CreateDatabaseParams
     UUID uuid;
     String statement; // used by CnchMaterializedMySQL
     String engine_name;
+    enum TextCaseOption text_case_option = TextCaseOption::MIXED;
 };
 
 struct CreateSnapshotParams

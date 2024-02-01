@@ -42,9 +42,21 @@ public:
     bool temporary{false};
 
     ASTType getType() const override { return ASTType::ASTQueryWithTableAndOutput; }
-    void setTableInfo(const StorageID & storage_id);
+    void setTableInfo(const StorageID& storage_id);
     StorageID getTableInfo() const;
 
+    void toLowerCase() override
+    {
+        boost::to_lower(catalog);
+        boost::to_lower(database);
+        boost::to_lower(table);
+    }
+    void toUpperCase() override
+    {
+        boost::to_upper(catalog);
+        boost::to_upper(database);
+        boost::to_upper(table);
+    }
 protected:
     void formatHelper(const FormatSettings & settings, const char * name) const;
 };

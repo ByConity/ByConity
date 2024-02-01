@@ -55,6 +55,10 @@ public:
     void serialize(WriteBuffer & buf) const override;
     void deserializeImpl(ReadBuffer & buf) override;
 
+    void toLowerCase() override { boost::to_lower(alias); }
+
+    void toUpperCase() override { boost::to_upper(alias); }
+
 protected:
     virtual void appendColumnNameImpl(WriteBuffer & ostr) const = 0;
 };
