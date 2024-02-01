@@ -500,7 +500,6 @@ size_t CnchPartGCThread::doPhaseTwoGC(const StoragePtr & istorage, StorageCnchMe
     std::atomic<size_t> ntotal = 0;
 
     auto batch_remove = [&](size_t p_beg, size_t p_end, size_t d_beg, size_t d_end) {
-        /// TODO: old impl use trySchedule, what's the difference?
         remove_pool.scheduleOrThrowOnError([&, p_beg, p_end, d_beg, d_end] {
             Stopwatch watch;
             Catalog::TrashItems items_removed;

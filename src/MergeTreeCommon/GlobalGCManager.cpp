@@ -102,7 +102,7 @@ namespace {
         ThreadPool clean_pool(context.getSettingsRef().s3_gc_inter_partition_parallelism);
         for (const String & partition_id : partition_ids)
         {
-            clean_pool.scheduleOrThrow([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
+            clean_pool.scheduleOrThrowOnError([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
                 MultiDiskS3PartsLazyCleaner parts_cleaner(std::nullopt, context.getSettingsRef().s3_gc_intra_partition_parallelism);
 
                 LOG_DEBUG(log, "Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs());
@@ -349,7 +349,7 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
                 ThreadPool clean_pool(mergetree->getSettings()->gc_remove_bitmap_thread_pool_size);
                 for (auto & bitmap : all_bitmaps)
                 {
-                    clean_pool.scheduleOrThrow([&bitmap]() { bitmap->removeFile(); });
+                    clean_pool.scheduleOrThrowOnError([&bitmap]() { bitmap->removeFile(); });
                 }
                 clean_pool.wait();
             }
