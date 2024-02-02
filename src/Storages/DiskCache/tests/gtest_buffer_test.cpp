@@ -1,7 +1,13 @@
 #include <fmt/core.h>
 #include <gtest/gtest.h>
 
+#include <Columns/IColumn.h>
+#include <Core/Types.h>
 #include <DataStreams/MarkInCompressedFile.h>
+#include <DataTypes/DataTypeHelper.h>
+#include <IO/BufferBase.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadBufferFromMemory.h>
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 
@@ -155,12 +161,67 @@ TEST(Buffer, MergeTreeDataPartChecksum)
 
     Buffer buffer(4096);
     auto write_buffer = buffer.asWriteBuffer();
-    checksums.serialize(write_buffer);
-    
+    checksums.write(write_buffer);
+
     MergeTreeDataPartChecksums checksums2;
     auto read_buffer = buffer.asReadBuffer();
-    checksums2.deserialize(read_buffer);
+    checksums2.read(read_buffer);
 
     ASSERT_EQ(checksums.getTotalChecksumUInt128(), checksums2.getTotalChecksumUInt128());
+}
+
+TEST(Buffer, PrimaryIndex)
+{
+    // prepare
+    MutableColumns primary_key;
+    primary_key.resize(1);
+    auto data_type = createBaseDataTypeFromTypeIndex(TypeIndex::Int32);
+    primary_key[0] = data_type->createColumn();
+    for (UInt32 i = 0; i < 10; i++)
+    {
+        primary_key[0]->insert(i);
+    }
+
+    // serialize
+    std::shared_ptr<Memory<>> mem = std::make_shared<Memory<>>(DBMS_DEFAULT_BUFFER_SIZE);
+    BufferWithOutsideMemory<WriteBuffer> write_buffer(*mem);
+
+    writeVarUInt(primary_key.size(), write_buffer);
+    writeVarUInt(primary_key[0]->size(), write_buffer); // row size
+
+    for (const auto & col : primary_key)
+    {
+        writeVarUInt(static_cast<UInt64>(col->getDataType()), write_buffer); // write type_index
+        auto serializer = createBaseDataTypeFromTypeIndex(col->getDataType())->getDefaultSerialization();
+        serializer->serializeBinaryBulk(*col, write_buffer, 0, col->size());
+    }
+
+    // deserialize
+    ReadBufferFromMemory read_buffer(mem->data(), mem->size());
+    UInt64 col_cnt;
+    readVarUInt(col_cnt, read_buffer);
+    UInt64 row_cnt;
+    readVarUInt(row_cnt, read_buffer);
+
+    MutableColumns primary_key2;
+    primary_key2.resize(col_cnt);
+
+    for (UInt64 i = 0; i < col_cnt; i++)
+    {
+        UInt64 type;
+        readVarUInt(type, read_buffer);
+        auto data_type2 = createBaseDataTypeFromTypeIndex(static_cast<TypeIndex>(type));
+        primary_key2[i] = data_type2->createColumn();
+        primary_key2[i]->reserve(row_cnt);
+        auto serializer = data_type->getDefaultSerialization();
+        serializer->deserializeBinaryBulk(*primary_key2[i], read_buffer, row_cnt, 0);
+    }
+
+    // check
+    for (UInt32 i = 0; i < 10; i++)
+    {
+        UInt32 value = (*primary_key2[0])[i].get<UInt32>();
+        ASSERT_EQ(i, value);
+    }
 }
 }

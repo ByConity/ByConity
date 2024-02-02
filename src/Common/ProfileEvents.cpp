@@ -355,7 +355,7 @@
     M(SDRequestUpstreamFailed, "Number requests sent to SD upstream that failed") \
     \
     M(WriteBufferFromHdfsWriteBytes, "")\
-    M(HDFSWriteElapsedMilliseconds, "")\
+    M(HDFSWriteElapsedMicroseconds, "")\
     M(WriteBufferFromHdfsWrite, "")\
     M(WriteBufferFromHdfsWriteFailed, "")\
     M(HdfsFileOpen, "")\
@@ -363,7 +363,7 @@
     M(ReadBufferFromHdfsRead, "")\
     M(ReadBufferFromHdfsReadFailed, "")\
     M(ReadBufferFromHdfsReadBytes, "")\
-    M(HDFSReadElapsedMilliseconds, "")\
+    M(HDFSReadElapsedMicroseconds, "")\
     M(HDFSSeek, "")\
     M(HDFSSeekElapsedMicroseconds, "")\
     M(HdfsGetBlkLocMicroseconds, "Total number of millisecons spent to call getBlockLocations") \
@@ -1057,10 +1057,24 @@ void Counters::reset()
     resetCounters();
 }
 
-uint64_t Counters::getIOReadTime() const
+uint64_t Counters::getIOReadTime(bool use_async_read) const
 {
     if (counters)
-        return counters[ProfileEvents::HDFSReadElapsedMilliseconds] * 1000 + counters[ProfileEvents::DiskReadElapsedMicroseconds];
+    {
+        // If we use async read, we only calculate the time of wait for asynchronous result
+        if (use_async_read)
+        {
+            return counters[ProfileEvents::RemoteFSAsynchronousReadWaitMicroseconds]
+                + counters[ProfileEvents::RemoteFSSynchronousReadWaitMicroseconds] + counters[ProfileEvents::DiskReadElapsedMicroseconds];
+        }
+        // Else, we calculate the origin read IO time
+        else
+        {
+            return counters[ProfileEvents::HDFSReadElapsedMicroseconds] + counters[ProfileEvents::ReadBufferFromS3ReadMicroseconds]
+                + counters[ProfileEvents::DiskReadElapsedMicroseconds];
+        }
+    }
+
     return 0;
 }
 

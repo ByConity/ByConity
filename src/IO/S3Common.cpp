@@ -852,6 +852,10 @@ namespace S3
         {
             return;
         }
+        if (keys.size() > 1000)
+        {
+            throw Exception("The number of s3 deleted objects cannot exceed 1000.", ErrorCodes::BAD_ARGUMENTS);
+        }
 
         std::vector<Aws::S3::Model::ObjectIdentifier> obj_ids;
         obj_ids.reserve(keys.size());
@@ -921,7 +925,7 @@ namespace S3
                 {
                     objects_to_clean.push_back(name);
 
-                    if (objects_to_clean.size() > batch_size)
+                    if (objects_to_clean.size() >= batch_size)
                     {
                         deleteObjects(objects_to_clean);
                         objects_to_clean.clear();

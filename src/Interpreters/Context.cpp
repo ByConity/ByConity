@@ -2643,6 +2643,7 @@ void Context::setNvmCache(const Poco::Util::AbstractConfiguration &config)
     shared->mark_cache->setNvmCache(shared->nvm_cache);
     shared->uncompressed_cache->setNvmCache(shared->nvm_cache);
     shared->checksums_cache->setNvmCache(shared->nvm_cache);
+    shared->primary_index_cache->setNvmCache(shared->nvm_cache);
 }
 
 NvmCachePtr Context::getNvmCache() const

@@ -163,9 +163,17 @@ void PlanSegmentManagerRpcService::executeQuery(
         report_metrics_timer->getResourceData().fillProto(*response->mutable_worker_resource_data());
         LOG_DEBUG(log, "adaptive scheduler worker status: {}", response->worker_resource_data().ShortDebugString());
 
+        AddressInfo coordinator_address(
+            request->coordinator_host(),
+            request->coordinator_port(),
+            request->user(),
+            request->password(),
+            request->coordinator_exchange_port());
         ThreadFromGlobalPool async_thread([query_context = std::move(query_context),
                                             execution_info = std::move(execution_info),
-                                           plan_segment_buf = std::make_shared<butil::IOBuf>(cntl->request_attachment().movable())]() {
+                                           plan_segment_buf = std::make_shared<butil::IOBuf>(cntl->request_attachment().movable()),
+                                           segment_id = request->plan_segment_id(),
+                                           coordinator_address = std::move(coordinator_address)]() {
             bool before_execute = true;
             try
             {
@@ -192,13 +200,13 @@ void PlanSegmentManagerRpcService::executeQuery(
                     const auto & host = extractExchangeHostPort(execution_info.execution_address);
                     RuntimeSegmentsStatus runtime_segment_status;
                     runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
-                    runtime_segment_status.segment_id = 0;
+                    runtime_segment_status.segment_id = segment_id;
                     runtime_segment_status.is_succeed = false;
                     runtime_segment_status.is_cancelled = false;
                     runtime_segment_status.code = exception_code;
                     runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
 
-                    reportPlanSegmentStatus(execution_info.execution_address, runtime_segment_status);
+                    reportPlanSegmentStatus(coordinator_address, runtime_segment_status);
                 }
             }
         });
@@ -539,6 +547,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                                            segment_id = request->plan_segment_id(),
                                            plan_segment_buf = std::make_shared<butil::IOBuf>(plan_segment_buf.movable()) ]() {
             bool before_execute = true;
+            auto coordinator_address = query_common->coordinator_address();
             try
             {
                 /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
@@ -577,7 +586,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     runtime_segment_status.code = exception_code;
                     runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
 
-                    reportPlanSegmentStatus(execution_info.execution_address, runtime_segment_status);
+                    reportPlanSegmentStatus(coordinator_address, runtime_segment_status);
                 }
             }
         });

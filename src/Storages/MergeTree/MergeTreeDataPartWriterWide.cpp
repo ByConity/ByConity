@@ -234,6 +234,19 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         const bool is_extra_column = !version_column_name.empty() && (column.name == version_column_name);
         const bool is_bitmap_index_column = column_bitmap_indexes.count(ISerialization::getFileNameForStream(column.name, {}));
 
+        if (!rows_count && column.column->lowCardinality())
+        {
+            // check lc switch at the very beginning
+            auto const *lc = typeid_cast<const ColumnLowCardinality *>(column.column.get());
+            if (lc->isFullState())
+            {
+                auto const *lc_type = typeid_cast<const DataTypeLowCardinality *>(column.type.get());
+                // lc full column need switch type
+                NameAndTypePair pair(column.name,  lc_type->getFullLowCardinalityTypePtr());
+                updateWriterStream(pair);
+            }
+        }
+
         if (permutation)
         {
             if (primary_key_block.has(it->name))

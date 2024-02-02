@@ -18,6 +18,8 @@
 #include <Core/Block.h>
 #include <IO/VarInt.h>
 #include <Common/typeid_cast.h>
+#include <Columns/ColumnLowCardinality.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 
 namespace DB
 {
@@ -44,7 +46,24 @@ static void writeData(const IDataType & type, const ColumnPtr & column, WriteBuf
     settings.getter = [&ostr](ISerialization::SubstreamPath) -> WriteBuffer * { return &ostr; };
     settings.position_independent_encoding = false;
     settings.low_cardinality_max_dictionary_size = 0; //-V1048
-
+    if (column->lowCardinality())
+    {
+        auto const *lc = typeid_cast<const ColumnLowCardinality *>(column.get());
+        if (lc->isFullState())
+        {
+            auto const *lc_type = typeid_cast<const DataTypeLowCardinality *>(&type);
+            if (lc_type)
+            {
+                auto full_type = lc_type->getFullLowCardinalityTypePtr();
+                auto serialization = full_type->getDefaultSerialization();
+                ISerialization::SerializeBinaryBulkStatePtr state;
+                serialization->serializeBinaryBulkStatePrefix(*full_column, settings, state);
+                serialization->serializeBinaryBulkWithMultipleStreams(*full_column, offset, limit, settings, state);
+                serialization->serializeBinaryBulkStateSuffix(settings, state);
+                return ;
+            }
+        }
+    }
     auto serialization = type.getDefaultSerialization();
 
     ISerialization::SerializeBinaryBulkStatePtr state;

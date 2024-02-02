@@ -43,8 +43,8 @@ namespace ProfileEvents
     extern const Event SelectedParts;
     extern const Event SelectedRanges;
     extern const Event SelectedMarks;
-    extern const Event HDFSReadElapsedMilliseconds;
-    extern const Event HDFSWriteElapsedMilliseconds;
+    extern const Event HDFSReadElapsedMicroseconds;
+    extern const Event HDFSWriteElapsedMicroseconds;
 }
 
 namespace DB
@@ -353,9 +353,9 @@ void insertCnchQueryMetric(
         UInt64 write_bytes = (info) ? info->written_bytes : 0;
         UInt64 write_duration = (info) ? info->written_duration : 0;
         UInt32 vfs_time = (info && info->profile_counters)
-            ? ((*info->profile_counters)[ProfileEvents::HDFSReadElapsedMilliseconds]
-                   ? ((*info->profile_counters)[ProfileEvents::HDFSReadElapsedMilliseconds]).load()
-                   : ((*info->profile_counters)[ProfileEvents::HDFSWriteElapsedMilliseconds]).load())
+            ? ((*info->profile_counters)[ProfileEvents::HDFSReadElapsedMicroseconds]
+                   ? ((*info->profile_counters)[ProfileEvents::HDFSReadElapsedMicroseconds]).load()
+                   : ((*info->profile_counters)[ProfileEvents::HDFSWriteElapsedMicroseconds]).load())
             : 0;
 
         String operator_level = (info) ? info->operator_level : "";

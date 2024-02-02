@@ -33,7 +33,7 @@ namespace DB::CnchPartsHelper
 {
 LoggingOption getLoggingOption(const Context & c)
 {
-    return (c.getSettingsRef().send_logs_level == LogsLevel::none) ? DisableLogging : EnableLogging;
+    return (c.getSettingsRef().send_logs_level < LogsLevel::debug) ? DisableLogging : EnableLogging;
 }
 
 IMergeTreeDataPartsVector toIMergeTreeDataPartsVector(const MergeTreeDataPartsCNCHVector & vec)

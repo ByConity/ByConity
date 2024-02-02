@@ -1,18 +1,22 @@
 #pragma once
+#include <memory>
 #if !defined(ARCADIA_BUILD)
 #    include "config_functions.h"
 #endif
 
 #if USE_BASE64
+#    include <Core/SettingsEnums.h>
 #    include <Columns/ColumnConst.h>
 #    include <Common/MemorySanitizer.h>
 #    include <Columns/ColumnString.h>
+#    include <DataTypes/DataTypeNullable.h>
 #    include <DataTypes/DataTypeString.h>
 #    include <Functions/FunctionFactory.h>
 #    include <Functions/FunctionHelpers.h>
 #    include <Functions/GatherUtils/Algorithms.h>
 #    include <IO/WriteHelpers.h>
 #    include <turbob64.h>
+#    include <Interpreters/Context.h>
 
 
 namespace DB
@@ -61,10 +65,13 @@ class FunctionBase64Conversion : public IFunction
 public:
     static constexpr auto name = Func::name;
 
-    static FunctionPtr create(ContextPtr)
+    static FunctionPtr create(ContextPtr context)
     {
-        return std::make_shared<FunctionBase64Conversion>();
+        return std::make_shared<FunctionBase64Conversion>(context->getSettingsRef().dialect_type == DialectType::MYSQL);
     }
+
+    FunctionBase64Conversion(bool mysql_mode_) : mysql_mode(mysql_mode_)
+    {}
 
     String getName() const override
     {
@@ -88,10 +95,23 @@ public:
                 "Illegal type " + arguments[0].type->getName() + " of 1 argument of function " + getName() + ". Must be String.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeString>();
+        DataTypePtr base_type = std::make_shared<DataTypeString>();
+        if (std::is_same_v<Func, Base64Decode> and mysql_mode)
+            return std::make_shared<DataTypeNullable>(base_type);
+        else 
+            return base_type;
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    {
+        if (mysql_mode)
+            return executeInternal<true>(arguments, result_type, input_rows_count);
+        else
+            return executeInternal<false>(arguments, result_type, input_rows_count);
+    }
+
+    template <bool null_on_errors>
+    ColumnPtr executeInternal(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const
     {
         const ColumnPtr column_string = arguments[0].column;
         const ColumnString * input = checkAndGetColumn<ColumnString>(column_string.get());
@@ -101,13 +121,21 @@ public:
                 "Illegal column " + arguments[0].column->getName() + " of first argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
 
-        auto dst_column = ColumnString::create();
-        auto & dst_data = dst_column->getChars();
-        auto & dst_offsets = dst_column->getOffsets();
+        ColumnString::MutablePtr dst_column = ColumnString::create();
+        ColumnString::Chars & dst_data = dst_column->getChars();
+        ColumnString::Offsets & dst_offsets = dst_column->getOffsets();
 
         size_t reserve = Func::getBufferSize(input->getChars().size(), input->size());
         dst_data.resize(reserve);
         dst_offsets.resize(input_rows_count);
+
+        ColumnUInt8::MutablePtr col_null_map_to;
+        UInt8 * vec_null_map_to [[maybe_unused]] = nullptr;
+        if constexpr (null_on_errors)
+        {
+            col_null_map_to = ColumnUInt8::create(input_rows_count);
+            vec_null_map_to = col_null_map_to->getData().data();
+        }
 
         const ColumnString::Offsets & src_offsets = input->getOffsets();
 
@@ -131,8 +159,22 @@ public:
                 if (srclen > 0)
                 {
                     outlen = _tb64d(reinterpret_cast<const uint8_t *>(source), srclen, reinterpret_cast<uint8_t *>(dst_pos));
-                    if (!outlen)
-                        throw Exception("Failed to " + getName() + " input '" + String(reinterpret_cast<const char *>(source), srclen) + "'", ErrorCodes::INCORRECT_DATA);
+
+                    
+                    if constexpr (null_on_errors)
+                    {
+                        if (outlen)
+                            vec_null_map_to[row] = false;
+                        else
+                            vec_null_map_to[row] = true;
+                        
+                    }
+                    else
+                    {
+                        if (!outlen)
+                            throw Exception("Failed to " + getName() + " input '" + String(reinterpret_cast<const char *>(source), srclen) + "'", ErrorCodes::INCORRECT_DATA);
+                    }
+                    
                 }
             }
             else
@@ -167,9 +209,18 @@ public:
         }
 
         dst_data.resize(dst_pos - dst);
-
-        return dst_column;
+        if constexpr (null_on_errors)
+        {
+            return ColumnNullable::create(std::move(dst_column), std::move(col_null_map_to));
+        }
+        else 
+        {
+            return dst_column;
+        }
     }
+
+    private:
+    bool mysql_mode;
 };
 }
 

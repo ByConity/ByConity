@@ -1,15 +1,15 @@
 #include "ThreadPoolRemoteFSReader.h"
 
-#include "config.h"
-#include <Common/Exception.h>
-#include <Common/ProfileEvents.h>
+#include <IO/AsyncReadCounters.h>
+#include <IO/SeekableReadBuffer.h>
+#include "Common/setThreadName.h"
 #include <Common/CurrentMetrics.h>
-#include <Common/Stopwatch.h>
-#include <Common/assert_cast.h>
 #include <Common/CurrentThread.h>
 #include <Common/ElapsedTimeProfileEventIncrement.h>
-#include <IO/SeekableReadBuffer.h>
-#include <IO/AsyncReadCounters.h>
+#include <Common/Exception.h>
+#include <Common/ProfileEvents.h>
+#include <Common/Stopwatch.h>
+#include <Common/assert_cast.h>
 #include <common/getThreadId.h>
 
 #include <future>
@@ -72,23 +72,31 @@ ThreadPoolRemoteFSReader::ThreadPoolRemoteFSReader(size_t pool_size, size_t queu
 std::future<IAsynchronousReader::Result> ThreadPoolRemoteFSReader::submit(Request request)
 {
     ProfileEventTimeIncrement<Microseconds> elapsed(ProfileEvents::ThreadPoolReaderSubmit);
-    return scheduleFromThreadPool<Result>([request]() -> Result
-    {
-        CurrentMetrics::Increment metric_increment{CurrentMetrics::RemoteRead};
-        auto * remote_fs_fd = assert_cast<RemoteFSFileDescriptor *>(request.descriptor.get());
+    auto thread_group = CurrentThread::getGroup();
+    return scheduleFromThreadPool<Result>(
+        [request, thread_group]() -> Result {
+            setThreadName("RemoteReadThr");
+            if (thread_group)
+                CurrentThread::attachToIfDetached(thread_group);
+            CurrentMetrics::Increment metric_increment{CurrentMetrics::RemoteRead};
 
-        auto async_read_counters = remote_fs_fd->getReadCounters();
-        std::optional<AsyncReadIncrement> increment = async_read_counters ? std::optional<AsyncReadIncrement>(async_read_counters) : std::nullopt;
+            auto * remote_fs_fd = assert_cast<RemoteFSFileDescriptor *>(request.descriptor.get());
+            auto async_read_counters = remote_fs_fd->getReadCounters();
+            std::optional<AsyncReadIncrement> increment
+                = async_read_counters ? std::optional<AsyncReadIncrement>(async_read_counters) : std::nullopt;
 
-        auto watch = std::make_unique<Stopwatch>(CLOCK_REALTIME);
-        Result result = remote_fs_fd->readInto(request.buf, request.size, request.offset, request.ignore);
-        watch->stop();
+            auto watch = std::make_unique<Stopwatch>(CLOCK_REALTIME);
+            Result result = remote_fs_fd->readInto(request.buf, request.size, request.offset, request.ignore);
+            watch->stop();
 
-        ProfileEvents::increment(ProfileEvents::ThreadPoolReaderTaskMicroseconds, watch->elapsedMicroseconds());
-        ProfileEvents::increment(ProfileEvents::ThreadPoolReaderReadBytes, result.size);
+            ProfileEvents::increment(ProfileEvents::ThreadPoolReaderTaskMicroseconds, watch->elapsedMicroseconds());
+            ProfileEvents::increment(ProfileEvents::ThreadPoolReaderReadBytes, result.size);
 
-        return Result{ .size = result.size, .offset = result.offset, .execution_watch = std::move(watch) };
-    }, *pool, "VFSRead", request.priority);
+            return Result{.size = result.size, .offset = result.offset, .execution_watch = std::move(watch)};
+        },
+        *pool,
+        "VFSRead",
+        request.priority);
 }
 
 void ThreadPoolRemoteFSReader::wait()

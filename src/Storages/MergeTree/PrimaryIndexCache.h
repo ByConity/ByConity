@@ -4,6 +4,7 @@
 #include <Common/LRUCache.h>
 #include <Common/ProfileEvents.h>
 #include <Storages/UUIDAndPartName.h>
+#include <Storages/DiskCache/NvmCache.h>
 
 namespace ProfileEvents
 {
@@ -43,6 +44,14 @@ public:
             ProfileEvents::increment(ProfileEvents::PrimaryIndexCacheHits);
         return result;
     }
+
+    void setNvmCache(std::shared_ptr<NvmCache> nvm_cache_) { nvm_cache = nvm_cache_; }
+
+private:
+    void removeExternal(const Key & key, const MappedPtr & value, size_t size) override;
+    MappedPtr loadExternal(const Key &) override;
+
+    std::shared_ptr<NvmCache> nvm_cache{};
 };
 
 using PrimaryIndexCachePtr = std::shared_ptr<PrimaryIndexCache>;

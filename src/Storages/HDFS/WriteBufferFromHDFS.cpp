@@ -37,7 +37,7 @@ namespace ProfileEvents
     extern const Event WriteBufferFromHdfsWriteFailed;
     extern const Event WriteBufferFromHdfsWriteBytes;
     extern const Event HdfsFileOpen;
-    extern const Event HDFSWriteElapsedMilliseconds;
+    extern const Event HDFSWriteElapsedMicroseconds;
 }
 namespace DB
 {
@@ -165,7 +165,7 @@ void WriteBufferFromHDFS::nextImpl()
 
     ProfileEvents::increment(ProfileEvents::WriteBufferFromHdfsWriteBytes, bytes_written);
     watch.stop();
-    ProfileEvents::increment(ProfileEvents::HDFSWriteElapsedMilliseconds, watch.elapsedMilliseconds());
+    ProfileEvents::increment(ProfileEvents::HDFSWriteElapsedMicroseconds, watch.elapsedMicroseconds());
 }
 
 
