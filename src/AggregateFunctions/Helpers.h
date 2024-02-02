@@ -168,6 +168,30 @@ static IAggregateFunction * createWithUnsignedIntegerType(const IDataType & argu
     return nullptr;
 }
 
+template <template <typename, typename> class AggregateFunctionTemplate, template <typename> class Data, typename ... TArgs>
+static IAggregateFunction * createWithIntegerType(const IDataType & argument_type, TArgs && ... args)
+{
+    WhichDataType which(argument_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) \
+        return new AggregateFunctionTemplate<TYPE, Data<TYPE>>(std::forward<TArgs>(args)...);
+    FOR_INTEGER_TYPES_DATA(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
+template <template <typename> class AggregateFunctionTemplate, typename ... TArgs>
+static IAggregateFunction * createWithIntegerType(const IDataType & argument_type, TArgs && ... args)
+{
+    WhichDataType which(argument_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) \
+        return new AggregateFunctionTemplate<TYPE>(std::forward<TArgs>(args)...);
+    FOR_INTEGER_TYPES_DATA(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
 template <template <typename, typename> class AggregateFunctionTemplate, template <typename> class Data, typename... TArgs>
 static IAggregateFunction * createWithBasicNumberOrDateOrDateTime(const IDataType & argument_type, TArgs &&... args)
 {
@@ -421,18 +445,6 @@ static IAggregateFunction * createWithTwoTypes(const IDataType & first_type, con
         return createWithTwoTypesSecond<Int8, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::Enum16)
         return createWithTwoTypesSecond<UInt16, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
-    return nullptr;
-}
-
-template <template <typename> class AggregateFunctionTemplate, typename ... TArgs>
-static IAggregateFunction * createWithIntegerType(const IDataType & argument_type, TArgs && ... args)
-{
-    WhichDataType which(argument_type);
-#define DISPATCH(TYPE) \
-    if (which.idx == TypeIndex::TYPE) \
-        return new AggregateFunctionTemplate<TYPE>(std::forward<TArgs>(args)...);
-    FOR_INTEGER_TYPES_DATA(DISPATCH)
-#undef DISPATCH
     return nullptr;
 }
 
