@@ -9,6 +9,6 @@ SELECT count(*) FROM (
     date WITH fill FROM toDate('2019-05-01') TO toDate('2019-05-10') STEP 3, 
     val WITH fill FROM 101 TO 125 STEP 8,
     date_time WITH fill FROM toDateTime('2022-01-01 10:00:10') TO toDateTime('2022-01-01 10:00:20') STEP 3
-);
+) format Null;
 
 drop table if exists database_214;
