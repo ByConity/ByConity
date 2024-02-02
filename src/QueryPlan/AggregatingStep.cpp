@@ -403,7 +403,9 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
         settings.max_threads,
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,
-        settings.min_count_to_compile_aggregate_expression);
+        settings.min_count_to_compile_aggregate_expression,
+        {},
+        settings.enable_lc_group_by_opt);
 
     /// Forget about current totals and extremes. They will be calculated again after aggregation if needed.
     pipeline.dropTotalsAndExtremes();
@@ -469,7 +471,9 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                     transform_params->params.max_threads,
                     transform_params->params.min_free_disk_space,
                     transform_params->params.compile_aggregate_expressions,
-                    transform_params->params.min_count_to_compile_aggregate_expression};
+                    transform_params->params.min_count_to_compile_aggregate_expression,
+                    {},
+                    transform_params->params.enable_lc_group_by_opt};
                 using TwoLevelMode = Aggregator::Params::TwoLevelMode;
                 params_for_set.two_level_mode
                     = settings.group_by_two_level_for_grouping_set ? TwoLevelMode::ENFORCE_TWO_LEVEL : TwoLevelMode::ENFORCE_SINGLE_LEVEL;

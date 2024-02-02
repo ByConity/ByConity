@@ -1335,7 +1335,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                     settings.min_free_disk_space_for_temporary_data,
                     settings.compile_expressions,
                     settings.min_count_to_compile_aggregate_expression,
-                    header_before_aggregation); // The source header is also an intermediate header
+                    header_before_aggregation,
+                    settings.enable_lc_group_by_opt); // The source header is also an intermediate header
 
                 transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), aggregator_list_ptr, aggregate_step.isFinal());
 
@@ -1365,7 +1366,9 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                     settings.max_threads,
                     settings.min_free_disk_space_for_temporary_data,
                     settings.compile_aggregate_expressions,
-                    settings.min_count_to_compile_aggregate_expression);
+                    settings.min_count_to_compile_aggregate_expression,
+                    {},
+                    settings.enable_lc_group_by_opt);
 
                 transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), aggregator_list_ptr, aggregate_step.isFinal());
             }

@@ -404,16 +404,16 @@ public:
     {
         AggregateDescription res;
         AggregateFunctionProperties properties;
-        res.function = AggregateFunctionFactory::instance().get("sum", {std::make_shared<DataTypeUInt64>()}, {}, properties);
+        res.function = AggregateFunctionFactory::instance().get("count", {}, {}, properties);
         res.parameters = {};
         // generate ColumnNumbers
-        for (int i = 0; i < 2; ++i)
-            res.arguments.emplace_back(eng() % 3);
+        // for (int i = 0; i < 2; ++i)
+        // res.arguments.emplace_back(eng() % 3);
         // generate Names
-        for (int i = 0; i < 10; ++i)
-            res.argument_names.emplace_back(fmt::format("text{}", eng() % 100));
-        res.column_name = fmt::format("text{}", eng() % 100);
-        res.mask_column = fmt::format("text{}", eng() % 100);
+        // for (int i = 0; i < 10; ++i)
+        // res.argument_names.emplace_back(fmt::format("text{}", eng() % 100));
+        res.column_name = std::vector{"a", "b"}[eng() % 2];
+        res.mask_column = res.column_name;
         return res;
     }
 
@@ -439,6 +439,7 @@ public:
         auto min_free_disk_space = eng() % 1000;
         auto compile_aggregate_expressions = eng() % 2 == 1;
         auto min_count_to_compile_aggregate_expression = eng() % 1000;
+        auto enable_lc_group_by_opt = eng() % 2 == 1;
         auto step = Aggregator::Params(
             src_header,
             keys,
@@ -455,7 +456,8 @@ public:
             min_free_disk_space,
             compile_aggregate_expressions,
             min_count_to_compile_aggregate_expression,
-            intermediate_header);
+            intermediate_header,
+            enable_lc_group_by_opt);
 
         return step;
     }

@@ -315,18 +315,11 @@ void ColumnLowCardinality::insertRangeFrom(const IColumn & src, size_t start, si
 
     if (full_state)
     {
-        if (low_cardinality_src->isFullState())
+        const ColumnPtr & dict_col = low_cardinality_src->getDictionary().getNestedColumn();
+        const IColumn & index = low_cardinality_src->getIndexes();
+        for (size_t i = start; i < (start + length); ++i)
         {
-            getNestedColumn().insertRangeFrom(low_cardinality_src->getNestedColumn(), start, length);
-        }
-        else
-        {
-            const ColumnPtr & dict_col = low_cardinality_src->getDictionary().getNestedColumn();
-            const IColumn & index = low_cardinality_src->getIndexes();
-            for (size_t i = start; i < (start + length); ++i)
-            {
-                getNestedColumn().insertFrom(*dict_col, index.getUInt(i));
-            }
+            getNestedColumn().insertFrom(*dict_col, index.getUInt(i));
         }
 
         return;
@@ -422,17 +415,22 @@ void ColumnLowCardinality::insertRangeSelective(
     if (!low_cardinality_src)
         throw Exception("Expected ColumnLowCardinality, got " + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
 
-    if (full_state)
+    if (low_cardinality_src->isFullState())
     {
-        if (low_cardinality_src->isFullState())
-        {
-            getNestedColumn().insertRangeSelective(low_cardinality_src->getNestedColumn(), selector, selector_start, length);
-        }
-        else
-        {
-            getNestedColumn().insertRangeSelective(*low_cardinality_src->convertToFullColumn(), selector, selector_start, length);
-        }
-        return ;
+        const auto & low_cardinality_src_full = *low_cardinality_src->convertToFullColumn();
+        for (size_t i = 0; i < length; ++i)
+            insertFromFullColumn(low_cardinality_src_full, selector[selector_start + i]);
+        
+        return;
+    }
+
+    if (isFullState())
+    {
+        const ColumnPtr & dict_column = low_cardinality_src->getDictionary().getNestedColumn();
+        const IColumn & index = low_cardinality_src->getIndexes();
+        for (size_t i = 0; i < length; ++i)
+            nested_column->insertFrom(*dict_column, index.getUInt(selector[selector_start + i]));
+        return;
     }
 
     const IColumn & src_index = low_cardinality_src->getIndexes();
