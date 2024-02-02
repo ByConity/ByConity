@@ -134,10 +134,6 @@ struct MergeTreeDataPartChecksums
 
     void write(WriteBuffer & to) const;
 
-    void serialize(WriteBuffer & to) const;
-
-    bool deserialize(ReadBuffer & in);
-
     /// Checksum from the set of checksums of .bin files (for deduplication).
     void computeTotalChecksumDataOnly(SipHash & hash) const;
 

@@ -17,6 +17,7 @@
 #include <Storages/DiskCache/Types.h>
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
+#include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
@@ -109,9 +110,10 @@ Handle NvmCache::find(HashedKey key, DecodeCallback cb, EngineTag tag)
     return hdl;
 }
 
-template Handle NvmCache::find<UncompressedCacheCell>(HashedKey key, DecodeCallback cb, EngineTag);
 template Handle NvmCache::find<MarksInCompressedFile>(HashedKey key, DecodeCallback cb, EngineTag);
+template Handle NvmCache::find<UncompressedCacheCell>(HashedKey key, DecodeCallback cb, EngineTag);
 template Handle NvmCache::find<MergeTreeDataPartChecksums>(HashedKey key, DecodeCallback cb, EngineTag);
+template Handle NvmCache::find<PrimaryIndex>(HashedKey key, DecodeCallback cb, EngineTag);
 
 void NvmCache::put(HashedKey key, std::shared_ptr<void> item, PutToken token, EncodeCallback cb, EngineTag tag)
 {

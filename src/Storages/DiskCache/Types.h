@@ -9,6 +9,7 @@ enum class EngineTag : UInt32
     MarkCache = 0,
     UncompressedCache,
     ChecksumCache,
+    PrimaryIndexCache,
     // keep count at last
     COUNT,
 };

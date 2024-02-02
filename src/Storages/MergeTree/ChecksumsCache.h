@@ -133,7 +133,7 @@ public:
                 {
                     auto checksums = std::static_pointer_cast<MergeTreeDataPartChecksums>(ptr);
                     auto read_buffer = buffer.asReadBuffer();
-                    checksums->deserialize(read_buffer);
+                    checksums->read(read_buffer);
                     if (internalInsert(shard, key, name, checksums))
                         flag = true;
 
@@ -276,7 +276,7 @@ private:
                 auto & checksums = pair.second->second;
                 std::shared_ptr<Memory<>> mem = std::make_shared<Memory<>>(DBMS_DEFAULT_BUFFER_SIZE);
                 BufferWithOutsideMemory<WriteBuffer> write_buffer(*mem);
-                checksums->serialize(write_buffer);
+                checksums->write(write_buffer);
 
                 nvm_cache->put(hash_key, std::move(mem), std::move(token), [](void * obj) {
                     auto * ptr = reinterpret_cast<Memory<> *>(obj);

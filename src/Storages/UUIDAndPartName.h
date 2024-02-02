@@ -20,6 +20,7 @@
 
 #include <city.h>
 #include <Core/UUID.h>
+#include <Common/HashTable/Hash.h>
 
 namespace DB
 {
