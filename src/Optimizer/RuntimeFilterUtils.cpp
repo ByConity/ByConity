@@ -10,6 +10,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/formatAST.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -182,7 +183,7 @@ std::vector<ASTPtr> RuntimeFilterUtils::createRuntimeFilterForTableScan(
                     }
                 }
             }
-            else
+            else if (d.values_set)
             {
                 if (d.values_set->has_min_max && range_cover && d.values_set->isRangeMatch())
                 {
@@ -209,6 +210,10 @@ std::vector<ASTPtr> RuntimeFilterUtils::createRuntimeFilterForTableScan(
                                                         std::make_shared<ASTLiteral>(d.values_set->max)));
                     }
                 }
+            }
+            else
+            {
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "unknown runtime filter type");
             }
         }
         else

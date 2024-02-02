@@ -96,10 +96,20 @@ struct DynamicData
     std::variant<RuntimeFilterVal, InternalDynamicData> data;
     String dump()
     {
+        if (bypass == BypassType::BYPASS_LARGE_HT)
+            return "BYPASS_LARGE_HT";
+        else if (bypass == BypassType::BYPASS_EMPTY_HT)
+            return "BYPASS_EMPTY_HT";
+
+        std::stringstream ss;
+        if (is_local)
+            ss << "LOCAL: ";
+
         if (is_local)
         {
             auto const & d = std::get<RuntimeFilterVal>(data);
-            return d.dump();
+            ss << d.dump();
+            return ss.str();
         }
         else
         {
