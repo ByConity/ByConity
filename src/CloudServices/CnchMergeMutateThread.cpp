@@ -21,6 +21,7 @@
 #include <CloudServices/selectPartsToMerge.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
+#include "common/logger_useful.h"
 #include <Common/Configurations.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TestUtils.h>
@@ -830,6 +831,9 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
     auto & task_record = *future_task.record;
     auto type = task_record.type;
 
+    if (maybe_sync_task)
+        LOG_TRACE(log, "[SyncMergeTask] Begin to submit a sync merge task: {}", task_record.task_id);
+
     /// Create transaction
     future_task.prepareTransaction();
     auto transaction = task_record.transaction;
@@ -870,6 +874,9 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
     if (type == ManipulationType::Merge || type == ManipulationType::Mutate || type == ManipulationType::Clustering)
         cnch_lock->lock();
 
+    if (maybe_sync_task)
+        LOG_TRACE(log, "[SyncMergeTask] Txn locked");
+
     SCOPE_EXIT(if (type == ManipulationType::Merge || type == ManipulationType::Mutate || type == ManipulationType::Clustering) {
         try
         {
@@ -906,6 +913,9 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
         params.mutation_commands = std::make_shared<MutationCommands>(future_task.mutation_entry->commands);
     }
 
+    if (maybe_sync_task)
+        LOG_TRACE(log, "[SyncMergeTask] RPC params constructed.");
+
     auto worker_client = getWorker(type, future_task.parts);
 
     task_record.task_id = params.task_id;
@@ -931,10 +941,14 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
             std::lock_guard lock(currently_synchronous_tasks_mutex);
             currently_synchronous_tasks.emplace(params.task_id);
         }
+        
+        const auto & worker_addr_str = worker_client->getHostWithPorts().toDebugString();
+        if (maybe_sync_task)
+            LOG_TRACE(log, "[SyncMergeTask] Submit a sync merge task to {}", worker_addr_str);
 
         ProfileEvents::increment(ProfileEvents::Manipulation, 1);
         worker_client->submitManipulationTask(cnch_table, params, transaction_id);
-        LOG_DEBUG(log, "Submitted manipulation task to {}, {}", worker_client->getHostWithPorts().toDebugString(), params.toDebugString());
+        LOG_DEBUG(log, "Submitted manipulation task to {}, {}", worker_addr_str, params.toDebugString());
     }
     catch (...)
     {

@@ -885,6 +885,7 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
 {
     /// clear data parts metadata as well as partition metadata
     metastore_ptr->clean(dataPartPrefix(name_space, uuid));
+    metastore_ptr->clean(trashItemsPrefix(name_space, uuid));
     metastore_ptr->clean(stagedDataPartPrefix(name_space, uuid));
     metastore_ptr->clean(tablePartitionInfoPrefix(name_space, uuid));
     metastore_ptr->clean(detachedPartPrefix(name_space, uuid));

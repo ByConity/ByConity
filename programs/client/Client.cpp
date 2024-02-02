@@ -2431,7 +2431,7 @@ private:
 
             if (outfile_target)
             {
-                outfile_target->flushFile();
+                outfile_target->flushFile(context);
             }
         }
 

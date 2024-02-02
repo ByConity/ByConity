@@ -42,7 +42,7 @@ public:
 
     std::shared_ptr<WriteBuffer> getOutfileBuffer(const ContextPtr & context , bool allow_into_local = false);
     
-    void flushFile();
+    void flushFile(ContextMutablePtr context);
 
     static OutfileTargetPtr getOutfileTarget(
         const std::string & uri,

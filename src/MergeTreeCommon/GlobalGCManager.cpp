@@ -102,12 +102,17 @@ namespace {
         ThreadPool clean_pool(context.getSettingsRef().s3_gc_inter_partition_parallelism);
         for (const String & partition_id : partition_ids)
         {
-            clean_pool.scheduleOrThrow([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
+            clean_pool.scheduleOrThrowOnError([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
                 MultiDiskS3PartsLazyCleaner parts_cleaner(std::nullopt, context.getSettingsRef().s3_gc_intra_partition_parallelism);
 
                 LOG_DEBUG(log, "Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs());
 
+                ServerDataPartsVector parts_in_trash = catalog->getTrashedPartsInPartitions(storage, {partition_id}, 0);
                 ServerDataPartsVector parts = catalog->getServerDataPartsInPartitions(storage, {partition_id}, {0}, &context);
+
+                LOG_DEBUG(log, "Will remove {} data parts and {} trashed parts from S3 storage.", parts.size(), parts_in_trash.size());
+                std::move(parts_in_trash.begin(), parts_in_trash.end(), std::back_inserter(parts));
+
                 for (auto & part : parts)
                 {
                     auto cnch_part = part->toCNCHDataPart(mergetree_meta);
@@ -344,7 +349,7 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
                 ThreadPool clean_pool(mergetree->getSettings()->gc_remove_bitmap_thread_pool_size);
                 for (auto & bitmap : all_bitmaps)
                 {
-                    clean_pool.scheduleOrThrow([&bitmap]() { bitmap->removeFile(); });
+                    clean_pool.scheduleOrThrowOnError([&bitmap]() { bitmap->removeFile(); });
                 }
                 clean_pool.wait();
             }

@@ -223,6 +223,10 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         drop_part->partition.assign(part->partition);
         drop_part->deleted = true;
 
+        /// rows_count and bytes_on_disk is required for parts info statistics.
+        drop_part->covered_parts_rows = part->rows_count;
+        drop_part->covered_parts_size = part->bytes_on_disk;
+
         parts_to_dump.push_back(std::move(drop_part));
         bitmaps_to_dump.push_back(LocalDeleteBitmap::createTombstone(drop_part_info, txn_id.toUInt64()));
     }

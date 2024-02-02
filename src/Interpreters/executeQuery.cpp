@@ -1950,8 +1950,8 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
             }
         }
 
-        if (outfile_target != nullptr)
-            outfile_target->flushFile();
+        if (outfile_target)
+            outfile_target->flushFile(context);
     }
     catch (...)
     {
@@ -2156,8 +2156,8 @@ void executeQuery(
             copyData(
                 *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
 
-            if (outfile_target!=nullptr)
-                outfile_target->flushFile();
+            if (outfile_target)
+                outfile_target->flushFile(context);
         }
         else if (pipeline.initialized())
         {
@@ -2220,8 +2220,8 @@ void executeQuery(
                 executor->execute(pipeline.getNumThreads());
             }
 
-            if (outfile_target != nullptr)
-                outfile_target->flushFile();
+            if (outfile_target)
+                outfile_target->flushFile(context);
         }
     }
     catch (...)
