@@ -433,18 +433,18 @@
     M(UpdateTableStatisticsFailed, "") \
     M(GetTableStatisticsSuccess, "") \
     M(GetTableStatisticsFailed, "") \
-    M(GetAvailableTableStatisticsTagsSuccess, "") \
-    M(GetAvailableTableStatisticsTagsFailed, "") \
     M(RemoveTableStatisticsSuccess, "") \
     M(RemoveTableStatisticsFailed, "") \
     M(UpdateColumnStatisticsSuccess, "") \
     M(UpdateColumnStatisticsFailed, "") \
     M(GetColumnStatisticsSuccess, "") \
     M(GetColumnStatisticsFailed, "") \
-    M(GetAvailableColumnStatisticsTagsSuccess, "") \
-    M(GetAvailableColumnStatisticsTagsFailed, "") \
+    M(GetAllColumnStatisticsSuccess, "") \
+    M(GetAllColumnStatisticsFailed, "") \
     M(RemoveColumnStatisticsSuccess, "") \
     M(RemoveColumnStatisticsFailed, "") \
+    M(RemoveAllColumnStatisticsSuccess, "") \
+    M(RemoveAllColumnStatisticsFailed, "") \
     M(UpdateSQLBindingFailed, "") \
     M(UpdateSQLBindingSuccess, "") \
     M(GetSQLBindingFailed, "") \

@@ -56,6 +56,16 @@ void CollectStep::writeResult(TableStats & core_table_stats, ColumnStatsMap & co
 }
 void CollectStep::collectTable()
 {
+    if (context->getSettingsRef().statistics_query_cnch_parts_for_row_count)
+    {
+        // try get count by fast trivial count
+        if (auto count_opt = catalog->queryRowCount(table_info))
+        {
+            handler_context.full_count = count_opt.value();
+            return;
+        }
+    }
+
     TableHandler table_handler(table_info);
     table_handler.registerHandler(std::make_unique<RowCountHandler>(handler_context));
     //  select count(*) from <table>;

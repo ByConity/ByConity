@@ -104,9 +104,9 @@ namespace DB::Catalog
 #define NONHOST_UPDATE_TIMESTAMP_PREFIX "NHUT_"
 #define INSERTION_LABEL_PREFIX "ILB_"
 #define TABLE_STATISTICS_PREFIX "TS_"
-#define TABLE_STATISTICS_TAG_PREFIX "TST_"
+#define TABLE_STATISTICS_TAG_PREFIX "TST_" // deprecated, just remove it
 #define COLUMN_STATISTICS_PREFIX "CS_"
-#define COLUMN_STATISTICS_TAG_PREFIX "CST_"
+#define COLUMN_STATISTICS_TAG_PREFIX "CST_" // deprecated, just remove it
 #define SQL_BINDING_PREFIX "SBI_"
 #define FILESYS_LOCK_PREFIX "FSLK_"
 #define UDF_STORE_PREFIX "UDF_"
@@ -684,19 +684,26 @@ public:
          return ss.str();
      }
 
-    static String columnStatisticPrefix(const String name_space, const String & uuid)
+    static String columnStatisticPrefixWithoutColumn(const String name_space, const String & uuid)
     {
         std::stringstream ss;
         ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_PREFIX << uuid << '_';
         return ss.str();
     }
 
-     static String columnStatisticTagKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
-     {
-         std::stringstream ss;
-         ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_TAG_PREFIX << uuid << '_' << escapeString(column) << '_' << static_cast<UInt64>(tag);
-         return ss.str();
-     }
+    static String columnStatisticPrefix(const String name_space, const String & uuid, const String & column)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_PREFIX << uuid << '_' << escapeString(column) << '_';
+        return ss.str();
+    }
+
+    static String columnStatisticTagKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_TAG_PREFIX << uuid << '_' << escapeString(column) << '_' << static_cast<UInt64>(tag);
+        return ss.str();
+    }
 
     static String columnStatisticTagPrefix(const String name_space, const String & uuid, const String & column)
     {
@@ -779,7 +786,7 @@ public:
     {
         return fmt::format("{}{}", accessEntityUUIDNameMappingPrefix(name_space), uuid);
     }
-    
+
     static String trashItemsPrefix(const String & name_space, const String & uuid)
     {
         return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
@@ -814,6 +821,15 @@ public:
     {
         return escapeString(name_space) + "_" + TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX + table_uuid;
     }
+
+    static String dictionaryBucketUpdateTimeKey(const String & name_space, const std::string & uuid, const Int64 bucket_number)
+    {
+        return escapeString(name_space) + '_' + DICTIONARY_BUCKET_UPDATE_TIME_PREFIX + uuid + '_' + std::to_string(bucket_number);
+    }
+    // parse the first key in format of '{prefix}{escapedString(first_key)}_postfix'
+    // note that prefix should contains _, like TCS_
+    // return [first_key, postfix]
+    static std::pair<String, String> splitFirstKey(const String & key, const String & prefix);
 
     /// end of Metastore Proxy keying schema
 
@@ -885,7 +901,7 @@ public:
 
     String getTableUUID(const String & name_space, const String & database, const String & name);
     std::shared_ptr<Protos::TableIdentifier> getTableID(const String & name_space, const String & database, const String & name);
-    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> getTableIDs(const String & name_space, 
+    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> getTableIDs(const String & name_space,
                     const std::vector<std::pair<String, String>> & db_name_pairs);
     String getTrashTableUUID(const String & name_space, const String & database, const String & name, const UInt64 & ts);
     void createTable(const String & name_space, const UUID & db_uuid, const DB::Protos::DataModelTable & table_data, const Strings & dependencies, const Strings & masking_policy_mapping);
@@ -1039,24 +1055,22 @@ public:
     SQLBindingItemPtr getSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression);
     void removeSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression);
 
-    void updateTableStatistics(
-        const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
-    std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    getTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags);
-    std::unordered_set<StatisticsTag> getAvailableTableStatisticsTags(const String & name_space, const String & uuid);
-    void removeTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags);
+    void updateTableStatistics(const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
+    // new api
+    std::unordered_map<StatisticsTag, StatisticsBasePtr> getTableStatistics(const String & name_space, const String & uuid);
 
-    void updateColumnStatistics(
-        const String & name_space,
-        const String & uuid,
-        const String & column,
-        const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
-    std::unordered_map<StatisticsTag, StatisticsBasePtr> getColumnStatistics(
-        const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
-    std::unordered_set<StatisticsTag>
-    getAvailableColumnStatisticsTags(const String & name_space, const String & uuid, const String & column);
-    void removeColumnStatistics(
-        const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
+    void removeTableStatistics(const String & name_space, const String & uuid);
+
+    void updateColumnStatistics(const String & name_space, const String & uuid, const String & column, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
+
+    std::unordered_map<StatisticsTag, StatisticsBasePtr>
+    getColumnStatistics(const String & name_space, const String & uuid, const String & column);
+    std::unordered_map<String, std::unordered_map<StatisticsTag, StatisticsBasePtr>>
+    getAllColumnStatistics(const String & name_space, const String & uuid);
+    std::vector<String> getAllColumnStatisticsKey(const String & name_space, const String & uuid);
+    void removeColumnStatistics(const String & name_space, const String & uuid, const String & column);
+    void removeAllColumnStatistics(const String & name_space, const String & uuid);
+
     void setMergeMutateThreadStartTime(const String & name_space, const String & uuid, const UInt64 & start_time);
     UInt64 getMergeMutateThreadStartTime(const String & name_space, const String & uuid);
 
@@ -1123,7 +1137,7 @@ public:
     IMetaStore::IteratorPtr getDetachedPartsInRange(const String& name_space,
         const String& tbl_uuid, const String& range_start, const String& range_end,
         bool include_start = true, bool include_end = false);
-    
+
     // Access Entities
     String getAccessEntity(EntityType type, const String & name_space, const String & name) const;
     Strings getAllAccessEntities(EntityType type, const String & name_space) const;
@@ -1145,7 +1159,7 @@ public:
      * @param limit Limit the results, disabled by passing 0.
      */
     IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
-    
+
     //Object column schema related API
     static String extractTxnIDFromPartialSchemaKey(const String & partial_schema_key);
     void appendObjectPartialSchema(

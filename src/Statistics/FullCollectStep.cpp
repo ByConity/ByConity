@@ -40,7 +40,7 @@ public:
 
     void generateSqls()
     {
-        auto quote_col_name = backQuoteIfNeed(col_name);
+        auto quote_col_name = colNameForSql(col_name);
         auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
         auto count_sql = fmt::format(FMT_STRING("count({})"), quote_col_name);
@@ -169,7 +169,7 @@ public:
 
     void generateSqls()
     {
-        auto quote_col_name = backQuoteIfNeed(col_name);
+        auto quote_col_name = colNameForSql(col_name);
         auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
         auto bounds_b64 = base64Encode(bucket_bounds->serialize());

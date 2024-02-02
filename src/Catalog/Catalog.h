@@ -100,14 +100,10 @@ public:
     void updateTableStatistics(const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
 
     /// get the latest stats
-    /// if tag not exists, don't put it into the map
-    std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    getTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags);
-    /// get all tags
-    std::unordered_set<StatisticsTag> getAvailableTableStatisticsTags(const String & uuid);
+    std::unordered_map<StatisticsTag, StatisticsBasePtr> getTableStatistics(const String & uuid);
 
     /// remove tags
-    void removeTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags);
+    void removeTableStatistics(const String & uuid);
 
     /// stats for Column
 
@@ -116,13 +112,15 @@ public:
         const String & uuid, const String & column, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
 
     /// get the latest stats
-    /// if tag not exists, don't put it into the map
-    std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    getColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
-    /// get all tags
-    std::unordered_set<StatisticsTag> getAvailableColumnStatisticsTags(const String & uuid, const String & column);
+    std::unordered_map<StatisticsTag, StatisticsBasePtr> getColumnStatistics(const String & uuid, const String & column);
+    std::unordered_map<String, std::unordered_map<StatisticsTag, StatisticsBasePtr>> getAllColumnStatistics(const String & uuid);
+
+    std::vector<String> getAllColumnStatisticsKey(const String & uuid);
+
     /// remove tags
-    void removeColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
+    void removeColumnStatistics(const String & uuid, const String & column);
+    void removeAllColumnStatistics(const String & uuid);
+
     //////////////
 
     void updateSQLBinding(const SQLBindingItemPtr data);
@@ -214,7 +212,6 @@ public:
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts,
         const bool is_recluster);
-
 
     void renameTable(
         const Settings & query_settings,

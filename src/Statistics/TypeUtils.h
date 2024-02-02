@@ -93,36 +93,4 @@ inline bool isCollectableType(const DataTypePtr & raw_type)
     }
 }
 
-inline ColumnDescVector filterCollectableColumns(
-    const ColumnDescVector & collectable, const std::vector<String> & target_columns, bool exception_on_unsupported = false)
-{
-    std::unordered_map<String, DataTypePtr> name_to_type;
-    ColumnDescVector result;
-    std::vector<String> unsupported_columns;
-
-    for (const auto & elem : collectable)
-        name_to_type.emplace(elem.name, elem.type);
-
-    for (const auto & col_name : target_columns)
-    {
-        if (name_to_type.count(col_name))
-        {
-            auto type = name_to_type[col_name];
-            result.emplace_back(col_name, type);
-        }
-        else
-        {
-            unsupported_columns.emplace_back(col_name);
-        }
-    }
-
-    if (exception_on_unsupported && !unsupported_columns.empty())
-    {
-        auto err_msg = fmt::format(FMT_STRING("columns ({}) not exist or is not collectable"), fmt::join(unsupported_columns, ", "));
-        throw Exception(err_msg, ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    return result;
-}
-
 }

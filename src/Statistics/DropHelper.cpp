@@ -67,7 +67,7 @@ void dropStatsColumns(
         auto catalog = createCatalogAdaptor(context);
         catalog->checkHealth(/*is_write=*/true);
         auto proxy = createCachedStatsProxy(catalog, cache_policy);
-        auto cols_desc = filterCollectableColumns(catalog->getCollectableColumns(table), columns, true);
+        auto cols_desc = catalog->filterCollectableColumns(table, columns);
         proxy->dropColumns(table, cols_desc);
         catalog->invalidateClusterStatsCache(table);
     }
@@ -76,15 +76,6 @@ void dropStatsColumns(
         if (throw_exception)
             throw;
     }
-}
-
-bool shouldDrop(const StoragePtr & ptr)
-{
-    if (ptr && ptr->as<StorageDistributed>())
-    {
-        return true;
-    }
-    return false;
 }
 
 }

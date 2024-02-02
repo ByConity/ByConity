@@ -34,7 +34,7 @@ class CatalogAdaptorMemory : public CatalogAdaptor
 {
 public:
     CatalogAdaptorMemory(ContextPtr context_, std::shared_ptr<StatisticsMemoryStore> sms_ptr)
-        : context(context_), statistics_memory_store(sms_ptr)
+        : CatalogAdaptor(context_), statistics_memory_store(sms_ptr)
     {
     }
 
@@ -59,6 +59,27 @@ public:
         }
 
         return sms.entries.at(key)->data;
+    }
+
+
+    std::vector<String> readStatsColumnsKey(const StatsTableIdentifier & table) override
+    {
+        std::vector<String> res;
+
+        auto & sms = getStatisticsMemoryStore();
+        std::shared_lock lck(sms.mtx);
+        auto key = table.getUniqueKey();
+
+        if (!sms.entries.count(key))
+        {
+            return {};
+        }
+
+        for (auto & [k, v] : sms.entries.at(key)->data.column_stats)
+        {
+            res.emplace_back(k);
+        }
+        return res;
     }
 
     StatsCollection readSingleStats(const StatsTableIdentifier & table, const std::optional<String> & column_name_opt) override
@@ -93,21 +114,6 @@ public:
         }
     }
 
-    ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) override
-    {
-        ColumnDescVector result;
-        auto storage = getStorageByTableId(identifier);
-        auto snapshot = storage->getInMemoryMetadataPtr();
-        for (const auto & name_type_pr : snapshot->getColumns().getAll())
-        {
-            if (!Statistics::isCollectableType(name_type_pr.type))
-            {
-                continue;
-            }
-            result.emplace_back(name_type_pr);
-        }
-        return result;
-    }
 
     // note: new
     void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) override
@@ -271,7 +277,6 @@ public:
 
 private:
     StatisticsMemoryStore & getStatisticsMemoryStore() { return *statistics_memory_store; }
-    ContextPtr context;
     std::shared_ptr<StatisticsMemoryStore> statistics_memory_store;
 };
 

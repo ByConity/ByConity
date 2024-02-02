@@ -941,7 +941,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
         if (settings.read_overflow_mode_leaf == OverflowMode::THROW && settings.max_rows_to_read_leaf)
             leaf_limits = SizeLimits(settings.max_rows_to_read_leaf, 0, settings.read_overflow_mode_leaf);
 
-        auto process_part = [&](size_t part_index)
+        auto process_part = [&](size_t part_index, bool force_ensure_one_mark)
         {
             auto & part = parts[part_index];
 
@@ -961,12 +961,14 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
             if (use_sampling && (settings.enable_sample_by_range || settings.enable_deterministic_sample_by_range))
             {
+                auto ensure_one_part = settings.ensure_one_mark_in_part_when_sample_by_range || force_ensure_one_mark;
                 MarkRanges sampled_ranges = sampleByRange(
                     part,
                     ranges.ranges,
                     relative_sample_size,
                     settings.enable_deterministic_sample_by_range,
-                    settings.uniform_sample_by_range
+                    settings.uniform_sample_by_range,
+                    ensure_one_part
                     );
                 ranges.ranges = std::move(sampled_ranges);
             }
@@ -1031,7 +1033,9 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
         if (num_threads <= 1)
         {
             for (size_t part_index = 0; part_index < parts.size(); ++part_index)
-                process_part(part_index);
+            {
+                process_part(part_index, part_index == 0);
+            }
         }
         else
         {
@@ -1045,7 +1049,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                     if (thread_group)
                         CurrentThread::attachTo(thread_group);
 
-                    process_part(part_index);
+                    process_part(part_index, part_index == 0);
                 });
 
             pool.wait();
@@ -1167,18 +1171,15 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
     const MarkRanges & ranges,
     const RelativeSize & relative_sample_size,
     bool deterministic,
-    bool uniform)
+    bool uniform,
+    bool ensure_one_mark_in_part_when_sample_by_range
+    )
 {
     MarkRanges new_ranges;
     auto stable_seed = std::hash<String>{}(part->name);
 
     for (const MarkRange & range : ranges)
     {
-        // Compute sampled size
-        size_t marks_size = range.end - range.begin;
-        RelativeSize total_size = RelativeSize(marks_size);
-        UInt64 sampled_size = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * total_size + RelativeSize(1)));
-
         UInt64 random_seed = 0;
         if (deterministic)
         {
@@ -1191,6 +1192,36 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
         {
             // generate from external entropy
             random_seed = std::random_device{}();
+        }
+
+        auto random_gen = std::mt19937{random_seed};
+
+        // Compute sampled size
+        size_t marks_size = range.end - range.begin;
+        UInt64 sampled_size;
+        if (ensure_one_mark_in_part_when_sample_by_range) 
+        {
+            // old logic to ensure at least one mark is sample in this part
+            // keep it as default mode
+            RelativeSize total_size = RelativeSize(marks_size);
+            sampled_size = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * total_size + RelativeSize(1)));
+        } 
+        else 
+        {
+            // new logic will sample part
+            // and make sure that the number of rows sampled meets the expected value
+            double n = relative_sample_size.numerator();
+            double d = relative_sample_size.denominator();
+            double expected_size = n / d * marks_size;
+            auto down_cast =  static_cast<UInt64>(expected_size);
+            auto remainder = expected_size - down_cast;
+            std::uniform_real_distribution<> dis(0, 1);
+            sampled_size = down_cast + (remainder >= dis(random_gen) ? 1 : 0);
+        }
+
+        if (sampled_size == 0)
+        {
+            continue;
         }
 
         if (uniform)
@@ -1213,7 +1244,7 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
                 sliced_ranges.end(),
                 std::back_inserter(sampled_ranges),
                 sampled_ranges_size,
-                std::mt19937{random_seed});
+                random_gen);
             std::sort(sampled_ranges.begin(), sampled_ranges.end(), [](const MarkRange & lhs, const MarkRange & rhs) {
                 return lhs.begin < rhs.begin;
             });

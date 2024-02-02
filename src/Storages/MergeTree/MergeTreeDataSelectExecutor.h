@@ -234,7 +234,8 @@ public:
         const MarkRanges & ranges,
         const RelativeSize & relative_sample_size,
         bool deterministic,
-        bool uniform);
+        bool uniform,
+        bool ensure_one_mark_in_part_when_sample_by_range);
 
     static MarkRanges sliceRange(const MarkRange & range, const UInt64 & sample_size);
 

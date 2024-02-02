@@ -18,9 +18,8 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <Interpreters/Context.h>
 #include <Statistics/StatisticsBase.h>
+#include <Statistics/StatisticsCache.h>
 #include <Statistics/StatsTableIdentifier.h>
-#include <Poco/ExpireLRUCache.h>
-#include <Common/HashTable/Hash.h>
 
 namespace DB::Statistics
 {
@@ -35,7 +34,7 @@ public:
             return std::hash<UUID>()(key.first) ^ std::hash<String>()(key.second);
         }
     };
-    using CacheType = Poco::ExpireLRUCache<std::pair<UUID, String>, StatsCollection>;
+    using CacheType = StatisticsCache;
 
     static void initialize(ContextPtr context);
     // for testing

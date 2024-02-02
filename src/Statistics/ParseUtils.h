@@ -15,6 +15,7 @@
 
 #pragma once
 #include <type_traits>
+#include <DataTypes/MapHelpers.h>
 #include <Statistics/BucketBounds.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/CollectorSettings.h>
@@ -154,4 +155,23 @@ inline String getKllFuncNameWithConfig(UInt64 kll_log_k)
     }
 }
 
+// return col name that suitable to use in sql
+// 1. backQuoted when needed
+// 2. convert to map{'...'} when needed
+inline String colNameForSql(const String & col_name)
+{
+    // optimizer don't support use __map__'key' directly
+    // so workaround it with map{'key'}
+    if (isMapImplicitKey(col_name))
+    {
+        auto map_col = parseMapNameFromImplicitColName(col_name);
+        auto key_name = parseKeyNameFromImplicitColName(col_name, map_col);
+        /// Attention: key_name has been quoted, no need to add more quote
+        return fmt::format("{}{{{}}}", backQuoteIfNeed(map_col), key_name);
+    }
+    else
+    {
+        return backQuoteIfNeed(col_name);
+    }
+}
 }

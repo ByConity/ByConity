@@ -15,19 +15,20 @@
 
 #include <hive_metastore_types.h>
 #include <Catalog/Catalog.h>
-#include <Interpreters/executeQuery.h>
 #include <Interpreters/StorageID.h>
+#include <Interpreters/executeQuery.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/StatisticsCollectorObjects.h>
+#include <Statistics/StatsUdiCounter.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Statistics/TypeUtils.h>
 #include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
-#include <hive_metastore_types.h>
-#include <Statistics/StatsUdiCounter.h>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/regex.hpp>
 #include "common/types.h"
+#include "Statistics/StatisticsBase.h"
 #include "Storages/TableStatistics.h"
 
 namespace DB::Statistics
@@ -37,6 +38,7 @@ class CatalogAdaptorCnch : public CatalogAdaptor
 {
 public:
     bool hasStatsData(const StatsTableIdentifier & table) override;
+    std::vector<String> readStatsColumnsKey(const StatsTableIdentifier & table) override;
     StatsData readStatsData(const StatsTableIdentifier & table) override;
     StatsCollection readSingleStats(const StatsTableIdentifier & table, const std::optional<String> & column_name) override;
     void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) override;
@@ -56,18 +58,19 @@ public:
     UInt64 getUpdateTime() override;
     bool isTableCollectable(const StatsTableIdentifier & identifier) override;
     bool isTableAutoUpdated(const StatsTableIdentifier & table) override;
-    ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) override;
     const Settings & getSettingsRef() override { return context->getSettingsRef(); }
     static StatsData convertTableStats(const TableStatistics & table_stats);
 
-    CatalogAdaptorCnch(ContextPtr context_, Catalog::CatalogPtr catalog_) : context(context_), catalog(catalog_) { }
     UInt64 fetchAddUdiCount(const StatsTableIdentifier & table, UInt64 count) override;
     void removeUdiCount(const StatsTableIdentifier & table) override;
+
+    CatalogAdaptorCnch(ContextPtr context_, Catalog::CatalogPtr catalog_) : CatalogAdaptor(context_), catalog(catalog_)
+    {
+    }
     ~CatalogAdaptorCnch() override = default;
 
 
 private:
-    ContextPtr context;
     CatalogPtr catalog;
 };
 
@@ -76,8 +79,8 @@ bool CatalogAdaptorCnch::hasStatsData(const StatsTableIdentifier & table)
 {
     /// return whether table_stats of the corresponding table is non-empty
     auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
-    auto tags = catalog->getAvailableTableStatisticsTags(uuid_str);
-    return !tags.empty();
+    auto table_stats = catalog->getTableStatistics(uuid_str);
+    return table_stats.count(StatisticsTag::TableBasic);
 }
 
 UInt64 CatalogAdaptorCnch::fetchAddUdiCount(const StatsTableIdentifier & table, UInt64 count)
@@ -85,7 +88,7 @@ UInt64 CatalogAdaptorCnch::fetchAddUdiCount(const StatsTableIdentifier & table, 
     // this function is NOT atomic, and should be called only by daemon manager
     constexpr auto tag = StatisticsTag::UdiCounter;
     auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
-    auto stats_collection = catalog->getTableStatistics(uuid_str, {tag});
+    auto stats_collection = catalog->getTableStatistics(uuid_str);
 
     UInt64 old_count = 0;
     if (stats_collection.count(tag))
@@ -111,7 +114,10 @@ void CatalogAdaptorCnch::removeUdiCount(const StatsTableIdentifier & table)
 {
     constexpr auto tag = StatisticsTag::UdiCounter;
     auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
-    catalog->removeTableStatistics(uuid_str, {tag});
+    StatsCollection c;
+    // nullptr means delete
+    c.emplace(tag, nullptr);
+    catalog->updateTableStatistics(uuid_str, c);
 }
 
 
@@ -121,53 +127,45 @@ StatsCollection CatalogAdaptorCnch::readSingleStats(const StatsTableIdentifier &
     if (!column_name_opt.has_value())
     {
         // table stats
-        auto tags = catalog->getAvailableTableStatisticsTags(uuid_str);
-        if (!tags.empty())
-        {
-            auto stats = catalog->getTableStatistics(uuid_str, tags);
-            return stats;
-        }
+        auto stats = catalog->getTableStatistics(uuid_str);
+        return stats;
     }
     else
     {
         // column_stats
-        const auto & column_name = column_name_opt.value();
-        auto tags = catalog->getAvailableColumnStatisticsTags(uuid_str, column_name);
-        if (!tags.empty())
-        {
-            auto stats = catalog->getColumnStatistics(uuid_str, column_name, tags);
-            return stats;
-        }
+        auto column_name = column_name_opt.value();
+        auto stats = catalog->getColumnStatistics(uuid_str, column_name);
+        return stats;
     }
-    return {};
+}
+
+std::vector<String> CatalogAdaptorCnch::readStatsColumnsKey(const StatsTableIdentifier & table)
+{
+    auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
+    return catalog->getAllColumnStatisticsKey(uuid_str);
 }
 
 StatsData CatalogAdaptorCnch::readStatsData(const StatsTableIdentifier & table)
 {
     auto storage = getStorageByTableId(table);
 
-    auto columns_desc = this->getCollectableColumns(table);
-    std::vector<String> cols_name;
-    for (auto desc : columns_desc)
-        cols_name.emplace_back(desc.name);
-    StatsData result;
-
-    auto table_stats = storage->getTableStats(cols_name, context);
-    if (table_stats)
-        return convertTableStats(*table_stats);
-
-    auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
-
-    // step 1: read table stats
-    result.table_stats = readSingleStats(table, std::nullopt);
-
-    // step 2: read column stats
-    for (auto & desc : columns_desc)
+    // only for Hive: if storage has stats
+    if (storage->getName() == "HiveCluster")
     {
-        auto column_name = desc.name;
-        auto stats = readSingleStats(table, column_name);
-        result.column_stats.emplace(column_name, std::move(stats));
+        auto columns_desc = this->getAllCollectableColumns(table);
+        std::vector<String> cols_name;
+        for (auto desc : columns_desc)
+            cols_name.emplace_back(desc.name);
+        auto table_stats = storage->getTableStats(cols_name, context);
+        if (table_stats)
+            return convertTableStats(*table_stats);
     }
+
+    StatsData result;
+    auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
+    // step 1: read table stats
+    result.table_stats = catalog->getTableStatistics(uuid_str);
+    result.column_stats = catalog->getAllColumnStatistics(uuid_str);
 
     return result;
 }
@@ -189,44 +187,15 @@ void CatalogAdaptorCnch::writeStatsData(const StatsTableIdentifier & table, cons
     }
 }
 
-void CatalogAdaptorCnch::dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc)
-{
-    auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
-    for (auto & desc : cols_desc)
-    {
-        auto col_name = desc.name;
-        auto tags = catalog->getAvailableColumnStatisticsTags(uuid_str, col_name);
-        if (!tags.empty())
-        {
-            catalog->removeColumnStatistics(uuid_str, col_name, tags);
-        }
-    }
-}
-
 void CatalogAdaptorCnch::dropStatsData(const StatsTableIdentifier & table)
 {
     auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
 
     // step 1: write table stats
-    {
-        auto tags = catalog->getAvailableTableStatisticsTags(uuid_str);
-        if (!tags.empty())
-        {
-            catalog->removeTableStatistics(uuid_str, tags);
-        }
-    }
+    catalog->removeTableStatistics(uuid_str);
 
     // step 2: write column stats
-    auto columns_desc = this->getCollectableColumns(table);
-    for (auto & desc : columns_desc)
-    {
-        auto col_name = desc.name;
-        auto tags = catalog->getAvailableColumnStatisticsTags(uuid_str, col_name);
-        if (!tags.empty())
-        {
-            catalog->removeColumnStatistics(uuid_str, col_name, tags);
-        }
-    }
+    catalog->removeAllColumnStatistics(uuid_str);
 }
 void CatalogAdaptorCnch::dropStatsDataAll(const String & database_name)
 {
@@ -234,6 +203,16 @@ void CatalogAdaptorCnch::dropStatsDataAll(const String & database_name)
     for (auto & identifier : tables)
     {
         dropStatsData(identifier);
+    }
+}
+
+void CatalogAdaptorCnch::dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc)
+{
+    auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
+    for (auto & desc : cols_desc)
+    {
+        auto col_name = desc.name;
+        catalog->removeColumnStatistics(uuid_str, col_name);
     }
 }
 
@@ -356,22 +335,6 @@ bool CatalogAdaptorCnch::isTableAutoUpdated(const StatsTableIdentifier & identif
     };
 
     return auto_storage_names.count(storage_name);
-}
-
-ColumnDescVector CatalogAdaptorCnch::getCollectableColumns(const StatsTableIdentifier & identifier)
-{
-    ColumnDescVector result;
-    auto storage = getStorageByTableId(identifier);
-    auto snapshot = storage->getInMemoryMetadataPtr();
-    for (const auto & name_type_pr : snapshot->getColumns().getAll())
-    {
-        if (!Statistics::isCollectableType(name_type_pr.type))
-        {
-            continue;
-        }
-        result.emplace_back(name_type_pr);
-    }
-    return result;
 }
 
 void CatalogAdaptorCnch::invalidateClusterStatsCache(const StatsTableIdentifier & table)
