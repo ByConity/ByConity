@@ -1177,8 +1177,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             {
                 if (typeid_cast<const InterpreterSelectQueryUseOptimizer *>(&*interpreter))
                 {
+                    static std::unordered_set<int> no_fallback_error_codes = {159, 202, 209, 252, 394, 2010, 2012, 2013, 1159, 241};
                     // fallback to simple query process
-                    if (context->getSettingsRef().enable_optimizer_fallback)
+                    if (context->getSettingsRef().enable_optimizer_fallback && !no_fallback_error_codes.contains(getCurrentExceptionCode()))
                     {
                         tryLogWarningCurrentException(
                                &Poco::Logger::get("executeQuery"), "Query failed in optimizer enabled, try to fallback to simple query.");
