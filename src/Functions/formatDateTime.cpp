@@ -2193,7 +2193,7 @@ REGISTER_FUNCTION(FormatDateTime)
     factory.registerFunction<FunctionTimeFormat>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("DATE_FORMAT", FunctionFormatDateTime::name);
 
-    factory.registerFunction<FunctionFromUnixTimestamp>();
+    factory.registerFunction<FunctionFromUnixTimestamp>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("fromUnixTimestamp", "FROM_UNIXTIME");
     factory.registerFunction<FunctionFROM_UNIXTIMEAdaptive>();
 
