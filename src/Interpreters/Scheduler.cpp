@@ -396,8 +396,9 @@ std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const A
             }
             else
             {
+                SegmentTaskInstance ret = *instance;
                 pending_task_instances.for_nodes[worker].erase(instance);
-                return std::make_pair(true, *instance);
+                return std::make_pair(true, ret);
             }
         }
     }
@@ -413,8 +414,9 @@ std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const A
         }
         else
         {
+            SegmentTaskInstance ret = *no_pref;
             pending_task_instances.no_prefs.erase(no_pref);
-            return std::make_pair(true, *no_pref);
+            return std::make_pair(true, ret);
         }
     }
     return std::make_pair(false, SegmentTaskInstance(0, 0));
