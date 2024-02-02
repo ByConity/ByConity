@@ -133,6 +133,16 @@ IProcessor::Status FillingTransform::prepare()
 {
     if (!on_totals && input.isFinished() && !output.isFinished() && !has_input && !generate_suffix)
     {
+        if (has_output)
+        {
+            if (!output.canPush())
+            {
+                return Status::PortFull;
+            }
+            output.pushData(std::move(output_data));
+            has_output = false;
+        }
+
         should_insert_first = next_row < filling_row;
 
         for (size_t i = 0; i < filling_row.size(); ++i)
