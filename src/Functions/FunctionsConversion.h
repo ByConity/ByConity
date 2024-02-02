@@ -69,6 +69,7 @@
 #include <Functions/IFunctionAdaptors.h>
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionFactory.h>
 #include <Functions/DateTimeTransforms.h>
 #include <Functions/toFixedString.h>
 #include <Functions/TransformDateTime64.h>
@@ -2063,15 +2064,16 @@ public:
         /// Here, the original toDate-like functions shall be replaced with counterparts whose are built with
         /// the true value of forceAdaptive: toDateAdaptive/toDateTimeAdaptive
         if constexpr (forceAdaptive)
-            return std::make_shared<FunctionConvert>(true, context);
+            return std::make_shared<FunctionConvert>(context,true);
         if (!context)
-            return std::make_shared<FunctionConvert>(false, context);
-        return std::make_shared<FunctionConvert>(context->getSettingsRef().adaptive_type_cast, context);
+            return std::make_shared<FunctionConvert>(context, false);
+        return std::make_shared<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, context->getSettingsRef().dialect_type == DialectType::MYSQL);
     }
-    static FunctionPtr create(bool adaptive = false) { return std::make_shared<FunctionConvert>(adaptive); }
+    static FunctionPtr create(bool adaptive = false) { return std::make_shared<FunctionConvert>(nullptr, adaptive, false); }
 
-    explicit FunctionConvert(bool adaptive = false, ContextPtr context_ = nullptr) : context(context_), adaptive_conversion(adaptive)
-    {}
+    explicit FunctionConvert(ContextPtr context_ = nullptr, bool adaptive = false, bool mysql_mode_ = false) : context(context_), adaptive_conversion(adaptive), mysql_mode(mysql_mode_)
+    {
+    }
 
     String getName() const override
     {
@@ -2112,9 +2114,18 @@ public:
 
     DataTypePtr getReturnTypeImplRemovedNullable(const ColumnsWithTypeAndName & arguments) const
     {
-        FunctionArgumentDescriptors mandatory_args = {{"Value", nullptr, nullptr, nullptr}};
+        FunctionArgumentDescriptors mandatory_args;
         FunctionArgumentDescriptors optional_args;
 
+        if (std::is_same_v<Name, NameToUnixTimestamp> && mysql_mode)
+        {
+            optional_args.push_back({"Value", nullptr, nullptr, nullptr});
+        }
+        else 
+        {
+            mandatory_args.push_back({"Value", nullptr, nullptr, nullptr});
+        }
+        
         if constexpr (to_decimal)
         {
             mandatory_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
@@ -2133,6 +2144,7 @@ public:
         // toString(DateTime or DateTime64, [timezone: String])
         if ((std::is_same_v<Name, NameToString> && !arguments.empty() && (isDateTime64(arguments[0].type) || isDateTime(arguments[0].type)))
             // toUnixTimestamp(value[, timezone : String])
+            // unix_timestamp([value, timezone : String]) -- mysql mode
             || std::is_same_v<Name, NameToUnixTimestamp>
             // toDate(value[, timezone : String])
             || std::is_same_v<ToDataType, DataTypeDate> // TODO: shall we allow timestamp argument for toDate? DateTime knows nothing about timezones and this argument is ignored below.
@@ -2276,14 +2288,27 @@ public:
 private:
     ContextPtr context;
     bool adaptive_conversion = false;
+    bool mysql_mode = false;
     mutable bool checked_return_type = false;
     mutable bool to_nullable = false;
 
     ColumnPtr executeInternal(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
     {
         if (arguments.empty())
+        {
+            if (std::is_same_v<Name, NameToUnixTimestamp> && mysql_mode)
+            {
+                auto executeFunction = [&](const std::string & function_name, const ColumnsWithTypeAndName input, const DataTypePtr output_type) -> ColumnPtr {
+                    FunctionFactory::instance();
+                    auto func = FunctionFactory::instance().get(function_name, context);
+                    return func->build(input)->execute(input, output_type, input_rows_count);
+                };
+                return executeFunction("now", {}, result_type);
+            }
+
             throw Exception{"Function " + getName() + " expects at least 1 argument",
-               ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+                ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+        }
 
         if (result_type->onlyNull())
             return result_type->createColumnConstWithDefaultValue(input_rows_count);
