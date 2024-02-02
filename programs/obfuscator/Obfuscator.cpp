@@ -26,7 +26,7 @@
 #include <Formats/registerFormats.h>
 #include <Core/Block.h>
 #include <common/StringRef.h>
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 #include <common/bit_cast.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>

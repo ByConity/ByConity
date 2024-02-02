@@ -7,7 +7,7 @@
 #include <Core/ServerUUID.h>
 #include <Common/SymbolIndex.h>
 #include <Common/DNSResolver.h>
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 #include <Common/ClickHouseRevision.h>
 
 #include <Poco/Environment.h>

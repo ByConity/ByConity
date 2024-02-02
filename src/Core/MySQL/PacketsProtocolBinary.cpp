@@ -2,8 +2,8 @@
 #include <Core/MySQL/IMySQLReadPacket.h>
 #include <Core/MySQL/IMySQLWritePacket.h>
 #include <Core/MySQL/PacketsProtocolBinary.h>
-#include "common/LocalDate.h"
-#include "common/LocalDateTime.h"
+#include "Common/LocalDate.h"
+#include "Common/LocalDateTime.h"
 #include "Columns/ColumnNullable.h"
 #include "Columns/ColumnVector.h"
 #include "Core/DecimalFunctions.h"
@@ -12,7 +12,7 @@
 #include "Formats/FormatSettings.h"
 #include "IO/WriteBufferFromString.h"
 #include "MySQLUtils.h"
-#include "common/DayNum.h"
+#include "Common/DayNum.h"
 #include "common/types.h"
 
 namespace DB

@@ -17,7 +17,7 @@
 #include <AggregateFunctions/AggregateFunctionBitmapLogic.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
-#include <common/DayNum.h>
+#include <Common/DayNum.h>
 
 
 namespace DB

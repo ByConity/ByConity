@@ -30,9 +30,9 @@
 #include <type_traits>
 
 #include <Common/formatIPv6.h>
-#include <common/DateLUT.h>
-#include <common/LocalDate.h>
-#include <common/LocalDateTime.h>
+#include <Common/DateLUT.h>
+#include <Common/LocalDate.h>
+#include <Common/LocalDateTime.h>
 #include <common/StringRef.h>
 #include <common/arithmeticOverflow.h>
 

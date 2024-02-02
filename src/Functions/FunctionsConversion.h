@@ -78,7 +78,7 @@
 #include <Columns/ColumnLowCardinality.h>
 #include <Interpreters/Context.h>
 
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 
 namespace DB
 {

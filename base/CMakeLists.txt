@@ -11,6 +11,4 @@ add_subdirectory (readpassphrase)
 add_subdirectory (libbiginteger)
 add_subdirectory (metrics2)
 
-if (USE_MYSQL)
-    add_subdirectory (mysqlxx)
-endif ()
+

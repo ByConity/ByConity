@@ -30,7 +30,7 @@
 #include <Functions/IFunction.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Common/Exception.h>
-#include <common/DateLUTImpl.h>
+#include <Common/DateLUTImpl.h>
 #include <common/types.h>
 
 /// The default mode value to use for the WEEK() function

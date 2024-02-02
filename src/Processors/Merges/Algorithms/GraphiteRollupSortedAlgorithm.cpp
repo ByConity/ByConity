@@ -1,7 +1,7 @@
 #include <Processors/Merges/Algorithms/GraphiteRollupSortedAlgorithm.h>
 #include <AggregateFunctions/IAggregateFunction.h>
-#include <common/DateLUTImpl.h>
-#include <common/DateLUT.h>
+#include <Common/DateLUTImpl.h>
+#include <Common/DateLUT.h>
 
 namespace DB
 {

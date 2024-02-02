@@ -8,7 +8,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 
 namespace DB
 {

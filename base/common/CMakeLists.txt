@@ -1,8 +1,6 @@
 set (SRCS
     argsToConfig.cpp
     coverage.cpp
-    DateLUT.cpp
-    DateLUTImpl.cpp
     demangle.cpp
     getFQDNOrHostName.cpp
     getMemoryAmount.cpp

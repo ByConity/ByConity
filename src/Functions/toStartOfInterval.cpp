@@ -20,7 +20,7 @@
  */
 
 #include <common/arithmeticOverflow.h>
-#include <common/DateLUTImpl.h>
+#include <Common/DateLUTImpl.h>
 #include <Columns/ColumnsDateTime.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeDate.h>

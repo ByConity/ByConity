@@ -71,7 +71,7 @@ void registerDictionarySourceMysql(DictionarySourceFactory & factory)
 #    include <DataTypes/DataTypeString.h>
 #    include <IO/WriteBufferFromString.h>
 #    include <IO/WriteHelpers.h>
-#    include <common/LocalDateTime.h>
+#    include <Common/LocalDateTime.h>
 #    include <common/logger_useful.h>
 #    include "readInvalidateQuery.h"
 #    include <mysqlxx/Exception.h>

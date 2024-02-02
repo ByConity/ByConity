@@ -45,7 +45,7 @@
 #include <Common/NaNUtils.h>
 #include <Common/FieldVisitorToString.h>
 
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 
 

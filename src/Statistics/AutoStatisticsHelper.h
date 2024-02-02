@@ -5,7 +5,7 @@
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/CollectorSettings.h>
 #include <Statistics/StatsTableIdentifier.h>
-#include <common/DayNum.h>
+#include <Common/DayNum.h>
 
 namespace DB::Statistics::AutoStats
 {

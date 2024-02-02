@@ -37,7 +37,7 @@
 #include <Common/AllocatorWithMemoryTracking.h>
 #include <Common/Exception.h>
 #include <common/IPv4andIPv6.h>
-#include <common/DayNum.h>
+#include <Common/DayNum.h>
 #include <common/strong_typedef.h>
 
 namespace DB
