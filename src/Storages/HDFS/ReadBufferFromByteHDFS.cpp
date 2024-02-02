@@ -31,7 +31,7 @@ namespace ProfileEvents
     extern const int HdfsFileOpen;
     extern const int HdfsFileOpenMs;
     extern const int ReadBufferFromHdfsRead;
-    extern const int HDFSReadElapsedMilliseconds;
+    extern const int HDFSReadElapsedMicroseconds;
     extern const int ReadBufferFromHdfsReadBytes;
     extern const int HDFSSeek;
     extern const int HDFSSeekElapsedMicroseconds;
@@ -199,7 +199,7 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
 
         ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsRead, 1);
         ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsReadBytes, total_bytes_read);
-        ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMilliseconds, watch.elapsedMilliseconds());
+        ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMicroseconds, watch.elapsedMicroseconds());
         return total_bytes_read;
     }
 

@@ -13,7 +13,7 @@ namespace ProfileEvents
     extern const Event ReadBufferFromHdfsReadBytes;
     extern const Event ReadBufferFromHdfsReadFailed;
     extern const Event HdfsFileOpen;
-    extern const Event HDFSReadElapsedMilliseconds;
+    extern const Event HDFSReadElapsedMicroseconds;
     extern const Event HdfsGetBlkLocMicroseconds;
     extern const Event HdfsSlowNodeCount;
     extern const Event HdfsFailedNodeCount;
@@ -82,7 +82,7 @@ uint64_t HDFSRemoteFSReader::read(char* buffer, uint64_t size) {
                 size - readed);
         }
         ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsRead);
-        ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMilliseconds, watch.elapsedMilliseconds());
+        ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMicroseconds, watch.elapsedMicroseconds());
 
         if (ret > 0) {
             // Read partial data, read again

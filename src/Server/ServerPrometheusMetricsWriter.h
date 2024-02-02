@@ -39,9 +39,9 @@ namespace ProfileEvents
     /// Storage
     // const extern Event CnchReadRowsFromDiskCache;
     // const extern Event CnchReadRowsFromRemote;
-    const extern Event HDFSReadElapsedMilliseconds;
+    const extern Event HDFSReadElapsedMicroseconds;
     // const extern Event HDFSReadElapsedCpuMilliseconds;
-    const extern Event HDFSWriteElapsedMilliseconds;
+    const extern Event HDFSWriteElapsedMicroseconds;
     const extern Event ReadBufferFromHdfsRead;
     const extern Event ReadBufferFromHdfsReadBytes;
     const extern Event ReadBufferFromHdfsReadFailed;
@@ -1131,10 +1131,10 @@ private:
         // ProfileEvents::CnchReadRowsFromDiskCache,
         // ProfileEvents::CnchReadRowsFromRemote,
         ProfileEvents::ReadBufferFromHdfsReadBytes,
-        ProfileEvents::HDFSReadElapsedMilliseconds,
+        ProfileEvents::HDFSReadElapsedMicroseconds,
         // ProfileEvents::HDFSReadElapsedCpuMilliseconds,
         ProfileEvents::WriteBufferFromHdfsWriteBytes,
-        ProfileEvents::HDFSWriteElapsedMilliseconds,
+        ProfileEvents::HDFSWriteElapsedMicroseconds,
         ///About SD
         ProfileEvents::SDRequest,
         ProfileEvents::SDRequestFailed,
