@@ -95,7 +95,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
 
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
 
-    auto alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
+    TableLockHolder alter_lock;
     IntentLockPtr cnch_table_lock;
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
@@ -108,6 +108,11 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
 
         LOG_INFO(&Poco::Logger::get("InterpreterAlterQuery"), "Waiting for cnch_lock for " + table_id.database_name + "." + table_id.table_name + ".");
         cnch_table_lock = cnch_txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, table->getStorageID().database_name, table->getStorageID().table_name);
+    }
+    else
+    {
+        /// Only accquire lock for non-cnch table
+        alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
     }
 
     /// Add default database to table identifiers that we can encounter in e.g. default expressions, mutation expression, etc.
@@ -190,6 +195,9 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     {
         if (cnch_table_lock && !cnch_table_lock->isLocked())
             cnch_table_lock->lock();
+        /// Make sure cnch table also accquire lock for DDL
+        if (!alter_lock)
+            alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
         StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
         alter_commands.validate(metadata, getContext());
         alter_commands.prepare(metadata);
