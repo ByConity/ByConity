@@ -1727,6 +1727,7 @@ enum PreloadLevelSettings : UInt64
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
     M(StatisticsCachePolicy, statistics_cache_policy, StatisticsCachePolicy::Default, "Cache policy for stats command and SQLs: (default|cache|catalog)", 0) \
+    M(Bool, statistics_query_cnch_parts_for_row_count, true, "Use cnch parts instead of count(*) for row count to speed up test", 0) \
     /** Optimizer relative settings, Cost model and Estimation */ \
     M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
@@ -1851,10 +1852,11 @@ enum PreloadLevelSettings : UInt64
     /** Sample setttings */ \
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
-    M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
     M(Bool, uniform_sample_by_range, false, "Sample by range with uniform mode", 0) \
-    M(Bool, uniform_final_sample, false, "Final sample with uniform mode", 0) \
-\
+    M(Bool, ensure_one_mark_in_part_when_sample_by_range, true, "Sample by range will ensure at least a mark is sampled in each part, otherwise will do sample on parts when necessary", 0) \
+    M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
+    M(Bool, uniform_final_sample, false, "Final sample with uniform mode", 0)\
+    \
     /** clone strategy **/ \
     M(Bool, stop_clone_in_utc_time, false, "Enable stop executing clone log in utc time", 0) \
     M(UInt64, utc_time_to_stop_clone, 2, "The hour of UTC time, if current time is greater than it, clone is stopepd", 0) \

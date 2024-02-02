@@ -118,18 +118,18 @@ namespace ProfileEvents
     extern const Event UpdateTableStatisticsFailed;
     extern const Event GetTableStatisticsSuccess;
     extern const Event GetTableStatisticsFailed;
-    extern const Event GetAvailableTableStatisticsTagsSuccess;
-    extern const Event GetAvailableTableStatisticsTagsFailed;
     extern const Event RemoveTableStatisticsSuccess;
     extern const Event RemoveTableStatisticsFailed;
     extern const Event UpdateColumnStatisticsSuccess;
     extern const Event UpdateColumnStatisticsFailed;
     extern const Event GetColumnStatisticsSuccess;
     extern const Event GetColumnStatisticsFailed;
-    extern const Event GetAvailableColumnStatisticsTagsSuccess;
-    extern const Event GetAvailableColumnStatisticsTagsFailed;
+    extern const Event GetAllColumnStatisticsSuccess;
+    extern const Event GetAllColumnStatisticsFailed;
     extern const Event RemoveColumnStatisticsSuccess;
     extern const Event RemoveColumnStatisticsFailed;
+    extern const Event RemoveAllColumnStatisticsSuccess;
+    extern const Event RemoveAllColumnStatisticsFailed;
     // extern const Event UpdateSQLBindingSuccess;
     // extern const Event UpdateSQLBindingFailed;
     // extern const Event GetSQLBindingSuccess;
@@ -725,18 +725,18 @@ private:
         ProfileEvents::UpdateTableStatisticsFailed,
         ProfileEvents::GetTableStatisticsSuccess,
         ProfileEvents::GetTableStatisticsFailed,
-        ProfileEvents::GetAvailableTableStatisticsTagsSuccess,
-        ProfileEvents::GetAvailableTableStatisticsTagsFailed,
         ProfileEvents::RemoveTableStatisticsSuccess,
         ProfileEvents::RemoveTableStatisticsFailed,
         ProfileEvents::UpdateColumnStatisticsSuccess,
         ProfileEvents::UpdateColumnStatisticsFailed,
         ProfileEvents::GetColumnStatisticsSuccess,
         ProfileEvents::GetColumnStatisticsFailed,
-        ProfileEvents::GetAvailableColumnStatisticsTagsSuccess,
-        ProfileEvents::GetAvailableColumnStatisticsTagsFailed,
+        ProfileEvents::GetAllColumnStatisticsSuccess,
+        ProfileEvents::GetAllColumnStatisticsFailed,
         ProfileEvents::RemoveColumnStatisticsSuccess,
         ProfileEvents::RemoveColumnStatisticsFailed,
+        ProfileEvents::RemoveAllColumnStatisticsSuccess,
+        ProfileEvents::RemoveAllColumnStatisticsFailed,
         // ProfileEvents::UpdateSQLBindingSuccess,
         // ProfileEvents::UpdateSQLBindingFailed,
         // ProfileEvents::GetSQLBindingSuccess,

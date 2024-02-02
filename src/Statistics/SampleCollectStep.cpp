@@ -52,7 +52,7 @@ public:
 
     void generateSqls()
     {
-        auto quote_col_name = backQuoteIfNeed(col_name);
+        auto quote_col_name = colNameForSql(col_name);
         auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
         auto count_sql = fmt::format(FMT_STRING("count({})"), quote_col_name);
@@ -261,7 +261,7 @@ public:
 
     void generateSqls()
     {
-        auto quote_col_name = backQuoteIfNeed(col_name);
+        auto quote_col_name = colNameForSql(col_name);
         auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
         auto bounds_b64 = base64Encode(bucket_bounds->serialize());
@@ -370,7 +370,7 @@ String constructThirdSql(
 {
     auto data_type = decayDataType(col_desc.type);
     auto config = getColumnConfig(settings, data_type);
-    auto wrapped_col_name = getWrappedColumnName(config, backQuoteIfNeed(col_desc.name));
+    auto wrapped_col_name = getWrappedColumnName(config, colNameForSql(col_desc.name));
     auto tag_sql = [&]() -> String {
         if (bucket_bounds)
         {

@@ -32,6 +32,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/MergeTree/IMetastore.h>
 #include <Storages/StorageSnapshot.h>
+#include <Statistics/StatisticsBase.h>
 
 namespace DB::ErrorCodes
 {
@@ -47,6 +48,7 @@ extern const int METASTORE_COMMIT_CAS_FAILURE;
 extern const int METASTORE_TABLE_TDH_CAS_ERROR;
 extern const int METASTORE_ACCESS_ENTITY_CAS_ERROR;
 extern const int METASTORE_ACCESS_ENTITY_EXISTS_ERROR;
+extern const int NOT_IMPLEMENTED;
 }
 
 namespace DB::Catalog
@@ -636,7 +638,7 @@ void MetastoreProxy::clearTableMeta(const String & name_space, const String & da
     {
         batch_write.AddDelete(it->key());
     }
-    auto column_statistics_prefix = columnStatisticPrefix(name_space, uuid);
+    auto column_statistics_prefix = columnStatisticPrefixWithoutColumn(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(column_statistics_prefix); it->next(); )
     {
         batch_write.AddDelete(it->key());
@@ -990,6 +992,37 @@ Strings MetastoreProxy::getAllMutations(const String & name_space, const String 
     while(it->next())
         res.push_back(it->value());
     return res;
+}
+
+std::pair<String, String> MetastoreProxy::splitFirstKey(const String & key, const String & prefix)
+{
+    if (!key.starts_with(prefix))
+    {
+        auto err_msg = fmt::format("unexpected prefix '{}' for key '{}'", prefix, key);
+        throw Exception(err_msg, ErrorCodes::METASTORE_EXCEPTION);
+    }
+    String first_key;
+    auto iter = key.begin() + prefix.size();
+    for (; iter != key.end(); ++iter)
+    {
+        if (*iter == '\\')
+            ++iter;
+        else if (*iter == '_')
+        {
+            ++iter;
+            break;
+        }
+
+        if (iter == key.end())
+        {
+            auto err_msg = fmt::format("unexpected key '{}' with wrong escape", key);
+            throw Exception(err_msg, ErrorCodes::METASTORE_EXCEPTION);
+        }
+        auto ch = *iter;
+        first_key.push_back(ch);
+    }
+    auto postfix = key.substr(iter - key.begin());
+    return std::make_pair(first_key, postfix);
 }
 
 void MetastoreProxy::createTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data)
@@ -1816,74 +1849,73 @@ void MetastoreProxy::updateTableStatistics(
     BatchCommitRequest batch_write;
     for (const auto & [tag, statisticPtr] : data)
     {
+        auto key = tableStatisticKey(name_space, uuid, tag);
+        auto tag_key = tableStatisticTagKey(name_space, uuid, tag);
+        if (!statisticPtr)
+        {
+            batch_write.AddDelete(key);
+            batch_write.AddDelete(tag_key);
+            continue;
+        }
         Protos::TableStatistic table_statistic;
         table_statistic.set_tag(static_cast<UInt64>(tag));
         table_statistic.set_timestamp(0); // currently this is deprecated
         table_statistic.set_blob(statisticPtr->serialize());
-        batch_write.AddPut(SinglePutRequest(tableStatisticKey(name_space, uuid, tag), table_statistic.SerializeAsString()));
-        batch_write.AddPut(SinglePutRequest(tableStatisticTagKey(name_space, uuid, tag), std::to_string(static_cast<UInt64>(tag))));
+        batch_write.AddPut(SinglePutRequest(key, table_statistic.SerializeAsString()));
+        // TODO: deprecate tag
+        batch_write.AddPut(SinglePutRequest(tag_key, std::to_string(static_cast<UInt64>(tag))));
     }
 
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }
 
-std::unordered_map<StatisticsTag, StatisticsBasePtr>
-MetastoreProxy::getTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags)
-{
-    Strings keys;
-    keys.reserve(tags.size());
-    for (const auto & tag : tags)
-    {
-        keys.push_back(tableStatisticKey(name_space, uuid, tag));
-    }
-    auto values = metastore_ptr->multiGet(keys);
-    std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
-    for (const auto & value : values)
-    {
-        if (value.first.empty())
-            continue;
-        Protos::TableStatistic table_statistic;
-        table_statistic.ParseFromString(value.first);
-        StatisticsTag tag = static_cast<StatisticsTag>(table_statistic.tag());
-        TxnTimestamp ts(table_statistic.timestamp());
-        auto statisticPtr = createStatisticsBase(tag, table_statistic.blob());
-        if (statisticPtr)
-            res.emplace(tag, statisticPtr);
-    }
-    return res;
-}
-
-std::unordered_set<StatisticsTag> MetastoreProxy::getAvailableTableStatisticsTags(const String & name_space, const String & uuid)
-{
-    std::unordered_set<StatisticsTag> res;
-    auto it = metastore_ptr->getByPrefix(tableStatisticTagPrefix(name_space, uuid));
-    while (it->next())
-    {
-        res.emplace(static_cast<StatisticsTag>(std::stoull(it->value())));
-    }
-    return res;
-}
-
-void MetastoreProxy::removeTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags)
+void MetastoreProxy::removeTableStatistics(const String & name_space, const String & uuid)
 {
     BatchCommitRequest batch_write;
-    for (const auto & tag : tags)
     {
-        batch_write.AddDelete(tableStatisticKey(name_space, uuid, tag));
-        batch_write.AddDelete(tableStatisticTagKey(name_space, uuid, tag));
+        auto prefix = tableStatisticPrefix(name_space, uuid);
+        auto iter = metastore_ptr->getByPrefix(prefix);
+        while (iter->next())
+        {
+            batch_write.AddDelete(iter->key());
+        }
+    }
+    {
+        // explicit tag store will be deprecated in the future.
+        // only remove logic will be maintained
+        auto prefix = tableStatisticTagPrefix(name_space, uuid);
+        auto iter = metastore_ptr->getByPrefix(prefix);
+        while (iter->next())
+        {
+            batch_write.AddDelete(iter->key());
+        }
     }
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }
 
-void MetastoreProxy::updateColumnStatistics(
-    const String & name_space,
-    const String & uuid,
-    const String & column,
-    const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data)
-{
 
+std::unordered_map<StatisticsTag, StatisticsBasePtr> MetastoreProxy::getTableStatistics(const String & name_space, const String & uuid)
+{
+    // new version won't use tag related function
+    auto prefix = tableStatisticPrefix(name_space, uuid);
+    auto iter = metastore_ptr->getByPrefix(prefix);
+    std::unordered_map<StatisticsTag, StatisticsBasePtr> result;
+    while (iter->next())
+    {
+        Protos::TableStatistic proto;
+        proto.ParseFromString(iter->value());
+
+        auto tag = static_cast<Statistics::StatisticsTag>(proto.tag());
+        auto obj_ptr = createStatisticsBase(tag, proto.blob());
+        result.emplace(tag, std::move(obj_ptr));
+    }
+    return result;
+}
+
+void MetastoreProxy::updateColumnStatistics(const String & name_space, const String & uuid, const String & column, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data)
+{
     BatchCommitRequest batch_write;
     for (const auto & [tag, statisticPtr] : data)
     {
@@ -1893,6 +1925,8 @@ void MetastoreProxy::updateColumnStatistics(
         column_statistic.set_column(column);
         column_statistic.set_blob(statisticPtr->serialize());
         batch_write.AddPut(SinglePutRequest(columnStatisticKey(name_space, uuid, column, tag), column_statistic.SerializeAsString()));
+        // TODO: in future should deprecate it.
+        // TODO: currently keep it just for front&back-compatibility
         batch_write.AddPut(SinglePutRequest(columnStatisticTagKey(name_space, uuid, column, tag), std::to_string(static_cast<UInt64>(tag))));
     }
 
@@ -1900,53 +1934,110 @@ void MetastoreProxy::updateColumnStatistics(
     metastore_ptr->batchWrite(batch_write, resp);
 }
 
-std::unordered_map<StatisticsTag, StatisticsBasePtr> MetastoreProxy::getColumnStatistics(
-    const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
+
+std::unordered_map<StatisticsTag, StatisticsBasePtr>
+MetastoreProxy::getColumnStatistics(const String & name_space, const String & uuid, const String & column)
 {
-    Strings keys;
-    keys.reserve(tags.size());
-    for (const auto & tag : tags)
-    {
-        keys.push_back(columnStatisticKey(name_space, uuid, column, tag));
-    }
-    auto values = metastore_ptr->multiGet(keys);
+    auto prefix = columnStatisticPrefix(name_space, uuid, column);
+    auto iter = metastore_ptr->getByPrefix(prefix);
     std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
-    for (const auto & value : values)
+    while (iter->next())
     {
-        if (value.first.empty())
+        if (iter->value().empty())
             continue;
         Protos::ColumnStatistic column_statistic;
-        column_statistic.ParseFromString(value.first);
+        column_statistic.ParseFromString(iter->value());
         StatisticsTag tag = static_cast<StatisticsTag>(column_statistic.tag());
         TxnTimestamp ts(column_statistic.timestamp());
         auto statisticPtr = createStatisticsBase(tag, column_statistic.blob());
         if (statisticPtr)
             res.emplace(tag, statisticPtr);
     }
-
     return res;
 }
 
-std::unordered_set<StatisticsTag>
-MetastoreProxy::getAvailableColumnStatisticsTags(const String & name_space, const String & uuid, const String & column)
+
+std::unordered_map<String, std::unordered_map<StatisticsTag, StatisticsBasePtr>>
+MetastoreProxy::getAllColumnStatistics(const String & name_space, const String & uuid)
 {
-    std::unordered_set<StatisticsTag> res;
-    auto it = metastore_ptr->getByPrefix(columnStatisticTagPrefix(name_space, uuid, column));
-    while (it->next())
+    auto prefix = columnStatisticPrefixWithoutColumn(name_space, uuid);
+    auto iter = metastore_ptr->getByPrefix(prefix);
+    std::unordered_map<String, std::unordered_map<StatisticsTag, StatisticsBasePtr>> res;
+    while (iter->next())
     {
-        res.emplace(static_cast<StatisticsTag>(std::stoull(it->value())));
+        if (iter->value().empty())
+            continue;
+        auto [column, postfix] = splitFirstKey(iter->key(), prefix);
+        Protos::ColumnStatistic column_statistic;
+        column_statistic.ParseFromString(iter->value());
+        StatisticsTag tag = static_cast<StatisticsTag>(column_statistic.tag());
+        auto statisticPtr = createStatisticsBase(tag, column_statistic.blob());
+        res[column].emplace(tag, statisticPtr);
     }
     return res;
 }
 
-void MetastoreProxy::removeColumnStatistics(
-    const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
+
+std::vector<String> MetastoreProxy::getAllColumnStatisticsKey(const String & name_space, const String & uuid)
+{
+    auto prefix = columnStatisticPrefixWithoutColumn(name_space, uuid);
+    auto iter = metastore_ptr->getByPrefix(prefix);
+    std::unordered_set<String> res;
+    while (iter->next())
+    {
+        if (iter->value().empty())
+            continue;
+        auto [column, postfix] = splitFirstKey(iter->key(), prefix);
+        if (column.empty())
+            continue;
+        res.emplace(column);
+    }
+    return std::vector(res.begin(), res.end());
+}
+
+void MetastoreProxy::removeColumnStatistics(const String & name_space, const String & uuid, const String & column)
 {
     BatchCommitRequest batch_write;
-    for (const auto & tag : tags)
     {
-        batch_write.AddDelete(columnStatisticKey(name_space, uuid, column, tag));
-        batch_write.AddDelete(columnStatisticTagKey(name_space, uuid, column, tag));
+        auto prefix = columnStatisticPrefix(name_space, uuid, column);
+        auto iter = metastore_ptr->getByPrefix(prefix);
+        while (iter->next())
+        {
+            batch_write.AddDelete(iter->key());
+        }
+    }
+    {
+        // TODO: explicit tag store will be deprecated in the future.
+        auto prefix = columnStatisticTagPrefix(name_space, uuid, column);
+        auto iter = metastore_ptr->getByPrefix(prefix);
+        while (iter->next())
+        {
+            batch_write.AddDelete(iter->key());
+        }
+    }
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
+void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const String & uuid)
+{
+    BatchCommitRequest batch_write;
+    {
+        auto prefix = columnStatisticPrefixWithoutColumn(name_space, uuid);
+        auto iter = metastore_ptr->getByPrefix(prefix);
+        while (iter->next())
+        {
+            batch_write.AddDelete(iter->key());
+        }
+    }
+    {
+        // TODO: explicit tag store will be deprecated in the future.
+        auto prefix = columnStatisticTagPrefixWithoutColumn(name_space, uuid);
+        auto iter = metastore_ptr->getByPrefix(prefix);
+        while (iter->next())
+        {
+            batch_write.AddDelete(iter->key());
+        }
     }
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);

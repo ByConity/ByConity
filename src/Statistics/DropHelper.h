@@ -23,7 +23,5 @@ void dropStatsColumns(
     StatisticsCachePolicy cache_policy,
     bool throw_exception);
 
-bool shouldDrop(const StoragePtr& ptr);
-
 }
 

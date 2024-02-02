@@ -18,10 +18,12 @@
 #include <fstream>
 #include <map>
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <DataTypes/MapHelpers.h>
 #include <Interpreters/InterpreterShowStatsQuery.h>
 #include <Optimizer/Dump/DDLDumper.h>
 #include <Optimizer/Dump/StatsLoader.h>
 #include <Parsers/ASTStatsQuery.h>
+#include <Statistics/AutoStatisticsHelper.h>
 #include <Statistics/CachedStatsProxy.h>
 #include <Statistics/FormattedOutput.h>
 #include <Statistics/StatisticsCollector.h>
@@ -29,13 +31,9 @@
 #include <Statistics/StatsTableBasic.h>
 #include <Statistics/TypeUtils.h>
 #include <Statistics/serde_extend.hpp>
+#include <Storages/StorageMaterializedView.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Timestamp.h>
-#include <Storages/StorageMaterializedView.h>
-#include "Core/Block.h"
-#include "Core/Types.h"
-#include "Core/UUID.h"
-#include "Statistics/AutoStatisticsHelper.h"
 
 namespace DB
 {
@@ -67,17 +65,16 @@ std::vector<FormattedOutputData> getTableFormattedOutput(
 {
     std::vector<FormattedOutputData> results;
     StatisticsCollector collector_impl(context, catalog, table_info, collector_settings);
-    ColumnDescVector cols_desc;
     if (column_names.empty())
     {
-        cols_desc = catalog->getCollectableColumns(table_info);
+        collector_impl.readAllFromCatalog();
     }
     else
     {
-        cols_desc = filterCollectableColumns(catalog->getCollectableColumns(table_info), column_names, true);
+        auto cols_desc = catalog->filterCollectableColumns(table_info, column_names, true);
+        collector_impl.readFromCatalogImpl(cols_desc);
     }
 
-    collector_impl.readFromCatalogImpl(cols_desc);
 
     auto plannode_stats_opt = collector_impl.toPlanNodeStatistics();
     if (!plannode_stats_opt.has_value())
@@ -96,11 +93,13 @@ std::vector<FormattedOutputData> getTableFormattedOutput(
     }
 
     auto symbols = plannode_stats->getSymbolStatistics();
+    auto cols_desc = catalog->getAllCollectableColumns(table_info);
     for (auto & col : cols_desc)
     {
         auto symbol_iter = symbols.find(col.name);
         if (symbol_iter == symbols.end())
         {
+            // TODO: should we output empty columns? to ensure no stats is correctly handled
             continue;
         }
         auto & symbol_stats = symbol_iter->second;
@@ -366,7 +365,7 @@ BlocksList getColumnsFormattedOutput(
 
     if (!target_columns.empty())
     {
-        auto cols_desc = filterCollectableColumns(catalog->getCollectableColumns(table_info), target_columns, true);
+        auto cols_desc = catalog->filterCollectableColumns(table_info, target_columns, true);
         collector_impl.readFromCatalog(target_columns);
     }
     else
@@ -388,7 +387,8 @@ BlocksList getColumnsFormattedOutput(
         return {};
     }
 
-    auto cols_desc = catalog->getCollectableColumns(table_info);
+    auto cols_desc = catalog->getAllCollectableColumns(table_info);
+
     for (auto & col_desc : cols_desc)
     {
         auto col_name = col_desc.name;

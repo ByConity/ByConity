@@ -1,4 +1,7 @@
 #include <Statistics/CollectTarget.h>
+#include "DataTypes/DataTypeMap.h"
+#include "DataTypes/IDataType.h"
+#include "Statistics/StatsTableIdentifier.h"
 
 namespace DB::Statistics
 {
@@ -26,9 +29,11 @@ void CollectTarget::init(const ContextPtr & context, const std::vector<String> &
 
     implicit_all_columns = columns_name.empty();
     if (implicit_all_columns)
-        columns_desc = catalog->getCollectableColumns(table_identifier);
+    {
+        columns_desc = catalog->getAllCollectableColumns(table_identifier);
+    }
     else
-        columns_desc = filterCollectableColumns(catalog->getCollectableColumns(table_identifier), columns_name);
+        columns_desc = catalog->filterCollectableColumns(table_identifier, columns_name);
 }
 
 }

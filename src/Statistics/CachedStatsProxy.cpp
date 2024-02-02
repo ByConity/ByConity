@@ -15,6 +15,7 @@
 
 #include <Statistics/CacheManager.h>
 #include <Statistics/CachedStatsProxy.h>
+#include <Statistics/StatisticsBase.h>
 #include <Statistics/TypeUtils.h>
 #include <Poco/SharedPtr.h>
 
@@ -28,8 +29,7 @@ public:
     CachedStatsProxyDirectImpl(const CatalogAdaptorPtr & catalog_) : catalog(catalog_) { }
     StatsData get(const StatsTableIdentifier & table_id) override
     {
-        auto columns = catalog->getCollectableColumns(table_id);
-        return get(table_id, true, columns);
+        return catalog->readStatsData(table_id);
     }
 
     StatsData get(const StatsTableIdentifier & table_id, bool table_info, const ColumnDescVector & columns) override
@@ -87,15 +87,14 @@ private:
 template <bool cache_only>
 StatsData CachedStatsProxyImpl<cache_only>::get(const StatsTableIdentifier & table_id)
 {
-    auto columns = catalog->getCollectableColumns(table_id);
+    // we must visit the real catalog to get which columns should be visited
+    // this use prefix scan and can be slow
+    // since it is only used for show stats <table>/all
+    // it should be fine.
+    auto columns = catalog->getAllCollectableColumns(table_id);
     return get(table_id, true, columns);
 }
 
-template <typename T, typename... Args>
-static Poco::SharedPtr<T> makePocoShared(Args &&... args)
-{
-    return Poco::SharedPtr<T>(new T(std::forward<Args>(args)...));
-}
 
 template <bool cache_only>
 StatsData CachedStatsProxyImpl<cache_only>::get(const StatsTableIdentifier & table_id, bool table_info, const ColumnDescVector & columns)
@@ -116,22 +115,18 @@ StatsData CachedStatsProxyImpl<cache_only>::get(const StatsTableIdentifier & tab
     {
         // collect table stats
         auto col_name = ""; // empty string represent table info
-        auto key = std::make_pair(table_id.getUniqueKey(), col_name);
-        auto item_ptr = cache.get(key);
+        auto item_ptr = cache.get(table_id.getUniqueKey(), col_name);
         if (!item_ptr)
         {
             if constexpr (cache_only)
             {
-                item_ptr = makePocoShared<StatsCollection>();
+                item_ptr = std::make_shared<StatsCollection>();
             }
             else
             {
                 fetch_data();
-                item_ptr = makePocoShared<StatsCollection>(all_stats_opt.value().table_stats);
-                // SharedPtr is Poco's implementation of a shared pointer and
-                // it will only free the memory when the counter reaches 0
-                // coverity[double_free]
-                cache.update(key, item_ptr);
+                item_ptr = std::make_shared<StatsCollection>(all_stats_opt.value().table_stats);
+                cache.update(table_id.getUniqueKey(), col_name, item_ptr);
             }
         }
         result.table_stats = *item_ptr;
@@ -140,27 +135,26 @@ StatsData CachedStatsProxyImpl<cache_only>::get(const StatsTableIdentifier & tab
     for (auto & pr : columns)
     {
         auto & col_name = pr.name;
-        auto key = std::make_pair(table_id.getUniqueKey(), col_name);
-        auto item_ptr = cache.get(key);
+        auto item_ptr = cache.get(table_id.getUniqueKey(), col_name);
 
         if (!item_ptr)
         {
             if constexpr (cache_only)
             {
-                item_ptr = makePocoShared<StatsCollection>();
+                item_ptr = std::make_shared<StatsCollection>();
             }
             else
             {
                 fetch_data();
                 if (all_stats_opt.value().column_stats.count(col_name))
                 {
-                    item_ptr = makePocoShared<StatsCollection>(all_stats_opt.value().column_stats.at(col_name));
+                    item_ptr = std::make_shared<StatsCollection>(all_stats_opt.value().column_stats.at(col_name));
                 }
                 else
                 {
-                    item_ptr = makePocoShared<StatsCollection>();
+                    item_ptr = std::make_shared<StatsCollection>();
                 }
-                cache.update(key, item_ptr);
+                cache.update(table_id.getUniqueKey(), col_name, item_ptr);
             }
         }
         // SharedPtr is Poco's implementation of a shared pointer and

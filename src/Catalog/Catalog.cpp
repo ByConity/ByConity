@@ -85,18 +85,18 @@ namespace ProfileEvents
     extern const Event UpdateTableStatisticsFailed;
     extern const Event GetTableStatisticsSuccess;
     extern const Event GetTableStatisticsFailed;
-    extern const Event GetAvailableTableStatisticsTagsSuccess;
-    extern const Event GetAvailableTableStatisticsTagsFailed;
     extern const Event RemoveTableStatisticsSuccess;
     extern const Event RemoveTableStatisticsFailed;
     extern const Event UpdateColumnStatisticsSuccess;
     extern const Event UpdateColumnStatisticsFailed;
     extern const Event GetColumnStatisticsSuccess;
     extern const Event GetColumnStatisticsFailed;
-    extern const Event GetAvailableColumnStatisticsTagsSuccess;
-    extern const Event GetAvailableColumnStatisticsTagsFailed;
+    extern const Event GetAllColumnStatisticsSuccess;
+    extern const Event GetAllColumnStatisticsFailed;
     extern const Event RemoveColumnStatisticsSuccess;
     extern const Event RemoveColumnStatisticsFailed;
+    extern const Event RemoveAllColumnStatisticsSuccess;
+    extern const Event RemoveAllColumnStatisticsFailed;
     extern const Event UpdateSQLBindingSuccess;
     extern const Event UpdateSQLBindingFailed;
     extern const Event GetSQLBindingSuccess;
@@ -5574,31 +5574,20 @@ namespace Catalog
             ProfileEvents::UpdateTableStatisticsFailed);
     }
 
-    std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    Catalog::getTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags)
+    std::unordered_map<StatisticsTag, StatisticsBasePtr> Catalog::getTableStatistics(const String & uuid)
     {
         std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
         runWithMetricSupport(
-            [&] { res = meta_proxy->getTableStatistics(name_space, uuid, tags); },
+            [&] { res = meta_proxy->getTableStatistics(name_space, uuid); },
             ProfileEvents::GetTableStatisticsSuccess,
             ProfileEvents::GetTableStatisticsFailed);
         return res;
     }
 
-    std::unordered_set<StatisticsTag> Catalog::getAvailableTableStatisticsTags(const String & uuid)
-    {
-        std::unordered_set<StatisticsTag> res;
-        runWithMetricSupport(
-            [&] { res = meta_proxy->getAvailableTableStatisticsTags(name_space, uuid); },
-            ProfileEvents::GetAvailableTableStatisticsTagsSuccess,
-            ProfileEvents::GetAvailableTableStatisticsTagsFailed);
-        return res;
-    }
-
-    void Catalog::removeTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags)
+    void Catalog::removeTableStatistics(const String & uuid)
     {
         runWithMetricSupport(
-            [&] { meta_proxy->removeTableStatistics(name_space, uuid, tags); },
+            [&] { meta_proxy->removeTableStatistics(name_space, uuid); },
             ProfileEvents::RemoveTableStatisticsSuccess,
             ProfileEvents::RemoveTableStatisticsFailed);
     }
@@ -5612,33 +5601,51 @@ namespace Catalog
             ProfileEvents::UpdateColumnStatisticsFailed);
     }
 
-    std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    Catalog::getColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
+    std::unordered_map<StatisticsTag, StatisticsBasePtr> Catalog::getColumnStatistics(const String & uuid, const String & column)
     {
         std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
         runWithMetricSupport(
-            [&] { res = meta_proxy->getColumnStatistics(name_space, uuid, column, tags); },
+            [&] { res = meta_proxy->getColumnStatistics(name_space, uuid, column); },
             ProfileEvents::GetColumnStatisticsSuccess,
             ProfileEvents::GetColumnStatisticsFailed);
         return res;
     }
 
-    std::unordered_set<StatisticsTag> Catalog::getAvailableColumnStatisticsTags(const String & uuid, const String & column)
+    std::unordered_map<String, std::unordered_map<StatisticsTag, StatisticsBasePtr>> Catalog::getAllColumnStatistics(const String & uuid)
     {
-        std::unordered_set<StatisticsTag> res;
+        std::unordered_map<String, std::unordered_map<StatisticsTag, StatisticsBasePtr>> res;
         runWithMetricSupport(
-            [&] { res = meta_proxy->getAvailableColumnStatisticsTags(name_space, uuid, column); },
-            ProfileEvents::GetAvailableColumnStatisticsTagsSuccess,
-            ProfileEvents::GetAvailableColumnStatisticsTagsFailed);
+            [&] { res = meta_proxy->getAllColumnStatistics(name_space, uuid); },
+            ProfileEvents::GetAllColumnStatisticsSuccess,
+            ProfileEvents::GetAllColumnStatisticsFailed);
         return res;
     }
 
-    void Catalog::removeColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
+    std::vector<String> Catalog::getAllColumnStatisticsKey(const String & uuid)
+    {
+        std::vector<String> res;
+        // use same profile events with getAllColumnStatistics
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getAllColumnStatisticsKey(name_space, uuid); },
+            ProfileEvents::GetAllColumnStatisticsSuccess,
+            ProfileEvents::GetAllColumnStatisticsFailed);
+        return res;
+    }
+
+    void Catalog::removeColumnStatistics(const String & uuid, const String & column)
     {
         runWithMetricSupport(
-            [&] { meta_proxy->removeColumnStatistics(name_space, uuid, column, tags); },
+            [&] { meta_proxy->removeColumnStatistics(name_space, uuid, column); },
             ProfileEvents::RemoveColumnStatisticsSuccess,
             ProfileEvents::RemoveColumnStatisticsFailed);
+    }
+
+    void Catalog::removeAllColumnStatistics(const String & uuid)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->removeAllColumnStatistics(name_space, uuid); },
+            ProfileEvents::RemoveAllColumnStatisticsSuccess,
+            ProfileEvents::RemoveAllColumnStatisticsFailed);
     }
 
     void Catalog::updateSQLBinding(const SQLBindingItemPtr data)

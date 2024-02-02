@@ -80,13 +80,13 @@ void StatisticsCollector::writeToCatalog()
 
 void StatisticsCollector::readAllFromCatalog()
 {
-    auto cols = catalog->getCollectableColumns(table_info);
+    auto cols = catalog->getAllCollectableColumns(table_info);
     readFromCatalogImpl(cols);
 }
 
 void StatisticsCollector::readFromCatalog(const std::vector<String> & cols_name)
 {
-    auto cols_desc = filterCollectableColumns(catalog->getCollectableColumns(table_info), cols_name);
+    auto cols_desc = catalog->filterCollectableColumns(table_info, cols_name);
     this->readFromCatalogImpl(cols_desc);
 }
 

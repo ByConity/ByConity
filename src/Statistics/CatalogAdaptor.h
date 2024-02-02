@@ -27,8 +27,12 @@ namespace DB::Statistics
 class CatalogAdaptor
 {
 public:
+    explicit CatalogAdaptor(ContextPtr context_) : context(context_)
+    {
+    }
     virtual bool hasStatsData(const StatsTableIdentifier & table) = 0;
     virtual StatsData readStatsData(const StatsTableIdentifier & table) = 0;
+    virtual std::vector<String> readStatsColumnsKey(const StatsTableIdentifier & table) = 0;
     virtual StatsCollection readSingleStats(const StatsTableIdentifier & table, const std::optional<String> & column_name) = 0;
     virtual void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) = 0;
 
@@ -41,17 +45,24 @@ public:
     virtual void invalidateServerStatsCache(const StatsTableIdentifier & table) = 0;
     virtual void invalidateAllServerStatsCache() = 0;
 
+    // fast way to query row count
+    std::optional<UInt64> queryRowCount(const StatsTableIdentifier & top_storage);
+
     virtual std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) = 0;
     virtual std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table) = 0;
     virtual std::optional<StatsTableIdentifier> getTableIdByUUID(const UUID & uuid) = 0;
     virtual StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) = 0;
     virtual StoragePtr tryGetStorageByUUID(const UUID & uuid) = 0;
     virtual UInt64 getUpdateTime() = 0;
-    virtual ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) = 0;
+    ColumnDescVector getAllCollectableColumns(const StatsTableIdentifier & identifier);
     virtual const Settings & getSettingsRef() = 0;
 
     virtual UInt64 fetchAddUdiCount(const StatsTableIdentifier & table, UInt64 count) = 0;
     virtual void removeUdiCount(const StatsTableIdentifier & table) = 0;
+
+    ColumnDescVector filterCollectableColumns(
+        const StatsTableIdentifier & table, const std::vector<String> & target_columns, bool exception_on_unsupported = false);
+
 
     virtual bool isTableCollectable(const StatsTableIdentifier & table)
     {
@@ -67,6 +78,9 @@ public:
 
     virtual void checkHealth(bool is_write) { (void)is_write; }
     virtual ~CatalogAdaptor() = default;
+
+protected:
+    ContextPtr context;
 };
 
 
