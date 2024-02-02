@@ -15,7 +15,7 @@
 #include <Interpreters/castColumn.h>
 
 #include <Common/typeid_cast.h>
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 
 #include <array>
 

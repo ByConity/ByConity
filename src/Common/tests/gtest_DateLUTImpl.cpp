@@ -19,8 +19,8 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <common/DateLUT.h>
-#include <common/DateLUTImpl.h>
+#include <Common/DateLUT.h>
+#include <Common/DateLUTImpl.h>
 
 #include <gtest/gtest.h>
 

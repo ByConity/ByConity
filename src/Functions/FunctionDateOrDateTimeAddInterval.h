@@ -20,7 +20,7 @@
  */
 
 #pragma once
-#include <common/DateLUTImpl.h>
+#include <Common/DateLUTImpl.h>
 
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDate32.h>

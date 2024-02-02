@@ -21,9 +21,9 @@
 
 #pragma once
 
-#include "DayNum.h"
-#include "defines.h"
-#include "types.h"
+#include <Common/DayNum.h>
+#include <common/defines.h>
+#include <common/types.h>
 
 #include <ctime>
 #include <cassert>

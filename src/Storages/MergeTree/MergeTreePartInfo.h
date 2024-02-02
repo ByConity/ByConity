@@ -25,7 +25,7 @@
 #include <tuple>
 #include <vector>
 #include <common/types.h>
-#include <common/DayNum.h>
+#include <Common/DayNum.h>
 #include <Core/Names.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/IStorage.h>

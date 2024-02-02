@@ -29,9 +29,9 @@
 
 #include <pcg-random/pcg_random.hpp>
 
-#include <common/DateLUT.h>
-#include <common/LocalDate.h>
-#include <common/LocalDateTime.h>
+#include <Common/DateLUT.h>
+#include <Common/LocalDate.h>
+#include <Common/LocalDateTime.h>
 #include <common/find_symbols.h>
 #include <common/StringRef.h>
 #include <common/DecomposedFloat.h>

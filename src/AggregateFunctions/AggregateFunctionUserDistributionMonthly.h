@@ -17,7 +17,7 @@
 
 #include <AggregateFunctions/AggregateFunctionUserDistributionCommon.h>
 #include <string>
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 
 
 namespace DB

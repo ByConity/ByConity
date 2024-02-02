@@ -10,10 +10,10 @@
 
 #include <common/preciseExp10.h>
 #include <common/types.h>
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 
 #include <mysqlxx/Types.h>
-#include <common/LocalDateTime.h>
+#include <Common/LocalDateTime.h>
 
 
 namespace mysqlxx

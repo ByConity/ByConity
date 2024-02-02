@@ -24,8 +24,8 @@
 #include <string>
 #include <iomanip>
 #include <exception>
-#include <common/DateLUT.h>
-#include <common/LocalDate.h>
+#include <Common/DateLUT.h>
+#include <Common/LocalDate.h>
 
 
 /** Stores calendar date and time in broken-down form.

@@ -28,7 +28,7 @@
 #include <DataStreams/ITTLAlgorithm.h>
 #include <DataStreams/TTLDeleteAlgorithm.h>
 
-#include <common/DateLUT.h>
+#include <Common/DateLUT.h>
 
 namespace DB
 {
