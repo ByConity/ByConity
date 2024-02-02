@@ -41,6 +41,12 @@ void RemoveRedundantSort::rewrite(QueryPlan & plan, ContextMutablePtr context) c
     plan.update(result);
 }
 
+PlanNodePtr RedundantSortVisitor::visitPlanNode(PlanNodeBase & node, RedundantSortContext & sort_context)
+{
+    sort_context.can_sort_be_removed = false;
+    return SimplePlanRewriter::visitPlanNode(node, sort_context);
+}
+
 PlanNodePtr RedundantSortVisitor::processChildren(PlanNodeBase & node, RedundantSortContext & sort_context)
 {
     if (node.getChildren().empty())
@@ -138,18 +144,6 @@ PlanNodePtr RedundantSortVisitor::visitExceptNode(ExceptNode & node, RedundantSo
 {
     sort_context.can_sort_be_removed = true;
     return processChildren(node, sort_context);
-}
-
-PlanNodePtr RedundantSortVisitor::visitLimitNode(LimitNode & node, RedundantSortContext & sort_context)
-{
-    sort_context.can_sort_be_removed = false;
-    return visitPlanNode(node, sort_context);
-}
-
-PlanNodePtr RedundantSortVisitor::visitLimitByNode(LimitByNode & node, RedundantSortContext & sort_context)
-{
-    sort_context.can_sort_be_removed = false;
-    return visitPlanNode(node, sort_context);
 }
 
 PlanNodePtr RedundantSortVisitor::visitSortingNode(SortingNode & node, RedundantSortContext & sort_context)
