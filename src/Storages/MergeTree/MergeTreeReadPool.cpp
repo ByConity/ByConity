@@ -112,6 +112,7 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
 
     auto & thread_task = thread_tasks.parts_and_ranges.back();
     const auto part_idx = thread_task.part_idx;
+    const auto all_mark_ranges = thread_task.ranges;
 
     auto & part = parts_with_idx[part_idx];
     auto & marks_in_part = thread_tasks.sum_marks_in_parts.back();
@@ -179,7 +180,7 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
     return std::make_unique<MergeTreeReadTask>(
         part.data_part, part.delete_bitmap, ranges_to_get_from_part, part.part_index_in_query, ordered_names,
         per_part_params[part_idx].column_name_set, per_part_params[part_idx].task_columns,
-        prewhere_info && prewhere_info->remove_prewhere_column, per_part_params[part_idx].should_reorder, std::move(curr_task_size_predictor));
+        prewhere_info && prewhere_info->remove_prewhere_column, per_part_params[part_idx].should_reorder, std::move(curr_task_size_predictor), all_mark_ranges);
 }
 
 Block MergeTreeReadPool::getHeader() const

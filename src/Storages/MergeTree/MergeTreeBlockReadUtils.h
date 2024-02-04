@@ -75,8 +75,8 @@ struct MergeTreeReadTask
     MergeTreeMetaBase::DataPartPtr data_part;
     /// used to filter out deleted rows from part, could be nullptr if no deleted rows
     ImmutableDeleteBitmapPtr delete_bitmap;
-    /// Ranges to read from `data_part`.
-    MarkRanges mark_ranges;
+    /// Ranges to batch read once from `data_part`.
+    MarkRanges mark_ranges_once_read;
     /// for virtual `part_index` virtual column
     size_t part_index_in_query;
     /// ordered list of column names used in this query, allows returning blocks with consistent ordering
@@ -95,21 +95,23 @@ struct MergeTreeReadTask
     MergeTreeRangeReader range_reader;
     MergeTreeRangeReader pre_range_reader;
     MergeTreeRangeReaderLM * msr_range_reader = nullptr;
+    /// Ranges to total read, which will be used for to calc buffer size and disk-cache caching data ranges
+    MarkRanges mark_ranges_total_read;
 
     bool isFinished() const
     {
         if (!msr_range_reader)
-            return mark_ranges.empty() && range_reader.isCurrentRangeFinished();
+            return mark_ranges_once_read.empty() && range_reader.isCurrentRangeFinished();
         else
-            return mark_ranges.empty() && msr_range_reader->isCurrentRangeFinished();
+            return mark_ranges_once_read.empty() && msr_range_reader->isCurrentRangeFinished();
     }
 
     MergeTreeReadTask(
-        const MergeTreeMetaBase::DataPartPtr & data_part_, ImmutableDeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
+        const MergeTreeMetaBase::DataPartPtr & data_part_, ImmutableDeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_once_read_, const size_t part_index_in_query_,
         const Names & ordered_names_, const NameSet & column_name_set_,
         const MergeTreeReadTaskColumns & task_columns_,
         bool remove_prewhere_column_, bool should_reorder_,
-        MergeTreeBlockSizePredictorPtr && size_predictor_);
+        MergeTreeBlockSizePredictorPtr && size_predictor_, const MarkRanges & mark_ranges_total_read_);
 
     virtual ~MergeTreeReadTask();
 };
