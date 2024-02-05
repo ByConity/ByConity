@@ -155,7 +155,7 @@ void RuntimeFilterManager::removeQuery(const String & query_id)
 void RuntimeFilterManager::addDynamicValue(
     const String & query_id, RuntimeFilterId filter_id, DynamicData && dynamic_value, UInt32 ref_segment)
 {
-    // std::cerr <<" addDynamicValue:" << filter_id << " " << dynamic_value.dump() << " \n";
+    LOG_TRACE(&Poco::Logger::get("RuntimeFilterManager"), "addDynamicValue: {}, {}", filter_id, dynamic_value.dump());
     complete_runtime_filters
         .compute(
             makeKey(query_id, filter_id),

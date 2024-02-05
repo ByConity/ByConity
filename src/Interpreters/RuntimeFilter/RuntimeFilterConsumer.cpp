@@ -60,7 +60,7 @@ void RuntimeFilterConsumer::addFinishRuntimeFilter(RuntimeFilterData && data, bo
                     {
                         DynamicData local_data;
                         local_data.is_local = true;
-                        local_data.bypass = local_data.bypass;
+                        local_data.bypass = dynamic_data.bypass;
                         RuntimeFilterManager::getInstance().addDynamicValue(query_id, rf.second.id, std::move(local_data), 1);
                     }
                 }

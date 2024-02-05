@@ -228,7 +228,14 @@ void RuntimeFilterVal::serialize(WriteBuffer & buf) const
 
 String RuntimeFilterVal::dump() const
 {
-    return "is_bf:" + std::string(is_bf ? "true" : "false");
+    std::stringstream ss;
+    if (bloom_filter)
+        ss << "bloom filter";
+    else if (values_set)
+        ss << "values set";
+    else
+        ss << "empty";
+    return ss.str();
 }
 
 void RuntimeFilterData::deserialize(ReadBuffer & buf)
