@@ -79,18 +79,18 @@ TaskResult IScheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segmen
 {
     TaskResult res;
     sendResource(plan_segment_ptr);
+    auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.is_source));
     if (query_context->getSettingsRef().bsp_mode)
     {
         for (const auto & output : plan_segment_ptr->getPlanSegmentOutputs())
         {
             query_context->getExchangeDataTracker()->registerExchange(
-                query_context->getCurrentQueryId(), output->getExchangeId(), plan_segment_ptr->getParallelSize());
+                query_context->getCurrentQueryId(), output->getExchangeId(), selector_result.first->second.worker_nodes.size());
         }
     }
-    auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.is_source));
     dag_graph_ptr->scheduled_segments.emplace(task.task_id);
     auto & selector_info = selector_result.first->second;
-    dag_graph_ptr->segment_paralle_size_map.emplace(task.task_id, selector_info.worker_nodes.size());
+    dag_graph_ptr->segment_paralle_size_map[task.task_id] = selector_info.worker_nodes.size();
 
     PlanSegmentExecutionInfo execution_info;
 
