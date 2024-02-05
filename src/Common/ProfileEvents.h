@@ -94,8 +94,23 @@ namespace ProfileEvents
 
         uint64_t getIOReadTime(bool use_async_read) const;
 
+        struct Snapshot
+        {
+            Snapshot();
+
+            const Count & operator[] (Event event) const
+            {
+                return counters_holder[event];
+            }
+
+        private:
+            std::unique_ptr<Count[]> counters_holder;
+
+            friend class Counters;
+        };
+
         /// Every single value is fetched atomically, but not all values as a whole.
-        Counters getPartiallyAtomicSnapshot() const;
+        Snapshot getPartiallyAtomicSnapshot() const;
 
         /// Reset all counters to zero and reset parent.
         void reset();
