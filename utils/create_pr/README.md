@@ -1,0 +1,2 @@
+The `create_pr.sh` when executed create a PR will title base on the last commit message for the current branch. After the `create_pr.sh` is executed, if the PR contains multiple commits (corresponding to multiple internal MRs) then the `split_pr.sh` script can create a PR for each coressponding MR.
+The `split_pr.sh` script create a branch for each commit and create a PR for each of them. Those branch have the same prefix. In normal case the branch will be drop automatically after PR is created succesfully.
