@@ -82,10 +82,10 @@ struct QueryLogElement
     String log_comment;
 
     std::vector<UInt64> thread_ids;
-    std::shared_ptr<ProfileEvents::Counters> profile_counters;
+    std::shared_ptr<ProfileEvents::Counters::Snapshot> profile_counters;
     String max_io_time_thread_name;
     uint64_t max_io_time_thread_ms{};
-    std::shared_ptr<ProfileEvents::Counters> max_thread_io_profile_counters;
+    std::shared_ptr<ProfileEvents::Counters::Snapshot> max_thread_io_profile_counters;
     std::shared_ptr<Settings> query_settings;
     /// [name, graphviz format string] for the AST, query plan, pipeline graphs
     /// available when print_graphviz=1

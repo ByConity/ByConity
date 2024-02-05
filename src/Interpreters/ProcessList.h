@@ -139,10 +139,10 @@ struct QueryStatusInfo
 
     /// Optional fields, filled by query
     std::vector<UInt64> thread_ids;
-    std::shared_ptr<ProfileEvents::Counters> profile_counters;
+    std::shared_ptr<ProfileEvents::Counters::Snapshot> profile_counters;
     String max_io_time_thread_name;
     uint64_t max_io_time_thread_ms;
-    std::shared_ptr<ProfileEvents::Counters> max_io_thread_profile_counters;
+    std::shared_ptr<ProfileEvents::Counters::Snapshot> max_io_thread_profile_counters;
     std::shared_ptr<Settings> query_settings;
     std::string current_database;
     String query_rewrite_by_view;
@@ -340,7 +340,7 @@ struct ProcessListForUserInfo
     Int64 peak_memory_usage;
 
     // Optional field, filled by request.
-    std::shared_ptr<ProfileEvents::Counters> profile_counters;
+    std::shared_ptr<ProfileEvents::Counters::Snapshot> profile_counters;
 };
 
 

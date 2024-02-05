@@ -250,10 +250,10 @@ void insertCnchQueryMetric(
         String server_id = getenv("SERVER_ID") ? getenv("SERVER_ID") : context->getHostWithPorts().getTCPAddress();
         time_t event_time = current_time;
         UInt32 latency = (info) ? info->elapsed_seconds * 1000 : 0;
-        UInt32 catalog_time = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::CatalogTime]).load() : 0;
-        UInt32 total_partitions = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::TotalPartitions]).load() : 0;
-        UInt32 pruned_partitions = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::PrunedPartitions]).load() : 0;
-        UInt32 selected_parts = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedParts]).load() : 0;
+        UInt32 catalog_time = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::CatalogTime]) : 0;
+        UInt32 total_partitions = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::TotalPartitions]) : 0;
+        UInt32 pruned_partitions = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::PrunedPartitions]) : 0;
+        UInt32 selected_parts = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedParts]) : 0;
         UInt64 peak_memory = (info) ? info->peak_memory_usage : 0;
         UInt32 read_rows = 0;
         UInt64 read_bytes = 0;
@@ -342,9 +342,9 @@ void insertCnchQueryMetric(
         String worker_id = getWorkerID(context);
         time_t event_time = current_time;
         UInt32 latency = (info) ? info->elapsed_seconds * 1000 : 0;
-        UInt32 selected_parts = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedParts]).load() : 0;
-        UInt32 selected_ranges = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedRanges]).load() : 0;
-        UInt32 selected_marks = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedMarks]).load() : 0;
+        UInt32 selected_parts = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedParts]) : 0;
+        UInt32 selected_ranges = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedRanges]) : 0;
+        UInt32 selected_marks = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedMarks]) : 0;
         UInt64 peak_memory = (info) ? info->peak_memory_usage : 0;
         UInt32 read_rows = (info) ? info->read_rows : 0;
         UInt64 read_bytes = (info) ? info->read_bytes : 0;
@@ -354,8 +354,8 @@ void insertCnchQueryMetric(
         UInt64 write_duration = (info) ? info->written_duration : 0;
         UInt32 vfs_time = (info && info->profile_counters)
             ? ((*info->profile_counters)[ProfileEvents::HDFSReadElapsedMicroseconds]
-                   ? ((*info->profile_counters)[ProfileEvents::HDFSReadElapsedMicroseconds]).load()
-                   : ((*info->profile_counters)[ProfileEvents::HDFSWriteElapsedMicroseconds]).load())
+                   ? ((*info->profile_counters)[ProfileEvents::HDFSReadElapsedMicroseconds])
+                   : ((*info->profile_counters)[ProfileEvents::HDFSWriteElapsedMicroseconds]))
             : 0;
 
         String operator_level = (info) ? info->operator_level : "";
