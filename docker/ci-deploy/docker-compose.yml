@@ -41,6 +41,9 @@ services:
       FDB_COORDINATOR_PORT: 4550
       FDB_PORT: 4550
     container_name: "${COMPOSE_PROJECT_NAME}_fdb-0"
+    volumes:
+      - /var/fdb/data
+      - /var/fdb/logs 
 
 # byconity:
   tso:
