@@ -12,6 +12,11 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+bool isLocal(PlanSegment * plan_segment_ptr)
+{
+    return plan_segment_ptr->getParallelSize() == 0 || plan_segment_ptr->getClusterName().empty();
+}
+
 void setParallelIndexAndSourceAddrs(
     PlanSegment * plan_segment_ptr,
     DAGGraph * dag_graph_ptr,
@@ -60,7 +65,7 @@ void setParallelIndexAndSourceAddrs(
                                 + " can not be found",
                             ErrorCodes::LOGICAL_ERROR);
                     }
-                    LOG_TRACE(log, "Not local plan segment plan_segment_input_id:{}", plan_segment_input_id);
+                    LOG_TRACE(log, "Non-local plan segment plan_segment_input_id:{}", plan_segment_input_id);
                     source_iter = result->source_addresses.emplace(
                         plan_segment_input_id, dag_graph_ptr->id_to_address[plan_segment_input_id]).first;
                 }
@@ -84,6 +89,21 @@ void setParallelIndexAndSourceAddrs(
                 parallel_index_id++;
             }
 #endif
+        }
+    }
+    // set prallel size to 1 for those local output
+    for (auto & plan_segment_output : plan_segment_ptr->getPlanSegmentOutputs())
+    {
+        auto plan_segment_output_id = plan_segment_output->getPlanSegmentId();
+        if (auto it = dag_graph_ptr->id_to_segment.find(plan_segment_output_id);
+            it != dag_graph_ptr->id_to_segment.end() && isLocal(it->second))
+        {
+            LOG_TRACE(
+                log,
+                "Set parallel size of output segment {} to 1 for segment id {}",
+                plan_segment_output_id,
+                plan_segment_ptr->getPlanSegmentId());
+            plan_segment_output->setParallelSize(1);
         }
     }
 }

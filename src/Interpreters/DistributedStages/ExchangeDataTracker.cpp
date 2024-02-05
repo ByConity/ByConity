@@ -54,7 +54,7 @@ void ExchangeStatusTracker::registerExchangeStatus(
 {
     LOG_TRACE(
         log,
-        "register exchange status for query:{} exchange_id:{} parallel_size:{} status_size:{}",
+        "register exchange status for query:{} exchange_id:{} parallel_index:{} status_size:{}",
         query_id,
         exchange_id,
         parallel_index,
