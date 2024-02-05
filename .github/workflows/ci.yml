@@ -300,3 +300,5 @@ jobs:
           cd /CI/
           docker compose down --volumes
           docker compose -f docker-compose-s3.yml down --volumes
+          docker volume prune --all
+          docker container prune -f
