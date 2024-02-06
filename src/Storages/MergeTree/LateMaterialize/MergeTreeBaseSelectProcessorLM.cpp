@@ -30,7 +30,7 @@ void MergeTreeBaseSelectProcessorLM::prepareBitMapIndexReader(const MergeTreeInd
                    task->data_part->index_granularity,
                    storage.getSettings()->bitmap_index_segment_granularity,
                    storage.getSettings()->bitmap_index_serializing_granularity,
-                   task->mark_ranges) : nullptr;
+                   task->mark_ranges_total_read) : nullptr;
 
     if (executor && executor->valid())
         executor->initReader(MergeTreeIndexInfo::Type::BITMAP, bitmap_columns);
@@ -155,7 +155,7 @@ bool MergeTreeBaseSelectProcessorLM::getNewTask()
             readers[i] = task->data_part->getReader(
                 task_columns.per_stage_columns[i],
                 storage_snapshot->metadata,
-                task->mark_ranges,
+                task->mark_ranges_total_read,
                 owned_uncompressed_cache.get(),
                 owned_mark_cache.get(),
                 stream_settings.reader_settings,
@@ -177,7 +177,7 @@ bool MergeTreeBaseSelectProcessorLM::getNewTask()
                 readers[i] = task->data_part->getReader(
                     task_columns.per_stage_columns[i],
                     storage_snapshot->metadata,
-                    task->mark_ranges,
+                    task->mark_ranges_total_read,
                     owned_uncompressed_cache.get(),
                     owned_mark_cache.get(),
                     stream_settings.reader_settings,
@@ -193,7 +193,7 @@ bool MergeTreeBaseSelectProcessorLM::getNewTask()
             for (size_t i = 0; i < atomic_predicate_list.size(); ++i)
             {
                 if (readers[i]->hasBitmapIndexReader())
-                    insertMarkRangesForSegmentBitMapIndexFunctions(index_executors[i], task->mark_ranges);
+                    insertMarkRangesForSegmentBitMapIndexFunctions(index_executors[i], task->mark_ranges_once_read);
             }
         }
     }
@@ -243,7 +243,7 @@ void MergeTreeBaseSelectProcessorLM::initializeTaskReader()
 Chunk MergeTreeBaseSelectProcessorLM::readFromPartImpl()
 {
     /// TODO: use block size predictor
-    ReadResult read_result = task->msr_range_reader->read(task->mark_ranges, need_filter);
+    ReadResult read_result = task->msr_range_reader->read(task->mark_ranges_once_read, need_filter);
 
     const auto & sample_block = task->msr_range_reader->getSampleBlock();
     // fmt::print("sample block {}\n", sample_block.dumpStructure());

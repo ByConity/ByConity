@@ -15,7 +15,7 @@ jobs:
     name: Build binary and run stateless tests
     # Use digest instead of tag to avoid network issue, original image byconity/byconity-ci:24Jan16
     container: byconity/byconity-ci:24Jan16
-    runs-on: self-hosted
+    runs-on: id4 
     steps:
       - name: Preload docker images
         run: |
@@ -39,7 +39,7 @@ jobs:
           echo "HIVE_NAMENODE_PORT=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Setup git proxy
-        if: ${{ runner.name != 'ip-10-10-129-157' }}
+        if: ${{ runner.name != 'ec2-aws-id4-10.10.129.157' }}
         run: | 
           git config --global http.proxy http://${{ secrets.HTTP_PROXY }}
       - name: Check out repository code
@@ -122,7 +122,7 @@ jobs:
           echo "Bring down ByConity Cluster S3"
           docker compose -f docker-compose-s3.yml down 
           docker ps --filter name=$COMPOSE_PROJECT_NAME
-           
+          docker volume prune
       - name: Create ByConity Cluster HDFS
         run: |
           echo "Bring up ByConity Cluster HDFS"
@@ -300,5 +300,7 @@ jobs:
           cd /CI/
           docker compose down --volumes
           docker compose -f docker-compose-s3.yml down --volumes
-          docker volume prune --all
+          docker stop $(docker ps -a -q)
           docker container prune -f
+          docker network prune -f
+          docker volume prune -f

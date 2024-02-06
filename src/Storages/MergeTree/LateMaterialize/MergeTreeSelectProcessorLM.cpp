@@ -68,7 +68,7 @@ bool MergeTreeSelectProcessorLM::getNewTaskImpl()
             : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, storage_snapshot->metadata->getSampleBlock());
 
         task = std::make_unique<MergeTreeReadTask>(
-            data_part, delete_bitmap, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns, false, task_columns.should_reorder, std::move(size_predictor));
+            data_part, delete_bitmap, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns, false, task_columns.should_reorder, std::move(size_predictor), all_mark_ranges);
 
         all_mark_ranges.clear();
 
