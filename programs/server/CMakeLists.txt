@@ -5,7 +5,7 @@ set(CLICKHOUSE_SERVER_SOURCES
     Server.cpp
 )
 
-set (LINK_RESOURCE_LIB INTERFACE "-Wl,${WHOLE_ARCHIVE} $<TARGET_FILE:clickhouse_server_configs> -Wl,${NO_WHOLE_ARCHIVE}")
+set (LINK_RESOURCE_LIB INTERFACE "-Wl,${WHOLE_ARCHIVE} $<TARGET_FILE:clickhouse_server_configs> $<TARGET_FILE:clickhouse_profiler_files> -Wl,${NO_WHOLE_ARCHIVE}")
 
 set (CLICKHOUSE_SERVER_LINK
     PRIVATE
@@ -37,3 +37,17 @@ clickhouse_embed_binaries(
     RESOURCES byconity-server.xml byconity-worker.xml byconity-worker-write.xml cnch_config.xml byconity-daemon-manager.xml byconity-tso.xml users.xml embedded.xml play.html
 )
 add_dependencies(clickhouse-server-lib clickhouse_server_configs)
+
+clickhouse_embed_binaries(
+  TARGET clickhouse_profiler_files
+  RESOURCES profiler/robots.txt
+            profiler/index.html
+            profiler/byt-logo-128.png
+            profiler/asset-manifest.json
+            profiler/static/js/main.js
+            profiler/static/js/vendors.js
+            profiler/static/js/vendors.js.LICENSE.txt
+            profiler/static/css/main.9af32620.css
+            profiler/static/css/vendors.2b0b3808.css
+)
+add_dependencies(clickhouse-server-lib clickhouse_profiler_files)
