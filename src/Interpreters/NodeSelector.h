@@ -198,11 +198,6 @@ public:
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, bool is_source);
 
 private:
-    bool isLocal(PlanSegment * plan_segment_ptr)
-    {
-        return plan_segment_ptr->getParallelSize() == 0 || plan_segment_ptr->getClusterName().empty();
-    }
-
     ContextPtr query_context;
     DAGGraph * dag_graph_ptr;
     const ClusterNodes & cluster_nodes;
