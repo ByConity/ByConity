@@ -76,10 +76,12 @@ public:
     mutable bthread::Mutex mutex;
 
     ProfileEvents::Counters performance_counters{VariableContext::Process};
-    String max_io_time_thread_name;
-    uint64_t max_io_time_thread_ms{0};
-    ProfileEvents::Counters max_io_thread_profile_counters{VariableContext::Process};
     MemoryTracker memory_tracker{VariableContext::Process};
+    /// for MaxIOThreadProfileEvents
+    std::shared_ptr<ProfileEvents::Counters::Snapshot> max_io_thread_profile_counters;
+    UInt64 max_io_time_us{0};
+    uint64_t max_io_time_thread_ms{0};
+    String max_io_time_thread_name;
 
     ContextWeakPtr query_context;
     ContextWeakPtr global_context;

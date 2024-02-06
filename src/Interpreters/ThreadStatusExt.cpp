@@ -446,7 +446,7 @@ void ThreadStatus::logToQueryThreadLog(QueryThreadLog & thread_log, const String
         if (query_context_ptr->getSettingsRef().log_profile_events != 0)
         {
             /// NOTE: Here we are in the same thread, so we can make memcpy()
-            elem.profile_counters = std::make_shared<ProfileEvents::Counters>(performance_counters.getPartiallyAtomicSnapshot());
+            elem.profile_counters = std::make_shared<ProfileEvents::Counters::Snapshot>(performance_counters.getPartiallyAtomicSnapshot());
         }
     }
 
@@ -455,15 +455,16 @@ void ThreadStatus::logToQueryThreadLog(QueryThreadLog & thread_log, const String
 
 void ThreadStatus::tryUpdateMaxIOThreadProfile(bool use_async_read)
 {
-    auto current_thread_profile = performance_counters.getPartiallyAtomicSnapshot();
     if (!thread_group)
         return;
+    auto curr_snapshot = std::make_shared<ProfileEvents::Counters::Snapshot>(performance_counters.getPartiallyAtomicSnapshot());
     std::lock_guard lock(thread_group->mutex);
-    if (current_thread_profile.getIOReadTime(use_async_read) > thread_group->max_io_thread_profile_counters.getIOReadTime(use_async_read))
+    if (auto curr_io_time_us = performance_counters.getIOReadTime(use_async_read); thread_group->max_io_time_us < curr_io_time_us)
     {
+        std::swap(thread_group->max_io_thread_profile_counters, curr_snapshot);
+        thread_group->max_io_time_us = curr_io_time_us;
         thread_group->max_io_time_thread_ms = (time_in_microseconds(std::chrono::system_clock::now()) - query_start_time_microseconds) / 1000;
         thread_group->max_io_time_thread_name = getThreadName();
-        thread_group->max_io_thread_profile_counters = std::move(current_thread_profile);
     }
 }
 

@@ -153,7 +153,7 @@ static CurrentMetrics::Metric getQueryTypeMetric(ProcessListQueryType & query_ty
     else if (query_type == ProcessListQueryType::System)
     {
         return CurrentMetrics::SystemQuery;
-    } 
+    }
 
     return CurrentMetrics::DefaultQuery;
 }
@@ -219,7 +219,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
        const_cast<Context *>(query_context.get())->setResourceGroup(ast);
         /// FIXME(xuruiliang): change getResourceGroup to const getResourceGroup
         resource_group = const_cast<Context *>(query_context.get())->tryGetResourceGroup();
-        
+
         if (auto vw = query_context->tryGetCurrentVW())
             labels.insert({"vw", vw->getName()});
         if (auto wg = query_context->tryGetCurrentWorkerGroup())
@@ -230,7 +230,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
     {
         is_vw_unlimited = true;
         ProfileEvents::increment(ProfileEvents::UnlimitedQuery, 1, labels);
-    } 
+    }
 
     if (resource_group != nullptr)
         group_it = resource_group->run(query_, *query_context);
@@ -336,7 +336,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
                         ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
             }
         }
-        
+
         CurrentMetrics::Metric query_type_metric = getQueryTypeMetric(query_type);
         auto query_status = std::make_shared<QueryStatus>(query_context, query_, client_info, priorities.insert(settings.priority),
             resource_group == nullptr ? nullptr : resource_group->insert(group_it), query_type_metric, is_vw_unlimited);
@@ -349,7 +349,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
         }
 
         res = std::make_shared<Entry>(*this, query_status);
-      
+
         std::unique_lock lock(mutex);
         query_status->type = query_type;
         ProcessListForUser & user_process_list = user_to_queries[client_info.current_user];
@@ -613,7 +613,7 @@ bool QueryStatus::checkCpuTimeLimit(String node_name)
 
         double total_query_cpu_seconds = total_query_cpu_micros * 1.0 / 1000000;
         double thread_cpu_seconds = thread_cpu_micros * 1.0 / 1000000;
- 
+
         LOG_TRACE(&Poco::Logger::get("ThreadStatus"), "node {} checkCpuTimeLimit thread cpu secs = {}, total cpu secs = {}, max = {}",
                     node_name, thread_cpu_seconds, total_query_cpu_seconds, settings.max_query_cpu_seconds);
         if (total_query_cpu_micros > settings.max_query_cpu_seconds * 1000000)
@@ -787,11 +787,10 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
 
         if (get_profile_events)
         {
-            res.profile_counters = std::make_shared<ProfileEvents::Counters>(thread_group->performance_counters.getPartiallyAtomicSnapshot());
-            res.max_io_thread_profile_counters
-                = std::make_shared<ProfileEvents::Counters>(thread_group->max_io_thread_profile_counters.getPartiallyAtomicSnapshot());
+            res.profile_counters = std::make_shared<ProfileEvents::Counters::Snapshot>(thread_group->performance_counters.getPartiallyAtomicSnapshot());
+            res.max_io_thread_profile_counters = thread_group->max_io_thread_profile_counters;
         }
-           
+
     }
 
     auto context_ptr = context.lock();
@@ -840,7 +839,7 @@ ProcessListForUserInfo ProcessListForUser::getInfo(bool get_profile_events) cons
     res.peak_memory_usage = user_memory_tracker.getPeak();
 
     if (get_profile_events)
-        res.profile_counters = std::make_shared<ProfileEvents::Counters>(user_performance_counters.getPartiallyAtomicSnapshot());
+        res.profile_counters = std::make_shared<ProfileEvents::Counters::Snapshot>(user_performance_counters.getPartiallyAtomicSnapshot());
 
     return res;
 }

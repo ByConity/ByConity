@@ -42,7 +42,7 @@ ServerPrometheusMetricsWriter::MetricMap ServerPrometheusMetricsWriter::getInter
 {
     ServerPrometheusMetricsWriter::MetricMap internal_metrics_nameval_map;
 
-    
+
     if (context->tryGetResourceGroupManager())
     {
         ResourceGroupInfoVec infos = context->tryGetResourceGroupManager()->getInfoVec();
@@ -67,7 +67,7 @@ ServerPrometheusMetricsWriter::MetricMap ServerPrometheusMetricsWriter::getInter
 
     /// Queries which are going to be executed on the worker side
 
-    // TODO:lianwenlong 
+    // TODO:lianwenlong
     // internal_metrics_nameval_map[INTENT_QUERIES_ONDEMAND_KEY].emplace_back(MetricEntry{empty_label, GAUGE_TYPE, context.getOndemandIntentQueries().size()});
     // internal_metrics_nameval_map[INTENT_QUERIES_PREALLOCATE_KEY].emplace_back(MetricEntry{empty_label, GAUGE_TYPE, context.getNumPreallocateIntentQueries()});
 
@@ -256,8 +256,7 @@ void ServerPrometheusMetricsWriter::writeProfileEvents(WriteBuffer & wb)
 
         };
 
-        const auto & labelled_counters = counters_snapshot.getLabelledCounters(profile_event);
-
+        const auto labelled_counters = ProfileEvents::global_counters.getLabelledCounters(profile_event);
         if (!labelled_counters.empty())
         {
             for (const auto & it : labelled_counters)
@@ -270,7 +269,7 @@ void ServerPrometheusMetricsWriter::writeProfileEvents(WriteBuffer & wb)
         }
         else
         {
-            const auto counter = counters_snapshot[profile_event].load(std::memory_order_relaxed);
+            const auto counter = counters_snapshot[profile_event];
             write_profile_event(counter, {});
         }
     }

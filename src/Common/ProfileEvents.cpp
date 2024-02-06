@@ -1078,14 +1078,15 @@ uint64_t Counters::getIOReadTime(bool use_async_read) const
     return 0;
 }
 
-Counters Counters::getPartiallyAtomicSnapshot() const
+Counters::Snapshot::Snapshot()
+    : counters_holder(new Count[num_counters] {})
+{}
+
+Counters::Snapshot Counters::getPartiallyAtomicSnapshot() const
 {
-    Counters res(VariableContext::Snapshot, nullptr);
+    Snapshot res;
     for (Event i = 0; i < num_counters; ++i)
-    {
-        res.counters[i].store(counters[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
-        res.labelled_counters[i] = getLabelledCounters(i);
-    }
+        res.counters_holder[i] = counters[i].load(std::memory_order_relaxed);
     return res;
 }
 
