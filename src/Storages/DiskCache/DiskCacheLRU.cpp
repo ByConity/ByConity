@@ -28,6 +28,7 @@
 #include <Common/Throttler.h>
 #include <Common/setThreadName.h>
 #include "DataTypes/IDataType.h"
+#include <IO/OpenedFileCache.h>
 #include "Interpreters/Context.h"
 #include "Storages/DiskCache/DiskCache_fwd.h"
 #include "Storages/DiskCache/IDiskCache.h"
@@ -352,11 +353,15 @@ void DiskCacheLRU::afterEvictSegment([[maybe_unused]]const std::vector<std::pair
                 auto rel_meta_path = getRelativePath(key, "", META_DISK_CACHE_DIR_PREFIX);
                 auto rel_data_path = getRelativePath(key, "", DATA_DISK_CACHE_DIR_PREFIX);
                 if (dsk->exists(rel_meta_path))
+                {
                     dsk->removeRecursive(rel_meta_path);
+                    OpenedFileCache::instance().remove(rel_meta_path, -1);
+                }
                 else
                 {
                     prefix = DATA_DISK_CACHE_DIR_PREFIX;
                     dsk->removeRecursive(rel_data_path);
+                    OpenedFileCache::instance().remove(rel_data_path, -1);
                 }
 
                 // Since we are holding locks of lru when calling onEvictSegment,
