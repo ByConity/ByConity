@@ -19,6 +19,8 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/ColumnNumbers.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -39,9 +41,13 @@
 
 #include <Interpreters/Context.h>
 
+#include <Common/Exception.h>
+#include <Common/DateLUTImpl.h>
+#include <common/types.h>
 #include <common/find_symbols.h>
 
 #include <type_traits>
+#include <tuple>
 
 
 namespace DB
@@ -53,12 +59,81 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int ILLEGAL_COLUMN;
     extern const int BAD_ARGUMENTS;
+    extern const int UNKNOWN_TYPE;
 }
 
 namespace
 {
 
-template <bool is_diff>
+struct Year{};
+struct Quarter{};
+struct Month{};
+struct Week{};
+struct Day{};
+struct Hour{};
+struct Minute{};
+struct Second{};
+template <typename T>
+struct TimeUnitTraits{};
+template <>
+struct TimeUnitTraits<Year>
+{
+    using transform = ToRelativeYearNumImpl<ResultPrecision::Extended>;
+    static constexpr bool mysql_timestamp_diff_use_months_as_unit = true;
+};
+template <>
+struct TimeUnitTraits<Quarter>
+{
+    using transform = ToRelativeQuarterNumImpl<ResultPrecision::Extended>;
+    static constexpr bool mysql_timestamp_diff_use_months_as_unit = true;
+};
+
+template <>
+struct TimeUnitTraits<Month>
+{
+    using transform = ToRelativeMonthNumImpl<ResultPrecision::Extended>;
+    static constexpr bool mysql_timestamp_diff_use_months_as_unit = true;
+};
+template <>
+struct TimeUnitTraits<Week>
+{
+    using transform = ToRelativeWeekNumImpl<ResultPrecision::Extended>;
+    static constexpr bool mysql_timestamp_diff_use_months_as_unit = false;
+};
+template <>
+struct TimeUnitTraits<Day>
+{
+    using transform = ToRelativeDayNumImpl<ResultPrecision::Extended>;
+    static constexpr bool mysql_timestamp_diff_use_months_as_unit = false;
+};
+template <>
+struct TimeUnitTraits<Hour>
+{
+    using transform = ToRelativeHourNumImpl<ResultPrecision::Extended>;
+    static constexpr bool mysql_timestamp_diff_use_months_as_unit = false;
+};
+template <>
+struct TimeUnitTraits<Minute>
+{
+    using transform = ToRelativeMinuteNumImpl<ResultPrecision::Extended>;
+    static constexpr bool mysql_timestamp_diff_use_months_as_unit = false;
+};
+template <>
+struct TimeUnitTraits<Second>
+{
+    using transform = ToRelativeSecondNumImpl<ResultPrecision::Extended>;
+    static constexpr bool mysql_timestamp_diff_use_months_as_unit = false;
+};
+
+enum class DiffType
+{
+    DateDiff,
+    TimestampDiff,
+    Age,
+    MysqlTimestampDiff
+};
+
+template <DiffType diff_type>
 class DateDiffImpl
 {
 public:
@@ -66,83 +141,83 @@ public:
 
     explicit DateDiffImpl(const String & name_) : name(name_) {}
 
-    template <typename Transform>
+    template <typename TimeUnit>
     void dispatchForColumns(
         const IColumn & x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         if (const auto * x_vec_16 = checkAndGetColumn<ColumnDate>(&x))
-            dispatchForSecondColumn<Transform>(*x_vec_16, y, timezone_x, timezone_y, result);
+            dispatchForSecondColumn<TimeUnit>(*x_vec_16, y, timezone_x, timezone_y, result);
         else if (const auto * x_vec_32 = checkAndGetColumn<ColumnDateTime>(&x))
-            dispatchForSecondColumn<Transform>(*x_vec_32, y, timezone_x, timezone_y, result);
+            dispatchForSecondColumn<TimeUnit>(*x_vec_32, y, timezone_x, timezone_y, result);
         else if (const auto * x_vec_32_s = checkAndGetColumn<ColumnDate32>(&x))
-            dispatchForSecondColumn<Transform>(*x_vec_32_s, y, timezone_x, timezone_y, result);
+            dispatchForSecondColumn<TimeUnit>(*x_vec_32_s, y, timezone_x, timezone_y, result);
         else if (const auto * x_vec_64 = checkAndGetColumn<ColumnDateTime64>(&x))
-            dispatchForSecondColumn<Transform>(*x_vec_64, y, timezone_x, timezone_y, result);
+            dispatchForSecondColumn<TimeUnit>(*x_vec_64, y, timezone_x, timezone_y, result);
         else if (const auto * x_const_16 = checkAndGetColumnConst<ColumnDate>(&x))
-            dispatchConstForSecondColumn<Transform>(x_const_16->getValue<UInt16>(), y, timezone_x, timezone_y, result);
+            dispatchConstForSecondColumn<TimeUnit>(x_const_16->getValue<UInt16>(), y, timezone_x, timezone_y, result);
         else if (const auto * x_const_32 = checkAndGetColumnConst<ColumnDateTime>(&x))
-            dispatchConstForSecondColumn<Transform>(x_const_32->getValue<UInt32>(), y, timezone_x, timezone_y, result);
+            dispatchConstForSecondColumn<TimeUnit>(x_const_32->getValue<UInt32>(), y, timezone_x, timezone_y, result);
         else if (const auto * x_const_32_s = checkAndGetColumnConst<ColumnDate32>(&x))
-            dispatchConstForSecondColumn<Transform>(x_const_32_s->getValue<Int32>(), y, timezone_x, timezone_y, result);
+            dispatchConstForSecondColumn<TimeUnit>(x_const_32_s->getValue<Int32>(), y, timezone_x, timezone_y, result);
         else if (const auto * x_const_64 = checkAndGetColumnConst<ColumnDateTime64>(&x))
-            dispatchConstForSecondColumn<Transform>(x_const_64->getValue<DecimalField<DateTime64>>(), y, timezone_x, timezone_y, result);
+            dispatchConstForSecondColumn<TimeUnit>(x_const_64->getValue<DecimalField<DateTime64>>(), y, timezone_x, timezone_y, result);
         else
             throw Exception(ErrorCodes::ILLEGAL_COLUMN,
                 "Illegal column for first argument of function {}, must be Date, Date32, DateTime or DateTime64",
                 name);
     }
 
-    template <typename Transform, typename LeftColumnType>
+    template <typename TimeUnit, typename LeftColumnType>
     void dispatchForSecondColumn(
         const LeftColumnType & x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         if (const auto * y_vec_16 = checkAndGetColumn<ColumnDate>(&y))
-            vectorVector<Transform>(x, *y_vec_16, timezone_x, timezone_y, result);
+            vectorVector<TimeUnit>(x, *y_vec_16, timezone_x, timezone_y, result);
         else if (const auto * y_vec_32 = checkAndGetColumn<ColumnDateTime>(&y))
-            vectorVector<Transform>(x, *y_vec_32, timezone_x, timezone_y, result);
+            vectorVector<TimeUnit>(x, *y_vec_32, timezone_x, timezone_y, result);
         else if (const auto * y_vec_32_s = checkAndGetColumn<ColumnDate32>(&y))
-            vectorVector<Transform>(x, *y_vec_32_s, timezone_x, timezone_y, result);
+            vectorVector<TimeUnit>(x, *y_vec_32_s, timezone_x, timezone_y, result);
         else if (const auto * y_vec_64 = checkAndGetColumn<ColumnDateTime64>(&y))
-            vectorVector<Transform>(x, *y_vec_64, timezone_x, timezone_y, result);
+            vectorVector<TimeUnit>(x, *y_vec_64, timezone_x, timezone_y, result);
         else if (const auto * y_const_16 = checkAndGetColumnConst<ColumnDate>(&y))
-            vectorConstant<Transform>(x, y_const_16->getValue<UInt16>(), timezone_x, timezone_y, result);
+            vectorConstant<TimeUnit>(x, y_const_16->getValue<UInt16>(), timezone_x, timezone_y, result);
         else if (const auto * y_const_32 = checkAndGetColumnConst<ColumnDateTime>(&y))
-            vectorConstant<Transform>(x, y_const_32->getValue<UInt32>(), timezone_x, timezone_y, result);
+            vectorConstant<TimeUnit>(x, y_const_32->getValue<UInt32>(), timezone_x, timezone_y, result);
         else if (const auto * y_const_32_s = checkAndGetColumnConst<ColumnDate32>(&y))
-            vectorConstant<Transform>(x, y_const_32_s->getValue<Int32>(), timezone_x, timezone_y, result);
+            vectorConstant<TimeUnit>(x, y_const_32_s->getValue<Int32>(), timezone_x, timezone_y, result);
         else if (const auto * y_const_64 = checkAndGetColumnConst<ColumnDateTime64>(&y))
-            vectorConstant<Transform>(x, y_const_64->getValue<DecimalField<DateTime64>>(), timezone_x, timezone_y, result);
+            vectorConstant<TimeUnit>(x, y_const_64->getValue<DecimalField<DateTime64>>(), timezone_x, timezone_y, result);
         else
             throw Exception(ErrorCodes::ILLEGAL_COLUMN,
                 "Illegal column for second argument of function {}, must be Date, Date32, DateTime or DateTime64",
                 name);
     }
 
-    template <typename Transform, typename T1>
+    template <typename TimeUnit, typename T1>
     void dispatchConstForSecondColumn(
         T1 x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         if (const auto * y_vec_16 = checkAndGetColumn<ColumnDate>(&y))
-            constantVector<Transform>(x, *y_vec_16, timezone_x, timezone_y, result);
+            constantVector<TimeUnit>(x, *y_vec_16, timezone_x, timezone_y, result);
         else if (const auto * y_vec_32 = checkAndGetColumn<ColumnDateTime>(&y))
-            constantVector<Transform>(x, *y_vec_32, timezone_x, timezone_y, result);
+            constantVector<TimeUnit>(x, *y_vec_32, timezone_x, timezone_y, result);
         else if (const auto * y_vec_32_s = checkAndGetColumn<ColumnDate32>(&y))
-            constantVector<Transform>(x, *y_vec_32_s, timezone_x, timezone_y, result);
+            constantVector<TimeUnit>(x, *y_vec_32_s, timezone_x, timezone_y, result);
         else if (const auto * y_vec_64 = checkAndGetColumn<ColumnDateTime64>(&y))
-            constantVector<Transform>(x, *y_vec_64, timezone_x, timezone_y, result);
+            constantVector<TimeUnit>(x, *y_vec_64, timezone_x, timezone_y, result);
         else
             throw Exception(ErrorCodes::ILLEGAL_COLUMN,
                 "Illegal column for second argument of function {}, must be Date, Date32, DateTime or DateTime64",
                 name);
     }
 
-    template <typename Transform, typename LeftColumnType, typename RightColumnType>
+    template <typename TimeUnit, typename LeftColumnType, typename RightColumnType>
     void vectorVector(
         const LeftColumnType & x, const RightColumnType & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
@@ -150,50 +225,75 @@ public:
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
-
-        const auto transform_x = TransformDateTime64<Transform>(getScale(x));
-        const auto transform_y = TransformDateTime64<Transform>(getScale(y));
-        for (size_t i = 0, size = x.size(); i < size; ++i)
-                result[i] = calculate(transform_x, transform_y, x_data[i], y_data[i], timezone_x, timezone_y);
+        if constexpr(diff_type == DiffType::MysqlTimestampDiff)
+        {
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+                result[i] = mysqlTimestampCalculate<TimeUnit, decltype(x_data[i]), decltype(y_data[i])>(x_data[i], y_data[i], timezone_x, timezone_y);
+        }
+        else
+        {
+            const auto transform_x = TransformDateTime64<typename TimeUnitTraits<TimeUnit>::transform>(getScale(x));
+            const auto transform_y = TransformDateTime64<typename TimeUnitTraits<TimeUnit>::transform>(getScale(y));
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+                    result[i] = calculate(transform_x, transform_y, x_data[i], y_data[i], timezone_x, timezone_y);
+        }
     }
 
-    template <typename Transform, typename LeftColumnType, typename T2>
+    template <typename TimeUnit, typename LeftColumnType, typename T2>
     void vectorConstant(
         const LeftColumnType & x, T2 y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         const auto & x_data = x.getData();
-        const auto transform_x = TransformDateTime64<Transform>(getScale(x));
-        const auto transform_y = TransformDateTime64<Transform>(getScale(y));
         const auto y_value = stripDecimalFieldValue(y);
 
-        for (size_t i = 0, size = x.size(); i < size; ++i)
-            result[i] = calculate(transform_x, transform_y, x_data[i], y_value, timezone_x, timezone_y);
+        if constexpr(diff_type == DiffType::MysqlTimestampDiff)
+        {
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+                result[i] = mysqlTimestampCalculate<TimeUnit, decltype(x_data[i]), decltype(y_value)>(x_data[i], y_value, timezone_x, timezone_y);
+        }
+        else
+        {
+            const auto transform_x = TransformDateTime64<typename TimeUnitTraits<TimeUnit>::transform>(getScale(x));
+            const auto transform_y = TransformDateTime64<typename TimeUnitTraits<TimeUnit>::transform>(getScale(y));
+
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+                result[i] = calculate(transform_x, transform_y, x_data[i], y_value, timezone_x, timezone_y);
+        }
     }
 
-    template <typename Transform, typename T1, typename RightColumnType>
+    template <typename TimeUnit, typename T1, typename RightColumnType>
     void constantVector(
         T1 x, const RightColumnType & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result) const
     {
         const auto & y_data = y.getData();
-        const auto transform_x = TransformDateTime64<Transform>(getScale(x));
-        const auto transform_y = TransformDateTime64<Transform>(getScale(y));
         const auto x_value = stripDecimalFieldValue(x);
 
-        for (size_t i = 0, size = y.size(); i < size; ++i)
-            result[i] = calculate(transform_x, transform_y, x_value, y_data[i], timezone_x, timezone_y);
+        if constexpr(diff_type == DiffType::MysqlTimestampDiff)
+        {
+            for (size_t i = 0, size = y.size(); i < size; ++i)
+                result[i] = mysqlTimestampCalculate<TimeUnit, decltype(x_value), decltype(y_data[i])>(x_value, y_data[i], timezone_x, timezone_y);
+        }
+        else
+        {
+            const auto transform_x = TransformDateTime64<typename TimeUnitTraits<TimeUnit>::transform>(getScale(x));
+            const auto transform_y = TransformDateTime64<typename TimeUnitTraits<TimeUnit>::transform>(getScale(y));
+
+            for (size_t i = 0, size = y.size(); i < size; ++i)
+                result[i] = calculate(transform_x, transform_y, x_value, y_data[i], timezone_x, timezone_y);
+        }
     }
 
     template <typename TransformX, typename TransformY, typename T1, typename T2>
     Int64 calculate(const TransformX & transform_x, const TransformY & transform_y, T1 x, T2 y, const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y) const
     {
-        if constexpr (is_diff)
+        if constexpr (diff_type == DiffType::DateDiff || diff_type == DiffType::TimestampDiff)
             return static_cast<Int64>(transform_y.execute(y, timezone_y))
                 - static_cast<Int64>(transform_x.execute(x, timezone_x));
-        else
+        else if constexpr (diff_type == DiffType::Age)
         {
             auto res = static_cast<Int64>(transform_y.execute(y, timezone_y))
                 - static_cast<Int64>(transform_x.execute(x, timezone_x));
@@ -276,6 +376,108 @@ public:
             }
             return res;
         }
+        else
+            throw Exception("Unreachable", ErrorCodes::UNKNOWN_TYPE);
+    }
+
+    template <typename TimeUnit, typename T1, typename T2>
+    Int64 mysqlTimestampCalculate(T1 x, T2 y, const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y) const
+    {
+        Int64 seconds_x = ToRelativeSecondNumImpl<ResultPrecision::Extended>::execute(x, timezone_x);
+        Int64 seconds_y = ToRelativeSecondNumImpl<ResultPrecision::Extended>::execute(y, timezone_y);
+        if (!TimeUnitTraits<TimeUnit>::mysql_timestamp_diff_use_months_as_unit)
+        {
+            Int64 seconds_diff = seconds_y - seconds_x;
+            static constexpr Int64 seconds_in_24h = 3600 * 24;
+            if constexpr(std::is_same_v<TimeUnit, Week>)
+                return seconds_diff / seconds_in_24h / 7;
+            else if constexpr(std::is_same_v<TimeUnit, Day>)
+                return seconds_diff / seconds_in_24h;
+            else if constexpr(std::is_same_v<TimeUnit, Hour>)
+                return seconds_diff / 3600;
+            else if constexpr(std::is_same_v<TimeUnit, Minute>)
+                return seconds_diff / 60;
+            else if constexpr(std::is_same_v<TimeUnit, Second>)
+                return seconds_diff;
+            else
+                throw Exception("Unreachable", ErrorCodes::UNKNOWN_TYPE);
+        }
+        else
+        {
+            // Mysql actually has the ability to set the timezone of the current session
+            // E.g. SET @@time_zone = 'Asia/Singapore';
+            // The time zone set this way can affect the output of timestamp_diff.
+            // The open-source version of ClickHouse has a session_timezone setting as well. Our current version does not have it.
+            // Example:
+            /*
+            CREATE TABLE tab1 (
+                id INT PRIMARY KEY,
+                t TIMESTAMP NOT NULL
+            );
+            CREATE TABLE tab2 (
+                id INT PRIMARY KEY,
+                t TIMESTAMP NOT NULL
+            );
+
+            SET @@time_zone = 'Asia/Singapore';
+            INSERT INTO tab1 VALUES
+            (1, '2000-02-01');
+            INSERT INTO tab2 VALUES
+            (1, '2000-03-01');
+            -- Note that the stored values in the tables are always in terms of UTC.
+            -- But the output of queries does depend on session time_zone.
+
+            SET @@time_zone = 'UTC';
+            SELECT * FROM tab1, tab2 WHERE tab1.id = tab2.id; -- Output 1a
+            SELECT timestampdiff(month, tab1.t, tab2.t) FROM tab1, tab2 WHERE tab1.id = tab2.id; -- Output 1b
+
+            SET @@time_zone = 'Asia/Singapore';
+            SELECT * FROM tab1, tab2 WHERE tab1.id = tab2.id; -- Output 2a
+            SELECT timestampdiff(month, tab1.t, tab2.t) FROM tab1, tab2 WHERE tab1.id = tab2.id; -- Output 2b
+            -- We observe that Output 1 differs from Output 2
+            */
+            // Note: It is impossible to take the civil-time diff of 2 different timezones to mysql's timestampdiff.
+            // Because, mysql will convert both absolute times to the same timezone given by the session time_zone variable.
+            const DateLUTImpl & date_lut = DateLUT::instance();
+            bool should_swap = seconds_x > seconds_y;
+            struct DateTimeComponents {
+                const DateLUTImpl::Values & values;
+                DateLUTImpl::Time seconds_excluding_date;
+            };
+            auto toDateTimeComponents{[&date_lut](DateLUTImpl::Time t) {
+                const DateLUTImpl::Values & values = date_lut.getValues(t);
+                // See DateLUTImpl::toDateTimeComponents(Time t)
+                DateLUTImpl::Time seconds = t - values.date;
+                if (seconds >= values.time_at_offset_change())
+                    seconds += values.amount_of_offset_change();
+                return DateTimeComponents {
+                    .values = values,
+                    .seconds_excluding_date = seconds,
+                };
+            }};
+
+            DateTimeComponents begin = toDateTimeComponents(should_swap ? seconds_y : seconds_x);
+            DateTimeComponents end = toDateTimeComponents(should_swap ? seconds_x : seconds_y);
+            auto years = end.values.year - begin.values.year;
+            if (std::tie(end.values.month, end.values.day_of_month) < std::tie(begin.values.month, begin.values.day_of_month))
+                years -= 1;
+            auto months = 12 * years;
+            if (std::tie(end.values.month, end.values.day_of_month) < std::tie(begin.values.month, begin.values.day_of_month))
+                months += 12 - (begin.values.month - end.values.month);
+            else
+                months += (end.values.month - begin.values.month);
+            if (std::tie(end.values.day_of_month, end.seconds_excluding_date) < std::tie(begin.values.day_of_month, begin.seconds_excluding_date))
+                months -= 1;
+            Int64 neg = should_swap ? -1 : 1;
+            if constexpr(std::is_same_v<TimeUnit, Year>)
+                return months / 12 * neg;
+            else if constexpr(std::is_same_v<TimeUnit, Quarter>)
+                return months / 3 * neg;
+            else if constexpr(std::is_same_v<TimeUnit, Month>)
+                return months * neg;
+            else
+                throw Exception("Unreachable", ErrorCodes::UNKNOWN_TYPE);
+        }
     }
 
     template <typename T>
@@ -300,7 +502,6 @@ private:
     String name;
 };
 
-
 /** dateDiff('unit', t1, t2, [timezone])
   * age('unit', t1, t2, [timezone])
   * t1 and t2 can be Date, Date32, DateTime or DateTime64
@@ -311,15 +512,19 @@ private:
   *
   * Timezone matters because days can have different length.
   */
-template <bool is_relative, bool isDateDiff = true>
+template <DiffType diff_type>
 class FunctionDateDiff : public IFunction
 {
 public:
-    static constexpr auto name = is_relative ? "dateDiff" : "age";
+    static constexpr auto name = diff_type != DiffType::Age ? "dateDiff" : "age";
     explicit FunctionDateDiff(ContextPtr context_, bool mysql_mode_) : context(context_), mysql_mode(mysql_mode_) { }
     static FunctionPtr create(ContextPtr context_)
     {
-        return std::make_shared<FunctionDateDiff>(context_, (context_->getSettingsRef().dialect_type == DialectType::MYSQL));
+        const bool mysql_mode = context_->getSettingsRef().dialect_type == DialectType::MYSQL;
+        if (diff_type == DiffType::TimestampDiff && mysql_mode)
+            return std::make_shared<FunctionDateDiff<DiffType::MysqlTimestampDiff>>(context_, mysql_mode);
+        else
+            return std::make_shared<FunctionDateDiff<diff_type>>(context_, mysql_mode);
     }
 
 
@@ -478,21 +683,21 @@ public:
         const auto & timezone_y = extractTimeZoneFromFunctionArguments(converted, zone_idx, y_idx);
 
         if (unit == "year" || unit == "yy" || unit == "yyyy")
-            impl.template dispatchForColumns<ToRelativeYearNumImpl<ResultPrecision::Extended>>(x, y, timezone_x, timezone_y, res->getData());
+            impl.template dispatchForColumns<Year>(x, y, timezone_x, timezone_y, res->getData());
         else if (unit == "quarter" || unit == "qq" || unit == "q")
-            impl.template dispatchForColumns<ToRelativeQuarterNumImpl<ResultPrecision::Extended>>(x, y, timezone_x, timezone_y, res->getData());
+            impl.template dispatchForColumns<Quarter>(x, y, timezone_x, timezone_y, res->getData());
         else if (unit == "month" || unit == "mm" || unit == "m")
-            impl.template dispatchForColumns<ToRelativeMonthNumImpl<ResultPrecision::Extended>>(x, y, timezone_x, timezone_y, res->getData());
+            impl.template dispatchForColumns<Month>(x, y, timezone_x, timezone_y, res->getData());
         else if (unit == "week" || unit == "wk" || unit == "ww")
-            impl.template dispatchForColumns<ToRelativeWeekNumImpl<ResultPrecision::Extended>>(x, y, timezone_x, timezone_y, res->getData());
+            impl.template dispatchForColumns<Week>(x, y, timezone_x, timezone_y, res->getData());
         else if (unit == "day" || unit == "dd" || unit == "d")
-            impl.template dispatchForColumns<ToRelativeDayNumImpl<ResultPrecision::Extended>>(x, y, timezone_x, timezone_y, res->getData());
+            impl.template dispatchForColumns<Day>(x, y, timezone_x, timezone_y, res->getData());
         else if (unit == "hour" || unit == "hh" || unit == "h")
-            impl.template dispatchForColumns<ToRelativeHourNumImpl<ResultPrecision::Extended>>(x, y, timezone_x, timezone_y, res->getData());
+            impl.template dispatchForColumns<Hour>(x, y, timezone_x, timezone_y, res->getData());
         else if (unit == "minute" || unit == "mi" || unit == "n")
-            impl.template dispatchForColumns<ToRelativeMinuteNumImpl<ResultPrecision::Extended>>(x, y, timezone_x, timezone_y, res->getData());
+            impl.template dispatchForColumns<Minute>(x, y, timezone_x, timezone_y, res->getData());
         else if (unit == "second" || unit == "ss" || unit == "s")
-            impl.template dispatchForColumns<ToRelativeSecondNumImpl<ResultPrecision::Extended>>(x, y, timezone_x, timezone_y, res->getData());
+            impl.template dispatchForColumns<Second>(x, y, timezone_x, timezone_y, res->getData());
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
                 "Function {} does not support '{}' unit", getName(), unit);
@@ -500,13 +705,15 @@ public:
         return res;
     }
 private:
-    DateDiffImpl<is_relative> impl{name};
+    DateDiffImpl<diff_type> impl{name};
     /// support dateDiff format like hive
     /// dateDiff(Date/DateTime, Date/DateTime [, TimeZone])
     mutable bool format_hive = false;
     ContextPtr context;
     bool mysql_mode;
+    static constexpr bool isDateDiff = diff_type == DiffType::DateDiff;
 };
+
 
 
 /** TimeDiff(t1, t2)
@@ -561,21 +768,21 @@ public:
         size_t rows = input_rows_count;
         auto res = ColumnInt64::create(rows);
 
-        impl.dispatchForColumns<ToRelativeSecondNumImpl<ResultPrecision::Extended>>(x, y, DateLUT::instance(), DateLUT::instance(), res->getData());
+        impl.dispatchForColumns<Second>(x, y, DateLUT::instance(), DateLUT::instance(), res->getData());
 
         return res;
     }
 private:
-    DateDiffImpl<true> impl{name};
+    DateDiffImpl<DiffType::TimestampDiff> impl{name};
 };
 
 }
 
 REGISTER_FUNCTION(DateDiff)
 {
-    factory.registerFunction<FunctionDateDiff<true>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionDateDiff<DiffType::DateDiff>>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("date_diff", "datediff", FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionDateDiff<true, false>>("timestampdiff", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionDateDiff<DiffType::TimestampDiff>>("timestampdiff", FunctionFactory::CaseInsensitive);
     factory.registerAlias("timestamp_diff", "timestampdiff", FunctionFactory::CaseInsensitive);
 
 }
@@ -596,7 +803,6 @@ Example:
 
 REGISTER_FUNCTION(Age)
 {
-    factory.registerFunction<FunctionDateDiff<false>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionDateDiff<DiffType::Age>>(FunctionFactory::CaseInsensitive);
 }
-
 }

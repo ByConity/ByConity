@@ -49,5 +49,89 @@ select datediff('2022-01-22 23:59:59',timestamp '2022-01-21');
 select datediff(timestamp '2022-01-22 23:59:59',timestamp '2022-01-21');
 select datediff('2022-01-22 23:59:59',date '2022-01-21');
 
+select timestampdiff('minute', '2022-01-01 12:34:56', '2022-01-01 12:35:55');
+select timestampdiff('minute', '2022-01-01 12:34:56', '2022-01-01 12:35:56');
+select timestampdiff('minute', '2022-01-01 12:34:56', '2022-01-01 12:35:57');
+select timestampdiff('minute', '2022-01-01 12:34:56', '2022-01-01 12:36:55');
+select timestampdiff('minute', '2022-01-01 12:34:56', '2022-01-01 12:36:56');
+select timestampdiff('minute', '2022-01-01 12:34:56', '2022-01-01 12:36:57');
+
+select timestampdiff('hour', '2022-01-01 12:34:56', '2022-01-01 13:34:55');
+select timestampdiff('hour', '2022-01-01 12:34:56', '2022-01-01 13:34:56');
+select timestampdiff('hour', '2022-01-01 12:34:56', '2022-01-01 13:34:57');
+select timestampdiff('hour', '2022-01-01 12:34:56', '2022-01-01 14:34:55');
+select timestampdiff('hour', '2022-01-01 12:34:56', '2022-01-01 14:34:56');
+select timestampdiff('hour', '2022-01-01 12:34:56', '2022-01-01 14:34:57');
+
+select timestampdiff('day', '2022-01-01 12:34:56', '2022-01-02 12:34:55');
+select timestampdiff('day', '2022-01-01 12:34:56', '2022-01-02 12:34:56');
+select timestampdiff('day', '2022-01-01 12:34:56', '2022-01-02 12:34:57');
+select timestampdiff('day', '2022-01-01 12:34:56', '2022-01-03 12:34:55');
+select timestampdiff('day', '2022-01-01 12:34:56', '2022-01-03 12:34:56');
+select timestampdiff('day', '2022-01-01 12:34:56', '2022-01-03 12:34:57');
+
+select timestampdiff('week', '2022-01-01 12:34:56', '2022-01-08 12:34:55');
+select timestampdiff('week', '2022-01-01 12:34:56', '2022-01-08 12:34:56');
+select timestampdiff('week', '2022-01-01 12:34:56', '2022-01-08 12:34:57');
+select timestampdiff('week', '2022-01-01 12:34:56', '2022-01-15 12:34:55');
+select timestampdiff('week', '2022-01-01 12:34:56', '2022-01-15 12:34:56');
+select timestampdiff('week', '2022-01-01 12:34:56', '2022-01-15 12:34:57');
+
+select timestampdiff('month', '2022-01-01 12:34:56', '2022-02-01 12:34:55');
+select timestampdiff('month', '2022-01-01 12:34:56', '2022-02-01 12:34:56');
+select timestampdiff('month', '2022-01-01 12:34:56', '2022-02-01 12:34:57');
+select timestampdiff('month', '2022-01-01 12:34:56', '2022-03-01 12:34:55');
+select timestampdiff('month', '2022-01-01 12:34:56', '2022-03-01 12:34:56');
+select timestampdiff('month', '2022-01-01 12:34:56', '2022-03-01 12:34:57');
+
+select timestampdiff('year', '2022-01-01 12:34:56', '2023-01-01 12:34:55');
+select timestampdiff('year', '2022-01-01 12:34:56', '2023-01-01 12:34:56');
+select timestampdiff('year', '2022-01-01 12:34:56', '2023-01-01 12:34:57');
+select timestampdiff('year', '2022-01-01 12:34:56', '2024-01-01 12:34:55');
+select timestampdiff('year', '2022-01-01 12:34:56', '2024-01-01 12:34:56');
+select timestampdiff('year', '2022-01-01 12:34:56', '2024-01-01 12:34:57');
+
+select timestampdiff('minute', '2022-01-01 12:35:55', '2022-01-01 12:34:56');
+select timestampdiff('minute', '2022-01-01 12:35:56', '2022-01-01 12:34:56');
+select timestampdiff('minute', '2022-01-01 12:35:57', '2022-01-01 12:34:56');
+select timestampdiff('minute', '2022-01-01 12:36:55', '2022-01-01 12:34:56');
+select timestampdiff('minute', '2022-01-01 12:36:56', '2022-01-01 12:34:56');
+select timestampdiff('minute', '2022-01-01 12:36:57', '2022-01-01 12:34:56');
+
+select timestampdiff('hour', '2022-01-01 13:34:55', '2022-01-01 12:34:56');
+select timestampdiff('hour', '2022-01-01 13:34:56', '2022-01-01 12:34:56');
+select timestampdiff('hour', '2022-01-01 13:34:57', '2022-01-01 12:34:56');
+select timestampdiff('hour', '2022-01-01 14:34:55', '2022-01-01 12:34:56');
+select timestampdiff('hour', '2022-01-01 14:34:56', '2022-01-01 12:34:56');
+select timestampdiff('hour', '2022-01-01 14:34:57', '2022-01-01 12:34:56');
+
+select timestampdiff('day', '2022-01-02 12:34:55', '2022-01-01 12:34:56');
+select timestampdiff('day', '2022-01-02 12:34:56', '2022-01-01 12:34:56');
+select timestampdiff('day', '2022-01-02 12:34:57', '2022-01-01 12:34:56');
+select timestampdiff('day', '2022-01-03 12:34:55', '2022-01-01 12:34:56');
+select timestampdiff('day', '2022-01-03 12:34:56', '2022-01-01 12:34:56');
+select timestampdiff('day', '2022-01-03 12:34:57', '2022-01-01 12:34:56');
+
+select timestampdiff('week', '2022-01-08 12:34:55', '2022-01-01 12:34:56');
+select timestampdiff('week', '2022-01-08 12:34:56', '2022-01-01 12:34:56');
+select timestampdiff('week', '2022-01-08 12:34:57', '2022-01-01 12:34:56');
+select timestampdiff('week', '2022-01-15 12:34:55', '2022-01-01 12:34:56');
+select timestampdiff('week', '2022-01-15 12:34:56', '2022-01-01 12:34:56');
+select timestampdiff('week', '2022-01-15 12:34:57', '2022-01-01 12:34:56');
+
+select timestampdiff('month', '2022-02-01 12:34:55', '2022-01-01 12:34:56');
+select timestampdiff('month', '2022-02-01 12:34:56', '2022-01-01 12:34:56');
+select timestampdiff('month', '2022-02-01 12:34:57', '2022-01-01 12:34:56');
+select timestampdiff('month', '2022-03-01 12:34:55', '2022-01-01 12:34:56');
+select timestampdiff('month', '2022-03-01 12:34:56', '2022-01-01 12:34:56');
+select timestampdiff('month', '2022-03-01 12:34:57', '2022-01-01 12:34:56');
+
+select timestampdiff('year', '2023-01-01 12:34:55', '2022-01-01 12:34:56');
+select timestampdiff('year', '2023-01-01 12:34:56', '2022-01-01 12:34:56');
+select timestampdiff('year', '2023-01-01 12:34:57', '2022-01-01 12:34:56');
+select timestampdiff('year', '2024-01-01 12:34:55', '2022-01-01 12:34:56');
+select timestampdiff('year', '2024-01-01 12:34:56', '2022-01-01 12:34:56');
+select timestampdiff('year', '2024-01-01 12:34:57', '2022-01-01 12:34:56');
+
 SELECT id, dateDiff(date1, date2) FROM test.test_datediff ORDER BY id;
 SELECT id, timestampdiff('day', date1, date2) FROM test.test_datediff ORDER BY id;
