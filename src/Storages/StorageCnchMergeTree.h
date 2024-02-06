@@ -114,7 +114,10 @@ public:
 
     CheckResults autoRemoveData(const ASTPtr & query, ContextPtr local_context) override;
 
+    /// TODO: some code in this duplicate with filterPartitionByTTL, refine it later
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
+
+    void filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context) const;
 
     /**
      * @param snapshot_ts If not zero, specify the snapshot to use
