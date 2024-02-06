@@ -234,6 +234,7 @@ struct UndoResource
     bool isLegacy() const { return pb_model.placeholders_size() == 0; }
     void clean(Catalog::Catalog & catalog, MergeTreeMetaBase * storage) const;
     void commit(const Context & context) const;
+    String toDebugString() const { return pb_model.ShortDebugString(); }
 
 private:
     static inline std::atomic<UInt64> counter{0};
@@ -247,6 +248,7 @@ struct UndoResourceNames
     NameSet parts;
     NameSet bitmaps;
     NameSet staged_parts;
+    NameSet kvfs_lock_keys;
 };
 
 UndoResourceNames integrateResources(const UndoResources & resources);

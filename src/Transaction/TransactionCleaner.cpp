@@ -101,11 +101,11 @@ void TransactionCleaner::cleanTransaction(const TransactionRecord & txn_record)
 void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
 {
     scheduleTask([this, txn_record, &global_context = *getContext()] {
+        bool clean_fs_lock_by_scan = global_context.getConfigRef().getBool("cnch_txn_clean_fs_lock_by_scan", true);
+
         LOG_DEBUG(log, "Start to clean the committed transaction {}\n", txn_record.txnID().toUInt64());
         TxnCleanTask & task = getCleanTask(txn_record.txnID());
         auto catalog = global_context.getCnchCatalog();
-        // first clear any filesys lock if hold
-        catalog->clearFilesysLock(txn_record.txnID());
         catalog->clearZombieIntent(txn_record.txnID());
         auto undo_buffer = catalog->getUndoBuffer(txn_record.txnID());
 
@@ -141,6 +141,13 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             /// Clean s3 meta file
             S3AttachMetaFileAction::commitByUndoBuffer(global_context, resources);
 
+            /// Release directory lock if any
+            if (!names.kvfs_lock_keys.empty())
+            {
+                catalog->clearFilesysLocks({names.kvfs_lock_keys.begin(), names.kvfs_lock_keys.end()}, std::nullopt);
+                clean_fs_lock_by_scan = false;
+            }
+
             auto intermediate_parts = catalog->getDataPartsByNames(names.parts, table, 0);
             auto undo_bitmaps = catalog->getDeleteBitmapByKeys(table, names.bitmaps);
             auto staged_parts = catalog->getStagedDataPartsByNames(names.staged_parts, table, 0);
@@ -158,6 +165,14 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             }
         }
 
+        /// Clean fs lock by txn id must be after undo resource clean, otherwise udno resource
+        /// clean may clean other user's fs lock
+        if (clean_fs_lock_by_scan)
+        {
+            // first clear any filesys lock if hold
+            catalog->clearFilesysLock(txn_record.txnID());
+        }
+
         catalog->clearUndoBuffer(txn_record.txnID());
         UInt64 ttl = global_context.getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
         catalog->setTransactionRecordCleanTime(txn_record, global_context.getTimestamp(), ttl);
@@ -168,6 +183,8 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
 void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
 {
     scheduleTask([this, txn_record, &global_context = *getContext()]() {
+        bool clean_fs_lock_by_scan = global_context.getConfigRef().getBool("cnch_txn_clean_fs_lock_by_scan", true);
+
         LOG_DEBUG(log, "Start to clean the aborted transaction {}\n", txn_record.txnID().toUInt64());
 
         // abort transaction if it is running
@@ -233,11 +250,23 @@ void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
             {
                 resource.clean(*catalog, storage);
             }
+
+            /// Release directory lock if any
+            if (!names.kvfs_lock_keys.empty())
+            {
+                catalog->clearFilesysLocks({names.kvfs_lock_keys.begin(), names.kvfs_lock_keys.end()},
+                    txn_record.txnID());
+                clean_fs_lock_by_scan = false;
+            }
         }
 
-        // remove directory lock if there's one, this is tricky, because we don't know the directory name
-        // current solution: scan all filesys lock and match the transaction id
-        catalog->clearFilesysLock(txn_record.txnID());
+        if (clean_fs_lock_by_scan)
+        {
+            // remove directory lock if there's one, this is tricky, because we don't know the directory name
+            // current solution: scan all filesys lock and match the transaction id
+            catalog->clearFilesysLock(txn_record.txnID());
+        }
+
         catalog->clearUndoBuffer(txn_record.txnID());
         catalog->removeTransactionRecord(txn_record);
         LOG_DEBUG(log, "Finish cleaning aborted transaction {}\n", txn_record.txnID().toUInt64());

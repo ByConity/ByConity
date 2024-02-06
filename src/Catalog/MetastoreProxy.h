@@ -854,10 +854,8 @@ public:
     void clearZombieIntent(const String & name_space, const UInt64 & txn_id);
 
     void writeFilesysLock(const String & name_space, UInt64 txn_id, const String & dir, const String & db, const String & table);
-
-    String getFilesysLock(const String & name_space, const String & dir);
-
-    void clearFilesysLock(const String & name_space, const String & dir);
+    std::vector<String> getFilesysLocks(const String& name_space, const std::vector<String>& dirs);
+    void clearFilesysLocks(const String & name_space, const std::vector<String>& dirs);
 
     IMetaStore::IteratorPtr getAllFilesysLock(const String & name_space);
 

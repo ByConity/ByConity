@@ -1388,19 +1388,43 @@ void MetastoreProxy::writeFilesysLock(const String & name_space, UInt64 txn_id, 
     data.set_database(db);
     data.set_table(table);
 
-    metastore_ptr->put(filesysLockKey(name_space, dir), data.SerializeAsString());
+    metastore_ptr->put(filesysLockKey(name_space, dir), data.SerializeAsString(), true);
 }
 
-String MetastoreProxy::getFilesysLock(const String & name_space, const String & dir)
+std::vector<String> MetastoreProxy::getFilesysLocks(const String& name_space,
+    const std::vector<String>& dirs)
 {
-    String data;
-    metastore_ptr->get(filesysLockKey(name_space, dir), data);
-    return data;
+    if (dirs.empty())
+    {
+        return {};
+    }
+
+    Strings keys;
+    for (const String& dir : dirs)
+    {
+        keys.push_back(filesysLockKey(name_space, dir));
+    }
+    auto res = metastore_ptr->multiGet(keys);
+    std::vector<String> lock_metas;
+    for (const auto& entry : res)
+    {
+        lock_metas.push_back(entry.first);
+    }
+    return lock_metas;
 }
 
-void MetastoreProxy::clearFilesysLock(const String & name_space, const String & dir)
+void MetastoreProxy::clearFilesysLocks(const String& name_space,
+    const std::vector<String>& dirs)
 {
-    metastore_ptr->drop(filesysLockKey(name_space, dir));
+    if (!dirs.empty())
+    {
+        Strings keys;
+        for (const String& dir : dirs)
+        {
+            keys.push_back(filesysLockKey(name_space, dir));
+        }
+        multiDrop(keys);
+    }
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getAllFilesysLock(const String & name_space)

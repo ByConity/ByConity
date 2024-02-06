@@ -453,11 +453,9 @@ public:
     /// (that will eventualy fail). **NOTES: it DOES NOT belong to general cnch lock system, don't confuse.
 
     /// write a directory lock
-    TxnTimestamp writeFilesysLock(TxnTimestamp txn_id, const String & dir, const String & db, const String & table);
-    /// check if a directory is lock
-    std::optional<FilesysLock> getFilesysLock(const String & dir);
-    /// clean a directory lock
-    void clearFilesysLock(const String & dir);
+    TxnTimestamp writeFilesysLock(TxnTimestamp txn_id, const String & dir, const IStorage& storage);
+    /// clean a directory lock, if txn_id is not a nullopt, will check if these locks are owned by this txn
+    void clearFilesysLocks(const std::vector<String>& dirs, std::optional<TxnTimestamp> txn_id);
     /// clean a directory lock by transaction id
     void clearFilesysLock(TxnTimestamp txn_id);
     /// get all filesys lock record

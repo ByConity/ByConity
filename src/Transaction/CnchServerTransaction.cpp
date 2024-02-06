@@ -441,6 +441,8 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
     Stopwatch watch(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchTxnCleanElapsedMilliseconds, watch.elapsedMilliseconds()); });
 
+    bool clean_fs_lock_by_scan = global_context->getConfigRef().getBool("cnch_txn_clean_fs_lock_by_scan", true);
+
     try
     {
         // operations are done in sequence, if any operation failed, the remaining will not continue. The background scan thread will finish the remaining job.
@@ -451,8 +453,8 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
 
         if (getStatus() == CnchTransactionStatus::Finished)
         {
-            // first clear any filesys lock if hold
-            catalog->clearFilesysLock(txn_id);
+            /// Transaction is succeed, nothing to undo, and transaction status is still in memory,
+            /// user should be responsible to release acquired resource(i.e. attach should release kvfs lock it self)
             UInt32 undo_size = 0;
             for (auto & action : actions)
             {
@@ -491,6 +493,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
                 task.undo_size = undo_size;
             }
 
+            std::set<String> kvfs_lock_keys;
             for (const auto & [uuid, resources] : undo_buffer)
             {
                 StoragePtr table = catalog->getTableByUUID(*global_context, uuid, txn_id, true);
@@ -499,13 +502,25 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
                     throw Exception("Table is not of MergeTree class", ErrorCodes::LOGICAL_ERROR);
 
                 for (const auto & resource : resources)
+                {
+                    if (resource.type() == UndoResourceType::KVFSLockKey)
+                        kvfs_lock_keys.insert(resource.placeholders(0));
                     resource.clean(*catalog, storage);
+                }
+            }
+
+            if (!kvfs_lock_keys.empty())
+            {
+                catalog->clearFilesysLocks({kvfs_lock_keys.begin(), kvfs_lock_keys.end()}, txn_id);
             }
 
             catalog->clearUndoBuffer(txn_id);
 
-            /// to this point, can safely clear any lock if hold
-            catalog->clearFilesysLock(txn_id);
+            if (kvfs_lock_keys.empty() && clean_fs_lock_by_scan)
+            {
+                /// to this point, can safely clear any lock if hold
+                catalog->clearFilesysLock(txn_id);
+            }
 
             // remove transaction record, if remove transaction record is not done, will still be handled by background scan thread.
             catalog->removeTransactionRecord(txn_record);

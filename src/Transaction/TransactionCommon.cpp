@@ -173,9 +173,13 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
             disk->moveDirectory(dst_path, src_path);
         }
     }
+    else if (type() == UndoResourceType::KVFSLockKey)
+    {
+        LOG_TRACE(log, "Nothing to clean in vfs for undo resource:" + toDebugString());
+    }
     else
     {
-        LOG_DEBUG(log, "Undefined clean method.");
+        LOG_DEBUG(log, "Undefined clean method for undo resource: " + toDebugString());
     }
 }
 
@@ -258,6 +262,10 @@ UndoResourceNames integrateResources(const UndoResources & resources)
                 /// parts (before attach).
                 result.parts.insert(part_name);
             }
+        }
+        else if (resource.type() == UndoResourceType::KVFSLockKey)
+        {
+            result.kvfs_lock_keys.insert(resource.placeholders(0));
         }
         else if (resource.type() == UndoResourceType::S3AttachPart
             || resource.type() == UndoResourceType::S3DetachPart
