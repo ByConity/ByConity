@@ -288,7 +288,8 @@ TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, 
         SortDescription{},
         GroupingDescriptions{},
         agg_step->needOverflowRow(),
-        !(agg_step->isFinal()) && context.context->getSettingsRef().distributed_aggregation_memory_efficient);
+        false,
+        agg_step->isNoShuffle());
     auto rewritten_agg_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(rewritten_aggregation), {inner_table});
 
     PlanNodePtr rewritten_join;
@@ -449,7 +450,8 @@ TransformResult PushAggThroughInnerJoin::transformImpl(PlanNodePtr aggregation, 
         SortDescription{},
         GroupingDescriptions{},
         agg_step->needOverflowRow(),
-        !(agg_step->isFinal()) && context.context->getSettingsRef().distributed_aggregation_memory_efficient);
+        false,
+        agg_step->isNoShuffle());
     auto left_agg_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(left_aggregation), {left_table});
 
     auto right_aggregation = std::make_shared<AggregatingStep>(
@@ -462,7 +464,8 @@ TransformResult PushAggThroughInnerJoin::transformImpl(PlanNodePtr aggregation, 
         SortDescription{},
         GroupingDescriptions{},
         agg_step->needOverflowRow(),
-        !(agg_step->isFinal()) && context.context->getSettingsRef().distributed_aggregation_memory_efficient);
+        false,
+        agg_step->isNoShuffle());
     auto right_agg_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(right_aggregation), {right_table});
 
     auto output_stream = agg_step->getInputStreams()[0];

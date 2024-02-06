@@ -288,7 +288,8 @@ AggregatingStep::AggregatingStep(
     SortDescription group_by_sort_description_,
     GroupingDescriptions groupings_,
     bool,
-    bool should_produce_results_in_order_of_bucket_number_)
+    bool should_produce_results_in_order_of_bucket_number_,
+    bool no_shuffle_)
     : ITransformingStep(
         input_stream_,
         appendGroupingColumns(params_.getHeader(final_), grouping_sets_params_, groupings_, final_),
@@ -307,6 +308,7 @@ AggregatingStep::AggregatingStep(
     , group_by_sort_description(std::move(group_by_sort_description_))
     , groupings(groupings_)
     , should_produce_results_in_order_of_bucket_number(should_produce_results_in_order_of_bucket_number_)
+    , no_shuffle(no_shuffle_)
 {
     //    final = final && !totals && !cube & !rollup;
     setInputStreams(input_streams);
@@ -702,7 +704,8 @@ std::shared_ptr<IQueryPlanStep> AggregatingStep::copy(ContextPtr) const
         group_by_sort_description,
         groupings,
         needOverflowRow(),
-        should_produce_results_in_order_of_bucket_number);
+        should_produce_results_in_order_of_bucket_number,
+        no_shuffle);
 }
 
 void GroupingSetsParams::toProto(Protos::GroupingSetsParams & proto) const

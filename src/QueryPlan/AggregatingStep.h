@@ -92,7 +92,8 @@ public:
         bool storage_has_evenly_distributed_read_,
         InputOrderInfoPtr group_by_info_,
         SortDescription group_by_sort_description_,
-        bool should_produce_results_in_order_of_bucket_number_)
+        bool should_produce_results_in_order_of_bucket_number_,
+        bool no_shuffle_ = false)
         : AggregatingStep(
             input_stream_,
             Names(),
@@ -108,7 +109,8 @@ public:
             std::move(group_by_sort_description_),
             {},
             false,
-            should_produce_results_in_order_of_bucket_number_)
+            should_produce_results_in_order_of_bucket_number_,
+            no_shuffle_)
     {
     }
 
@@ -122,7 +124,8 @@ public:
         SortDescription group_by_sort_description_ = {},
         GroupingDescriptions groupings_ = {},
         bool overflow_row_ = false,
-        bool should_produce_results_in_order_of_bucket_number_ = false)
+        bool should_produce_results_in_order_of_bucket_number_ = false,
+        bool no_shuffle_ = false)
         : AggregatingStep(
             input_stream_,
             keys_,
@@ -138,7 +141,8 @@ public:
             group_by_sort_description_,
             groupings_,
             false,
-            should_produce_results_in_order_of_bucket_number_)
+            should_produce_results_in_order_of_bucket_number_,
+            no_shuffle_)
     {
     }
 
@@ -158,7 +162,8 @@ public:
         SortDescription group_by_sort_description_,
         GroupingDescriptions groupings_ = {},
         bool totals_ = false,
-        bool should_produce_results_in_order_of_bucket_number = true);
+        bool should_produce_results_in_order_of_bucket_number = true,
+        bool no_shuffle_ = false);
 
     String getName() const override { return "Aggregating"; }
 
@@ -184,8 +189,18 @@ public:
     bool isFinal() const { return final; }
     bool isPartial() const { return !final; }
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }
+    bool isNoShuffle() const
+    {
+        return no_shuffle;
+    }
+    void setNoShuffle(bool no_shuffle_)
+    {
+        no_shuffle = no_shuffle_;
+    }
+
     const GroupingDescriptions & getGroupings() const { return groupings; }
     bool shouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }
+    void setShouldProduceResultsInOrderOfBucketNumber(bool value) { should_produce_results_in_order_of_bucket_number = value; }
     bool needOverflowRow() const
     {
         return params.overflow_row;
@@ -232,7 +247,10 @@ private:
     /// therefore, this variable is passed to the constructor.
     /// if the condition is unkown, the safe options is to set it to true to avoid errors
     /// therefore the default value is true in the constructor
-    const bool should_produce_results_in_order_of_bucket_number;
+    bool should_produce_results_in_order_of_bucket_number;
+
+    // for bitengine sqls
+    bool no_shuffle;
 
     Processors aggregating_in_order;
     Processors aggregating_sorted;

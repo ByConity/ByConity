@@ -1479,6 +1479,16 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
     if (step.isFinal())
         details << "|"
                 << "final";
+    if (step.isNoShuffle())
+        details << "|"
+                << "no shuffle";
+
+    if (step.shouldProduceResultsInOrderOfBucketNumber())
+    {
+        details << "|";
+        details << "results in order of bucket number";
+    }
+
     //    if (step.isTotals())
     //        details << "|"
     //                << "totals";
@@ -1572,6 +1582,13 @@ String StepPrinter::printMergingAggregatedStep(const MergingAggregatedStep & ste
         details << column.name << ":";
         details << column.type->getName() << "\\n";
     }
+
+    if (step.isMemoryEfficientAggregation())
+    {
+        details << "|";
+        details << "memory efficient";
+    }
+
     return details.str();
 }
 
@@ -1669,7 +1686,8 @@ String StepPrinter::printExchangeStep(const ExchangeStep & step)
                 return "GATHER";
         }
     };
-    details << "ExchangeNode " << f(step.getExchangeMode());
+    details << f(step.getExchangeMode());
+
     if (step.needKeepOrder())
     {
         details << "|";

@@ -51,7 +51,8 @@ TransformResult split(const PlanNodePtr & node, RuleContext & context)
         step->getGroupBySortDescription(),
         step->getGroupings(),
         step->needOverflowRow(),
-        context.context->getSettingsRef().distributed_aggregation_memory_efficient);
+        false,
+        step->isNoShuffle());
 
     auto partial_agg_node
         = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(partial_agg), node->getChildren(), node->getStatistics());
