@@ -65,6 +65,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.avro.schema_registry_url = settings.format_avro_schema_registry_url.toString();
     format_settings.csv.allow_double_quotes = settings.format_csv_allow_double_quotes;
     format_settings.csv.allow_single_quotes = settings.format_csv_allow_single_quotes;
+    format_settings.csv.write_utf8_with_bom = settings.format_csv_write_utf8_with_bom;
     format_settings.csv.crlf_end_of_line = settings.output_format_csv_crlf_end_of_line;
     format_settings.csv.delimiter = settings.format_csv_delimiter;
     format_settings.csv.empty_as_default = settings.input_format_defaults_for_omitted_fields;

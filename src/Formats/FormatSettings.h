@@ -97,6 +97,7 @@ struct FormatSettings
         char delimiter = ',';
         bool allow_single_quotes = true;
         bool allow_double_quotes = true;
+        bool write_utf8_with_bom = false;
         bool unquoted_null_literal_as_null = false;
         bool empty_as_default = false;
         bool crlf_end_of_line = false;
