@@ -25,10 +25,24 @@ MemoryTracker * getMemoryTracker()
 namespace CurrentMemoryTracker
 {
 
+
+
+/// g_total_untracked_memory_limit_encoded = | highest 4 bit for power of two of base value | lowest 4 bit for base value in KB|
+/// Use only one encoded byte to represent 0 to 480MB total untracked memory limit, since one byte load/store is safe on all platform
+/// Actual total untracked limit = (lowest 4 bit value) * 2^(higest 4 bit value) KB = (byte&0x0f) << (byte<<4) KB
+/// Default total untracked limit = 0xc1 = 0x01 * 2^0x0c KB = 1 * 2^12 KB = 4MB
+/// Maximum total untraced limit =  0xff = 0x0f * 2^0x0f KB = 15 * 2^15 KB = 480MB
+DB::UInt8 g_total_untracked_memory_limit_encoded{DEFAULT_TOTAL_UNTRACKED_LIMIT_ENCODED};
+
 using DB::current_thread;
 
 namespace
 {
+
+    thread_local Int64 total_untracked_memory{0};
+    thread_local Int64 total_untracked_memory_limit
+        = ((g_total_untracked_memory_limit_encoded & 0x0f) << (g_total_untracked_memory_limit_encoded >> 4)) << 10;
+
     void allocImpl(Int64 size, bool throw_if_memory_exceeded)
     {
         if (auto * memory_tracker = getMemoryTracker())
@@ -45,10 +59,19 @@ namespace
                     memory_tracker->allocImpl(tmp, throw_if_memory_exceeded);
                 }
             }
-            /// total_memory_tracker only, ignore untracked_memory
+            /// total_memory_tracker only, use total_untracked_memory_limit to avoid perfermance issue
             else
             {
-                memory_tracker->allocImpl(size, throw_if_memory_exceeded);
+                total_untracked_memory += size;
+                if (total_untracked_memory > total_untracked_memory_limit)
+                {
+                    Int64 tmp = total_untracked_memory;
+                    total_untracked_memory = 0;
+                    /// Update limit
+                    total_untracked_memory_limit
+                        = ((g_total_untracked_memory_limit_encoded & 0x0f) << (g_total_untracked_memory_limit_encoded >> 4)) << 10;
+                    memory_tracker->allocImpl(tmp, throw_if_memory_exceeded);
+                }
             }
         }
     }
@@ -91,10 +114,18 @@ void free(Int64 size)
                 current_thread->untracked_memory = 0;
             }
         }
-        /// total_memory_tracker only, ignore untracked_memory
+        /// total_memory_tracker only, use total_untracked_memory_limit to avoid perfermance issue
         else
         {
-            memory_tracker->free(size);
+            total_untracked_memory -= size;
+            if (total_untracked_memory < -total_untracked_memory_limit)
+            {
+                /// Update limit
+                total_untracked_memory_limit
+                    = ((g_total_untracked_memory_limit_encoded & 0x0f) << (g_total_untracked_memory_limit_encoded >> 4)) << 10;
+                memory_tracker->free(-total_untracked_memory);
+                total_untracked_memory = 0;
+            }
         }
     }
 }

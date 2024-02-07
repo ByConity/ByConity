@@ -99,6 +99,7 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Version.h>
+#include <Common/CurrentMemoryTracker.h>
 #include <Common/Brpc/BrpcApplication.h>
 #include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/ClickHouseRevision.h>
@@ -962,6 +963,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->reloadRootConfig(*config);
             Settings::checkNoSettingNamesAtTopLevel(*config, config_path);
 
+            /// Settings for total memory
+            UInt64 total_untracked_memory_limit_encoded
+                = config->getUInt64("total_untracked_memory_limit_encoded", CurrentMemoryTracker::DEFAULT_TOTAL_UNTRACKED_LIMIT_ENCODED);
+            if (total_untracked_memory_limit_encoded <= std::numeric_limits<UInt8>::max())
+            {
+                LOG_INFO(log, "Setting total_untracked_memory_limit_encoded: {}", total_untracked_memory_limit_encoded);
+                CurrentMemoryTracker::g_total_untracked_memory_limit_encoded = total_untracked_memory_limit_encoded;
+            }
             /// Limit on total memory usage
             size_t max_server_memory_usage = config->getUInt64("max_server_memory_usage", 0);
 
