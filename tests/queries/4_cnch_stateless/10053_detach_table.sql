@@ -7,7 +7,7 @@ INSERT INTO detach_test VALUES (1, 2), (3, 4);
 SELECT COUNT() FROM detach_test;
 
 DETACH TABLE detach_test PERMANENTLY;
-SELECT COUNT() FROM detach_test; --{serverError 60}
+SELECT COUNT() FROM detach_test; --{serverError 8077}
 
 ATTACH TABLE detach_test;
 SELECT COUNT() FROM detach_test;

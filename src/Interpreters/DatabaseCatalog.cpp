@@ -88,6 +88,8 @@ namespace ErrorCodes
     extern const int UNKNOWN_CATALOG;
     extern const int UNKNOWN_DATABASE;
     extern const int UNKNOWN_TABLE;
+    extern const int TABLE_IS_DETACHED;
+    extern const int TABLE_IS_DROPPED;
     extern const int TABLE_ALREADY_EXISTS;
     extern const int DATABASE_ALREADY_EXISTS;
     extern const int DATABASE_NOT_EMPTY;
@@ -371,17 +373,21 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         database = it->second;
     }
 
-    auto table = database->tryGetTable(table_id.table_name, context_);
-
-    if (!table && exception)
-        exception->emplace(
-            ErrorCodes::UNKNOWN_TABLE,
-            "Table {} doesn't exist in {}, database engine type: {}",
-            table_id.getNameForLogs(),
-            database->getDatabaseName(),
-            database->getEngineName());
-    if (!table)
+    StoragePtr table = database->tryGetTable(table_id.table_name, context_, true);
+    if (exception)
+    {
+        if (!table)
+            exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Table {} doesn't exist in {}, database engine type: {}", table_id.getNameForLogs(), database->getDatabaseName(), database->getEngineName());
+        else if (table->is_detached)
+            exception->emplace(ErrorCodes::TABLE_IS_DETACHED, "Table {} is detached in {}, database engine type: {}", table_id.getNameForLogs(), database->getDatabaseName(), database->getEngineName());
+        else if (table->is_dropped)
+            exception->emplace(ErrorCodes::TABLE_IS_DROPPED, "Table {} is dropped in {}, database engine type: {}", table_id.getNameForLogs(), database->getDatabaseName(), database->getEngineName());
+    }
+    if (!table || table->is_detached || table->is_dropped)
+    {
+        table = nullptr;
         database = nullptr;
+    }
 
     if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
     {
