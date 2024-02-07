@@ -13,6 +13,7 @@
 #    include <DataTypes/DataTypeString.h>
 #    include <Functions/FunctionFactory.h>
 #    include <Functions/FunctionHelpers.h>
+#    include <Functions/IFunctionMySql.h>
 #    include <Functions/GatherUtils/Algorithms.h>
 #    include <IO/WriteHelpers.h>
 #    include <turbob64.h>
@@ -67,11 +68,15 @@ public:
 
     static FunctionPtr create(ContextPtr context)
     {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionBase64Conversion>(context->getSettingsRef().dialect_type == DialectType::MYSQL));
         return std::make_shared<FunctionBase64Conversion>(context->getSettingsRef().dialect_type == DialectType::MYSQL);
     }
 
     FunctionBase64Conversion(bool mysql_mode_) : mysql_mode(mysql_mode_)
     {}
+
+    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
 
     String getName() const override
     {
@@ -88,11 +93,11 @@ public:
         return true;
     }
 
-    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!WhichDataType(arguments[0].type).isString())
+        if (!WhichDataType(arguments[0]).isString())
             throw Exception(
-                "Illegal type " + arguments[0].type->getName() + " of 1 argument of function " + getName() + ". Must be String.",
+                "Illegal type " + arguments[0]->getName() + " of 1 argument of function " + getName() + ". Must be String.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         DataTypePtr base_type = std::make_shared<DataTypeString>();
@@ -209,7 +214,7 @@ public:
         }
 
         dst_data.resize(dst_pos - dst);
-        if constexpr (null_on_errors)
+        if (std::is_same_v<Func, Base64Decode> and null_on_errors)
         {
             return ColumnNullable::create(std::move(dst_column), std::move(col_null_map_to));
         }

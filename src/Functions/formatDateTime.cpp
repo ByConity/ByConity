@@ -31,7 +31,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/TransformDateTime64.h>
 #include <Functions/castTypeToEither.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
@@ -749,8 +749,17 @@ namespace
                     writeNumber2(dest + 3, ToMinuteImpl::execute(source, timezone));
                     writeNumber2(dest + 6, ToSecondImpl::execute(source, timezone));
                 }
+                writeChar1(dest + 8, ' ');
                 if (hh >= 12)
-                    *(dest + 9) = 'P';
+                {
+                    writeChar1(dest + 9, 'P');
+                    writeChar1(dest + 10, 'M');
+                }
+                else
+                {
+                    writeChar1(dest + 9, 'A');
+                    writeChar1(dest + 10, 'M');
+                }
 
                 if (!mysql_with_only_fixed_length_formatters)
                 {
@@ -1042,12 +1051,25 @@ namespace
             if constexpr (forceAdaptive)
                 return std::make_shared<FunctionFormatDateTimeImpl>(true, false, false, context);
             if constexpr (std::is_same_v<Name, NameDateFormat>)
-                return std::make_shared<FunctionFormatDateTimeImpl>(false, true, true, context);
+                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionFormatDateTimeImpl>(false, true, true, context));
+            if (context->getSettingsRef().enable_implicit_arg_type_convert && support_integer == SupportInteger::No)
+                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionFormatDateTimeImpl>(
+                                                        context->getSettingsRef().adaptive_type_cast,
+                                                        context->getSettingsRef().dialect_type == DialectType::MYSQL,
+                                                        context->getSettingsRef().formatdatetime_parsedatetime_m_is_month_name,
+                                                        context));
             return std::make_shared<FunctionFormatDateTimeImpl>(
                 context->getSettingsRef().adaptive_type_cast,
                 context->getSettingsRef().dialect_type == DialectType::MYSQL,
                 context->getSettingsRef().formatdatetime_parsedatetime_m_is_month_name,
                 context);
+        }
+
+        ArgType getArgumentsType() const override
+        {
+            if constexpr (std::is_same_v<Name, NameTimeFormat>)
+                return ArgType::STRINGS;
+            return ArgType::DATE_STR;
         }
 
         String getName() const override { return name; }
@@ -1194,14 +1216,13 @@ namespace
                 {
                     if (!isTime(arguments[0].type))
                     {
-                        // TODO: handle scale for datetime
                         auto to_int = FunctionFactory::instance().get("toTimeType", context_ptr);
                         const auto scale_type = std::make_shared<DataTypeUInt8>();
-                        const auto scale_col = scale_type->createColumnConst(1, Field(0));
+                        const auto scale_col = scale_type->createColumnConst(1, Field(6));
                         ColumnWithTypeAndName scale_arg {std::move(scale_col), std::move(scale_type), "scale"};
                         ColumnsWithTypeAndName temp {arguments[0], std::move(scale_arg)};
-                        auto col = to_int->build(temp)->execute(temp, std::make_shared<DataTypeTime>(0), input_rows_count);
-                        ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeTime>(0), "unixtime");
+                        auto col = to_int->build(temp)->execute(temp, std::make_shared<DataTypeTime>(6), input_rows_count);
+                        ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeTime>(6), "unixtime");
                         converted.emplace_back(converted_col);
                         for (size_t i = 1; i < arguments.size(); i++)
                         {
@@ -2191,7 +2212,6 @@ REGISTER_FUNCTION(FormatDateTime)
     factory.registerFunction<FunctionFormatDateTime>();
     factory.registerFunction<FunctionDateFormat>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTimeFormat>(FunctionFactory::CaseInsensitive);
-    factory.registerAlias("DATE_FORMAT", FunctionFormatDateTime::name);
 
     factory.registerFunction<FunctionFromUnixTimestamp>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("fromUnixTimestamp", "FROM_UNIXTIME");

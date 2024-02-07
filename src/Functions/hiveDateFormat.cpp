@@ -252,6 +252,12 @@ public:
 
     static FunctionPtr create(ContextPtr context)
     {
+        // In mysql dialect, use mysql date format
+        if (context->getSettingsRef().dialect_type == DialectType::MYSQL)
+            return std::make_shared<FunctionFormatDateTimeImpl>(false, true, true, context);
+        // Have to include this check to separate hive and ck behavior
+        else if (context->getSettingsRef().date_format_clickhouse)
+            return std::make_shared<FunctionFormatDateTimeImpl>(false, true, true, context);
         return std::make_shared<FunctionHiveDateFormat>(context);
     }
 
@@ -382,7 +388,8 @@ public:
 
 REGISTER_FUNCTION(HiveDateFormat)
 {
-    factory.registerFunction<FunctionHiveDateFormat>();
+    factory.registerFunction<FunctionHiveDateFormat>(FunctionFactory::CaseInsensitive);
+    factory.registerAlias("date_format_hive", "date_format", FunctionFactory::CaseInsensitive);
 }
 
 }

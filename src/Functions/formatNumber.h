@@ -14,13 +14,13 @@ namespace DB
 struct FormatNumberImpl
 {
     static ColumnPtr
-    formatExecute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &/*result_type*/, size_t input_row_counts)
+    formatExecute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_row_counts, ContextPtr context)
     {
         // TODO: add support for an optional locale argument
         const DataTypePtr & data_type = arguments[0].type;
 
         // round raw numbers
-        auto func_builder_round = FunctionFactory::instance().get("round", nullptr);
+        auto func_builder_round = FunctionFactory::instance().get("round", context);
         auto rounded_data_ptr = func_builder_round->build(arguments)->execute(arguments, data_type, input_row_counts);
 
         // convert to string
@@ -110,7 +110,7 @@ struct FormatNumberImpl
             throw Exception("Scale argument for format functions must be constant", ErrorCodes::ILLEGAL_COLUMN);
 
         Field scale_field = assert_cast<const ColumnConst &>(scale_column).getField();
-        int scale64 = scale_field.get<Int64>();
+        int scale64 = scale_column.getInt(0);
         // only support up to 30 digits like MySQL
         scale64 = scale64 == 0 ? -1 : scale64;
         scale64 = std::min(std::max(scale64, -1), 30);

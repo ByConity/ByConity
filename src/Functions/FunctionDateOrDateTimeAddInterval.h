@@ -31,7 +31,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/DecimalFunctions.h>
 
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/castTypeToEither.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
@@ -694,19 +694,15 @@ struct DateTimeAddIntervalImpl
                 String str_val = src_const->template getValue<String>();
                 ReadBufferFromMemory read_buffer(str_val.c_str(), str_val.size());
                 DateTime64 dt_val = 0;
-                readDateTime64Text(dt_val, 0, read_buffer);
+                readDateTime64Text(dt_val, 3, read_buffer);
 
                 op.constantVector(dt_val, col_to->getData(), delta_column, time_zone, scale);
             }
             else
             {
-                const ColumnPtr dt_col = ConvertThroughParsing<
-                    FromDataType,
-                    DataTypeDateTime64,
-                    NameToDateTime64,
-                    ConvertFromStringExceptionMode::Throw,
-                    ConvertFromStringParsingMode::Normal>::
-                    execute({arguments[0]}, std::make_shared<DataTypeDateTime64>(0), source_col->size(), 0);
+                const ColumnPtr dt_col = ConvertThroughParsing<FromDataType, DataTypeDateTime64, NameToDateTime64,
+                        ConvertFromStringExceptionMode::Throw, ConvertFromStringParsingMode::Normal>::execute(
+                        {arguments[0]}, std::make_shared<DataTypeDateTime64>(3), source_col->size(), 3);
                 const auto * datetime64_input = checkAndGetColumn<ColumnDecimal<DateTime64>>(dt_col.get());
                 if (!datetime64_input)
                     throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal string input column {}", source_col->getName());
@@ -759,7 +755,14 @@ class FunctionDateOrDateTimeAddInterval : public IFunction
 {
 public:
     static constexpr auto name = Transform::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionDateOrDateTimeAddInterval>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionDateOrDateTimeAddInterval>());
+        return std::make_shared<FunctionDateOrDateTimeAddInterval>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::DATE_NUM_STR; }
 
     String getName() const override
     {
@@ -776,7 +779,7 @@ public:
                 + toString(arguments.size()) + ", should be 2 or 3",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (!isNativeNumber(arguments[1].type) && !isStringOrFixedString(arguments[1].type))
+        if (!isNumber(arguments[1].type) && !isStringOrFixedString(arguments[1].type))
             throw Exception(
                 "Second argument for function " + getName() + " (delta) must be number, string",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -884,7 +887,7 @@ public:
             else
             {
                 WhichDataType which(arguments[0].type.get());
-                auto scale = which.isStringOrFixedString() ? 0 : DataTypeDateTime64::default_scale;
+                auto scale = DataTypeDateTime64::default_scale;
 
                 if constexpr (std::is_same_v<Transform, AddNanosecondsImpl> || std::is_same_v<Transform, SubtractNanosecondsImpl>)
                     scale = 9;
@@ -962,13 +965,13 @@ public:
         {
             using WrappedTransformType = TransformType<typename DataTypeDateTime64::FieldType>;
             return DateTimeAddIntervalImpl<DataTypeString, TransformResultDataType<DataTypeDateTime64>, WrappedTransformType>::execute(
-                WrappedTransformType{static_cast<UInt32>(0)}, converted_arguments, result_type);
+                WrappedTransformType{static_cast<UInt32>(3)}, converted_arguments, result_type);
         }
         else if (which.isFixedString())
         {
             using WrappedTransformType = TransformType<typename DataTypeDateTime64::FieldType>;
             return DateTimeAddIntervalImpl<DataTypeFixedString, TransformResultDataType<DataTypeDateTime64>, WrappedTransformType>::execute(
-                WrappedTransformType{static_cast<UInt32>(0)}, converted_arguments, result_type);
+                WrappedTransformType{static_cast<UInt32>(3)}, converted_arguments, result_type);
         }
         else if (const auto * datetime64_type = assert_cast<const DataTypeDateTime64 *>(from_type))
         {

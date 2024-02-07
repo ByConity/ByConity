@@ -1090,6 +1090,8 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             total_marks_pk += part->index_granularity.getMarksCountWithoutFinal();
         parts_before_pk = parts.size();
 
+        Stopwatch stopwatch;
+
         result.parts_with_ranges = MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipIndexes(
             std::move(parts),
             metadata_snapshot,
@@ -1100,10 +1102,13 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             log,
             num_streams,
             result.index_stats,
-            true,
+            settings.enable_skip_index,
             data,
             result.sampling.use_sampling,
             result.sampling.relative_sample_size);
+
+        auto cost_micro_seconds = stopwatch.elapsedMicroseconds();
+        LOG_DEBUG(log, "Filtering parts by primiry key and skip indexes used: {} micro seconds", cost_micro_seconds);
     }
     catch (...)
     {

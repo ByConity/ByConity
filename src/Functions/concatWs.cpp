@@ -30,7 +30,7 @@ namespace
 
         static FunctionPtr create(ContextPtr context) { return std::make_shared<ConcatWithSeparatorImpl>(context); }
 
-        bool useDefaultImplementationForNulls() const override { return context->getSettingsRef().dialect_type != DialectType::MYSQL; }
+        bool useDefaultImplementationForNulls() const override { return !context || context->getSettingsRef().dialect_type != DialectType::MYSQL; }
 
         String getName() const override { return name; }
 

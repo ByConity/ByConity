@@ -6,6 +6,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/IFunctionMySql.h>
 
 #include <memory>
 #include <regex>
@@ -24,7 +25,14 @@ public:
 
     explicit FunctionConvertTz(ContextPtr context_) : context(context_) { }
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionConvertTz>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertTz>(context));
+        return std::make_shared<FunctionConvertTz>(context);
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
 
     String getName() const override { return name; }
 
@@ -53,7 +61,7 @@ public:
         const ColumnPtr from_tz_parsed = from_tz.type->createColumnConst(from_tz.column->size(), from_tz_str);
         const auto date_time_type = std::make_shared<DataTypeDateTime>(from_tz_str);
         const ColumnsWithTypeAndName to_date_time_operands = {date_expr, {from_tz_parsed, from_tz.type, from_tz.name}};
-        return executeFunction("toDateTime", to_date_time_operands, date_time_type);
+        return executeFunction("parseDateTimeBestEffort", to_date_time_operands, date_time_type);
     }
 
 private:

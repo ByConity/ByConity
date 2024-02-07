@@ -24,6 +24,7 @@
 
 #include <AggregateFunctions/AggregateFunctionArray.h>
 #include <AggregateFunctions/AggregateFunctionState.h>
+#include <AggregateFunctions/IAggregateFunctionMySql.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
 #include <Compression/CompressedWriteBuffer.h>
@@ -389,7 +390,27 @@ Aggregator::Aggregator(const Params & params_)
     aggregation_state_cache = AggregatedDataVariants::createCache(method_chosen, cache_settings);
 
 #if USE_EMBEDDED_COMPILER
-    compileAggregateFunctions();
+    /// implicit type conversion is not implmented for llvm compiled agg funcs
+    /// therefore, do not use llvm compiled agg if implicit type convesion is required,
+    /// i.e., IAggregateFunctionMySql is used
+    bool compile_agg = true;
+    for (size_t i = 0; i < params.aggregates_size; ++i)
+    {
+        if (dynamic_cast<const IAggregateFunctionMySql*>(aggregate_functions[i]))
+        {
+            compile_agg = false;
+        }
+        else if (auto nested = aggregate_functions[i]->getNestedFunction())
+        {
+            if (dynamic_cast<const IAggregateFunctionMySql*>(nested.get()))
+                compile_agg = false;
+        }
+        if (!compile_agg)
+            break;
+    }
+
+    if (compile_agg)
+        compileAggregateFunctions();
 #endif
 
 }

@@ -78,6 +78,9 @@ namespace ProfileEvents
     extern const Event SelectedParts;
     extern const Event SelectedRanges;
     extern const Event SelectedMarks;
+    extern const Event IndexGranuleSeekTime;
+    extern const Event IndexGranuleReadTime;
+    extern const Event IndexGranuleCalcTime;
 }
 
 
@@ -975,6 +978,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
             MutableFilterBitmapPtr filter_bitmap = std::make_shared<roaring::Roaring>();
 
+            IndexTimeWatcher index_time_watcher;
             for (auto & index_and_condition : useful_indices)
             {
                 roaring::Roaring tmp_filter_bitmap;
@@ -996,7 +1000,8 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                     total_granules,
                     granules_dropped,
                     tmp_filter_bitmap,
-                    log_
+                    log_,
+                    index_time_watcher
                 );
                 
                 (*filter_bitmap) |= tmp_filter_bitmap;
@@ -1007,6 +1012,10 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                 if (ranges.ranges.empty())
                     index_and_condition.parts_dropped.fetch_add(1, std::memory_order_relaxed);
             }
+
+            ProfileEvents::increment(ProfileEvents::IndexGranuleSeekTime, index_time_watcher.index_granule_seek_time);
+            ProfileEvents::increment(ProfileEvents::IndexGranuleReadTime, index_time_watcher.index_granule_read_time);
+            ProfileEvents::increment(ProfileEvents::IndexGranuleCalcTime, index_time_watcher.index_condition_calc_time);
 
             if (!ranges.ranges.empty())
             {
@@ -1738,7 +1747,8 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     size_t & total_granules,
     size_t & granules_dropped,
     roaring::Roaring & filter_bitmap,
-    Poco::Logger * log)
+    Poco::Logger * log,
+    IndexTimeWatcher & index_time_watcher)
 {
     const auto & settings = context->getSettingsRef();
     if (!part->getChecksums()->files.contains(index_helper->getFileName() + ".idx"))
@@ -1799,15 +1809,19 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
                 range.begin / index_granularity,
                 (range.end + index_granularity - 1) / index_granularity);
 
-        if (last_index_mark != index_range.begin || !granule)
-            reader.seek(index_range.begin);
+        index_time_watcher.watch(IndexTimeWatcher::Type::SEEK, [&](){
+            if (last_index_mark != index_range.begin || !granule)
+                reader.seek(index_range.begin);
+        });
 
         total_granules += index_range.end - index_range.begin;
 
         for (size_t index_mark = index_range.begin; index_mark < index_range.end; ++index_mark)
         {
-            if (index_mark != index_range.begin || !granule || last_index_mark != index_range.begin)
-                granule = reader.read();
+            index_time_watcher.watch(IndexTimeWatcher::Type::READ, [&](){
+                if (index_mark != index_range.begin || !granule || last_index_mark != index_range.begin)
+                    granule = reader.read();
+            });
 
             MarkRange data_range(
                     std::max(range.begin, index_mark * index_granularity),
@@ -1817,7 +1831,9 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
 
             if (!gin_filter_condition)
             {
-                maybe_true = condition->mayBeTrueOnGranule(granule);
+                index_time_watcher.watch(IndexTimeWatcher::Type::CLAC, [&](){
+                    maybe_true = condition->mayBeTrueOnGranule(granule);
+                });
             }
             else
             {

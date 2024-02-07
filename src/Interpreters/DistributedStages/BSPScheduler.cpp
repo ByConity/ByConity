@@ -1,3 +1,5 @@
+#include <CloudServices/CnchServerResource.h>
+
 #include "BSPScheduler.h"
 
 namespace DB
@@ -33,7 +35,7 @@ void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed,
     // on exception
     if (!is_succeed && !is_canceled)
     {
-        stopped.store(true, std::memory_order_release);
+        stopped.store(true, std::memory_order_relaxed);
         // emplace a fake task.
         addBatchTask(nullptr);
     }
@@ -170,4 +172,30 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
     }
 }
 
+void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size)
+{
+    // Send table resources to worker.
+    ResourceOption option;
+    for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+    {
+        auto storage_id = plan_segment_input->getStorageID();
+        if (storage_id && storage_id->hasUUID())
+        {
+            option.table_ids.emplace(storage_id->uuid);
+            LOG_TRACE(log, "Storage id {}", storage_id->getFullTableName());
+        }
+    }
+    if (!option.table_ids.empty())
+    {
+        query_context->getCnchServerResource()->setSendMutations(true);
+        query_context->getCnchServerResource()->sendResources(query_context, option);
+    }
+
+    // Register exchange for all outputs.
+    for (const auto & output : plan_segment_ptr->getPlanSegmentOutputs())
+    {
+        query_context->getExchangeDataTracker()->registerExchange(
+            query_context->getCurrentQueryId(), output->getExchangeId(), parallel_size);
+    }
+}
 }

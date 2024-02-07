@@ -488,27 +488,12 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, force_index_by_date, 0, "Throw an exception if there is a partition key in a table, and it is not used.", 0) \
     M(Bool, force_primary_key, 0, "Throw an exception if there is primary key in a table, and it is not used.", 0) \
-    M(String, \
-      force_data_skipping_indices, \
-      "", \
-      "Comma separated list of strings or literals with the name of the data skipping indices that should be used during query " \
-      "execution, otherwise an exception will be thrown.", \
-      0) \
-\
-    M(Float, \
-      max_streams_to_max_threads_ratio, \
-      1, \
-      "Allows you to use more sources than the number of threads - to more evenly distribute work across threads. It is assumed that " \
-      "this is a temporary solution, since it will be possible in the future to make the number of sources equal to the number of " \
-      "threads, but for each source to dynamically select available work for itself.", \
-      0) \
-    M(Float, \
-      max_streams_multiplier_for_merge_tables, \
-      5, \
-      "Ask more streams when reading from Merge table. Streams will be spread across tables that Merge table will use. This allows more " \
-      "even distribution of work across threads and especially helpful when merged tables differ in size.", \
-      0) \
-\
+    M(Bool, enable_skip_index, 1, "Whether enable to use skip index", 0) \
+    M(String, force_data_skipping_indices, "", "Comma separated list of strings or literals with the name of the data skipping indices that should be used during query execution, otherwise an exception will be thrown.", 0) \
+    \
+    M(Float, max_streams_to_max_threads_ratio, 1, "Allows you to use more sources than the number of threads - to more evenly distribute work across threads. It is assumed that this is a temporary solution, since it will be possible in the future to make the number of sources equal to the number of threads, but for each source to dynamically select available work for itself.", 0) \
+    M(Float, max_streams_multiplier_for_merge_tables, 5, "Ask more streams when reading from Merge table. Streams will be spread across tables that Merge table will use. This allows more even distribution of work across threads and especially helpful when merged tables differ in size.", 0) \
+    \
     M(String, network_compression_method, "LZ4", "Allows you to select the method of data compression when writing.", 0) \
 \
     M(Int64, network_zstd_compression_level, 1, "Allows you to select the level of ZSTD compression.", 0) \
@@ -1357,10 +1342,12 @@ enum PreloadLevelSettings : UInt64
     M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(TextCaseOption, text_case_option, TextCaseOption::MIXED, "Convert identifiers to lower case/upper case just like MySQL", 0) \
+    M(Bool, enable_implicit_arg_type_convert, false, "Eable implicit type conversion for functions", 0) \
     M(Bool, adaptive_type_cast, true, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
     M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
     M(Bool, formatdatetime_parsedatetime_m_is_month_name, false, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
+    M(Bool, date_format_clickhouse, false, "use date_format as a clickhouse function instead of hive", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
     M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\

@@ -8,7 +8,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/IDataType.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteHelpers.h>
 
 namespace DB
@@ -24,7 +24,14 @@ class FunctionSubstringIndex : public IFunction
 {
 public:
     static constexpr auto name = "substring_index";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionSubstringIndex>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionSubstringIndex>());
+        return std::make_shared<FunctionSubstringIndex>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STR_STR_NUM; }
 
     String getName() const override { return name; }
 

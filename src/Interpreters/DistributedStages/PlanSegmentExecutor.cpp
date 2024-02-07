@@ -82,6 +82,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int QUERY_WAS_CANCELLED;
     extern const int MEMORY_LIMIT_EXCEEDED;
+    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
 void PlanSegmentExecutor::prepareSegmentInfo() const
@@ -326,7 +327,14 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     GraphvizPrinter::printPipeline(pipeline_executor->getProcessors(), pipeline_executor->getExecutingGraph(), context, plan_segment->getPlanSegmentId(), extractExchangeHostPort(plan_segment_instance->info.execution_address));
     for (const auto & sender : senders)
     {
-        sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
+        auto status = sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
+        /// bsp mode will fsync data in finish, so we need to check if exception is thrown here.
+        if (context->getSettingsRef().bsp_mode && status.code != BroadcastStatusCode::ALL_SENDERS_DONE)
+            throw Exception(
+                ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION,
+                "finish senders failed status.code:{} status.message:{}",
+                status.code,
+                status.message);
     }
 
 

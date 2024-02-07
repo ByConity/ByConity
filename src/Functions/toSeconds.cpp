@@ -2,6 +2,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/IFunctionMySql.h>
 
 #define SECONDS_TO_EPOCH 62167219200
 
@@ -19,7 +20,14 @@ public:
 
     explicit FunctionToSeconds(ContextPtr context_) : context(context_) { }
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionToSeconds>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionToSeconds>(context));
+        return std::make_shared<FunctionToSeconds>(context);
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::DATES; }
 
     String getName() const override { return name; }
 

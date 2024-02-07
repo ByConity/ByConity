@@ -1,5 +1,6 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsConversion.h>
+#include <Functions/IFunctionMySql.h>
 #include "Columns/IColumn.h"
 #include "Core/ColumnsWithTypeAndName.h"
 #include "DataTypes/DataTypesNumber.h"
@@ -28,6 +29,9 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<DataTypeString>();
+
         if (!isInteger(arguments[0]))
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);

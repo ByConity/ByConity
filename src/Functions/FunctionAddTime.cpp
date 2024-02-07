@@ -6,6 +6,7 @@
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/IFunctionMySql.h>
 
 
 namespace DB
@@ -112,7 +113,17 @@ public:
 
     explicit FunctionAddOrSubTime(ContextPtr context_) : context(context_) { }
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionAddOrSubTime>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionAddOrSubTime>(context));
+        return std::make_shared<FunctionAddOrSubTime>(context);
+    }
+
+    ArgType getArgumentsType() const override
+    {
+        return ArgType::DATE_STR;
+    }
 
     String getName() const override { return name; }
 

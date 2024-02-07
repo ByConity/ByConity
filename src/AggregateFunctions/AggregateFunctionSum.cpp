@@ -1,5 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionSum.h>
+#include <AggregateFunctions/IAggregateFunctionMySql.h>
 #include <AggregateFunctions/Helpers.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 
@@ -51,7 +52,7 @@ template <typename T> using AggregateFunctionSumKahan =
 
 
 template <template <typename> class Function>
-AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings * settings)
 {
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
@@ -62,6 +63,13 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
         res.reset(createWithDecimalType<Function>(*data_type, *data_type, argument_types));
     else
         res.reset(createWithNumericType<Function>(*data_type, argument_types));
+
+    if (!res && (!settings || settings->enable_implicit_arg_type_convert))
+    {
+        DataTypePtr type_float64 = std::make_shared<DataTypeFloat64>();
+        auto * func = createWithNumericType<Function>(*type_float64, argument_types);
+        res.reset(new IAggregateFunctionMySql(std::unique_ptr<IAggregateFunction>(func)));
+    }
 
     if (!res)
         throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name,

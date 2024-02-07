@@ -51,3 +51,7 @@ SELECT TIME_FORMAT('2023-05-30 10:30:00', '%T');
 SELECT TIME_FORMAT(date'2023-05-30', '%H');
 SELECT TIME_FORMAT('2023-05-30', '%H');
 
+select TIME_FORMAT('12:00:00.', '%H %k %h %I %l %f');
+select TIME_FORMAT('12:00:00.123', '%H %k %h %I %l %f');
+select TIME_FORMAT('12:00:00.123456', '%H %k %h %I %l %f');
+select TIME_FORMAT('12:00:00.1234567890', '%H %k %h %I %l %f');

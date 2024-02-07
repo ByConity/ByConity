@@ -29,6 +29,7 @@
 #include <Common/Exception.h>
 #include <common/types.h>
 #include <Common/Exception.h>
+#include <Common/MySqlEnums.h>
 #include <Common/ThreadPool.h>
 
 #if !defined(ARCADIA_BUILD)
@@ -100,6 +101,8 @@ public:
 
     /// Get the result type.
     virtual DataTypePtr getReturnType() const = 0;
+
+    virtual ArgType getMySqlArgumentTypes() const { return ArgType::NUMBERS; }
 
     /// Get the data type of internal state. By default it is AggregateFunction(name(params), argument_types...).
     virtual DataTypePtr getStateType() const;

@@ -50,6 +50,8 @@ public:
 
     String getName() const override { return Data::name(); }
 
+    ArgType getMySqlArgumentTypes() const override { return ArgType::UINTS; }
+
     DataTypePtr getReturnType() const override
     {
         return std::make_shared<DataTypeNumber<T>>();

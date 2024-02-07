@@ -23,7 +23,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-static Block getCommonHeader(const Blocks & headers)
+Block InterpreterSelectIntersectExceptQuery::getCommonHeader(const Blocks & headers)
 {
     size_t num_selects = headers.size();
     Block common_header = headers.front();
@@ -44,7 +44,7 @@ static Block getCommonHeader(const Blocks & headers)
             columns[i] = &headers[i].getByPosition(column_num);
 
         ColumnWithTypeAndName & result_elem = common_header.getByPosition(column_num);
-        result_elem = getLeastSuperColumn(columns);
+        result_elem = getLeastSuperColumn(columns, context->getSettingsRef().enable_implicit_arg_type_convert);
     }
 
     return common_header;

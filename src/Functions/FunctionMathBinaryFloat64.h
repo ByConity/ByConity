@@ -7,6 +7,7 @@
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnConst.h>
 #include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
@@ -31,7 +32,14 @@ class FunctionMathBinaryFloat64 : public IFunction
 public:
     static constexpr auto name = Impl::name;
     FunctionMathBinaryFloat64(ContextPtr context_) : context(context_) {}
-    static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionMathBinaryFloat64>(context_); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionMathBinaryFloat64>(context));
+        return std::make_shared<FunctionMathBinaryFloat64>(context);
+    }
+    ArgType getArgumentsType() const override { return ArgType::NUMBERS; }
+
     static_assert(Impl::rows_per_iteration > 0, "Impl must process at least one row per iteration");
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -47,7 +55,9 @@ private:
     {
         const auto check_argument_type = [this] (const IDataType * arg)
         {
-            if (!isNumber(arg))
+            if (isNumber(arg) || (context && context->getSettingsRef().enable_implicit_arg_type_convert))
+            {}
+            else
                 throw Exception{"Illegal type " + arg->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         };

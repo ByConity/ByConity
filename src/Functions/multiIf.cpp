@@ -83,14 +83,6 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & args) const override
     {
         /// Arguments are the following: cond1, then1, cond2, then2, ... condN, thenN, else.
-
-        auto for_conditions = [&args](auto && f)
-        {
-            size_t conditions_end = args.size() - 1;
-            for (size_t i = 0; i < conditions_end; i += 2)
-                f(args[i]);
-        };
-
         auto for_branches = [&args](auto && f)
         {
             size_t branches_end = args.size();
@@ -102,28 +94,6 @@ public:
         if (!(args.size() >= 3 && args.size() % 2 == 1))
             throw Exception{"Invalid number of arguments for function " + getName(),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
-
-        for_conditions([&](const DataTypePtr & arg)
-        {
-            const IDataType * nested_type;
-            if (arg->isNullable())
-            {
-                if (arg->onlyNull())
-                    return;
-
-                const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(*arg);
-                nested_type = nullable_type.getNestedType().get();
-            }
-            else
-            {
-                nested_type = arg.get();
-            }
-
-            if (!WhichDataType(nested_type).isUInt8())
-                throw Exception{"Illegal type " + arg->getName() + " of argument (condition) "
-                    "of function " + getName() + ". Must be UInt8.",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
-        });
 
         DataTypes types_of_branches;
         types_of_branches.reserve(args.size() / 2 + 1);

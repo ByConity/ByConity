@@ -18,7 +18,7 @@ namespace ErrorCodes
 
 IMPLEMENT_SETTINGS_TRAITS(MergeTreeSettingsTraits, LIST_OF_MERGE_TREE_SETTINGS)
 
-void MergeTreeSettings::loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config)
+void MergeTreeSettings::loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config, bool skip_unknown_settings)
 {
     if (!config.has(config_elem))
         return;
@@ -26,32 +26,46 @@ void MergeTreeSettings::loadFromConfig(const String & config_elem, const Poco::U
     Poco::Util::AbstractConfiguration::Keys config_keys;
     config.keys(config_elem, config_keys);
 
-    try
-    {
-        for (const String & key : config_keys)
-            set(key, config.getString(config_elem + "." + key));
-    }
-    catch (Exception & e)
-    {
-        if (e.code() == ErrorCodes::UNKNOWN_SETTING)
-            e.addMessage("in MergeTree config");
-        throw;
-    }
-}
-
-void MergeTreeSettings::loadFromQuery(ASTStorage & storage_def)
-{
-    if (storage_def.settings)
+    for (const String & key : config_keys)
     {
         try
         {
-            applyChanges(storage_def.settings->changes);
+            set(key, config.getString(config_elem + "." + key));
         }
         catch (Exception & e)
         {
             if (e.code() == ErrorCodes::UNKNOWN_SETTING)
-                e.addMessage("for storage " + storage_def.engine->name);
-            throw;
+                e.addMessage("in MergeTree config");
+        
+            if (skip_unknown_settings)
+                LOG_ERROR(&Poco::Logger::get("MergeTreeSettings"), "Unknown setting in {} config", key);
+            else
+                throw;
+        }
+    }
+}
+
+void MergeTreeSettings::loadFromQuery(ASTStorage & storage_def, bool attach)
+{
+    if (storage_def.settings)
+    {
+        for (const SettingChange & setting : storage_def.settings->changes)
+        {
+            try
+            {
+                applyChange(setting);
+            }
+            catch (Exception & e)
+            {
+                if (e.code() == ErrorCodes::UNKNOWN_SETTING)
+                    e.addMessage("for storage " + storage_def.engine->name);
+            
+                if (attach)
+                    LOG_ERROR(&Poco::Logger::get("MergeTreeSettings"),
+                          "Unknown setting for storage {}", storage_def.engine->name);
+                else
+                    throw;
+            }
         }
     }
     else

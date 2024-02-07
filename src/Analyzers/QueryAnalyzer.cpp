@@ -22,12 +22,10 @@
 #include <Analyzers/analyze_common.h>
 #include <Analyzers/function_utils.h>
 #include <Analyzers/tryEvaluateConstantExpression.h>
-#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/ArrayJoinedColumnsVisitor.h>
@@ -36,7 +34,6 @@
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/convertFieldToType.h>
-#include <Optimizer/Utils.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTExplainQuery.h>
@@ -47,8 +44,15 @@
 #include <Parsers/ASTVisitor.h>
 #include <Parsers/queryToString.h>
 #include <QueryPlan/Void.h>
-#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageDistributed.h>
+#include <Storages/StorageMemory.h>
+#if USE_HIVE
+#    include <Storages/Hive/StorageCnchHive.h>
+#endif
+#include <Optimizer/Utils.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeArray.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -56,8 +60,6 @@
 #include <unordered_map>
 #include <sstream>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
-#include <Storages/StorageDistributed.h>
-#include <Storages/StorageMemory.h>
 #include "Parsers/formatAST.h"
 #include <Access/ContextAccess.h>
 
@@ -411,8 +413,12 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
                     origin_columns.insert(origin_columns.end(), elem_field.origin_columns.begin(), elem_field.origin_columns.end());
             }
 
+            DataTypePtr output_type;
             // promote output type to super type if necessary
-            auto output_type = getLeastSupertype(elem_types, allow_extended_conversion);
+            if (context->getSettingsRef().enable_implicit_arg_type_convert)
+                output_type = getLeastSupertype<LeastSupertypeOnError::String>(elem_types, true);
+            else
+                output_type = getLeastSupertype(elem_types, allow_extended_conversion);
             output_desc.emplace_back(
                 first_input_desc[column_idx].name,
                 output_type,
@@ -2058,7 +2064,7 @@ void checkAccess(AnalysisPtr analysis, ContextPtr context)
     const auto & used_columns = analysis->getUsedColumns();
     for (const auto & [table_id, columns] : used_columns)
     {
-        Names required_names(columns.begin(), columns.end());                
+        Names required_names(columns.begin(), columns.end());
         context->checkAccess(AccessType::SELECT, table_id, required_names);
     }
     if (used_columns.empty())

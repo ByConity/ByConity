@@ -7,7 +7,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteBufferFromVector.h>
 #include <IO/WriteHelpers.h>
 
@@ -24,7 +24,9 @@ namespace
     {
     public:
         static constexpr auto name = "strcmp";
-        static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionStrcmp>(); }
+        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionStrcmp>(context->getSettingsRef().dialect_type == DialectType::MYSQL); }
+
+        explicit FunctionStrcmp(bool mysql_mode_) : mysql_mode(mysql_mode_) {}
 
         String getName() const override { return name; }
 
@@ -32,6 +34,8 @@ namespace
 
         DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
         {
+            if (mysql_mode) return std::make_shared<DataTypeInt8>();
+
             if (!isString(arguments[0]) && !isFixedString(arguments[0]) && !isNumber(arguments[0]))
             {
                 throw Exception(
@@ -93,6 +97,7 @@ namespace
         }
 
     private:
+        bool mysql_mode;
         inline void serializeColumn(
             COWHelper<DB::IColumn, DB::ColumnString>::MutablePtr & col_serialized,
             const IColumn & col_from,

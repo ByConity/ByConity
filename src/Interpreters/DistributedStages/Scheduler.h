@@ -149,7 +149,11 @@ protected:
     void genTopology();
     void genSourceTasks();
     bool getBatchTaskToSchedule(BatchTaskPtr & task);
-    void sendResource(PlanSegment * plan_segment_ptr);
+    virtual void prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size)
+    {
+        (void)plan_segment_ptr;
+        (void)parallel_size;
+    }
     void dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx);
     TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);
     void prepareFinalTask();

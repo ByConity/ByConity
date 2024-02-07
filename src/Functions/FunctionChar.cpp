@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/castColumn.h>
 #include <IO/WriteHelpers.h>
@@ -21,7 +21,14 @@ class FunctionChar : public IFunction
 {
 public:
     static constexpr auto name = "char";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionChar>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionChar>());
+        return std::make_shared<FunctionChar>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::INTS; }
 
     String getName() const override
     {

@@ -697,7 +697,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (replicated || is_ha) /// TODO: fix me
         storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getReplicatedMergeTreeSettings());
     else
-        storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getMergeTreeSettings());
+        storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getMergeTreeSettings(args.skip_unknown_settings));
 
     if (is_extended_storage_def)
     {
@@ -806,7 +806,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             }
         }
 
-        storage_settings->loadFromQuery(*args.storage_def);
+        storage_settings->loadFromQuery(*args.storage_def, args.attach);
 
         // updates the default storage_settings with settings specified via SETTINGS arg in a query
         if (args.storage_def->settings)

@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteHelpers.h>
 #include <common/range.h>
 
@@ -32,32 +32,40 @@ class FormatFunction : public IFunction
 public:
     static constexpr auto name = Name::name;
     static constexpr size_t argument_threshold = std::numeric_limits<UInt32>::max();
-    bool mysql_mode_ = false;
-    FormatFunction(bool mysql_mode) : mysql_mode_(mysql_mode) { }
+    bool mysql_mode = false;
+    ContextPtr context;
+    FormatFunction(ContextPtr context_) : context(context_)
+    {
+        mysql_mode = context->getSettingsRef().dialect_type == DialectType::MYSQL;
+    }
 
     static FunctionPtr create(ContextPtr context)
     {
-        return std::make_shared<FormatFunction>(context->getSettingsRef().dialect_type == DialectType::MYSQL);
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FormatFunction>(context));
+        return std::make_shared<FormatFunction>(context);
     }
 
-    bool useDefaultImplementationForConstants() const override
-    {
-        // MySQL format function uses default implementation for constants
-        return mysql_mode_;
-    }
-
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
-    {
-        // Clickhouse format function -> arg 0 is constant
-        // MySQL format function -> arg 1 is constant
-        return {static_cast<size_t>(mysql_mode_)};
-    }
+    ArgType getArgumentsType() const override { return ArgType::NUMBERS; }
 
     String getName() const override { return name; }
 
     bool isVariadic() const override { return true; }
 
     size_t getNumberOfArguments() const override { return 0; }
+
+    bool useDefaultImplementationForConstants() const override
+    {
+        // MySQL format function uses default implementation for constants
+        return mysql_mode;
+    }
+
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
+    {
+        // Clickhouse format function -> arg 0 is constant
+        // MySQL format function -> arg 1 is constant
+        return {static_cast<size_t>(mysql_mode)};
+    }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -73,7 +81,7 @@ public:
                     + ", should be at most " + std::to_string(FormatStringImpl::argument_threshold),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (mysql_mode_)
+        if (mysql_mode)
         {
             // MySQL compatibility: select format(X, D) -> format number X to D decimal places with comma
             if (arguments.size() != 2)
@@ -109,9 +117,9 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, size_t input_rows_count) const override
     {
 
-        if (mysql_mode_)
+        if (mysql_mode)
         {
-            return FormatNumberImpl::formatExecute(arguments, return_type, input_rows_count);
+            return FormatNumberImpl::formatExecute(arguments, return_type, input_rows_count, context);
         }
         const ColumnPtr & c0 = arguments[0].column;
         const ColumnConst * c0_const_string = typeid_cast<const ColumnConst *>(&*c0);

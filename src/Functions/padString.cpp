@@ -2,6 +2,7 @@
 #include <Columns/ColumnString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/Sinks.h>
 #include <Functions/GatherUtils/Sources.h>
@@ -139,14 +140,22 @@ namespace
     {
     public:
         static constexpr auto name = is_space_func ? "space" : (is_right_pad ? (is_utf8 ? "rightPadUTF8" : "rightPad") : (is_utf8 ? "leftPadUTF8" : "leftPad"));
-        static FunctionPtr create(const ContextPtr) { return std::make_shared<FunctionPadString>(); }
+        static FunctionPtr create(ContextPtr context)
+        {
+            if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionPadString>());
+            return std::make_shared<FunctionPadString>();
+        }
+
+        ArgType getArgumentsType() const override { return is_space_func ? ArgType::UINTS : ArgType::STR_UINT_STR; }
 
         String getName() const override { return name; }
 
         bool isVariadic() const override { return !is_space_func; }
         size_t getNumberOfArguments() const override { return !is_space_func ? 0 : 1; }
 
-        bool useDefaultImplementationForConstants() const override { return false; }
+        bool useDefaultImplementationForConstants() const override { return true; }
+        ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {2}; }
 
         DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
         {

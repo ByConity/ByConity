@@ -3,6 +3,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsDateTime.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 
 #include <Functions/FunctionFactory.h>
@@ -36,6 +37,7 @@ namespace
 
     constexpr Int32 minYear = 1970;
     constexpr Int32 maxYear = 2106;
+    constexpr UInt32 fraction_scale = 6;
 
     const std::unordered_map<String, std::pair<String, Int32>> dayOfWeekMap{
         {"mon", {"day", 1}},
@@ -110,6 +112,8 @@ namespace
         Int32 hour = 0;
         Int32 minute = 0; /// range [0, 59]
         Int32 second = 0; /// range [0, 59]
+
+        Int64 fraction = 0; /// precision range [0, 999999999]
 
         bool is_am = true; /// If is_hour_of_half_day = true and is_am = false (i.e. pm) then add 12 hours to the result DateTime
         bool hour_starts_at_1 = false; /// Whether the hour is clockhour
@@ -336,6 +340,13 @@ namespace
             second = second_;
         }
 
+        void setFraction(Int64 fraction_)
+        {
+            if (fraction_ < 0 || fraction_ > 999999999)
+               throw Exception(ErrorCodes::CANNOT_PARSE_DATETIME, "Value {} for fraction must be in the precision range [0,9]", fraction_);
+            fraction = fraction_;
+        }
+
         /// For debug
         [[maybe_unused]] String toString() const
         {
@@ -416,6 +427,36 @@ namespace
             res += isLeapYear(year_) ? cumulativeLeapDays[month_ - 1] : cumulativeDays[month_ - 1];
             res += day_ - 1;
             return res;
+        }
+
+        DateTime64 buildDateTime64(const DateLUTImpl & time_zone)
+        {
+            if (is_hour_of_half_day && !is_am)
+                hour += 12;
+
+            // Convert the parsed date/time into a timestamp.
+            Int32 days_since_epoch;
+            if (week_date_format)
+                days_since_epoch = daysSinceEpochFromWeekDate(year, week, day_of_week);
+            else if (day_of_year_format)
+                days_since_epoch = daysSinceEpochFromDayOfYear(year, day_of_year);
+            else
+                days_since_epoch = daysSinceEpochFromDate(year, month, day);
+
+            Int64 seconds_since_epoch = days_since_epoch * 86400U + hour * 3600U + minute * 60U + second;
+
+            /// Time zone is not specified, use local time zone
+            if (!has_time_zone_offset)
+                time_zone_offset = time_zone.timezoneOffset(seconds_since_epoch);
+
+            /// Time zone is specified in format string.
+            if (seconds_since_epoch >= time_zone_offset)
+                seconds_since_epoch -= time_zone_offset;
+            else
+                throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "Seconds since epoch is negative");
+
+            return DecimalUtils::decimalFromComponents<DateTime64>(
+                    seconds_since_epoch, static_cast<Int64>(fraction), static_cast<UInt32>(fraction_scale));
         }
 
         Int64 buildDateTime(const DateLUTImpl & time_zone)
@@ -499,15 +540,31 @@ namespace
 
             validateFunctionArgumentTypes(*this, arguments, mandatory_args, optional_args);
             String time_zone_name = getTimeZone(arguments).getTimeZone();
-            DataTypePtr date_type = std::make_shared<DataTypeDateTime>(time_zone_name);
+            DataTypePtr date_type;
+            // MySQL str_to_date has precision of 6 as default
+            if (mysql_mode)
+                date_type = std::make_shared<DataTypeDateTime64>(fraction_scale, time_zone_name);
+            else
+                date_type = std::make_shared<DataTypeDateTime>(time_zone_name);
+
             if (error_handling == ErrorHandling::Null)
                 return std::make_shared<DataTypeNullable>(date_type);
             else
                 return date_type;
         }
 
-        ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t input_rows_count) const override
+        ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
         {
+            if (mysql_mode)
+                return executeInternalImpl<DataTypeDateTime64>(arguments, result_type, input_rows_count);
+            else
+                return executeInternalImpl<DataTypeDateTime>(arguments, result_type, input_rows_count);
+        }
+
+        template<typename ResultType>
+        ColumnPtr executeInternalImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t input_rows_count) const
+        {
+            using ColVecTo = typename ResultType::ColumnType;
             const auto * col_str = checkAndGetColumn<ColumnString>(arguments[0].column.get());
             if (!col_str)
                 throw Exception(
@@ -519,14 +576,17 @@ namespace
             String format = getFormat(arguments);
             const auto & time_zone = getTimeZone(arguments);
             std::vector<Instruction> instructions = parseFormat(format);
+            typename ColVecTo::MutablePtr col_res = nullptr;
+            if constexpr(std::is_same_v<ResultType, DataTypeDateTime64>)
+                col_res = ColVecTo::create(input_rows_count, fraction_scale);
+            else
+                col_res = ColVecTo::create(input_rows_count);
 
-            auto col_res = ColumnDateTime::create(input_rows_count);
+            typename ColVecTo::Container & res_data = col_res->getData();
 
             ColumnUInt8::MutablePtr col_null_map;
             if constexpr (error_handling == ErrorHandling::Null)
                 col_null_map = ColumnUInt8::create(input_rows_count, 0);
-
-            auto & res_data = col_res->getData();
 
             /// Make datetime fit in a cache line.
             alignas(64) DateTime datetime;
@@ -572,15 +632,29 @@ namespace
 
                 try
                 {
-                    /// Ensure all input was consumed
-                    if (cur < end)
-                        throw Exception(
-                            ErrorCodes::CANNOT_PARSE_DATETIME,
-                            "Invalid format input {} is malformed at {}",
-                            str_ref.toView(),
-                            std::string_view(cur, end - cur));
-                    Int64 time = datetime.buildDateTime(time_zone);
-                    res_data[i] = static_cast<UInt32>(time);
+                    if constexpr(std::is_same_v<ResultType, DataTypeDateTime64>)
+                    {
+                        /// Ensure all input was consumed
+                        if (!mysql_mode && cur < end)
+                            throw Exception(
+                                ErrorCodes::CANNOT_PARSE_DATETIME,
+                                "Invalid format input {} is malformed at {}",
+                                str_ref.toView(),
+                                std::string_view(cur, end - cur));
+                        res_data[i] = datetime.buildDateTime64(time_zone);
+                    }
+                    else
+                    {
+                        /// Ensure all input was consumed
+                        if (!mysql_mode && cur < end)
+                            throw Exception(
+                                ErrorCodes::CANNOT_PARSE_DATETIME,
+                                "Invalid format input {} is malformed at {}",
+                                str_ref.toView(),
+                                std::string_view(cur, end - cur));
+                        Int64 time = datetime.buildDateTime(time_zone);
+                        res_data[i] = static_cast<UInt32>(time);
+                    }
                 }
                 catch (...)
                 {
@@ -1117,7 +1191,33 @@ namespace
                 return cur;
             }
 
-            static Pos mysqlMicrosecond(Pos cur, Pos end, const String & fragment, DateTime & /*date*/)
+            static Pos mysqlFraction(Pos cur, Pos end, const String & fragment, DateTime & date)
+            {
+                checkSpace(cur, end, 0, "mysqlMicrosecond requires size >= 0", fragment);
+
+                Int64 fraction = 0;
+                int digits = 0;
+
+                while (digits < 6 && cur != end)
+                {
+                    checkSpace(cur, end, 1, "readNumber requires size >= 1", fragment);
+                    fraction = fraction * 10 + (*cur - '0');
+                    ++cur;
+                    ++digits;
+                }
+
+                // Consume extra digits
+                while (cur != end && (*cur >= '0' && *cur <= '9'))
+                    ++cur;
+
+                // Adjust scales by padding zeros
+                fraction *= pow(10, 6 - digits);
+                date.setFraction(fraction);
+
+                return cur;
+            }
+
+            static Pos mysqlMicrosecond(Pos cur, Pos end, const String & fragment, DateTime &)
             {
                 checkSpace(cur, end, 6, "mysqlMicrosecond requires size >= 6", fragment);
 
@@ -1540,7 +1640,10 @@ namespace
 
                         // Fractional seconds
                         case 'f':
-                            instructions.emplace_back(ACTION_ARGS(Instruction::mysqlMicrosecond));
+                            if (mysql_mode)
+                                instructions.emplace_back(ACTION_ARGS(Instruction::mysqlFraction));
+                            else
+                                instructions.emplace_back(ACTION_ARGS(Instruction::mysqlMicrosecond));
                             break;
 
                         // Short YYYY-MM-DD date, equivalent to %Y-%m-%d   2001-08-23
@@ -1624,13 +1727,12 @@ namespace
                             break;
 
                         // 12-hour HH:MM time, equivalent to %h:%i %p 2:55 PM
-                        case 'r': {
+                        case 'r':
                             if (mysql_mode)
                                 instructions.emplace_back(ACTION_ARGS(Instruction::mysqlHHMMSSAMPM));
                             else
                                 instructions.emplace_back(ACTION_ARGS(Instruction::mysqlHHMM12));
                             break;
-                            }
                         // 24-hour HH:MM time, equivalent to %H:%i 14:55
                         case 'R':
                             instructions.emplace_back(ACTION_ARGS(Instruction::mysqlHHMM24));
@@ -1695,8 +1797,6 @@ namespace
                             break;
 
                         /// Unimplemented
-
-                        /// Fractional seconds
                         case 'U':
                             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "format is not supported for WEEK (Sun-Sat)");
                         case 'v':

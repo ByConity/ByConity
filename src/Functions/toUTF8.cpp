@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 
 namespace DB
 {
@@ -19,22 +19,29 @@ namespace ErrorCodes
 class FunctionToUTF8 : public IFunction
 {
 public:
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionToUTF8>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionToUTF8>());
+        return std::make_shared<FunctionToUTF8>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
 
     String getName() const override { return "TO_UTF8"; }
     size_t getNumberOfArguments() const override { return 1; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 1)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Wrong number of arguments for function {}: 1 expected.", getName());
 
-        if (!WhichDataType(arguments[0].type).isStringOrFixedString())
+        if (!WhichDataType(arguments[0]).isStringOrFixedString())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "Illegal type {} of 1st argument of function {}. Must be FixedString or String.",
-                arguments[0].type->getName(),
+                arguments[0]->getName(),
                 getName());
 
         return std::make_shared<DataTypeString>();

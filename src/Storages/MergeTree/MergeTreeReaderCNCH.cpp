@@ -305,9 +305,12 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
             return;
 
         String file_name = stream_name;
-        bool data_file_exists = data_part->getChecksums()->files.count(file_name + DATA_FILE_EXTENSION);
 
-        if (!data_file_exists)
+        auto check_validity
+            = [&](String & stream_name_) -> bool { return data_part->getChecksums()->files.count(stream_name_ + DATA_FILE_EXTENSION); };
+
+        if ((!name_and_type.type->isKVMap() && !check_validity(stream_name))
+            || (name_and_type.type->isKVMap() && !tryConvertToValidKVStreamName(stream_name, check_validity)))
             return;
 
         // no need to do mvcc when read column in projection part

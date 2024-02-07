@@ -6,7 +6,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteBufferFromVector.h>
 #include <IO/WriteHelpers.h>
 
@@ -25,7 +25,14 @@ class FunctionELT : public IFunction
 
 public:
     static constexpr auto name = "ELT";
-    static FunctionPtr create(ContextPtr /*context*/) { return std::make_shared<FunctionELT>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionELT>());
+        return std::make_shared<FunctionELT>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::INT_STR; }
 
     String getName() const override { return name; }
 

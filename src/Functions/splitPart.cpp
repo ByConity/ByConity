@@ -6,7 +6,7 @@
 #include <DataTypes/IDataType.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteHelpers.h>
 
 
@@ -23,7 +23,14 @@ class FunctionSplitPart : public IFunction
 {
 public:
     static constexpr auto name = "split_part";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionSplitPart>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionSplitPart>());
+        return std::make_shared<FunctionSplitPart>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STR_STR_NUM; }
 
     String getName() const override { return name; }
 
@@ -70,7 +77,9 @@ public:
     {
         const auto & icolumn_string = arguments[0].column.get();
         const auto & icolumn_delimiter = arguments[1].column.get();
-        const auto & icolumn_index = arguments[2].column.get();
+        ColumnPtr icolumn_index = arguments[2].column;
+        if (const auto * nullable_col = checkAndGetColumn<ColumnNullable>(*arguments[2].column))
+            icolumn_index = nullable_col->getNestedColumnPtr();
 
         MutableColumnPtr res{result_type->createColumn()};
         res->reserve(input_rows_count);
@@ -105,7 +114,7 @@ public:
             splitInto(
                 std::string_view(icolumn_string->getDataAt(row)),
                 std::string_view(icolumn_delimiter->getDataAt(row)),
-                icolumn_index->get64(row),
+                icolumn_index->getInt(row),
                 nullable_column,
                 res_nested_col);
         }

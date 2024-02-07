@@ -6,6 +6,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 
 namespace DB
 {
@@ -24,7 +25,13 @@ public:
 
     FunctionLogWithBase(ContextPtr context) : context_(context) { }
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionLogWithBase>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionLogWithBase>(context));
+        return std::make_shared<FunctionLogWithBase>(context);
+    }
+    ArgType getArgumentsType() const override { return ArgType::NUMBERS; }
 
     String getName() const override { return name; }
 

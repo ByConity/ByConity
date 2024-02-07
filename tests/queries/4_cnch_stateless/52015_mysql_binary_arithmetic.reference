@@ -1,0 +1,160 @@
+select equals(null, toNullable(1))
+\N
+select equals(null, '123.456abc')
+\N
+select equals(null, ' 123abc ')
+\N
+select equals(null, DateTime64'2023-12-31 01:02:03.123')
+\N
+select equals(toNullable(1), '123.456abc')
+0
+select equals(toNullable(1), ' 123abc ')
+0
+select equals(toNullable(1), DateTime64'2023-12-31 01:02:03.123')
+0
+select equals('123.456abc', ' 123abc ')
+0
+select equals('123.456abc', DateTime64'2023-12-31 01:02:03.123')
+0
+select equals(' 123abc ', DateTime64'2023-12-31 01:02:03.123')
+0
+select greater(null, toNullable(1))
+\N
+select greater(null, '123.456abc')
+\N
+select greater(null, ' 123abc ')
+\N
+select greater(null, DateTime64'2023-12-31 01:02:03.123')
+\N
+select greater(toNullable(1), '123.456abc')
+0
+select greater(toNullable(1), ' 123abc ')
+0
+select greater(toNullable(1), DateTime64'2023-12-31 01:02:03.123')
+0
+select greater('123.456abc', ' 123abc ')
+1
+select greater('123.456abc', DateTime64'2023-12-31 01:02:03.123')
+0
+select greater(' 123abc ', DateTime64'2023-12-31 01:02:03.123')
+0
+select less(null, toNullable(1))
+\N
+select less(null, '123.456abc')
+\N
+select less(null, ' 123abc ')
+\N
+select less(null, DateTime64'2023-12-31 01:02:03.123')
+\N
+select less(toNullable(1), '123.456abc')
+1
+select less(toNullable(1), ' 123abc ')
+1
+select less(toNullable(1), DateTime64'2023-12-31 01:02:03.123')
+1
+select less('123.456abc', ' 123abc ')
+0
+select less('123.456abc', DateTime64'2023-12-31 01:02:03.123')
+1
+select less(' 123abc ', DateTime64'2023-12-31 01:02:03.123')
+1
+select bitAnd(null, toNullable(1))
+\N
+select bitAnd(null, '123.456abc')
+\N
+select bitAnd(null, ' 123abc ')
+\N
+select bitAnd(null, DateTime64'2023-12-31 01:02:03.123')
+\N
+select bitAnd(toNullable(1), '123.456abc')
+1
+select bitAnd(toNullable(1), ' 123abc ')
+1
+select bitAnd(toNullable(1), DateTime64'2023-12-31 01:02:03.123')
+1
+select bitAnd('123.456abc', ' 123abc ')
+123
+select bitAnd('123.456abc', DateTime64'2023-12-31 01:02:03.123')
+27
+select bitAnd(' 123abc ', DateTime64'2023-12-31 01:02:03.123')
+27
+select bitOr(null, toNullable(1))
+\N
+select bitOr(null, '123.456abc')
+\N
+select bitOr(null, ' 123abc ')
+\N
+select bitOr(null, DateTime64'2023-12-31 01:02:03.123')
+\N
+select bitOr(toNullable(1), '123.456abc')
+123
+select bitOr(toNullable(1), ' 123abc ')
+123
+select bitOr(toNullable(1), DateTime64'2023-12-31 01:02:03.123')
+20231231010203
+select bitOr('123.456abc', ' 123abc ')
+123
+select bitOr('123.456abc', DateTime64'2023-12-31 01:02:03.123')
+20231231010299
+select bitOr(' 123abc ', DateTime64'2023-12-31 01:02:03.123')
+20231231010299
+select bitXor(null, toNullable(1))
+\N
+select bitXor(null, '123.456abc')
+\N
+select bitXor(null, ' 123abc ')
+\N
+select bitXor(null, DateTime64'2023-12-31 01:02:03.123')
+\N
+select bitXor(toNullable(1), '123.456abc')
+122
+select bitXor(toNullable(1), ' 123abc ')
+122
+select bitXor(toNullable(1), DateTime64'2023-12-31 01:02:03.123')
+20231231010202
+select bitXor('123.456abc', ' 123abc ')
+0
+select bitXor('123.456abc', DateTime64'2023-12-31 01:02:03.123')
+20231231010272
+select bitXor(' 123abc ', DateTime64'2023-12-31 01:02:03.123')
+20231231010272
+select divide(null, toNullable(1))
+\N
+select divide(null, '123.456abc')
+\N
+select divide(null, ' 123abc ')
+\N
+select divide(null, DateTime64'2023-12-31 01:02:03.123')
+\N
+select divide(toNullable(1), '123.456abc')
+0.008100051840331779
+select divide(toNullable(1), ' 123abc ')
+0.008130081300813009
+select divide(toNullable(1), DateTime64'2023-12-31 01:02:03.123')
+4.942852955886247e-14
+select divide('123.456abc', ' 123abc ')
+1.0037073170731707
+select divide('123.456abc', DateTime64'2023-12-31 01:02:03.123')
+6.102248545218925e-12
+select divide(' 123abc ', DateTime64'2023-12-31 01:02:03.123')
+6.079709135740084e-12
+select plus(null, toNullable(1))
+\N
+select plus(null, '123.456abc')
+\N
+select plus(null, ' 123abc ')
+\N
+select plus(null, DateTime64'2023-12-31 01:02:03.123')
+\N
+select plus(toNullable(1), '123.456abc')
+124.456
+select plus(toNullable(1), ' 123abc ')
+124
+select plus(toNullable(1), DateTime64'2023-12-31 01:02:03.123')
+20231231010204.12
+select plus('123.456abc', ' 123abc ')
+246.45600000000002
+select plus('123.456abc', DateTime64'2023-12-31 01:02:03.123')
+20231231010326.58
+select plus(' 123abc ', DateTime64'2023-12-31 01:02:03.123')
+20231231010326.12

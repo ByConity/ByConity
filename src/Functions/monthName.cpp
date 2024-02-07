@@ -3,6 +3,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <IO/WriteHelpers.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/IFunctionMySql.h>
 
 namespace DB
 {
@@ -20,11 +21,18 @@ public:
 
     static constexpr auto month_str = "month";
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionMonthName>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionMonthName>(context));
+        return std::make_shared<FunctionMonthName>(context);
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::DATES; }
 
     explicit FunctionMonthName(ContextPtr context_)
         : function_resolver(FunctionFactory::instance().get("dateName", context_))
-        , datetime_resolver(FunctionFactory::instance().get("toDateTime", context_))
+        , datetime_resolver(FunctionFactory::instance().get("toDateTime64", context_))
         {}
 
     String getName() const override { return name; }

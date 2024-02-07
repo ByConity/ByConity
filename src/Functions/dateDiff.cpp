@@ -30,7 +30,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnDecimal.h>
 
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
@@ -522,11 +522,21 @@ public:
     {
         const bool mysql_mode = context_->getSettingsRef().dialect_type == DialectType::MYSQL;
         if (diff_type == DiffType::TimestampDiff && mysql_mode)
-            return std::make_shared<FunctionDateDiff<DiffType::MysqlTimestampDiff>>(context_, mysql_mode);
-        else
-            return std::make_shared<FunctionDateDiff<diff_type>>(context_, mysql_mode);
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionDateDiff<DiffType::MysqlTimestampDiff>>(context_, mysql_mode));
+        else if (context_ && (context_->getSettingsRef().enable_implicit_arg_type_convert || mysql_mode))
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionDateDiff<diff_type>>(context_, mysql_mode));
+        return std::make_shared<FunctionDateDiff<diff_type>>(context_, mysql_mode);
     }
 
+    ArgType getArgumentsType() const override
+    {
+        if constexpr (isDateDiff)
+            if (mysql_mode)
+                return ArgType::DATES;
+        if constexpr (diff_type == DiffType::TimestampDiff || diff_type == DiffType::MysqlTimestampDiff)
+            return ArgType::STR_DATETIME_STR;
+        return ArgType::UNDEFINED;
+    }
 
     String getName() const override
     {
@@ -557,12 +567,12 @@ public:
                             + toString(arguments.size()) + ", should be 2",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-                if (!(isStringOrFixedString(arguments[0]) || is_date_or_datetime(arguments[0])))
+                if (!is_date_or_datetime(arguments[0]))
                     throw Exception(
                         "First argument for function " + getName() + " must be Date, DateTime or String",
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-                if (!(isStringOrFixedString(arguments[1]) || is_date_or_datetime(arguments[1])))
+                if (!is_date_or_datetime(arguments[1]))
                     throw Exception(
                         "Second argument for function " + getName() + " must be Date, DateTime or String",
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -641,6 +651,7 @@ public:
 
         ColumnsWithTypeAndName converted;
         const bool mysql_date_diff = mysql_mode && (arguments.size() == 2); // MySQL datediff(date, date)
+
         if (format_hive)
         {
             converted = arguments;
@@ -648,8 +659,8 @@ public:
         else if (mysql_date_diff)
         {
             // swap order of arguments
-            converted.emplace_back(get_datetime_column(arguments[1]));
-            converted.emplace_back(get_datetime_column(arguments[0]));
+            converted.emplace_back(arguments[1]);
+            converted.emplace_back(arguments[0]);
         }
         else
         {
@@ -724,7 +735,17 @@ class FunctionTimeDiff : public IFunction
     using ColumnDateTime64 = ColumnDecimal<DateTime64>;
 public:
     static constexpr auto name = "TimeDiff";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionTimeDiff>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionTimeDiff>());
+        return std::make_shared<FunctionTimeDiff>();
+    }
+
+    ArgType getArgumentsType() const override
+    {
+        return ArgType::DATE_OR_DATETIME;
+    }
 
     String getName() const override
     {

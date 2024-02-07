@@ -24,6 +24,7 @@
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Names.h>
+#include <Common/MySqlEnums.h>
 #include <DataTypes/IDataType.h>
 
 #if !defined(ARCADIA_BUILD)
@@ -381,6 +382,8 @@ public:
     virtual ~IFunction() = default;
 
     virtual String getName() const = 0;
+
+    virtual ArgType getArgumentsType() const { return ArgType::UNDEFINED; }
 
     virtual ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const = 0;
     virtual ColumnPtr executeImplDryRun(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const

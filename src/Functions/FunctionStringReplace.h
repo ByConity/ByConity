@@ -6,6 +6,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunctionMySql.h>
 
 
 namespace DB
@@ -21,8 +22,14 @@ class FunctionStringReplace : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionStringReplace>());
+        return std::make_shared<FunctionStringReplace>();
+    }
 
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionStringReplace>(); }
+    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
 
     String getName() const override { return name; }
 
@@ -32,15 +39,11 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        FunctionArgumentDescriptors args{
-            {"haystack", &isStringOrFixedString<IDataType>, nullptr, "String or FixedString"},
-            {"pattern", &isString<IDataType>, nullptr, "String"},
-            {"replacement", &isString<IDataType>, nullptr, "String"}
-        };
-
-        validateFunctionArgumentTypes(*this, arguments, args);
+        validateArgumentType(*this, arguments, 0, isStringOrFixedString, "String or FixedString");
+        validateArgumentType(*this, arguments, 1, isString, "String");
+        validateArgumentType(*this, arguments, 2, isString, "String");
 
         return std::make_shared<DataTypeString>();
     }

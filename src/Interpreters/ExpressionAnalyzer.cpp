@@ -336,7 +336,8 @@ void ExpressionAnalyzer::analyzeAggregation()
         analyzedJoin().addJoinedColumnsAndCorrectTypes(columns_after_join, false);
     }
 
-    has_aggregation = makeAggregateDescriptions(temp_actions);
+    /// delay the agg function creation because some argument column types may change
+    has_aggregation = !aggregates().empty();
     if (select_query && (select_query->groupBy() || select_query->having()))
         has_aggregation = true;
 
@@ -403,7 +404,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                                     select_query->group_by_with_constant_keys = true;
 
                                     /// But don't remove last key column if no aggregate functions, otherwise aggregation will not work.
-                                    if (!aggregate_descriptions.empty() || group_size > 1)
+                                    if (!aggregates().empty() || group_size > 1)
                                     {
                                         if (j + 1 < static_cast<ssize_t>(group_size))
                                             group_elements_ast[j] = std::move(group_elements_ast.back());
@@ -465,7 +466,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                                 select_query->group_by_with_constant_keys = true;
 
                                 /// But don't remove last key column if no aggregate functions, otherwise aggregation will not work.
-                                if (!aggregate_descriptions.empty() || size > 1)
+                                if (!aggregates().empty() || size > 1)
                                 {
                                     if (i + 1 < static_cast<ssize_t>(size))
                                         group_asts[i] = std::move(group_asts.back());
@@ -495,6 +496,25 @@ void ExpressionAnalyzer::analyzeAggregation()
                     }
                 }
 
+                /// the key columns, e.g, aggregation_keys, have been extracted;
+                /// we are able to decide whether to make argument columns nullable
+                /// and then create the correct agg funcs
+                makeAggregateDescriptions(temp_actions);
+
+                // tmpfix, ANSI features should be implemented in the optimizer
+                if (ansi_enabled)
+                {
+                    NameSet aggregate_arguments;
+                    for (const auto & agg : aggregate_descriptions)
+                        aggregate_arguments.insert(agg.argument_names.begin(), agg.argument_names.end());
+
+                    for (const auto & key : aggregation_keys)
+                        if (aggregate_arguments.count(key.name) && !isNullableOrLowCardinalityNullable(key.type))
+                            throw Exception(
+                                "In ANSI mode grouping keys will be converted to nullable types, aggregate description should be rebuilt",
+                                ErrorCodes::NOT_IMPLEMENTED);
+                }
+
                 if (!select_query->group_by_with_grouping_sets)
                 {
                     auto & list = aggregation_keys_indexes_list.emplace_back();
@@ -517,6 +537,10 @@ void ExpressionAnalyzer::analyzeAggregation()
         if (select_query)
             has_const_aggregation_keys = select_query->group_by_with_constant_keys;
 
+        /// if makeAggregateDescriptions has not been invoked
+        if (aggregate_descriptions.empty())
+            makeAggregateDescriptions(temp_actions);
+
         for (const auto & desc : aggregate_descriptions)
             aggregated_columns.emplace_back(desc.column_name, desc.function->getReturnType());
     }
@@ -524,6 +548,7 @@ void ExpressionAnalyzer::analyzeAggregation()
     {
         aggregated_columns = temp_actions->getNamesAndTypesList();
     }
+
 }
 
 void ExpressionAnalyzer::analyzeBitmapIndex()
@@ -862,6 +887,14 @@ bool ExpressionAnalyzer::makeAggregateDescriptions(ActionsDAGPtr & actions)
             types[i] = dag_node->result_type;
             aggregate.argument_names[i] = name;
         }
+
+        /// To be consistent with appendGroupBy, which converts agg key columns to nullable;
+        /// otherwise the functions expect non-nullable columns when key columns are agg arguments,
+        /// but nullable columns are present
+        if (getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+            for (size_t i = 0; i < arguments.size(); ++i)
+                if (aggregation_keys.contains(aggregate.argument_names[i]) && JoinCommon::canBecomeNullable(types[i]))
+                    types[i] = JoinCommon::convertTypeToNullable(types[i]);
 
         AggregateFunctionProperties properties;
         aggregate.parameters = (node->parameters) ? getAggregateFunctionParametersArray(node->parameters, "", getContext()) : Array();

@@ -4010,7 +4010,7 @@ const CnchHiveSettings & Context::getCnchLasSettings() const
     return *shared->las_settings;
 }
 
-const MergeTreeSettings & Context::getMergeTreeSettings() const
+const MergeTreeSettings & Context::getMergeTreeSettings(bool skip_unknown_settings) const
 {
     auto lock = getLock();
 
@@ -4018,7 +4018,7 @@ const MergeTreeSettings & Context::getMergeTreeSettings() const
     {
         const auto & config = getConfigRef();
         MergeTreeSettings mt_settings;
-        mt_settings.loadFromConfig("merge_tree", config);
+        mt_settings.loadFromConfig("merge_tree", config, skip_unknown_settings);
         shared->merge_tree_settings.emplace(mt_settings);
     }
 

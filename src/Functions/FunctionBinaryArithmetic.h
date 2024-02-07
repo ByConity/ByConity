@@ -56,7 +56,7 @@
 #include <Functions/DivisionUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/IsOperation.h>
 #include <Functions/castTypeToEither.h>
 #include <Interpreters/Context.h>
@@ -847,7 +847,8 @@ class FunctionBinaryArithmetic : public IFunction
             DataTypeDecimal<Decimal64>,
             DataTypeDecimal<Decimal128>,
             DataTypeDecimal<Decimal256>,
-            DataTypeFixedString
+            DataTypeFixedString,
+            DataTypeString
         >(type, std::forward<F>(f));
     }
 
@@ -906,17 +907,15 @@ class FunctionBinaryArithmetic : public IFunction
     static FunctionOverloadResolverPtr
     getFunctionForIntervalArithmetic(const DataTypePtr & type0, const DataTypePtr & type1, ContextPtr context)
     {
-        DataTypePtr ntype0 = type0;
-
-        // MySQL does not allow reordering of arguments unlike ClickHouse
-        if (context->getSettingsRef().dialect_type == DialectType::MYSQL && isStringOrFixedString(type0))
-            ntype0 = std::make_shared<DataTypeDateTime>();
-
-        bool first_is_date_or_datetime = isDateOrDate32(ntype0) || isDateTime(ntype0) || isDateTime64(ntype0) || isTime(ntype0);
+        bool first_is_date_or_datetime_or_string = isDateOrDate32(type0) || isDateTime(type0) || isDateTime64(type0) || isTime(type0);
         bool second_is_date_or_datetime = isDateOrDate32(type1) || isDateTime(type1) || isDateTime64(type1) || isTime(type1);
 
+        /// only mysql support first argument is String
+        if (context && context->getSettingsRef().dialect_type == DialectType::MYSQL)
+            first_is_date_or_datetime_or_string = first_is_date_or_datetime_or_string || isString(type0);
+
         /// Exactly one argument must be Date or DateTime
-        if (first_is_date_or_datetime == second_is_date_or_datetime)
+        if (first_is_date_or_datetime_or_string == second_is_date_or_datetime)
             return {};
 
         /// Special case when the function is plus or minus, one of arguments is Date/DateTime and another is Interval.
@@ -925,9 +924,10 @@ class FunctionBinaryArithmetic : public IFunction
         if constexpr (!is_plus && !is_minus)
             return {};
 
-        const DataTypePtr & type_time = first_is_date_or_datetime ? ntype0 : type1;
-        const DataTypePtr & type_interval = first_is_date_or_datetime ? type1 : ntype0;
+        const DataTypePtr & type_time = first_is_date_or_datetime_or_string ? type0 : type1;
+        const DataTypePtr & type_interval = first_is_date_or_datetime_or_string ? type1 : type0;
 
+        bool first_arg_is_string = isString(type0);
         bool interval_is_number = isNumber(type_interval);
 
         const DataTypeInterval * interval_data_type = nullptr;
@@ -937,6 +937,10 @@ class FunctionBinaryArithmetic : public IFunction
 
             if (!interval_data_type)
                 return {};
+        }
+        else if (first_arg_is_string)
+        {
+            return {};
         }
 
         if (second_is_date_or_datetime && is_minus)
@@ -1103,16 +1107,6 @@ class FunctionBinaryArithmetic : public IFunction
                                                size_t input_rows_count, const FunctionOverloadResolverPtr & function_builder) const
     {
         ColumnsWithTypeAndName new_arguments = arguments;
-        // First argument can be a string only if the dialect is MySQL
-        // The function's caller already checks for this
-        if (isStringOrFixedString(arguments[0].type))
-        {
-            ColumnsWithTypeAndName temp{arguments[0]};
-            auto to_datetime = FunctionFactory::instance().get("toDateTime", context);
-            auto col = to_datetime->build(temp)->execute(temp, std::make_shared<DataTypeDateTime>(), input_rows_count);
-            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime>(), "datetime");
-            new_arguments[0] = converted_col;
-        }
 
         /// Interval argument must be second.
         if (isDateOrDate32(arguments[1].type) || isDateTime(arguments[1].type)
@@ -1284,7 +1278,19 @@ class FunctionBinaryArithmetic : public IFunction
 
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionBinaryArithmetic>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionBinaryArithmetic>(context));
+        return std::make_shared<FunctionBinaryArithmetic>(context);
+    }
+
+    ArgType getArgumentsType() const override
+    {
+        if (name == "bitAnd" || name == "bitOr" || name == "bitXor" || name == "bitShiftLeft" || name == "bitShiftRight")
+            return ArgType::NOT_DECIMAL;
+        return ArgType::NUMBERS;
+    }
 
     explicit FunctionBinaryArithmetic(ContextPtr context_)
     :   context(context_),
@@ -1351,8 +1357,7 @@ public:
 
             for (size_t i = 0; i < 2; ++i)
                 new_arguments[i].type = arguments[i];
-            if (isStringOrFixedString(new_arguments[0].type))
-                new_arguments[0].type = std::make_shared<DataTypeDateTime>();
+
             /// Interval argument must be second.
             if (isDateOrDate32(new_arguments[1].type) || isDateTime(new_arguments[1].type)
                 || isDateTime64(new_arguments[1].type) || isTime(new_arguments[1].type))
@@ -1951,7 +1956,7 @@ public:
         {
             using LeftDataType = std::decay_t<decltype(left)>;
             using RightDataType = std::decay_t<decltype(right)>;
-            if constexpr (std::is_same_v<DataTypeFixedString, LeftDataType> || std::is_same_v<DataTypeFixedString, RightDataType>)
+            if constexpr (std::is_same_v<DataTypeFixedString, LeftDataType> || std::is_same_v<DataTypeFixedString, RightDataType> || std::is_same_v<DataTypeString, LeftDataType> || std::is_same_v<DataTypeString, RightDataType>)
                 return false;
             else
             {
@@ -1980,7 +1985,7 @@ public:
         {
             using LeftDataType = std::decay_t<decltype(left)>;
             using RightDataType = std::decay_t<decltype(right)>;
-            if constexpr (!std::is_same_v<DataTypeFixedString, LeftDataType> && !std::is_same_v<DataTypeFixedString, RightDataType>)
+            if constexpr (!std::is_same_v<DataTypeFixedString, LeftDataType> && !std::is_same_v<DataTypeFixedString, RightDataType> && !std::is_same_v<DataTypeString, LeftDataType> && !std::is_same_v<DataTypeString, RightDataType>)
             {
                 using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType, allow_decimal_promote_storage>::ResultDataType;
                 using OpSpec = Op<typename LeftDataType::FieldType, typename RightDataType::FieldType>;
@@ -2025,6 +2030,8 @@ public:
         const DataTypePtr & return_type_,
         ContextPtr context)
     {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionBinaryArithmeticWithConstants>(left_, right_, return_type_, context));
         return std::make_shared<FunctionBinaryArithmeticWithConstants>(left_, right_, return_type_, context);
     }
 
@@ -2241,7 +2248,7 @@ public:
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size()) + ", should be 2",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments>::getReturnTypeImplStatic(arguments, context, handle_division_by_zero);
+        return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments>::create(context)->getReturnTypeImpl(arguments);
     }
 
 private:

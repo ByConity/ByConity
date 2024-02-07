@@ -155,7 +155,7 @@ struct BitShiftLeftImpl
 };
 
 struct NameBitShiftLeft { static constexpr auto name = "bitShiftLeft"; };
-using FunctionBitShiftLeft = BinaryArithmeticOverloadResolver<BitShiftLeftImpl, NameBitShiftLeft, true, false>;
+using FunctionBitShiftLeft = BinaryArithmeticOverloadResolver<BitShiftLeftImpl, NameBitShiftLeft, true, true>;
 
 }
 

@@ -26,6 +26,7 @@ struct FactorialImpl
     static const constexpr bool allow_decimal = false;
     static const constexpr bool allow_fixed_string = false;
     static const constexpr bool allow_string_integer = false;
+    static const constexpr ArgType default_arg_type = ArgType::NUMBERS;
 
     static inline NO_SANITIZE_UNDEFINED ResultType apply(A a)
     {

@@ -23,6 +23,7 @@
 #include <Columns/IColumn.h>
 #include <Columns/ColumnConst.h>
 #include <Common/assert_cast.h>
+#include <Core/SettingsEnums.h>
 #include <DataTypes/getLeastSupertype.h>
 
 
@@ -39,7 +40,7 @@ static bool sameConstants(const IColumn & a, const IColumn & b)
     return assert_cast<const ColumnConst &>(a).getField() == assert_cast<const ColumnConst &>(b).getField();
 }
 
-ColumnWithTypeAndName getLeastSuperColumn(const std::vector<const ColumnWithTypeAndName *> & columns, bool allow_extended_conversion)
+ColumnWithTypeAndName getLeastSuperColumn(const std::vector<const ColumnWithTypeAndName *> & columns, bool enable_implicit_arg_type_convert, bool allow_extended_conversion)
 {
     if (columns.empty())
         throw Exception("Logical error: no src columns for supercolumn", ErrorCodes::LOGICAL_ERROR);
@@ -57,7 +58,10 @@ ColumnWithTypeAndName getLeastSuperColumn(const std::vector<const ColumnWithType
             ++num_const;
     }
 
-    result.type = getLeastSupertype(types, allow_extended_conversion);
+    if (enable_implicit_arg_type_convert)
+        result.type = getLeastSupertype<LeastSupertypeOnError::String>(types, true);
+    else
+        result.type = getLeastSupertype(types, allow_extended_conversion);
 
     /// Create supertype column saving constness if possible.
 

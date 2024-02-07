@@ -132,8 +132,10 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
 /// Dump local part to vfs
 MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     const IMutableMergeTreeDataPartPtr & local_part,
-    const DiskPtr & remote_disk) const
+    const DiskPtr & remote_disk,
+    bool is_temp_prefix) const
 {
+    const String TMP_PREFIX = "tmp_dump_";
     MergeTreePartInfo new_part_info(
         local_part->info.partition_id,
         local_part->info.min_block,
@@ -156,11 +158,15 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     switch(disk->getType())
     {
         case DiskType::Type::ByteHDFS: {
-            String relative_path = new_part_info.getPartNameWithHintMutation();
+            String relative_path = is_temp_prefix ? TMP_PREFIX + new_part_info.getPartNameWithHintMutation() : new_part_info.getPartNameWithHintMutation();
             new_part = std::make_shared<MergeTreeDataPartCNCH>(data, part_name, new_part_info, volume, relative_path);
             break;
         }
         case DiskType::Type::ByteS3: {
+            if (is_temp_prefix)
+            {
+                throw Exception("Temp prefix is not supported for s3 part", ErrorCodes::LOGICAL_ERROR);
+            }
             UUID part_id = local_part->uuid;
             String relative_path = UUIDHelpers::UUIDToString(part_id);
             LOG_DEBUG(log, "Relative path : " + relative_path);

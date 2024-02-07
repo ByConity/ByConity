@@ -73,6 +73,7 @@ public:
         bool has_force_restore_data_flag;
         const String & comment;
         IMetaClientPtr hive_client = nullptr;
+        bool skip_unknown_settings; /// for dumper
         ContextMutablePtr getContext() const;
         ContextMutablePtr getLocalContext() const;
         IMetaClientPtr getMetaClient() const;
@@ -122,7 +123,8 @@ public:
         const ForeignKeysDescription & foreign_keys,
         const UniqueNotEnforcedDescription & unique,
         bool has_force_restore_data_flag,
-        HiveParamsPtr hive_params = nullptr) const;
+        HiveParamsPtr hive_params = nullptr,
+        bool skip_unknown_settings = false) const;
 
     /// Register a table engine by its name.
     /// No locking, you must register all engines before usage of get.

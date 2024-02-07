@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionsConversion.h>
 
 namespace DB
@@ -19,7 +19,14 @@ class FunctionFindInSet : public IFunction
 {
 public:
     static constexpr auto name = "find_in_set";
-    static FunctionPtr create(ContextPtr /*context*/) { return std::make_shared<FunctionFindInSet>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionFindInSet>());
+        return std::make_shared<FunctionFindInSet>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
 
     String getName() const override { return name; }
 

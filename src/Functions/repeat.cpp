@@ -4,7 +4,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/castTypeToEither.h>
 
 
@@ -168,12 +168,19 @@ class FunctionRepeat : public IFunction
     template <typename F>
     static bool castType(const IDataType * type, F && f)
     {
-        return castTypeToEither<DataTypeUInt8, DataTypeUInt16, DataTypeUInt32, DataTypeUInt64>(type, std::forward<F>(f));
+        return castTypeToEither<DataTypeUInt8, DataTypeUInt16, DataTypeUInt32, DataTypeUInt64, DataTypeFloat32, DataTypeFloat64>(type, std::forward<F>(f));
     }
 
 public:
     static constexpr auto name = "repeat";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionRepeat>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionRepeat>());
+        return std::make_shared<FunctionRepeat>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STR_NUM; }
 
     String getName() const override { return name; }
 
@@ -184,9 +191,6 @@ public:
         if (!isString(arguments[0]))
             throw Exception(
                 "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if (!isUnsignedInteger(arguments[1]))
-            throw Exception(
-                "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return arguments[0];
     }
 

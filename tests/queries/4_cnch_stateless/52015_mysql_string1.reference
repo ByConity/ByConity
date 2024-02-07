@@ -1,0 +1,208 @@
+select BIT_LENGTH(null)
+\N
+select BIT_LENGTH(toNullable(1))
+8
+select BIT_LENGTH(5)
+8
+select BIT_LENGTH('2023')
+32
+select CHARACTER_LENGTH(null)
+\N
+select CHARACTER_LENGTH(toNullable(1))
+1
+select CHARACTER_LENGTH(5)
+1
+select CHARACTER_LENGTH('2023')
+4
+select CONCAT(null, toNullable(1))
+\N
+select CONCAT(null, 5)
+\N
+select CONCAT(null, '2023')
+\N
+select CONCAT(toNullable(1), 5)
+15
+select CONCAT(toNullable(1), '2023')
+12023
+select CONCAT(5, '2023')
+52023
+select CONCAT_WS(null, toNullable(1))
+
+select CONCAT_WS(null, 5)
+
+select CONCAT_WS(null, '2023')
+
+select CONCAT_WS(toNullable(1), 5)
+5
+select CONCAT_WS(toNullable(1), '2023')
+2023
+select CONCAT_WS(5, '2023')
+2023
+select FIELD(null, toNullable(1))
+\N
+select FIELD(null, 5)
+\N
+select FIELD(null, '2023')
+\N
+select FIELD(toNullable(1), 5)
+0
+select FIELD(toNullable(1), '2023')
+0
+select FIELD(5, '2023')
+0
+select FIND_IN_SET(null, toNullable(1))
+\N
+select FIND_IN_SET(null, 5)
+\N
+select FIND_IN_SET(null, '2023')
+\N
+select FIND_IN_SET(toNullable(1), 5)
+0
+select FIND_IN_SET(toNullable(1), '2023')
+0
+select FIND_IN_SET(5, '2023')
+0
+select FROM_BASE64(null)
+\N
+select FROM_BASE64(toNullable(1))
+Ô
+select FROM_BASE64(5)
+ä
+select FROM_BASE64('2023')
+ÛM·
+select FROM_UTF8(null)
+\N
+select FROM_UTF8(toNullable(1))
+1
+select FROM_UTF8(5)
+5
+select FROM_UTF8('2023')
+2023
+select LCASE(null)
+\N
+select LCASE(toNullable(1))
+1
+select LCASE(5)
+5
+select LCASE('2023')
+2023
+select LENGTH(null)
+\N
+select LENGTH(toNullable(1))
+1
+select LENGTH(5)
+1
+select LENGTH('2023')
+4
+select LOWER(null)
+\N
+select LOWER(toNullable(1))
+1
+select LOWER(5)
+5
+select LOWER('2023')
+2023
+select LTRIM(null)
+\N
+select LTRIM(toNullable(1))
+1
+select LTRIM(5)
+5
+select LTRIM('2023')
+2023
+select OCT(null)
+\N
+select OCT(toNullable(1))
+1
+select OCT(5)
+5
+select OCT('2023')
+3747
+select REPLACE(null, toNullable(1), 5)
+\N
+select REPLACE(null, toNullable(1), '2023')
+\N
+select REPLACE(null, 5, '2023')
+\N
+select REPLACE(toNullable(1), 5, '2023')
+1
+select REVERSE(null)
+\N
+select REVERSE(toNullable(1))
+1
+select REVERSE(5)
+5
+select REVERSE('2023')
+3202
+select TRIM(null)
+\N
+select TRIM(toNullable(1))
+1
+select TRIM(5)
+5
+select TRIM('2023')
+2023
+select TO_BASE64(null)
+\N
+select TO_BASE64(toNullable(1))
+MQ==
+select TO_BASE64(5)
+NQ==
+select TO_BASE64('2023')
+MjAyMw==
+select TO_UTF8(null)
+\N
+select TO_UTF8(toNullable(1))
+0x31
+select TO_UTF8(5)
+0x35
+select TO_UTF8('2023')
+0x32303233
+select UCASE(null)
+\N
+select UCASE(toNullable(1))
+1
+select UCASE(5)
+5
+select UCASE('2023')
+2023
+select UPPER(null)
+\N
+select UPPER(toNullable(1))
+1
+select UPPER(5)
+5
+select UPPER('2023')
+2023
+select RTRIM(null)
+\N
+select RTRIM(toNullable(1))
+1
+select RTRIM(5)
+5
+select RTRIM('2023')
+2023
+select SPLIT(null, toNullable(1))
+\N
+select SPLIT(null, 5)
+\N
+select SPLIT(null, '2023')
+\N
+select SPLIT(toNullable(1), 5)
+['1']
+select SPLIT(toNullable(1), '2023')
+['1']
+select SPLIT(5, '2023')
+['5']
+select STRCMP(null, toNullable(1))
+\N
+select STRCMP(null, 5)
+\N
+select STRCMP(null, '2023')
+\N
+select STRCMP(toNullable(1), 5)
+-1
+select STRCMP(toNullable(1), '2023')
+-1
+select STRCMP(5, '2023')
+1

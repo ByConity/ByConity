@@ -49,13 +49,9 @@ void ReadStorageRowCountStep::initializePipeline(QueryPipeline & pipeline, const
     auto column = ColumnAggregateFunction::create(func);
     column->insertFrom(place);
 
-    size_t arguments_size = agg_desc.argument_names.size();
-    DataTypes argument_types(arguments_size);
-    for (size_t j = 0; j < arguments_size; ++j)
-        argument_types[j] = std::make_shared<DataTypeInt64>();
-
+    // AggregateFunction's argument type must keep same. 
     Block block_with_count{
-        {std::move(column), std::make_shared<DataTypeAggregateFunction>(func, argument_types, agg_desc.parameters), agg_desc.column_name}};
+        {std::move(column), std::make_shared<DataTypeAggregateFunction>(func, func->getArgumentTypes(), agg_desc.parameters), agg_desc.column_name}};
 
     auto istream = std::make_shared<OneBlockInputStream>(block_with_count);
     auto pipe = Pipe(std::make_shared<SourceFromInputStream>(istream));

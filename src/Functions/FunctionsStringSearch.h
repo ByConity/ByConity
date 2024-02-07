@@ -11,7 +11,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/EscapeLike.h>
 #include <Interpreters/Context.h>
 #include <IO/WriteHelpers.h>
@@ -81,7 +81,16 @@ public:
     FunctionsStringSearch(bool mysql_mode_ = false) : mysql_mode(mysql_mode_) { }
     static FunctionPtr create(ContextPtr context)
     {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionsStringSearch>(context->getSettingsRef().dialect_type == DialectType::MYSQL));
         return std::make_shared<FunctionsStringSearch>(context->getSettingsRef().dialect_type == DialectType::MYSQL);
+    }
+
+    ArgType getArgumentsType() const override
+    {
+        if constexpr (isEscapeMatchImpl<Impl>())
+            return ArgType::STRINGS;
+        return ArgType::STR_STR_UINT;
     }
 
     String getName() const override { return name; }
