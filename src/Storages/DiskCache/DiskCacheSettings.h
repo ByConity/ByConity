@@ -46,6 +46,7 @@ struct DiskCacheSettings
     size_t cache_loader_per_disk {2};
     int cache_load_dispatcher_drill_down_level {1};
     size_t cache_set_rate_limit {0};
+    size_t cache_set_throughput_limit {0};
 
     size_t segment_size {8192};
     size_t hits_to_cache {2};

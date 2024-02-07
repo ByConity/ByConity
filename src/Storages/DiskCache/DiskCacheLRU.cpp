@@ -103,6 +103,7 @@ DiskCacheLRU::DiskCacheLRU(
     IDiskCache::DataType type_)
     : IDiskCache(name_, volume_, throttler_, settings_, strategy_, false, type_)
     , set_rate_throttler(settings_.cache_set_rate_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_rate_limit))
+    , set_throughput_throttler(settings_.cache_set_rate_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_throughput_limit))
     , containers(
           settings.cache_shard_num,
           BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>::Options{
@@ -217,6 +218,11 @@ void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_
     if (set_rate_throttler)
     {
         set_rate_throttler->add(1);
+    }
+
+    if (set_throughput_throttler)
+    {
+        set_throughput_throttler->add(weight_hint);
     }
 
     ProfileEvents::increment(ProfileEvents::DiskCacheSetTotalOps);
