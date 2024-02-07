@@ -758,5 +758,6 @@ DataTypePtr tryGetLeastSupertype(const TypeIndexSet & types, bool allow_extended
 }
 
 template DataTypePtr getLeastSupertype<LeastSupertypeOnError::Throw>(const DataTypes & types, bool allow_extended_conversion);
+template DataTypePtr getLeastSupertype<LeastSupertypeOnError::String>(const DataTypes & types, bool allow_extended_conversion);
 template DataTypePtr getLeastSupertype<LeastSupertypeOnError::Throw>(const TypeIndexSet & types, bool allow_extended_conversion);
 }

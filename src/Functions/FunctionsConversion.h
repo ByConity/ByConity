@@ -67,6 +67,7 @@
 #include <Common/Concepts.h>
 #include <Core/AccurateComparison.h>
 #include <Functions/IFunctionAdaptors.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionFactory.h>
@@ -1499,6 +1500,24 @@ struct ConvertThroughParsing
                         return true;
                 }
             }
+            // Add support for YYYYMMDDhhmmss.x
+            else if (!in.eof())
+            {
+                if (in.buffer().size() == strlen("YYYYMMDDhhmmss"))
+                    return true;
+                
+                if (in.buffer().size() >= strlen("YYYYMMDDhhmmss.x")
+                    && in.buffer().begin()[14] == '.')
+                {
+                    in.position() = in.buffer().begin() + 15;
+
+                    while (!in.eof() && isNumericASCII(*in.position()))
+                        ++in.position();
+
+                    if (in.eof())
+                        return true;
+                }
+            }
         }
 
         return false;
@@ -1607,6 +1626,12 @@ struct ConvertThroughParsing
                         parseDateTime64BestEffort(res, vec_to.getScale(), read_buffer, *local_time_zone, *utc_time_zone);
                         vec_to[i] = res;
                     }
+                    else if (std::is_same_v<ToDataType, DataTypeFloat64>)
+                    {
+                        Float64 res = 0;
+                        readFloatText(res, read_buffer);
+                        vec_to[i] = res;
+                    }
                     else
                     {
                         time_t res;
@@ -1689,6 +1714,14 @@ struct ConvertThroughParsing
                     {
                         DateTime64 res = 0;
                         parsed = tryParseDateTime64BestEffort(res, vec_to.getScale(), read_buffer, *local_time_zone, *utc_time_zone);
+                        vec_to[i] = res;
+                    }
+                    else if (std::is_same_v<ToDataType, DataTypeFloat64>)
+                    {
+                        Float64 res = 0;
+                        parsed = tryReadFloatText(res, read_buffer);
+                        while (!read_buffer.eof())
+                            ++read_buffer.position();
                         vec_to[i] = res;
                     }
                     else
@@ -1935,6 +1968,7 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBeha
 
 /// Declared early because used below.
 struct NameToDate { static constexpr auto name = "toDate"; };
+struct NameToDateMySql { static constexpr auto name = "toDateMySql"; };
 struct NameToDate32 { static constexpr auto name = "toDate32"; };
 struct NameToTime { static constexpr auto name = "toTimeType"; };
 struct NameToDateTime { static constexpr auto name = "toDateTime"; };
@@ -2059,6 +2093,12 @@ public:
 
     static FunctionPtr create(ContextPtr context)
     {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+        {
+            if constexpr (forceAdaptive)
+                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, true));
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, context->getSettingsRef().dialect_type == DialectType::MYSQL));
+        }
         /// Template variable forceAdaptive is to co-work with the rewriting of toDate-like functions
         /// in terms of query parsing stage, so as to enforce the apply of adaptive timestamp.
         /// Here, the original toDate-like functions shall be replaced with counterparts whose are built with
@@ -2070,6 +2110,15 @@ public:
         return std::make_shared<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, context->getSettingsRef().dialect_type == DialectType::MYSQL);
     }
     static FunctionPtr create(bool adaptive = false) { return std::make_shared<FunctionConvert>(nullptr, adaptive, false); }
+
+    ArgType getArgumentsType() const override
+    {
+        if constexpr (std::is_same_v<Name, NameToUnixTimestamp>)
+            return ArgType::DATE_OR_DATETIME;
+        else if constexpr (std::is_same_v<Name, NameToTime>)
+            return ArgType::STR_NUM;
+        return ArgType::UNDEFINED;
+    }
 
     explicit FunctionConvert(ContextPtr context_ = nullptr, bool adaptive = false, bool mysql_mode_ = false) : context(context_), adaptive_conversion(adaptive), mysql_mode(mysql_mode_)
     {
@@ -2481,8 +2530,20 @@ public:
 
     static constexpr bool to_datetime64 = std::is_same_v<ToDataType, DataTypeDateTime64>;
 
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionConvertFromString>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && (context->getSettingsRef().enable_implicit_arg_type_convert || context->getSettingsRef().dialect_type == DialectType::MYSQL))
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertFromString>());
+        return std::make_shared<FunctionConvertFromString>();
+    }
     static FunctionPtr create() { return std::make_shared<FunctionConvertFromString>(); }
+
+    ArgType getArgumentsType() const override
+    {
+        if constexpr (std::is_same_v<Name, NameToDateMySql>)
+            return ArgType::STRINGS;
+        return ArgType::UNDEFINED;
+    }
 
     String getName() const override
     {
@@ -2893,6 +2954,7 @@ using FunctionToInt256 = FunctionConvert<DataTypeInt256, NameToInt256, ToNumberM
 using FunctionToFloat32 = FunctionConvert<DataTypeFloat32, NameToFloat32, ToNumberMonotonicity<Float32>>;
 using FunctionToFloat64 = FunctionConvert<DataTypeFloat64, NameToFloat64, ToNumberMonotonicity<Float64>>;
 using FunctionToDate = FunctionConvert<DataTypeDate, NameToDate, ToDateMonotonicity>;
+using FunctionToDateMySql = FunctionConvertFromString<DataTypeDate, NameToDateMySql, ConvertFromStringExceptionMode::Zero>;
 using FunctionToDate32 = FunctionConvert<DataTypeDate32, NameToDate32, ToDateMonotonicity>;
 using FunctionToDateTime = FunctionConvert<DataTypeDateTime, NameToDateTime, ToDateTimeMonotonicity>;
 using FunctionToDateTime32 = FunctionConvert<DataTypeDateTime, NameToDateTime32, ToDateTimeMonotonicity>;
@@ -3015,6 +3077,10 @@ struct NameParseDateTime64BestEffortUS { static constexpr auto name = "parseDate
 struct NameParseDateTime64BestEffortUSOrZero { static constexpr auto name = "parseDateTime64BestEffortUSOrZero"; };
 struct NameParseDateTime64BestEffortUSOrNull { static constexpr auto name = "parseDateTime64BestEffortUSOrNull"; };
 
+struct NameToFloat64MySql {static constexpr auto name = "parseFloat64OrZeroMySql"; };
+
+using FunctionToFloat64OrZeroMySql = FunctionConvertFromString<DataTypeFloat64, NameToFloat64MySql, ConvertFromStringExceptionMode::Zero
+                                , ConvertFromStringParsingMode::BestEffort>;
 using FunctionParseDateTimeBestEffort = FunctionConvertFromString<
     DataTypeDateTime, NameParseDateTimeBestEffort, ConvertFromStringExceptionMode::Throw, ConvertFromStringParsingMode::BestEffort>;
 using FunctionParseDateTimeBestEffortOrZero = FunctionConvertFromString<

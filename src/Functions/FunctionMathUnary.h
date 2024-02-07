@@ -6,6 +6,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnDecimal.h>
 #include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionHelpers.h>
 
 #if !defined(ARCADIA_BUILD)
@@ -35,7 +36,14 @@ class FunctionMathUnary : public IFunction
 {
 public:
     static constexpr auto name = Impl::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMathUnary>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionMathUnary>());
+        return std::make_shared<FunctionMathUnary>();
+    }
+    /// get the expected argument type to be converted into if the input is not a number
+    ArgType getArgumentsType() const override { return ArgType::NUMBERS; }
 
 private:
     String getName() const override { return name; }

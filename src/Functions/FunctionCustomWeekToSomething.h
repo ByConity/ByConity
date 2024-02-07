@@ -25,7 +25,7 @@
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Functions/CustomWeekTransforms.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/TransformDateTime64.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
@@ -62,6 +62,16 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
+        if (mysql_mode)
+        {
+            if (arguments.size() != 1 && arguments.size() != 2 && arguments.size() != 3)
+                throw Exception(
+                    "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                        + ", expected 1, 2 or 3.",
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            return std::make_shared<ToDataType>();
+        }
+
         if (arguments.size() == 1)
         {
             if (!isDate(arguments[0].type) && !isDate32(arguments[0].type) && !isDateTime(arguments[0].type)
@@ -148,16 +158,36 @@ public:
         {
             ColumnsWithTypeAndName converted;
             ColumnsWithTypeAndName temp{arguments[0]};
-            auto to_datetime = FunctionFactory::instance().get("toDateTime", context_ptr);
-            auto col = to_datetime->build(temp)->execute(temp, std::make_shared<DataTypeDateTime64>(0), input_rows_count);
-            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(0), "unixtime");
+            auto to_datetime = FunctionFactory::instance().get("toDateTime64", context_ptr);
+            auto col = to_datetime->build(temp)->execute(temp, std::make_shared<DataTypeDateTime64>(3), input_rows_count);
+            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(3), "unixtime");
             converted.emplace_back(converted_col);
             for (size_t i = 1; i < arguments.size(); i++)
             {
                 converted.emplace_back(arguments[i]);
             }
-            return CustomWeekTransformImpl<DataTypeDateTime, ToDataType>::execute(
-                converted, result_type, input_rows_count, Transform{}, mysql_mode);
+            return CustomWeekTransformImpl<DataTypeDateTime64, ToDataType>::execute(
+                converted,
+                result_type,
+                input_rows_count,
+                TransformDateTime64<Transform>{static_cast<UInt32>(3)},
+                mysql_mode);
+        }
+        else if (mysql_mode && which.isNumber())
+        {
+            ColumnsWithTypeAndName converted;
+            auto col = IFunctionMySql::convertToTypeStatic<DataTypeDateTime64>(arguments[0], std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale), input_rows_count);
+            converted.emplace_back(col, std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale), "unixtime");
+            for (size_t i = 1; i < arguments.size(); i++)
+            {
+                converted.emplace_back(arguments[i]);
+            }
+            return CustomWeekTransformImpl<DataTypeDateTime64, ToDataType>::execute(
+                converted,
+                result_type,
+                input_rows_count,
+                TransformDateTime64<Transform>{static_cast<UInt32>(3)},
+                mysql_mode);
         }
         else
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,

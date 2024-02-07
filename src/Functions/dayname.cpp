@@ -5,7 +5,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 
 
 namespace DB
@@ -26,9 +26,19 @@ public:
 
     explicit FunctionDayName(ContextPtr context) : context_ptr(context) { }
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionDayName>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionDayName>(context));
+        return std::make_shared<FunctionDayName>(context);
+    }
 
-    String getName() const override { return name; }
+    ArgType getArgumentsType() const override { return ArgType::DATE_OR_DATETIME; }
+
+    String getName() const override
+    {
+        return name;
+    }
 
     bool isVariadic() const override { return false; }
 
@@ -68,9 +78,9 @@ public:
         if (isStringOrFixedString(arguments[0].type))
         {
             ColumnsWithTypeAndName tmp{arguments[0]};
-            auto to_dt = FunctionFactory::instance().get("toDateTime", context_ptr);
-            auto col = to_dt->build(tmp)->execute(tmp, std::make_shared<DataTypeDateTime64>(0), input_rows_count);
-            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(0), "unixtime");
+            auto to_dt = FunctionFactory::instance().get("toDateTime64", context_ptr);
+            auto col = to_dt->build(tmp)->execute(tmp, std::make_shared<DataTypeDateTime64>(3), input_rows_count);
+            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(3), "unixtime");
             input_col.emplace_back(converted_col);
         }
         else

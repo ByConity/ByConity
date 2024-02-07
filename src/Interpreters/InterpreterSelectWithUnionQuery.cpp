@@ -222,7 +222,7 @@ Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & he
             columns[i] = &headers[i].getByPosition(column_num);
 
         ColumnWithTypeAndName & result_elem = common_header.getByPosition(column_num);
-        result_elem = getLeastSuperColumn(columns, allow_extended_conversion);
+        result_elem = getLeastSuperColumn(columns, context->getSettingsRef().enable_implicit_arg_type_convert, allow_extended_conversion);
     }
 
     return common_header;

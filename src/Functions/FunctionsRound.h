@@ -22,6 +22,7 @@
 #pragma once
 
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteHelpers.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeArray.h>
@@ -31,7 +32,6 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Columns/ColumnVector.h>
 #include <Interpreters/castColumn.h>
-#include "IFunction.h"
 #include <Common/intExp.h>
 #include <Common/assert_cast.h>
 #include <Core/Defines.h>
@@ -109,6 +109,12 @@ enum class TieBreakingMode
     Auto, // use banker's rounding for floating point numbers, round up otherwise
     Bankers, // use banker's rounding
 };
+
+struct NameRound { static constexpr auto name = "round"; };
+struct NameRoundBankers { static constexpr auto name = "roundBankers"; };
+struct NameCeil { static constexpr auto name = "ceil"; };
+struct NameFloor { static constexpr auto name = "floor"; };
+struct NameTrunc { static constexpr auto name = "trunc"; };
 
 /// For N, no more than the number of digits in the largest type.
 using Scale = Int16;
@@ -545,9 +551,20 @@ public:
 template <typename Name, RoundingMode rounding_mode, TieBreakingMode tie_breaking_mode>
 class FunctionRounding : public IFunction
 {
+private:
+    ContextPtr context;
+
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionRounding>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionRounding>(context));
+        return std::make_shared<FunctionRounding>(context);
+    }
+    ArgType getArgumentsType() const override { return ArgType::NUMBERS; }
+
+    FunctionRounding(ContextPtr context_): context(context_) {}
 
     String getName() const override
     {
@@ -570,10 +587,24 @@ public:
                 throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+        {
+            if constexpr (std::is_same_v<NameFloor, Name> || std::is_same_v<NameCeil, Name>)
+            {
+                if (isDecimal(arguments[0]))
+                    return std::make_shared<DataTypeInt64>();
+            }
+            else if constexpr (std::is_same_v<NameRound, Name> || std::is_same_v<NameTrunc, Name>)
+            {
+                /// TODO(fredwang): create the return type using the round scale
+                // if (isDecimal(arguments[0]))
+                //     return std::make_shared<DataTypeDecimal<Decimal64>>(18, scale);
+            }
+        }
         return arguments[0];
     }
 
-    static Scale getScaleArg(const ColumnsWithTypeAndName & arguments)
+    static Scale getScaleArg(const ColumnsWithTypeAndName & arguments, ContextPtr context=nullptr)
     {
         if (arguments.size() == 2)
         {
@@ -582,11 +613,13 @@ public:
                 throw Exception("Scale argument for rounding functions must be constant", ErrorCodes::ILLEGAL_COLUMN);
 
             Field scale_field = assert_cast<const ColumnConst &>(scale_column).getField();
-            if (scale_field.getType() != Field::Types::UInt64
-                && scale_field.getType() != Field::Types::Int64)
-                throw Exception("Scale argument for rounding functions must have integer type", ErrorCodes::ILLEGAL_COLUMN);
+            if (!context || !context->getSettingsRef().enable_implicit_arg_type_convert)
+                if (scale_field.getType() != Field::Types::UInt64
+                    && scale_field.getType() != Field::Types::Int64)
+                    throw Exception("Scale argument for rounding functions must have integer type", ErrorCodes::ILLEGAL_COLUMN);
 
-            Int64 scale64 = scale_field.get<Int64>();
+            Int64 scale64 = static_cast<Int64>(scale_column.getFloat64(0));
+
             if (scale64 > std::numeric_limits<Scale>::max()
                 || scale64 < std::numeric_limits<Scale>::min())
                 throw Exception("Scale argument for rounding function is too large", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -599,10 +632,10 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const ColumnWithTypeAndName & column = arguments[0];
-        Scale scale_arg = getScaleArg(arguments);
+        Scale scale_arg = getScaleArg(arguments, context);
 
         ColumnPtr res;
         auto call = [&](const auto & types) -> bool
@@ -614,6 +647,18 @@ public:
             {
                 using FieldType = typename DataType::FieldType;
                 res = Dispatcher<FieldType, rounding_mode, tie_breaking_mode>::apply(column.column.get(), scale_arg);
+                if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+                {
+                    if constexpr (std::is_same_v<NameFloor, Name> || std::is_same_v<NameCeil, Name>)
+                    {
+                        if (isDecimal(arguments[0].type))
+                        {
+                            ColumnWithTypeAndName tmp{res, arguments[0].type, arguments[0].name};
+                            res = IFunctionMySql::convertToTypeStatic<DataTypeInt64>(tmp, std::make_shared<DataTypeInt64>(), input_rows_count);
+                        }
+                    }
+                    /// TODO(fredwang) fix return type of NameRound and NameTrunc under mysql dialect
+                }
                 return true;
             }
             return false;
@@ -825,12 +870,6 @@ private:
     }
 };
 
-
-struct NameRound { static constexpr auto name = "round"; };
-struct NameRoundBankers { static constexpr auto name = "roundBankers"; };
-struct NameCeil { static constexpr auto name = "ceil"; };
-struct NameFloor { static constexpr auto name = "floor"; };
-struct NameTrunc { static constexpr auto name = "trunc"; };
 
 using FunctionRound = FunctionRounding<NameRound, RoundingMode::Round, TieBreakingMode::Auto>;
 using FunctionRoundBankers = FunctionRounding<NameRoundBankers, RoundingMode::Round, TieBreakingMode::Bankers>;

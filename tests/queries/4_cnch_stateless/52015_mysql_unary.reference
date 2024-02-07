@@ -1,0 +1,748 @@
+2	6.5	0.5	250000000000	500000000000	0	20231213	7553600	67900.5
+4	7	0.5	250000000000	500000000000	0	20231213	7553600	6178.7
+select ceil(5)
+5
+select ceil(-5)
+-5
+select ceil(1234.5678)
+1235
+select ceil(-1234.5678)
+-1234
+select ceil(5678.1234)
+5679
+select ceil(-5678.1234)
+-5678
+select ceil(0)
+0
+select ceil(-0)
+0
+select ceil(1.2345e2)
+124
+select ceil(-1.2345e2)
+-123
+select ceil('5')
+5
+select ceil('-5')
+-5
+select ceil('1234.5678')
+1235
+select ceil('-1234.5678')
+-1234
+select ceil('5678.1234')
+5679
+select ceil('-5678.1234')
+-5678
+select ceil('0')
+0
+select ceil('-0')
+-0
+select ceil('1.2345e2')
+124
+select ceil('-1.2345e2')
+-123
+select ceil('0.34afds')
+1
+select ceil('-1.8999.edf')
+-1
+select floor(5)
+5
+select floor(-5)
+-5
+select floor(1234.5678)
+1234
+select floor(-1234.5678)
+-1235
+select floor(5678.1234)
+5678
+select floor(-5678.1234)
+-5679
+select floor(0)
+0
+select floor(-0)
+0
+select floor(1.2345e2)
+123
+select floor(-1.2345e2)
+-124
+select floor('5')
+5
+select floor('-5')
+-5
+select floor('1234.5678')
+1234
+select floor('-1234.5678')
+-1235
+select floor('5678.1234')
+5678
+select floor('-5678.1234')
+-5679
+select floor('0')
+0
+select floor('-0')
+-0
+select floor('1.2345e2')
+123
+select floor('-1.2345e2')
+-124
+select floor('0.34afds')
+0
+select floor('-1.8999.edf')
+-2
+select round(5)
+5
+select round(-5)
+-5
+select round(1234.5678)
+1235
+select round(-1234.5678)
+-1235
+select round(5678.1234)
+5678
+select round(-5678.1234)
+-5678
+select round(0)
+0
+select round(-0)
+0
+select round(1.2345e2)
+123
+select round(-1.2345e2)
+-123
+select round('5')
+5
+select round('-5')
+-5
+select round('1234.5678')
+1235
+select round('-1234.5678')
+-1235
+select round('5678.1234')
+5678
+select round('-5678.1234')
+-5678
+select round('0')
+0
+select round('-0')
+-0
+select round('1.2345e2')
+123
+select round('-1.2345e2')
+-123
+select round('0.34afds')
+0
+select round('-1.8999.edf')
+-2
+select round(5, 2.0)
+5
+select round(-5, 2.0)
+-5
+select round(1234.5678, 2.0)
+1234.57
+select round(-1234.5678, 2.0)
+-1234.57
+select round(5678.1234, 2.0)
+5678.12
+select round(-5678.1234, 2.0)
+-5678.12
+select round(0, 2.0)
+0
+select round(-0, 2.0)
+0
+select round(1.2345e2, 2.0)
+123.45
+select round(-1.2345e2, 2.0)
+-123.45
+select round('5', 2.0)
+5
+select round('-5', 2.0)
+-5
+select round('1234.5678', 2.0)
+1234.57
+select round('-1234.5678', 2.0)
+-1234.57
+select round('5678.1234', 2.0)
+5678.12
+select round('-5678.1234', 2.0)
+-5678.12
+select round('0', 2.0)
+0
+select round('-0', 2.0)
+-0
+select round('1.2345e2', 2.0)
+123.45
+select round('-1.2345e2', 2.0)
+-123.45
+select round('0.34afds', 2.0)
+0.34
+select round('-1.8999.edf', 2.0)
+-1.9
+select round(5, -2)
+0
+select round(-5, -2)
+0
+select round(1234.5678, -2)
+1200
+select round(-1234.5678, -2)
+-1200
+select round(5678.1234, -2)
+5700
+select round(-5678.1234, -2)
+-5700
+select round(0, -2)
+0
+select round(-0, -2)
+0
+select round(1.2345e2, -2)
+100
+select round(-1.2345e2, -2)
+-100
+select round('5', -2)
+0
+select round('-5', -2)
+-0
+select round('1234.5678', -2)
+1200
+select round('-1234.5678', -2)
+-1200
+select round('5678.1234', -2)
+5700
+select round('-5678.1234', -2)
+-5700
+select round('0', -2)
+0
+select round('-0', -2)
+-0
+select round('1.2345e2', -2)
+100
+select round('-1.2345e2', -2)
+-100
+select round('0.34afds', -2)
+0
+select round('-1.8999.edf', -2)
+-0
+select truncate(5, 2)
+5
+select truncate(-5, 2)
+-5
+select truncate(1234.5678, 2)
+1234.56
+select truncate(-1234.5678, 2)
+-1234.56
+select truncate(5678.1234, 2)
+5678.12
+select truncate(-5678.1234, 2)
+-5678.12
+select truncate(0, 2)
+0
+select truncate(-0, 2)
+0
+select truncate(1.2345e2, 2)
+123.45
+select truncate(-1.2345e2, 2)
+-123.45
+select truncate('5', 2)
+5
+select truncate('-5', 2)
+-5
+select truncate('1234.5678', 2)
+1234.56
+select truncate('-1234.5678', 2)
+-1234.56
+select truncate('5678.1234', 2)
+5678.12
+select truncate('-5678.1234', 2)
+-5678.12
+select truncate('0', 2)
+0
+select truncate('-0', 2)
+-0
+select truncate('1.2345e2', 2)
+123.44
+select truncate('-1.2345e2', 2)
+-123.44
+select truncate('0.34afds', 2)
+0.34
+select truncate('-1.8999.edf', 2)
+-1.89
+select truncate(5, -2)
+0
+select truncate(-5, -2)
+0
+select truncate(1234.5678, -2)
+1200
+select truncate(-1234.5678, -2)
+-1200
+select truncate(5678.1234, -2)
+5600
+select truncate(-5678.1234, -2)
+-5600
+select truncate(0, -2)
+0
+select truncate(-0, -2)
+0
+select truncate(1.2345e2, -2)
+100
+select truncate(-1.2345e2, -2)
+-100
+select truncate('5', -2)
+0
+select truncate('-5', -2)
+-0
+select truncate('1234.5678', -2)
+1200
+select truncate('-1234.5678', -2)
+-1200
+select truncate('5678.1234', -2)
+5600
+select truncate('-5678.1234', -2)
+-5600
+select truncate('0', -2)
+0
+select truncate('-0', -2)
+-0
+select truncate('1.2345e2', -2)
+100
+select truncate('-1.2345e2', -2)
+-100
+select truncate('0.34afds', -2)
+0
+select truncate('-1.8999.edf', -2)
+-0
+select hex(5)
+5
+select hex(-5)
+FFFFFFFFFFFFFFFB
+select hex(5.5)
+6
+select hex(-5.5)
+FFFFFFFFFFFFFFFA
+select hex('5')
+35
+select hex('-5')
+2D35
+select hex(0)
+0
+select hex(-0)
+0
+select hex('0')
+30
+select hex('-0')
+2D30
+select hex(toDateTime('2023-11-22 12:00:01', 'Asia/Singapore'))
+323032332D31312D32322031323A30303A3031
+select hex(toDateTime64('2023-11-22 12:00:01.001', 3, 'Asia/Singapore'))
+323032332D31312D32322031323A30303A30312E303031
+select hex('327f7dbd-8905-11ee-b77f-fad484e0e86b')
+33323766376462642D383930352D313165652D623737662D666164343834653065383662
+select hex(5)
+5
+select hex(-5)
+FFFFFFFFFFFFFFFB
+select hex(5.5)
+6
+select hex(-5.5)
+FFFFFFFFFFFFFFFA
+select hex('5')
+35
+select hex('-5')
+2D35
+select hex(0)
+0
+select hex(-0)
+0
+select hex('0')
+30
+select hex('-0')
+2D30
+select hex(toDateTime('2023-11-22 12:00:01'))
+323032332D31312D32322031323A30303A3031
+select hex(toDateTime64('2023-11-22 12:00:01.001'))
+323032332D31312D32322031323A30303A30312E303031
+select hex('327f7dbd-8905-11ee-b77f-fad484e0e86b')
+33323766376462642D383930352D313165652D623737662D666164343834653065383662
+select unhex(0)
+\0
+select unhex(35)
+5
+select unhex('0')
+\0
+select unhex('35')
+5
+select unhex('1f2a33')
+*3
+select unhex('f2a33')
+*3
+select abs(5)
+5
+select abs(-5)
+5
+select abs(5.5)
+5.5
+select abs(-5.5)
+5.5
+select abs('5')
+5
+select abs('-5')
+5
+select abs('5.5')
+5.5
+select abs('-5.5')
+5.5
+select abs(0.123)
+0.123
+select abs(-0.123)
+0.123
+select abs('0.123')
+0.123
+select sign(5)
+1
+select sign(-5)
+-1
+select sign(5.5)
+1
+select sign(-5.5)
+-1
+select sign('5')
+1
+select sign('-5')
+-1
+select sign('5.5')
+1
+select sign('-5.5')
+-1
+select sign(0.123)
+1
+select sign(-0.123)
+-1
+select sign('0.123')
+1
+select negate(5)
+-5
+select negate(-5)
+5
+select negate(5.5)
+-5.5
+select negate(-5.5)
+5.5
+select negate('5')
+-5
+select negate('-5')
+5
+select negate('5.5')
+-5.5
+select negate('-5.5')
+5.5
+select negate(0.123)
+-0.123
+select negate(-0.123)
+0.123
+select negate('0.123')
+-0.123
+select bitNot(5)
+18446744073709551610
+select bitNot(-5)
+4
+select bitNot(5.5)
+18446744073709551609
+select bitNot(-5.5)
+5
+select bitNot('5')
+18446744073709551610
+select bitNot('-5')
+4
+select bitNot('5.5')
+18446744073709551610
+select bitNot('-5.5')
+4
+select bitNot(0.123)
+18446744073709551615
+select bitNot(-0.123)
+18446744073709551615
+select bitNot('0.123')
+18446744073709551615
+select degrees(5)
+286.4788975654116
+select degrees(-5)
+-286.4788975654116
+select degrees(5.5)
+315.12678732195275
+select degrees(-5.5)
+-315.12678732195275
+select degrees('5')
+286.4788975654116
+select degrees('-5')
+-286.4788975654116
+select degrees('5.5')
+315.12678732195275
+select degrees('-5.5')
+-315.12678732195275
+select degrees(0.123)
+7.047380880109126
+select degrees(-0.123)
+-7.047380880109126
+select degrees('0.123')
+7.047380880109126
+select exp(5)
+148.41315910245692
+select exp(-5)
+0.006737946999089028
+select exp(5.5)
+244.6919322642148
+select exp(-5.5)
+0.004086771438465195
+select exp('5')
+148.41315910245692
+select exp('-5')
+0.006737946999089028
+select exp('5.5')
+244.6919322642148
+select exp('-5.5')
+0.004086771438465195
+select exp(0.123)
+1.1308844209471727
+select exp(-0.123)
+0.8842636625607079
+select exp('0.123')
+1.1308844209471727
+select radians(5)
+0.08726646259971647
+select radians(-5)
+-0.08726646259971647
+select radians(5.5)
+0.09599310885968812
+select radians(-5.5)
+-0.09599310885968812
+select radians('5')
+0.08726646259971647
+select radians('-5')
+-0.08726646259971647
+select radians('5.5')
+0.09599310885968812
+select radians('-5.5')
+-0.09599310885968812
+select radians(0.123)
+0.0021467549799530253
+select radians(-0.123)
+-0.0021467549799530253
+select radians('0.123')
+0.0021467549799530253
+select cos(5)
+0.28366218546322625
+select cos(-5)
+0.28366218546322625
+select cos(5.5)
+0.70866977429126
+select cos(-5.5)
+0.70866977429126
+select cos('5')
+0.28366218546322625
+select cos('-5')
+0.28366218546322625
+select cos('5.5')
+0.70866977429126
+select cos('-5.5')
+0.70866977429126
+select cos(0.123)
+0.9924450321351935
+select cos(-0.123)
+0.9924450321351935
+select cos('0.123')
+0.9924450321351935
+select sin(5)
+-0.9589242746631385
+select sin(-5)
+0.9589242746631385
+select sin(5.5)
+-0.7055403255703919
+select sin(-5.5)
+0.7055403255703919
+select sin('5')
+-0.9589242746631385
+select sin('-5')
+0.9589242746631385
+select sin('5.5')
+-0.7055403255703919
+select sin('-5.5')
+0.7055403255703919
+select sin(0.123)
+0.12269009002431533
+select sin(-0.123)
+-0.12269009002431533
+select sin('0.123')
+0.12269009002431533
+select tan(5)
+-3.380515006246586
+select tan(-5)
+3.380515006246586
+select tan(5.5)
+-0.995584052213885
+select tan(-5.5)
+0.995584052213885
+select tan('5')
+-3.380515006246586
+select tan('-5')
+3.380515006246586
+select tan('5.5')
+-0.995584052213885
+select tan('-5.5')
+0.995584052213885
+select tan(0.123)
+0.12362406586927442
+select tan(-0.123)
+-0.12362406586927442
+select tan('0.123')
+0.12362406586927442
+select log(5)
+1.6094379132876024
+select log(-5)
+nan
+select log(5.5)
+1.7047480919115294
+select log(-5.5)
+nan
+select log('5')
+1.6094379132876024
+select log('-5')
+nan
+select log('5.5')
+1.7047480919115294
+select log('-5.5')
+nan
+select log(0.123)
+-2.095570923577417
+select log(-0.123)
+nan
+select log('0.123')
+-2.095570923577417
+select log2(5)
+2.321928094887362
+select log2(-5)
+nan
+select log2(5.5)
+2.4594316186372973
+select log2(-5.5)
+nan
+select log2('5')
+2.321928094887362
+select log2('-5')
+nan
+select log2('5.5')
+2.4594316186372973
+select log2('-5.5')
+nan
+select log2(0.123)
+-3.023269779322847
+select log2(-0.123)
+nan
+select log2('0.123')
+-3.023269779322847
+select log10(5)
+0.6989700043360189
+select log10(-5)
+nan
+select log10(5.5)
+0.7403626894942439
+select log10(-5.5)
+nan
+select log10('5')
+0.6989700043360189
+select log10('-5')
+nan
+select log10('5.5')
+0.7403626894942439
+select log10('-5.5')
+nan
+select log10(0.123)
+-0.9100948885606021
+select log10(-0.123)
+nan
+select log10('0.123')
+-0.9100948885606021
+select acos(5)
+nan
+select acos(-5)
+nan
+select acos(5.5)
+nan
+select acos(-5.5)
+nan
+select acos('5')
+nan
+select acos('-5')
+nan
+select acos('5.5')
+nan
+select acos('-5.5')
+nan
+select acos(0.123)
+1.4474840516030247
+select acos(-0.123)
+1.6941086019867686
+select acos('0.123')
+1.4474840516030247
+select asin(5)
+nan
+select asin(-5)
+nan
+select asin(5.5)
+nan
+select asin(-5.5)
+nan
+select asin('5')
+nan
+select asin('-5')
+nan
+select asin('5.5')
+nan
+select asin('-5.5')
+nan
+select asin(0.123)
+0.12331227519187199
+select asin(-0.123)
+-0.12331227519187199
+select asin('0.123')
+0.12331227519187199
+select atan(5)
+1.373400766945016
+select atan(-5)
+-1.373400766945016
+select atan(5.5)
+1.3909428270024184
+select atan(-5.5)
+-1.3909428270024184
+select atan('5')
+1.373400766945016
+select atan('-5')
+-1.373400766945016
+select atan('5.5')
+1.3909428270024184
+select atan('-5.5')
+-1.3909428270024184
+select atan(0.123)
+0.12238528147180266
+select atan(-0.123)
+-0.12238528147180266
+select atan('0.123')
+0.12238528147180266
+select sqrt(5)
+2.23606797749979
+select sqrt(-5)
+nan
+select sqrt(5.5)
+2.345207879911715
+select sqrt(-5.5)
+nan
+select sqrt('5')
+2.23606797749979
+select sqrt('-5')
+nan
+select sqrt('5.5')
+2.345207879911715
+select sqrt('-5.5')
+nan
+select sqrt(0.123)
+0.3507135583350036
+select sqrt(-0.123)
+nan
+select sqrt('0.123')
+0.3507135583350036

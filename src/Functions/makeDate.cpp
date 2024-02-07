@@ -495,22 +495,13 @@ namespace
         }
     };
 
+    /// makeTime(hour, minute, second[, fraction[, precision]])
     class FunctionMakeTime : public FunctionWithNumericParamsBase
     {
-    protected:
+    private:
         static constexpr std::array mandatory_argument_names = {"hour", "minute", "second"};
-
-        template <typename T>
-        static Int64 Time(T hour, T minute, T second, const DateLUTImpl & lut)
-        {
-            if unlikely (
-                std::isnan(hour) || std::isnan(minute) || std::isnan(second) || hour < 0 || minute < 0 || second < 0 || hour > 23
-                || minute > 59 || second > 59)
-            {
-                return lut.makeTime(0, 0, 0);
-            }
-            return lut.makeTime(static_cast<UInt8>(hour), static_cast<UInt8>(minute), static_cast<UInt8>(second));
-        }
+        static constexpr std::array optional_argument_names = {"fraction", "precision"};
+        static constexpr UInt8 DEFAULT_PRECISION = 3;
 
     public:
         static constexpr auto name = "makeTime";
@@ -526,18 +517,56 @@ namespace
                 {mandatory_argument_names[1], &isNumberOrString<IDataType>, nullptr, "Number or String"},
                 {mandatory_argument_names[2], &isNumberOrString<IDataType>, nullptr, "Number or String"}};
 
-            FunctionArgumentDescriptors optional_args{};
+            FunctionArgumentDescriptors optional_args{
+                {optional_argument_names[0], &isNumber<IDataType>, nullptr, "Number"},
+                {optional_argument_names[1], &isNumber<IDataType>, nullptr, "Number"}};
 
             validateFunctionArgumentTypes(*this, arguments, mandatory_args, optional_args);
 
-            return std::make_shared<DataTypeTime>(0);
+            /// Optional precision argument
+            Int64 precision = DEFAULT_PRECISION;
+            if (arguments.size() == mandatory_argument_names.size() + 2)
+                precision = extractPrecision(arguments[mandatory_argument_names.size() + 1]);
+
+            return std::make_shared<DataTypeTime>(precision);
         }
+
+        template <typename T>
+        static Int64 Time(T hour, T minute, T second, const DateLUTImpl & lut)
+        {
+            if unlikely (
+                std::isnan(hour) || std::isnan(minute) || std::isnan(second) || hour < 0 || minute < 0 || second < 0 || hour > 23
+                || minute > 59 || second > 59)
+            {
+                return lut.makeTime(0, 0, 0);
+            }
+            return lut.makeTime(static_cast<UInt8>(hour), static_cast<UInt8>(minute), static_cast<UInt8>(second));
+        }
+
+        static Int64 minTime(const DateLUTImpl & lut) { return lut.makeTime(0, 0, 0); }
+
+        static Int64 maxTime(const DateLUTImpl & lut) { return lut.makeTime(23, 59, 59); }
 
         ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
         {
+            /// Optional precision argument
+            Int64 precision = DEFAULT_PRECISION;
+            if (arguments.size() == mandatory_argument_names.size() + 2)
+                precision = extractPrecision(arguments[mandatory_argument_names.size() + 1]);
+
             Columns converted_arguments = convertMandatoryArguments(arguments, mandatory_argument_names);
 
-            auto res_column = ColumnTime::create(input_rows_count, 0);
+            /// Optional fraction argument
+            const ColumnVector<Float64>::Container * fraction_data = nullptr;
+            if (arguments.size() >= mandatory_argument_names.size() + 1)
+            {
+                ColumnPtr fraction_column = castColumn(arguments[mandatory_argument_names.size()], std::make_shared<DataTypeFloat64>());
+                fraction_column = fraction_column->convertToFullColumnIfConst();
+                converted_arguments.push_back(fraction_column);
+                fraction_data = &typeid_cast<const ColumnFloat64 &>(*converted_arguments[3]).getData();
+            }
+
+            auto res_column = ColumnTime::create(input_rows_count, static_cast<UInt32>(precision));
             auto & result_data = res_column->getData();
 
             const auto & hour_data = typeid_cast<const ColumnFloat32 &>(*converted_arguments[0]).getData();
@@ -545,6 +574,9 @@ namespace
             const auto & second_data = typeid_cast<const ColumnFloat32 &>(*converted_arguments[2]).getData();
 
             const auto & date_lut = DateLUT::instance();
+            const auto max_fraction = pow(10, precision) - 1;
+            const auto min_time = minTime(date_lut);
+            const auto max_time = maxTime(date_lut);
 
             for (size_t i = 0; i < input_rows_count; ++i)
             {
@@ -554,10 +586,46 @@ namespace
 
                 auto time = Time(hour, minute, second, date_lut);
 
-                result_data[i] = DecimalUtils::decimalFromComponents<Decimal64>(time, 0, 0);
+                double fraction = 0;
+                if unlikely ((time == min_time))
+                    fraction = 0;
+                else if unlikely ((time == max_time))
+                    fraction = 999999999;
+                else
+                {
+                    fraction = fraction_data ? (*fraction_data)[i] : 0;
+                    if (unlikely(std::isnan(fraction)))
+                    {
+                        time = min_time;
+                        fraction = 0;
+                    }
+                    else if (unlikely(fraction < 0))
+                        fraction = 0;
+                    else if (unlikely(fraction > max_fraction))
+                        fraction = max_fraction;
+                }
+
+                result_data[i] = DecimalUtils::decimalFromComponents<Decimal64>(
+                    time, static_cast<Int64>(fraction), static_cast<UInt32>(precision));
             }
 
             return res_column;
+        }
+
+    private:
+        UInt8 extractPrecision(const ColumnWithTypeAndName & precision_argument) const
+        {
+            Int64 precision = DEFAULT_PRECISION;
+            if (!isNumber(precision_argument.type) || !precision_argument.column
+                || (precision_argument.column->size() != 1 && !typeid_cast<const ColumnConst *>(precision_argument.column.get())))
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Argument 'precision' for function {} must be constant number", getName());
+            precision = precision_argument.column->getInt(0);
+            if (precision < 0 || precision > 9)
+                throw Exception(
+                    ErrorCodes::ARGUMENT_OUT_OF_BOUND, "Argument 'precision' for function {} must be in range [0, 9]", getName());
+
+            return precision;
         }
     };
 }

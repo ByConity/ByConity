@@ -7,7 +7,7 @@
 #include <Common/BinStringDecodeHelper.h>
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/castColumn.h>
@@ -43,7 +43,7 @@ struct HexImpl
     static constexpr size_t word_size = 2;
 
     template <typename T>
-    static void executeOneUIntOrInt(T x, char *& out, bool skip_leading_zero = true, bool auto_close = true)
+    static void executeOneUIntOrInt(T x, char *& out, bool skip_leading_zero = true, bool auto_close = true, bool skip_leading_zeros_in_byte = false)
     {
         bool was_nonzero = false;
         for (int offset = (sizeof(T) - 1) * 8; offset >= 0; offset -= 8)
@@ -55,8 +55,8 @@ struct HexImpl
                 continue;
 
             was_nonzero = true;
-            writeHexByteUppercase(byte, out);
-            out += word_size;
+            out += writeHexByteUppercase(byte, out, skip_leading_zeros_in_byte);
+            skip_leading_zeros_in_byte = false;
         }
         if (auto_close)
         {
@@ -136,7 +136,7 @@ struct BinImpl
     static constexpr size_t word_size = 8;
 
     template <typename T>
-    static void executeOneUIntOrInt(T x, char *& out, bool skip_leading_zero = true, bool auto_close = true)
+    static void executeOneUIntOrInt(T x, char *& out, bool skip_leading_zero = true, bool auto_close = true, bool skip_leading_zeros_in_byte = false)
     {
         bool was_nonzero = false;
         for (int offset = (sizeof(T) - 1) * 8; offset >= 0; offset -= 8)
@@ -148,8 +148,8 @@ struct BinImpl
                 continue;
 
             was_nonzero = true;
-            writeBinByte(byte, out);
-            out += word_size;
+            out += writeBinByte(byte, out, skip_leading_zeros_in_byte);
+            skip_leading_zeros_in_byte = false;
         }
         if (auto_close)
         {
@@ -228,11 +228,17 @@ struct UnbinImpl
 template <typename Impl>
 class EncodeToBinaryRepresentation : public IFunction
 {
+
+private:
+    ContextPtr context;
+
 public:
     static constexpr auto name = Impl::name;
     static constexpr size_t word_size = Impl::word_size;
 
-    static FunctionPtr create(ContextPtr) { return std::make_shared<EncodeToBinaryRepresentation>(); }
+    static FunctionPtr create(ContextPtr context) { return std::make_shared<EncodeToBinaryRepresentation>(context); }
+
+    EncodeToBinaryRepresentation (ContextPtr context_) : context(context_) {}
 
     String getName() const override { return name; }
 
@@ -266,7 +272,7 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const IColumn * column = arguments[0].column.get();
         ColumnPtr res_column;
@@ -280,6 +286,65 @@ public:
             return res_column;
         }
 
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+        {
+            /// Note: cannot use which; must use arg_type defined below.
+            WhichDataType arg_type(arguments[0].type);
+            ColumnWithTypeAndName col_type_name = arguments[0];
+
+            /// bin() expectcs int64 argument; if not, convert to int64 (no rounding)
+            if constexpr (std::is_same_v<Impl, BinImpl>)
+            {
+                /// for types like datetime, convert to string and then to int64.
+                /// direct convert: truncate(toDateTime('2023-11-11 11:11:11')) -> 20231111111111
+                /// but bin expects the int64 to be 2023
+                if (!arg_type.isNumber() && !arg_type.isString() && !arg_type.isFixedString())
+                {
+                    auto type_str = std::make_shared<DataTypeString>();
+                    auto column_str = IFunctionMySql::convertToTypeStatic<DataTypeString>(col_type_name, type_str, input_rows_count);
+                    col_type_name.column = column_str;
+                    col_type_name.type = type_str;
+                }
+
+                if (!arg_type.isInt64() && !arg_type.isUInt64())
+                {
+                    auto type_int64 = std::make_shared<DataTypeInt64>();
+                    auto column_int64 = IFunctionMySql::convertToTypeStatic<DataTypeInt64>(col_type_name, type_int64, input_rows_count);
+                    tryExecuteUIntOrInt<Int64>(column_int64.get(), res_column);
+                }
+                else tryExecuteUIntOrInt<Int64>(column, res_column);
+            }
+            // hex() expects either int64 or str argument; so try convert it to int64 or str
+            else if (arg_type.isNumber())
+            {
+                if (!(arg_type.isInt() || arg_type.isUInt()))
+                {
+                    // only round here; no type conversion
+                    auto func = FunctionFactory::instance().get("round", context);
+                    col_type_name.type = func->getReturnType(arguments);
+                    col_type_name.column = func->build(arguments)->execute(arguments, col_type_name.type, input_rows_count);
+                }
+
+                if (!arg_type.isInt64())
+                {
+                    auto type_int64 = std::make_shared<DataTypeInt64>();
+                    auto column_int64 = IFunctionMySql::convertToTypeStatic<DataTypeInt64>(col_type_name, type_int64, input_rows_count);
+                    tryExecuteUIntOrInt<Int64>(column_int64.get(), res_column);
+                }
+                else tryExecuteUIntOrInt<Int64>(column, res_column);
+            }
+            else if (!arg_type.isStringOrFixedString())
+            {
+                auto type_string = std::make_shared<DataTypeString>();
+                auto converted_col = IFunctionMySql::convertToTypeStatic<DataTypeString>(arguments[0], type_string, input_rows_count);
+                tryExecuteString(converted_col.get(), res_column);
+            }
+            else if (!tryExecuteString(column, res_column))
+            {
+                tryExecuteFixedString(column, res_column);
+            }
+            return res_column;
+        }
         if (tryExecuteUIntOrInt<UInt8>(column, res_column) ||
             tryExecuteUIntOrInt<UInt16>(column, res_column) ||
             tryExecuteUIntOrInt<UInt32>(column, res_column) ||
@@ -329,6 +394,7 @@ public:
             out_vec.resize(size * (word_size+1) + MAX_LENGTH); /// word_size+1 is length of one byte in hex/bin plus zero byte.
 
             size_t pos = 0;
+            bool skip_leading_zeros_in_byte = context && context->getSettingsRef().enable_implicit_arg_type_convert;
             for (size_t i = 0; i < size; ++i)
             {
                 /// Manual exponential growth, so as not to rely on the linear amortized work time of `resize` (no one guarantees it).
@@ -337,7 +403,7 @@ public:
 
                 char * begin = reinterpret_cast<char *>(&out_vec[pos]);
                 char * end = begin;
-                Impl::executeOneUIntOrInt(in_vec[i], end);
+                Impl::executeOneUIntOrInt(in_vec[i], end, true, true, skip_leading_zeros_in_byte);
 
                 pos += end - begin;
                 out_offsets[i] = pos;
@@ -614,7 +680,15 @@ class DecodeFromBinaryRepresentation : public IFunction
 public:
     static constexpr auto name = Impl::name;
     static constexpr size_t word_size = Impl::word_size;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<DecodeFromBinaryRepresentation>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<DecodeFromBinaryRepresentation>());
+        return std::make_shared<DecodeFromBinaryRepresentation>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
+
 
     String getName() const override { return name; }
 

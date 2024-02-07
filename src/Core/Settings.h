@@ -1342,10 +1342,12 @@ enum PreloadLevelSettings : UInt64
     M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(TextCaseOption, text_case_option, TextCaseOption::MIXED, "Convert identifiers to lower case/upper case just like MySQL", 0) \
+    M(Bool, enable_implicit_arg_type_convert, false, "Eable implicit type conversion for functions", 0) \
     M(Bool, adaptive_type_cast, true, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
     M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
     M(Bool, formatdatetime_parsedatetime_m_is_month_name, false, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
+    M(Bool, date_format_clickhouse, false, "use date_format as a clickhouse function instead of hive", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
     M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\

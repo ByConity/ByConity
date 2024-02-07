@@ -169,7 +169,7 @@ void PlanSegmentManagerRpcService::executeQuery(
             request->user(),
             request->password(),
             request->coordinator_exchange_port());
-        ThreadFromGlobalPool async_thread([query_context = std::move(query_context),
+        ThreadFromGlobalPool async_thread([log = log, query_context = std::move(query_context),
                                             execution_info = std::move(execution_info),
                                            plan_segment_buf = std::make_shared<butil::IOBuf>(cntl->request_attachment().movable()),
                                            segment_id = request->plan_segment_id(),
@@ -177,6 +177,11 @@ void PlanSegmentManagerRpcService::executeQuery(
             bool before_execute = true;
             try
             {
+                /// agg func needs context for mysql settings
+                if(CurrentThread::isInitialized())
+                    CurrentThread::get().attachQueryContext(query_context);
+                else
+                    LOG_WARNING(log, "context is not initalized before plan segment deserialization, which may lead to settings like dialect_type not be valid");
                 /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
                 ReadBufferFromBrpcBuf plan_segment_read_buf(*plan_segment_buf);
                 auto plan_segment = PlanSegment::deserializePlanSegment(plan_segment_read_buf, query_context);

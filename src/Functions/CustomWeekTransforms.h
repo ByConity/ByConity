@@ -26,9 +26,10 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/DecimalFunctions.h>
 #include <Functions/DateTimeTransforms.h>
+#include <Functions/TransformDateTime64.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
+#include <Functions/IFunctionMySql.h>
 #include <Common/Exception.h>
 #include <Common/DateLUTImpl.h>
 #include <common/types.h>
@@ -209,30 +210,46 @@ struct CustomWeekTransformImpl
     static ColumnPtr execute(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr &,
-        size_t /*input_rows_count*/,
+        size_t input_rows_count,
         Transform transform = {},
         bool mysql_mode_ = false)
     {
         const auto op = WeekTransformer<typename FromDataType::FieldType, typename ToDataType::FieldType, Transform, is_extended_result>{std::move(transform)};
 
-        UInt8 week_mode = mysql_mode_ ? DEFAULT_WEEK_MODE_MYSQL : DEFAULT_WEEK_MODE;
+        UInt8 week_mode =  DEFAULT_WEEK_MODE;
         if (mysql_mode_)
         {
-            if constexpr(std::is_same_v<Transform, ToDayOfWeekMySQLImpl>)
+            if constexpr(std::is_same_v<Transform, ToDayOfWeekMySQLImpl> || std::is_same_v<Transform, TransformDateTime64<ToDayOfWeekMySQLImpl>>)
+                // Weekday in mysql uses mode 1
                 week_mode = DEFAULT_DAY_WEEK_MODE_MYSQL;
-            else if constexpr(std::is_same_v<Transform, ToWeekImpl> || std::is_same_v<Transform, ToYearWeekImpl>)
+            else if constexpr(std::is_same_v<Transform, ToWeekImpl> || 
+                            std::is_same_v<Transform, TransformDateTime64<ToWeekImpl>> || 
+                            std::is_same_v<Transform, ToYearWeekImpl> || 
+                            std::is_same_v<Transform, TransformDateTime64<ToYearWeekImpl>>)
+                // toWeek and toYearWeek in mysql uses mode 0
                 week_mode = DEFAULT_WEEK_MODE;
+            else
+                // By default mysql uses mode 3
+                week_mode = DEFAULT_WEEK_MODE_MYSQL;
         }
         
-        if constexpr(std::is_same_v<Transform, ToWeekOfYearImpl>)
-        {
+        if constexpr(std::is_same_v<Transform, ToWeekOfYearImpl> || std::is_same_v<Transform, TransformDateTime64<ToWeekOfYearImpl>>)
+            // toWeekOfYear uses mode 3 by default
             week_mode = DEFAULT_WEEK_MODE_MYSQL;
-        }
 
         size_t timezone_index = 2;
         if (arguments.size() > 1)
         {
-            if (const auto * week_mode_column = checkAndGetColumnConst<ColumnUInt8>(arguments[1].column.get()))
+            if (mysql_mode_)
+            {
+                // for mysql implicit type convert - 2nd column is a string of numeric
+                auto col = IFunctionMySql::convertToTypeStatic<DataTypeUInt64>(arguments[1], std::make_shared<DataTypeUInt64>(), input_rows_count);
+                if (col->getUInt(0) == 0)
+                    timezone_index = 1;
+                else
+                    week_mode = col->getUInt(0);
+            }
+            else if (const auto * week_mode_column = checkAndGetColumnConst<ColumnUInt8>(arguments[1].column.get()))
                 week_mode = week_mode_column->getValue<UInt8>();
             else if (const auto * timezone_column = checkAndGetColumnConst<ColumnString>(arguments[1].column.get()))
                 // for backward compatibility - try to get 2nd column as timezone

@@ -52,6 +52,7 @@
 #include <Functions/IFunctionAdaptors.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IsOperation.h>
+#include <Functions/IFunctionMySql.h>
 
 #include <Core/AccurateComparison.h>
 #include <Core/DecimalComparison.h>
@@ -581,7 +582,14 @@ class FunctionComparison : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionComparison>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionComparison>(context));
+        return std::make_shared<FunctionComparison>(context);
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::SAME_TYPE; }
 
     explicit FunctionComparison(ContextPtr context_)
         : context(context_), check_decimal_overflow(decimalCheckComparisonOverflow(context)) {}

@@ -73,7 +73,7 @@
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionHelpers.h>
 #include <Common/TargetSpecific.h>
 #include <Functions/PerformanceAdaptors.h>
@@ -982,7 +982,19 @@ class FunctionStringHashFixedString : public IFunction
 {
 public:
     static constexpr auto name = Impl::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionStringHashFixedString>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionStringHashFixedString>());
+        return std::make_shared<FunctionStringHashFixedString>();
+    }
+
+    ArgType getArgumentsType() const override
+    {
+        if constexpr (std::is_same_v<Impl, MD5Impl> || std::is_same_v<Impl, SHA1Impl>)
+            return ArgType::STRINGS;
+        return ArgType::UNDEFINED;
+    }
 
     String getName() const override { return name;}
 

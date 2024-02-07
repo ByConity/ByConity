@@ -6,6 +6,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/GatherUtils/Algorithms.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/GatherUtils/Sinks.h>
 #include <Functions/GatherUtils/Slices.h>
@@ -36,8 +37,15 @@ class FunctionSubstring : public IFunction
 {
 public:
     static constexpr auto name = is_utf8 ? "substringUTF8" : "substring";
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionSubstring>());
+        return std::make_shared<FunctionSubstring>();
+    }
 
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionSubstring>(); }
+    ArgType getArgumentsType() const override { return ArgType::STR_NUM; }
+
     String getName() const override { return name; }
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }

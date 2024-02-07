@@ -6,7 +6,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteBufferFromVector.h>
 #include <IO/WriteHelpers.h>
 
@@ -28,7 +28,14 @@ class FunctionMakeSet : public IFunction
 
 public:
     static constexpr auto name = "make_set";
-    static FunctionPtr create(ContextPtr /*context*/) { return std::make_shared<FunctionMakeSet>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionMakeSet>());
+        return std::make_shared<FunctionMakeSet>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::NUM_STR; }
 
     String getName() const override { return name; }
 

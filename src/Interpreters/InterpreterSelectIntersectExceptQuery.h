@@ -37,7 +37,7 @@ public:
 
 private:
     static String getName() { return "SelectIntersectExceptQuery"; }
-
+    Block getCommonHeader(const Blocks & headers);
     std::unique_ptr<IInterpreterUnionOrSelectQuery>
     buildCurrentChildInterpreter(const ASTPtr & ast_ptr_);
 

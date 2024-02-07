@@ -1681,6 +1681,30 @@ struct ToYYYYMMDDImpl
     using FactorTransform = ZeroTransform;
 };
 
+struct ToYYYYMMDDImplMySql
+{
+    static constexpr auto name = "toYYYYMMDDMySql";
+
+    static inline Float64 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return static_cast<Float64>(time_zone.toNumYYYYMMDD(t));
+    }
+    static inline Float64 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return static_cast<Float64>(time_zone.toNumYYYYMMDD(t));
+    }
+    static inline Float64 execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return static_cast<Float64>(time_zone.toNumYYYYMMDD(ExtendedDayNum(d)));
+    }
+    static inline Float64 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return static_cast<Float64>(time_zone.toNumYYYYMMDD(DayNum(d)));
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
 struct ToYYYYMMDDhhmmssImpl
 {
     static constexpr auto name = "toYYYYMMDDhhmmss";
@@ -1700,6 +1724,46 @@ struct ToYYYYMMDDhhmmssImpl
     static inline UInt64 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMMDDhhmmss(time_zone.toDate(DayNum(d)));
+    }
+
+    static inline UInt64 executeTime(Decimal64 t, UInt32 scale_multiplier, const DateLUTImpl & date_lut)
+    {
+        return ToHourSecondImpl::executeTime(t, scale_multiplier, date_lut);
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
+struct ToYYYYMMDDhhmmssMySqlImpl
+{
+    static constexpr auto name = "toYYYYMMDDhhmmssMySql";
+
+    static inline Float64 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return static_cast<Float64>(ToYYYYMMDDhhmmssImpl::execute(t, time_zone));
+    }
+    static inline Float64 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return static_cast<Float64>(ToYYYYMMDDhhmmssImpl::execute(t, time_zone));
+    }
+    static inline Float64 execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return static_cast<Float64>(ToYYYYMMDDhhmmssImpl::execute(d, time_zone));
+    }
+    static inline Float64 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return static_cast<Float64>(ToYYYYMMDDhhmmssImpl::execute(d, time_zone));
+    }
+    static inline Float64 execute(const DateTime64 & datetime64, Int64 scale_multiplier, const DateLUTImpl & time_zone)
+    {
+        auto component = DecimalUtils::splitWithScaleMultiplier(datetime64, scale_multiplier);
+        return ToYYYYMMDDhhmmssImpl::execute(static_cast<Int64>(component.whole), time_zone) + static_cast<Float64>(component.fractional)/scale_multiplier;
+    }
+
+    static inline Float64 executeTime(Decimal64 t, UInt32 scale_multiplier, const DateLUTImpl & date_lut)
+    {
+        auto component = DecimalUtils::splitWithScaleMultiplier(t, scale_multiplier);
+        return ToHourSecondImpl::executeTime(t, scale_multiplier, date_lut) + static_cast<Float64>(component.fractional)/scale_multiplier;
     }
 
     using FactorTransform = ZeroTransform;

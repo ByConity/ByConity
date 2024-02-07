@@ -23,6 +23,7 @@
 #include <Functions/IFunctionDateOrDateTime.h>
 #include <Functions/TransformTime.h>
 #include <DataTypes/DataTypeTime.h>
+#include <Functions/IFunctionMySql.h>
 
 namespace DB
 {
@@ -42,7 +43,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        this->checkArguments(arguments, (std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeDate32>));
+        this->checkArguments(arguments, (std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeDate32>), context);
 
         /// For DateTime, if time zone is specified, attach it to type.
         /// If the time zone is specified but empty, throw an exception.
@@ -96,6 +97,15 @@ public:
                 convertToDateTime(arguments, &temp_args, input_rows_count);
                 return DateTimeTransformImpl<DataTypeDateTime, ToDataType, Transform>::execute(temp_args, result_type, input_rows_count);
             }
+            if (which.isStringOrFixedString())
+            {
+                ColumnsWithTypeAndName temp_args;
+                auto to_time = FunctionFactory::instance().get("toTimeType", context);
+                auto to_time_col = to_time->build(arguments)->execute(arguments, std::make_shared<DataTypeTime>(3), input_rows_count);
+                temp_args.emplace_back(std::move(to_time_col), std::make_shared<DataTypeTime>(3), "time");
+                const TransformTime<Transform> transformer(3);
+                return DateTimeTransformImpl<DataTypeTime, ToDataType, decltype(transformer)>::execute(temp_args, result_type, input_rows_count, transformer);
+            }
         }
         else if constexpr (
             std::is_same_v<Transform, ToYearImpl> || std::is_same_v<Transform, ToQuarterImpl> || std::is_same_v<Transform, ToMonthImpl>
@@ -126,6 +136,17 @@ public:
             const auto scale = static_cast<const DataTypeTime *>(from_type)->getScale();
             const TransformTime<Transform> transformer(scale);
             return DateTimeTransformImpl<DataTypeTime, ToDataType, decltype(transformer)>::execute(arguments, result_type, input_rows_count, transformer);
+        }
+        else if (context->getSettingsRef().enable_implicit_arg_type_convert && which.isNumber())
+        {
+            const UInt32 scale = 3;
+            const TransformDateTime64<Transform> transformer(scale);
+            ColumnsWithTypeAndName temp_args;
+            auto col = IFunctionMySql::convertToTypeStatic<DataTypeDateTime64>(arguments[0], std::make_shared<DataTypeDateTime64>(scale), input_rows_count);
+            temp_args.emplace_back(std::move(col), std::make_shared<DataTypeDateTime64>(scale), arguments[0].name);
+            if (arguments.size() == 2)
+                temp_args.emplace_back(arguments[1]);
+            return DateTimeTransformImpl<DataTypeDateTime64, ToDataType, decltype(transformer)>::execute(temp_args, result_type, input_rows_count, transformer);
         }
         else
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,

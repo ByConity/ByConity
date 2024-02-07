@@ -1,0 +1,178 @@
+select ASCII(null)
+\N
+select ASCII('123abc')
+49
+select ASCII('1')
+49
+select ASCII(' 1 ')
+32
+select CHAR(null)
+\N
+select CHAR('123abc')
+{
+select CHAR('1')
+
+select CHAR(' 1 ')
+
+select ELT(null, '123abc')
+\N
+select ELT(null, '1')
+\N
+select ELT(null, ' 1 ')
+\N
+select ELT('123abc', '1')
+\N
+select ELT('123abc', ' 1 ')
+\N
+select ELT('1', ' 1 ')
+ 1 
+select FORMAT(null, '123abc')
+\N
+select FORMAT(null, '1')
+\N
+select FORMAT(null, ' 1 ')
+\N
+select FORMAT('123abc', '1')
+123.0
+select FORMAT('123abc', ' 1 ')
+123.0
+select FORMAT('1', ' 1 ')
+1.0
+select INSERT(null, '123abc', '1', ' 1 ')
+\N
+select INSTR(null, '123abc')
+\N
+select INSTR(null, '1')
+\N
+select INSTR(null, ' 1 ')
+\N
+select INSTR('123abc', '1')
+1
+select INSTR('123abc', ' 1 ')
+0
+select INSTR('1', ' 1 ')
+0
+select LOCATE(null, '123abc')
+\N
+select LOCATE(null, '1')
+\N
+select LOCATE(null, ' 1 ')
+\N
+select LOCATE('123abc', '1')
+0
+select LOCATE('123abc', ' 1 ')
+0
+select LOCATE('1', ' 1 ')
+2
+select LPAD(null, '123abc', '1')
+\N
+select LPAD(null, '123abc', ' 1 ')
+\N
+select LPAD(null, '1', ' 1 ')
+\N
+select LPAD('123abc', '1', ' 1 ')
+1
+select MID(null, '123abc')
+\N
+select MID(null, '1')
+\N
+select MID(null, ' 1 ')
+\N
+select MID('123abc', '1')
+123abc
+select MID('123abc', ' 1 ')
+123abc
+select MID('1', ' 1 ')
+1
+select MAKE_SET(null, '123abc')
+\N
+select MAKE_SET(null, '1')
+\N
+select MAKE_SET(null, ' 1 ')
+\N
+select MAKE_SET('123abc', '1')
+1
+select MAKE_SET('123abc', ' 1 ')
+ 1 
+select MAKE_SET('1', ' 1 ')
+ 1 
+select ORD(null)
+\N
+select ORD('123abc')
+49
+select ORD('1')
+49
+select ORD(' 1 ')
+32
+select POSITION(null, '123abc')
+\N
+select POSITION(null, '1')
+\N
+select POSITION(null, ' 1 ')
+\N
+select POSITION('123abc', '1')
+1
+select POSITION('123abc', ' 1 ')
+0
+select POSITION('1', ' 1 ')
+0
+select REPEAT(null, '123abc')
+\N
+select REPEAT(null, '1')
+\N
+select REPEAT(null, ' 1 ')
+\N
+select REPEAT('123abc', '1')
+123abc
+select REPEAT('123abc', ' 1 ')
+123abc
+select REPEAT('1', ' 1 ')
+1
+select REGEXP(null, '123abc')
+\N
+select REGEXP(null, '1')
+\N
+select REGEXP(null, ' 1 ')
+\N
+select REGEXP('123abc', '1')
+1
+select REGEXP('123abc', ' 1 ')
+0
+select REGEXP('1', ' 1 ')
+0
+select space(null)
+\N
+select space('123abc')
+                                                                                                                           
+select space('1')
+ 
+select space(' 1 ')
+ 
+select SPLIT_PART(null, '123abc', '1')
+\N
+select SPLIT_PART(null, '123abc', ' 1 ')
+\N
+select SPLIT_PART(null, '1', ' 1 ')
+\N
+select SPLIT_PART('123abc', '1', ' 1 ')
+
+select SUBSTR(null, '123abc')
+\N
+select SUBSTR(null, '1')
+\N
+select SUBSTR(null, ' 1 ')
+\N
+select SUBSTR('123abc', '1')
+123abc
+select SUBSTR('123abc', ' 1 ')
+123abc
+select SUBSTR('1', ' 1 ')
+1
+select SUBSTRING_INDEX(null, '123abc', '1')
+\N
+select SUBSTRING_INDEX(null, '123abc', ' 1 ')
+\N
+select SUBSTRING_INDEX(null, '1', ' 1 ')
+\N
+select SUBSTRING_INDEX('123abc', '1', ' 1 ')
+123abc

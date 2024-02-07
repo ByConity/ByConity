@@ -1,4 +1,5 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/IAggregateFunctionMySql.h>
 #include <AggregateFunctions/Helpers.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/AggregateFunctionStatisticsSimple.h>
@@ -18,7 +19,7 @@ namespace
 
 template <template <typename> typename FunctionTemplate>
 AggregateFunctionPtr createAggregateFunctionStatisticsUnary(
-    const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+    const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings * settings)
 {
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
@@ -29,6 +30,13 @@ AggregateFunctionPtr createAggregateFunctionStatisticsUnary(
         res.reset(createWithDecimalType<FunctionTemplate>(*data_type, argument_types));
     else
         res.reset(createWithNumericType<FunctionTemplate>(*data_type, argument_types));
+
+    if (!res && (!settings || settings->enable_implicit_arg_type_convert))
+    {
+        DataTypePtr type_float64 = std::make_shared<DataTypeFloat64>();
+        auto * func = createWithNumericType<FunctionTemplate>(*type_float64, argument_types);
+        res.reset(new IAggregateFunctionMySql(std::unique_ptr<IAggregateFunction>(func)));
+    }
 
     if (!res)
         throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name,

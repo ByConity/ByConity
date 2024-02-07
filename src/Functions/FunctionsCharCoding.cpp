@@ -18,8 +18,9 @@
 #include <DataTypes/IDataType.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Common/UTF8Helpers.h>
 #include <common/types.h>
 #include "Core/Types.h"
@@ -145,7 +146,9 @@ class FunctionsCharCoding : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionsCharCoding>(); }
+    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionsCharCoding>(context); }
+
+    explicit FunctionsCharCoding(ContextPtr context_) : context(context_) {}
 
     String getName() const override { return name; }
 
@@ -161,6 +164,9 @@ public:
         }
         if (!isStringOrFixedString(arguments[0]) && !isNumber(arguments[0]))
         {
+            if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+                return std::make_shared<DataTypeUInt8>();
+
             throw Exception(
                 "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
@@ -173,9 +179,14 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
 
     ColumnPtr
-    executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const override
+    executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /* result_type */, size_t input_rows_count) const override
     {
-        const ColumnPtr & column = arguments[0].column;
+        ColumnPtr column = arguments[0].column;
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+        {
+            if (isDateTime64(arguments[0].type) || isDateOrDate32(arguments[0].type) || isDateTime(arguments[0].type) || isTime(arguments[0].type))
+                column = IFunctionMySql::convertToTypeStatic<DataTypeFloat64>(arguments[0], std::make_shared<DataTypeFloat64>(), input_rows_count);
+        }
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
         {
             return Impl::template execute<ColumnString>(col);
@@ -219,6 +230,7 @@ public:
     }
 
 private:
+    ContextPtr context;
     template <typename P, typename CONTAINER_T, typename T>
     /// templated function to handle ColumnVector<TYPE> or ColumnDecimal<TYPE> as input,
     /// and ColumnUInt8 or ColumnUInt32 as return type, 

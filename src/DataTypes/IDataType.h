@@ -536,6 +536,12 @@ inline bool isUnsignedInteger(const T & data_type)
 }
 
 template <typename T>
+inline bool isSignedInteger(const T & data_type)
+{
+    return WhichDataType(data_type).isInt();
+}
+
+template <typename T>
 inline bool isInteger(const T & data_type)
 {
     WhichDataType which(data_type);

@@ -3,6 +3,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
 #include <Functions/DateTimeTransforms.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 #include <Functions/TransformDateTime64.h>
@@ -35,8 +36,12 @@ namespace
 
         static FunctionPtr create(ContextPtr context)
         {
+            if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionFromDaysImpl>(context));
             return std::make_shared<FunctionFromDaysImpl>(context);
         }
+
+        ArgType getArgumentsType() const override { return ArgType::NUMBERS; }
 
         String getName() const override
         {
@@ -60,10 +65,10 @@ namespace
                     getName(),
                     toString(arguments.size()));
 
-            if (!isInteger(arguments[0]) && !isStringOrFixedString(arguments[0]))
+            if (!isNumber(arguments[0]) && !isStringOrFixedString(arguments[0]))
                 throw Exception(
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "The argument of function {} must be integer or a string literal of an integer",
+                    "The argument of function {} must be number or a string literal of an number",
                     getName());
 
             return std::make_shared<DataTypeDate32>();
@@ -90,7 +95,7 @@ namespace
                 return true;
             };
             /// All integral types are supported
-            if (!callOnBasicType<void, true, false, false, false>(col_type, call))
+            if (!callOnBasicType<void, true, true, false, false>(col_type, call))
                 throw Exception("Wrong call for " + getName() + " with " + getTypeName(col_type), ErrorCodes::ILLEGAL_COLUMN);
 
             return res;
@@ -147,7 +152,14 @@ namespace
 
         explicit FunctionToDaysImpl(ContextPtr context_) : context(context_) { }
 
-        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionToDaysImpl>(context); }
+        static FunctionPtr create(ContextPtr context)
+        {
+            if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionToDaysImpl>(context));
+            return std::make_shared<FunctionToDaysImpl>(context);
+        }
+
+        ArgType getArgumentsType() const override { return ArgType::DATES; }
 
         String getName() const override { return name; }
         bool useDefaultImplementationForConstants() const override { return true; }

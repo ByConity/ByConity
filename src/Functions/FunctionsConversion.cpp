@@ -52,14 +52,13 @@ REGISTER_FUNCTION(Conversion)
     /// Hive compatibility alias.
     factory.registerFunction<FunctionToDate>("to_date", FunctionFactory::CaseInsensitive);
     /// MysQL compatibility alias.
-    factory.registerFunction<FunctionToDate>("DATE", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionToDateMySql>("DATE", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDate32>();
     factory.registerFunction<FunctionToTime>();
     /// MysQL compatibility alias.
     factory.registerFunction<FunctionToTime>("TIME", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDateTime>();
     factory.registerFunction<FunctionToDateTime32>();
-    factory.registerFunction<FunctionToDateTime32>("timestamp", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDateTime64>();
     factory.registerFunction<FunctionToUUID>();
     factory.registerFunction<FunctionToIPv4>();
@@ -88,6 +87,7 @@ REGISTER_FUNCTION(Conversion)
     factory.registerFunction<FunctionToInt256OrZero>();
     factory.registerFunction<FunctionToFloat32OrZero>();
     factory.registerFunction<FunctionToFloat64OrZero>();
+    factory.registerFunction<FunctionToFloat64OrZeroMySql>();
     factory.registerFunction<FunctionToDateOrZero>();
     factory.registerFunction<FunctionToDate32OrZero>();
     factory.registerFunction<FunctionToDateTimeOrZero>();

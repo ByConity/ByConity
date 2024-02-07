@@ -122,6 +122,9 @@ public:
         return nested_function->getName();
     }
 
+
+    ArgType getMySqlArgumentTypes() const override { return nested_function->getMySqlArgumentTypes(); }
+
     DataTypePtr getReturnType() const override
     {
         if constexpr (result_is_nullable)

@@ -663,7 +663,7 @@ template <typename ReturnType = void>
 inline ReturnType readDateTextImpl(LocalDate & date, ReadBuffer & buf)
 {
     /// Optimistic path, when whole value is in buffer.
-    if (!buf.eof() && buf.position() + 10 <= buf.buffer().end())
+    if (!buf.eof() && buf.position() + 8 <= buf.buffer().end())
     {
         char * pos = buf.position();
 
@@ -1100,19 +1100,29 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
 }
 
 // Parse format HH:MM:SS.NNNNNNNNN (SQL Standard)
+// Add support for 'HHMMSS.NNNNNNNNN' and its variants (MYSQL)
 inline bool readTimeTextImpl(time_t & t, ReadBuffer & buf)
 {
-    static constexpr auto TimeStringInputSize = 8;
     static constexpr auto DateTimeMinSize = 18;
     static constexpr auto DateTimeMaxSize = 30;
     static constexpr auto DateSize = 10;
 
-    const char * begin_pos = buf.position();
-    auto * const end_pos = buf.buffer().end();
-    if (end_pos < begin_pos + TimeStringInputSize)
+    static constexpr auto DataSizeMySQL = 8;
+    static constexpr auto DataTimeMaxSizeMySQL = 13;
+
+    char * begin_pos = buf.position();
+    char * fractional_pos = begin_pos;
+    bool have_separater = false;
+    while (fractional_pos < buf.buffer().end() && *fractional_pos != '.')
     {
-        return false;
+        if (*fractional_pos == ':' || *fractional_pos == '-')
+            have_separater = true;
+        if (*fractional_pos != '.')
+            ++fractional_pos;
     }
+
+    auto * const end_pos = fractional_pos;
+
     if (end_pos >= begin_pos + DateSize && begin_pos[4] == '-' && begin_pos[7] == '-')
     {
         if (end_pos <= begin_pos + DateTimeMinSize)
@@ -1131,21 +1141,70 @@ inline bool readTimeTextImpl(time_t & t, ReadBuffer & buf)
         }
     }
 
-    const char * s = buf.position();
-    if (s[2] != ':' && s[5] != ':') {
-        return false;
+    /// YYYYMMDD
+    else if (end_pos >= begin_pos + DataSizeMySQL && !have_separater)
+    {
+        /// YYYYMMDDhhmmss
+        if (end_pos <= begin_pos + DataTimeMaxSizeMySQL)
+        {
+            t = 0;
+            buf.position() += end_pos - begin_pos;
+            return true;
+        }
+        else
+            buf.ignore(DataSizeMySQL);
     }
 
-    UInt8 hour = (s[0] - '0') * 10 + (s[1] - '0');
-    UInt8 minute = (s[3] - '0') * 10 + (s[4] - '0');
-    UInt8 sec = (s[6] - '0') * 10 + (s[7] - '0');
+    UInt8 hour = 0;
+    UInt8 minute = 0;
+    UInt8 sec = 0;
+
+    size_t totalIntegerSize = end_pos - buf.position();
+    const char * s = buf.position();
+    if (totalIntegerSize >= 8 && s[2] == ':' && s[5] == ':')
+    {
+        hour = (s[0] - '0') * 10 + (s[1] - '0');
+        minute = (s[3] - '0') * 10 + (s[4] - '0');
+        sec = (s[6] - '0') * 10 + (s[7] - '0');
+    }
+    else if (totalIntegerSize == 6)
+    {
+        hour = (s[0] - '0') * 10 + (s[1] - '0');
+        minute = (s[2] - '0') * 10 + (s[3] - '0');
+        sec = (s[4] - '0') * 10 + (s[5] - '0');
+    }
+    else if (totalIntegerSize == 5)
+    {
+        hour = s[0] - '0';
+        minute = (s[1] - '0') * 10 + (s[2] - '0');
+        sec = (s[3] - '0') * 10 + (s[4] - '0');
+    }
+    else if (totalIntegerSize == 4)
+    {
+        minute = (s[0] - '0') * 10 + (s[1] - '0');
+        sec = (s[2] - '0') * 10 + (s[3] - '0');
+    }
+    else if (totalIntegerSize == 3)
+    {
+        minute = s[0] - '0';
+        sec = (s[1] - '0') * 10 + (s[2] - '0');
+    }
+    else if (totalIntegerSize == 2)
+    {
+        sec = (s[0] - '0') * 10 + (s[1] - '0');
+    }
+    else if (totalIntegerSize == 1)
+    {
+        sec = s[0] - '0';
+    }
+    else return false;
 
     if (unlikely(hour >= 24 || minute > 60 || sec > 60)) {
         return false;
     }
 
     t = (hour * 3600 + minute * 60 + sec);
-    buf.position() += TimeStringInputSize;
+    buf.position() += totalIntegerSize;
     return true;
 }
 
@@ -1213,6 +1272,97 @@ inline void readDateTimeText(LocalDateTime & datetime, ReadBuffer & buf)
     datetime.second((s[17] - '0') * 10 + (s[18] - '0'));
 }
 
+/// In h*:mm:ss format.
+template <typename ReturnType = void>
+inline ReturnType readTime64TextImpl(time_t & time, ReadBuffer & buf)
+{
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
+
+    int16_t hours;
+    int16_t minutes;
+    int16_t seconds;
+
+    readIntText(hours, buf);
+
+    int negative_multiplier = hours < 0 ? -1 : 1;
+
+    // :mm:ss
+    const size_t remaining_time_size = 6;
+
+    char s[remaining_time_size];
+
+    size_t size = buf.read(s, remaining_time_size);
+    if (size != remaining_time_size)
+    {
+        s[size] = 0;
+
+        if constexpr (throw_exception)
+            throw ParsingException(ErrorCodes::CANNOT_PARSE_DATETIME, "Cannot parse DateTime {}", s);
+        else
+            return false;
+    }
+
+    minutes = (s[1] - '0') * 10 + (s[2] - '0');
+    seconds = (s[4] - '0') * 10 + (s[5] - '0');
+
+    time = hours * 3600 + (minutes * 60 + seconds) * negative_multiplier;
+
+    return ReturnType(true);
+}
+
+template <typename ReturnType>
+inline ReturnType readTime64TextImpl(Decimal64 & time64, UInt32 scale, ReadBuffer & buf)
+{
+    time_t whole;
+    if (!readTime64TextImpl<bool>(whole, buf))
+    {
+        return ReturnType(false);
+    }
+
+    DB::DecimalUtils::DecimalComponents<Decimal64> components{static_cast<Decimal64::NativeType>(whole), 0};
+
+    if (!buf.eof() && *buf.position() == '.')
+    {
+        ++buf.position();
+
+        /// Read digits, up to 'scale' positions.
+        for (size_t i = 0; i < scale; ++i)
+        {
+            if (!buf.eof() && isNumericASCII(*buf.position()))
+            {
+                components.fractional *= 10;
+                components.fractional += *buf.position() - '0';
+                ++buf.position();
+            }
+            else
+            {
+                /// Adjust to scale.
+                components.fractional *= 10;
+            }
+        }
+
+        /// Ignore digits that are out of precision.
+        while (!buf.eof() && isNumericASCII(*buf.position()))
+            ++buf.position();
+    }
+
+    bool is_ok = true;
+    if constexpr (std::is_same_v<ReturnType, void>)
+    {
+        time64 = DecimalUtils::decimalFromComponents<Decimal64>(components, scale);
+    }
+    else
+    {
+        is_ok = DecimalUtils::tryGetDecimalFromComponents<Decimal64>(components, scale, time64);
+    }
+
+    return ReturnType(is_ok);
+}
+
+inline void readTime64Text(Decimal64 & time64, UInt32 scale, ReadBuffer & buf)
+{
+    readTime64TextImpl<void>(time64, scale, buf);
+}
 
 /// Generic methods to read value in native binary format.
 template <typename T>

@@ -1164,6 +1164,9 @@ void WindowTransform::executeSecondStage()
         .wt = this,
     };
 
+    if (pdr.blk_it == blocks.end())
+        return;
+
     for (size_t wi = 0; wi < workspaces.size(); ++wi)
     {
         IWindowFunction * wf = workspaces[wi].window_function_impl;

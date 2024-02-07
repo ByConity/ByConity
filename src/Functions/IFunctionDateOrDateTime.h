@@ -93,8 +93,18 @@ public:
     }
 
 protected:
-    void checkArguments(const ColumnsWithTypeAndName & arguments, bool is_result_type_date_or_date32) const
+    void checkArguments(const ColumnsWithTypeAndName & arguments, bool is_result_type_date_or_date32, ContextPtr context = nullptr) const
     {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+        {
+            if (arguments.size() != 1 && arguments.size() != 2)
+                throw Exception(
+                        "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                        + ", should be 1 or 2",
+                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            return;
+        }
+
         if (arguments.size() == 1)
         {
             if (!isDateOrDate32(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type)

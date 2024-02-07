@@ -31,7 +31,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/Regexps.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context_fwd.h>
@@ -655,7 +655,14 @@ class FunctionTokens : public IFunction
 {
 public:
     static constexpr auto name = Generator::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionTokens>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionTokens>());
+        return std::make_shared<FunctionTokens>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
 
     String getName() const override
     {

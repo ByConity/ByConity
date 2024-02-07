@@ -1,3 +1,5 @@
+-- STR_TO_DATE is a MySQL specific function
+set dialect_type='MYSQL';
 SELECT STR_TO_DATE('2023-01-01 12:00:00', '%Y-%m-%d %H:%i:%s'); 
 SELECT STR_TO_DATE('2024-02-29 12:00:00', '%Y-%m-%d %H:%i:%s'); 
 SELECT STR_TO_DATE('2023-02-29 12:00:00', '%Y-%m-%d %H:%i:%s');
@@ -6,7 +8,6 @@ SELECT STR_TO_DATE('12:00:00', '%H:%i:%s');
 SELECT STR_TO_DATE('2023-02-30 12:00:00', '%Y-%m-%d %H:%i:%s');
 SELECT STR_TO_DATE('2023-01-01 24:00:00', '%Y-%m-%d %H:%i:%s');
 SELECT STR_TO_DATE('2023-01-01 12:00 PM', '%Y-%m-%d %r');
-set dialect_type='MYSQL';
 SELECT STR_TO_DATE('2023-01-01 12:00:00 PM', '%Y-%m-%d %r');
 SELECT STR_TO_DATE('01-01-2023', '%d-%m-%Y');
 set formatdatetime_parsedatetime_m_is_month_name = 1;
@@ -142,3 +143,9 @@ select str_to_date('10:04:11 03-07-2019', '%s:%i:%H %d-%m-%Y', 'UTC') = toDateTi
 select sTr_To_DaTe('10:04:11 03-07-2019', '%s:%i:%H %d-%m-%Y', 'UTC') = toDateTime('2019-07-03 11:04:10', 'UTC');
 select str_to_date('10:04:11 invalid 03-07-2019', '%s:%i:%H %d-%m-%Y', 'UTC') IS NULL;
 
+-- Fractional support
+select str_to_date('2022-01-06 10:20:30.123','%Y-%m-%d %H:%i:%s.%f');
+select str_to_date('2022-01-06 10:20:30.123456','%Y-%m-%d %H:%i:%s.%f');
+select str_to_date('2022-01-06 10:20:30.123456789','%Y-%m-%d %H:%i:%s');
+select str_to_date('2022-01-06 10:20:30.123456789','%Y-%m-%d %H:%i:%s.%f');
+select str_to_date('2022-01-06 10:20:30.','%Y-%m-%d %H:%i:%s.%f');

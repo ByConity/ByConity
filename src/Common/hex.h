@@ -56,9 +56,21 @@ constexpr inline std::string_view hex_byte_to_char_lowercase_table = //
     "e0e1e2e3e4e5e6e7e8e9eaebecedeeef"
     "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff";
 
-inline void writeHexByteUppercase(UInt8 byte, void * out)
+enum NumBytesWritten { SingleByte = 1, TwoBytes = 2 };
+
+inline int writeHexByteUppercase(UInt8 byte, void * out, bool skip_leading_zeros = false)
 {
-    memcpy(out, &hex_byte_to_char_uppercase_table[static_cast<size_t>(byte) * 2], 2);
+    /// for 0...F output a single byte instead of 00, 01,...0F
+    if (skip_leading_zeros && byte < 16)
+    {
+        memcpy(out, &hex_digit_to_char_uppercase_table[static_cast<size_t>(byte)], 1);
+        return SingleByte;
+    }
+    else
+    {
+        memcpy(out, &hex_byte_to_char_uppercase_table[static_cast<size_t>(byte) * 2], 2);
+        return TwoBytes;
+    }
 }
 
 inline void writeHexByteLowercase(UInt8 byte, void * out)
@@ -100,9 +112,44 @@ constexpr inline std::string_view bin_byte_to_char_table = //
     "1111000011110001111100101111001111110100111101011111011011110111"
     "1111100011111001111110101111101111111100111111011111111011111111";
 
-inline void writeBinByte(UInt8 byte, void * out)
+constexpr inline UInt8 count_of_leading_zeros[128] = {
+  8,7,6,6,5,5,5,5,
+  4,4,4,4,4,4,4,4,
+  3,3,3,3,3,3,3,3,
+  3,3,3,3,3,3,3,3,
+  2,2,2,2,2,2,2,2,
+  2,2,2,2,2,2,2,2,
+  2,2,2,2,2,2,2,2,
+  2,2,2,2,2,2,2,2,
+  1,1,1,1,1,1,1,1,
+  1,1,1,1,1,1,1,1,
+  1,1,1,1,1,1,1,1,
+  1,1,1,1,1,1,1,1,
+  1,1,1,1,1,1,1,1,
+  1,1,1,1,1,1,1,1,
+  1,1,1,1,1,1,1,1,
+  1,1,1,1,1,1,1,1
+};
+
+inline int writeBinByte(UInt8 byte, void * out, bool skip_leading_zeros = false)
 {
-    memcpy(out, &bin_byte_to_char_table[static_cast<size_t>(byte) * 8], 8);
+    if (skip_leading_zeros && byte < 128)
+    {
+        /// e.g., 00001001 -> 1001; 0 -> 0; 01-> 1
+        if (byte == 0)
+        {
+            *static_cast<char*>(out) = '0';
+            return 1;
+        }
+        int leading_zeros = count_of_leading_zeros[byte];
+        memcpy(out, &bin_byte_to_char_table[static_cast<size_t>(byte) * 8 + leading_zeros], 8 - leading_zeros);
+        return 8 - leading_zeros;
+    }
+    else
+    {
+        memcpy(out, &bin_byte_to_char_table[static_cast<size_t>(byte) * 8], 8);
+        return 8;
+    }
 }
 
 /// Produces hex representation of an unsigned int with leading zeros (for checksums)

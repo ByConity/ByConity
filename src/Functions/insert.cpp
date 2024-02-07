@@ -4,6 +4,7 @@
 #include <Columns/IColumn.h>
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/IFunctionMySql.h>
 
 namespace DB
 {
@@ -19,7 +20,14 @@ class FunctionInsert : public IFunction
 {
 public:
     static constexpr auto name = "insert";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionInsert>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionInsert>());
+        return std::make_shared<FunctionInsert>();
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STR_NUM_NUM_STR; }
 
     String getName() const override { return name; }
 

@@ -8,9 +8,11 @@
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnFixedString.h>
 #include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IsOperation.h>
 #include <Functions/castTypeToEither.h>
+#include <Functions/FunctionsRound.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config.h>
@@ -75,6 +77,7 @@ struct FunctionUnaryArithmeticMonotonicity;
 /// Used to indicate undefined operation
 struct InvalidType;
 
+struct NameBitNot;
 
 template <template <typename> class Op, typename Name, bool is_injective>
 class FunctionUnaryArithmetic : public IFunction
@@ -82,6 +85,11 @@ class FunctionUnaryArithmetic : public IFunction
     static constexpr bool allow_decimal = IsUnaryOperation<Op>::negate || IsUnaryOperation<Op>::abs || IsUnaryOperation<Op>::sign;
     static constexpr bool allow_fixed_string = Op<UInt8>::allow_fixed_string;
     static constexpr bool is_sign_function = IsUnaryOperation<Op>::sign;
+
+    ContextPtr context;
+
+    /// get the expected argument type to be converted into if the input is a string
+    ArgType getArgumentsType() const override { return Op<UInt8>::default_arg_type; }
 
     template <typename F>
     static bool castType(const IDataType * type, F && f)
@@ -111,7 +119,14 @@ class FunctionUnaryArithmetic : public IFunction
 
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionUnaryArithmetic>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionUnaryArithmetic>(context));
+        return std::make_shared<FunctionUnaryArithmetic>(context);
+    }
+
+    explicit FunctionUnaryArithmetic(ContextPtr context_) : context(context_) {}
 
     String getName() const override
     {
@@ -125,6 +140,18 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        return getReturnTypeImplStatic(arguments, context);
+    }
+
+    static DataTypePtr getReturnTypeImplStatic(const DataTypes & arguments, ContextPtr context)
+    {
+        /// special case for bitNot under mysql dialect
+        if constexpr (std::is_same_v<Name, NameBitNot>)
+        {
+            if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+                return std::make_shared<DataTypeUInt64>();
+        }
+
         DataTypePtr result;
         bool valid = castType(arguments[0].get(), [&](const auto & type)
         {
@@ -151,13 +178,38 @@ public:
             return true;
         });
         if (!valid)
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + String(name),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return result;
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & args, const DataTypePtr &, size_t input_rows_count) const override
     {
+        ColumnsWithTypeAndName arguments = args;
+        if constexpr (std::is_same_v<Name, NameBitNot>)
+        {
+            if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            {
+                WhichDataType arg_type(args[0].type);
+                if (arg_type.isNumber())
+                {
+                    // round it
+                    auto func = FunctionFactory::instance().get("round", context);
+                    auto output_type = func->getReturnType(arguments);
+                    arguments[0].column = func->build(arguments)->execute(arguments, output_type, input_rows_count);
+                    arguments[0].type = output_type;
+                    arg_type = WhichDataType(output_type);
+                }
+
+                if (!arg_type.isUInt64())
+                {
+                    // truncate to uint64
+                    arguments[0].column = IFunctionMySql::convertToTypeStatic<DataTypeUInt64>(arguments[0], std::make_shared<DataTypeUInt64>(), input_rows_count);
+                    arguments[0].type = std::make_shared<DataTypeUInt64>();
+                }
+            }
+        }
+
         ColumnPtr result_column;
         bool valid = castType(arguments[0].type.get(), [&](const auto & type)
         {

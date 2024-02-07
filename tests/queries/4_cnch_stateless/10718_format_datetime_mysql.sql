@@ -1,3 +1,4 @@
+set dialect_type='MYSQL';
 SELECT '----compatible patterns----';
 SELECT date_format_mysql(toDateTime('2018-01-02 22:33:44', 'UTC'), '%d');
 SELECT date_format_mysql(toDateTime('2018-01-02 02:33:44', 'UTC'), '%H');
@@ -49,3 +50,5 @@ SELECT date_format_mysql(toDateTime('2018-01-01 22:33:44', 'UTC'), '%X'), date_f
 
 SELECT '----random patterns----';
 SELECT date_format_mysql(toDateTime('1990-01-01 12:31:44', 'UTC'), '%r %%s %%%o %%%%q');
+
+select date_format('2022-01-27 13:23:45', '%W %M %Y %r') as result;

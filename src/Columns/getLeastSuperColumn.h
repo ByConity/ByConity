@@ -22,12 +22,13 @@
 #pragma once
 
 #include <Core/ColumnWithTypeAndName.h>
+#include <Core/SettingsEnums.h>
 
 
 namespace DB
 {
 
 /// getLeastSupertype + related column changes
-ColumnWithTypeAndName getLeastSuperColumn(const std::vector<const ColumnWithTypeAndName *> & columns, bool allow_extended_conversion = false);
+ColumnWithTypeAndName getLeastSuperColumn(const std::vector<const ColumnWithTypeAndName *> & columns, bool enable_implicit_arg_type_convert, bool allow_extended_conversion = false);
 
 }

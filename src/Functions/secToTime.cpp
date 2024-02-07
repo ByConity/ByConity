@@ -7,7 +7,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Common/DateLUT.h>
 
 namespace DB
@@ -36,7 +36,14 @@ public:
 
     FunctionSecToTime(ContextPtr context) : context_(context) { }
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionSecToTime>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionSecToTime>(context));
+        return std::make_shared<FunctionSecToTime>(context);
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::NUMBERS; }
 
     String getName() const override { return name; }
 
@@ -118,7 +125,14 @@ public:
 
     FunctionTimeToSec(ContextPtr context) : context_(context) { }
 
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionTimeToSec>(context); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionTimeToSec>(context));
+        return std::make_shared<FunctionTimeToSec>(context);
+    }
+
+    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
 
     String getName() const override { return name; }
 

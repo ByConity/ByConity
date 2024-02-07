@@ -12,7 +12,7 @@
 #if USE_SSL
 #include <DataTypes/DataTypeString.h>
 #include <Columns/ColumnString.h>
-#include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 
@@ -142,7 +142,17 @@ class FunctionEncrypt : public IFunction
 public:
     static constexpr OpenSSLDetails::CompatibilityMode compatibility_mode = Impl::compatibility_mode;
     static constexpr auto name = Impl::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionEncrypt>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return make_shared<IFunctionMySql>(std::make_unique<FunctionEncrypt>());
+        return std::make_shared<FunctionEncrypt>();
+    }
+
+    ArgType getArgumentsType() const override
+    {
+        return ArgType::STRINGS;
+    }
 
 private:
     using CipherMode = OpenSSLDetails::CipherMode;
@@ -412,7 +422,17 @@ public:
     static constexpr OpenSSLDetails::CompatibilityMode compatibility_mode = Impl::compatibility_mode;
     static constexpr auto name = Impl::name;
     static constexpr bool use_null_when_decrypt_fail = Impl::use_null_when_decrypt_fail;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionDecrypt>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return make_shared<IFunctionMySql>(std::make_unique<FunctionDecrypt>());
+        return std::make_shared<FunctionDecrypt>();
+    }
+
+    ArgType getArgumentsType() const override
+    {
+        return ArgType::STRINGS;
+    }
 
 private:
     using CipherMode = OpenSSLDetails::CipherMode;
