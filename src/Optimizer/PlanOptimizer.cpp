@@ -112,7 +112,9 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<CascadesOptimizer>(false),
 
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
+        std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),
         std::make_shared<RemoveRedundantDistinct>(),
+
         // use property
         std::make_shared<SortingOrderedSource>(),
 
@@ -268,7 +270,9 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // push partial step through exchange
         // TODO cost-base partial aggregate push down
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
+        std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),
         std::make_shared<RemoveRedundantDistinct>(),
+
         // use property
         std::make_shared<SortingOrderedSource>(),
 

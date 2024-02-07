@@ -1019,6 +1019,14 @@ public:
         static Aggregator::Params fromProto(const Protos::AggregatorParams & proto, ContextPtr context);
     };
 
+    /// Only part of the params that required for ChooseMethod
+    struct ChooseMethodOption
+    {
+        const Block & header;
+        const ColumnNumbers & keys;
+        bool enable_lc_group_by_opt;
+    };
+
     explicit Aggregator(const Params & params_);
 
     using AggregateColumns = std::vector<ColumnRawPtrs>;
@@ -1088,6 +1096,11 @@ public:
 
     /// Get data structure of the result.
     Block getHeader(bool final) const;
+
+    static void chooseAggregationMethodByOption(
+        const ChooseMethodOption & option,
+        Sizes & key_sizes,
+        AggregatedDataVariants::Type & method_chosen);
 
 private:
 

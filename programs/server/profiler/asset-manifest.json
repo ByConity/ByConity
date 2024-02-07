@@ -1,0 +1,19 @@
+{
+  "files": {
+    "main.js": "/profiler/static/js/main.js",
+    "main.css": "/profiler/static/css/main.9af32620.css",
+    "vendors.js": "/profiler/static/js/vendors.js",
+    "vendors.css": "/profiler/static/css/vendors.2b0b3808.css",
+    "index.html": "/profiler/index.html",
+    "main.js.map": "/profiler/static/js/main.js.map",
+    "main.9af32620.css.map": "/profiler/static/css/main.9af32620.css.map",
+    "vendors.js.map": "/profiler/static/js/vendors.js.map",
+    "vendors.2b0b3808.css.map": "/profiler/static/css/vendors.2b0b3808.css.map"
+  },
+  "entrypoints": [
+    "static/js/vendors.js",
+    "static/css/vendors.2b0b3808.css",
+    "static/js/main.js",
+    "static/css/main.9af32620.css"
+  ]
+}

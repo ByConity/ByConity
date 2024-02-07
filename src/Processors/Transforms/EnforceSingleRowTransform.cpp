@@ -75,7 +75,7 @@ IProcessor::Status EnforceSingleRowTransform::prepare()
     }
 
     // push into output if we have data
-    if (!output_finished)
+    if (!output_finished && single_row.chunk.hasRows())
     {
         if (output.canPush())
         {

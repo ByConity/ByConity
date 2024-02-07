@@ -144,6 +144,8 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
         std::cout << formatDataModel<DB::Protos::DataModelTransactionRecord>(metadata) << std::endl;
     else if (key.ends_with("-election"))
         std::cout << formatDataModel<DB::Protos::LeaderInfo>(metadata) << std::endl;
+    else if (key.starts_with("UB_"))
+        std::cout << formatDataModel<DB::Protos::DataModelUndoBuffer>(metadata) << std::endl;
     else
         std::cout << metadata << std::endl;
 };

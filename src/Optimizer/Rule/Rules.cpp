@@ -22,21 +22,20 @@
 #include <Optimizer/Rule/Rewrite/InlineProjections.h>
 #include <Optimizer/Rule/Rewrite/MergeSetOperationRules.h>
 #include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToMarkDistinct.h>
+#include <Optimizer/Rule/Rewrite/OptimizeAggregateRules.h>
 #include <Optimizer/Rule/Rewrite/PullProjectionOnJoinThroughJoin.h>
 #include <Optimizer/Rule/Rewrite/PushAggThroughJoinRules.h>
 #include <Optimizer/Rule/Rewrite/PushDownApplyRules.h>
 #include <Optimizer/Rule/Rewrite/PushDownLimitRules.h>
-#include <Optimizer/Rule/Rewrite/PushProjectionRules.h>
 #include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
 #include <Optimizer/Rule/Rewrite/PushPartialStepThroughExchangeRules.h>
+#include <Optimizer/Rule/Rewrite/PushProjectionRules.h>
 #include <Optimizer/Rule/Rewrite/PushThroughExchangeRules.h>
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 #include <Optimizer/Rule/Rewrite/SingleDistinctAggregationToGroupBy.h>
 #include <Optimizer/Rule/Rewrite/SwapAdjacentRules.h>
 #include <Optimizer/Rule/Rewrite/TopNRules.h>
-#include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
-#include <Optimizer/Rule/Rewrite/PushDownApplyRules.h>
 
 namespace DB
 {
@@ -88,8 +87,12 @@ std::vector<RulePtr> Rules::pushPartialStepRules()
         std::make_shared<PushPartialSortingThroughExchange>(),
         std::make_shared<PushPartialLimitThroughExchange>(),
         std::make_shared<FilterWindowToPartitionTopN>(),
-//        std::make_shared<PushRuntimeFilterBuilderThroughExchange>(),
         std::make_shared<PushPartialDistinctThroughExchange>()};
+}
+
+std::vector<RulePtr> Rules::optimizeAggregateRules()
+{
+    return {std::make_shared<OptimizeMemoryEfficientAggregation>()};
 }
 
 std::vector<RulePtr> Rules::removeRedundantRules()

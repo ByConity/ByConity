@@ -29,6 +29,7 @@ public:
     static std::vector<RulePtr> simplifyExpressionRules();
     static std::vector<RulePtr> inlineProjectionRules();
     static std::vector<RulePtr> pushPartialStepRules();
+    static std::vector<RulePtr> optimizeAggregateRules();
     static std::vector<RulePtr> pushAggRules();
     static std::vector<RulePtr> pushDownLimitRules();
     static std::vector<RulePtr> pushDownTopNRules();

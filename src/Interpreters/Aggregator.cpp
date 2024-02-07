@@ -475,26 +475,30 @@ void Aggregator::compileAggregateFunctions()
 
 #endif
 
-AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
+void Aggregator::chooseAggregationMethodByOption(const ChooseMethodOption & option, Sizes & key_sizes, AggregatedDataVariants::Type & method_chosen)
 {
+    method_chosen = AggregatedDataVariants::Type::EMPTY;
+    auto key_size = option.keys.size();
     /// If no keys. All aggregating to single row.
-    if (params.keys_size == 0)
-        return AggregatedDataVariants::Type::without_key;
+    if (key_size == 0)
+    {
+        method_chosen = AggregatedDataVariants::Type::without_key;
+        return;
+    }
 
     /// Check if at least one of the specified keys is nullable.
     DataTypes types_removed_nullable;
-    types_removed_nullable.reserve(params.keys.size());
+    types_removed_nullable.reserve(key_size);
     bool has_nullable_key = false;
     bool has_low_cardinality = false;
     bool has_low_cardinality_without_opt = false;
-
-    for (const auto & pos : params.keys)
+    for (const auto & pos : option.keys)
     {
-        DataTypePtr type = (params.src_header ? params.src_header : params.intermediate_header).safeGetByPosition(pos).type;
+        DataTypePtr type = option.header.safeGetByPosition(pos).type;
 
         if (type->lowCardinality())
         {
-            if (params.enable_lc_group_by_opt)
+            if (option.enable_lc_group_by_opt)
             {
                 has_low_cardinality = true;
                 type = removeLowCardinality(type);
@@ -521,8 +525,8 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     size_t keys_bytes = 0;
     size_t num_fixed_contiguous_keys = 0;
 
-    key_sizes.resize(params.keys_size);
-    for (size_t j = 0; j < params.keys_size; ++j)
+    key_sizes.resize(key_size);
+    for (size_t j = 0; j < key_size; ++j)
     {
         if (types_removed_nullable[j]->isValueUnambiguouslyRepresentedInContiguousMemoryRegion())
         {
@@ -536,122 +540,171 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     }
 
     if (has_low_cardinality_without_opt)
-        return AggregatedDataVariants::Type::serialized;
+    {
+        method_chosen = AggregatedDataVariants::Type::serialized;
+        return;
+    }
 
     if (has_nullable_key)
     {
-        if (params.keys_size == num_fixed_contiguous_keys && !has_low_cardinality)
+        if (key_size == num_fixed_contiguous_keys && !has_low_cardinality)
         {
             /// Pack if possible all the keys along with information about which key values are nulls
             /// into a fixed 16- or 32-byte blob.
             if (std::tuple_size<KeysNullMap<UInt64>>::value + keys_bytes <= 8)
-                return AggregatedDataVariants::Type::nullable_keys64;
+            {
+                method_chosen = AggregatedDataVariants::Type::nullable_keys64;
+                return;
+            }
+
             if (std::tuple_size<KeysNullMap<UInt128>>::value + keys_bytes <= 16)
-                return AggregatedDataVariants::Type::nullable_keys128;
+            {
+                method_chosen = AggregatedDataVariants::Type::nullable_keys128;
+                return;
+            }
+
             if (std::tuple_size<KeysNullMap<UInt256>>::value + keys_bytes <= 32)
-                return AggregatedDataVariants::Type::nullable_keys256;
+            {
+                method_chosen = AggregatedDataVariants::Type::nullable_keys256;
+                return;
+            }
         }
 
-        if (has_low_cardinality && params.keys_size == 1)
+        if (has_low_cardinality && key_size == 1)
         {
             if (types_removed_nullable[0]->isValueRepresentedByNumber())
             {
                 size_t size_of_field = types_removed_nullable[0]->getSizeOfValueInMemory();
 
                 if (size_of_field == 1)
-                    return AggregatedDataVariants::Type::low_cardinality_key8;
-                if (size_of_field == 2)
-                    return AggregatedDataVariants::Type::low_cardinality_key16;
-                if (size_of_field == 4)
-                    return AggregatedDataVariants::Type::low_cardinality_key32;
-                if (size_of_field == 8)
-                    return AggregatedDataVariants::Type::low_cardinality_key64;
+                    method_chosen = AggregatedDataVariants::Type::low_cardinality_key8;
+                else if (size_of_field == 2)
+                    method_chosen = AggregatedDataVariants::Type::low_cardinality_key16;
+                else if (size_of_field == 4)
+                    method_chosen = AggregatedDataVariants::Type::low_cardinality_key32;
+                else if (size_of_field == 8)
+                    method_chosen = AggregatedDataVariants::Type::low_cardinality_key64;
+                if (method_chosen != AggregatedDataVariants::Type::EMPTY)
+                    return;
             }
             else if (isString(types_removed_nullable[0]))
-                return AggregatedDataVariants::Type::low_cardinality_key_string;
+            {
+                method_chosen = AggregatedDataVariants::Type::low_cardinality_key_string;
+                return;
+            }
             else if (isFixedString(types_removed_nullable[0]))
-                return AggregatedDataVariants::Type::low_cardinality_key_fixed_string;
+            {
+                method_chosen = AggregatedDataVariants::Type::low_cardinality_key_fixed_string;
+                return;
+            }
         }
 
         /// Fallback case.
-        return AggregatedDataVariants::Type::serialized;
+        method_chosen = AggregatedDataVariants::Type::serialized;
+        return;
     }
 
     /// No key has been found to be nullable.
 
     /// Single numeric key.
-    if (params.keys_size == 1 && types_removed_nullable[0]->isValueRepresentedByNumber())
+    if (key_size == 1 && types_removed_nullable[0]->isValueRepresentedByNumber())
     {
         size_t size_of_field = types_removed_nullable[0]->getSizeOfValueInMemory();
 
         if (has_low_cardinality)
         {
             if (size_of_field == 1)
-                return AggregatedDataVariants::Type::low_cardinality_key8;
-            if (size_of_field == 2)
-                return AggregatedDataVariants::Type::low_cardinality_key16;
-            if (size_of_field == 4)
-                return AggregatedDataVariants::Type::low_cardinality_key32;
-            if (size_of_field == 8)
-                return AggregatedDataVariants::Type::low_cardinality_key64;
+                method_chosen = AggregatedDataVariants::Type::low_cardinality_key8;
+            else if (size_of_field == 2)
+                method_chosen = AggregatedDataVariants::Type::low_cardinality_key16;
+            else if (size_of_field == 4)
+                method_chosen = AggregatedDataVariants::Type::low_cardinality_key32;
+            else if (size_of_field == 8)
+                method_chosen = AggregatedDataVariants::Type::low_cardinality_key64;
+            if (method_chosen != AggregatedDataVariants::Type::EMPTY)
+                return;
         }
 
         if (size_of_field == 1)
-            return AggregatedDataVariants::Type::key8;
-        if (size_of_field == 2)
-            return AggregatedDataVariants::Type::key16;
-        if (size_of_field == 4)
-            return AggregatedDataVariants::Type::key32;
-        if (size_of_field == 8)
-            return AggregatedDataVariants::Type::key64;
-        if (size_of_field == 16)
-            return AggregatedDataVariants::Type::keys128;
-        if (size_of_field == 32)
-            return AggregatedDataVariants::Type::keys256;
+            method_chosen = AggregatedDataVariants::Type::key8;
+        else if (size_of_field == 2)
+            method_chosen = AggregatedDataVariants::Type::key16;
+        else if (size_of_field == 4)
+            method_chosen = AggregatedDataVariants::Type::key32;
+        else if (size_of_field == 8)
+            method_chosen = AggregatedDataVariants::Type::key64;
+        else if (size_of_field == 16)
+            method_chosen = AggregatedDataVariants::Type::keys128;
+        else if (size_of_field == 32)
+            method_chosen = AggregatedDataVariants::Type::keys256;
+
+        if (method_chosen != AggregatedDataVariants::Type::EMPTY)
+            return;
         throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16, 32.", ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (params.keys_size == 1 && isFixedString(types_removed_nullable[0]))
+    if (key_size == 1 && isFixedString(types_removed_nullable[0]))
     {
         if (has_low_cardinality)
-            return AggregatedDataVariants::Type::low_cardinality_key_fixed_string;
+            method_chosen = AggregatedDataVariants::Type::low_cardinality_key_fixed_string;
         else
-            return AggregatedDataVariants::Type::key_fixed_string;
+            method_chosen = AggregatedDataVariants::Type::key_fixed_string;
+        return;
     }
 
     /// If all keys fits in N bits, will use hash table with all keys packed (placed contiguously) to single N-bit key.
-    if (params.keys_size == num_fixed_contiguous_keys)
+    if (key_size == num_fixed_contiguous_keys)
     {
         if (has_low_cardinality)
         {
             if (keys_bytes <= 16)
-                return AggregatedDataVariants::Type::low_cardinality_keys128;
+            {
+                    method_chosen = AggregatedDataVariants::Type::low_cardinality_keys128;
+                    return;
+            }
             if (keys_bytes <= 32)
-                return AggregatedDataVariants::Type::low_cardinality_keys256;
+            {
+                method_chosen = AggregatedDataVariants::Type::low_cardinality_keys256;
+                return;
+            }
         }
 
         if (keys_bytes <= 2)
-            return AggregatedDataVariants::Type::keys16;
-        if (keys_bytes <= 4)
-            return AggregatedDataVariants::Type::keys32;
-        if (keys_bytes <= 8)
-            return AggregatedDataVariants::Type::keys64;
-        if (keys_bytes <= 16)
-            return AggregatedDataVariants::Type::keys128;
-        if (keys_bytes <= 32)
-            return AggregatedDataVariants::Type::keys256;
+            method_chosen = AggregatedDataVariants::Type::keys16;
+        else if (keys_bytes <= 4)
+            method_chosen = AggregatedDataVariants::Type::keys32;
+        else if (keys_bytes <= 8)
+            method_chosen = AggregatedDataVariants::Type::keys64;
+        else if (keys_bytes <= 16)
+            method_chosen = AggregatedDataVariants::Type::keys128;
+        else if (keys_bytes <= 32)
+            method_chosen = AggregatedDataVariants::Type::keys256;
+        if (method_chosen != AggregatedDataVariants::Type::EMPTY)
+            return;
     }
 
     /// If single string key - will use hash table with references to it. Strings itself are stored separately in Arena.
-    if (params.keys_size == 1 && isString(types_removed_nullable[0]))
+    if (key_size == 1 && isString(types_removed_nullable[0]))
     {
         if (has_low_cardinality)
-            return AggregatedDataVariants::Type::low_cardinality_key_string;
+            method_chosen = AggregatedDataVariants::Type::low_cardinality_key_string;
         else
-            return AggregatedDataVariants::Type::key_string;
+            method_chosen = AggregatedDataVariants::Type::key_string;
+        return;
     }
 
-    return AggregatedDataVariants::Type::serialized;
+    method_chosen = AggregatedDataVariants::Type::serialized;
+}
+
+AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
+{
+    ChooseMethodOption option{
+        .header = (params.src_header ? params.src_header : params.intermediate_header),
+        .keys = params.keys,
+        .enable_lc_group_by_opt = params.enable_lc_group_by_opt};
+    AggregatedDataVariants::Type method;
+    Aggregator::chooseAggregationMethodByOption(option, key_sizes, method);
+    return method;
 }
 
 template <bool skip_compiled_aggregate_functions>

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/SimplePlanRewriter.h>

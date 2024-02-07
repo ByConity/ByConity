@@ -45,6 +45,7 @@ public:
     const Partitioning & getSchema() const { return schema; }
 
     bool needKeepOrder() const { return keep_order; }
+    void setKeepOrder(bool keep_order_) { keep_order = keep_order_; }
     const std::unordered_map<String, std::vector<String>> & getOutToInputs() const { return output_to_inputs; }
 
     Block getHeader() const { return getOutputStream().header; }

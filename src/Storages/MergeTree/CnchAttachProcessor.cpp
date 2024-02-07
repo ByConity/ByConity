@@ -255,7 +255,7 @@ void AttachContext::commit()
     /// If we're not in the interactive transaction session, at this point it's safe
     /// to remove the directory lock
     if (!src_directory.empty() && !isQueryInInteractiveSession(query_ctx.shared_from_this()) && !query_ctx.getSettingsRef().force_clean_transaction_by_dm)
-        query_ctx.getCnchCatalog()->clearFilesysLock(src_directory);
+        query_ctx.getCnchCatalog()->clearFilesysLocks({src_directory}, std::nullopt);
 
     if (!meta_files_to_delete.empty())
     {
@@ -497,10 +497,7 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
                 while (true)
                 {
                     auto hold_txn_id = query_ctx->getCnchCatalog()->writeFilesysLock(
-                        query_ctx->getCurrentTransactionID(),
-                        command.from_zookeeper_path,
-                        target_tbl.getDatabaseName(),
-                        target_tbl.getTableName());
+                        query_ctx->getCurrentTransactionID(), command.from_zookeeper_path, target_tbl);
 
                     if (hold_txn_id == query_ctx->getCurrentTransactionID())
                         break;

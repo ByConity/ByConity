@@ -3458,11 +3458,14 @@ namespace Catalog
     }
 
 
-    TxnTimestamp Catalog::writeFilesysLock(TxnTimestamp txn_id, const String & dir, const String & db, const String & table)
+    TxnTimestamp Catalog::writeFilesysLock(TxnTimestamp txn_id, const String & dir, const IStorage& storage)
     {
         TxnTimestamp res;
         runWithMetricSupport(
             [&] {
+                auto db = storage.getDatabaseName();
+                auto table = storage.getTableName();
+                auto uuid = storage.getStorageUUID();
                 if (dir.empty() || db.empty() || table.empty())
                 {
                     throw Exception(
@@ -3476,7 +3479,6 @@ namespace Catalog
                 }
                 /// if outer dir is locked, then we cannot lock the inner dir
 
-                String cur_dir = normalized_dir;
                 auto get_parent_dir = [](String & dir) {
                     auto pos = dir.rfind('/');
                     if (pos == std::string::npos)
@@ -3485,55 +3487,84 @@ namespace Catalog
                         dir.erase(dir.begin() + pos, dir.end());
                 };
 
+                String cur_dir = normalized_dir;
+                std::vector<String> dir_paths;
                 while (!cur_dir.empty())
                 {
-                    if (auto lk = getFilesysLock(cur_dir))
-                    {
-                        LOG_DEBUG(log, "{} is locked, cannot lock {} because it is locked by transaction {}", cur_dir, normalized_dir, lk->txn_id());
-                        res = lk->txn_id();
-                        break;
-                    }
+                    dir_paths.push_back(normalizePath(cur_dir));
                     get_parent_dir(cur_dir);
                 }
-                if (!res)
+
+                /// NOTE: Check parent path's lock is not atomic with write fs lock.
+                /// there maybe race condition where two query lock parent and child
+                /// directory concurrently and both acquire the lock
+                std::vector<String> lock_metas = meta_proxy->getFilesysLocks(name_space, dir_paths);
+                for (const String& lock_meta : lock_metas)
                 {
-                    meta_proxy->writeFilesysLock(name_space, txn_id, normalized_dir, db, table);
-                    res = txn_id;
+                    if (!lock_meta.empty())
+                    {
+                        Protos::DataModelFileSystemLock lock;
+                        lock.ParseFromString(lock_meta);
+                        LOG_DEBUG(log, "Cannot lock {} because it is locked by another transaction {}",
+                            normalized_dir, lock.ShortDebugString());
+                        res = lock.txn_id();
+                        return;
+                    }
                 }
+
+                /// Write the undo resouce for the lock
+                UndoResource ub(txn_id, UndoResourceType::KVFSLockKey, normalized_dir);
+                writeUndoBuffer(UUIDHelpers::UUIDToString(uuid), txn_id, {ub});
+                /// Write the lock
+                meta_proxy->writeFilesysLock(name_space, txn_id, normalized_dir, db, table);
+                res = txn_id;
             },
             ProfileEvents::WriteFilesysLockSuccess,
             ProfileEvents::WriteFilesysLockFailed);
         return res;
     }
 
-    std::optional<FilesysLock> Catalog::getFilesysLock(const String & dir)
+    void Catalog::clearFilesysLocks(const std::vector<String>& dirs, std::optional<TxnTimestamp> txn_id)
     {
-        std::optional<FilesysLock> res;
         runWithMetricSupport(
             [&] {
-                String normalized_dir = normalizePath(dir);
-                auto data = meta_proxy->getFilesysLock(name_space, dir);
-                if (!data.empty())
+                std::vector<String> normalized_dirs;
+                for (const String& dir : dirs)
                 {
-                    res = std::make_optional<FilesysLock>();
-                    res->pb_model.ParseFromString(data);
+                    String normalized_dir = normalizePath(dir);
+                    if (normalized_dir == "/")
+                    {
+                        throw Exception("Trying to unlock the root directory, it's probably a bug", ErrorCodes::LOGICAL_ERROR);
+                    }
+                    normalized_dirs.push_back(normalized_dir);
                 }
-            },
-            ProfileEvents::GetFilesysLockSuccess,
-            ProfileEvents::GetFilesysLockFailed);
-        return res;
-    }
 
-    void Catalog::clearFilesysLock(const String & dir)
-    {
-        runWithMetricSupport(
-            [&] {
-                String normalized_dir = normalizePath(dir);
-                if (normalized_dir == "/")
+                /// In scenario like undo buffer clean for abort transaction, we need to check if this lock is owned by us
+                if (txn_id.has_value())
                 {
-                    throw Exception("Trying to unlock the root directory, it's probably a bug", ErrorCodes::LOGICAL_ERROR);
+                    std::vector<String> lock_metas = meta_proxy->getFilesysLocks(name_space, normalized_dirs);
+                    normalized_dirs.clear();
+                    for (const String& lock_meta : lock_metas)
+                    {
+                        if (!lock_meta.empty())
+                        {
+                            Protos::DataModelFileSystemLock lock;
+                            lock.ParseFromString(lock_meta);
+
+                            if (lock.txn_id() != txn_id.value().toUInt64())
+                            {
+                                LOG_INFO(log, "Skip release lock for {} since it not owned by us({})",
+                                    lock.ShortDebugString(), txn_id.value().toUInt64());
+                            }
+                            else
+                            {
+                                normalized_dirs.push_back(lock.directory());
+                            }
+                        }
+                    }
                 }
-                meta_proxy->clearFilesysLock(name_space, dir);
+
+                meta_proxy->clearFilesysLocks(name_space, normalized_dirs);
             },
             ProfileEvents::ClearFilesysLockDirSuccess,
             ProfileEvents::ClearFilesysLockDirFailed);
@@ -3553,8 +3584,7 @@ namespace Catalog
                     if (record.pb_model.txn_id() == txn_id.toUInt64())
                         to_delete.push_back(std::move(record.pb_model.directory()));
                 }
-                /// may need multi-write later, as now there's will be only 1 dir at most
-                std::for_each(to_delete.begin(), to_delete.end(), [this](const String & dir) { clearFilesysLock(dir); });
+                clearFilesysLocks(to_delete, std::nullopt);
             },
             ProfileEvents::ClearFilesysLockTxnIdSuccess,
             ProfileEvents::ClearFilesysLockTxnIdFailed);

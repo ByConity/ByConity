@@ -68,10 +68,9 @@ public:
     }
     size_t getMaxThreads() const { return max_threads; }
     size_t getMemoryEfficientMergeThreads() const { return memory_efficient_merge_threads; }
-    bool isShouldProduceResultsInOrderOfBucketNumber() const
-    {
-        return should_produce_results_in_order_of_bucket_number;
-    }
+    bool isShouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }
+    void setShouldProduceResultsInOrderOfBucketNumber(bool value) { should_produce_results_in_order_of_bucket_number = value; }
+    void setMemoryEfficientAggregation(bool value) { memory_efficient_aggregation = value; }
 
     void toProto(Protos::MergingAggregatedStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<MergingAggregatedStep> fromProto(const Protos::MergingAggregatedStep & proto, ContextPtr context);
@@ -96,7 +95,7 @@ private:
     /// Set as to_stage==WithMergeableState && distributed_aggregation_memory_efficient
     /// which is equivalent to !final_ && && distributed_aggregation_memory_efficient
     /// Initialized in the constructor according the formula above
-    const bool should_produce_results_in_order_of_bucket_number;
+    bool should_produce_results_in_order_of_bucket_number;
 };
 
 }

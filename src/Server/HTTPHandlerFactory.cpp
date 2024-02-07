@@ -11,6 +11,7 @@
 #include <Server/APIRequestHandler.h>
 #include <Server/HTTPHandler.h>
 #include <Server/InterserverIOHTTPHandler.h>
+#include <Server/ProfilerRequestHandler.h>
 #include <Server/NotFoundHandler.h>
 #include <Server/PrometheusRequestHandler.h>
 #include <Server/ReplicasStatusHandler.h>
@@ -163,6 +164,11 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
     root_handler->attachStrictPath("/");
     root_handler->allowGetAndHeadRequest();
     factory.addHandler(root_handler);
+
+    auto profiler_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<ProfilerRequestHandler>>(server);
+    profiler_handler->attachNonStrictPath("/profiler");
+    profiler_handler->allowGetAndHeadRequest();
+    factory.addHandler(profiler_handler);
 
     auto ping_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<StaticRequestHandler>>(server, ping_response_expression);
     ping_handler->attachStrictPath("/ping");

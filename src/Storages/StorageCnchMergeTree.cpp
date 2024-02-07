@@ -380,19 +380,7 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
     /// (3) `_partition_id` or `_partition_value` if they're in predicate
 
     /// (1) Prune partition by partition level TTL
-    TTLTableDescription table_ttl = getInMemoryMetadata().getTableTTLs();
-    if (getInMemoryMetadata().hasPartitionLevelTTL() && table_ttl.definition_ast && local_context->getCurrentTransaction())
-    {
-        TxnTimestamp start_ts = local_context->getCurrentTransactionID();
-        time_t query_time = start_ts.toSecond();
-        size_t prev_sz = partition_list.size();
-        std::erase_if(partition_list, [&](const auto & partition) {
-            time_t metadata_ttl = getTTLForPartition(*partition);
-            return metadata_ttl && metadata_ttl < query_time;
-        });
-        if (partition_list.size() < prev_sz)
-            LOG_DEBUG(log, "TTL rules dropped {} expired partitions", prev_sz - partition_list.size());
-    }
+    filterPartitionByTTL(partition_list, local_context);
 
     const auto partition_key = MergeTreePartition::adjustPartitionKey(getInMemoryMetadataPtr(), local_context);
     const auto & partition_key_expr = partition_key.expression;
@@ -594,6 +582,77 @@ static Block getBlockWithPartColumn(ServerDataPartsVector & parts)
         column->insert(part->part_model_wrapper->name);
 
     return Block{ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), "_part")};
+}
+
+void StorageCnchMergeTree::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context) const
+{
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    TTLTableDescription table_ttl = metadata_snapshot->getTableTTLs();
+    if (getInMemoryMetadata().hasPartitionLevelTTL() && table_ttl.definition_ast && local_context->getCurrentTransaction())
+    {
+        if (!metadata_snapshot->hasRowsTTL())
+            return;
+
+        /// make a copy of rows_ttl, we may rewrite it later.
+        auto rows_ttl = metadata_snapshot->table_ttl.rows_ttl;
+
+        /// Construct a block consists of partition keys then compute ttl values according to this block
+        const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
+        MutableColumns columns = partition_key_sample.cloneEmptyColumns();
+
+        for (auto partition : partition_list)
+        {
+            /// This can happen when ALTER query is implemented improperly; finish ALTER query should bypass this check.
+            if (columns.size() != partition->value.size())
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Partition key columns definition missmatch between inmemory and metastore, this is a bug, expect block ({}), got values "
+                    "({})\n",
+                    partition_key_sample.dumpNames(),
+                    fmt::join(partition->value, ", "));
+
+            for (size_t i = 0; i < partition->value.size(); ++i)
+                columns[i]->insert(partition->value[i]);
+        }
+
+        auto block = partition_key_sample.cloneWithColumns(std::move(columns));
+        TTLDescription::tryRewriteTTLWithPartitionKey(rows_ttl, metadata_snapshot->columns, metadata_snapshot->partition_key, metadata_snapshot->primary_key, getContext());
+        rows_ttl.expression->execute(block);
+
+        // got the ttl values for each partition based on ttl expression
+        const auto & ttl_values = block.getByName(rows_ttl.result_column);
+        const IColumn * column = ttl_values.column.get();
+
+        if (column->size() != partition_list.size())
+            throw Exception("Calculated TTL column size cannot match input partitions column size.", ErrorCodes::LOGICAL_ERROR);
+
+        TxnTimestamp start_ts = local_context->getCurrentTransactionID();
+        time_t query_time = start_ts.toSecond();
+        std::vector<std::shared_ptr<MergeTreePartition>> filtered_result;
+
+        for (size_t index = 0; index < column->size(); index++)
+        {
+            time_t ttl_value = 0;
+            if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
+            {
+                const auto & date_lut = DateLUT::instance();
+                ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
+            }
+            else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))
+            {
+                ttl_value = column_date_time->getElement(index);
+            }
+            else
+                throw Exception("Unexpected type of result ttl column", ErrorCodes::LOGICAL_ERROR);
+
+            if (ttl_value >= query_time)
+                filtered_result.push_back(partition_list[index]);
+        }
+
+        if (filtered_result.size() < partition_list.size())
+            LOG_DEBUG(log, "TTL rules dropped {} partitions (before: {}).", partition_list.size() - filtered_result.size(), partition_list.size());
+        filtered_result.swap(partition_list);
+    }
 }
 
 time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & partition) const
