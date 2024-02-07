@@ -10,13 +10,14 @@
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/NodeSelector.h>
-#include <Interpreters/Scheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Interpreters/sendPlanSegment.h>
 #include <butil/iobuf.h>
 #include <Common/Stopwatch.h>
 #include <Common/time.h>
 #include <common/types.h>
+
+#include "Scheduler.h"
 
 namespace DB
 {
@@ -26,17 +27,17 @@ namespace ErrorCodes
     extern const int WAIT_FOR_RESOURCE_TIMEOUT;
 }
 
-bool IScheduler::addBatchTask(BatchTaskPtr batch_task)
+bool Scheduler::addBatchTask(BatchTaskPtr batch_task)
 {
     return queue.push(batch_task);
 }
 
-bool IScheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
+bool Scheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
 {
     return queue.tryPop(task, timespec_to_duration(query_context->getQueryExpirationTimeStamp()).count() / 1000);
 }
 
-void IScheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
+void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
 {
     const auto & selector_info = node_selector_result[task.task_id];
     const auto & worker_node = selector_info.worker_nodes[idx];
@@ -75,7 +76,7 @@ void IScheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask 
     }
 }
 
-TaskResult IScheduler::scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task)
+TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
     TaskResult res;
     sendResource(plan_segment_ptr);
@@ -128,7 +129,7 @@ TaskResult IScheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segmen
     return res;
 }
 
-void IScheduler::schedule()
+void Scheduler::schedule()
 {
     Stopwatch sw;
     genTopology();
@@ -166,7 +167,7 @@ void IScheduler::schedule()
     LOG_DEBUG(log, "Scheduling takes {} ms", sw.elapsedMilliseconds());
 }
 
-void IScheduler::genSourceTasks()
+void Scheduler::genSourceTasks()
 {
     LOG_DEBUG(log, "Begin generate source tasks");
     auto batch_task = std::make_shared<BatchTask>();
@@ -184,7 +185,7 @@ void IScheduler::genSourceTasks()
     addBatchTask(std::move(batch_task));
 }
 
-void IScheduler::genTopology()
+void Scheduler::genTopology()
 {
     LOG_DEBUG(log, "Generate dependency topology for segments");
     for (const auto & [id, plan_segment_ptr] : dag_graph_ptr->id_to_segment)
@@ -204,7 +205,7 @@ void IScheduler::genTopology()
     }
 }
 
-void IScheduler::sendResource(PlanSegment * plan_segment_ptr)
+void Scheduler::sendResource(PlanSegment * plan_segment_ptr)
 {
     if (query_context->getSettingsRef().bsp_mode)
     {
@@ -226,7 +227,7 @@ void IScheduler::sendResource(PlanSegment * plan_segment_ptr)
     }
 }
 
-void IScheduler::prepareFinalTask()
+void Scheduler::prepareFinalTask()
 {
     if (stopped.load(std::memory_order_acquire))
     {
@@ -255,7 +256,7 @@ void IScheduler::prepareFinalTask()
     dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start = true;
 }
 
-void IScheduler::removeDepsAndEnqueueTask(const SegmentTask & task)
+void Scheduler::removeDepsAndEnqueueTask(const SegmentTask & task)
 {
     std::lock_guard<std::mutex> guard(plansegment_topology_mutex);
     auto batch_task = std::make_shared<BatchTask>();
@@ -278,185 +279,4 @@ void IScheduler::removeDepsAndEnqueueTask(const SegmentTask & task)
     addBatchTask(std::move(batch_task));
 }
 
-/// MPP schduler logic
-void MPPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
-{
-    const auto & selector_info = node_selector_result[task.task_id];
-    for (size_t idx = 0; idx < selector_info.worker_nodes.size(); idx++)
-    {
-        dispatchTask(plan_segment_ptr, task, idx);
-    }
-}
-
-void MPPScheduler::onSegmentScheduled(const SegmentTask & task)
-{
-    removeDepsAndEnqueueTask(task);
-}
-
-/// BSP scheduler logic
-void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
-{
-    (void)plan_segment_ptr;
-    const auto selector_info = node_selector_result[task.task_id];
-    for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
-    {
-        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        // Is it solid to check empty address via hostname?
-        if (selector_info.worker_nodes[i].address.getHostName().empty())
-        {
-            pending_task_instances.no_prefs.emplace(task.task_id, i);
-        }
-        else
-        {
-            pending_task_instances.for_nodes[selector_info.worker_nodes[i].address].emplace(task.task_id, i);
-        }
-    }
-    triggerDispatch(cluster_nodes.rank_workers);
-}
-
-void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled)
-{
-    if (is_succeed)
-    {
-        removeDepsAndEnqueueTask(SegmentTask{segment_id});
-    }
-    // on exception
-    if (!is_succeed && !is_canceled)
-    {
-        stopped.store(true, std::memory_order_release);
-        // emplace a fake task.
-        addBatchTask(nullptr);
-    }
-}
-
-void BSPScheduler::onQueryFinished()
-{
-    UInt64 query_unique_id = query_context->getCurrentTransactionID().toUInt64();
-    for (const auto & address : dag_graph_ptr->plan_send_addresses)
-    {
-        try
-        {
-            cleanupExchangeDataForQuery(address, query_unique_id);
-            LOG_TRACE(
-                log,
-                "cleanup exchange data successfully query_id:{} query_unique_id:{} address:{}",
-                query_id,
-                query_unique_id,
-                address.toString());
-        }
-        catch (...)
-        {
-            tryLogCurrentException(
-                log,
-                fmt::format(
-                    "cleanup exchange data failed for query_id:{} query_unique_id:{} address:{}",
-                    query_id,
-                    query_unique_id,
-                    address.toString()));
-        }
-    }
-}
-
-void BSPScheduler::updateSegmentStatusCounter(const size_t & segment_id, const UInt64 & parallel_index)
-{
-    std::unique_lock<std::mutex> lock(segment_status_counter_mutex);
-    auto segment_status_counter_iterator = segment_status_counter.find(segment_id);
-    if (segment_status_counter_iterator == segment_status_counter.end())
-    {
-        segment_status_counter[segment_id] = {};
-    }
-    segment_status_counter[segment_id].insert(parallel_index);
-
-    if (segment_status_counter[segment_id].size() == dag_graph_ptr->segment_paralle_size_map[segment_id])
-    {
-        onSegmentFinished(segment_id, /*is_succeed=*/true, /*is_canceled=*/true);
-    }
-
-    AddressInfo available_worker;
-    {
-        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        available_worker = segment_parallel_locations[segment_id][parallel_index];
-        occupied_workers[segment_id].erase(available_worker);
-    }
-    triggerDispatch({WorkerNode{available_worker}});
-}
-
-std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const AddressInfo & worker)
-{
-    if (pending_task_instances.for_nodes.contains(worker))
-    {
-        for (auto instance = pending_task_instances.for_nodes[worker].begin(); instance != pending_task_instances.for_nodes[worker].end();)
-        {
-            const auto & node_iter = occupied_workers.find(instance->task_id);
-            // If the target node is busy, skip it.
-            if (node_iter != occupied_workers.end() && node_iter->second.contains(worker))
-            {
-                instance++;
-                continue;
-            }
-            else
-            {
-                SegmentTaskInstance ret = *instance;
-                pending_task_instances.for_nodes[worker].erase(instance);
-                return std::make_pair(true, ret);
-            }
-        }
-    }
-
-    for (auto no_pref = pending_task_instances.no_prefs.begin(); no_pref != pending_task_instances.no_prefs.end();)
-    {
-        const auto & node_iter = occupied_workers.find(no_pref->task_id);
-        // If the target node is busy, skip it.
-        if (node_iter != occupied_workers.end() && node_iter->second.contains(worker))
-        {
-            no_pref++;
-            continue;
-        }
-        else
-        {
-            SegmentTaskInstance ret = *no_pref;
-            pending_task_instances.no_prefs.erase(no_pref);
-            return std::make_pair(true, ret);
-        }
-    }
-    return std::make_pair(false, SegmentTaskInstance(0, 0));
-}
-
-void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_workers)
-{
-    for (const auto & worker : available_workers)
-    {
-        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        const auto & address = worker.address;
-        const auto & [has_result, result] = getInstanceToSchedule(address);
-        if (!has_result)
-            continue;
-
-        auto & worker_node = node_selector_result[result.task_id].worker_nodes[result.parallel_index];
-        if (worker_node.address.getHostName().empty())
-            worker_node.address = address;
-
-        dispatchTask(dag_graph_ptr->getPlanSegmentPtr(result.task_id), SegmentTask{result.task_id}, result.parallel_index);
-
-        const auto & node_iter = occupied_workers.find(result.task_id);
-        if (node_iter != occupied_workers.end())
-        {
-            node_iter->second.insert(address);
-        }
-        else
-        {
-            occupied_workers.emplace(result.task_id, std::unordered_set<AddressInfo, AddressInfo::Hash>{address});
-        }
-        const auto & parallel_nodes_iter = segment_parallel_locations.find(result.task_id);
-        if (parallel_nodes_iter != segment_parallel_locations.end())
-        {
-            parallel_nodes_iter->second.insert({result.parallel_index, address});
-        }
-        else
-        {
-            segment_parallel_locations.emplace(
-                result.task_id, std::unordered_map<UInt64, AddressInfo>{std::make_pair(result.parallel_index, address)});
-        }
-    }
-}
 }

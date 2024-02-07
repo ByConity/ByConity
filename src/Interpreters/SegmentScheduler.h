@@ -29,10 +29,11 @@
 #include <Interpreters/DAGGraph.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/BSPScheduler.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/Scheduler.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
-#include <Interpreters/Scheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>

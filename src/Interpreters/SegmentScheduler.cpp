@@ -16,18 +16,19 @@
 #include <memory>
 #include <set>
 #include <CloudServices/CnchServerResource.h>
-#include <Interpreters/Scheduler.h>
+#include <Interpreters/DistributedStages/MPPScheduler.h>
+#include <Interpreters/DistributedStages/Scheduler.h>
+#include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/profile/ProfileLogHub.h>
 #include <Interpreters/sendPlanSegment.h>
+#include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
 #include <butil/endpoint.h>
 #include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
 #include <common/types.h>
-#include <Interpreters/DistributedStages/executePlanSegment.h>
-#include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
 
 namespace ProfileEvents
 {
@@ -616,7 +617,7 @@ void SegmentScheduler::scheduleV2(const String & query_id, ContextPtr query_cont
     Stopwatch sw;
     try
     {
-        std::shared_ptr<IScheduler> scheduler;
+        std::shared_ptr<Scheduler> scheduler;
         if (query_context->getSettingsRef().bsp_mode)
         {
             std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
