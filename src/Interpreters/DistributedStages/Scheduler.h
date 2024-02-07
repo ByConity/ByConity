@@ -93,13 +93,13 @@ struct ScheduleResult
  *
  * Normally it will first schedule source tasks, then intermidiate(compute) ones, and final task at last.
 */
-class IScheduler
+class Scheduler
 {
     using PlanSegmentTopology = std::unordered_map<size_t, std::unordered_set<size_t>>;
     using Queue = ConcurrentBoundedQueue<BatchTaskPtr>;
 
 public:
-    IScheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
+    Scheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
         : query_id(query_id_)
         , query_context(query_context_)
         , dag_graph_ptr(dag_graph_ptr_)
@@ -110,7 +110,7 @@ public:
     {
         cluster_nodes.rank_workers.emplace_back(local_address, NodeType::Local, "");
     }
-    virtual ~IScheduler() = default;
+    virtual ~Scheduler() = default;
     // Pop tasks from queue and schedule them.
     void schedule();
     virtual void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) = 0;
@@ -157,77 +157,4 @@ protected:
     NodeSelector::SelectorResultMap node_selector_result;
 };
 
-// Once the dependencies scheduled, the segment would be scheduled.
-//
-// IScheduler::genTopology -> IScheduler::scheduleTask -> MPPScheduler::submitTasks -> IScheduler::dispatchTask -rpc-> Worker node
-class MPPScheduler : public IScheduler
-{
-public:
-    MPPScheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
-        : IScheduler(query_id_, query_context_, dag_graph_ptr_)
-    {
-    }
-
-private:
-    void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) override;
-    void onSegmentScheduled(const SegmentTask & task) override;
-    // We do nothing on task finished.
-    void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) override
-    {
-        (void)segment_id;
-        (void)is_succeed;
-        (void)is_canceled;
-    }
-};
-
-using MPPSchedulerPtr = std::unique_ptr<MPPScheduler>;
-
-// Only if the dependencies were executed done, the segment would be scheduled.
-//
-// IScheduler::genTopology -> IScheduler::scheduleTask -> BSPScheduler::submitTasks
-//                                                                  |
-//                                                        IScheduler::dispatchTask -rpc-> Worker node
-//                                                                  |                       | rpc
-//                                                                  <--------- BSPScheduler::onSegmentFinished
-class BSPScheduler : public IScheduler
-{
-    struct PendingTaskIntances
-    {
-        // nodes -> [segment instance who prefer to be scheduled to it]
-        std::unordered_map<AddressInfo, std::unordered_set<SegmentTaskInstance, SegmentTaskInstance::Hash>, AddressInfo::Hash> for_nodes;
-        // segment isntances who have no preference.
-        std::unordered_set<SegmentTaskInstance, SegmentTaskInstance::Hash> no_prefs;
-    };
-
-public:
-    BSPScheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
-        : IScheduler(query_id_, query_context_, dag_graph_ptr_)
-    {
-    }
-
-    void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) override;
-    // We do nothing on task scheduled.
-    void onSegmentScheduled(const SegmentTask & task) override
-    {
-        (void)task;
-    }
-    void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) override;
-    void onQueryFinished() override;
-
-    void updateSegmentStatusCounter(const size_t & segment_id, const UInt64 & parallel_index);
-
-private:
-    std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
-    void triggerDispatch(const std::vector<WorkerNode> & available_workers);
-
-    std::mutex segment_status_counter_mutex;
-    std::unordered_map<size_t, std::unordered_set<UInt64>> segment_status_counter;
-
-    std::mutex nodes_alloc_mutex;
-    // segment id -> nodes running its instance
-    std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> occupied_workers;
-    // segment id -> [segment instance, node]
-    std::unordered_map<size_t, std::unordered_map<UInt64, AddressInfo>> segment_parallel_locations;
-    PendingTaskIntances pending_task_instances;
-};
 }
