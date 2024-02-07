@@ -40,6 +40,7 @@ public:
 private:
     std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
     void triggerDispatch(const std::vector<WorkerNode> & available_workers);
+    void prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size) override;
 
     std::mutex segment_status_counter_mutex;
     std::unordered_map<size_t, std::unordered_set<UInt64>> segment_status_counter;

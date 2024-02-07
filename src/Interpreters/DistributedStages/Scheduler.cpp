@@ -4,7 +4,6 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <CloudServices/CnchServerResource.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
@@ -79,18 +78,10 @@ void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask &
 TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
     TaskResult res;
-    sendResource(plan_segment_ptr);
     auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.is_source));
-    if (query_context->getSettingsRef().bsp_mode)
-    {
-        for (const auto & output : plan_segment_ptr->getPlanSegmentOutputs())
-        {
-            query_context->getExchangeDataTracker()->registerExchange(
-                query_context->getCurrentQueryId(), output->getExchangeId(), selector_result.first->second.worker_nodes.size());
-        }
-    }
-    dag_graph_ptr->scheduled_segments.emplace(task.task_id);
     auto & selector_info = selector_result.first->second;
+    prepareTask(plan_segment_ptr, selector_info.worker_nodes.size());
+    dag_graph_ptr->scheduled_segments.emplace(task.task_id);
     dag_graph_ptr->segment_paralle_size_map[task.task_id] = selector_info.worker_nodes.size();
 
     PlanSegmentExecutionInfo execution_info;
@@ -138,7 +129,7 @@ void Scheduler::schedule()
     /// Leave final segment alone.
     while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
     {
-        if (stopped.load(std::memory_order_acquire))
+        if (stopped.load(std::memory_order_relaxed))
         {
             LOG_INFO(log, "Schedule interrupted");
             return;
@@ -205,31 +196,9 @@ void Scheduler::genTopology()
     }
 }
 
-void Scheduler::sendResource(PlanSegment * plan_segment_ptr)
-{
-    if (query_context->getSettingsRef().bsp_mode)
-    {
-        ResourceOption option;
-        for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
-        {
-            auto storage_id = plan_segment_input->getStorageID();
-            if (storage_id && storage_id->hasUUID())
-            {
-                option.table_ids.emplace(storage_id->uuid);
-                LOG_TRACE(log, "Storage id {}", storage_id->getFullTableName());
-            }
-        }
-        if (!option.table_ids.empty())
-        {
-            query_context->getCnchServerResource()->setSendMutations(true);
-            query_context->getCnchServerResource()->sendResources(query_context, option);
-        }
-    }
-}
-
 void Scheduler::prepareFinalTask()
 {
-    if (stopped.load(std::memory_order_acquire))
+    if (stopped.load(std::memory_order_relaxed))
     {
         LOG_INFO(log, "Schedule interrupted before schedule final task");
         return;
