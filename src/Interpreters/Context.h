@@ -1273,7 +1273,7 @@ public:
         const QueryWorkerMetricElement & element); /// Add the metrics element to the background thread for flushing
     std::shared_ptr<CnchQueryLog> getCnchQueryLog() const;
 
-    const MergeTreeSettings & getMergeTreeSettings() const;
+    const MergeTreeSettings & getMergeTreeSettings(bool skip_unknown_settings = false) const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
     const StorageS3Settings & getStorageS3Settings() const;
     const CnchHiveSettings & getCnchHiveSettings() const;

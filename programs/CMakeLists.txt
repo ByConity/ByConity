@@ -57,6 +57,7 @@ option (ENABLE_CLICKHOUSE_KEEPER_CONVERTER "Util allows to convert ZooKeeper log
 option (ENABLE_CLICKHOUSE_TSO_SERVER "Service that produces globally consistent timestamps" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_DAEMON_MANAGER "Service that manage background jobs in clickhouse" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_PART_TOOLKIT "Enable part_toolkit" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_DUMPER "Enable clickhouse-dumper" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_RESOURCE_MANAGER "Service that manage worker resources" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_META_INSPECTOR "Enable meta-inspector in CNCH" ${ENABLE_CLICKHOUSE_ALL})
 
@@ -259,6 +260,7 @@ add_subdirectory (git-import)
 add_subdirectory (bash-completion)
 add_subdirectory (tso)
 add_subdirectory (part-toolkit)
+add_subdirectory (dumper)
 add_subdirectory (meta-inspector)
 
 if (ENABLE_CLICKHOUSE_KEEPER)
@@ -343,6 +345,7 @@ if (CLICKHOUSE_SPLIT_BINARY)
         clickhouse-git-import
         clickhouse-copier
         clickhouse-part-toolkit
+        clickhouse-dumper
         clickhouse-meta-inspector
     )
 
@@ -421,6 +424,9 @@ else ()
     if (ENABLE_CLICKHOUSE_PART_TOOLKIT)
         clickhouse_target_link_split_lib(clickhouse part-toolkit)
     endif ()
+    if (ENABLE_CLICKHOUSE_DUMPER)
+        clickhouse_target_link_split_lib(clickhouse dumper)
+    endif()
     if (ENABLE_CLICKHOUSE_META_INSPECTOR)
         clickhouse_target_link_split_lib(clickhouse meta-inspector)
     endif()
@@ -513,6 +519,11 @@ else ()
         add_custom_target (clickhouse-part-toolkit ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-part-toolkit DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-part-toolkit" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-part-toolkit)
+    endif ()
+    if (ENABLE_CLICKHOUSE_DUMPER)
+        add_custom_target (clickhouse-dumper ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-dumper DEPENDS clickhouse)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-dumper DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-dumper)
     endif ()
     if (ENABLE_CLICKHOUSE_META_INSPECTOR)
         add_custom_target (clickhouse-meta-inspector ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-meta-inspector DEPENDS clickhouse)

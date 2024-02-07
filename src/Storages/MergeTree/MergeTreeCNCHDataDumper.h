@@ -95,7 +95,7 @@ public:
       * --------------------------------
       */
     MutableMergeTreeDataPartCNCHPtr
-    dumpTempPart(const IMutableMergeTreeDataPartPtr & local_part, const DiskPtr & remote_disk = nullptr) const;
+    dumpTempPart(const IMutableMergeTreeDataPartPtr & local_part, const DiskPtr & remote_disk = nullptr, bool is_temp_prefix = false) const;
 
 private:
     struct CNCHDataMeta

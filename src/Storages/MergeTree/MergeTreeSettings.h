@@ -547,10 +547,10 @@ DECLARE_SETTINGS_TRAITS(MergeTreeSettingsTraits, LIST_OF_MERGE_TREE_SETTINGS)
   */
 struct MergeTreeSettings : public BaseSettings<MergeTreeSettingsTraits>
 {
-    void loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config);
+    void loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config, bool skip_unknown_settings = false);
 
     /// NOTE: will rewrite the AST to add immutable settings.
-    void loadFromQuery(ASTStorage & storage_def);
+    void loadFromQuery(ASTStorage & storage_def, bool attach = false);
 
     /// We check settings after storage creation
     static bool isReadonlySetting(const String & name)

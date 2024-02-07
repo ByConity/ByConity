@@ -110,7 +110,8 @@ DB::StoragePtr HiveExternalCatalog::getTable(
         InterpreterCreateQuery::getConstraintsDescription(create_query_ast.columns_list->constraints),
         {},{},
         false,
-        std::move(hive_params));
+        std::move(hive_params),
+        false);
 
     ret->setCreateTableSql(create_query);
     return ret;
