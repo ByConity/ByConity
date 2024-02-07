@@ -32,6 +32,7 @@ namespace DB
 {
 
 class KeyCondition;
+struct IndexTimeWatcher;
 
 using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
 
@@ -111,7 +112,8 @@ private:
         size_t & total_granules,
         size_t & granules_dropped,
         roaring::Roaring & filter_bitmap,
-        Poco::Logger * log);
+        Poco::Logger * log,
+        IndexTimeWatcher & index_time_watcher);
 
     struct PartFilterCounters
     {
@@ -245,6 +247,53 @@ public:
         const MergeTreeMetaBase & data,
         const RangesInDataParts & parts_with_ranges,
         const ContextPtr & context);
+};
+
+struct IndexTimeWatcher
+{
+    enum class Type
+    {
+        SEEK,
+        READ,
+        CLAC,
+    };
+
+    Stopwatch index_seek_watcher;
+    Stopwatch index_read_watcher;
+    Stopwatch index_calc_watcher;
+
+    size_t index_granule_seek_time;
+    size_t index_granule_read_time;
+    size_t index_condition_calc_time;
+
+    explicit IndexTimeWatcher(): index_granule_seek_time(0), index_granule_read_time(0), index_condition_calc_time(0) {}
+
+    void begin(Type type)
+    {
+        switch (type)
+        {
+            case Type::SEEK: index_seek_watcher.restart(); return;
+            case Type::READ: index_read_watcher.restart(); return;
+            case Type::CLAC: index_calc_watcher.restart(); return;
+        }
+    }
+
+    void elapsed(Type type)
+    {
+        switch (type)
+        {
+            case Type::SEEK: index_granule_seek_time += index_seek_watcher.elapsedMicroseconds(); return;
+            case Type::READ: index_granule_read_time += index_read_watcher.elapsedMicroseconds(); return;
+            case Type::CLAC: index_condition_calc_time += index_calc_watcher.elapsedMicroseconds(); return;
+        }
+    }
+
+    void watch(IndexTimeWatcher::Type type, std::function<void()> func) 
+    {
+        begin(type);
+        func();
+        elapsed(type);
+    }
 };
 
 }

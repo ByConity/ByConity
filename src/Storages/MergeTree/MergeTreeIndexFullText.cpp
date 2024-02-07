@@ -2,6 +2,7 @@
 
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
@@ -153,10 +154,12 @@ void MergeTreeIndexAggregatorFullText::update(const Block & block, size_t * pos,
 
     for (size_t col = 0; col < index_columns.size(); ++col)
     {
-        const auto & column = block.getByName(index_columns[col]).column;
+        auto column_and_type = block.getByName(index_columns[col]);
+        const ColumnPtr actual_col = BloomFilter::getPrimitiveColumn(column_and_type.column);
+
         for (size_t i = 0; i < rows_read; ++i)
         {
-            auto ref = column->getDataAt(*pos + i);
+            auto ref = actual_col->getDataAt(*pos + i);
             columnToBloomFilter(ref.data, ref.size, token_extractor, granule->bloom_filters[col]);
         }
     }
@@ -607,12 +610,20 @@ MergeTreeIndexPtr bloomFilterIndexCreator(
     }
 }
 
+inline void checkFullTextIndexType(const DataTypePtr & data_type)
+{
+    if (data_type->getTypeId() != TypeIndex::String && data_type->getTypeId() != TypeIndex::FixedString)
+        throw Exception("Bloom filter index can be used only with (Nullable) `String` or `FixedString` column.", ErrorCodes::INCORRECT_QUERY);
+}
+
 void bloomFilterIndexValidator(const IndexDescription & index, bool /*attach*/)
 {
     for (const auto & data_type : index.data_types)
     {
-        if (data_type->getTypeId() != TypeIndex::String && data_type->getTypeId() != TypeIndex::FixedString)
-            throw Exception("Bloom filter index can be used only with `String` or `FixedString` column.", ErrorCodes::INCORRECT_QUERY);
+        if (const auto * inner_type = typeid_cast<const DataTypeNullable *>(data_type.get()))
+            checkFullTextIndexType(inner_type->getNestedType());
+        else
+            checkFullTextIndexType(data_type);
     }
 
     if (index.type == NgramTokenExtractor::getName())

@@ -196,6 +196,11 @@
     \
     M(Manipulation, "Number of manipulations.") \
     M(ManipulationSuccess, "Number of success manipulations.") \
+\
+    M(IndexGranuleSeekTime, "The total time that skip index spent on seeking files.") \
+    M(IndexGranuleReadTime, "The total time that skip index spent on reading files.") \
+    M(IndexGranuleCalcTime, "The total time that skip index spent on calculating conditions.") \
+\
     M(Merge, "Number of launched background merges.") \
     M(MergedRows, "Rows read for background merges. This is the number of rows before merge.") \
     M(MergedUncompressedBytes, "Uncompressed bytes (for columns as they stored in memory) that was read for background merges. This is the number before merge.") \
