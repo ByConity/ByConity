@@ -211,7 +211,8 @@ void ThreadStatus::initPerformanceCounters()
     {
         try
         {
-            taskstats = TasksStatsCounters::create(thread_id);
+            if (auto query_context_ptr = query_context.lock(); query_context_ptr && query_context_ptr->getSettingsRef().enable_os_task_stats)
+                taskstats = TasksStatsCounters::create(thread_id);
         }
         catch (...)
         {

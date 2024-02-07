@@ -13,11 +13,16 @@
 
 #define DB_NAME_DELIMITER '.'  /// database name may contain the account id, i.e. account_id.database_name
 
+namespace LabelledMetrics
+{
+    const extern Metric VwQuery;
+    const extern Metric UnlimitedQuery;
+    const extern Metric QueriesFailed;
+}
+
 namespace ProfileEvents
 {
     const extern Event Query;
-    const extern Event VwQuery;
-    const extern Event UnlimitedQuery;
     const extern Event TimedOutQuery;
     const extern Event InsufficientConcurrencyQuery;
     const extern Event Manipulation;
@@ -27,12 +32,6 @@ namespace ProfileEvents
     const extern Event MergedRows;
     const extern Event MergedUncompressedBytes;
     const extern Event FailedQuery;
-    const extern Event QueriesFailed;
-    const extern Event QueriesFailedBeforeStart;
-    const extern Event QueriesFailedWhileProcessing;
-    const extern Event QueriesFailedFromUser;
-    const extern Event QueriesFailedFromEngine;
-    const extern Event QueriesSucceeded;
     // const extern Event CloudMergeStarted;
     // const extern Event CloudMergeEnded;
 
@@ -697,9 +696,8 @@ private:
     /// Maps/vectors to retrieve and export metrics
     MetricMap getInternalMetrics();
 
-    const String getServiceDiscoveryLabel(MetricLabels & labels);
-
     void writeProfileEvents(WriteBuffer & wb);
+    void writeLabelledMetrics(WriteBuffer & wb);
     void writeCurrentMetrics(WriteBuffer & wb);
     void writeAsyncMetrics(WriteBuffer & wb);
     void writeHistogramMetrics(WriteBuffer & wb);
@@ -1106,8 +1104,6 @@ private:
     const std::vector<ProfileEvents::Event> profile_events_list =
     {
         ProfileEvents::Query,
-        ProfileEvents::VwQuery,
-        ProfileEvents::UnlimitedQuery,
         ProfileEvents::TimedOutQuery,
         ProfileEvents::InsufficientConcurrencyQuery,
         ProfileEvents::Manipulation,
@@ -1118,11 +1114,6 @@ private:
         ProfileEvents::MergedUncompressedBytes,
         // ProfileEvents::CloudMergeStarted,
         // ProfileEvents::CloudMergeEnded,
-        ProfileEvents::QueriesFailedBeforeStart,
-        ProfileEvents::QueriesFailedWhileProcessing,
-        ProfileEvents::QueriesFailedFromUser,
-        ProfileEvents::QueriesFailedFromEngine,
-        ProfileEvents::QueriesSucceeded,
         ///About HDFS
         ProfileEvents::ReadBufferFromHdfsRead,
         ProfileEvents::ReadBufferFromHdfsReadFailed,
@@ -1420,8 +1411,8 @@ private:
 
     // Metric names used frequently in write() initialized here for performance
     const String sd_request_metric{ProfileEvents::getSnakeName(ProfileEvents::SDRequest)};
-    const String failed_queries_metrics{ProfileEvents::getSnakeName(ProfileEvents::QueriesFailed)};
     const String profile_event_query_metric{ProfileEvents::getSnakeName(ProfileEvents::Query)};
+    const String failed_queries_metrics{LabelledMetrics::getSnakeName(LabelledMetrics::QueriesFailed)};
 };
 
 }

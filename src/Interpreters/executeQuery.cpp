@@ -93,6 +93,7 @@
 #include <Interpreters/Cache/QueryCache.h>
 #include <Interpreters/SQLBinding/SQLBindingUtils.h>
 
+#include <Common/LabelledMetrics.h>
 #include <Common/ProfileEvents.h>
 #include <Common/RpcClientPool.h>
 
@@ -157,15 +158,15 @@ extern const Event FailedSelectQuery;
 extern const Event QueryTimeMicroseconds;
 extern const Event SelectQueryTimeMicroseconds;
 extern const Event InsertQueryTimeMicroseconds;
-extern const Event QueriesFailed;
-extern const Event QueriesFailedBeforeStart;
-extern const Event QueriesFailedWhileProcessing;
-extern const Event QueriesFailedFromUser;
-extern const Event QueriesFailedFromEngine;
-extern const Event QueriesSucceeded;
 extern const Event TimedOutQuery;
 extern const Event Query;
 extern const Event BackupVW;
+}
+
+namespace LabelledMetrics
+{
+extern const Metric QueriesFailed;
+extern const Metric QueriesFailedFromEngine;
 }
 
 namespace HistogramMetrics
@@ -639,13 +640,13 @@ static void onExceptionBeforeStart(
     LabelledMetrics::MetricLabels labels = markQueryProfileEventLabels(context, query_type, is_unlimited_query);
     labels.insert({"processing_stage", "before-processing"});
 
-    ProfileEvents::increment(ProfileEvents::QueriesFailed, 1, labels);
+    LabelledMetrics::increment(LabelledMetrics::QueriesFailed, 1, labels);
 
     //TODO:@lianwenlong add user error codes
     // if (ErrorCodes::USER_ERRORS.find(error_code) != ErrorCodes::USER_ERRORS.end())
-    //     ProfileEvents::increment(ProfileEvents::QueriesFailedFromUser, 1, labels);
+    //     LabelledMetrics::increment(LabelledMetrics::QueriesFailedFromUser, 1, labels);
     // else
-        ProfileEvents::increment(ProfileEvents::QueriesFailedFromEngine, 1, labels);
+        LabelledMetrics::increment(LabelledMetrics::QueriesFailedFromEngine, 1, labels);
 
     if (ast)
     {
@@ -931,7 +932,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         if (context->getServerType() == ServerType::cnch_server && context->hasQueryContext())
         {
-            if (context->getSettingsRef().text_case_option == TextCaseOption::LOWERCASE) 
+            if (context->getSettingsRef().text_case_option == TextCaseOption::LOWERCASE)
                 IdentifierNameNormalizer().visit<true>(ast.get());
             else if (context->getSettingsRef().text_case_option == TextCaseOption::UPPERCASE)
                 IdentifierNameNormalizer().visit<false>(ast.get());
@@ -1802,11 +1803,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 LabelledMetrics::MetricLabels labels = markQueryProfileEventLabels(context, query_type, is_unlimited_query);
                 labels.insert({"processing_stage", "processing"});
-                ProfileEvents::increment(ProfileEvents::QueriesFailed, 1, labels);
+                LabelledMetrics::increment(LabelledMetrics::QueriesFailed, 1, labels);
                 // if (ErrorCodes::USER_ERRORS.find(error_code) != ErrorCodes::USER_ERRORS.end())
-                //     ProfileEvents::increment(ProfileEvents::QueriesFailedFromUser, 1, labels);
+                //     LabelledMetrics::increment(LabelledMetrics::QueriesFailedFromUser, 1, labels);
                 // else
-                ProfileEvents::increment(ProfileEvents::QueriesFailedFromEngine, 1, labels);
+                    LabelledMetrics::increment(LabelledMetrics::QueriesFailedFromEngine, 1, labels);
 
                 logException(context, elem);
 

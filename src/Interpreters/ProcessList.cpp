@@ -29,9 +29,10 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/queryNormalization.h>
-#include <Common/typeid_cast.h>
-#include <Common/Exception.h>
 #include <Common/CurrentThread.h>
+#include <Common/Exception.h>
+#include <Common/LabelledMetrics.h>
+#include <Common/typeid_cast.h>
 #include <IO/WriteHelpers.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <common/logger_useful.h>
@@ -44,10 +45,14 @@
 
 namespace ProfileEvents
 {
-extern const Event UnlimitedQuery;
-extern const Event VwQuery;
 extern const Event UserTimeMicroseconds;
 extern const Event SystemTimeMicroseconds;
+}
+
+namespace LabelledMetrics
+{
+extern const Metric UnlimitedQuery;
+extern const Metric VwQuery;
 }
 
 namespace CurrentMetrics
@@ -224,12 +229,12 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
             labels.insert({"vw", vw->getName()});
         if (auto wg = query_context->tryGetCurrentWorkerGroup())
             labels.insert({"wg", wg->getID()});
-        ProfileEvents::increment(ProfileEvents::VwQuery, 1, labels);
+        LabelledMetrics::increment(LabelledMetrics::VwQuery, 1, labels);
     }
     else
     {
         is_vw_unlimited = true;
-        ProfileEvents::increment(ProfileEvents::UnlimitedQuery, 1, labels);
+        LabelledMetrics::increment(LabelledMetrics::UnlimitedQuery, 1, labels);
     }
 
     if (resource_group != nullptr)

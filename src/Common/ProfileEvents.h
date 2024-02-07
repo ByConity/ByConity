@@ -21,8 +21,6 @@ namespace ProfileEvents
     using Count = size_t;
     using Counter = std::atomic<Count>;
     class Counters;
-    using MetricLabels = LabelledMetrics::MetricLabels;
-    using LabelledCounter = std::unordered_map<MetricLabels, Count, LabelledMetrics::MetricLabelHasher>;
 
     /// Counters - how many times each event happened
     extern Counters global_counters;
@@ -30,11 +28,7 @@ namespace ProfileEvents
     class Counters
     {
         Counter * counters = nullptr;
-        LabelledCounter * labelled_counters = nullptr;
-        mutable std::mutex * labelled_counters_locks = nullptr;
         std::unique_ptr<Counter[]> counters_holder;
-        std::unique_ptr<LabelledCounter[]> labelled_counters_holder;
-        std::unique_ptr<std::mutex[]> labelled_counters_locks_holder;
         /// Used to propagate increments
         Counters * parent = nullptr;
 
@@ -46,8 +40,8 @@ namespace ProfileEvents
         Counters(VariableContext level = VariableContext::Thread, Counters * parent = &global_counters);
 
         /// Global level static initializer
-            Counters(Counter * allocated_counters, LabelledCounter * allocated_labelled_counters, std::mutex * allocated_labelled_counters_locks)
-                : counters(allocated_counters), labelled_counters(allocated_labelled_counters), labelled_counters_locks(allocated_labelled_counters_locks), parent(nullptr), level(VariableContext::Global) {}
+        Counters(Counter * allocated_counters)
+            : counters(allocated_counters), parent(nullptr), level(VariableContext::Global) {}
 
         Counter & operator[] (Event event)
         {
@@ -59,35 +53,12 @@ namespace ProfileEvents
             return counters[event];
         }
 
-
-        const std::unique_lock<std::mutex> getLabelLock(Event event) const
-        {
-            return std::unique_lock(labelled_counters_locks[event]);
-        }
-
-        LabelledCounter getLabelledCounters(Event event)
-        {
-            auto lock = getLabelLock(event);
-            return labelled_counters[event];
-        }
-
-        const LabelledCounter getLabelledCounters(Event event) const
-        {
-            auto lock = getLabelLock(event);
-            return labelled_counters[event];
-        }
-
-        inline void increment(Event event, Count amount = 1, MetricLabels labels = {})
+        inline void increment(Event event, Count amount = 1)
         {
             Counters * current = this;
             do
             {
                 current->counters[event].fetch_add(amount, std::memory_order_relaxed);
-                if (!labels.empty())
-                {
-                    auto lock = current->getLabelLock(event);
-                    current->labelled_counters[event][labels] += amount;
-                }
                 current = current->parent;
             } while (current != nullptr);
         }
@@ -134,7 +105,7 @@ namespace ProfileEvents
     };
 
     /// Increment a counter for event. Thread-safe
-    void increment(Event event, Count amount = 1, MetricLabels label = {}, Metrics::MetricType type = Metrics::None, time_t ts = {});
+    void increment(Event event, Count amount = 1);
 
     /// Get name of event by identifier. Returns statically allocated string.
     const char * getName(Event event);

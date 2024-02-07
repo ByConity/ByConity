@@ -726,12 +726,8 @@ enum PreloadLevelSettings : UInt64
       "value is at least 10000000 (100 times a second) for single queries or 1000000000 (once a second) for cluster-wide profiling.", \
       0) \
     M(Bool, metrics_perf_events_enabled, false, "If enabled, some of the perf events will be measured throughout queries' execution.", 0) \
-    M(String, \
-      metrics_perf_events_list, \
-      "", \
-      "Comma separated list of perf metrics that will be measured throughout queries' execution. Empty means all events. See " \
-      "PerfEventInfo in sources for the available events.", \
-      0) \
+    M(Bool, enable_os_task_stats, true, "If enabled, collect additional per-thread OS metrics (like OSCPUWaitMicroseconds/OSIOWaitMicroseconds) throughout queries' execution.", 0) \
+    M(String, metrics_perf_events_list, "", "Comma separated list of perf metrics that will be measured throughout queries' execution. Empty means all events. See PerfEventInfo in sources for the available events.", 0) \
     M(Float, opentelemetry_start_trace_probability, 0., "Probability to start an OpenTelemetry trace for an incoming query.", 0) \
     M(Bool, prefer_column_name_to_alias, false, "Prefer using column names instead of aliases if possible.", 0) \
     M(Bool, \

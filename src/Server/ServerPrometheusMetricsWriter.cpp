@@ -8,6 +8,7 @@
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Common/HistogramMetrics.h>
+#include <Common/LabelledMetrics.h>
 #include <Common/RpcClientPool.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/config_version.h>
@@ -128,20 +129,6 @@ String getPartMetricKeyLabel(const String & database, const String & table, cons
 
 }
 
-const String ServerPrometheusMetricsWriter::getServiceDiscoveryLabel(MetricLabels & labels)
-{
-    const String pod = DNSResolver::instance().getHostName();
-    const String mode = context->getServiceDiscoveryClient()->getName();
-    const String cluster = context->getServiceDiscoveryClient()->getClusterName();
-
-    labels.insert(
-        {{"pod", pod},
-        {"mode", mode},
-        {"cluster", cluster}});
-
-    return getLabel(labels);
-}
-
 void ServerPrometheusMetricsWriter::writeConfigMetrics(WriteBuffer & wb)
 {
 
@@ -187,24 +174,24 @@ void ServerPrometheusMetricsWriter::writeProfileEvents(WriteBuffer & wb)
 
     for (const auto & profile_event : catalog_profile_events_list)
     {
-            const auto counter = ProfileEvents::global_counters[profile_event].load(std::memory_order_relaxed);
+        const auto counter = counters_snapshot[profile_event];
 
-            std::string metric_name{ProfileEvents::getSnakeName(profile_event)};
-            metric_name.append(TOTAL_SUFFIX);
-            std::string metric_doc{ProfileEvents::getDocumentation(profile_event)};
+        std::string metric_name{ProfileEvents::getSnakeName(profile_event)};
+        metric_name.append(TOTAL_SUFFIX);
+        std::string metric_doc{ProfileEvents::getDocumentation(profile_event)};
 
-            replaceInvalidChars(metric_name);
-            std::string key{CATALOG_METRICS_PREFIX + metric_name};
-            std::string label(key);
+        replaceInvalidChars(metric_name);
+        std::string key{CATALOG_METRICS_PREFIX + metric_name};
+        std::string label(key);
 
-            writeOutLine(wb, "# HELP", key, metric_doc);
-            writeOutLine(wb, "# TYPE", key, COUNTER_TYPE);
-            writeOutLine(wb, label, counter);
+        writeOutLine(wb, "# HELP", key, metric_doc);
+        writeOutLine(wb, "# TYPE", key, COUNTER_TYPE);
+        writeOutLine(wb, label, counter);
     }
 
     for (const auto & profile_event : profile_events_list)
     {
-        auto write_profile_event = [this, &wb, &profile_event](ProfileEvents::Count counter, MetricLabels labels = {})
+        auto write_profile_event = [this, &wb, &profile_event](ProfileEvents::Count counter)
         {
             std::string metric_name{ProfileEvents::getSnakeName(profile_event)};
             metric_name.append(TOTAL_SUFFIX);
@@ -212,66 +199,70 @@ void ServerPrometheusMetricsWriter::writeProfileEvents(WriteBuffer & wb)
 
             replaceInvalidChars(metric_name);
             std::string key{PROFILE_EVENTS_PREFIX + metric_name};
-            std::string key_label(key);
+            MetricLabels labels;
 
             if (startsWith(metric_name, sd_request_metric))
             {
-                key_label += getServiceDiscoveryLabel(labels);
+                const String pod = DNSResolver::instance().getHostName();
+                const String mode = context->getServiceDiscoveryClient()->getName();
+                const String cluster = context->getServiceDiscoveryClient()->getClusterName();
+                labels.insert(
+                    {{"pod", pod},
+                    {"mode", mode},
+                    {"cluster", cluster}});
             }
             else if (profile_event == ProfileEvents::TSOError)
             {
                 labels.insert({"tso_leader_endpoint", context->tryGetTSOLeaderHostPort()});
-                key_label += getLabel(labels);
             }
-            else if (startsWith(metric_name, failed_queries_metrics))
-            {
-                /// Combine all different QueriesFailed related events to the same one, and use `type` label to categorize them.
-                key = failed_queries_metrics;
-                replaceInvalidChars(key.append(TOTAL_SUFFIX));
-                key = PROFILE_EVENTS_PREFIX + key;
-                metric_doc = ProfileEvents::getDocumentation(ProfileEvents::FailedQuery);
-                labels.insert({"failure_type", ProfileEvents::getName(profile_event)});
-                key_label = key + getLabel(labels);
-            }
-            else if (profile_event == ProfileEvents::VwQuery
-                || profile_event == ProfileEvents::UnlimitedQuery)
-            {
-                key = String{PROFILE_EVENTS_PREFIX} + PROFILE_EVENTS_LABELLED_QUERY_KEY + TOTAL_SUFFIX;
-                replaceInvalidChars(key);
-
-                if (profile_event == ProfileEvents::VwQuery)
-                    labels.insert({"resource_type", "vw"});
-                else
-                    labels.insert({"resource_type", "unlimited"});
-                key_label = key + getLabel(labels);
-            }
-            else if (!labels.empty())
-            {
-               key_label += getLabel(labels);
-            }
+            std::string key_label = key + getLabel(labels);
 
             writeOutLine(wb, "# HELP", key, metric_doc);
             writeOutLine(wb, "# TYPE", key, COUNTER_TYPE);
             writeOutLine(wb, key_label, counter);
-
         };
 
-        const auto labelled_counters = ProfileEvents::global_counters.getLabelledCounters(profile_event);
-        if (!labelled_counters.empty())
-        {
-            for (const auto & it : labelled_counters)
-            {
-                const auto labels = it.first;
-                const auto counter = it.second;
+        const auto counter = counters_snapshot[profile_event];
+        write_profile_event(counter);
+    }
+}
 
-                write_profile_event(counter, labels);
-            }
-        }
-        else
+void ServerPrometheusMetricsWriter::writeLabelledMetrics(WriteBuffer & wb)
+{
+    for (LabelledMetrics::Metric metric = 0; metric < LabelledMetrics::end(); ++metric)
+    {
+        String metric_name { LabelledMetrics::getSnakeName(metric) };
+        String metric_doc { LabelledMetrics::getDocumentation(metric) };
+        LabelledMetrics::LabelledCounter labelled_counter = LabelledMetrics::getCounter(metric);
+        for (const auto & item : labelled_counter)
         {
-            const auto counter = counters_snapshot[profile_event];
-            write_profile_event(counter, {});
+            String key;
+            MetricLabels labels = item.first;
+            LabelledMetrics::Count counter = item.second;
+
+            if (metric == LabelledMetrics::VwQuery || metric == LabelledMetrics::UnlimitedQuery)
+            {
+                labels.insert({"resource_type", metric == LabelledMetrics::VwQuery ? "vw" : "unlimited"});
+                key = String(PROFILE_EVENTS_PREFIX) + PROFILE_EVENTS_LABELLED_QUERY_KEY + TOTAL_SUFFIX;
+            }
+            else if (startsWith(metric_name, failed_queries_metrics))
+            {
+                /// Combine all different QueriesFailed related events to the same one, and use `type` label to categorize them.
+                labels.insert({"failure_type", String(LabelledMetrics::getName(metric))});
+                key = String(PROFILE_EVENTS_PREFIX) + failed_queries_metrics + TOTAL_SUFFIX;
+                metric_doc = String(LabelledMetrics::getDocumentation(LabelledMetrics::QueriesFailed));
+            }
+            else
+            {
+                continue;
+            }
+
+            String key_label = key + getLabel(labels);
+            writeOutLine(wb, "# HELP", key, metric_doc);
+            writeOutLine(wb, "# TYPE", key, COUNTER_TYPE);
+            writeOutLine(wb, key_label, counter);
         }
+
     }
 }
 
@@ -570,6 +561,8 @@ void ServerPrometheusMetricsWriter::writePartMetrics(WriteBuffer & wb)
 void ServerPrometheusMetricsWriter::write(WriteBuffer & wb)
 {
     writeConfigMetrics(wb);
+
+    writeLabelledMetrics(wb);
 
     if (send_events)
         writeProfileEvents(wb);
