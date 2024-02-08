@@ -19,6 +19,7 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/VirtualWarehousePool.h>
+#include <Interpreters/evaluateConstantExpression.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Parsers/ASTAlterQuery.h>
@@ -50,6 +51,74 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
 {
     auto vw_handle = context->getVirtualWarehousePool().get(vw_name);
     context->setCurrentVW(std::move(vw_handle));
+}
+
+static bool trySetVirtualWarehouseFromStorageID(const StorageID table_id, ContextMutablePtr & context, VirtualWarehouseType vw_type = VirtualWarehouseType::Default )
+{
+    auto & database_catalog = DatabaseCatalog::instance();
+    auto storage = database_catalog.tryGetTable(table_id, context);
+    if (!storage)
+        return false;
+
+    if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+    {
+        String vw_name = vw_type == VirtualWarehouseType::Write
+                         ? cnch_table->getSettings()->cnch_vw_write
+                         : cnch_table->getSettings()->cnch_vw_default;
+
+        LOG_DEBUG(
+            &Poco::Logger::get("trySetVirtualWarehouse"),
+            "try get warehouse from {}, type is WRITE {}",
+            vw_name,
+            VirtualWarehouseType::Write == vw_type);
+        setVirtualWarehouseByName(vw_name, context);
+        return true;
+    }
+    else if (auto vw_name = storage->getVirtualWarehouseName(vw_type); vw_name)
+    {
+        /// I hate dynamic_cast
+        setVirtualWarehouseByName(*vw_name, context);
+        return true;
+    }
+    else if (auto * cnchfile = dynamic_cast<IStorageCnchFile *>(storage.get()))
+    {
+        String name = vw_type == VirtualWarehouseType::Write
+                         ? cnchfile->settings.cnch_vw_write
+                         : cnchfile->settings.cnch_vw_default;
+
+        setVirtualWarehouseByName(name, context);
+        return true;
+    }
+    else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
+    {
+        if (trySetVirtualWarehouseFromAST(view_table->getInnerQuery(), context))
+            return true;
+    }
+    else if (auto * mv_table = dynamic_cast<StorageMaterializedView *>(storage.get()))
+    {
+        if (trySetVirtualWarehouseFromAST(mv_table->getInnerQuery(), context))
+            return true;
+    }
+    else if (auto * materialize_mysql_table = dynamic_cast<StorageMaterializeMySQL *>(storage.get()))
+    {
+        auto * nested_table = dynamic_cast<StorageCnchMergeTree *>(materialize_mysql_table->getNested().get());
+        if (!nested_table)
+            return false;
+
+        String nested_vw_name = vw_type == VirtualWarehouseType::Write
+                                ? nested_table->getSettings()->cnch_vw_write
+                                : nested_table->getSettings()->cnch_vw_default;
+
+        LOG_DEBUG(
+            &Poco::Logger::get("trySetVirtualWarehouse"),
+            "try get warehouse from {}, type is WRITE {}",
+            nested_vw_name,
+            VirtualWarehouseType::Write == vw_type);
+        setVirtualWarehouseByName(nested_vw_name, context);
+        return true;
+    }
+
+    return false;
 }
 
 static bool trySetVirtualWarehouseFromTable(
@@ -166,14 +235,33 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
         }
         else if (auto * table_expr = ast->as<ASTTableExpression>())
         {
-            if (!table_expr->database_and_table_name)
-                break;
+            if (table_expr->database_and_table_name)
+            {
+                DatabaseAndTableWithAlias db_and_table(table_expr->database_and_table_name);
+                if (db_and_table.database.empty())
+                    db_and_table.database = context->getCurrentDatabase();
+                if (trySetVirtualWarehouseFromStorageID(db_and_table.getStorageID(), context))
+                    return true;
+            }
 
-            DatabaseAndTableWithAlias db_and_table(table_expr->database_and_table_name);
-            if (db_and_table.database.empty())
-                db_and_table.database = context->getCurrentDatabase();
-            if (trySetVirtualWarehouseFromTable(db_and_table.database, db_and_table.table, context))
-                return true;
+            if (table_expr->table_function)
+            {
+                const auto & table_func = table_expr->table_function->as<ASTFunction &>();
+                if (table_func.name == "fusionMerge")
+                {
+                    const auto & table_args = table_func.arguments->children;
+                    String database_name = evaluateConstantExpressionOrIdentifierAsLiteral(table_args[0], context)
+                                               ->as<ASTLiteral &>()
+                                               .value.safeGet<String>();
+                    String table1_name = evaluateConstantExpressionOrIdentifierAsLiteral(table_args[1], context)
+                                             ->as<ASTLiteral &>()
+                                             .value.safeGet<String>();
+                    if (trySetVirtualWarehouseFromTable(database_name, table1_name, context))
+                        return true;
+                }
+            }
+
+            break;
         }
         /// XXX: This is a hack solution for an uncommonn query `SELECT ... WHERE x IN table`
         /// which may cause some rare bugs if the identifiers confict with table names.

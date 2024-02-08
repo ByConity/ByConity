@@ -264,6 +264,11 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
         }
         if (table_expression->table_function)
         {
+            const auto & function = table_expression->table_function->as<ASTFunction &>();
+
+            if (function.name == "fusionMerge")
+                return true;
+
             reason = "table function";
             return false;
         }

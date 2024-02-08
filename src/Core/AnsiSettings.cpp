@@ -27,7 +27,8 @@ void onSettingChanged(Settings *s)
     s->enable_optimizer = ansi;
 
     // community settings
-    s->join_use_nulls = ansi;
+    if (ansi) // TODO: need be refactor by https://meego.feishu.cn/clickhousech/story/detail/3001220613
+        s->join_use_nulls = ansi;
     s->cast_keep_nullable = ansi;
     s->union_default_mode = ansi ? "DISTINCT" : "";
     s->intersect_default_mode = ansi ? SetOperationMode::DISTINCT : SetOperationMode::ALL;

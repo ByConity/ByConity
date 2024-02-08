@@ -57,10 +57,10 @@ template <typename Value, bool float_return> using FuncQuantileBFloat16 = Aggreg
 template <typename Value, bool float_return> using FuncQuantilesBFloat16 = AggregateFunctionQuantile<Value, QuantileBFloat16Histogram<Value>, NameQuantilesBFloat16, false, std::conditional_t<float_return, Float64, void>, true>;
 
 /// FuncQuantileTDigestWithSSize: for compatible with vanilla
-template <typename Value, bool float_return> using FuncQuantileTDigestWithSSize = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantileTDigest, false, std::conditional_t<float_return, Float32, void>, false>;
-template <typename Value, bool float_return> using FuncQuantilesTDigestWithSSize = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantilesTDigest, false, std::conditional_t<float_return, Float32, void>, true>;
-template <typename Value, bool float_return> using FuncQuantileTDigestWithSSizeWeighted = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantileTDigestWeighted, true, std::conditional_t<float_return, Float32, void>, false>;
-template <typename Value, bool float_return> using FuncQuantilesTDigestWithSSizeWeighted = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantilesTDigestWeighted, true, std::conditional_t<float_return, Float32, void>, true>;
+template <typename Value, bool float_return> using FuncQuantileTDigestWithSSize = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantileTDigestWithSSize, false, std::conditional_t<float_return, Float32, void>, false>;
+template <typename Value, bool float_return> using FuncQuantilesTDigestWithSSize = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantilesTDigestWithSSize, false, std::conditional_t<float_return, Float32, void>, true>;
+template <typename Value, bool float_return> using FuncQuantileTDigestWithSSizeWeighted = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantileTDigestWithSSizeWeighted, true, std::conditional_t<float_return, Float32, void>, false>;
+template <typename Value, bool float_return> using FuncQuantilesTDigestWithSSizeWeighted = AggregateFunctionQuantile<Value, QuantileTDigest<Value>, NameQuantilesTDigestWithSSizeWeighted, true, std::conditional_t<float_return, Float32, void>, true>;
 
 template <template <typename, bool> class Function>
 static constexpr bool supportDecimal()
