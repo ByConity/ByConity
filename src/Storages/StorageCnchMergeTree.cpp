@@ -320,7 +320,7 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     const Names & column_names, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info, ContextPtr & local_context)
 {
     auto txn = local_context->getCurrentTransaction();
-    if (local_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
+    if (local_context->getServerType() == ServerType::cnch_server && txn)
         local_context->getCnchTransactionCoordinator().touchActiveTimestampByTable(getStorageID(), txn);
 
     auto storage_snapshot = getStorageSnapshot(metadata_snapshot, local_context);
