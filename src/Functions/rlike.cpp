@@ -13,9 +13,9 @@ struct NameRLike
     static constexpr auto name = "rlike";
 };
 
-using RLikeImpl = MatchImpl<NameRLike, MatchTraits::Syntax::Re2, MatchTraits::Case::Sensitive, MatchTraits::Result::DontNegate>;
-using FunctionRLike = FunctionsStringSearch<RLikeImpl>;
-
+template <bool mysql_mode>
+using RLikeImpl = MatchImpl<NameRLike, MatchTraits::Syntax::Re2, MatchTraits::Case::Sensitive, MatchTraits::Result::DontNegate, mysql_mode>;
+using FunctionRLike = FunctionsStringSearchMysqlModeDispatcher<RLikeImpl>;
 using FunctionEscapeRLike = FunctionsStringSearch<EscapeRLikeImpl>;
 
 }

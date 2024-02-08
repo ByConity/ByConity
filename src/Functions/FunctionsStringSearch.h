@@ -307,4 +307,18 @@ public:
     }
 };
 
+template <template <bool mysql_mode> typename Impl>
+class FunctionsStringSearchMysqlModeDispatcher : IFunction
+{
+public:
+    static constexpr auto name = Impl<false>::name;
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context->getSettingsRef().dialect_type == DialectType::MYSQL)
+            return std::make_shared<FunctionsStringSearch<Impl<true>>>(true);
+        else
+            return std::make_shared<FunctionsStringSearch<Impl<false>>>(false);
+    }
+};
+
 }

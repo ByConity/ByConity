@@ -41,10 +41,12 @@ namespace Regexps
 
 using RegexpPtr = std::shared_ptr<OptimizedRegularExpression>;
 
-template <bool like, bool no_capture, bool case_insensitive>
+template <bool like, bool no_capture, bool case_insensitive, bool dot_nl = true>
 inline OptimizedRegularExpression createRegexp(const String & pattern)
 {
-    int flags = OptimizedRegularExpression::RE_DOT_NL;
+    int flags{};
+    if constexpr (like || dot_nl)
+        flags |= OptimizedRegularExpression::RE_DOT_NL;
     if constexpr (no_capture)
         flags |= OptimizedRegularExpression::RE_NO_CAPTURE;
     if constexpr (case_insensitive)
@@ -56,10 +58,12 @@ inline OptimizedRegularExpression createRegexp(const String & pattern)
         return {pattern, flags};
 }
 
-template <bool like, bool no_capture, bool case_insensitive>
+template <bool like, bool no_capture, bool case_insensitive, bool dot_nl = true>
 inline OptimizedRegularExpression createRegexp(const String & pattern, char escape)
 {
-    int flags = OptimizedRegularExpression::RE_DOT_NL;
+    int flags{};
+    if constexpr (like || dot_nl)
+        flags |= OptimizedRegularExpression::RE_DOT_NL;
     if constexpr (no_capture)
         flags |= OptimizedRegularExpression::RE_NO_CAPTURE;
     if constexpr (case_insensitive)
@@ -82,18 +86,18 @@ class LocalCacheTable
 public:
     using RegexpPtr = std::shared_ptr<OptimizedRegularExpression>;
 
-    template <bool like, bool no_capture, bool case_insensitive>
+    template <bool like, bool no_capture, bool case_insensitive, bool dot_nl>
     RegexpPtr getOrSet(const String & pattern)
     {
         Bucket & bucket = known_regexps[hasher(pattern) % CACHE_SIZE];
 
         if unlikely(!bucket.regexp)
             /// insert new entry
-            bucket = {pattern, std::make_shared<OptimizedRegularExpression>(createRegexp<like, no_capture, case_insensitive>(pattern))};
+            bucket = {pattern, std::make_shared<OptimizedRegularExpression>(createRegexp<like, no_capture, case_insensitive, dot_nl>(pattern))};
         else
             if (pattern != bucket.pattern)
                 /// replace existing entry
-                bucket = {pattern, std::make_shared<OptimizedRegularExpression>(createRegexp<like, no_capture, case_insensitive>(pattern))};
+                bucket = {pattern, std::make_shared<OptimizedRegularExpression>(createRegexp<like, no_capture, case_insensitive, dot_nl>(pattern))};
 
         return bucket.regexp;
     }
