@@ -19,6 +19,7 @@
 #include <Analyzers/ExecutePrewhereSubqueryVisitor.h>
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
+#include <Analyzers/RewriteFusionMerge.h>
 #include <Analyzers/SimpleFunctionVisitor.h>
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
@@ -174,6 +175,13 @@ namespace
 
     using CustomizeAggregateFunctionsOrNullVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeAggregateFunctionsSuffixData>, true>;
     using CustomizeAggregateFunctionsMoveOrNullVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeAggregateFunctionsMoveSuffixData>, true>;
+
+    void rewriteFusionMerge(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
+    {
+        RewriteFusionMerge data{context};
+        RewriteFusionMergeVisitor(data).visit(query);
+        GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-rewrite-fusionMerge");
+    }
 
     void expandCte(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
@@ -545,6 +553,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
     if (context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
     {
         /// Statement rewriting
+        rewriteFusionMerge(query, context, graphviz_index);
         expandCte(query, context, graphviz_index);
         expandView(query, context, graphviz_index);
         normalizeUnion(query, context); // queries in union may not be normalized, hence normalize them here
@@ -560,6 +569,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
     else
     {
         applyWithAlias(query, context, graphviz_index);
+        rewriteFusionMerge(query, context, graphviz_index);
         expandCte(query, context, graphviz_index);
         expandView(query, context, graphviz_index);
         normalizeUnion(query, context);
