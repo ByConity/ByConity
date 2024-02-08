@@ -258,6 +258,9 @@ void CnchBGThreadsMapArray::shutdown()
 
     pool.wait();
 
+    if (resource_reporter_task)
+        resource_reporter_task.reset();
+
     /// `cleaner` must be stopped as well
     if (cleaner)
         cleaner->deactivate();

@@ -134,6 +134,11 @@ public:
         return DecimalUtils::getFractionalPart(x, scale);
     }
 
+    DecimalUtils::DecimalComponents<T> split(T x) const
+    {
+        return DecimalUtils::split(x, scale);
+    }
+
     T maxWholeValue() const { return getScaleMultiplier(precision - scale) - T(1); }
 
     template <typename U>

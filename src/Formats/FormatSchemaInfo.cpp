@@ -65,16 +65,13 @@ FormatSchemaInfo::FormatSchemaInfo(const String & format_schema, const String & 
             path = path.parent_path() / "";
     }
 
-    auto default_schema_directory = [&format_schema_path]()
-    {
-        static const String str = fs::canonical(format_schema_path) / "";
-        return str;
-    };
+    /// Each table may have its own schema dir, so here we won't use static variable as community version does
+    const String default_schema_dir_str = fs::canonical(format_schema_path) / "";
 
     if (!path.has_extension() && !default_file_extension.empty())
         path = path.parent_path() / (path.stem().string() + '.' + default_file_extension);
 
-    fs::path default_schema_directory_path(default_schema_directory());
+    fs::path default_schema_directory_path(default_schema_dir_str);
     if (path.is_absolute())
     {
         if (is_server)
@@ -95,7 +92,7 @@ FormatSchemaInfo::FormatSchemaInfo(const String & format_schema, const String & 
     else
     {
         schema_path = path;
-        schema_directory = default_schema_directory();
+        schema_directory = default_schema_dir_str;
     }
 }
 

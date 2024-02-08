@@ -104,7 +104,7 @@ enum class Result
  * NOTE: We want to run regexp search for whole columns by one call (as implemented in function 'position')
  *  but for that, regexp engine must support \0 bytes and their interpretation as string boundaries.
  */
-template <typename Name, MatchTraits::Syntax syntax_, MatchTraits::Case case_, MatchTraits::Result result_>
+template <typename Name, MatchTraits::Syntax syntax_, MatchTraits::Case case_, MatchTraits::Result result_, bool mysql_mode_ = false>
 struct MatchImpl
 {
     static constexpr bool use_default_implementation_for_constants = true;
@@ -117,6 +117,7 @@ struct MatchImpl
 
     static constexpr bool is_like = (syntax_ == MatchTraits::Syntax::Like);
     static constexpr bool case_insensitive = (case_ == MatchTraits::Case::Insensitive);
+    static constexpr bool dot_matches_nl = (syntax_ == MatchTraits::Syntax::Re2 && !mysql_mode_);
     static constexpr bool negate = (result_ == MatchTraits::Result::Negate);
 
     using Searcher = std::conditional_t<case_insensitive, VolnitskyCaseInsensitiveUTF8, VolnitskyUTF8>;
@@ -191,7 +192,7 @@ struct MatchImpl
             return;
         }
 
-        const auto & regexp = OptimizedRegularExpression(Regexps::createRegexp<is_like, /*no_capture*/ true, case_insensitive>(needle));
+        const auto & regexp = OptimizedRegularExpression(Regexps::createRegexp<is_like, /*no_capture*/ true, case_insensitive, dot_matches_nl>(needle));
 
         String required_substring;
         bool is_trivial;
@@ -513,7 +514,7 @@ struct MatchImpl
             }
             else
             {
-                regexp = cache.getOrSet<is_like, /*no_capture*/ true, case_insensitive>(needle);
+                regexp = cache.getOrSet<is_like, /*no_capture*/ true, case_insensitive, dot_matches_nl>(needle);
                 regexp->getAnalyzeResult(required_substr, is_trivial, required_substring_is_prefix);
 
                 if (required_substr.empty())
@@ -622,7 +623,7 @@ struct MatchImpl
             }
             else
             {
-                regexp = cache.getOrSet<is_like, /*no_capture*/ true, case_insensitive>(needle);
+                regexp = cache.getOrSet<is_like, /*no_capture*/ true, case_insensitive, dot_matches_nl>(needle);
                 regexp->getAnalyzeResult(required_substr, is_trivial, required_substring_is_prefix);
 
                 if (required_substr.empty())

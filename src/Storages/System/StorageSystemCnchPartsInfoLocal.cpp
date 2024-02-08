@@ -49,9 +49,9 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
         {"partition", std::make_shared<DataTypeString>()},
         {"first_partition", std::make_shared<DataTypeString>()},
         {"metrics_available", std::make_shared<DataTypeUInt8>()},
-        {"total_parts_number", std::make_shared<DataTypeInt64>()},
-        {"total_parts_size", std::make_shared<DataTypeInt64>()},
-        {"total_rows_count", std::make_shared<DataTypeInt64>()},
+        {"total_parts_number", std::make_shared<DataTypeUInt64>()},
+        {"total_parts_size", std::make_shared<DataTypeUInt64>()},
+        {"total_rows_count", std::make_shared<DataTypeUInt64>()},
         {"ready_state", std::move(ready_state)},
         /// Boolean
         {"recalculating", std::make_shared<DataTypeUInt8>()},

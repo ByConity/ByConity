@@ -1,3 +1,5 @@
+SELECT 'new*\n*line' RLIKE 'new\\*.\\*line';
+SELECT 'new*\n*line' REGEXP 'new\\*.\\*line';
 SELECT 'new*\n*line' RLIKE '(?-s)new\\*.\\*line';
 SELECT 'new*\n*line' REGEXP '(?-s)new\\*.\\*line';
 SELECT 'c' RLIKE '^[a-d]';
@@ -51,3 +53,7 @@ FROM test.regexp_table
 WHERE name RLIKE '555|1234|6789';
 
 DROP TABLE IF EXISTS test.regexp_table;
+
+SET dialect_type='MYSQL';
+SELECT 'new*\n*line' RLIKE 'new\\*.\\*line';
+SELECT 'new*\n*line' REGEXP 'new\\*.\\*line';

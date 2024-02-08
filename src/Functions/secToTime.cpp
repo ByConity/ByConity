@@ -1,13 +1,17 @@
 #include <iostream>
+#include <type_traits>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnsDateTime.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypesDecimal.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunctionMySql.h>
+#include <Functions/FunctionsConversion.h>
+#include <Functions/IFunction.h>
 #include <Common/DateLUT.h>
 
 namespace DB
@@ -19,6 +23,8 @@ namespace ErrorCodes
     extern const int ARGUMENT_OUT_OF_BOUND;
 }
 
+using DecimalX = DataTypeTime::Base::FieldType;
+static_assert(std::is_same_v<DecimalX, Decimal64>);
 
 class FunctionSecToTime : public IFunction
 {
@@ -29,6 +35,8 @@ private:
 
     static Int64 minTime(const DateLUTImpl & lut) { return lut.makeTime(0, 0, 0); }
     static Int64 maxTime(const DateLUTImpl & lut) { return lut.makeTime(23, 59, 59); }
+
+    static constexpr UInt8 scale = DataTypeTime::default_scale;
 
 public:
     static constexpr auto name = "sec_to_time";
@@ -73,42 +81,42 @@ public:
                 "Illegal type " + arg->getName() + " of argument " + std::to_string(0) + " of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
-        return std::make_shared<DataTypeTime>(0);
+        return std::make_shared<DataTypeTime>(scale);
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        auto res_column = ColumnTime::create(input_rows_count, 0);
-        auto & result_data = res_column->getData();
+        const DataTypeDecimal<DecimalX> equivalent_decimal_type{DecimalUtils::max_precision<DecimalX>, scale};
+        MutableColumnPtr res_column_p = equivalent_decimal_type.createColumn();
+        auto & res_column = assert_cast<ColumnTime &>(*res_column_p);
+        res_column.reserve(input_rows_count);
+        res_column.insertManyDefaults(input_rows_count);
+        auto & result_data = res_column.getData();
 
-        ColumnsWithTypeAndName converted;
-        if (isStringOrFixedString(arguments[0].type))
-        {
-            auto to_int = FunctionFactory::instance().get("toInt64", context_);
-            auto col = to_int->build(arguments)->execute(arguments, std::make_shared<DataTypeInt64>(), input_rows_count);
-            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeInt64>(), "unixtime");
-            converted.emplace_back(converted_col);
-        }
-        else
-        {
-            converted = arguments;
-        }
+        auto to_decimal = FunctionFactory::instance().get(FunctionTo<DataTypeDecimal<DecimalX>>::Type::name, context_);
+        auto scale_type = std::make_shared<DataTypeUInt8>();
+        ColumnPtr scale_col = scale_type->createColumnConst(input_rows_count, Field(scale));
+        ColumnWithTypeAndName scale_arg {std::move(scale_col), std::move(scale_type), "scale"};
+        ColumnsWithTypeAndName args {arguments[0], std::move(scale_arg)};
+        ColumnPtr col_p = to_decimal->build(args)->execute(args, std::make_shared<DataTypeDecimal<DecimalX>>(DecimalUtils::max_precision<DecimalX>, scale), input_rows_count);
+        const auto & col = assert_cast<const ColumnDecimal<DecimalX> &>(*col_p);
 
         for (size_t i = 0; i < input_rows_count; ++i)
         {
-            //auto time = std::max(std::min(converted[0].column->getInt(i), max_time), min_time);
-            auto time = converted[0].column->getInt(i) % max_time;
-            if (time < 0)
-            {
-                time += max_time;
-            }
-
-            result_data[i] = DecimalUtils::decimalFromComponents<Decimal64>(time, 0, 0);
+            auto [whole_part, fractional_part] = equivalent_decimal_type.split(col.getElement(i));      
+            whole_part %= max_time;
+            if (whole_part < 0)
+                whole_part += max_time;    
+            result_data[i] = DecimalUtils::decimalFromComponents<DecimalX>(
+                whole_part, 
+                fractional_part, 
+                scale
+            );
         }
-
-        return res_column;
+        return res_column_p;
     }
 };
+
 
 class FunctionTimeToSec : public IFunction
 {
@@ -120,6 +128,8 @@ private:
     static Int64 minTime(const DateLUTImpl & lut) { return lut.makeTime(0, 0, 0); }
     static Int64 maxTime(const DateLUTImpl & lut) { return lut.makeTime(23, 59, 59); }
 
+    static constexpr UInt8 scale = DataTypeTime::default_scale;
+    
 public:
     static constexpr auto name = "time_to_sec";
 
@@ -162,24 +172,18 @@ public:
                 "Illegal type " + arg->getName() + " of argument " + std::to_string(0) + " of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
-        return std::make_shared<DataTypeInt64>();
+        static_assert(std::is_same_v<DecimalX, Decimal64>);
+        return std::make_shared<DataTypeDecimal<DecimalX>>(DecimalUtils::max_precision<DecimalX>, scale);
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        ColumnsWithTypeAndName converted_time;
-
         auto to_time = FunctionFactory::instance().get("toTimeType", context_);
-        const auto scale_type = std::make_shared<DataTypeUInt8>();
-        const auto scale_col = scale_type->createColumnConst(1, Field(0));
+        auto scale_type = std::make_shared<DataTypeUInt8>();
+        ColumnPtr scale_col = scale_type->createColumnConst(1, Field(scale));
         ColumnWithTypeAndName scale_arg {std::move(scale_col), std::move(scale_type), "scale"};
         ColumnsWithTypeAndName args {arguments[0], std::move(scale_arg)};
-        auto col = to_time->build(args)->execute(args, std::make_shared<DataTypeTime>(0), input_rows_count);
-        ColumnWithTypeAndName converted_time_col(col, std::make_shared<DataTypeTime>(0), "time");
-        converted_time.emplace_back(converted_time_col);
-
-        auto to_int = FunctionFactory::instance().get("toInt64", context_);
-        return to_int->build(converted_time)->execute(converted_time, std::make_shared<DataTypeInt64>(), input_rows_count);
+        return to_time->build(args)->execute(args, std::make_shared<DataTypeTime>(scale), input_rows_count);
     }
 };
 
