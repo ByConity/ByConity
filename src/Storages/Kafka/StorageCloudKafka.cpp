@@ -509,9 +509,10 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
     //consume_context.setSetting("min_insert_block_size_rows", UInt64(1));
     consume_context->applySettingsChanges(settings_adjustments);
 
-    /// Set local format_schema_path of the table to create its own SchemaInfo & format stream (see FormatFactory.cpp)
+    /// XXX: may should add it into `settings_adjustments`;
+    /// but it will be updated after tryLoadFormatSchemaFileFromHDFS while `settings_adjustments` is initialized during construction
     if (!settings.format_schema_path.value.empty())
-        consume_context->setFormatSchemaPath(settings.format_schema_path.value, false);
+        consume_context->setSetting("format_custom_schema_path", settings.format_schema_path.value);
 
     consume_context->setSessionContext(consume_context);
 
