@@ -33,6 +33,7 @@ void DiskCacheSettings::loadFromConfig(const Poco::Util::AbstractConfiguration &
     cache_loader_per_disk = config.getUInt(config_prefix + ".cache_loader_per_disk", 2);
     cache_load_dispatcher_drill_down_level = config.getInt(config_prefix + ".cache_load_dispatcher_drill_down_level", 1);
     cache_set_rate_limit = config.getUInt64(config_prefix + ".cache_set_rate_limit", 0);
+    cache_set_throughput_limit = config.getUInt64(config_prefix + ".cache_set_throughput_limit", 0);
     segment_size = config.getUInt64(config_prefix + ".segment_size", 8192);
     hits_to_cache = config.getUInt64(config_prefix + ".hits_to_cache", 2);
     stats_bucket_size = config.getUInt64(config_prefix + ".stats_bucket_size", 10000);
@@ -61,6 +62,7 @@ std::string DiskCacheSettings::toString() const
             "cache_loader_per_disk": {},
             "cache_load_dispatcher_drill_down_level": {},
             "cache_set_rate_limit": {},
+            "cache_set_throughput_limit": {},
             "segment_size": {},
             "hits_to_cache": {},
             "stats_bucket_size": {},
@@ -78,6 +80,7 @@ std::string DiskCacheSettings::toString() const
         cache_loader_per_disk,
         cache_load_dispatcher_drill_down_level,
         cache_set_rate_limit,
+        cache_set_throughput_limit,
         segment_size,
         hits_to_cache,
         stats_bucket_size,

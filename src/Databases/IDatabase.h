@@ -169,6 +169,7 @@ public:
 
     /// Get the table for work. Return nullptr if there is no table.
     virtual StoragePtr tryGetTable(const String & name, ContextPtr context) const = 0;
+    virtual StoragePtr tryGetTable(const String & name, ContextPtr local_context, bool /* ignore_status */) const { return tryGetTable(name, local_context); }
 
     virtual UUID tryGetTableUUID(const String & /*table_name*/) const { return UUIDHelpers::Nil; }
 

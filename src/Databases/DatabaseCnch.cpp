@@ -348,6 +348,11 @@ bool DatabaseCnch::isTableExist(const String & name, ContextPtr local_context) c
 
 StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_context) const
 {
+    return tryGetTable(name, local_context, false);
+}
+
+StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_context, bool ignore_status) const
+{
     try
     {
         {
@@ -357,11 +362,18 @@ StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_conte
                 return it->second;
         }
         auto res = tryGetTableImpl(name, local_context);
-        if (res && !res->is_detached && !res->is_dropped)
+        if (res)
         {
-            std::lock_guard wr{cache_mutex};
-            cache.emplace(name, res);
-            return res;
+            if (!res->is_detached && !res->is_dropped)
+            {
+                std::lock_guard wr{cache_mutex};
+                cache.emplace(name, res);
+                return res;
+            }
+            else if (ignore_status)
+            {
+                return res;
+            }
         }
     }
     catch (const Exception & e)

@@ -27,23 +27,18 @@
 
 /// Available events. Add something here as you wish.
 #define APPLY_FOR_EVENTS(M) \
-    M(Query, "Number of queries to be interpreted and potentially executed. Does not include queries that failed to parse or were rejected due to AST size limits, quota limits or limits on the number of simultaneously running queries. May include internal queries initiated by ClickHouse itself. Does not count subqueries.") \
-    M(VwQuery, "Number of queries started to be interpreted and maybe executed that belongs to a virtual warehouse.") \
+    M(Query, \
+      "Number of queries to be interpreted and potentially executed. Does not include queries that failed to parse or were rejected due " \
+      "to AST size limits, quota limits or limits on the number of simultaneously running queries. May include internal queries " \
+      "initiated by ClickHouse itself. Does not count subqueries.") \
     M(SelectQuery, "Same as Query, but only for SELECT queries.") \
     M(InsertQuery, "Same as Query, but only for INSERT queries.") \
     M(SystemQuery, "Same as Query, but only for SYSTEM queries.") \
     M(DefaultQuery, "Same as Query, but only for DEFAULT queries.") \
-    M(UnlimitedQuery, "Number of queries that do not utilise a VW") \
     M(TimedOutQuery, "Number of queries that timed out") \
     M(FailedQuery, "Number of failed queries.") \
     M(FailedSelectQuery, "Same as FailedQuery, but only for SELECT queries.") \
     M(FailedInsertQuery, "Same as FailedQuery, but only for INSERT queries.") \
-    M(QueriesFailed, "Number of queries that have failed") \
-    M(QueriesFailedBeforeStart, "Number of queries that have failed before start") \
-    M(QueriesFailedWhileProcessing, "Number of queries that have failed while processing") \
-    M(QueriesFailedFromUser, "Number of queries that have failed because of user side error") \
-    M(QueriesFailedFromEngine, "Number of queries that have failed because of engine side error")\
-    M(QueriesSucceeded, "Number of queries that have succeeded") \
     M(InsufficientConcurrencyQuery, "Number of queries that are cancelled due to insufficient concurrency") \
     M(QueryTimeMicroseconds, "Total time of all queries.") \
     M(SelectQueryTimeMicroseconds, "Total time of SELECT queries.") \
@@ -1022,24 +1017,18 @@ constexpr Event END = __COUNTER__;
 
 /// Global variable, initialized by zeros.
 Counter global_counters_array[END] {};
-LabelledCounter global_labelled_counters_array[END] {};
-std::mutex global_labelled_counters_locks[END] {};
 /// Initialize global counters statically
-Counters global_counters(global_counters_array, global_labelled_counters_array, global_labelled_counters_locks);
+Counters global_counters(global_counters_array);
 
 const Event Counters::num_counters = END;
 
 
 Counters::Counters(VariableContext level_, Counters * parent_)
     : counters_holder(new Counter[num_counters] {}),
-      labelled_counters_holder(new LabelledCounter[num_counters] {}),
-      labelled_counters_locks_holder(new std::mutex[num_counters] {}),
       parent(parent_),
       level(level_)
 {
     counters = counters_holder.get();
-    labelled_counters = labelled_counters_holder.get();
-    labelled_counters_locks = labelled_counters_locks_holder.get();
 }
 
 void Counters::resetCounters()
@@ -1048,11 +1037,6 @@ void Counters::resetCounters()
     {
         for (Event i = 0; i < num_counters; ++i)
             counters[i].store(0, std::memory_order_relaxed);
-    }
-    if (labelled_counters)
-    {
-        for (Event i = 0; i < num_counters; ++i)
-            labelled_counters[i].clear();
     }
 }
 
@@ -1131,13 +1115,9 @@ const char * getDocumentation(Event event)
 
 Event end() { return END; }
 
-void increment(Event event, Count amount, MetricLabels labels, Metrics::MetricType type, time_t ts)
+void increment(Event event, Count amount)
 {
-    DB::CurrentThread::getProfileEvents().increment(event, amount, labels);
-    if (type != Metrics::MetricType::None)
-    {
-        Metrics::EmitMetric(type, getSnakeName(event), amount, LabelledMetrics::toString(labels), ts);
-    }
+    DB::CurrentThread::getProfileEvents().increment(event, amount);
 }
 
 }

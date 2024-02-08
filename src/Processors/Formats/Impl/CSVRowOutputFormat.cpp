@@ -21,6 +21,12 @@ CSVRowOutputFormat::CSVRowOutputFormat(WriteBuffer & out_, const Block & header_
 
 void CSVRowOutputFormat::doWritePrefix()
 {
+    if (format_settings.csv.write_utf8_with_bom)
+    {
+        const char bom[] = {'\xEF', '\xBB', '\xBF'};
+        writeString(bom, sizeof(bom), out);
+    }
+
     const auto & sample = getPort(PortKind::Main).getHeader();
     size_t columns = sample.columns();
 

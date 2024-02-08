@@ -78,6 +78,7 @@ public:
     void drop(ContextPtr context) override;
     bool isTableExist(const String & name, ContextPtr local_context) const override;
     StoragePtr tryGetTable(const String & name, ContextPtr local_context) const override;
+    StoragePtr tryGetTable(const String & name, ContextPtr local_context, bool ignore_status) const override;
     DatabaseTablesIteratorPtr getTablesIterator(ContextPtr local_context, const FilterByNameFunction & filter_by_table_name) override;
     /// used to optimize visiting of system.tables
     DatabaseTablesIteratorPtr getTablesIteratorWithCommonSnapshot(ContextPtr local_context, const std::vector<Protos::DataModelTable> & snapshot);
