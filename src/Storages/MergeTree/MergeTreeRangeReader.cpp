@@ -1085,6 +1085,7 @@ static ColumnPtr combineFilterEqualSize(ColumnPtr first, ColumnPtr second)
 {
     /// Use first filter to only fiter the rows not been filted in second filter.
     /// in other words, do a & operation like: first = first & second
+    ConstantFilterDescription first_const_descr(*first);
     ConstantFilterDescription second_const_descr(*second);
 
     checkCombinedFiltersSize(first->size(), second->size());
@@ -1094,6 +1095,12 @@ static ColumnPtr combineFilterEqualSize(ColumnPtr first, ColumnPtr second)
 
     if (second_const_descr.always_false)
         return second;
+
+    if (first_const_descr.always_true)
+        return second;
+    
+    if (first_const_descr.always_false)
+        return first;
 
     FilterDescription first_descr(*first);
     FilterDescription second_descr(*second);
