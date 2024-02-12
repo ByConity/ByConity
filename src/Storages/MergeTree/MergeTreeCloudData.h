@@ -42,6 +42,7 @@ public:
     /// Load prepared parts, deactivate outdated parts and construct coverage link
     /// [Preallocate Mode] if worker_topology_hash is not empty, need to check whether the given topology is matched with worker's topology
     void loadDataParts(MutableDataPartsVector & parts, UInt64 worker_topology_hash = 0);
+    bool loadDataPart(MutableDataPartPtr part);
 
     /// Remove Outdated parts of which timestamp is less than expired ts from container.
     /// DO NOT check reference count of parts.

@@ -804,7 +804,13 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(
         return checksums;
 
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    auto data_footer = loadPartDataFooter();
+    MergeTreeDataPartChecksums::FileChecksums data_footer;
+    try {
+        data_footer = loadPartDataFooter();
+    }
+    catch (...) {
+        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The checksums file in part {} under path {} does not exist", name, data_rel_path);
+    }
     const auto & checksum_file = data_footer["checksums.txt"];
 
     if (checksum_file.file_size == 0 /* && isDeleted() */)
