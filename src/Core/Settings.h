@@ -1940,6 +1940,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
     M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
     M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
+    M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
     /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "if enabled, query will execute in bsp mode", 0) \
     /*end of bulk synchronous parallel section*/ \
@@ -1949,7 +1950,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
     /** for inverted index*/ \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
-    M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
