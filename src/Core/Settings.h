@@ -1949,7 +1949,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
     /** for inverted index*/ \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
-    M(Bool, disable_str_to_arraystr_cast, false, "disable String to Array(String) CAST", 0) \
+    M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.

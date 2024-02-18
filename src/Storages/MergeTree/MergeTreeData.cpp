@@ -1564,7 +1564,7 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
 
     if (!columns_to_check_conversion.empty())
     {
-        const_cast<Context &>(*getContext()).setSetting("disable_str_to_arraystr_cast", Field{true});
+        const_cast<Context &>(*getContext()).setSetting("disable_str_to_array_cast", Field{true});
 
         auto old_header = old_metadata.getSampleBlock();
         performRequiredConversions(old_header, columns_to_check_conversion, getContext());
