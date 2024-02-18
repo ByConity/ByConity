@@ -3412,7 +3412,7 @@ private:
         if (!from_type)
         {
             throw Exception(ErrorCodes::TYPE_MISMATCH,
-                "CAST AS Array can only be performed between same-dimensional Array or String types");
+                "CAST AS Array can only be performed between same-dimensional Array or String types " + std::to_string(disable_str_to_array_cast));
         }
 
         DataTypePtr from_nested_type = from_type->getNestedType();
