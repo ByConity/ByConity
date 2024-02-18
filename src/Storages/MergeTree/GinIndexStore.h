@@ -4,6 +4,8 @@
 #include <common/types.h>
 #include <Common/FST.h>
 #include <Common/HashTable/StringHashMap.h>
+#include <Common/BucketLRUCache.h>
+#include <Common/ShardCache.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <IO/WriteBufferFromFileBase.h>
 #include <Interpreters/Context.h>
@@ -197,6 +199,8 @@ public:
 
     GinSegmentDictionaryPtr getDictionary(UInt32 segment_id_) const;
 
+    size_t cacheWeight() const;
+
 private:
     friend class GinIndexStoreDeserializer;
 
@@ -306,25 +310,42 @@ struct PostingsCacheForStore
     GinPostingsCachePtr getPostings(const String & query_string) const;
 };
 
+struct GinIndexStoreCacheSettings
+{
+    size_t lru_max_size {5368709120/*5GB*/};
+
+    // Cache mapping bucket size
+    size_t mapping_bucket_size {5000};
+
+    // LRU queue update interval in seconds
+    size_t lru_update_interval {60};
+
+    size_t cache_shard_num {8};
+};
+
+struct GinIndexStoreWeightFunction
+{
+    size_t operator()(const GinIndexStore & cache_item) const
+    {
+        return cache_item.cacheWeight();
+    }
+};
+
 class GinIndexStoreFactory : private boost::noncopyable
 {
 public:
-    /// Get singleton of GinIndexStoreFactory
-    static GinIndexStoreFactory & instance();
+    GinIndexStoreFactory(const GinIndexStoreCacheSettings & settings);
 
     /// TODO get with data part or segment and batter cache info
     ///Get GinIndexStore by using index name and data part
     GinIndexStorePtr get(const String & name, GinDataPartHelperPtr && storage_info);
 
-    /// Remove all Gin index files which are under the same part_path
-    void remove(const String & part_path);
-
     /// GinIndexStores indexed by part file path
     using GinIndexStores = std::unordered_map<std::string, GinIndexStorePtr>;
 
 private:
-    GinIndexStores stores;
-    std::mutex mutex;
+    ShardCache<String, std::hash<String>, 
+        BucketLRUCache<String, GinIndexStore, std::hash<String>, GinIndexStoreWeightFunction>> stores_lru_cache;
 };
 
 }

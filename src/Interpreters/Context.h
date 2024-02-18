@@ -314,6 +314,9 @@ using NvmCachePtr = std::shared_ptr<NvmCache>;
 class IAsynchronousReader;
 using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
 
+class GinIndexStoreFactory;
+struct GinIndexStoreCacheSettings;
+
 enum class ServerType
 {
     standalone,
@@ -1465,9 +1468,11 @@ public:
             return settings.default_catalog.toString();
     }
 
-
     void setChecksumsCache(const ChecksumsCacheSettings & settings);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
+
+    void setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings);
+    std::shared_ptr<GinIndexStoreFactory> getGinIndexStoreFactory() const;
 
     void setPrimaryIndexCache(size_t cache_size_in_bytes);
     std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;

@@ -2,6 +2,7 @@
 #include <Columns/ColumnString.h>
 #include <common/logger_useful.h>
 #include <Common/FST.h>
+#include <common/find_symbols.h>
 #include <Compression/CompressionFactory.h>
 #include <Disks/IDisk.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
@@ -543,6 +544,18 @@ void GinIndexStore::setStoreDensity(const Float32 & density_)
     density = density_;
 }
 
+size_t GinIndexStore::cacheWeight() const
+{
+    size_t weight = 0;
+    for (const auto & pair : segment_dictionaries)
+    {
+        weight += sizeof(UInt32); //key
+        weight += 2 * sizeof(UInt64); //postings_start_offset + dict_start_offset
+        weight += (pair.second->offsets.getData().capacity()) * sizeof(UInt8); //offsets
+    }
+    return weight;
+}
+
 GinIndexStoreDeserializer::GinIndexStoreDeserializer(const GinIndexStorePtr & store_)
     : store(store_)
 {
@@ -672,22 +685,31 @@ GinPostingsCachePtr PostingsCacheForStore::getPostings(const String & query_stri
     return it->second;
 }
 
-GinIndexStoreFactory & GinIndexStoreFactory::instance()
+GinIndexStoreFactory::GinIndexStoreFactory(const GinIndexStoreCacheSettings & settings)
+    : stores_lru_cache(
+        settings.cache_shard_num,
+        BucketLRUCache<String, GinIndexStore, std::hash<String>, GinIndexStoreWeightFunction>::Options{
+            .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
+            .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
+            .max_size = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / settings.cache_shard_num)),
+            .max_nums = std::numeric_limits<size_t>::max(),
+            .enable_customize_evict_handler = false
+        })
 {
-    static GinIndexStoreFactory instance;
-    return instance;
+
 }
 
 GinIndexStorePtr GinIndexStoreFactory::get(const String & name, GinDataPartHelperPtr && storage_info)
 {
     const String & part_path = storage_info->getPartUniqueID();
-    String key = name + ":" + part_path;
+    String key = part_path + ":" + name;
 
-    std::lock_guard lock(mutex);
-    GinIndexStores::const_iterator it = stores.find(key);
+    auto& shard = stores_lru_cache.shard(key);
+    GinIndexStorePtr cache_result = shard.get(key);
+    if (cache_result)
+        return cache_result;
 
-    if (it == stores.end())
-    {
+    auto result = shard.getOrSet(key, [&]() -> GinIndexStorePtr {
         GinIndexStorePtr store = std::make_shared<GinIndexStore>(name, std::move(storage_info));
         if (!store->exists())
             return nullptr;
@@ -695,25 +717,10 @@ GinIndexStorePtr GinIndexStoreFactory::get(const String & name, GinDataPartHelpe
         GinIndexStoreDeserializer deserializer(store);
         deserializer.readSegments();
         deserializer.readSegmentDictionaries();
-
-        stores[key] = store;
-
         return store;
-    }
-    return it->second;
-}
+    });
 
-void GinIndexStoreFactory::remove(const String & part_path)
-{
-    std::lock_guard lock(mutex);
-    for (auto it = stores.begin(); it != stores.end();)
-    {
-        if (it->first.find(part_path) != String::npos)
-            it = stores.erase(it);
-        else
-            ++it;
-    }
+    return result.first;
 }
 
 }
-

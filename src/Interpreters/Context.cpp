@@ -120,6 +120,7 @@
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
+#include <Storages/MergeTree/GinIndexStore.h>
 #include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/MergeList.h>
@@ -385,6 +386,8 @@ struct ContextSharedPart
     mutable ChecksumsCachePtr checksums_cache;
     /// global primary index cache
     mutable PrimaryIndexCachePtr primary_index_cache;
+
+    mutable std::shared_ptr<GinIndexStoreFactory> ginindex_store_factory;
 
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
@@ -4781,6 +4784,19 @@ void Context::setChecksumsCache(const ChecksumsCacheSettings & settings)
 std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
 {
     return shared->checksums_cache;
+}
+
+void Context::setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings)
+{
+    if (shared->ginindex_store_factory)
+        throw Exception("ginindex_store_factory has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->ginindex_store_factory = std::make_shared<GinIndexStoreFactory>(settings);
+}
+
+std::shared_ptr<GinIndexStoreFactory> Context::getGinIndexStoreFactory() const
+{
+    return shared->ginindex_store_factory;
 }
 
 void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)

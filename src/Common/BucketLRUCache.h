@@ -129,13 +129,91 @@ public:
     // Retrieve object from cache, if not exist, return nullptr
     MappedPtr get(const Key& key)
     {
-        auto res = getImpl(key);
-        if (res)
+        auto val_pair = fastGet(key);
+        if (val_pair.first && !val_pair.second)
+        {
             ++hits;
-        else
-            ++misses;
+            return val_pair.first;
+        }
 
-        return res;
+        if (val_pair.first)
+        {
+            ++hits;
+            std::lock_guard cache_lock(mutex);
+            normalGet(key, cache_lock);
+            return val_pair.first;
+        }
+
+        ++misses;
+        return nullptr;
+    }
+
+    template <typename LoadFunc>
+    std::pair<MappedPtr, bool> getOrSet(const Key & key, LoadFunc && load_func)
+    {
+        auto val_pair = fastGet(key);
+        if (val_pair.first && !val_pair.second)
+        {
+            ++hits;
+            return std::make_pair(val_pair.first, false);
+        }
+
+        InsertTokenHolder token_holder;
+        {
+            std::lock_guard cache_lock(mutex);
+            if (val_pair.first)
+            {
+                ++hits;
+                normalGet(key, cache_lock);
+                return std::make_pair(val_pair.first, false);
+            }
+
+            auto & token = insert_tokens[key];
+            if (!token)
+                token = std::make_shared<InsertToken>(*this);
+
+            token_holder.acquire(&key, token, cache_lock);
+        }
+
+        InsertToken * token = token_holder.token.get();
+
+        std::lock_guard token_lock(token->mutex);
+
+        token_holder.cleaned_up = token->cleaned_up;
+
+        if (token->value)
+        {
+            /// Another thread already produced the value while we waited for token->mutex.
+            ++hits;
+            return std::make_pair(token->value, false);
+        }
+
+        ++misses;
+        token->value = load_func();
+
+        bool result = false;
+        std::vector<std::pair<Key, MappedPtr>> removed_elements;
+        std::vector<std::pair<Key, MappedPtr>> updated_elements;
+        {
+            std::lock_guard cache_lock(mutex);
+
+            /// Insert the new value only if the token is still in present in insert_tokens.
+            /// (The token may be absent because of a concurrent reset() call).
+            auto token_it = insert_tokens.find(key);
+            if (token_it != insert_tokens.end() && token_it->second.get() == token)
+            {
+                setRetEvictWithLock(key, token->value, SetMode::EMPLACE, 
+                    removed_elements, updated_elements, cache_lock);
+                result = true;
+            }
+
+            if (!token->cleaned_up)
+                token_holder.cleanup(token_lock, cache_lock);
+        }
+
+        opts.customize_post_evict_handler(removed_elements, updated_elements);
+
+        return std::make_pair(token->value, result);
     }
 
     bool emplace(const Key& key, const MappedPtr& mapped)
@@ -343,36 +421,34 @@ private:
         std::vector<Bucket> buckets;
     };
 
-    MappedPtr getImpl(const Key& key)
+    // return (value, exceed_update_interval) pair
+    std::pair<MappedPtr, bool>  fastGet(const Key& key)
     {
-        // Fast path
+        std::optional<Cell> cell = container.get(key, false);
+        if (!cell.has_value())
         {
-            std::optional<Cell> cell = container.get(key, false);
-            if (!cell.has_value())
-            {
-                return nullptr;
-            }
-
-            size_t now = timestamp();
-            if (now - cell.value().timestamp < opts.lru_update_interval)
-            {
-                return cell.value().value;
-            }
+            return std::make_pair(nullptr, false);
         }
 
-        // Slow path, get object from container again to prevent it got evict
-        // from cache before acquire lock
+        size_t now = timestamp();
+        if (now - cell.value().timestamp < opts.lru_update_interval)
         {
-            std::lock_guard<std::mutex> lock(mutex);
-
-            std::optional<Cell> cell_to_update = container.get(key, true);
-            if (cell_to_update.has_value())
-            {
-                queue.splice(queue.end(), queue, cell_to_update.value().queue_iterator);
-                return cell_to_update.value().value;
-            }
-            return nullptr;
+            return std::make_pair(cell.value().value, false);
         }
+
+        return std::make_pair(cell.value().value, true);
+    }
+
+    MappedPtr normalGet(const Key & key, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+    {
+        std::optional<Cell> cell_to_update = container.get(key, true);
+        if (cell_to_update.has_value())
+        {
+            queue.splice(queue.end(), queue, cell_to_update.value().queue_iterator);
+            return cell_to_update.value().value;
+        }
+
+        return nullptr;
     }
 
     enum class SetMode
@@ -388,57 +464,70 @@ private:
     {
         std::vector<std::pair<Key, MappedPtr>> removed_elements;
         std::vector<std::pair<Key, MappedPtr>> updated_elements;
+
+        auto res = false;
         {
-            std::lock_guard<std::mutex> lock(mutex);
-
-            std::optional<Cell> cell = container.get(key, false);
-            LRUQueueIterator iter;
-            if (cell.has_value())
-            {
-                // Object already in cache, adjust lru list
-                switch(mode)
-                {
-                    case SetMode::EMPLACE:
-                    {
-                        return false;
-                    }
-                    case SetMode::INSERT:
-                    {
-                        throw Exception(fmt::format("Trying to insert value {} but already in lru",
-                            toString(key)), ErrorCodes::BAD_ARGUMENTS);
-                    }
-                    default:
-                        break;
-                }
-
-                queue.splice(queue.end(), queue, cell.value().queue_iterator);
-
-                iter = cell.value().queue_iterator;
-
-                current_size -= cell.value().size;
-            }
-            else
-            {
-                // New object, insert into lru list
-                if (mode == SetMode::UPDATE)
-                {
-                    throw Exception(fmt::format("Trying to update value {} but no value found",
-                        toString(key)), ErrorCodes::BAD_ARGUMENTS);
-                }
-
-                iter = queue.insert(queue.end(), key);
-
-                ++current_count;
-            }
-
-            size_t weight = weight_function(*mapped);
-            container.set(key, Cell(weight, timestamp(), iter, mapped));
-            current_size += weight;
-
-            evictIfNecessary(removed_elements, updated_elements);
+            std::lock_guard<std::mutex> guard(mutex);
+            res = setRetEvictWithLock(key, mapped, mode, removed_elements, updated_elements, guard);
+            if (!res)
+                return res;
         }
 
         opts.customize_post_evict_handler(removed_elements, updated_elements);
+
+        return res;
+    }
+
+    bool setRetEvictWithLock(const Key & key, const MappedPtr & mapped, SetMode mode
+        , std::vector<std::pair<Key, MappedPtr>> removed_elements
+        , std::vector<std::pair<Key, MappedPtr>> updated_elements
+        , [[maybe_unused]]std::lock_guard<std::mutex> & guard)
+    {
+        std::optional<Cell> cell = container.get(key, false);
+        LRUQueueIterator iter;
+        if (cell.has_value())
+        {
+            // Object already in cache, adjust lru list
+            switch(mode)
+            {
+                case SetMode::EMPLACE:
+                {
+                    return false;
+                }
+                case SetMode::INSERT:
+                {
+                    throw Exception(fmt::format("Trying to insert value {} but already in lru",
+                        toString(key)), ErrorCodes::BAD_ARGUMENTS);
+                }
+                default:
+                    break;
+            }
+
+            queue.splice(queue.end(), queue, cell.value().queue_iterator);
+
+            iter = cell.value().queue_iterator;
+
+            current_size -= cell.value().size;
+        }
+        else
+        {
+            // New object, insert into lru list
+            if (mode == SetMode::UPDATE)
+            {
+                throw Exception(fmt::format("Trying to update value {} but no value found",
+                    toString(key)), ErrorCodes::BAD_ARGUMENTS);
+            }
+
+            iter = queue.insert(queue.end(), key);
+
+            ++current_count;
+        }
+
+        size_t weight = mapped ? weight_function(*mapped) : 0;
+        container.set(key, Cell(weight, timestamp(), iter, mapped));
+        current_size += weight;
+
+        evictIfNecessary(removed_elements, updated_elements);
 
         return true;
     }
@@ -518,6 +607,71 @@ private:
         clock_gettime(CLOCK_MONOTONIC, &ts);
         return ts.tv_sec;
     }
+
+    /// Represents pending insertion attempt.
+    struct InsertToken
+    {
+        explicit InsertToken(BucketLRUCache & cache_) : cache(cache_) {}
+
+        std::mutex mutex;
+        bool cleaned_up = false; /// Protected by the token mutex
+        MappedPtr value; /// Protected by the token mutex
+
+        BucketLRUCache & cache;
+        size_t refcount = 0; /// Protected by the cache mutex
+    };
+
+    using InsertTokenById = std::unordered_map<Key, std::shared_ptr<InsertToken>, HashFunction>;
+
+    /// This class is responsible for removing used insert tokens from the insert_tokens map.
+    /// Among several concurrent threads the first successful one is responsible for removal. But if they all
+    /// fail, then the last one is responsible.
+    struct InsertTokenHolder
+    {
+        const Key * key = nullptr;
+        std::shared_ptr<InsertToken> token;
+        bool cleaned_up = false;
+
+        InsertTokenHolder() = default;
+
+        void acquire(const Key * key_, const std::shared_ptr<InsertToken> & token_, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+        {
+            key = key_;
+            token = token_;
+            ++token->refcount;
+        }
+
+        void cleanup([[maybe_unused]] std::lock_guard<std::mutex> & token_lock, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+        {
+            token->cache.insert_tokens.erase(*key);
+            token->cleaned_up = true;
+            cleaned_up = true;
+        }
+
+        ~InsertTokenHolder()
+        {
+            if (!token)
+                return;
+
+            if (cleaned_up)
+                return;
+
+            std::lock_guard token_lock(token->mutex);
+
+            if (token->cleaned_up)
+                return;
+
+            std::lock_guard cache_lock(token->cache.mutex);
+
+            --token->refcount;
+            if (token->refcount == 0)
+                cleanup(token_lock, cache_lock);
+        }
+    };
+
+    friend struct InsertTokenHolder;
+
+    InsertTokenById insert_tokens;
 
     const Options opts;
 
