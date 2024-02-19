@@ -454,8 +454,10 @@ enum StealingCacheMode : UInt64
     M(UInt64, cnch_merge_max_total_rows_to_merge, 50000000, "", 0) \
     M(UInt64, cnch_merge_max_total_bytes_to_merge, 150ULL * 1024 * 1024 * 1024, "", 0) \
     M(UInt64, cnch_merge_max_parts_to_merge, 100, "", 0) \
-\
-    /* Unique table related settings */ \
+    M(UInt64, cnch_mutate_max_parts_to_mutate, 100, "", 0) \
+    M(UInt64, cnch_mutate_max_total_bytes_to_mutate, 50UL * 1024 * 1024 * 1024, "", 0) \
+    \
+    /* Unique table related settings */\
     M(Bool, cloud_enable_staging_area, false, "", 0) \
     M(Bool, cloud_enable_dedup_worker, false, "", 0) \
     M(UInt64, dedup_worker_max_heartbeat_interval, 16, "", 0) \
