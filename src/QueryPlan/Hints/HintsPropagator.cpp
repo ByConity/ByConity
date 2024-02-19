@@ -95,6 +95,16 @@ void HintsVisitor::visitFilterNode(FilterNode & node, HintsVisitorContext & hint
     processNodeWithHints(node, hints_context, hint_options);
 }
 
+void HintsVisitor::visitAggregatingNode(AggregatingNode & node, HintsVisitorContext & hints_context)
+{
+    HintOptions hint_options;
+    auto & step = node.getStep();
+    for (const auto & agg : step->getAggregates())
+        hint_options.func_names.emplace_back(agg.function->getName());
+
+    processNodeWithHints(node, hints_context, hint_options);
+}
+
 void HintsVisitor::visitTableScanNode(TableScanNode & node, HintsVisitorContext & hints_context)
 {
     hints_context.name_list.clear();

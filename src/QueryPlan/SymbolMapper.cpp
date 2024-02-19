@@ -370,7 +370,9 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
         SortDescription{map(agg.getGroupBySortDescription())},
         map(agg.getGroupings()),
         agg.needOverflowRow(),
-        agg.shouldProduceResultsInOrderOfBucketNumber());
+        agg.shouldProduceResultsInOrderOfBucketNumber(),
+        agg.isNoShuffle(),
+        agg.getHints());
 }
 
 std::shared_ptr<ApplyStep> SymbolMapper::map(const ApplyStep & apply)

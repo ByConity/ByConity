@@ -95,6 +95,7 @@ TransformResult SingleDistinctAggregationToGroupBy::transformImpl(PlanNodePtr no
     }
 
     auto count_agg_step = std::make_shared<AggregatingStep>(group_agg_node->getStep()->getOutputStream(), group_by, step.getKeysNotHashed(), count_aggs, GroupingSetsParamsList{}, true);
+    count_agg_step->setHints(step.getHints());
     auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {group_agg_node});
     return count_agg_node;
 }

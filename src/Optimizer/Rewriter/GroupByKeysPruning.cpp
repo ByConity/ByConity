@@ -65,7 +65,7 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
     for (const auto & aggregator : agg_step->getAggregates())
             for (const auto & argument_name : aggregator.argument_names)
                 all_agg_argument_names.insert(argument_name);
-    
+
     NameSet new_keys_not_participate_in_calculating = agg_step->getKeysNotHashed();
 
     // if a key used in aggregator or also be simplified, it can't be simplified again.
@@ -95,7 +95,7 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
     auto node_ptr = node.shared_from_this();
     auto constants_values = result.constants.getValues();
 
-    
+
     AggregateDescriptions new_aggregators;
     for (const auto & aggregator : agg_step->getAggregates())
     {
@@ -110,10 +110,10 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
             new_aggregators.push_back(aggregator);
         }
     }
-    
+
     // reserve original keys order, avoid unnecesary repartition.
     Names new_agg_keys = agg_step->getKeys();
-    
+
     // prune constants group by keys.
     bool has_eliminated_agg_by_constants = false;
     if (!constants_values.empty())
@@ -137,7 +137,7 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
             LOG_INFO(&Poco::Logger::get("DataDependency"), "after GroupByKeysPruning by constants, new_agg_keys -- " + str);
         }
     }
-    
+
     // Insert agg keys which has been simplified to new_keys_not_participate_in_calculating.
     // Otherwise, if it belongs to constants values, we can simply remove it.
     for (const auto & agg_key : agg_step->getKeys())
@@ -148,8 +148,19 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
         }
     }
 
-    auto new_agg_step = std::make_shared<AggregatingStep>(node.getChildren()[0]->getStep()->getOutputStream(), new_agg_keys, new_keys_not_participate_in_calculating, new_aggregators, 
-        agg_step->getGroupingSetsParams(), agg_step->isFinal(), agg_step->getGroupBySortDescription(), agg_step->getGroupings(), false, agg_step->shouldProduceResultsInOrderOfBucketNumber());
+    auto new_agg_step = std::make_shared<AggregatingStep>(
+        node.getChildren()[0]->getStep()->getOutputStream(),
+        new_agg_keys,
+        new_keys_not_participate_in_calculating,
+        new_aggregators,
+        agg_step->getGroupingSetsParams(),
+        agg_step->isFinal(),
+        agg_step->getGroupBySortDescription(),
+        agg_step->getGroupings(),
+        false,
+        agg_step->shouldProduceResultsInOrderOfBucketNumber(),
+        agg_step->isNoShuffle(),
+        agg_step->getHints());
     node_ptr = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(new_agg_step), node.getChildren());
 
 
@@ -178,7 +189,7 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
     DataDependency data_dependency = DataDependencyDeriver::deriveDataDependency(
         node.getStep(), {result.data_dependency}, cte_helper.getCTEInfo(), context);
     Constants constants = ConstantsDeriver::deriveConstants(node.getStep(), {result.constants}, cte_helper.getCTEInfo(), context);
-    
+
     return {node_ptr, data_dependency, constants};
 }
 

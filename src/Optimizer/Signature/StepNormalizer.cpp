@@ -352,7 +352,9 @@ StepAndOutputOrder StepNormalizer::visitAggregatingStep(const AggregatingStep & 
         SortDescription{}, // checked empty
         GroupingDescriptions{}, // checked empty
         false,
-        step.shouldProduceResultsInOrderOfBucketNumber());
+        step.shouldProduceResultsInOrderOfBucketNumber(),
+        step.isNoShuffle(),
+        step.getHints());
 
     Block output_order = getOutputOrder(step, *normal_agg, symbol_mapper);
     return StepAndOutputOrder{normal_agg, std::move(output_order)};
