@@ -40,7 +40,7 @@ public:
     std::vector<std::filesystem::path> getTableDDLFiles() override { return {TPCH_TABLE_DDL_FILE}; }
     std::filesystem::path getStatisticsFile() override
     {
-        return std::filesystem::path(TPCH_TABLE_STATISTICS_FOLDER) / fmt::format("{}.bin", getDatabaseName());
+        return std::filesystem::path(TPCH_TABLE_STATISTICS_FOLDER) / getDatabaseName() / "stats.json";
     }
     std::filesystem::path getQueriesDir() override { return TPCH_QUERIES_DIR; }
     std::filesystem::path getExpectedExplainDir() override
