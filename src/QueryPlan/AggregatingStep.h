@@ -93,7 +93,8 @@ public:
         InputOrderInfoPtr group_by_info_,
         SortDescription group_by_sort_description_,
         bool should_produce_results_in_order_of_bucket_number_,
-        bool no_shuffle_ = false)
+        bool no_shuffle_ = false,
+        PlanHints hints_ = {})
         : AggregatingStep(
             input_stream_,
             Names(),
@@ -110,7 +111,8 @@ public:
             {},
             false,
             should_produce_results_in_order_of_bucket_number_,
-            no_shuffle_)
+            no_shuffle_,
+            hints_)
     {
     }
 
@@ -125,7 +127,8 @@ public:
         GroupingDescriptions groupings_ = {},
         bool overflow_row_ = false,
         bool should_produce_results_in_order_of_bucket_number_ = false,
-        bool no_shuffle_ = false)
+        bool no_shuffle_ = false,
+        PlanHints hints_ = {})
         : AggregatingStep(
             input_stream_,
             keys_,
@@ -142,7 +145,8 @@ public:
             groupings_,
             false,
             should_produce_results_in_order_of_bucket_number_,
-            no_shuffle_)
+            no_shuffle_,
+            hints_)
     {
     }
 
@@ -163,7 +167,8 @@ public:
         GroupingDescriptions groupings_ = {},
         bool totals_ = false,
         bool should_produce_results_in_order_of_bucket_number = true,
-        bool no_shuffle_ = false);
+        bool no_shuffle_ = false,
+        PlanHints hints_ = {});
 
     String getName() const override { return "Aggregating"; }
 

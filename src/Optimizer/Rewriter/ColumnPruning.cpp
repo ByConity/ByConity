@@ -569,9 +569,11 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
         step->getGroupBySortDescription(),
         step->getGroupings(),
         step->needOverflowRow(),
-        step->shouldProduceResultsInOrderOfBucketNumber()
+        step->shouldProduceResultsInOrderOfBucketNumber(),
+        step->isNoShuffle(),
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
+        step->getHints()
     );
 
     PlanNodes children{child};

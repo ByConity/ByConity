@@ -208,7 +208,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
         translated.fp_keys = common_fp_keys;
     }
 
-    // LOG_INFO(&Poco::Logger::get("DataDependency"), "visitJoinNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr()); 
+    // LOG_INFO(&Poco::Logger::get("DataDependency"), "visitJoinNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr());
 
     bool is_inner_join = step.getKind() == ASTTableJoin::Kind::Inner;
     bool is_outer_join = step.isOuterJoin() && step.getKind() != ASTTableJoin::Kind::Full; // only allow left outer/right outer join.
@@ -381,7 +381,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
                     // a pure primary key means it's from fk ref in dll, not unique in dll.
                     auto pk_side_actual_output_names = candidate->getChildren()[1 - is_fk_in_right]->getOutputNames();
 
-                    bool can_remove_directly = 
+                    bool can_remove_directly =
                         std::all_of(pk_side_actual_output_names.begin(), pk_side_actual_output_names.end(), [&](const String & output_name)
                         {
                             return pk_current_name == output_name;
@@ -608,7 +608,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitProjectionNode(Projectio
             translated.downgradePkTables(invalid_tables);
             std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables, {c});
             collectEliminableJoin(old_winners);
-            
+
             continue;
         }
 
@@ -1118,7 +1118,9 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitAggregatingNode(AggregatingNode 
             step->getGroupBySortDescription(),
             step->getGroupings(),
             false,
-            step->shouldProduceResultsInOrderOfBucketNumber());
+            step->shouldProduceResultsInOrderOfBucketNumber(),
+            step->isNoShuffle(),
+            step->getHints());
 
         return AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step), node.getChildren());
     }
@@ -1168,7 +1170,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
     // current_node(join/union) new_table_scan
     */
 
-    auto first_bottom_join = *std::min_element(winner.second.bottom_joins.begin(), winner.second.bottom_joins.end(), 
+    auto first_bottom_join = *std::min_element(winner.second.bottom_joins.begin(), winner.second.bottom_joins.end(),
         [](const auto & pair, const auto & pair2){ return pair.first->getId() < pair2.first->getId(); });
 
     // 1. create new_table_scan_node from erased bottom_table_scan_node, and fill column_alias with origin columns.

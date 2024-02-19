@@ -140,3 +140,8 @@ TEST_F(PlanCheckCorrectness, q17)
 {
     EXPECT_TRUE(equals(explain("q17"), expected("q17")));
 }
+
+TEST_F(PlanCheckCorrectness, q20)
+{
+    EXPECT_TRUE(equals(explain("q20"), expected("q20")));
+}
