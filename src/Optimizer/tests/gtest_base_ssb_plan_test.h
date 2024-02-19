@@ -38,7 +38,7 @@ public:
     std::vector<std::filesystem::path> getTableDDLFiles() override { return {SSB_TABLE_DDL_FILE}; }
     std::filesystem::path getStatisticsFile() override
     {
-        return std::filesystem::path(SSB_TABLE_STATISTICS_FOLDER) / fmt::format("{}.bin", getDatabaseName());
+        return std::filesystem::path(SSB_TABLE_STATISTICS_FOLDER) / getDatabaseName() / "stats.json";
     }
     std::filesystem::path getQueriesDir() override { return SSB_QUERIES_DIR; }
     std::filesystem::path getExpectedExplainDir() override
