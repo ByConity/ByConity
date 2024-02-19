@@ -909,7 +909,8 @@ DiskExchangeDataManagerPtr Context::getDiskExchangeDataManager() const
             .storage_policy = bsp_conf.storage_policy,
             .volume = bsp_conf.volume,
             .gc_interval_seconds = bsp_conf.gc_interval_seconds,
-            .file_expire_seconds = bsp_conf.file_expire_seconds};
+            .file_expire_seconds = bsp_conf.file_expire_seconds,
+            .max_disk_bytes = bsp_conf.max_disk_bytes};
         shared->disk_exchange_data_manager
             = DiskExchangeDataManager::createDiskExchangeDataManager(global_context, getGlobalContext(), options);
     }

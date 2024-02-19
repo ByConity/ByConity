@@ -19,6 +19,7 @@
 #include <boost/core/noncopyable.hpp>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
+#include <sys/types.h>
 #include <Poco/Logger.h>
 #include <Common/Exception.h>
 #include <Common/ThreadPool.h>
@@ -38,6 +39,7 @@ struct DiskExchangeDataManagerOptions
     size_t gc_interval_seconds;
     /// files will expire after this
     size_t file_expire_seconds;
+    ssize_t max_disk_bytes;
     /// random interval before start gc task
     size_t start_gc_random_wait_seconds = 300;
     size_t cleanup_thread_pool_size = 200;
@@ -84,6 +86,7 @@ public:
     std::unique_ptr<WriteBufferFromFileBase> createFileBufferForWrite(const ExchangeDataKeyPtr & key);
     void createWriteTaskDirectory(UInt64 query_unique_id, const String & query_id, const String & coordinator_addr);
     void shutdown();
+    /// used by test only
     void setFileExpireSeconds(size_t file_expire_seconds_)
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
@@ -92,6 +95,18 @@ public:
     /// one round of gc, this method is not thread-safe
     void gc();
     std::vector<std::unique_ptr<ReadBufferFromFileBase>> readFiles(const ExchangeDataKey & key) const;
+    void updateWrittenBytes(UInt64 query_unique_id, ssize_t disk_written_bytes);
+    void checkEnoughSpace();
+    /// used by test only
+    void setMaxDiskBytes(ssize_t max_disk_bytes_)
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        this->max_disk_bytes = max_disk_bytes_;
+    }
+    ssize_t getDiskWrittenBytes() const
+    {
+        return global_disk_written_bytes.load(std::memory_order_relaxed);
+    }
 
 private:
     Protos::AliveQueryInfo readQueryInfo(UInt64 query_unique_id) const;
@@ -115,16 +130,23 @@ private:
     using ReadTaskPtr = std::shared_ptr<ReadTask>;
     /// finish senders of a specific task, so that downstream wont wait until timeout
     static void finishSenders(const ReadTaskPtr & task, BroadcastStatusCode code, String message);
+    void removeWriteTaskDirectory(const std::variant<String, UInt64> & delete_item);
+    ssize_t getFileSizeRecursively(const String & file_path);
 
     Poco::Logger * logger;
+    /// this mutex protects read_tasks, write_tasks, cleanup_tasks, alive_queries
     bthread::Mutex mutex;
     std::map<ExchangeDataKeyPtr, ReadTaskPtr, ExchangeDataKeyPtrLess> read_tasks;
     std::map<ExchangeDataKeyPtr, DiskPartitionWriterPtr, ExchangeDataKeyPtrLess> write_tasks;
-    ExceptionHandler write_task_exception_handler;
     std::set<UInt64> cleanup_tasks;
+    struct AliveQueryInfo
+    {
+        Protos::AliveQueryInfo proto;
+        ssize_t disk_written_bytes = {0};
+    };
     /// this controls the life time for disk exchange shuffule files, only deletes from it when cleanup() is called
     /// insert <query unique id, query id> into alive_queries before creating the corresponding directory
-    std::map<UInt64, Protos::AliveQueryInfo> alive_queries;
+    std::map<UInt64, AliveQueryInfo> alive_queries;
     size_t start_gc_random_wait_seconds;
     DiskPtr disk;
     std::filesystem::path path;
@@ -141,6 +163,8 @@ private:
     /// we used another mutex to avoid any I/O with bthread::Mutex.
     std::mutex disk_mutex;
     ThreadPool cleanup_thread_pool;
+    std::atomic_int64_t global_disk_written_bytes = {0};
+    ssize_t max_disk_bytes;
 };
 
 } // namespace DB

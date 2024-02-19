@@ -73,6 +73,7 @@ protected:
             .volume = "tmp_bsp",
             .gc_interval_seconds = 1000,
             .file_expire_seconds = 10000,
+            .max_disk_bytes = 100000,
             .start_gc_random_wait_seconds = 0};
         if (disk->exists(options.path))
             disk->removeRecursive(options.path);
