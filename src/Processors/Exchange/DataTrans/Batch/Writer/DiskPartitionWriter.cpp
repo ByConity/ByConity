@@ -208,6 +208,7 @@ void DiskPartitionWriter::runWriteTask()
             done = true;
         }
         done_cv.notify_all();
+        mgr->updateWrittenBytes(key->query_unique_id, buf->count());
     });
 }
 

@@ -330,11 +330,11 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
             {
                 // obtain the max exception errorcode if any subreceiver is abnormal.
                 // if all subreceivers run normally, the status code comes to BroadcastStatusCode::RUNNING.
-                old_status = std::move(res);
+                old_status = res;
             }
 
             if (res.code > BroadcastStatusCode::RUNNING && res.code != BroadcastStatusCode::RECV_CANCELLED)
-                err_status.push_back({receiver->getName(), res});
+                err_status.push_back({receiver->getName(), std::move(res)});
         }
         /// Wakeup all pending receivers;
         collector->close();

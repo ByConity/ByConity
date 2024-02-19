@@ -23,10 +23,20 @@
 #include <Processors/tests/gtest_exchange_helper.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
+#include <Poco/Exception.h>
+#include <Common/Exception.h>
 #include <Common/tests/gtest_global_context.h>
 
 using namespace DB;
 using namespace UnitTest;
+
+namespace DB
+{
+namespace ErrorCodes
+{
+    extern const int EXCHANGE_DATA_DISK_LIMIT_EXCEEDED;
+}
+}
 
 static Block getHeader(size_t column_num)
 {
@@ -192,4 +202,32 @@ TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByExpire)
             lock, std::chrono::milliseconds((10)), [&]() { return !disk->exists(fmt::format("bsp/v-1.0.0/{}", query_unique_id_4)); });
     }
     ASSERT_TRUE(!disk->exists(fmt::format("bsp/v-1.0.0/{}", query_unique_id_4)));
+}
+
+TEST_F(ExchangeRemoteTest, DiskExchangeSizeLimit)
+{
+    auto context = getContext().context;
+    auto header = getHeader(1);
+    auto query_unique_id_5 = 555;
+    auto key = std::make_shared<ExchangeDataKey>(query_unique_id_5, exchange_id, parallel_idx);
+    write(context, header, manager, key);
+    std::mutex mu;
+    std::condition_variable cv;
+    for (size_t i = 0; i < 500; i++)
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        cv.wait_for(lock, std::chrono::milliseconds((10)), [&]() { return manager->getDiskWrittenBytes() == 13; });
+    }
+    manager->setMaxDiskBytes(1);
+    query_unique_id_5 = 666;
+    key = std::make_shared<ExchangeDataKey>(query_unique_id_5, exchange_id, parallel_idx);
+    try
+    {
+        write(context, header, manager, key);
+        ASSERT_TRUE(false);
+    }
+    catch (const Exception & e)
+    {
+        ASSERT_EQ(e.code(), ErrorCodes::EXCHANGE_DATA_DISK_LIMIT_EXCEEDED) << "code:" << e.code() << " e.message:" << e.message();
+    }
 }
