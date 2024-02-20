@@ -128,7 +128,8 @@ Pipe StorageSystemCnchTrashItemsInfoLocal::read(
                 {
                     auto entry = active_tables[(*filtered_index_column)[current_task].get<UInt64>()];
                     storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
-                    if (storage)
+                    /// Extra check to avoid double counting of the same table.
+                    if (storage && UUIDHelpers::UUIDToString(storage->getStorageUUID()) == entry->table_uuid)
                         metrics_collection[current_task] = cache_manager->getTrashItemsInfoMetrics(*storage);
                 }
                 catch (Exception & e)
