@@ -103,12 +103,14 @@
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/parseQuery.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <QueryPlan/PlanCache.h>
+#include <Processors/Executors/PipelineExecutingBlockInputStream.h>
+#include <Processors/Transforms/AddingDefaultsTransform.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <ResourceGroup/InternalResourceGroupManager.h>
 #include <ResourceGroup/VWResourceGroupManager.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
-#include <QueryPlan/PlanCache.h>
 #include <Storages/CompressionCodecSelector.h>
 #include <Storages/DiskCache/AbstractCache.h>
 #include <Storages/DiskCache/KeyIndexFileCache.h>
@@ -4155,6 +4157,35 @@ BlockInputStreamPtr Context::getInputFormat(const String & name, ReadBuffer & bu
 {
     return std::make_shared<InputStreamFromInputFormat>(
         FormatFactory::instance().getInput(name, buf, sample, shared_from_this(), max_block_size));
+}
+
+BlockInputStreamPtr Context::getInputStreamByFormatNameAndBuffer(const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size, const ColumnsDescription& columns) const
+{
+    if (getSettingsRef().insert_null_as_default && columns.hasDefaults())
+    {
+        auto input_format = FormatFactory::instance().getInput(name, buf, sample, shared_from_this(), max_block_size);
+        // Construct pipeline to addingDefaultsTransform
+        Pipe pipe(input_format);
+        pipe.addSimpleTransform([&](const Block & header)
+        {
+            return std::make_shared<AddingDefaultsTransform>(header, columns, *input_format, shared_from_this());
+        });
+
+        QueryPipeline pipeline;
+        pipeline.init(std::move(pipe));
+
+        // Construct an inputStream by pipeline
+        BlockInputStreamPtr adding_defaults_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
+
+        return adding_defaults_stream;
+    }
+    else
+    {
+        auto input_stream = std::make_shared<InputStreamFromInputFormat>(
+            FormatFactory::instance().getInput(name, buf, sample, shared_from_this(), max_block_size));
+
+        return input_stream;
+    }
 }
 
 BlockOutputStreamPtr Context::getOutputStreamParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const

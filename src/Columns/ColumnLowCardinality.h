@@ -118,6 +118,14 @@ public:
             return getDictionary().getDataAt(getIndexes().getUInt(n));
     }
 
+    bool isDefaultAt(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().isDefaultAt(n);
+        else
+            return getDictionary().isDefaultAt(getIndexes().getUInt(n));
+    }
+
     StringRef getDataAtWithTerminatingZero(size_t n) const override
     {
         if (full_state)

@@ -102,6 +102,12 @@ public:
         res = std::string_view{reinterpret_cast<const char *>(&chars[offsetAt(n)]), sizeAt(n) - 1};
     }
 
+    bool isDefaultAt(size_t n) const override
+    {
+        assert(n < size());
+        return chars[n] == 0;
+    }
+
     StringRef getDataAt(size_t n) const override
     {
         assert(n < size());

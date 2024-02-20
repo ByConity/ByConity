@@ -178,6 +178,11 @@ void ColumnMap::get(size_t n, Field & res) const
     }
 }
 
+bool ColumnMap::isDefaultAt(size_t n) const
+{
+    return nested->isDefaultAt(n);
+}
+
 StringRef ColumnMap::getDataAt(size_t) const
 {
     throw Exception("Method getDataAt is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);

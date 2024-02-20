@@ -122,6 +122,11 @@ public:
         res = Field(std::move(s));
     }
 
+    bool isDefaultAt(size_t ) const override
+    {
+        throw Exception("Method isDefaultAt is not supported for ColumnBitMap", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     StringRef getDataAt(size_t n) const override
     {
         assert(n < size());

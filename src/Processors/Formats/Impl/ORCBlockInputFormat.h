@@ -26,8 +26,9 @@ public:
 
     void resetParser() override;
 
-    static std::vector<int> getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header);
+    const BlockMissingValues & getMissingValues() const override;
 
+    static std::vector<int> getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header, const bool & ignore_case, const bool & import_nested);
 protected:
     Chunk generate() override;
 
@@ -46,6 +47,8 @@ private:
     std::vector<int> include_indices;
 
     const FormatSettings format_settings;
+
+    BlockMissingValues block_missing_values;
 
     void prepareReader();
 };

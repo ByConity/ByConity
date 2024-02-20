@@ -63,6 +63,11 @@ public:
         throw Exception("Cannot get value from " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    bool isDefaultAt(size_t) const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "isDefaultAt is not implemented for {}", getName());
+    }
+
     StringRef getDataAt(size_t) const override
     {
         throw Exception("Cannot get value from " + getName(), ErrorCodes::NOT_IMPLEMENTED);

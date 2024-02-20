@@ -197,7 +197,7 @@ void PartWriter::execute()
     LOG_DEBUG(log, "is_enable_squash = {}, min_insert_block_size_rows = {}, min_insert_block_size_bytes = {}",
         is_enable_squash, settings.min_insert_block_size_rows, settings.min_insert_block_size_bytes);
 
-    auto input_stream = InterpreterInsertQuery::buildInputStreamFromSource(getContext(), sample_block, settings, source_path, data_format, is_enable_squash);
+    auto input_stream = InterpreterInsertQuery::buildInputStreamFromSource(getContext(), metadata_snapshot->getColumns(), sample_block, settings, source_path, data_format, is_enable_squash);
 
     input_stream->readPrefix();
 

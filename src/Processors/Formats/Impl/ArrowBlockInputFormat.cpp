@@ -63,7 +63,7 @@ Chunk ArrowBlockInputFormat::generate()
 
     ++record_batch_current;
 
-    arrow_column_to_ch_column->arrowTableToCHChunk(res, *table_result);
+    arrow_column_to_ch_column->arrowTableToCHChunk(res, *table_result, (*table_result)->num_rows());
 
     return res;
 }
@@ -104,10 +104,11 @@ void ArrowBlockInputFormat::prepareReader()
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
         getPort().getHeader(),
-        std::move(schema),
         "Arrow",
+        format_settings.arrow.import_nested,
         format_settings.arrow.allow_missing_columns,
-        format_settings.null_as_default);
+        format_settings.null_as_default,
+        format_settings.arrow.case_insensitive_column_matching);
 
     if (stream)
         record_batch_total = -1;

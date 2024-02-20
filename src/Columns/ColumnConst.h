@@ -107,6 +107,11 @@ public:
         return data->getDataAtWithTerminatingZero(0);
     }
 
+    bool isDefaultAt(size_t) const override
+    {
+        return data->isDefaultAt(0);
+    }
+
     UInt64 get64(size_t) const override
     {
         return data->get64(0);

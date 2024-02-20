@@ -1,14 +1,16 @@
 #include "ORCBlockInputFormat.h"
+#include <boost/algorithm/string/case_conv.hpp>
 #if USE_ORC
 
-#    include <Formats/FormatFactory.h>
-#    include <IO/ReadBufferFromMemory.h>
-#    include <IO/WriteHelpers.h>
-#    include <IO/copyData.h>
-#    include <arrow/adapters/orc/adapter.h>
-#    include <arrow/io/memory.h>
-#    include "ArrowBufferedStreams.h"
-#    include "ArrowColumnToCHColumn.h"
+#include <Formats/FormatFactory.h>
+#include <IO/ReadBufferFromMemory.h>
+#include <IO/WriteHelpers.h>
+#include <IO/copyData.h>
+#include <arrow/adapters/orc/adapter.h>
+#include <arrow/io/memory.h>
+#include "ArrowBufferedStreams.h"
+#include "ArrowColumnToCHColumn.h"
+#include <DataTypes/NestedUtils.h>
 
 namespace DB
 {
@@ -18,12 +20,12 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-#define THROW_ARROW_NOT_OK(status) \
-    do                                                                 \
-    {                                                                  \
-        if (::arrow::Status _s = (status); !_s.ok())                   \
-           throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
-    } while (false)
+// #define THROW_ARROW_NOT_OK(status)                                     \
+//     do                                                                 \
+//     {                                                                  \
+//         if (::arrow::Status _s = (status); !_s.ok())                   \
+//             throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
+//     } while (false)
 
 ORCBlockInputFormat::ORCBlockInputFormat(ReadBuffer & in_, Block header_, const FormatSettings & format_settings_)
     : IInputFormat(std::move(header_), in_), format_settings(format_settings_)
@@ -32,6 +34,8 @@ ORCBlockInputFormat::ORCBlockInputFormat(ReadBuffer & in_, Block header_, const 
 
 Chunk ORCBlockInputFormat::generate()
 {
+    block_missing_values.clear();
+
     Chunk res;
 
     if (!file_reader)
@@ -44,15 +48,33 @@ Chunk ORCBlockInputFormat::generate()
     if (stripe_current >= stripe_total)
         return res;
 
-    std::shared_ptr<arrow::Table> table;
-    auto batch_status = file_reader->ReadStripe(stripe_current, include_indices);
+    auto batch_status = file_reader->ReadStripe(stripe_current, include_indices );
     if (!batch_status.ok())
         throw ParsingException(
             ErrorCodes::CANNOT_READ_ALL_DATA, "Error while reading batch of ORC data: {}", batch_status.status().ToString());
 
-    THROW_ARROW_NOT_OK(arrow::Table::FromRecordBatches({batch_status.ValueOrDie()}).Value(&table));
+    auto batch = batch_status.ValueOrDie();
+    if (!batch)
+        return {};
+
+    auto table_result = arrow::Table::FromRecordBatches({batch});
+    if (!table_result.ok())
+        throw ParsingException(
+            ErrorCodes::CANNOT_READ_ALL_DATA, "Error while reading batch of ORC data: {}", table_result.status().ToString());
+
+
+    /// We should extract the number of rows directly from the stripe, because in case when
+    /// record batch contains 0 columns (for example if we requested only columns that
+    /// are not presented in data) the number of rows in record batch will be 0.
+    size_t num_rows = file_reader->GetRawORCReader()->getStripe(stripe_current)->getNumberOfRows();
+
+    auto table = table_result.ValueOrDie();
+    if (!table || !num_rows)
+        return {};
+
     ++stripe_current;
-    arrow_column_to_ch_column->arrowTableToCHChunk(res, table);
+    BlockMissingValues * block_missing_values_ptr = format_settings.defaults_for_omitted_fields ? &block_missing_values : nullptr;
+    arrow_column_to_ch_column->arrowTableToCHChunk(res, table, num_rows, block_missing_values_ptr);
     return res;
 }
 
@@ -63,6 +85,12 @@ void ORCBlockInputFormat::resetParser()
     file_reader.reset();
     include_indices.clear();
     stripe_current = 0;
+    block_missing_values.clear();
+}
+
+const BlockMissingValues & ORCBlockInputFormat::getMissingValues() const
+{
+    return block_missing_values;
 }
 
 static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
@@ -88,23 +116,18 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
     return 1;
 }
 
-std::vector<int> ORCBlockInputFormat::getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header)
+std::vector<int> ORCBlockInputFormat::getColumnIndices(
+    const std::shared_ptr<arrow::Schema> & schema, const Block & header, const bool & ignore_case, const bool & import_nested)
 {
     std::vector<int> include_indices;
+    std::unordered_set<String> nested_table_names;
+    if (import_nested)
+        nested_table_names = Nested::getAllTableNames(header, ignore_case);
+
     for (int i = 0; i < schema->num_fields(); ++i)
     {
-        // /// LIST type require 2 indices, STRUCT - the number of elements + 1,
-        // /// so we should recursively count the number of indices we need for this type.
-        // int indexes_count = countIndicesForType(schema->field(i)->type());
-        // if (header.has(schema->field(i)->name()))
-        // {
-        //     for (int j = 0; j != indexes_count; ++j)
-        //         include_indices.push_back(index + j);
-        // }
-        // index += indexes_count;
-        /// TODO: check later, this seems to work
         const auto & name = schema->field(i)->name();
-        if (header.has(name))
+        if (header.has(name, ignore_case) || nested_table_names.contains(ignore_case ? boost::to_lower_copy(name) : name))
             include_indices.push_back(i);
     }
     return include_indices;
@@ -135,9 +158,14 @@ void ORCBlockInputFormat::prepareReader()
     auto & schema = schema_status.ValueOrDie();
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
-        getPort().getHeader(), schema, "ORC", format_settings.orc.allow_missing_columns, format_settings.null_as_default);
+        getPort().getHeader(),
+        "ORC",
+        format_settings.orc.import_nested,
+        format_settings.orc.allow_missing_columns,
+        format_settings.null_as_default,
+        format_settings.orc.case_insensitive_column_matching);
 
-    include_indices = getColumnIndices(schema, getPort().getHeader());
+    include_indices = getColumnIndices(schema, getPort().getHeader(), format_settings.orc.case_insensitive_column_matching, format_settings.orc.import_nested);
 }
 
 void registerInputFormatProcessorORC(FormatFactory & factory)

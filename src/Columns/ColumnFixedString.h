@@ -113,6 +113,8 @@ public:
         return StringRef(&chars[n * index], n);
     }
 
+    bool isDefaultAt(size_t index) const override;
+
     void insert(const Field & x) override;
 
     void insertFrom(const IColumn & src_, size_t index) override;
