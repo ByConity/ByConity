@@ -809,6 +809,7 @@ enum PreloadLevelSettings : UInt64
     M(OverflowModeGroupBy, group_by_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
     M(UInt64, max_bytes_before_external_group_by, 0, "", 0) \
     M(Bool, enable_lc_group_by_opt, false, "Whether enable single lowcardinality column group by optimize", 0) \
+    M(UInt64, spill_buffer_bytes_before_external_group_by, 10485760, "Agg memory buffer threshold when the spill trigger condition is reached, default 10Mb", 0) \
     \
     M(UInt64, max_rows_to_sort, 0, "", 0) \
     M(UInt64, max_bytes_to_sort, 0, "", 0) \

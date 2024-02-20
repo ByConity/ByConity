@@ -4,6 +4,7 @@ GROUP BY number
 ORDER BY index, number;
 
 SET max_bytes_before_external_group_by = 1;
+SET spill_buffer_bytes_before_external_group_by=1;
 
 SELECT arrayJoin(arrayMap(i -> (i + 1), range(2))) AS index, number
 FROM numbers(2)
