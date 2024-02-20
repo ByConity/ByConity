@@ -865,6 +865,14 @@ inline void writeTimeText(Decimal64 time, UInt32 scale, WriteBuffer & buf)
     scale = scale > MaxScale ? MaxScale : scale;
 
     auto components = DecimalUtils::split(time, scale);
+
+    if (components.whole < 0)
+    {
+        *buf.position() = '-';
+        ++buf.position();
+        components.whole = -components.whole;
+    }
+
     memcpy(buf.position(), &digits100[(components.whole/3600) * 2], 2);
     buf.position() += 2;
     *buf.position() = time_delimeter;
