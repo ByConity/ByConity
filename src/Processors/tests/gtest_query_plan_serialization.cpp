@@ -121,6 +121,7 @@ Aggregator::Params createAggregatorParams()
         2,
         3,
         4,
+        4,
         true,
         nullptr,
         5,

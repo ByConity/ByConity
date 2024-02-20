@@ -231,7 +231,7 @@ AggregatingStep::createParams(Block header_before_aggregation, AggregateDescript
 
 
     return Aggregator::Params(
-        header_before_aggregation, keys, aggregates, overflow_row, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, 0, 0, false, 0);
+        header_before_aggregation, keys, aggregates, overflow_row, 0, OverflowMode::THROW, 0, 0, 0, 10485760, false, nullptr, 0, 0, false, 0);
 }
 
 GroupingSetsParamsList AggregatingStep::prepareGroupingSetsParams() const
@@ -402,6 +402,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
         settings.group_by_two_level_threshold,
         settings.group_by_two_level_threshold_bytes,
         settings.max_bytes_before_external_group_by,
+        settings.spill_buffer_bytes_before_external_group_by,
         params.empty_result_for_aggregation_by_empty_set || settings.empty_result_for_aggregation_by_empty_set,
         params.tmp_volume,
         settings.max_threads,
@@ -469,6 +470,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                     transform_params->params.group_by_two_level_threshold,
                     transform_params->params.group_by_two_level_threshold_bytes,
                     transform_params->params.max_bytes_before_external_group_by,
+                    transform_params->params.spill_buffer_bytes_before_external_group_by,
                     /// Return empty result when aggregating without keys on empty set, if ansi
                     settings.dialect_type != DialectType::CLICKHOUSE ? true : transform_params->params.empty_result_for_aggregation_by_empty_set,
                     transform_params->params.tmp_volume,
