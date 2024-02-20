@@ -172,6 +172,11 @@ public:
 
     void insertDefault() override;
 
+    bool isDefaultAt(size_t) const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method isDefaultAt is not supported for ColumnAggregateFunction");
+    }
+
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
 
     const char * deserializeAndInsertFromArena(const char * src_arena) override;

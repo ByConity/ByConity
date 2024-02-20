@@ -206,6 +206,12 @@ StringRef ColumnArray::getDataAt(size_t n) const
     return StringRef(first.data, last.data + last.size - first.data);
 }
 
+bool ColumnArray::isDefaultAt(size_t n) const
+{
+    const auto & offsets_data = getOffsets();
+    return offsets_data[n] == offsets_data[static_cast<ssize_t>(n) - 1];
+}
+
 
 void ColumnArray::insertData(const char * pos, size_t length)
 {

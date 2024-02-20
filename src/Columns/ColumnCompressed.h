@@ -104,6 +104,7 @@ public:
     void insertRangeSelective(const IColumn &, const Selector &, size_t, size_t) override { throwMustBeDecompressed(); }
     void insertData(const char *, size_t) override { throwMustBeDecompressed(); }
     void insertDefault() override { throwMustBeDecompressed(); }
+    bool isDefaultAt(size_t) const override { throwMustBeDecompressed(); }
     void popBack(size_t) override { throwMustBeDecompressed(); }
     StringRef serializeValueIntoArena(size_t, Arena &, char const *&) const override { throwMustBeDecompressed(); }
     const char * deserializeAndInsertFromArena(const char *) override { throwMustBeDecompressed(); }

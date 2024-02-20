@@ -143,6 +143,7 @@ public:
     /** More efficient methods of manipulation */
     IColumn & getData() { return *data; }
     const IColumn & getData() const { return *data; }
+    bool isDefaultAt(size_t n) const override;
 
     IColumn & getOffsetsColumn() { return *offsets; }
     const IColumn & getOffsetsColumn() const { return *offsets; }

@@ -942,6 +942,8 @@ public:
 
     /// I/O formats.
     BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size) const;
+   BlockInputStreamPtr getInputStreamByFormatNameAndBuffer(
+        const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size, const ColumnsDescription& columns) const;
 
     /// Don't use streams. Better look at getOutputFormat...
     BlockOutputStreamPtr getOutputStreamParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const;

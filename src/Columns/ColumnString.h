@@ -129,6 +129,12 @@ public:
         return StringRef(&chars[offsetAt(n)], sizeAt(n) - 1);
     }
 
+    bool isDefaultAt(size_t n) const override
+    {
+        assert(n < size());
+        return sizeAt(n) == 1;
+    }
+
     StringRef getDataAtWithTerminatingZero(size_t n) const override
     {
         assert(n < size());

@@ -12,7 +12,6 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
-
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -20,6 +19,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
+
 
 namespace DB
 {
@@ -56,11 +56,18 @@ ORC_UNIQUE_PTR<orc::Type> ORCBlockOutputFormat::getORCType(const DataTypePtr & t
 {
     switch (type->getTypeId())
     {
-        case TypeIndex::UInt8: [[fallthrough]];
+        case TypeIndex::UInt8:
+        {
+            if (isBool(type))
+                return orc::createPrimitiveType(orc::TypeKind::BOOLEAN);
+            return orc::createPrimitiveType(orc::TypeKind::BYTE);
+        }
+        case TypeIndex::Enum8: [[fallthrough]];
         case TypeIndex::Int8:
         {
             return orc::createPrimitiveType(orc::TypeKind::BYTE);
         }
+        case TypeIndex::Enum16: [[fallthrough]];
         case TypeIndex::UInt16: [[fallthrough]];
         case TypeIndex::Int16:
         {
@@ -85,6 +92,7 @@ ORC_UNIQUE_PTR<orc::Type> ORCBlockOutputFormat::getORCType(const DataTypePtr & t
         {
             return orc::createPrimitiveType(orc::TypeKind::DOUBLE);
         }
+        case TypeIndex::Date32: [[fallthrough]];
         case TypeIndex::Date:
         {
             return orc::createPrimitiveType(orc::TypeKind::DATE);
@@ -94,9 +102,17 @@ ORC_UNIQUE_PTR<orc::Type> ORCBlockOutputFormat::getORCType(const DataTypePtr & t
         {
             return orc::createPrimitiveType(orc::TypeKind::TIMESTAMP);
         }
+        case TypeIndex::Int128: [[fallthrough]];
+        case TypeIndex::UInt128: [[fallthrough]];
+        case TypeIndex::Int256: [[fallthrough]];
+        case TypeIndex::UInt256: [[fallthrough]];
+        case TypeIndex::Decimal256:
+            return orc::createPrimitiveType(orc::TypeKind::BINARY);
         case TypeIndex::FixedString: [[fallthrough]];
         case TypeIndex::String:
         {
+            if (format_settings.orc.output_string_as_string)
+                return orc::createPrimitiveType(orc::TypeKind::STRING);
             return orc::createPrimitiveType(orc::TypeKind::BINARY);
         }
         case TypeIndex::IPv6:
@@ -107,6 +123,10 @@ ORC_UNIQUE_PTR<orc::Type> ORCBlockOutputFormat::getORCType(const DataTypePtr & t
         {
             return getORCType(removeNullable(type), column_name);
         }
+        // case TypeIndex::IPv6:
+        // {
+        //     return orc::createPrimitiveType(orc::TypeKind::BINARY);
+        // }
         case TypeIndex::Array:
         {
             const auto * array_type = assert_cast<const DataTypeArray *>(type.get());
@@ -272,6 +292,7 @@ void ORCBlockOutputFormat::writeColumn(
 
     switch (type->getTypeId())
     {
+        case TypeIndex::Enum8: [[fallthrough]];
         case TypeIndex::Int8:
         {
             /// Note: Explicit cast to avoid clang-tidy error: 'signed char' to 'long' conversion; consider casting to 'unsigned char' first.
@@ -283,6 +304,7 @@ void ORCBlockOutputFormat::writeColumn(
             writeNumbers<UInt8, orc::LongVectorBatch>(orc_column, column, null_bytemap, [](const UInt8 & value){ return value; });
             break;
         }
+        case TypeIndex::Enum16: [[fallthrough]];
         case TypeIndex::Int16:
         {
             writeNumbers<Int16, orc::LongVectorBatch>(orc_column, column, null_bytemap, [](const Int16 & value){ return value; });
@@ -294,6 +316,7 @@ void ORCBlockOutputFormat::writeColumn(
             writeNumbers<UInt16, orc::LongVectorBatch>(orc_column, column, null_bytemap, [](const UInt16 & value){ return value; });
             break;
         }
+        case TypeIndex::Date32: [[fallthrough]];
         case TypeIndex::Int32:
         {
             writeNumbers<Int32, orc::LongVectorBatch>(orc_column, column, null_bytemap, [](const Int32 & value){ return value; });
@@ -317,6 +340,26 @@ void ORCBlockOutputFormat::writeColumn(
         case TypeIndex::UInt64:
         {
             writeNumbers<UInt64,orc::LongVectorBatch>(orc_column, column, null_bytemap, [](const UInt64 & value){ return value; });
+            break;
+        }
+        case TypeIndex::Int128:
+        {
+            writeStrings<ColumnInt128>(orc_column, column, null_bytemap);
+            break;
+        }
+        case TypeIndex::UInt128:
+        {
+            writeStrings<ColumnUInt128>(orc_column, column, null_bytemap);
+            break;
+        }
+        case TypeIndex::Int256:
+        {
+            writeStrings<ColumnInt256>(orc_column, column, null_bytemap);
+            break;
+        }
+        case TypeIndex::UInt256:
+        {
+            writeStrings<ColumnUInt256>(orc_column, column, null_bytemap);
             break;
         }
         case TypeIndex::Float32:
@@ -394,6 +437,11 @@ void ORCBlockOutputFormat::writeColumn(
                     [](Int128 value){ return orc::Int128(value >> 64, (value << 64) >> 64); });
             break;
         }
+        case TypeIndex::Decimal256:
+        {
+            writeStrings<ColumnDecimal<Decimal256>>(orc_column, column, null_bytemap);
+            break;
+        }
         case TypeIndex::Nullable:
         {
             const auto & nullable_column = assert_cast<const ColumnNullable &>(column);
@@ -435,8 +483,9 @@ void ORCBlockOutputFormat::writeColumn(
         case TypeIndex::Map:
         {
             orc::MapVectorBatch & map_orc_column = dynamic_cast<orc::MapVectorBatch &>(orc_column);
-            const auto & list_column = assert_cast<const ColumnMap &>(column).getNestedColumn();
             const auto & map_type = assert_cast<const DataTypeMap &>(*type);
+            const auto & list_column = assert_cast<const ColumnMap &>(column).getNestedColumn();
+
             const ColumnArray::Offsets & offsets = list_column.getOffsets();
 
             map_orc_column.resize(list_column.size());

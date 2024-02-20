@@ -1036,18 +1036,11 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
     return std::make_pair(local_table_name, write_shard_ptr);
 }
 
-BlockOutputStreamPtr
-StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
     bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
     if (enable_staging_area)
         LOG_DEBUG(log, "enable staging area for write");
-
-    auto modified_query_ast = query->clone();
-    auto & insert_query = modified_query_ast->as<ASTInsertQuery &>();
-
-    if (insert_query.table_id.database_name.empty())
-        insert_query.table_id.database_name = local_context->getCurrentDatabase();
 
     return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area);
 }

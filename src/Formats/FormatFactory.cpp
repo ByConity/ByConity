@@ -98,6 +98,9 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.parquet.case_insensitive_column_matching = settings.input_format_parquet_case_insensitive_column_matching;
     format_settings.parquet.row_group_size = settings.output_format_parquet_row_group_size;
     format_settings.parquet.max_block_size = settings.input_format_parquet_max_block_size;
+    format_settings.parquet.output_string_as_string = settings.output_format_parquet_string_as_string;
+    format_settings.parquet.output_fixed_string_as_fixed_byte_array = settings.output_format_parquet_fixed_string_as_fixed_byte_array;
+    format_settings.parquet.import_nested = settings.input_format_parquet_import_nested;
     format_settings.pretty.charset = settings.output_format_pretty_grid_charset.toString() == "ASCII" ? FormatSettings::Pretty::Charset::ASCII : FormatSettings::Pretty::Charset::UTF8;
     format_settings.pretty.color = settings.output_format_pretty_color;
     format_settings.pretty.max_column_pad_width = settings.output_format_pretty_max_column_pad_width;
@@ -128,6 +131,11 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.write_statistics = settings.output_format_write_statistics;
     format_settings.arrow.low_cardinality_as_dictionary = settings.output_format_arrow_low_cardinality_as_dictionary;
     format_settings.arrow.allow_missing_columns = settings.input_format_arrow_allow_missing_columns;
+    format_settings.arrow.output_string_as_string = settings.output_format_arrow_string_as_string;
+    format_settings.arrow.output_fixed_string_as_fixed_byte_array = settings.output_format_arrow_fixed_string_as_fixed_byte_array;
+    format_settings.arrow.import_nested = settings.input_format_arrow_import_nested;
+    format_settings.orc.import_nested = settings.input_format_orc_import_nested;
+    format_settings.orc.output_string_as_string = settings.output_format_orc_string_as_string;
     format_settings.orc.allow_missing_columns = settings.input_format_orc_allow_missing_columns;
     format_settings.protobuf.enable_multiple_message = settings.input_format_protobuf_enable_multiple_message;
     format_settings.protobuf.default_length_parser = settings.input_format_protobuf_default_length_parser;
