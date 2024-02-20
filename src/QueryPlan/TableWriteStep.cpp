@@ -66,7 +66,7 @@ BlockOutputStreams TableWriteStep::createOutputStream(
             out = target_table->write(nullptr, metadata_snapshot, settings.context);
         else
             out = std::make_shared<PushingToViewsBlockOutputStream>(
-                target_table, metadata_snapshot, settings.context, nullptr, no_destination);
+                target_table, metadata_snapshot, settings.context, ASTPtr(), no_destination);
 
         /// Note that we wrap transforms one on top of another, so we write them in reverse of data processing order.
 
