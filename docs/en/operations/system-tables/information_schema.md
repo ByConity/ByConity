@@ -15,25 +15,42 @@ SHOW TABLES FROM information_schema;
 │ KEY_COLUMN_USAGE        │
 │ REFERENTIAL_CONSTRAINTS │
 │ SCHEMATA                │
+│ STATISTICS              │
 │ TABLES                  │
 │ VIEWS                   │
+│ EVENTS                  │
+│ ROUTINES                │
+│ TRIGGERS                │
+│ PARTITIONS              │
 │ columns                 │
 │ key_column_usage        │
 │ referential_constraints │
 │ schemata                │
+│ statistics              │
 │ tables                  │
 │ views                   │
+│ events                  │
+│ routines                │
+│ triggers                │
+│ partitions              │
 └─────────────────────────┘
+
 ```
 
 `INFORMATION_SCHEMA` contains the following views:
 
 - [COLUMNS](#columns)
-- [SCHEMATA](#schemata)
-- [TABLES](#tables)
-- [VIEWS](#views)
 - [KEY_COLUMN_USAGE](#key_column_usage)
 - [REFERENTIAL_CONSTRAINTS](#referential_constraints)
+- [SCHEMATA](#schemata)
+- [STATISTICS](#statistics)
+- [TABLES](#tables)
+- [VIEWS](#views)
+- [EVENTS](#events)
+- [ROUTINES](#routines)
+- [TRIGGERS](#triggers)
+- [PARTITIONS](#partitions)
+
 
 Case-insensitive equivalent views, e.g. `INFORMATION_SCHEMA.columns` are provided for reasons of compatibility with other databases. The same applies to all the columns in these views - both lowercase (for example, `table_name`) and uppercase (`TABLE_NAME`) variants are provided.
 
@@ -364,3 +381,157 @@ Columns:
 - `delete_rule` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
 - `table_name` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
 - `referenced_table_name` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+
+## STATISTICS {#statistics}
+
+Provides information about table indexes. Currently returns an empty result (no rows) which is just enough to provide compatibility with 3rd party tools like Tableau Online.
+
+Columns:
+
+- `table_catalog` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `table_schema` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `table_name` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `non_unique` ([Int32](../../sql-reference/data-types/int-uint.md)) — Currently unused.
+- `index_schema` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `index_name` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Currently unused.
+- `seq_in_index` ([UInt32](../../sql-reference/data-types/int-uint.md)) — Currently unused.
+- `column_name` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Currently unused.
+- `collation` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Currently unused.
+- `cardinality` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — Currently unused.
+- `sub_part` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — Currently unused.
+- `packed` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Currently unused.
+- `nullable` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `index_type` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `comment` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `index_comment` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `is_visible` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `expression` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Currently unused.
+
+## EVENTS {#events}
+
+Provides information about scheduled events in the database. Currently returns an empty result (no rows) for compatibility purposes.
+
+Columns:
+
+- `EVENT_CATALOG` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `EVENT_SCHEMA` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `EVENT_NAME` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `DEFINER` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `TIME_ZONE` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `EVENT_BODY` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `EVENT_DEFINITION` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Currently unused.
+- `EVENT_TYPE` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `EXECUTE_AT` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — Currently unused.
+- `INTERVAL_VALUE` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Currently unused.
+- `INTERVAL_FIELD` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Currently unused.
+- `SQL_MODE` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `STARTS` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — Currently unused.
+- `ENDS` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — Currently unused.
+- `STATUS` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `ON_COMPLETION` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `CREATED` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — Currently unused.
+- `LAST_ALTERED` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — Currently unused.
+- `LAST_EXECUTED` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — Currently unused.
+- `EVENT_COMMENT` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `ORIGINATOR` ([UInt64](../../sql-reference/data-types/int-uint.md)) — Currently unused.
+- `CHARACTER_SET_CLIENT` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+- `COLLATION_CONNECTION` ([String](../../sql-reference/data-types/string.md)) — Currently unused.
+
+## ROUTINES {#routines}
+
+Provides information about stored routines (procedures and functions) in the database. Currently returns an empty result (no rows) for compatibility purposes.
+
+Columns:
+
+- `SPECIFIC_NAME` ([String](../../sql-reference/data-types/string.md)) — The unique name that distinguishes the routine from other routines with the same `ROUTINE_NAME`. Currently unused.
+- `ROUTINE_CATALOG` ([String](../../sql-reference/data-types/string.md)) — The name of the catalog to which the routine belongs. Currently unused.
+- `ROUTINE_SCHEMA` ([String](../../sql-reference/data-types/string.md)) — The name of the schema (database) to which the routine belongs. Currently unused.
+- `ROUTINE_NAME` ([String](../../sql-reference/data-types/string.md)) — The name of the routine. Currently unused.
+- `ROUTINE_TYPE` ([String](../../sql-reference/data-types/string.md)) — The type of the routine, either 'PROCEDURE' or 'FUNCTION'. Currently unused.
+- `DATA_TYPE` ([String](../../sql-reference/data-types/string.md)) — The data type of the routine's return value (for functions). Currently unused.
+- `CHARACTER_MAXIMUM_LENGTH` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The maximum length of a character data type returned by a function. Currently unused.
+- `CHARACTER_OCTET_LENGTH` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The length in bytes for a character string returned by a function. Currently unused.
+- `NUMERIC_PRECISION` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The numeric precision of a numeric data type returned by a function. Currently unused.
+- `NUMERIC_SCALE` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The numeric scale of a numeric data type returned by a function. Currently unused.
+- `DATETIME_PRECISION` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The fractional seconds precision of a time data type returned by a function. Currently unused.
+- `CHARACTER_SET_NAME` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The name of the character set used by a character or text string routine parameter. Currently unused.
+- `COLLATION_NAME` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The name of the collation used by a character or text string routine parameter. Currently unused.
+- `DTD_IDENTIFIER` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The data type descriptor for the routine's return value. Currently unused.
+- `ROUTINE_BODY` ([String](../../sql-reference/data-types/string.md)) — Specifies whether the routine is implemented in SQL or uses an external implementation. Currently unused.
+- `ROUTINE_DEFINITION` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The source text of the routine's body. Currently unused.
+- `EXTERNAL_NAME` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The name of the external function or procedure when `ROUTINE_BODY` is 'EXTERNAL'. Currently unused.
+- `EXTERNAL_LANGUAGE` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The language used for writing the external routine when `ROUTINE_BODY` is 'EXTERNAL'. Currently unused.
+- `PARAMETER_STYLE` ([String](../../sql-reference/data-types/string.md)) — The SQL parameter style of the routine. Currently unused.
+- `IS_DETERMINISTIC` ([String](../../sql-reference/data-types/string.md)) — Specifies whether the routine always returns the same results given the same inputs. Currently unused.
+- `SQL_DATA_ACCESS` ([String](../../sql-reference/data-types/string.md)) — Specifies the type of data access the routine requires (e.g., 'CONTAINS SQL', 'NO SQL'). Currently unused.
+- `SQL_PATH` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The path to be used for resolving names in the routine body. Currently unused.
+- `SECURITY_TYPE` ([String](../../sql-reference/data-types/string.md)) — The security context in which the routine is executed ('DEFINER' or 'INVOKER'). Currently unused.
+- `CREATED` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — The date and time when the routine was created. Currently unused.
+- `LAST_ALTERED` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — The date and time when the routine was last altered. Currently unused.
+- `SQL_MODE` ([String](../../sql-reference/data-types/string.md)) — The SQL mode in effect when the routine was created. Currently unused.
+- `ROUTINE_COMMENT` ([String](../../sql-reference/data-types/string.md)) — Any comment supplied about the routine. Currently unused.
+- `DEFINER` ([String](../../sql-reference/data-types/string.md)) — The account of the user who defined the routine. Currently unused.
+- `CHARACTER_SET_CLIENT` ([String](../../sql-reference/data-types/string.md)) — The client character set for the routine. Currently unused.
+- `COLLATION_CONNECTION` ([String](../../sql-reference/data-types/string.md)) — The collation of the connection that created the routine. Currently unused.
+- `DATABASE_COLLATION` ([String](../../sql-reference/data-types/string.md)) — The collation of the database in which the routine was created. Currently unused.
+
+## TRIGGERS {#triggers}
+
+Provides information about triggers defined in the database. Currently returns an empty result (no rows) for compatibility purposes.
+
+Columns:
+
+- `TRIGGER_CATALOG` ([String](../../sql-reference/data-types/string.md)) — The name of the catalog to which the trigger belongs. Currently unused.
+- `TRIGGER_SCHEMA` ([String](../../sql-reference/data-types/string.md)) — The name of the schema (database) to which the trigger belongs. Currently unused.
+- `TRIGGER_NAME` ([String](../../sql-reference/data-types/string.md)) — The name of the trigger. Currently unused.
+- `EVENT_MANIPULATION` ([String](../../sql-reference/data-types/string.md)) — The type of event that activates the trigger (e.g., INSERT, UPDATE, DELETE). Currently unused.
+- `EVENT_OBJECT_CATALOG` ([String](../../sql-reference/data-types/string.md)) — The name of the catalog containing the table on which the trigger acts. Currently unused.
+- `EVENT_OBJECT_SCHEMA` ([String](../../sql-reference/data-types/string.md)) — The name of the schema containing the table on which the trigger acts. Currently unused.
+- `EVENT_OBJECT_TABLE` ([String](../../sql-reference/data-types/string.md)) — The name of the table on which the trigger acts. Currently unused.
+- `ACTION_ORDER` ([Int64](../../sql-reference/data-types/int-uint.md)) — The position of the trigger's action within the sequence of triggers on the same table, for the same event. Currently unused.
+- `ACTION_CONDITION` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The condition that must be true for the trigger to fire. Currently unused.
+- `ACTION_STATEMENT` ([String](../../sql-reference/data-types/string.md)) — The SQL statement executed when the trigger fires. Currently unused.
+- `ACTION_ORIENTATION` ([String](../../sql-reference/data-types/string.md)) — Whether the trigger is row-level or statement-level. Currently unused.
+- `ACTION_TIMING` ([String](../../sql-reference/data-types/string.md)) — Specifies whether the trigger fires before or after the event. Currently unused.
+- `ACTION_REFERENCE_OLD_TABLE` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The old table reference name, for row-level triggers. Currently unused.
+- `ACTION_REFERENCE_NEW_TABLE` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The new table reference name, for row-level triggers. Currently unused.
+- `ACTION_REFERENCE_OLD_ROW` ([String](../../sql-reference/data-types/string.md)) — The old row reference name. Currently unused.
+- `ACTION_REFERENCE_NEW_ROW` ([String](../../sql-reference/data-types/string.md)) — The new row reference name. Currently unused.
+- `CREATED` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — The date and time when the trigger was created. Currently unused.
+- `SQL_MODE` ([String](../../sql-reference/data-types/string.md)) — The SQL mode in effect when the trigger was created. Currently unused.
+- `DEFINER` ([String](../../sql-reference/data-types/string.md)) — The account of the user who defined the trigger. Currently unused.
+- `CHARACTER_SET_CLIENT` ([String](../../sql-reference/data-types/string.md)) — The client character set for the trigger. Currently unused.
+- `COLLATION_CONNECTION` ([String](../../sql-reference/data-types/string.md)) — The collation of the connection that created the trigger. Currently unused.
+- `DATABASE_COLLATION` ([String](../../sql-reference/data-types/string.md)) — The collation of the database in which the trigger was created. Currently unused.
+
+## PARTITIONS {#partitions}
+
+Provides information about table partitions in the database. Currently returns an empty result (no rows) for compatibility purposes.
+
+Columns:
+
+- `TABLE_CATALOG` ([String](../../sql-reference/data-types/string.md)) — The name of the catalog to which the table with the partition belongs. Currently unused.
+- `TABLE_SCHEMA` ([String](../../sql-reference/data-types/string.md)) — The name of the schema (database) to which the table with the partition belongs. Currently unused.
+- `TABLE_NAME` ([String](../../sql-reference/data-types/string.md)) — The name of the table with the partition. Currently unused.
+- `PARTITION_NAME` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The name of the partition. Currently unused.
+- `SUBPARTITION_NAME` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The name of the subpartition. Currently unused.
+- `PARTITION_ORDINAL_POSITION` ([Nullable](../../sql-reference/data-types/nullable.md)([UInt64](../../sql-reference/data-types/int-uint.md))) — The ordinal position of the partition within the table. Currently unused.
+- `SUBPARTITION_ORDINAL_POSITION` ([Nullable](../../sql-reference/data-types/nullable.md)([UInt64](../../sql-reference/data-types/int-uint.md))) — The ordinal position of the subpartition within the partition. Currently unused.
+- `PARTITION_METHOD` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The method or function used to partition the table. Currently unused.
+- `SUBPARTITION_METHOD` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The method or function used to subpartition the table. Currently unused.
+- `PARTITION_EXPRESSION` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The expression used for partitioning the table. Currently unused.
+- `SUBPARTITION_EXPRESSION` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The expression used for subpartitioning the table. Currently unused.
+- `PARTITION_DESCRIPTION` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — A description or value used in the range or list partitioning. Currently unused.
+- `TABLE_ROWS` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — An estimate of the number of rows in the partition. Currently unused.
+- `AVG_ROW_LENGTH` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The average length of a row in the partition. Currently unused.
+- `DATA_LENGTH` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The total length (in bytes) of the data in the partition. Currently unused.
+- `MAX_DATA_LENGTH` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The maximum data length (in bytes) allowed in the partition. Currently unused.
+- `INDEX_LENGTH` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The length (in bytes) of the index file for the partition. Currently unused.
+- `DATA_FREE` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The number of allocated but unused bytes in the partition. Currently unused.
+- `CREATE_TIME` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — The date and time when the partition was created. Currently unused.
+- `UPDATE_TIME` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — The date and time when the partition was last updated. Currently unused.
+- `CHECK_TIME` ([Nullable](../../sql-reference/data-types/nullable.md)([DateTime](../../sql-reference/data-types/datetime.md))) — The date and time when the partition was last checked. Currently unused.
+- `CHECKSUM` ([Nullable](../../sql-reference/data-types/nullable.md)([UInt64](../../sql-reference/data-types/int-uint.md))) — The live checksum value for the rows in the partition (if any). Currently unused.
+- `PARTITION_COMMENT` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — Any comment provided for the partition. Currently unused.
+- `NODEGROUP` ([Nullable](../../sql-reference/data-types/nullable.md)([Int64](../../sql-reference/data-types/int-uint.md))) — The node group for the partition in a clustered database. Currently unused.
+- `TABLESPACE_NAME` ([Nullable](../../sql-reference/data-types/nullable.md)([String](../../sql-reference/data-types/string.md))) — The tablespace in which the partition resides. Currently unused.

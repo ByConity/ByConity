@@ -34,6 +34,7 @@ public:
     bool isDeterministic() const override { return false; }
     bool isDeterministicInScopeOfQuery() const override { return false; }
     bool isSuitableForConstantFolding() const override { return false; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
 
     size_t getNumberOfArguments() const override
     {
@@ -47,7 +48,7 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr &, size_t input_rows_count) const override
     {
-        return DataTypeString().createColumnConst(input_rows_count, is_mysql ? "5.1.0" : VERSION_STRING);
+        return DataTypeString().createColumnConst(input_rows_count, is_mysql ? "5.6.0" : VERSION_STRING);
     }
 private:
     bool is_mysql;

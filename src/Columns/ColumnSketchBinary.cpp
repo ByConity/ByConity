@@ -4,6 +4,7 @@
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnCompressed.h>
 #include <Columns/ColumnVector.h>
+#include <Columns/MaskOperations.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
@@ -192,6 +193,12 @@ ColumnPtr ColumnSketchBinary::filter(const Filter & filt, ssize_t result_size_hi
     return res;
 }
 
+void ColumnSketchBinary::expand(const Filter & mask, bool inverted)
+{
+    auto & chars_data = getChars();
+    auto & offsets_data = getOffsets();
+    expandStringDataByMask(chars_data, offsets_data, mask, inverted);
+}
 
 ColumnPtr ColumnSketchBinary::permute(const Permutation & perm, size_t limit) const
 {

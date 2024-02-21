@@ -20,6 +20,7 @@
  */
 
 #include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
@@ -28,6 +29,7 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Poco/Logger.h>
+#include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
 #include "IO/WriteBufferFromString.h"
@@ -40,7 +42,8 @@ namespace ErrorCodes
 
 
 InterpreterShowTablesQuery::InterpreterShowTablesQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
-    : WithMutableContext(context_), query_ptr(query_ptr_)
+    : WithMutableContext(context_)
+    , query_ptr(query_ptr_)
 {
 }
 
@@ -164,10 +167,27 @@ String InterpreterShowTablesQuery::getRewrittenQueryImpl()
     }
 
     WriteBufferFromOwnString rewritten_query;
-    rewritten_query << "SELECT name FROM system.";
+    rewritten_query << "SELECT name";
+    if (query.full)
+    {
+        if (query.dictionaries)
+            throw Exception("FULL is not allowed for dictionaries.", ErrorCodes::SYNTAX_ERROR);
+        else if (query.snapshots)
+            throw Exception("FULL is not allowed for snapshots.", ErrorCodes::SYNTAX_ERROR);
+        if (query.history)
+            throw Exception("FULL TABLE is not compatible with HISTORY.", ErrorCodes::SYNTAX_ERROR);
+        rewritten_query << 
+            ", multiIf("
+                "database = 'INFORMATION_SCHEMA' OR database = 'information_schema', 'SYSTEM VIEW',"
+                "engine = 'View', 'VIEW',"
+                "'BASE TABLE'"
+            ") AS table_type";
+    }
+
+    rewritten_query << " FROM ";
 
     if (query.dictionaries)
-        rewritten_query << "dictionaries ";
+        rewritten_query << "system.dictionaries ";
     else if (query.snapshots)
     {
         rewritten_query.restart();
@@ -181,7 +201,10 @@ String InterpreterShowTablesQuery::getRewrittenQueryImpl()
             rewritten_query << "SELECT name, uuid, delete_time FROM system.cnch_tables_history ";
         }
         else
-            rewritten_query << "tables ";
+        {
+            String tables_in_db = "Tables_in_" + database;
+            rewritten_query << "(SELECT *, name AS " << backQuote(tables_in_db) << " FROM system.tables) ";
+        }
     }
 
     rewritten_query << "WHERE ";

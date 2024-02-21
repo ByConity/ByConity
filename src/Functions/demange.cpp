@@ -45,6 +45,7 @@ public:
     {
         return true;
     }
+
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 1)

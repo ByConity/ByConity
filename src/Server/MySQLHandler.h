@@ -81,8 +81,8 @@ protected:
     MySQLProtocol::PacketEndpointPtr packet_endpoint;
     ContextMutablePtr connection_context;
 
-    using QueryReplacementFn = std::function<String(const String & query)>;
-    using QueriesReplacements = std::unordered_map<std::string, QueryReplacementFn>;
+    using QueryReplacementFn = std::function<String(const String & query, const String & prefix)>;
+    using QueriesReplacements = std::vector<std::pair<std::string, QueryReplacementFn>>;
     QueriesReplacements queries_replacements;
 
     using SettingsReplacements = std::unordered_map<std::string, std::string>;

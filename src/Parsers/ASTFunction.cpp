@@ -43,14 +43,15 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNEXPECTED_EXPRESSION;
     extern const int UNEXPECTED_AST_STRUCTURE;
+    extern const int UNKNOWN_FUNCTION;
 }
 
 void ASTFunction::appendColumnNameImpl(WriteBuffer & ostr) const
 {
-    if (name == "view")
-        throw Exception("Table function view cannot be used as an expression", ErrorCodes::UNEXPECTED_EXPRESSION);
+    /// These functions contain some unexpected ASTs in arguments (e.g. SETTINGS or even a SELECT query)
+    if (name == "view" || name == "viewIfPermitted" || name == "mysql" || name == "postgresql" || name == "mongodb" || name == "s3")
+        throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Table function '{}' cannot be used as an expression", name);
 
     writeString(name, ostr);
 

@@ -262,6 +262,8 @@ public:
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
 
+    void expand(const Filter & /*mask*/, bool /*inverted*/) override;
+
     double getRatioOfDefaultRows(double) const override
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method getRatioOfDefaultRows is not supported for {}", getName());
@@ -342,6 +344,7 @@ public:
 
     // Throws an exception if offsets/chars are messed up
     void validate() const;
+
 };
 
 }

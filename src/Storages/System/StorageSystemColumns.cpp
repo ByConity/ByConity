@@ -78,6 +78,7 @@ public:
         : SourceWithProgress(header_)
         , columns_mask(std::move(columns_mask_)), max_block_size(max_block_size_)
         , databases(std::move(databases_)), tables(std::move(tables_)), storages(std::move(storages_))
+        , client_info_interface(context->getClientInfo().interface)
         , total_tables(tables->size()), access(context->getAccess())
         , query_id(context->getCurrentQueryId()), lock_acquire_timeout(context->getSettingsRef().lock_acquire_timeout)
     {
@@ -294,6 +295,7 @@ private:
     ColumnPtr databases;
     ColumnPtr tables;
     Storages storages;
+    ClientInfo::Interface client_info_interface;
     size_t db_table_num = 0;
     size_t total_tables;
     std::shared_ptr<const ContextAccess> access;

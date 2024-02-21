@@ -32,6 +32,7 @@
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserKillQueryQuery.h>
 #include <Parsers/ParserOptimizeQuery.h>
+#include <Parsers/ParserShowSettingQuery.h>
 #include <Parsers/ParserWatchQuery.h>
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/ASTExplainQuery.h>
@@ -39,6 +40,7 @@
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ParserShowAccessEntitiesQuery.h>
 #include <Parsers/ParserShowAccessQuery.h>
+#include <Parsers/ParserShowColumnsQuery.h>
 #include <Parsers/ParserShowCreateAccessEntityQuery.h>
 #include <Parsers/ParserShowGrantsQuery.h>
 #include <Parsers/ParserShowPrivilegesQuery.h>
@@ -58,7 +60,9 @@ namespace DB
 bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserShowTablesQuery show_tables_p(dt);
+    ParserShowSettingQuery show_setting_p;
     ParserSelectWithUnionQuery select_p(dt);
+    ParserShowColumnsQuery show_columns_p;
     ParserTablePropertiesQuery table_p;
     ParserDescribeTableQuery describe_table_p(dt);
     ParserShowProcesslistQuery show_processlist_p;
@@ -99,6 +103,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || select_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         || show_tables_p.parse(pos, query, expected)
+        || show_setting_p.parse(pos, query, expected)
+        || show_columns_p.parse(pos, query, expected)
         || table_p.parse(pos, query, expected)
         || describe_table_p.parse(pos, query, expected)
         || show_processlist_p.parse(pos, query, expected)

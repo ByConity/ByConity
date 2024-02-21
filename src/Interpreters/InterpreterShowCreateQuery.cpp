@@ -150,6 +150,39 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
     MutableColumnPtr column = ColumnString::create();
     column->insert(res);
 
+    if (getContext()->getSettingsRef().dialect_type == DialectType::MYSQL) {
+        MutableColumnPtr name_column = ColumnString::create();
+        if ((show_query = query_ptr->as<ASTShowCreateTableQuery>()))
+        {
+            name_column->insert(show_query->table);
+            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "Table"}, 
+                                                                {std::move(column), std::make_shared<DataTypeString>(), "Create Table"}});
+        }
+        else if ((show_query = query_ptr->as<ASTShowCreateViewQuery>()))
+        {
+            name_column->insert(show_query->table);
+            MutableColumnPtr character_set_client_column = ColumnString::create();
+            MutableColumnPtr collation_connection_column = ColumnString::create();
+            // TODO: Replace with actual values
+            character_set_client_column->insert("utf8mb4");
+            collation_connection_column->insert("utf8mb4_0900_ai_ci");
+            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "View"}, 
+                                                    {std::move(column), std::make_shared<DataTypeString>(), "Create View"}, 
+                                                    {std::move(character_set_client_column), std::make_shared<DataTypeString>(), "character_set_client"}, 
+                                                    {std::move(collation_connection_column), std::make_shared<DataTypeString>(), "collation_connection"}});
+        }
+         else if ((show_query = query_ptr->as<ASTShowCreateDatabaseQuery>()))
+        {
+            name_column->insert(getOriginalDatabaseName(show_query->database));
+            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "Database"}, 
+                                        {std::move(column), std::make_shared<DataTypeString>(), "Create Database"}});
+        }
+        // TODO: add more show create that mysql has ...
+
+        // fall back to clickhouse syntax
+        return std::make_shared<OneBlockInputStream>(Block{{std::move(column), std::make_shared<DataTypeString>(), "statement"}});
+    }
+
     return std::make_shared<OneBlockInputStream>(Block{{std::move(column), std::make_shared<DataTypeString>(), "statement"}});
 }
 }

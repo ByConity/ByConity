@@ -24,6 +24,7 @@
 #include <Core/SettingsEnums.h>
 
 #include <Interpreters/Context_fwd.h>
+#include <Core/SettingsEnums.h>
 
 #include <cstddef>
 
@@ -49,6 +50,8 @@ struct ExpressionActionsSettings
     CompileExpressions compile_expressions = CompileExpressions::no;
 
     enum DialectType dialect_type = DialectType::CLICKHOUSE;
+
+    ShortCircuitFunctionEvaluation short_circuit_function_evaluation = ShortCircuitFunctionEvaluation::DISABLE;
 
     static ExpressionActionsSettings fromSettings(const Settings & from, CompileExpressions compile_expressions = CompileExpressions::no);
     static ExpressionActionsSettings fromContext(ContextPtr from, CompileExpressions compile_expressions = CompileExpressions::no);

@@ -105,11 +105,11 @@ void computeGroupingFunctions(
         force_grouping_standard_compatibility = true;
 
     auto actions = std::make_shared<ActionsDAG>(pipeline.getHeader().getColumnsWithTypeAndName());
-    ActionsDAG::NodeRawConstPtrs index = actions->getIndex();
+    ActionsDAG::NodeRawConstPtrs outputs = actions->getOutputs();
     ActionsDAG::NodeRawConstPtrs children;
 
     if (!grouping_set_params.empty())
-        children.push_back(&actions->findInIndex("__grouping_set"));
+        children.push_back(&actions->findInOutputs("__grouping_set"));
 
     auto get_key_index = [&](const String & key) { return std::find(keys.begin(), keys.end(), key) - keys.begin(); };
 
@@ -135,20 +135,20 @@ void computeGroupingFunctions(
             arguments_indexes.push_back(get_key_index(arg));
 
         if (!grouping_set_params.empty()) // GROUPING SETS, ROLLUP, CUBE
-            index.push_back(&actions->addFunction(
+            outputs.push_back(&actions->addFunction(
                 std::make_shared<FunctionToOverloadResolverAdaptor>(
                     std::make_shared<FunctionGroupingForGroupingSets>(std::move(arguments_indexes), grouping_sets_indices, force_grouping_standard_compatibility)),
                 children,
                 grouping.output_name));
         else // ORDINARY
-            index.push_back(&actions->addFunction(
+            outputs.push_back(&actions->addFunction(
                 std::make_shared<FunctionToOverloadResolverAdaptor>(
                     std::make_shared<FunctionGroupingOrdinary>(std::move(arguments_indexes), force_grouping_standard_compatibility)),
                 children,
                 grouping.output_name));
     }
 
-    actions->getIndex().swap(index);
+    actions->getOutputs().swap(outputs);
     auto expression = std::make_shared<ExpressionActions>(actions, build_settings.getActionsSettings());
     pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ExpressionTransform>(header, expression); });
 }
@@ -537,15 +537,15 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
 
                 /// Here we create a DAG which fills missing keys and adds `__grouping_set` column
                 auto dag = std::make_shared<ActionsDAG>(header.getColumnsWithTypeAndName());
-                ActionsDAG::NodeRawConstPtrs index;
-                index.reserve(output_header.columns() + 1);
+                ActionsDAG::NodeRawConstPtrs outputs;
+                outputs.reserve(output_header.columns() + 1);
 
                 auto grouping_col = ColumnConst::create(ColumnUInt64::create(1, set_counter), 0);
                 const auto * grouping_node
                     = &dag->addColumn({ColumnPtr(std::move(grouping_col)), std::make_shared<DataTypeUInt64>(), "__grouping_set"});
 
                 grouping_node = &dag->materializeNode(*grouping_node);
-                index.push_back(grouping_node);
+                outputs.push_back(grouping_node);
 
                 size_t missign_column_index = 0;
                 const auto & missing_columns = prepared_sets_params[set_counter].missing_keys;
@@ -561,13 +561,13 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                         auto column = ColumnConst::create(std::move(column_with_default), 0);
                         const auto * node = &dag->addColumn({ColumnPtr(std::move(column)), col.type, col.name});
                         node = &dag->materializeNode(*node);
-                        index.push_back(node);
+                        outputs.push_back(node);
                     }
                     else
-                        index.push_back(dag->getIndex()[header.getPositionByName(col.name)]);
+                        outputs.push_back(dag->getOutputs()[header.getPositionByName(col.name)]);
                 }
 
-                dag->getIndex().swap(index);
+                dag->getOutputs().swap(outputs);
                 auto expression = std::make_shared<ExpressionActions>(dag, build_settings.getActionsSettings());
                 auto transform = std::make_shared<ExpressionTransform>(header, expression);
 
