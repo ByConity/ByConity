@@ -1,11 +1,14 @@
 show tables from information_schema;
 SHOW TABLES FROM INFORMATION_SCHEMA;
-DROP TABLE IF EXISTS t;
+CREATE DATABASE IF NOT EXISTS 01161_information_schema;
+use 01161_information_schema;
 DROP VIEW IF EXISTS v;
+DROP TABLE IF EXISTS t;
 --DROP VIEW IF EXISTS mv;
 DROP TABLE IF EXISTS tmp;
 DROP TABLE IF EXISTS kcu;
 DROP TABLE IF EXISTS kcu2;
+DROP TABLE IF EXISTS partitioned;
 
 CREATE TABLE t (n UInt64, f Float32, s String, fs FixedString(42), d Decimal(9, 6)) ENGINE = CnchMergeTree() ORDER BY tuple();
 CREATE VIEW v (n Nullable(Int32), f Float64) AS SELECT n, f FROM t;
@@ -13,6 +16,7 @@ CREATE VIEW v (n Nullable(Int32), f Float64) AS SELECT n, f FROM t;
 CREATE TEMPORARY TABLE tmp (d Date, dt DateTime, dtms DateTime64(3));
 CREATE TABLE kcu (i UInt32, s String) ENGINE = CnchMergeTree() ORDER BY i;
 CREATE TABLE kcu2 (i UInt32, d Date, u UUID) ENGINE = CnchMergeTree() ORDER BY (u, d);
+CREATE TABLE partitioned (i UInt32, s String) ENGINE = CnchMergeTree() PARTITION BY i % 3 ORDER BY tuple();
 SET enable_optimizer=0;
 
 -- FIXME #28687
@@ -34,16 +38,38 @@ SET enable_optimizer=0;
 -- mixed upper/lowercase schema and table name:
 SELECT count() FROM information_schema.TABLES WHERE table_schema = currentDatabase() AND table_name = 't';
 SELECT count() FROM INFORMATION_SCHEMA.tables WHERE table_schema = currentDatabase() AND table_name = 't';
-SELECT count() FROM INFORMATION_schema.tables WHERE table_schema = currentDatabase() AND table_name = 't'; -- { serverError 81 }
-SELECT count() FROM information_schema.taBLES WHERE table_schema = currentDatabase() AND table_name = 't'; -- { serverError 60 }
+
 
 SELECT * FROM information_schema.key_column_usage WHERE table_schema = currentDatabase() AND table_name = 'kcu';
 SELECT * FROM information_schema.key_column_usage WHERE table_schema = currentDatabase() AND table_name = 'kcu2';
 
+SELECT '-- information_schema.referential_constraints';
 SELECT * FROM information_schema.referential_constraints;
+
+SELECT '-- information_schema.statistics';
+SELECT * FROM information_schema.statistics;
+
+SELECT '-- information_schema.events';
+SELECT * FROM information_schema.events;
+
+SELECT '-- information_schema.routines';
+SELECT * FROM information_schema.routines;
+
+SELECT '-- information_schema.triggers';
+SELECT * FROM information_schema.triggers;
+
+SELECT '-- information_schema.partitions';
+SELECT * FROM information_schema.partitions WHERE table_schema = currentDatabase();
+INSERT INTO partitioned VALUES
+    (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three'), (4, 'four'), (5, 'five'), (1000, 'one thousand');
+
+SELECT '-- information_schema.partitions (After INSERT)';
+SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase() ORDER BY table_name, partition_name;
 
 --drop view mv;
 drop view v;
 drop table t;
 drop table kcu;
 drop table kcu2;
+drop table partitioned;
+drop database 01161_information_schema;

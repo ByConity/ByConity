@@ -674,9 +674,13 @@ Block KeyCondition::getBlockWithConstants(
         { DataTypeUInt8().createColumnConstWithDefaultValue(1), std::make_shared<DataTypeUInt8>(), "_dummy" }
     };
 
-    const auto expr_for_constant_folding = ExpressionAnalyzer(query, syntax_analyzer_result, context).getConstActions();
-
-    expr_for_constant_folding->execute(result);
+   
+    auto actions = ExpressionAnalyzer(query, syntax_analyzer_result, context).getConstActionsDAG();
+    for (const auto & action_node : actions->getOutputs())
+    {
+        if (action_node->column)
+            result.insert(ColumnWithTypeAndName{action_node->column, action_node->result_type, action_node->result_name});
+    }
 
     return result;
 }
@@ -1294,6 +1298,8 @@ public:
     bool isDeterministicInScopeOfQuery() const override { return func->isDeterministicInScopeOfQuery(); }
 
     bool hasInformationAboutMonotonicity() const override { return func->hasInformationAboutMonotonicity(); }
+
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & arguments) const override { return func->isSuitableForShortCircuitArgumentsExecution(arguments); }
 
     IFunctionBase::Monotonicity getMonotonicityForRange(const IDataType & type, const Field & left, const Field & right) const override
     {

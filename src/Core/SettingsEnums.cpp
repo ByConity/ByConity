@@ -185,4 +185,9 @@ IMPLEMENT_SETTING_ENUM(TextCaseOption, ErrorCodes::BAD_ARGUMENTS,
     {{"MIXED", TextCaseOption::MIXED},
      {"LOWERCASE", TextCaseOption::LOWERCASE},
      {"UPPERCASE", TextCaseOption::UPPERCASE}})
+
+IMPLEMENT_SETTING_ENUM(ShortCircuitFunctionEvaluation, ErrorCodes::BAD_ARGUMENTS,
+    {{"enable",          ShortCircuitFunctionEvaluation::ENABLE},
+     {"force_enable",    ShortCircuitFunctionEvaluation::FORCE_ENABLE},
+     {"disable",         ShortCircuitFunctionEvaluation::DISABLE}})
 } // namespace DB

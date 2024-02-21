@@ -82,7 +82,7 @@ struct NameLength
     static constexpr auto name = "length";
 };
 
-using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
+using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64, false>;
 
 REGISTER_FUNCTION(Length)
 {

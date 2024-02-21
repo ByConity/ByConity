@@ -1,5 +1,5 @@
-#include <Functions/IFunction.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/IFunction.h>
 #include <Core/Field.h>
 #include <DataTypes/DataTypeString.h>
 
@@ -35,6 +35,9 @@ public:
         return false;
     }
 
+
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
 
     size_t getNumberOfArguments() const override
@@ -58,7 +61,6 @@ public:
     }
 
     ColumnNumbers getArgumentsThatDontImplyNullableReturnType(size_t /*number_of_arguments*/) const override { return {0}; }
-
 };
 
 }

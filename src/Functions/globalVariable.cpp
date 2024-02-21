@@ -45,6 +45,8 @@ public:
         return 1;
     }
 
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (!checkColumnConst<ColumnString>(arguments[0].column.get()))
@@ -79,8 +81,26 @@ private:
     };
     std::unordered_map<String, TypeAndValue> global_variable_map
         = {{"max_allowed_packet", {std::make_shared<DataTypeInt32>(), 67108864}},
-           {"version", {std::make_shared<DataTypeString>(), "5.7.30"}},
+           {"version", {std::make_shared<DataTypeString>(), "5.7.0"}},
            {"version_comment", {std::make_shared<DataTypeString>(), ""}},
+           {"auto_increment_increment", {std::make_shared<DataTypeInt32>(), 1}},
+           {"character_set_client", {std::make_shared<DataTypeString>(), "utf8mb4"}},
+           {"character_set_connection", {std::make_shared<DataTypeString>(), "utf8mb4"}},
+           {"character_set_results", {std::make_shared<DataTypeString>(), "utf8mb4"}},
+           {"character_set_server", {std::make_shared<DataTypeString>(), "utf8mb4"}},
+           {"collation_server", {std::make_shared<DataTypeString>(), "utf8mb4_0900_ai_ci"}},
+           {"collation_connection", {std::make_shared<DataTypeString>(), "utf8mb4_0900_ai_ci"}},
+           {"init_connect", {std::make_shared<DataTypeString>(), ""}},
+           {"interactive_timeout", {std::make_shared<DataTypeInt32>(), 28800}},
+           {"license", {std::make_shared<DataTypeString>(), "GPL"}},
+           {"lower_case_table_names", {std::make_shared<DataTypeInt32>(), 1}},
+           {"net_write_timeout", {std::make_shared<DataTypeInt32>(), 60}},
+           {"performance_schema", {std::make_shared<DataTypeInt32>(), 0}},
+           {"sql_mode", {std::make_shared<DataTypeString>(), "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"}},
+           {"system_time_zone", {std::make_shared<DataTypeString>(), "UTC"}},
+           {"time_zone", {std::make_shared<DataTypeString>(), "UTC"}},
+           {"wait_timeout", {std::make_shared<DataTypeInt32>(), 28800}},
+           {"ssl_cipher", {std::make_shared<DataTypeString>(), "TLS_AES_256_GCM_SHA384"}},
            {"transaction_isolation", {std::make_shared<DataTypeString>(), "READ-UNCOMMITTED"}}};
 };
 

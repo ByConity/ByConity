@@ -35,7 +35,7 @@ namespace DB
 class ParserShowTablesQuery : public IParserDialectBase
 {
 protected:
-    const char * getName() const override { return "SHOW [TEMPORARY] TABLES|DATABASES|CLUSTERS|CLUSTER 'name' [[NOT] [I]LIKE 'str'] [LIMIT expr]"; }
+    const char * getName() const override { return "SHOW [FULL] [TEMPORARY] TABLES|DATABASES|CLUSTERS|CLUSTER 'name' [[NOT] [I]LIKE 'str'] [LIMIT expr]"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 public:
     using IParserDialectBase::IParserDialectBase;

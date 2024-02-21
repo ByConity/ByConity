@@ -20,6 +20,11 @@ SELECT 'orZero';
 SELECT parseDateTime64BestEffortOrZero('2020-05-14T03:37:03.253184Z', 3, 'UTC');
 SELECT parseDateTime64BestEffortOrZero('bar', 3, 'UTC');
 
+SET dialect_type='MYSQL';
+SELECT parseDateTime64BestEffortOrZero('2012-12-21 01:02:03.12345678912345678912', 3, 'UTC');
+SELECT parseDateTime64BestEffortOrZero('2012-12-21 01:02:03.123456789123456789123456', 3, 'UTC');
+SET dialect_type='CLICKHOUSE';
+
 SELECT 'non-const';
 SELECT parseDateTime64BestEffort(materialize('2020-05-14T03:37:03.253184Z'), 3, 'UTC');
 

@@ -13,6 +13,7 @@
 #include <DataStreams/ColumnGathererStream.h>
 #include <Interpreters/castColumn.h>
 #include <Interpreters/convertFieldToType.h>
+#include "Common/Exception.h"
 #include <Common/HashTable/HashSet.h>
 
 namespace DB
@@ -26,6 +27,7 @@ namespace ErrorCodes
     extern const int NUMBER_OF_DIMENSIONS_MISMATCHED;
     extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
     extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int UNSUPPORTED_METHOD;
 }
 
 namespace

@@ -20,6 +20,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnBitMap64.h>
 #include <Columns/ColumnsCommon.h>
+#include <Columns/MaskOperations.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/WeakHash.h>
@@ -197,6 +198,13 @@ ColumnPtr ColumnBitMap64::filter(const Filter & filt, ssize_t result_size_hint) 
 
     filterArraysImpl<UInt8>(chars, offsets, res_chars, res_offsets, filt, result_size_hint);
     return res;
+}
+
+void ColumnBitMap64::expand(const Filter & mask, bool inverted)
+{
+    auto & chars_data = getChars();
+    auto & offsets_data = getOffsets();
+    expandStringDataByMask(chars_data, offsets_data, mask, inverted);
 }
 
 ColumnPtr ColumnBitMap64::permute(const Permutation & perm, size_t limit) const

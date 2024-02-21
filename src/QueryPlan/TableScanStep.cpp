@@ -160,10 +160,10 @@ namespace _scan_execute_impl
             // columns mistakenly. Here, we add used required columns back.
             // For example. projection desc: SELECT toDate(at), count() GROUP BY toDate(at)
             // query: SELECT toDate(at), count() PREWHERE toDate(at) = '2022-01-01' GROUP BY toDate(at)
-            auto & index = prewhere_actions->getIndex();
+            auto & outputs = prewhere_actions->getOutputs();
             for (const auto & input: prewhere_actions->getInputs())
-                if (std::find(index.begin(), index.end(), input) == index.end())
-                    index.emplace_back(input);
+                if (std::find(outputs.begin(), outputs.end(), input) == outputs.end())
+                    outputs.emplace_back(input);
         }
 
         return ExecutePlanElement {
@@ -746,7 +746,7 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
                 Names output;
                 output.emplace_back(left_in_operand->getColumnName());
                 auto temp_actions = createExpressionActions(context, input, output, left_in_operand);
-                if (temp_actions->tryFindInIndex(left_in_operand->getColumnName()))
+                if (temp_actions->tryFindInOutputs(left_in_operand->getColumnName()))
                 {
                     makeExplicitSet(func, *temp_actions, true, context, size_limits_for_set, prepared_sets);
                 }

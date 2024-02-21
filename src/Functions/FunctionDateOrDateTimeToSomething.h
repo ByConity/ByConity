@@ -41,6 +41,8 @@ public:
     FunctionDateOrDateTimeToSomething(ContextPtr context_) : context(context_) { }
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionDateOrDateTimeToSomething>(context_); }
 
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         this->checkArguments(arguments, (std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeDate32>), context);

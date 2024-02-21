@@ -1525,7 +1525,7 @@ struct ConvertThroughParsing
 
     template <typename Additions = void *>
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & res_type, size_t input_rows_count,
-                        Additions additions [[maybe_unused]] = Additions())
+                        Additions additions [[maybe_unused]] = Additions(), bool mysql_mode [[maybe_unused]] = false)
     {
         using ColVecTo = typename ToDataType::ColumnType;
 
@@ -1715,6 +1715,8 @@ struct ConvertThroughParsing
                         DateTime64 res = 0;
                         parsed = tryParseDateTime64BestEffort(res, vec_to.getScale(), read_buffer, *local_time_zone, *utc_time_zone);
                         vec_to[i] = res;
+                        if (mysql_mode)
+                            read_buffer.ignore(read_buffer.buffer().end() - read_buffer.position());
                     }
                     else if (std::is_same_v<ToDataType, DataTypeFloat64>)
                     {
@@ -2090,6 +2092,10 @@ public:
 
     static constexpr bool to_string_or_fixed_string = std::is_same_v<ToDataType, DataTypeFixedString> ||
                                                       std::is_same_v<ToDataType, DataTypeString>;
+    
+    static constexpr bool to_date_or_datetime = std::is_same_v<ToDataType, DataTypeDate> ||
+                                                std::is_same_v<ToDataType, DataTypeDate32> ||
+                                                std::is_same_v<ToDataType, DataTypeDateTime>;
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -2132,6 +2138,11 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return std::is_same_v<Name, NameToString>; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & arguments) const override
+    {
+        /// TODO: We can make more optimizations here.
+        return !(to_date_or_datetime && isNumber(*arguments[0].type));
+    }
 
     using DefaultReturnTypeGetter = std::function<DataTypePtr(const ColumnsWithTypeAndName &)>;
     static DataTypePtr getReturnTypeDefaultImplementationForNulls(const ColumnsWithTypeAndName & arguments, const DefaultReturnTypeGetter & getter)
@@ -2520,6 +2531,8 @@ template <typename ToDataType, typename Name,
     ConvertFromStringParsingMode parsing_mode = ConvertFromStringParsingMode::Normal>
 class FunctionConvertFromString : public IFunction
 {
+private:
+    bool mysql_mode;
 public:
     static constexpr auto name = Name::name;
     static constexpr bool to_decimal =
@@ -2533,10 +2546,12 @@ public:
     static FunctionPtr create(ContextPtr context)
     {
         if (context && (context->getSettingsRef().enable_implicit_arg_type_convert || context->getSettingsRef().dialect_type == DialectType::MYSQL))
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertFromString>());
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertFromString>(true));
         return std::make_shared<FunctionConvertFromString>();
     }
     static FunctionPtr create() { return std::make_shared<FunctionConvertFromString>(); }
+
+    explicit FunctionConvertFromString(bool mysql_mode_ = false) : mysql_mode(mysql_mode_) {}
 
     ArgType getArgumentsType() const override
     {
@@ -2551,6 +2566,7 @@ public:
     }
 
     bool isVariadic() const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -2661,12 +2677,12 @@ public:
         if (checkAndGetDataType<DataTypeString>(from_type))
         {
             return ConvertThroughParsing<DataTypeString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
-                arguments, result_type, input_rows_count, scale);
+                arguments, result_type, input_rows_count, scale, mysql_mode);
         }
         else if (checkAndGetDataType<DataTypeFixedString>(from_type))
         {
             return ConvertThroughParsing<DataTypeFixedString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
-                arguments, result_type, input_rows_count, scale);
+                arguments, result_type, input_rows_count, scale, mysql_mode);
         }
 
         return nullptr;
@@ -3223,6 +3239,7 @@ public:
 
     bool isDeterministic() const override { return true; }
     bool isDeterministicInScopeOfQuery() const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
     bool hasInformationAboutMonotonicity() const override
     {

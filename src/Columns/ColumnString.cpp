@@ -24,6 +24,7 @@
 #include <Columns/Collator.h>
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnCompressed.h>
+#include <Columns/MaskOperations.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
@@ -213,6 +214,14 @@ ColumnPtr ColumnString::filter(const Filter & filt, ssize_t result_size_hint) co
     filterArraysImpl<UInt8>(chars, offsets, res_chars, res_offsets, filt, result_size_hint);
     return res;
 }
+
+void ColumnString::expand(const IColumn::Filter & mask, bool inverted)
+{
+    auto & chars_data = getChars();
+    auto & offsets_data = getOffsets();
+    expandStringDataByMask(chars_data, offsets_data, mask, inverted);
+}
+
 
 ColumnPtr ColumnString::permute(const Permutation & perm, size_t limit) const
 {

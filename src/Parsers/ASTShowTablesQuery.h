@@ -43,6 +43,7 @@ public:
     bool snapshots{false};
     bool m_settings{false};
     bool changed{false};
+    bool full{false};
     bool temporary{false};
     bool history{false};   // if set true, will show databases/tables in trash.
     bool external{false};

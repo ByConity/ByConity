@@ -384,7 +384,7 @@ SetPtr makeExplicitSet(
     const ASTPtr & right_arg = args.children.at(1);
 
     auto column_name = left_arg->getColumnName();
-    const auto & dag_node = actions.findInIndex(column_name);
+    const auto & dag_node = actions.findInOutputs(column_name);
     DataTypePtr left_arg_type = dag_node.result_type;
 
     // Special handling bitmap function case
@@ -537,7 +537,7 @@ ActionsMatcher::Data::Data(
     , build_expression_with_window_functions(build_expression_with_window_functions_)
     , index_context(index_context_)
     , metadata_snapshot(metadata_snapshot_)
-    , next_unique_suffix(actions_stack.getLastActions().getIndex().size() + 1)
+    , next_unique_suffix(actions_stack.getLastActions().getOutputs().size() + 1)
 {
 }
 
@@ -556,9 +556,9 @@ ScopeStack::ScopeStack(ActionsDAGPtr actions_dag, ContextPtr context_) : WithCon
 {
     auto & level = stack.emplace_back();
     level.actions_dag = std::move(actions_dag);
-    level.index = std::make_unique<ScopeStack::Index>(level.actions_dag->getIndex());
+    level.index = std::make_unique<ScopeStack::Index>(level.actions_dag->getOutputs());
 
-    for (const auto & node : level.actions_dag->getIndex())
+    for (const auto & node : level.actions_dag->getOutputs())
         if (node->type == ActionsDAG::ActionType::INPUT)
             level.inputs.emplace(node->result_name);
 }
@@ -567,7 +567,7 @@ void ScopeStack::pushLevel(const NamesAndTypesList & input_columns)
 {
     auto & level = stack.emplace_back();
     level.actions_dag = std::make_shared<ActionsDAG>();
-    level.index = std::make_unique<ScopeStack::Index>(level.actions_dag->getIndex());
+    level.index = std::make_unique<ScopeStack::Index>(level.actions_dag->getOutputs());
     const auto & prev = stack[stack.size() - 2];
 
     for (const auto & input_column : input_columns)
@@ -577,7 +577,7 @@ void ScopeStack::pushLevel(const NamesAndTypesList & input_columns)
         level.inputs.emplace(input_column.name);
     }
 
-    for (const auto & node : prev.actions_dag->getIndex())
+    for (const auto & node : prev.actions_dag->getOutputs())
     {
         if (!level.index->contains(node->result_name))
         {

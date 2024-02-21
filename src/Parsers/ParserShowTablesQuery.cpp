@@ -41,6 +41,7 @@ namespace DB
 bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_show("SHOW");
+    ParserKeyword s_full("FULL");
     ParserKeyword s_temporary("TEMPORARY");
     ParserKeyword s_external_catalog("EXTERNAL CATALOGS");
     ParserKeyword s_tables("TABLES");
@@ -204,6 +205,9 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     }
     else // show tables or dictionaries or snapshots
     {
+        if (s_full.ignore(pos, expected))
+            query->full = true;
+
         if (s_temporary.ignore(pos))
             query->temporary = true;
 

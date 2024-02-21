@@ -250,6 +250,7 @@ public:
     void updateHashWithValue(size_t, SipHash &) const override { throwMustBeConcrete(); }
     void updateWeakHash32(WeakHash32 &) const override { throwMustBeConcrete(); }
     void updateHashFast(SipHash &) const override { throwMustBeConcrete(); }
+    void expand(const Filter &, bool) override  { throwMustBeConcrete(); }
     bool hasEqualValues() const override { throwMustBeConcrete(); }
     size_t byteSizeAt(size_t) const override { throwMustBeConcrete(); }
     double getRatioOfDefaultRows(double) const override { throwMustBeConcrete(); }
