@@ -154,24 +154,34 @@ void StorageHiveSource::prepareReader()
 
 Chunk StorageHiveSource::generate()
 {
-    if (!reader)
-        prepareReader();
-
-    while (reader)
+    try
     {
-        Chunk chunk;
-        if (reader->pull(chunk))
-        {
-            buildResultChunk(chunk);
-            return chunk;
-        }
+        if (!reader)
+            prepareReader();
 
+        while (reader)
+        {
+            Chunk chunk;
+            if (reader->pull(chunk))
+            {
+                buildResultChunk(chunk);
+                return chunk;
+            }
+
+            reader.reset();
+            pipeline.reset();
+            data_source.reset();
+            prepareReader();
+        }
+        return {};
+    }
+    catch (...)
+    {
         reader.reset();
         pipeline.reset();
         data_source.reset();
-        prepareReader();
+        throw;
     }
-    return {};
 }
 
 void StorageHiveSource::buildResultChunk(Chunk & chunk) const

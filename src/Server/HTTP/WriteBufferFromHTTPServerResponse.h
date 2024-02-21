@@ -86,8 +86,7 @@ public:
     /// Send at least HTTP headers if no data has been sent yet.
     /// Use after the data has possibly been sent and no error happened (and thus you do not plan
     /// to change response HTTP code.
-    /// This method is idempotent.
-    void finalize() override;
+    void finalizeImpl() override;
 
     /// Turn compression on or off.
     /// The setting has any effect only if HTTP headers haven't been sent yet.
