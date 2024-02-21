@@ -342,8 +342,6 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     {
         part_model.set_covered_parts_rows(part.covered_parts_rows);
     }
-    // For part in hdfs, it's id will be filled with 0
-    RPCHelpers::fillUUID(part.getUUID(), *(part_model.mutable_part_id()));
 
     if (!part.disk_cache_host_port.empty())
     {
@@ -359,7 +357,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
         part_model.add_projections(projection);
 
     // For part in hdfs, it's id will be filled with 0
-    RPCHelpers::fillUUID(part.getUUID(), *(part_model.mutable_part_id()));
+    RPCHelpers::fillUUID(part.get_uuid(), *(part_model.mutable_part_id()));
 }
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model)

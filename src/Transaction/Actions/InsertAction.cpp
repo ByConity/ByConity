@@ -63,7 +63,7 @@ void InsertAction::executeV1(TxnTimestamp commit_time)
 
     auto catalog = global_context.getCnchCatalog();
     catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false);
-    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, false);
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, {}, txn_id, /*error=*/ false);
 }
 
 void InsertAction::executeV2()
@@ -96,8 +96,8 @@ void InsertAction::postCommit(TxnTimestamp commit_time)
     // set commit flag for dynamic object column schema
     if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
         global_context.getCnchCatalog()->commitObjectPartialSchema(txn_id);
-    
-    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, false);
+
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts, txn_id, /*error=*/ false);
 }
 
 void InsertAction::abort()
@@ -109,8 +109,8 @@ void InsertAction::abort()
     // set commit flag for dynamic object column schema
     if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
         global_context.getCnchCatalog()->abortObjectPartialSchema(txn_id);
-    
-    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, true);
+
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts, txn_id, /*error=*/ true);
 }
 
 UInt32 InsertAction::collectNewParts() const
