@@ -20,9 +20,34 @@
 #include <Columns/ColumnsNumber.h>
 
 #include <Common/assert_cast.h>
+#include <Common/CurrentThread.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE;
+}
+
+
+void SerializationDate32::checkDateOverflow(const ExtendedDayNum &, const FormatSettings & settings) const
+{
+    if (!settings.check_date_overflow)
+        return;
+
+    if(!current_thread || !current_thread->has_truncated_date)
+        return;
+
+    if (settings.throw_on_date_overflow)
+    {
+        current_thread->has_truncated_date = false;
+        throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "Under MYSQL dialect or check_date_overflow = 1, the Date32 value should be within [1900-01-01, 2299-12-31]");
+    }
+
+    current_thread->has_truncated_date = in_serialization_nullable;
+}
 
 void SerializationDate32::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const
 {
@@ -36,10 +61,11 @@ void SerializationDate32::deserializeWholeText(IColumn & column, ReadBuffer & is
         throwUnexpectedDataAfterParsedValue(column, istr, settings, "Date32");
 }
 
-void SerializationDate32::deserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationDate32::deserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     ExtendedDayNum x;
     readDateText(x, istr);
+    checkDateOverflow(x, settings);
     assert_cast<ColumnInt32 &>(column).getData().push_back(x);
 }
 
@@ -55,12 +81,13 @@ void SerializationDate32::serializeTextQuoted(const IColumn & column, size_t row
     writeChar('\'', ostr);
 }
 
-void SerializationDate32::deserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationDate32::deserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     ExtendedDayNum x;
     assertChar('\'', istr);
     readDateText(x, istr);
     assertChar('\'', istr);
+    checkDateOverflow(x, settings);
     assert_cast<ColumnInt32 &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
 }
 
@@ -71,12 +98,13 @@ void SerializationDate32::serializeTextJSON(const IColumn & column, size_t row_n
     writeChar('"', ostr);
 }
 
-void SerializationDate32::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationDate32::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     ExtendedDayNum x;
     assertChar('"', istr);
     readDateText(x, istr);
     assertChar('"', istr);
+    checkDateOverflow(x, settings);
     assert_cast<ColumnInt32 &>(column).getData().push_back(x);
 }
 
@@ -87,10 +115,22 @@ void SerializationDate32::serializeTextCSV(const IColumn & column, size_t row_nu
     writeChar('"', ostr);
 }
 
-void SerializationDate32::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationDate32::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
-    LocalDate value;
-    readCSV(value, istr);
-    assert_cast<ColumnInt32 &>(column).getData().push_back(value.getExtendedDayNum());
+    if (!settings.check_date_overflow)
+    {
+        LocalDate value;
+        readCSV(value, istr);
+        const auto x = value.getExtendedDayNum();
+        assert_cast<ColumnInt32 &>(column).getData().push_back(x);
+
+    }
+    else
+    {
+        ExtendedDayNum x;
+        readCSV(x, istr);
+        checkDateOverflow(x, settings);
+        assert_cast<ColumnInt32 &>(column).getData().push_back(x);
+    }
 }
 }

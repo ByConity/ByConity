@@ -35,6 +35,8 @@ namespace ErrorCodes
 
 void ThreadStatus::applyQuerySettings()
 {
+    /// reset the truncation flag for every query
+    has_truncated_date = false;
     auto query_context_ptr = query_context.lock();
     assert(query_context_ptr);
     const Settings & settings = query_context_ptr->getSettingsRef();

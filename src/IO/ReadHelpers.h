@@ -45,6 +45,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Arena.h>
 #include <Common/intExp.h>
+#include <Common/ThreadStatus.h>
 
 #include <Formats/FormatSettings.h>
 
@@ -706,9 +707,17 @@ inline ReturnType readDateTextImpl(LocalDate & date, ReadBuffer & buf)
 inline void convertToDayNum(DayNum & date, ExtendedDayNum & from)
 {
     if (unlikely(from < 0))
+    {
+        if (current_thread)
+            current_thread->has_truncated_date = true;
         date = 0;
+    }
     else if (unlikely(from > 0xFFFF))
+    {
+        if (current_thread)
+            current_thread->has_truncated_date = true;
         date = 0xFFFF;
+    }
     else
         date = from;
 }
@@ -989,6 +998,8 @@ inline ReturnType readDateTimeTzTextImpl(time_t & datetime, ReadBuffer & buf, co
             buf.position() += DateTimeStringInputSize;
             if (unlikely(year == 0)) {
                 datetime = 0;
+                if (current_thread)
+                    current_thread->has_truncated_date = true;
                 return ReturnType(true);
             }
             s = buf.position();
@@ -1075,8 +1086,8 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
             }
         }
     }
-    /// 9908870400 is time_t value for 2184-01-01 UTC (a bit over the last year supported by DateTime64)
-    else if (whole >= 9908870400LL)
+    /// 10413792000LLis time_t value for 2300-01-01 UTC (a bit over the last year supported by DateTime64)
+    else if (whole >= 10413792000LL)
     {
         /// Unix timestamp with subsecond precision, already scaled to integer.
         /// For disambiguation we support only time since 2001-09-09 01:46:40 UTC and less than 30 000 years in future.
@@ -1089,14 +1100,19 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
         return ReturnType(false);
     }
 
+    bool is_ok = true;
     if constexpr (std::is_same_v<ReturnType, void>)
-        datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale);
+    {
+        datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale) * negative_multiplier;
+    }
     else
-        DecimalUtils::tryGetDecimalFromComponents<DateTime64>(components, scale, datetime64);
+    {
+        is_ok = DecimalUtils::tryGetDecimalFromComponents<DateTime64>(components, scale, datetime64);
+        if (is_ok)
+            datetime64 *= negative_multiplier;
+    }
 
-    datetime64 *= negative_multiplier;
-
-    return ReturnType(true);
+    return ReturnType(is_ok);
 }
 
 // Parse format HH:MM:SS.NNNNNNNNN (SQL Standard)
@@ -1166,6 +1182,7 @@ inline bool readTimeTextImpl(time_t & t, ReadBuffer & buf)
         hour = (s[0] - '0') * 10 + (s[1] - '0');
         minute = (s[3] - '0') * 10 + (s[4] - '0');
         sec = (s[6] - '0') * 10 + (s[7] - '0');
+        totalIntegerSize = 8;
     }
     else if (totalIntegerSize == 6)
     {
@@ -1364,6 +1381,16 @@ inline void readTime64Text(Decimal64 & time64, UInt32 scale, ReadBuffer & buf)
     readTime64TextImpl<void>(time64, scale, buf);
 }
 
+inline time_t extractWholePart(DateTime64 datetime64, UInt32 scale)
+{
+    auto decimal_components = DecimalUtils::split(datetime64, scale);
+    time_t whole = decimal_components.whole;
+    /// reverse op of combining whole and fract to get decimal64 in readDateTimeTextImpl
+    if (decimal_components.fractional && whole < 0)
+        whole -= 1;
+    return whole;
+}
+
 /// Generic methods to read value in native binary format.
 template <typename T>
 inline std::enable_if_t<is_arithmetic_v<T>, void>
@@ -1435,6 +1462,8 @@ tryReadText(T & x, ReadBuffer & buf) { return tryReadFloatText(x, buf); }
 
 inline void readText(bool & x, ReadBuffer & buf) { readBoolText(x, buf); }
 inline void readText(String & x, ReadBuffer & buf) { readEscapedString(x, buf); }
+inline void readText(DayNum & x, ReadBuffer & buf) { readDateText(x, buf); }
+inline void readText(ExtendedDayNum & x, ReadBuffer & buf) { readDateText(x, buf); }
 inline void readText(LocalDate & x, ReadBuffer & buf) { readDateText(x, buf); }
 inline void readText(LocalDateTime & x, ReadBuffer & buf) { readDateTimeText(x, buf); }
 inline void readText(UUID & x, ReadBuffer & buf) { readUUIDText(x, buf); }
@@ -1529,6 +1558,8 @@ inline std::enable_if_t<is_arithmetic_v<T>, void>
 readCSV(T & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 
 inline void readCSV(String & x, ReadBuffer & buf, const FormatSettings::CSV & settings) { readCSVString(x, buf, settings); }
+inline void readCSV(DayNum & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
+inline void readCSV(ExtendedDayNum & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(LocalDate & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(LocalDateTime & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(UUID & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
