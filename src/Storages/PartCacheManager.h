@@ -169,6 +169,7 @@ private:
     CnchStorageCachePtr storageCachePtr;
 
     mutable std::mutex trashed_active_tables_mutex;
+    /// Trashed TableMetaEntryPtr, will be cleaned in a background thread.
     std::list<TableMetaEntryPtr> trashed_active_tables;
     /// A cache for the NHUT which has been written to bytekv. Do not need to update NHUT each time when non-host server commit parts
     /// bacause tso has 3 seconds interval. We just cache the latest updated NHUT and only write to metastore if current ts is
