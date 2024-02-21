@@ -142,6 +142,8 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.map.parse_null_map_as_empty = settings.input_format_parse_null_map_as_empty;
     format_settings.map.skip_null_map_value = settings.input_format_skip_null_map_value;
     format_settings.map.max_map_key_length = settings.input_format_max_map_key_long;
+    format_settings.throw_on_date_overflow = settings.throw_on_date_overflow;
+    format_settings.check_date_overflow = settings.check_date_overflow;
 
     /// Validate avro_schema_registry_url with RemoteHostFilter when non-empty and in Server context
     if (format_settings.schema.is_server)

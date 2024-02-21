@@ -16,6 +16,8 @@ private:
 public:
     SerializationDateTime(const DateLUTImpl & time_zone_, const DateLUTImpl & utc_time_zone_);
 
+    void checkDateOverflow(time_t & x, const FormatSettings & settings) const;
+
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
