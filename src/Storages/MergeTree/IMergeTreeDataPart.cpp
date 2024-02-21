@@ -1802,14 +1802,12 @@ void IMergeTreeDataPart::createDeleteBitmapForDetachedPart() const
 
             auto bitmap_writer = volume->getDisk()->writeFile(delete_bitmap_rel_path);
             bitmap_writer->write(buf.data(), size);
-            /// It's necessary to do next() and sync() here, otherwise it will omit the error in WriteBufferFromHDFS::WriteBufferFromHDFSImpl::~WriteBufferFromHDFSImpl() which case file incomplete.
-            bitmap_writer->next();
             bitmap_writer->sync();
             bitmap_writer->finalize();
         }
     }
-    meta_writer->next();
     meta_writer->sync();
+    meta_writer->finalize();
     LOG_DEBUG(
         storage.log,
         "Write delete bitmap for detached part {} to path: {}, cardinality: {}",
@@ -2002,10 +2000,10 @@ IMergeTreeDataPart::ColumnSizeByName IMergeTreeDataPart::getColumnsSkipIndicesSi
         ColumnSize size;
         auto index_file_name = index_helper->getFileName();
         static const std::vector<String> idx_extension = {
-            INDEX_FILE_EXTENSION, 
-            GIN_SEGMENT_ID_FILE_EXTENSION, 
-            GIN_SEGMENT_METADATA_FILE_EXTENSION, 
-            GIN_DICTIONARY_FILE_EXTENSION, 
+            INDEX_FILE_EXTENSION,
+            GIN_SEGMENT_ID_FILE_EXTENSION,
+            GIN_SEGMENT_METADATA_FILE_EXTENSION,
+            GIN_DICTIONARY_FILE_EXTENSION,
             GIN_POSTINGS_FILE_EXTENSION
         };
         std::for_each(idx_extension.begin(), idx_extension.end(), [&](const String & ext) {

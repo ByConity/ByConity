@@ -60,8 +60,16 @@
 namespace ProfileEvents
 {
     extern const Event S3ReadRequestsErrors;
+    extern const Event S3WriteRequestsErrors;
+
     extern const Event S3ResetSessions;
     extern const Event S3PreservedSessions;
+
+    extern const Event S3CreateMultipartUpload;
+    extern const Event S3CompleteMultipartUpload;
+    extern const Event S3AbortMultipartUpload;
+    extern const Event S3UploadPart;
+    extern const Event S3PutObject;
 }
 
 namespace
@@ -702,6 +710,7 @@ namespace S3
         const std::optional<std::map<String, String>> & meta,
         const std::optional<std::map<String, String>> & tags) const
     {
+        ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload, 1);
         Aws::S3::Model::CreateMultipartUploadRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -715,15 +724,12 @@ namespace S3
         }
 
         auto outcome = client->CreateMultipartUpload(req);
-
-        if (outcome.IsSuccess())
+        if (!outcome.IsSuccess())
         {
-            return outcome.GetResult().GetUploadId();
-        }
-        else
-        {
+            ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);
             throw S3Exception(outcome.GetError());
         }
+        return outcome.GetResult().GetUploadId();
     }
 
     void S3Util::completeMultipartUpload(const String & key, const String & upload_id, const std::vector<String> & etags) const
@@ -732,6 +738,8 @@ namespace S3
         {
             throw Exception("Trying to complete a multiupload without any part in it", ErrorCodes::LOGICAL_ERROR);
         }
+
+        ProfileEvents::increment(ProfileEvents::S3CompleteMultipartUpload, 1);
 
         Aws::S3::Model::CompleteMultipartUploadRequest req;
         req.SetBucket(bucket);
@@ -751,12 +759,15 @@ namespace S3
 
         if (!outcome.IsSuccess())
         {
+            ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);
             throw S3Exception(outcome.GetError());
         }
     }
 
     void S3Util::abortMultipartUpload(const String & key, const String & upload_id) const
     {
+        ProfileEvents::increment(ProfileEvents::S3AbortMultipartUpload, 1);
+
         Aws::S3::Model::AbortMultipartUploadRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -766,6 +777,7 @@ namespace S3
 
         if (!outcome.IsSuccess())
         {
+            ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);
             throw S3Exception(outcome.GetError());
         }
     }
@@ -777,8 +789,9 @@ namespace S3
         size_t size,
         const std::shared_ptr<Aws::StringStream> & stream) const
     {
-        Aws::S3::Model::UploadPartRequest req;
+        ProfileEvents::increment(ProfileEvents::S3UploadPart, 1);
 
+        Aws::S3::Model::UploadPartRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
         req.SetPartNumber(part_number);
@@ -788,14 +801,12 @@ namespace S3
 
         auto outcome = client->UploadPart(req);
 
-        if (outcome.IsSuccess())
+        if (!outcome.IsSuccess())
         {
-            return outcome.GetResult().GetETag();
-        }
-        else
-        {
+            ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);
             throw S3Exception(outcome.GetError());
         }
+        return outcome.GetResult().GetETag();
     }
 
     void S3Util::upload(
@@ -805,6 +816,8 @@ namespace S3
         const std::optional<std::map<String, String>> & metadata,
         const std::optional<std::map<String, String>> & tags) const
     {
+        ProfileEvents::increment(ProfileEvents::S3PutObject, 1);
+
         Aws::S3::Model::PutObjectRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -823,6 +836,7 @@ namespace S3
 
         if (!outcome.IsSuccess())
         {
+            ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);
             throw S3Exception(outcome.GetError());
         }
     }

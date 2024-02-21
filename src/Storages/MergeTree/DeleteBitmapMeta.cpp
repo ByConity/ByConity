@@ -119,8 +119,6 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage) c
                 auto out = disk->writeFile(file_rel_path);
 
                 out->write(buf.data(), size);
-                /// It's necessary to do next() and sync() here, otherwise it will omit the error in WriteBufferFromHDFS::WriteBufferFromHDFSImpl::~WriteBufferFromHDFSImpl() which case file incomplete.
-                out->next();
                 out->sync();
                 out->finalize();
             }

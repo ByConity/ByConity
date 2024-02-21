@@ -28,8 +28,9 @@ public:
         const ConnectionTimeouts & timeouts = {},
         size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE);
 
+protected:
     /// Receives response from the server after sending all data.
-    void finalize() override;
+    void finalizeImpl() override;
 };
 
 }

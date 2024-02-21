@@ -46,6 +46,7 @@ namespace ErrorCodes
 {
 extern const int NETWORK_ERROR;
 extern const int CANNOT_OPEN_FILE;
+extern const int CANNOT_CLOSE_FILE;
 extern const int CANNOT_FSYNC;
 extern const int BAD_ARGUMENTS;
 }
@@ -57,6 +58,8 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
     hdfsFile fout;
     HDFSBuilderWrapper builder;
     HDFSFSPtr fs;
+    bool need_close = false;
+
     void openFile( const std::string & hdfs_name_, int flags, bool overwrite_current_file = false) {
         ProfileEvents::increment(ProfileEvents::HdfsFileOpen);
         /// We use hdfs_name as path directly to avoid Poco URI escaping character(e.g. %) in hdfs_name.
@@ -80,7 +83,9 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
             throw Exception("Unable to open HDFS file: " + path + " error: " + std::string(hdfsGetLastError()),
                 ErrorCodes::CANNOT_OPEN_FILE);
         }
+        need_close = true;
     }
+
     explicit WriteBufferFromHDFSImpl(
             const std::string & hdfs_name_,
             const Poco::Util::AbstractConfiguration & config_,
@@ -103,15 +108,37 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
 
     ~WriteBufferFromHDFSImpl()
     {
-        int ec = hdfsCloseFile(fs.get(), fout);
-        if (ec != 0)
+        try
         {
-            const char * underlying_err_msg = hdfsGetLastError();
-            std::string underlying_err_str = underlying_err_msg ? std::string(underlying_err_msg) : "unknown error";
-            LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "failed to close file {}, errno: {}, reason: {} ", hdfs_uri.toString(), ec, underlying_err_str);
+            closeFile();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
         }
     }
 
+    void closeFile()
+    {
+        if (need_close)
+        {
+            int ec = hdfsCloseFile(fs.get(), fout);
+            if (ec != 0)
+            {
+                ProfileEvents::increment(ProfileEvents::WriteBufferFromHdfsWriteFailed);
+
+                const char * underlying_err_msg = hdfsGetLastError();
+                std::string reason = underlying_err_msg ? std::string(underlying_err_msg) : "unknown error";
+                throw Exception(
+                    ErrorCodes::CANNOT_CLOSE_FILE,
+                    "Failed to close hdfs file {}, errno: {}, reason: {}",
+                    hdfs_uri.toString(),
+                    ec,
+                    reason);
+            }
+            need_close = false;
+        }
+    }
 
     int write(const char * start, size_t size) const
     {
@@ -164,13 +191,13 @@ void WriteBufferFromHDFS::nextImpl()
         bytes_written += impl->write(working_buffer.begin() + bytes_written, offset() - bytes_written);
 
     ProfileEvents::increment(ProfileEvents::WriteBufferFromHdfsWriteBytes, bytes_written);
-    watch.stop();
     ProfileEvents::increment(ProfileEvents::HDFSWriteElapsedMicroseconds, watch.elapsedMicroseconds());
 }
 
 
 void WriteBufferFromHDFS::sync()
 {
+    next();
     impl->sync();
 }
 
@@ -184,22 +211,22 @@ off_t WriteBufferFromHDFS::getPositionInFile()
     return hdfsTell(impl->fs.get(), impl->fout);
 }
 
-void WriteBufferFromHDFS::finalize()
+void WriteBufferFromHDFS::finalizeImpl()
+{
+    next();
+    impl->closeFile();
+}
+
+WriteBufferFromHDFS::~WriteBufferFromHDFS()
 {
     try
     {
-        next();
+        finalize();
     }
     catch (...)
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
-}
-
-
-WriteBufferFromHDFS::~WriteBufferFromHDFS()
-{
-    finalize();
 }
 
 }

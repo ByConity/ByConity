@@ -27,6 +27,7 @@
 #include <iostream>
 #include <cassert>
 
+#include <Common/MemoryTracker.h>
 #include <Common/Exception.h>
 #include <IO/BufferBase.h>
 
@@ -121,11 +122,6 @@ public:
         next();
     }
 
-    virtual void finalize()
-    {
-        next();
-    }
-
     /// This method may be called before finalize() to tell there would not be any more data written.
     /// Used does not have to call it, implementation should check it itself if needed.
     ///
@@ -134,6 +130,35 @@ public:
     /// multiple files to finalize. Mainly, for blob storage, finalization has high latency,
     /// and calling preFinalize in a loop may parallelize it.
     virtual void preFinalize() { next(); }
+
+    /// Write the last data.
+    virtual void finalize()
+    {
+        if (finalized)
+            return;
+
+        MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
+        try
+        {
+            finalizeImpl();
+            finalized = true;
+        }
+        catch (...)
+        {
+            pos = working_buffer.begin();
+            finalized = true;
+            throw;
+        }
+    }
+
+protected:
+
+    virtual void finalizeImpl()
+    {
+        next();
+    }
+
+    bool finalized = false;
 
 private:
     /** Write the data in the buffer (from the beginning of the buffer to the current position).

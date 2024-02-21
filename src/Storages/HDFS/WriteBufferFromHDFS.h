@@ -60,7 +60,7 @@ public:
     void sync() override;
     off_t getPositionInFile();
     std::string getFileName() const override;
-    void finalize() override;
+    void finalizeImpl() override;
 
 private:
     struct WriteBufferFromHDFSImpl;

@@ -79,21 +79,19 @@ public:
 
     ~WriteBufferFromByteS3() override;
 
-    /// Receives response from the server after sending all data.
-    virtual void finalize() override;
-
     void nextImpl() override;
 
-    void sync() override;
+    void sync() override {}
 
     String getFileName() const override
     {
         return s3_util.getBucket() + "/" + key;
     }
 
-private:
-    bool finalized = false;
+protected:
+    virtual void finalizeImpl() override;
 
+private:
     void allocateBuffer();
     void clearBuffer();
 
