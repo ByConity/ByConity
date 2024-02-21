@@ -83,9 +83,13 @@ void AssignedResource::addDataParts(const HiveFiles & parts)
 {
     for (const auto & part : parts)
     {
-        if (!part_names.count(part->file_path))
-        {
-            part_names.emplace(part->file_path);
+        auto [it, insert] = part_names.emplace(part->file_path);
+        if (!insert) {
+            // what to do here? if we addede duplicated file path
+            // self join case may trigger the exception
+            // throw Exception(ErrorCodes::BAD_ARGUMENTS, "Find duplicated part name '{}'", part->file_path);
+        }
+        else {
             hive_parts.emplace_back(part);
         }
     }

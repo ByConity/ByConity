@@ -63,8 +63,11 @@ HiveFiles JNIHiveMetastoreClient::getFilesInPartition(const HivePartitions & par
     Protos::InputSplits input_splits;
     HiveFiles hive_files;
     input_splits.ParseFromString(input_splits_bytes);
+    /// file_path is used for hash in worker service; and does not allow duplicated file_path
+    int file_idx = 0;
     for (const auto & input_split : input_splits.input_splits()) {
         auto it = hive_files.emplace_back(std::make_shared<HiveInputSplitFile>(input_split, properties));
+        it->file_path = std::to_string(file_idx++);
         it->format = IHiveFile::FileFormat::InputSplit;
         it->partition = partitions.at(input_split.partition_index());
     }
