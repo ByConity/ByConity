@@ -1525,7 +1525,7 @@ struct ConvertThroughParsing
 
     template <typename Additions = void *>
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & res_type, size_t input_rows_count,
-                        Additions additions [[maybe_unused]] = Additions())
+                        Additions additions [[maybe_unused]] = Additions(), bool mysql_mode [[maybe_unused]] = false)
     {
         using ColVecTo = typename ToDataType::ColumnType;
 
@@ -1715,6 +1715,8 @@ struct ConvertThroughParsing
                         DateTime64 res = 0;
                         parsed = tryParseDateTime64BestEffort(res, vec_to.getScale(), read_buffer, *local_time_zone, *utc_time_zone);
                         vec_to[i] = res;
+                        if (mysql_mode)
+                            read_buffer.ignore(read_buffer.buffer().end() - read_buffer.position());
                     }
                     else if (std::is_same_v<ToDataType, DataTypeFloat64>)
                     {
@@ -2529,6 +2531,8 @@ template <typename ToDataType, typename Name,
     ConvertFromStringParsingMode parsing_mode = ConvertFromStringParsingMode::Normal>
 class FunctionConvertFromString : public IFunction
 {
+private:
+    bool mysql_mode;
 public:
     static constexpr auto name = Name::name;
     static constexpr bool to_decimal =
@@ -2542,10 +2546,12 @@ public:
     static FunctionPtr create(ContextPtr context)
     {
         if (context && (context->getSettingsRef().enable_implicit_arg_type_convert || context->getSettingsRef().dialect_type == DialectType::MYSQL))
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertFromString>());
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertFromString>(true));
         return std::make_shared<FunctionConvertFromString>();
     }
     static FunctionPtr create() { return std::make_shared<FunctionConvertFromString>(); }
+
+    explicit FunctionConvertFromString(bool mysql_mode_ = false) : mysql_mode(mysql_mode_) {}
 
     ArgType getArgumentsType() const override
     {
@@ -2671,12 +2677,12 @@ public:
         if (checkAndGetDataType<DataTypeString>(from_type))
         {
             return ConvertThroughParsing<DataTypeString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
-                arguments, result_type, input_rows_count, scale);
+                arguments, result_type, input_rows_count, scale, mysql_mode);
         }
         else if (checkAndGetDataType<DataTypeFixedString>(from_type))
         {
             return ConvertThroughParsing<DataTypeFixedString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
-                arguments, result_type, input_rows_count, scale);
+                arguments, result_type, input_rows_count, scale, mysql_mode);
         }
 
         return nullptr;
