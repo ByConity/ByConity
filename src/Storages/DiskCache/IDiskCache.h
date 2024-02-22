@@ -81,7 +81,7 @@ public:
     virtual void shutdown();
 
     /// set segment name in cache and write value to disk cache
-    virtual void set(const String & key, ReadBuffer & value, size_t weight_hint) = 0;
+    virtual void set(const String & key, ReadBuffer & value, size_t weight_hint, bool is_preload) = 0;
 
     /// get segment from cache and return local path if exists.
     virtual std::pair<DiskPtr, String> get(const String & key) = 0;
@@ -198,7 +198,7 @@ public:
         return dropped_size;
     }
 
-    virtual void set(const String &, ReadBuffer &, size_t ) override { throw Exception("MultiDiskCache `set` is not supported now", ErrorCodes::LOGICAL_ERROR);}
+    virtual void set(const String &, ReadBuffer &, size_t, bool ) override { throw Exception("MultiDiskCache `set` is not supported now", ErrorCodes::LOGICAL_ERROR);}
     virtual std::pair<DiskPtr, String> get(const String &) override { throw Exception("MultiDiskCache `get` is not supported now", ErrorCodes::LOGICAL_ERROR);}
     virtual void load() override { throw Exception("MultiDiskCache `load` is not supported now", ErrorCodes::LOGICAL_ERROR);}
     virtual size_t getKeyCount() const override {throw Exception("MultiDiskCache `getKeyCount` is not supported now", ErrorCodes::LOGICAL_ERROR); }

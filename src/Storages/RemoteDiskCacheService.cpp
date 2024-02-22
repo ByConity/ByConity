@@ -80,7 +80,7 @@ void RemoteDiskCacheService::writeRemoteFile(
                     auto data_file = disk->readFile(file.path()); // todo(jiashuo): use default settings
                     data_file->seek(file.offset());
                     LimitReadBuffer segment_value(*data_file, file.length(), false);
-                    disk_cache->set(file.key(), segment_value, file.length());
+                    disk_cache->set(file.key(), segment_value, file.length(), false);
                     LOG_TRACE(log, "Cached remote {} file: {}", disk_cache->getName(), file.key());
                 }
                 catch (Exception & e)
