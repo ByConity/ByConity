@@ -33,7 +33,7 @@ void FileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
         LimitSeekableReadBuffer limit_reader(*buf, begin, end);
 
         String segment_key = getSegmentName();
-        disk_cache.set(segment_key, limit_reader, end - begin);
+        disk_cache.set(segment_key, limit_reader, end - begin, false);
         LOG_TRACE(log, "Cached {} range {}-{} segment {} to disk", path,
             begin, end, getSegmentName());
     }

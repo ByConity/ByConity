@@ -75,7 +75,7 @@ public:
         const IDiskCacheStrategyPtr & strategy_,
         IDiskCache::DataType type_ = IDiskCache::DataType::ALL);
 
-    void set(const String& seg_name, ReadBuffer& value, size_t weight_hint) override;
+    void set(const String& seg_name, ReadBuffer& value, size_t weight_hint, bool is_preload) override;
     std::pair<DiskPtr, String> get(const String& seg_name) override;
     void load() override;
     size_t drop(const String & part_name) override;

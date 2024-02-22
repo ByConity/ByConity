@@ -49,6 +49,7 @@ namespace ProfileEvents
     extern const Event DiskCacheGetMetaMicroSeconds;
     extern const Event DiskCacheGetTotalOps;
     extern const Event DiskCacheSetTotalOps;
+    extern const Event DiskCacheSetTotalBytes;
 }
 
 namespace DB
@@ -103,7 +104,7 @@ DiskCacheLRU::DiskCacheLRU(
     IDiskCache::DataType type_)
     : IDiskCache(name_, volume_, throttler_, settings_, strategy_, false, type_)
     , set_rate_throttler(settings_.cache_set_rate_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_rate_limit))
-    , set_throughput_throttler(settings_.cache_set_rate_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_throughput_limit))
+    , set_throughput_throttler(settings_.cache_set_throughput_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_throughput_limit))
     , containers(
           settings.cache_shard_num,
           BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>::Options{
@@ -206,7 +207,7 @@ static fs::path getRelativePathForPart(const String & part_name, const String & 
     return fs::path(prefix) / hex_key.substr(0, 3) / hex_key / "";
 }
 
-void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_hint)
+void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_hint, bool is_preload)
 {
     if (is_droping)
     {
@@ -220,12 +221,13 @@ void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_
         set_rate_throttler->add(1);
     }
 
+    ProfileEvents::increment(ProfileEvents::DiskCacheSetTotalOps, 1, Metrics::MetricType::Rate, {{"type", (is_preload ? "preload": "query")}});
+
     if (set_throughput_throttler)
     {
         set_throughput_throttler->add(weight_hint);
     }
 
-    ProfileEvents::increment(ProfileEvents::DiskCacheSetTotalOps);
     auto key = hash(seg_name);
     auto& shard = containers.shard(key);
     // Insert cache meta first, if there is a entry already there, skip this insert
@@ -249,6 +251,7 @@ void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_
 
         // Write data to local
         size_t weight = writeSegment(seg_name, value, reserved_space);
+        ProfileEvents::increment(ProfileEvents::DiskCacheSetTotalBytes, weight, Metrics::MetricType::Rate, {{"type", (is_preload ? "preload": "query")}});
 
         // Update meta in lru cache, it must still there, since it should get evicted
         // since it have 0 weight

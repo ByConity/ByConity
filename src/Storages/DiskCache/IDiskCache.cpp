@@ -214,6 +214,7 @@ bool IDiskCache::scheduleCacheTask(const std::function<void()> & task)
         if (dist(random_generator) <= drop_possibility)
         {
             LOG_DEBUG(log, "Drop disk cache since queue is almost full, Queue length: {}, Max: {}, curren_ratio: {} ", active_task_size, max_queue_size, current_ratio);
+            ProfileEvents::increment(ProfileEvents::DiskCacheTaskDropCount, 1, Metrics::MetricType::Meter);
             return false;
         }
         else

@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeInterval.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/Context.h>
 
@@ -150,6 +151,18 @@ DataTypes getColumnsType(ArgType argType, const Type & arguments)
                 else expectedTypes.push_back(std::make_shared<DataTypeDateTime>());
             }
             break;
+        case ArgType::DATE_INTERVAL:
+            {
+                expectedTypes.push_back(std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale));
+                expectedTypes.push_back(std::make_shared<DataTypeInterval>(IntervalKind::Second));
+            }
+            break;
+        case ArgType::INTERVAL_DATE:
+            {
+                expectedTypes.push_back(std::make_shared<DataTypeInterval>(IntervalKind::Second));
+                expectedTypes.push_back(std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale));
+            }
+            break;
         case ArgType::UNDEFINED:
             break;
     }
@@ -239,7 +252,7 @@ public:
 
 private:
     std::unique_ptr<IFunction> function;
-    ArgType arg_type = ArgType::UNDEFINED;
+    mutable ArgType arg_type = ArgType::UNDEFINED;
 
     template<typename Type>
     bool isVaildArguments(const Type & arguments) const;

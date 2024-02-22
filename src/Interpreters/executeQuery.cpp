@@ -1464,7 +1464,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
 
             /// Common code for finish and exception callbacks
-            auto status_info_to_query_log = [](QueryLogElement & element, const QueryStatusInfo & info, const ASTPtr query_ast) mutable {
+            auto status_info_to_query_log = [is_unlimited_query, context](QueryLogElement & element, const QueryStatusInfo & info, const ASTPtr query_ast) mutable {
                 DB::UInt64 query_time = info.elapsed_seconds * 1000000;
                 ProfileEvents::increment(ProfileEvents::QueryTimeMicroseconds, query_time);
                 if (query_ast->as<ASTSelectQuery>() || query_ast->as<ASTSelectWithUnionQuery>())
@@ -1493,6 +1493,37 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 element.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
                 element.max_io_time_thread_ms = info.max_io_time_thread_ms;
                 element.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
+
+                if (element.max_thread_io_profile_counters)
+                {
+                    auto max_io_ms = element.max_thread_io_profile_counters->getIOReadTime(element.query_settings->remote_filesystem_read_prefetch) / 1000;
+                    auto io_ms = max_io_ms < element.query_duration_ms ? max_io_ms : 0; 
+                    if (is_unlimited_query)
+                    {
+                        HistogramMetrics::increment(
+                            HistogramMetrics::UnlimitedQueryIOLatency,
+                            io_ms,
+                            Metrics::MetricType::Timer);
+                    }
+                    else
+                    {
+                        if (auto vw = context->tryGetCurrentVW())
+                        {
+                            HistogramMetrics::increment(
+                                HistogramMetrics::QueryIOLatency,
+                                io_ms,
+                                Metrics::MetricType::Timer,
+                                {{"vw", vw->getName()}});
+                        }
+                        else
+                        {
+                            HistogramMetrics::increment(
+                                HistogramMetrics::UnlimitedQueryIOLatency,
+                                io_ms,
+                                Metrics::MetricType::Timer);
+                        }
+                    }
+                }
             };
 
             auto query_id = context->getCurrentQueryId();
@@ -1548,18 +1579,18 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                         if (process_list_elem->isUnlimitedQuery())
                             HistogramMetrics::increment(
-                                HistogramMetrics::UnlimitedQueryLatency, elem.query_duration_ms, {}, Metrics::MetricType::Timer);
+                                HistogramMetrics::UnlimitedQueryLatency, elem.query_duration_ms, Metrics::MetricType::Timer);
                         else
                         {
                             if (auto vw = context->tryGetCurrentVW())
                                 HistogramMetrics::increment(
                                     HistogramMetrics::QueryLatency,
                                     elem.query_duration_ms,
-                                    {{"vw", vw->getName()}},
-                                    Metrics::MetricType::Timer);
+                                    Metrics::MetricType::Timer,
+                                    {{"vw", vw->getName()}});
                             else
                                 HistogramMetrics::increment(
-                                    HistogramMetrics::UnlimitedQueryLatency, elem.query_duration_ms, {}, Metrics::MetricType::Timer);
+                                    HistogramMetrics::UnlimitedQueryLatency, elem.query_duration_ms, Metrics::MetricType::Timer);
                         }
 
                         auto progress_callback = context->getProgressCallback();
@@ -1686,6 +1717,37 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         elem.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
                         elem.max_io_time_thread_ms = info.max_io_time_thread_ms;
                         elem.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
+
+                        if (elem.max_thread_io_profile_counters)
+                        {
+                            auto max_io_ms = elem.max_thread_io_profile_counters->getIOReadTime(elem.query_settings->remote_filesystem_read_prefetch) / 1000;
+                            auto io_ms = max_io_ms < elem.query_duration_ms ? max_io_ms : 0; 
+                            if (process_list_elem->isUnlimitedQuery())
+                            {
+                                HistogramMetrics::increment(
+                                    HistogramMetrics::UnlimitedQueryIOLatency,
+                                    io_ms,
+                                    Metrics::MetricType::Timer);
+                            }
+                            else
+                            {
+                                if (auto vw = context->tryGetCurrentVW())
+                                {
+                                    HistogramMetrics::increment(
+                                        HistogramMetrics::QueryIOLatency,
+                                        io_ms,
+                                        Metrics::MetricType::Timer,
+                                        {{"vw", vw->getName()}});
+                                }
+                                else
+                                {
+                                    HistogramMetrics::increment(
+                                        HistogramMetrics::UnlimitedQueryIOLatency,
+                                        io_ms,
+                                        Metrics::MetricType::Timer);
+                                }
+                            }
+                        }
 
 
                         const auto & factories_info = context->getQueryFactoriesInfo();

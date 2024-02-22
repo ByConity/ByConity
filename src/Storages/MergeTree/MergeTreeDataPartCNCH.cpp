@@ -1233,7 +1233,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     IDiskCacheSegmentsVector segments;
 
     MarkCachePtr mark_cache_holder = storage.getContext()->getMarkCache();
-    auto add_segments = [&, this, strategy = cache_strategy](
+    auto add_segments = [&, this, strategy = cache_strategy, disk_cache = cache](
                             const NameAndTypePair & real_column) {
         ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
 
@@ -1256,6 +1256,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                 PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(mark_file_name), getFileSizeOrZero(mark_file_name)},
                 getMarksCount(),
                 mark_cache_holder.get(),
+                disk_cache->getMetaCache().get(),
                 stream_name,
                 DATA_FILE_EXTENSION,
                 PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(data_file_name), getFileSizeOrZero(data_file_name)},

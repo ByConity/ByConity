@@ -514,7 +514,7 @@ void CnchWorkerServiceImpl::preloadDataParts(
     google::protobuf::Closure * done)
 {
     SUBMIT_THREADPOOL({
-        SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::PreloadExecTotalOps); });
+        SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::PreloadExecTotalOps, 1, Metrics::MetricType::Rate);});
 
         Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);

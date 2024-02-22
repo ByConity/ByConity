@@ -6,9 +6,11 @@
 #include <vector>
 #include <atomic>
 #include <Core/Types.h>
+#include <Poco/Logger.h>
 #include <Common/LabelledMetrics.h>
 #include <metric_helper.h>
 #include <Common/Exception.h>
+#include <common/logger_useful.h>
 
 /** Implements histogram metrics, which can be helpful for latency etc.
   * Metric name, documentation and histogram buckets are to be defined in HistogramMetrics.cpp
@@ -55,7 +57,7 @@ namespace HistogramMetrics
 
     const std::unique_lock<std::mutex> getLock(Metric metric);
 
-    inline void increment(Metric metric, Value value, const MetricLabels & labels = {}, Metrics::MetricType type = Metrics::MetricType::None)
+    inline void increment(Metric metric, Value value, Metrics::MetricType type = Metrics::MetricType::None, const LabelledMetrics::MetricLabels & labels = {})
     {
         auto histogram = getHistogramBucketLimits(metric);
         size_t i = 0;
@@ -84,9 +86,18 @@ namespace HistogramMetrics
         {
             if (type != Metrics::MetricType::Timer)
             {
-                throw DB::Exception("only support Metrics::MetricType::Timer type when report histogram metrics", DB::ErrorCodes::BAD_ARGUMENTS);
+                LOG_ERROR(&Poco::Logger::get("HistogramMetrics"), "Only support Metrics::MetricType::Timer type when report histogram metrics");
+                return;
             }
-            Metrics::EmitTimer(getSnakeName(metric), value, LabelledMetrics::toString(labels));
+
+            try
+            {
+                Metrics::EmitTimer(getSnakeName(metric), value, LabelledMetrics::toString(labels));
+            }
+            catch (DB::Exception & e)
+            {
+                LOG_ERROR(&Poco::Logger::get("HistogramMetrics"), "Metrics emit metric failed: {}", e.message());
+            }
         }
     }
 }

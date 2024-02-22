@@ -398,7 +398,7 @@ void CnchDataWriter::schedule(
     const IMutableMergeTreeDataPartsVector & temp_staged_parts)
 {
     Stopwatch watch;
-    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchWriteDataElapsedMilliseconds, watch.elapsedMilliseconds()); });
+    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchWriteDataElapsedMilliseconds, watch.elapsedMilliseconds(), Metrics::MetricType::Timer);});
 
     if (!thread_pool)
     {

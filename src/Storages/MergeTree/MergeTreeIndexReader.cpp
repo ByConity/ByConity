@@ -110,6 +110,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                         PartFileDiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
                         marks_count_,
                         mark_cache,
+                        segment_cache->getMetaCache().get(),
                         index_name,
                         INDEX_FILE_EXTENSION,
                         PartFileDiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
