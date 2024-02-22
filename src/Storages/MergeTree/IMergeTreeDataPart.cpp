@@ -1725,6 +1725,8 @@ UInt64 IMergeTreeDataPart::getVersionFromPartition() const
 
 bool IMergeTreeDataPart::enableDiskCache() const
 {
+    if (!storage.getContext()->getSettingsRef().enable_local_disk_cache)
+        return false;
     if (disk_cache_mode == DiskCacheMode::AUTO)
         return storage.getSettings()->enable_local_disk_cache;
     else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
