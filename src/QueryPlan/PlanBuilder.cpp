@@ -67,32 +67,43 @@ Names PlanBuilder::applyProjection(ASTs & expressions)
     return output_symbols;
 }
 
-void PlanBuilder::appendProjection(ASTs & expressions)
+template <typename T>
+void PlanBuilder::appendProjection(const T & expressions)
 {
-    Assignments assignments;
-    NameToType types;
-    putIdentities(getOutputNamesAndTypes(), assignments, types);
-    bool has_new_projection = false;
-    AstToSymbol expression_to_symbols = createScopeAwaredASTMap<String>(analysis, translation->scope);
-
-    for (auto & expr : expressions)
+    if constexpr (std::is_same_v<T, ASTPtr>)
     {
-        if (expression_to_symbols.find(expr) == expression_to_symbols.end() && !canTranslateToSymbol(expr))
+        appendProjection(ASTs{expressions});
+        return;
+    }
+    else
+    {
+        Assignments assignments;
+        NameToType types;
+        putIdentities(getOutputNamesAndTypes(), assignments, types);
+        bool has_new_projection = false;
+        AstToSymbol expression_to_symbols = createScopeAwaredASTMap<String>(analysis, translation->scope);
+
+        for (auto & expr : expressions)
         {
-            String symbol = symbol_allocator->newSymbol(expr);
-            assignments.emplace_back(symbol, translate(expr));
-            types[symbol] = analysis.getExpressionType(expr);
-            expression_to_symbols[expr] = symbol;
-            has_new_projection = true;
+            if (expression_to_symbols.find(expr) == expression_to_symbols.end() && !canTranslateToSymbol(expr))
+            {
+                String symbol = symbol_allocator->newSymbol(expr);
+                assignments.emplace_back(symbol, translate(expr));
+                types[symbol] = analysis.getExpressionType(expr);
+                expression_to_symbols[expr] = symbol;
+                has_new_projection = true;
+            }
         }
-    }
 
-    if (has_new_projection)
-    {
-        auto project = std::make_shared<ProjectionStep>(getCurrentDataStream(), assignments, types);
-        addStep(std::move(project));
-        withAdditionalMappings(expression_to_symbols);
+        if (has_new_projection)
+        {
+            auto project = std::make_shared<ProjectionStep>(getCurrentDataStream(), assignments, types);
+            addStep(std::move(project));
+            withAdditionalMappings(expression_to_symbols);
+        }
+        return;
     }
+    __builtin_unreachable();
 }
 
 Names PlanBuilder::projectExpressionsWithCoercion(const ExpressionsAndTypes & expression_and_types)
@@ -137,4 +148,6 @@ Names PlanBuilder::projectExpressionsWithCoercion(const ExpressionsAndTypes & ex
     return output_symbols;
 }
 
+template void PlanBuilder::appendProjection(const ASTPtr & expressions);
+template void PlanBuilder::appendProjection(const ASTs & expressions);
 }

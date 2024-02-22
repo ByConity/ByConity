@@ -1814,7 +1814,6 @@ namespace
         }
 
     private:
-        ContextPtr context;
         Analysis & analysis;
         ScopePtr source_scope;
         std::unordered_set<size_t> grouping_field_indices;
@@ -1823,8 +1822,12 @@ namespace
         void verifyNoReferenceToNonGroupingKeyInSubquery(ASTPtr & node);
 
     public:
-        PostAggregateAnalyzerExpressionVisitor(ContextPtr context_, Analysis & analysis_, ScopePtr source_scope_, std::unordered_set<size_t> grouping_field_indices_):
-            AnalyzerExpressionVisitor(context_), context(context_), analysis(analysis_), source_scope(source_scope_), grouping_field_indices(std::move(grouping_field_indices_))
+        PostAggregateAnalyzerExpressionVisitor(
+            ContextPtr context_, Analysis & analysis_, ScopePtr source_scope_, std::unordered_set<size_t> grouping_field_indices_)
+            : AnalyzerExpressionVisitor(context_)
+            , analysis(analysis_)
+            , source_scope(source_scope_)
+            , grouping_field_indices(std::move(grouping_field_indices_))
         {}
     };
 
