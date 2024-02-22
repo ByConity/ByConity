@@ -239,7 +239,7 @@ public:
     const auto & get_partition() const { return partition; }
     const auto & get_deleted() const { return deleted; }
     const auto & get_commit_time() const { return commit_time; }
-    const auto & getUUID() const { return uuid; }
+    const auto & get_uuid() const { return uuid; }
 
     const MergeTreeMetaBase & storage;
 
@@ -249,8 +249,7 @@ public:
     std::atomic<bool> has_bitmap {false};
 
     /// Part unique identifier.
-    /// The intention is to use it for identifying cases where the same part is
-    /// processed by multiple shards.
+    /// Used by parts on object storage (S3) to compute an unique object key.
     UUID uuid = UUIDHelpers::Nil;
 
     VolumePtr volume;

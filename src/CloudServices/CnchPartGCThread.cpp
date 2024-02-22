@@ -267,38 +267,7 @@ void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const Server
             {
                 catalog->moveDataItemsToTrash(storage, items);
                 num_moved.fetch_add(is_staged ? items.staged_parts.size() : items.data_parts.size());
-
-                if (auto server_part_log = local_context->getServerPartLog())
-                {
-                    auto now = time(nullptr);
-                    std::unordered_map<String, size_t> count_by_partition{};
-
-                    for (const auto & part: parts)
-                    {
-                        /// TODO: add commit_time and end_time field
-                        ServerPartLogElement elem;
-                        elem.event_type = ServerPartLogElement::REMOVE_PART;
-                        elem.event_time = now;
-                        elem.database_name = storage->getDatabaseName();
-                        elem.table_name = storage->getTableName();
-                        elem.uuid = storage->getStorageUUID();
-                        elem.part_name = part->name();
-                        elem.partition_id = part->info().partition_id;
-                        elem.is_staged_part = is_staged;
-                        elem.rows = part->rowsCount();
-
-                        server_part_log->add(elem);
-
-                        if (elem.rows > 0)
-                            count_by_partition[elem.partition_id] += 1;
-                    }
-
-                    if (partition_selector)
-                    {
-                        for (const auto & [partition, count] : count_by_partition)
-                            partition_selector->addRemoveParts(storage->getStorageUUID(), partition, count, now);
-                    }
-                }
+                ServerPartLog::addRemoveParts(local_context, storage_id, parts, is_staged);
             }
             catch (Exception & e)
             {

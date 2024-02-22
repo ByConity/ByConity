@@ -23,11 +23,21 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int DIRECTORY_ALREADY_EXISTS;
+    extern const int LOGICAL_ERROR;
 }
 
 void MergeMutateAction::appendPart(MutableMergeTreeDataPartCNCHPtr part)
 {
     parts.emplace_back(std::move(part));
+}
+
+/// for merge, only add the merged part (last part) to server part log
+MutableMergeTreeDataPartsCNCHVector MergeMutateAction::getMergedPart() const
+{
+    if (type != ManipulationType::Merge)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "expect type to be Merge but got {}", static_cast<int>(type));
+    if (parts.empty()) return {};
+    return { parts.back() };
 }
 
 void MergeMutateAction::executeV1(TxnTimestamp commit_time)
@@ -54,7 +64,7 @@ void MergeMutateAction::executeV2()
         return;
 
     executed = true;
-    
+
     auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(table.get());
     if (!cnch_table)
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
@@ -69,6 +79,8 @@ void MergeMutateAction::postCommit(TxnTimestamp commit_time)
     global_context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
     for (auto & part : parts)
         part->commit_time = commit_time;
+
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), getPartLogType(), type == ManipulationType::Merge ? getMergedPart() : parts, {}, txn_id, /*error=*/ false, source_part_names);
 }
 
 void MergeMutateAction::abort()
@@ -76,6 +88,8 @@ void MergeMutateAction::abort()
     // clear parts in kv
     // skip part cache to avoid blocking by write lock of part cache for long time
     global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}});
+
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), getPartLogType(), type == ManipulationType::Merge ? getMergedPart() : parts, {}, txn_id, /*error=*/ true, source_part_names);
 }
 
 void MergeMutateAction::updatePartData(MutableMergeTreeDataPartCNCHPtr part, [[maybe_unused]] TxnTimestamp commit_time)

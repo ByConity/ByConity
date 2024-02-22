@@ -148,6 +148,11 @@ const String & ServerDataPart::name() const { return part_model_wrapper->name; }
 const MergeTreePartition & ServerDataPart::partition() const { return part_model_wrapper->partition; }
 const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & ServerDataPart::minmax_idx() const { return part_model_wrapper->minmax_idx; }
 
+UUID ServerDataPart::get_uuid() const
+{
+    return part_model().has_part_id() ? RPCHelpers::createUUID(part_model().part_id()) : UUIDHelpers::Nil;
+}
+
 UInt64 ServerDataPart::txnID() const
 {
     return part_model_wrapper->txnID();
@@ -189,7 +194,7 @@ const ImmutableDeleteBitmapPtr & ServerDataPart::getDeleteBitmap(const MergeTree
                 return delete_bitmap;
             throw Exception("No metadata for delete bitmap of part " + name(), ErrorCodes::LOGICAL_ERROR);
         }
-        
+
         Stopwatch watch;
         auto cache = storage.getContext()->getDeleteBitmapCache();
         /// TODO (zuochuang.zema): how to get the value of _row_exists.

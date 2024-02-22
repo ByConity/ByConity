@@ -241,12 +241,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 res_columns[col_num++]->insert(visible);
                 res_columns[col_num++]->insert(static_cast<Int8>(type));
 
-                UUID part_id = UUIDHelpers::Nil;
-                if (curr_part->part_model().has_part_id())
-                {
-                    part_id = RPCHelpers::createUUID(curr_part->part_model().part_id());
-                }
-                res_columns[col_num++]->insert(part_id);
+                res_columns[col_num++]->insert(curr_part->get_uuid());
                 res_columns[col_num++]->insert(curr_part->getCommitTime());
                 res_columns[col_num++]->insert(curr_part->getEndTime());
 

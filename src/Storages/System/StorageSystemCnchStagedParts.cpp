@@ -153,7 +153,7 @@ void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, Contex
         res_columns[col_num++]->insert(part->info.partition_id);
         res_columns[col_num++]->insert(part->bucket_number);
         res_columns[col_num++]->insert(part->getFullPath());
-        res_columns[col_num++]->insert(part->getUUID());
+        res_columns[col_num++]->insert(part->get_uuid());
     }
 }
 }

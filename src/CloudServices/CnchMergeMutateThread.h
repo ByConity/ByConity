@@ -62,6 +62,8 @@ struct ManipulationTaskRecord
 
     /// for system.part_merge_log & system.server_part_log
     String result_part_name;
+
+    Strings getSourcePartNames() const;
 };
 
 struct FutureManipulationTask
@@ -173,7 +175,7 @@ public:
 
 
     void tryRemoveTask(const String & task_id);
-    void finishTask(const String & task_id, const MergeTreeDataPartPtr & merged_part, std::function<void()> && commit_parts);
+    void finishTask(const String & task_id, std::function<void(const ManipulationTaskRecord &)> && commit_parts);
     bool removeTasksOnPartitions(const std::unordered_set<String> & partitions);
 
     String triggerPartMerge(StoragePtr & istorage, const String & partition_id, bool final, bool try_select, bool try_execute);

@@ -114,6 +114,7 @@ public:
     decltype(auto) get_partition() const { return partition(); }
     decltype(auto) get_deleted() const { return deleted(); }
     decltype(auto) get_commit_time() const { return getCommitTime(); }
+    UUID get_uuid() const;
 
     void serializePartitionAndMinMaxIndex(const MergeTreeMetaBase & storage, WriteBuffer & buf) const;
     void serializeDeleteBitmapMetas(const MergeTreeMetaBase & storage, WriteBuffer & buffer) const;
