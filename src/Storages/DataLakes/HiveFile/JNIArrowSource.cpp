@@ -44,7 +44,7 @@ Chunk JNIArrowSource::generate()
         THROW_RESULT_NOT_OK(record_batch);
         auto table = arrow::Table::FromRecordBatches(schema, {record_batch.ValueOrDie()});
         THROW_RESULT_NOT_OK(table);
-        arrow_column_to_ch_column->arrowTableToCHChunk(res, table.ValueOrDie());
+        arrow_column_to_ch_column->arrowTableToCHChunk(res, table.ValueOrDie(), (*table)->num_rows());
     }
     return res;
 }
@@ -61,10 +61,10 @@ void JNIArrowSource::prepareReader()
     /// check schema matches header;
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
         getPort().getHeader(),
-        schema,
         "JNI",
-        false,
-        true
+        false, /*import_nested*/
+        false, /*allow_missing_columns*/
+        true /*null_as_default*/
     );
 }
 
