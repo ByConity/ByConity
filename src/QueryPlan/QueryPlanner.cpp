@@ -153,19 +153,20 @@ private:
     // void planSampling(PlanBuilder & builder, ASTSelectQuery & select_query);
     RelationPlan planFinalSelect(PlanBuilder & builder, ASTSelectQuery & select_query);
 
-    /// plan subquery expressions, only subquery expressions under parent_expression will be planned
-    void planSubqueryExpression(PlanBuilder & builder, ASTSelectQuery & select_query, ASTs & parent_expressions)
-    {
-        for (auto & expr : parent_expressions)
-            planSubqueryExpression(builder, select_query, expr);
-    }
+    // the routine to plan expressions in most scenarios, which handle non-deterministic function & subqueries within expressions
+    template <typename T>
+    void planExpression(PlanBuilder & builder, ASTSelectQuery & select_query, const T & expressions);
+    template <typename T>
+    void planNonDeterministicFunction(PlanBuilder & builder, ASTSelectQuery & select_query, const T & expressions);
 
+    // plan subquery expressions, only subquery expressions under parent_expression will be planned
     // return apply nodes in order to setOuterColumns
-    PlanNodes planSubqueryExpression(PlanBuilder & builder, ASTSelectQuery & select_query, ASTPtr root);
+    template <typename T>
+    PlanNodes planSubqueryExpression(PlanBuilder & builder, ASTSelectQuery & select_query, const T & expressions);
     void planScalarSubquery(PlanBuilder & builder, const ASTPtr & scalar_subquery);
-    void planInSubquery(PlanBuilder & builder, const ASTPtr & node);
+    void planInSubquery(PlanBuilder & builder, const ASTPtr & node, ASTSelectQuery & select_query);
     void planExistsSubquery(PlanBuilder & builder, const ASTPtr & node);
-    void planQuantifiedComparisonSubquery(PlanBuilder & builder, const ASTPtr & node);
+    void planQuantifiedComparisonSubquery(PlanBuilder & builder, const ASTPtr & node, ASTSelectQuery & select_query);
     RelationPlan combineSubqueryOutputsToTuple(const RelationPlan & plan, const ASTPtr & subquery);
 
     /// plan UNION/INTERSECT/EXCEPT
@@ -185,7 +186,13 @@ private:
     std::pair<UInt64, UInt64> getLimitLengthAndOffset(ASTSelectQuery & query);
     PlanBuilder toPlanBuilder(const RelationPlan & plan, ScopePtr scope);
 
-    void processSubqueryArgs(PlanBuilder & builder, ASTs & children, String & rhs_symbol, String & lhs_symbol, RelationPlan & rhs_plan);
+    void processSubqueryArgs(
+        PlanBuilder & builder,
+        ASTs & children,
+        String & rhs_symbol,
+        String & lhs_symbol,
+        RelationPlan & rhs_plan,
+        ASTSelectQuery & select_query);
     void planHint(const QueryPlanStepPtr & step, SqlHints & sql_hints);
     bool needAggregateOverflowRow(ASTSelectQuery & select_query) const;
 };
@@ -1216,17 +1223,8 @@ void QueryPlannerVisitor::planFilter(PlanBuilder & builder, ASTSelectQuery & sel
     if (!filter || ASTEquality::compareTree(filter, PredicateConst::TRUE_VALUE))
         return;
 
-    /// In clickhouse, if filter contains non-determinism functions reference to select, these functions may compute twice.
-    /// Extract these functions into projection, use translation map to replace upstream expressions.
-    /// Eg, select arrayJoin([1,2,3]) a from system.one where a = 1
-    auto nondeterministic_expressions = extractExpressions(context, analysis, filter, false, [&](const ASTPtr & expr) {
-        if (auto * func = expr->as<ASTFunction>())
-            return !context->isFunctionDeterministic(func->name);
-        return false;
-    });
-
-    builder.appendProjection(nondeterministic_expressions);
     auto scalar_apply = planSubqueryExpression(builder, select_query, filter);
+    planNonDeterministicFunction(builder, select_query, filter);
     auto filter_step = std::make_shared<FilterStep>(builder.getCurrentDataStream(), builder.translate(filter));
     for (const auto & scalar : scalar_apply)
     {
@@ -1270,8 +1268,7 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
         for (auto & agg_item : aggregate_analysis)
             append(aggregate_inputs, agg_item.expression->arguments->children);
 
-        planSubqueryExpression(builder, select_query, aggregate_inputs);
-        builder.appendProjection(aggregate_inputs);
+        planExpression(builder, select_query, aggregate_inputs);
         PRINT_PLAN(builder.plan, plan_prepare_aggregate);
     }
 
@@ -1478,8 +1475,7 @@ void QueryPlannerVisitor::planWindow(PlanBuilder & builder, ASTSelectQuery & sel
                 });
         }
 
-        planSubqueryExpression(builder, select_query, window_inputs);
-        builder.appendProjection(window_inputs);
+        planExpression(builder, select_query, window_inputs);
         PRINT_PLAN(builder.plan, plan_prepare_window);
     }
 
@@ -1564,8 +1560,7 @@ void QueryPlannerVisitor::planWindow(PlanBuilder & builder, ASTSelectQuery & sel
 void QueryPlannerVisitor::planSelect(PlanBuilder & builder, ASTSelectQuery & select_query)
 {
     auto & select_expressions = analysis.getSelectExpressions(select_query);
-    planSubqueryExpression(builder, select_query, select_expressions);
-    builder.appendProjection(select_expressions);
+    planExpression(builder, select_query, select_expressions);
 }
 
 void QueryPlannerVisitor::planDistinct(PlanBuilder & builder, ASTSelectQuery & select_query)
@@ -1598,8 +1593,7 @@ void QueryPlannerVisitor::planOrderBy(PlanBuilder & builder, ASTSelectQuery & se
     ASTs sort_expressions;
     for (auto & order_by_item : order_by_analysis)
         sort_expressions.emplace_back(order_by_item->children.front());
-    planSubqueryExpression(builder, select_query, sort_expressions);
-    builder.appendProjection(sort_expressions);
+    planExpression(builder, select_query, sort_expressions);
     PRINT_PLAN(builder.plan, plan_prepare_order_by);
 
     // build sort description
@@ -1665,8 +1659,7 @@ void QueryPlannerVisitor::planLimitBy(PlanBuilder & builder, ASTSelectQuery & se
 
     // project limit by keys
     ASTs & limit_by_expressions = analysis.getLimitByItem(select_query);
-    planSubqueryExpression(builder, select_query, limit_by_expressions);
-    builder.appendProjection(limit_by_expressions);
+    planExpression(builder, select_query, limit_by_expressions);
     PRINT_PLAN(builder.plan, plan_prepare_limit_by);
 
     UInt64 offset = select_query.getLimitByOffset() ? analysis.getLimitByOffsetValue(select_query) : 0;
@@ -1893,8 +1886,11 @@ namespace
             UserContext & user_context_,
             Analysis & analysis_,
             ContextPtr context_,
-            PlanBuilder & plan_builder_)
-            : ExpressionTraversalVisitor<UserContext>(user_visitor_, user_context_, analysis_, context_), plan_builder(plan_builder_)
+            PlanBuilder & plan_builder_,
+            bool include_lambda_)
+            : ExpressionTraversalVisitor<UserContext>(user_visitor_, user_context_, analysis_, context_)
+            , plan_builder(plan_builder_)
+            , include_lambda(include_lambda_)
         {
         }
 
@@ -1904,11 +1900,15 @@ namespace
             if (plan_builder.canTranslateToSymbol(node))
                 return;
 
+            if (const auto * func = node->as<ASTFunction>(); func && func->name == "lambda" && !include_lambda)
+                return;
+
             ExpressionTraversalVisitor<UserContext>::process(node, traversal_context);
         }
 
     private:
         PlanBuilder & plan_builder;
+        bool include_lambda;
     };
 
     struct ExtractSubqueryVisitor : public AnalyzerExpressionVisitor<const Void>
@@ -1936,27 +1936,55 @@ namespace
         std::vector<ASTPtr> quantified_comparison_subqueries;
     };
 
+    class ExtractNonDeterministicFunctionVisitor : public AnalyzerExpressionVisitor<const Void>
+    {
+    protected:
+        void visitExpression(ASTPtr &, IAST &, const Void &) override
+        {
+        }
+        void visitOrdinaryFunction(ASTPtr & node, ASTFunction & func, const Void &) override
+        {
+            if (!context->isFunctionDeterministic(func.name))
+                non_deterministic_functions.emplace_back(node);
+        }
+
+    public:
+        using AnalyzerExpressionVisitor<const Void>::AnalyzerExpressionVisitor;
+        std::vector<ASTPtr> non_deterministic_functions;
+    };
 }
 
-PlanNodes QueryPlannerVisitor::planSubqueryExpression(PlanBuilder & builder, ASTSelectQuery & /*select_query*/, ASTPtr root)
+template <typename T>
+PlanNodes QueryPlannerVisitor::planSubqueryExpression(PlanBuilder & builder, ASTSelectQuery & select_query, const T & expressions)
 {
-    ExtractSubqueryVisitor extract_visitor{context};
-    ExtractSubqueryTraversalVisitor traversal_visitor{extract_visitor, {}, analysis, context, builder};
-    traversal_visitor.process(root);
-
-    PlanNodes scalar_apply;
-    for (auto & scalar_subquery : extract_visitor.scalar_subqueries)
+    if constexpr (std::is_same_v<T, ASTs>)
     {
-        planScalarSubquery(builder, scalar_subquery);
-        scalar_apply.emplace_back(builder.getRoot());
+        for (auto & expr : expressions)
+            planSubqueryExpression(builder, select_query, expr);
+
+        return {};
     }
-    for (auto & in_subquery : extract_visitor.in_subqueries)
-        planInSubquery(builder, in_subquery);
-    for (auto & exists_subquery : extract_visitor.exists_subqueries)
-        planExistsSubquery(builder, exists_subquery);
-    for (auto & quantified_comparison_subquery : extract_visitor.quantified_comparison_subqueries)
-        planQuantifiedComparisonSubquery(builder, quantified_comparison_subquery);
-    return scalar_apply;
+    else
+    {
+        ExtractSubqueryVisitor extract_visitor{context};
+        ExtractSubqueryTraversalVisitor traversal_visitor{extract_visitor, {}, analysis, context, builder, true};
+        traversal_visitor.process(const_cast<ASTPtr &>(expressions));
+
+        PlanNodes scalar_apply;
+        for (auto & scalar_subquery : extract_visitor.scalar_subqueries)
+        {
+            planScalarSubquery(builder, scalar_subquery);
+            scalar_apply.emplace_back(builder.getRoot());
+        }
+        for (auto & in_subquery : extract_visitor.in_subqueries)
+            planInSubquery(builder, in_subquery, select_query);
+        for (auto & exists_subquery : extract_visitor.exists_subqueries)
+            planExistsSubquery(builder, exists_subquery);
+        for (auto & quantified_comparison_subquery : extract_visitor.quantified_comparison_subqueries)
+            planQuantifiedComparisonSubquery(builder, quantified_comparison_subquery, select_query);
+        return scalar_apply;
+    }
+    __builtin_unreachable();
 }
 
 void QueryPlannerVisitor::planScalarSubquery(PlanBuilder & builder, const ASTPtr & scalar_subquery)
@@ -1996,7 +2024,7 @@ void QueryPlannerVisitor::planScalarSubquery(PlanBuilder & builder, const ASTPtr
     PRINT_PLAN(builder.plan, plan_scalar_subquery);
 }
 
-void QueryPlannerVisitor::planInSubquery(PlanBuilder & builder, const ASTPtr & node)
+void QueryPlannerVisitor::planInSubquery(PlanBuilder & builder, const ASTPtr & node, ASTSelectQuery & select_query)
 {
     // filter out planned subqueries
     if (builder.canTranslateToSymbol(node))
@@ -2010,7 +2038,7 @@ void QueryPlannerVisitor::planInSubquery(PlanBuilder & builder, const ASTPtr & n
     //process two children of function
     RelationPlan rhs_plan;
     String rhs_symbol, lhs_symbol;
-    processSubqueryArgs(builder, function.arguments->children, rhs_symbol, lhs_symbol, rhs_plan);
+    processSubqueryArgs(builder, function.arguments->children, rhs_symbol, lhs_symbol, rhs_plan, select_query);
 
     // Add Apply Step
     String apply_output_symbol = context->getSymbolAllocator()->newSymbol("_in_subquery");
@@ -2067,7 +2095,7 @@ void QueryPlannerVisitor::planExistsSubquery(PlanBuilder & builder, const ASTPtr
     PRINT_PLAN(builder.plan, plan_exists_subquery);
 }
 
-void QueryPlannerVisitor::planQuantifiedComparisonSubquery(PlanBuilder & builder, const ASTPtr & node)
+void QueryPlannerVisitor::planQuantifiedComparisonSubquery(PlanBuilder & builder, const ASTPtr & node, ASTSelectQuery & select_query)
 {
     if (builder.canTranslateToSymbol(node))
         return;
@@ -2077,7 +2105,7 @@ void QueryPlannerVisitor::planQuantifiedComparisonSubquery(PlanBuilder & builder
     //process two children of quantified_comparison
     RelationPlan rhs_plan;
     String rhs_symbol, lhs_symbol;
-    processSubqueryArgs(builder, quantified_comparison.children, rhs_symbol, lhs_symbol, rhs_plan);
+    processSubqueryArgs(builder, quantified_comparison.children, rhs_symbol, lhs_symbol, rhs_plan, select_query);
 
     String apply_output_symbol;
     std::shared_ptr<ApplyStep> apply_step;
@@ -2403,11 +2431,16 @@ std::pair<UInt64, UInt64> QueryPlannerVisitor::getLimitLengthAndOffset(ASTSelect
 }
 
 void QueryPlannerVisitor::processSubqueryArgs(
-    PlanBuilder & builder, ASTs & children, String & rhs_symbol, String & lhs_symbol, RelationPlan & rhs_plan)
+    PlanBuilder & builder,
+    ASTs & children,
+    String & rhs_symbol,
+    String & lhs_symbol,
+    RelationPlan & rhs_plan,
+    ASTSelectQuery & select_query)
 {
     //process lhs
     auto & lhs_ast = children.at(0);
-    builder.appendProjection(lhs_ast);
+    planExpression(builder, select_query, lhs_ast);
     lhs_symbol = builder.translateToSymbol(lhs_ast);
 
     if (auto coerced_type = analysis.getTypeCoercion(lhs_ast))
@@ -2451,5 +2484,48 @@ bool QueryPlannerVisitor::needAggregateOverflowRow(ASTSelectQuery & select_query
     const auto & settings = context->getSettingsRef();
     return select_query.group_by_with_totals && settings.max_rows_to_group_by && settings.group_by_overflow_mode == OverflowMode::ANY
         && settings.totals_mode != TotalsMode::AFTER_HAVING_EXCLUSIVE;
+}
+
+template <typename T>
+void QueryPlannerVisitor::planExpression(PlanBuilder & builder, ASTSelectQuery & select_query, const T & expressions)
+{
+    if constexpr (std::is_same_v<T, ASTPtr>)
+    {
+        planExpression(builder, select_query, ASTs{expressions});
+        return;
+    }
+    else
+    {
+        // subqueries should be planned first, as non-deterministic expressions may contain subqueries
+        planSubqueryExpression(builder, select_query, expressions);
+        planNonDeterministicFunction(builder, select_query, expressions);
+        builder.appendProjection(expressions);
+        return;
+    }
+    __builtin_unreachable();
+}
+
+template <typename T>
+void QueryPlannerVisitor::planNonDeterministicFunction(PlanBuilder & builder, ASTSelectQuery & select_query, const T & expressions)
+{
+    if constexpr (std::is_same_v<T, ASTPtr>)
+    {
+        planNonDeterministicFunction(builder, select_query, ASTs{expressions});
+        return;
+    }
+    else
+    {
+        // TODO: currently it's hard to get the determinism of a lambda,
+        // so if lambda has arrayJoin, it will be computed twice
+        ExtractNonDeterministicFunctionVisitor extract_visitor{context};
+        ExtractSubqueryTraversalVisitor traversal_visitor{extract_visitor, {}, analysis, context, builder, false};
+
+        for (auto & expr : expressions)
+            traversal_visitor.process(const_cast<ASTPtr &>(expr));
+
+        builder.appendProjection(extract_visitor.non_deterministic_functions);
+        return;
+    }
+    __builtin_unreachable();
 }
 }

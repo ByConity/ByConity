@@ -130,25 +130,30 @@ namespace
     };
 
     // calculate complexity of sub-expressions and save them into ExpressionInfos
-    class FindSharableExpressionASTVisitor : public ASTVisitor<int, const Void>
+    class FindSharableExpressionASTVisitor : public ASTVisitor<std::optional<int>, const Void>
     {
     public:
-        explicit FindSharableExpressionASTVisitor(bool belong_to_prewhere_) : belong_to_prewhere(belong_to_prewhere_)
+        FindSharableExpressionASTVisitor(bool belong_to_prewhere_, ContextPtr ctx_)
+            : belong_to_prewhere(belong_to_prewhere_), ctx(std::move(ctx_))
         {
         }
-        int visitNode(ASTPtr &, const Void &) override
+        std::optional<int> visitNode(ASTPtr &, const Void &) override
         {
             return 0;
         }
-        int visitASTFunction(ASTPtr & node, const Void & context) override;
+        std::optional<int> visitASTFunction(ASTPtr & node, const Void & context) override;
 
         ExpressionInfos expression_infos;
         bool belong_to_prewhere;
+        ContextPtr ctx;
     };
 
-    int FindSharableExpressionASTVisitor::visitASTFunction(ASTPtr & node, const Void & context)
+    std::optional<int> FindSharableExpressionASTVisitor::visitASTFunction(ASTPtr & node, const Void & context)
     {
         auto & function = node->as<ASTFunction &>();
+        if (RuntimeFilterUtils::isInternalRuntimeFilter(node) || !ctx->isFunctionDeterministic(function.name))
+            return {};
+
         int complexity = 1; // complexity for this node
 
         if (function.arguments)
@@ -157,10 +162,17 @@ namespace
                 int child_complexity;
                 auto * arg_func = argument->as<ASTFunction>();
 
+                // TODO: currently it's hard to get the determinism of a lambda,
+                // so not share expressions with lambdas
                 if (arg_func && arg_func->name == "lambda")
-                    child_complexity = 10; // share expression with lambda eagerly
+                    return {};
                 else
-                    child_complexity = ASTVisitorUtil::accept(argument, *this, context);
+                {
+                    auto optional_child_complexity = ASTVisitorUtil::accept(argument, *this, context);
+                    if (!optional_child_complexity)
+                        return {};
+                    child_complexity = *optional_child_complexity;
+                }
 
                 complexity += child_complexity;
             }
@@ -206,7 +218,7 @@ namespace
             if (auto prewhere = step.getPrewhere())
             {
                 auto normalized_prewhere = IdentifierToColumnReference::rewrite(step.getStorage().get(), node.getId(), prewhere);
-                FindSharableExpressionASTVisitor ast_visitor(true);
+                FindSharableExpressionASTVisitor ast_visitor(true, context);
                 ASTVisitorUtil::accept(normalized_prewhere, ast_visitor, {});
                 expression_infos.update(ast_visitor.expression_infos);
                 cached_expressions.emplace(prewhere, normalized_prewhere);
@@ -217,7 +229,7 @@ namespace
     void FindSharableExpressionPlanVisitor::visitFilterNode(FilterNode & node, const Void &)
     {
         auto & step = dynamic_cast<FilterStep &>(*node.getStep().get());
-        FindSharableExpressionASTVisitor ast_visitor(false);
+        FindSharableExpressionASTVisitor ast_visitor(false, context);
         const auto & filter = step.getFilter();
         auto normalized_filter = symbol_transform.inlineReferences(filter);
         ASTVisitorUtil::accept(normalized_filter, ast_visitor, {});
@@ -228,7 +240,7 @@ namespace
     void FindSharableExpressionPlanVisitor::visitProjectionNode(ProjectionNode & node, const Void &)
     {
         auto & step = dynamic_cast<ProjectionStep &>(*node.getStep().get());
-        FindSharableExpressionASTVisitor ast_visitor(false);
+        FindSharableExpressionASTVisitor ast_visitor(false, context);
         for (const auto & [symbol, expression] : step.getAssignments())
         {
             auto normalized_expression = symbol_transform.inlineReferences(expression);

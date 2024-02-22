@@ -99,12 +99,8 @@ struct PlanBuilder
     Names translateToSymbols(ASTs & expressions) const;
     Names translateToUniqueSymbols(ASTs & expressions) const;
     Names applyProjection(ASTs & expressions);
-    void appendProjection(ASTs & expressions);
-    void appendProjection(const ASTPtr & expression)
-    {
-        ASTs list{expression};
-        appendProjection(list);
-    }
+    template <typename T>
+    void appendProjection(const T & expressions);
     // project expressions and cast their types
     Names projectExpressionsWithCoercion(const ExpressionsAndTypes & expression_and_types);
 };
