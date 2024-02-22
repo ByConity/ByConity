@@ -39,20 +39,32 @@ template<typename Type>
 bool IFunctionMySql::isVaildIntervalArithmetic(const Type & arguments) const
 {
     if (arguments.size() != 2) return false;
+    DataTypePtr type0, type1;
     if constexpr (std::is_same_v<Type, DataTypes>)
     {
-        if (checkAndGetDataType<DataTypeInterval>(arguments[0].get()) || checkAndGetDataType<DataTypeInterval>(arguments[1].get()))
-            return true;
-        if (isDateTime64(arguments[0]) && isDateTime64(arguments[1]))
-            return true;
+        type0 = arguments[0];
+        type1 = arguments[1];
     }
     if constexpr (std::is_same_v<Type, ColumnsWithTypeAndName>)
     {
-        if (checkAndGetDataType<DataTypeInterval>(arguments[0].type.get()) ||checkAndGetDataType<DataTypeInterval>(arguments[1].type.get()))
-            return true;
-        if (isDateTime64(arguments[0].type) && isDateTime64(arguments[1].type))
-            return true;
+        type0 = arguments[0].type;
+        type1 = arguments[1].type;
     }
+
+    if (checkAndGetDataType<DataTypeInterval>(type0.get()))
+    {
+        if (isDateOrDate32(type1) || isDateTime(type1) || isDateTime64(type1) || isTime(type1))
+            return true;
+        arg_type = ArgType::INTERVAL_DATE;
+    }
+    else if (checkAndGetDataType<DataTypeInterval>(type1.get()))
+    {
+        if (isDateOrDate32(type0) || isDateTime(type0) || isDateTime64(type0) || isTime(type0))
+            return true;
+        arg_type = ArgType::DATE_INTERVAL;
+    }
+    else if (isDateTime64(type0) && isDateTime64(type1))
+        return true;
     return false;
 }
 
