@@ -394,148 +394,180 @@ UniqueKeyIndexPtr MergeTreeDataPartCNCH::getUniqueKeyIndex() const
         return const_cast<MergeTreeDataPartCNCH *>(this)->loadUniqueKeyIndex();
 }
 
-const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getCombinedDeleteBitmapForUniqueTable(bool allow_null) const
+ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getCombinedDeleteBitmapForUniqueTable(bool allow_null) const
 {
-    if (deleted)
+    ImmutableDeleteBitmapPtr res;
     {
-        if (delete_bitmap != nullptr)
-            throw Exception("Delete bitmap for part " + name + " is not null", ErrorCodes::LOGICAL_ERROR);
-        /// DropPart will return a nullptr.
-        return delete_bitmap;
+        DeleteBitmapReadLock rlock(delete_bitmap_mutex);
+        res = delete_bitmap;
     }
 
-    if (!delete_bitmap)
+    if (deleted)
     {
+        if (res != nullptr)
+            throw Exception("Delete bitmap for part " + name + " is not null", ErrorCodes::LOGICAL_ERROR);
+        /// DropPart will return a nullptr.
+        return res;
+    }
+
+    if (!res)
+    {
+        DeleteBitmapWriteLock wlock(delete_bitmap_mutex);
         /// bitmap hasn't been set, load it from cache and metas
         if (delete_bitmap_metas.empty())
         {
             if (allow_null)
-                return delete_bitmap;
+                return res;
             throw Exception("No metadata for delete bitmap of part " + name, ErrorCodes::LOGICAL_ERROR);
         }
 
-        bool has_row_exists_column = hasRowExistsImplicitColumn();
-        Int64 row_exists_mutation = has_row_exists_column ? getMutationOfRowExists() : 0;
-        Stopwatch watch;
-        auto cache = storage.getContext()->getDeleteBitmapCache();
-        String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info.partition_id, info.min_block, info.max_block, row_exists_mutation);
-        ImmutableDeleteBitmapPtr cached_bitmap;
-        UInt64 cached_version = 0; /// 0 is an invalid value and acts as a sentinel
-        bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);
-
-        UInt64 target_version = delete_bitmap_metas.front()->commit_time();
-        UInt64 txn_id = delete_bitmap_metas.front()->txn_id();
-        if (hit_cache && cached_version == target_version)
+        if (!delete_bitmap)
         {
-            /// common case: got the exact version of bitmap from cache
-            const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(cached_bitmap);
-        }
-        else
-        {
-            DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
-            std::forward_list<DataModelDeleteBitmapPtr> to_reads; /// store meta in ascending order of commit time
+            bool has_row_exists_column = hasRowExistsImplicitColumn();
+            Int64 row_exists_mutation = has_row_exists_column ? getMutationOfRowExists() : 0;
+            Stopwatch watch;
+            auto cache = storage.getContext()->getDeleteBitmapCache();
+            String cache_key = DeleteBitmapCache::buildKey(
+                storage.getStorageUUID(), info.partition_id, info.min_block, info.max_block, row_exists_mutation);
+            ImmutableDeleteBitmapPtr cached_bitmap;
+            UInt64 cached_version = 0; /// 0 is an invalid value and acts as a sentinel
+            bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);
 
-            if (cached_version > target_version)
+            UInt64 target_version = delete_bitmap_metas.front()->commit_time();
+            UInt64 txn_id = delete_bitmap_metas.front()->txn_id();
+            if (hit_cache && cached_version == target_version)
             {
-                /// case: querying an older version than the cached version
-                /// then cached bitmap can't be used and we need to build the bitmap from all metas
-                to_reads = delete_bitmap_metas;
-                to_reads.reverse();
+                /// common case: got the exact version of bitmap from cache
+                delete_bitmap = std::move(cached_bitmap);
             }
             else
             {
-                /// case: querying a newer version than the cached version
-                /// if all metas > cached version, build the bitmap from all metas.
-                /// otherwise build the bitmap from the cached bitmap and newer metas (whose version > cached version)
-                for (auto & meta : delete_bitmap_metas)
+                DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
+                std::forward_list<DataModelDeleteBitmapPtr> to_reads; /// store meta in ascending order of commit time
+
+                if (cached_version > target_version)
                 {
-                    if (meta->commit_time() > cached_version)
+                    /// case: querying an older version than the cached version
+                    /// then cached bitmap can't be used and we need to build the bitmap from all metas
+                    to_reads = delete_bitmap_metas;
+                    to_reads.reverse();
+                }
+                else
+                {
+                    /// case: querying a newer version than the cached version
+                    /// if all metas > cached version, build the bitmap from all metas.
+                    /// otherwise build the bitmap from the cached bitmap and newer metas (whose version > cached version)
+                    for (auto & meta : delete_bitmap_metas)
                     {
-                        to_reads.insert_after(to_reads.before_begin(), meta);
-                    }
-                    else if (meta->commit_time() == cached_version)
-                    {
-                        *bitmap = *cached_bitmap; /// copy the cached bitmap as the base
-                        break;
-                    }
-                    else
-                    {
-                        throw Exception("Part " + name + " doesn't contain delete bitmap meta at " + toString(cached_version), ErrorCodes::LOGICAL_ERROR);
+                        if (meta->commit_time() > cached_version)
+                        {
+                            to_reads.insert_after(to_reads.before_begin(), meta);
+                        }
+                        else if (meta->commit_time() == cached_version)
+                        {
+                            *bitmap = *cached_bitmap; /// copy the cached bitmap as the base
+                            break;
+                        }
+                        else
+                        {
+                            throw Exception(
+                                "Part " + name + " doesn't contain delete bitmap meta at " + toString(cached_version),
+                                ErrorCodes::LOGICAL_ERROR);
+                        }
                     }
                 }
+
+                /// union to_reads into bitmap
+                for (auto & meta : to_reads)
+                    deserializeDeleteBitmapInfo(storage, meta, bitmap);
+
+                if (has_row_exists_column)
+                    combineWithRowExists(bitmap);
+
+                delete_bitmap = std::move(bitmap);
+                if (target_version > cached_version)
+                {
+                    cache->insert(cache_key, target_version, delete_bitmap);
+                }
+
+                LOG_DEBUG(
+                    storage.log,
+                    "Loaded delete bitmap for unique table part {} in {} ms, commit_time: {}, bitmap cardinality: {}, generated in txn: {}",
+                    name,
+                    watch.elapsedMilliseconds(),
+                    target_version,
+                    delete_bitmap->cardinality(),
+                    txn_id);
             }
-
-            /// union to_reads into bitmap
-            for (auto & meta : to_reads)
-                deserializeDeleteBitmapInfo(storage, meta, bitmap);
-
-            if (has_row_exists_column)
-                combineWithRowExists(bitmap);
-
-            const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(bitmap);
-            if (target_version > cached_version)
-            {
-                cache->insert(cache_key, target_version, delete_bitmap);
-            }
-
-            LOG_DEBUG(storage.log,
-                "Loaded delete bitmap for unique table part {} in {} ms, commit_time: {}, bitmap cardinality: {}, generated in txn: {}",
-                name,
-                watch.elapsedMilliseconds(),
-                target_version,
-                delete_bitmap->cardinality(),
-                txn_id
-            );
         }
+
+        res = delete_bitmap;
     }
-    assert(delete_bitmap != nullptr);
-    return delete_bitmap;
+
+    if (res == nullptr)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap for part {} is null", name);
+    return res;
 }
 
-const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getCombinedDeleteBitmapForNormalTable(bool /*allow_null*/) const
+ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getCombinedDeleteBitmapForNormalTable(bool /*allow_null*/) const
 {
     bool has_row_exists_column = hasRowExistsImplicitColumn();
+    ImmutableDeleteBitmapPtr res;
+    {
+        DeleteBitmapReadLock rlock(delete_bitmap_mutex);
+        res = delete_bitmap;
+    }
 
     /// If the normal part is deleted or has no _row_exists, then the delete_bitmap must be null.
     if (deleted || !has_row_exists_column)
     {
-        if (delete_bitmap != nullptr)
+        if (res != nullptr)
             throw Exception("Delete bitmap for part " + name + " is not null", ErrorCodes::LOGICAL_ERROR);
-        return delete_bitmap;
+        return res;
     }
 
-    /// If the normal part contains _row_exists, then load it as delete_bitmap.
-    Int64 row_exists_mutation = getMutationOfRowExists();
-    Stopwatch watch;
-    auto cache = storage.getContext()->getDeleteBitmapCache();
-    String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info.partition_id, info.min_block, info.max_block, row_exists_mutation);
-    ImmutableDeleteBitmapPtr cached_bitmap;
-    UInt64 cached_version = 0;
-    bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);
-
-    /// use max as the placeholder for normal part's cache version.
-    UInt64 target_version = std::numeric_limits<std::int64_t>::max();
-    if (hit_cache && cached_version == target_version)
+    if (!res)
     {
-        const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(cached_bitmap);
-    }
-    else
-    {
-        DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
-        combineWithRowExists(bitmap);
-        const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(bitmap);
-        cache->insert(cache_key, target_version, delete_bitmap);
+        DeleteBitmapWriteLock wlock(delete_bitmap_mutex);
+        if (!delete_bitmap)
+        {
+            /// If the normal part contains _row_exists, then load it as delete_bitmap.
+            Int64 row_exists_mutation = getMutationOfRowExists();
+            Stopwatch watch;
+            auto cache = storage.getContext()->getDeleteBitmapCache();
+            String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info.partition_id, info.min_block, info.max_block, row_exists_mutation);
+            ImmutableDeleteBitmapPtr cached_bitmap;
+            UInt64 cached_version = 0;
+            bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);
 
-        LOG_DEBUG(storage.log,
-            "Loaded delete bitmap for normal part {} in {} ms, bitmap cardinality: {}, DELETE mutation task: {}",
-            name,
-            watch.elapsedMilliseconds(),
-            delete_bitmap->cardinality(),
-            row_exists_mutation
-        );
+            /// use max as the placeholder for normal part's cache version.
+            UInt64 target_version = std::numeric_limits<std::int64_t>::max();
+            if (hit_cache && cached_version == target_version)
+            {
+                delete_bitmap = std::move(cached_bitmap);
+            }
+            else
+            {
+                DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
+                combineWithRowExists(bitmap);
+                delete_bitmap = std::move(bitmap);
+                cache->insert(cache_key, target_version, delete_bitmap);
+
+                LOG_DEBUG(storage.log,
+                    "Loaded delete bitmap for normal part {} in {} ms, bitmap cardinality: {}, DELETE mutation task: {}",
+                    name,
+                    watch.elapsedMilliseconds(),
+                    delete_bitmap->cardinality(),
+                    row_exists_mutation
+                );
+            }
+        }
+        res = delete_bitmap;
     }
-    assert(delete_bitmap != nullptr);
-    return delete_bitmap;
+
+    if (res == nullptr)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap for part {} is null", name);
+    return res;
 }
 
 void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
@@ -584,7 +616,7 @@ void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
     LOG_TRACE(storage.log, "Part {} has {} rows are marked as deleted by _row_exists.", name, deleted_count);
 }
 
-const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool allow_null) const
+ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getDeleteBitmap(bool allow_null) const
 {
     if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
         return getCombinedDeleteBitmapForUniqueTable(allow_null);

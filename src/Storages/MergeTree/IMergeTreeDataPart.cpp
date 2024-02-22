@@ -1682,6 +1682,7 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
 
 void IMergeTreeDataPart::setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta, bool force_set) const
 {
+    DeleteBitmapWriteLock wlock(delete_bitmap_mutex);
     if (!delete_bitmap_metas.empty())
         throw Exception("Part " + name + " already has delete bitmap meta, can't set twice", ErrorCodes::LOGICAL_ERROR);
     if (!bitmap_meta)
@@ -1781,7 +1782,7 @@ void IMergeTreeDataPart::createDeleteBitmapForDetachedPart() const
     auto meta_writer = volume->getDisk()->writeFile(delete_bitmap_meta_rel_path);
     writeIntBinary(DeleteBitmapMeta::delete_file_meta_format_version, *meta_writer);
     writeIntBinary(bitmap->cardinality(), *meta_writer);
-    if (delete_bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
+    if (bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
     {
         String value;
         value.reserve(bitmap->cardinality() * sizeof(UInt32));
