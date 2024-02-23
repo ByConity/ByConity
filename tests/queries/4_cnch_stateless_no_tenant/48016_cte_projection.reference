@@ -28,8 +28,8 @@ CTEDef [0]
             └─ Projection Est. ? rows
                │     Expressions: [user_id_1], expr#toDate(hdfs_par):=toDate(hdfs_par)
                └─ Filter Est. ? rows
-                  │     Condition: toDate(hdfs_par) >= \'2020-04-07\'
+                  │     Condition: toDate(hdfs_par) >= cast(18359, \'Date\')
                   └─ TableScan test.idm_ods_ods_inst_user_tags Est. ? rows
-                           Where: toDate(hdfs_par) >= \'2020-04-07\'
+                           Where: toDate(hdfs_par) >= cast(18359, \'Date\')
                            Outputs: [hdfs_par], user_id_1:=user_id
 note: CTE(Common Table Expression) is applied for 2 times.

@@ -23,9 +23,9 @@ Projection Est. 83006653 rows
                            │     │     Condition: 
                            │     │     Filter: c_acctbal > `expr#avg(c_acctbal)`
                            │     ├─ Filter Est. 150000000 rows
-                           │     │  │     Condition: substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')
+                           │     │  │     Condition: substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31')
                            │     │  └─ TableScan tpch1000_sample.customer Est. 150000000 rows
-                           │     │           Where: substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')
+                           │     │           Where: substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31')
                            │     │           Outputs: [c_custkey, c_phone, c_acctbal]
                            │     └─ Broadcast Exchange Est. 1 rows
                            │        └─ MergingAggregated Est. 1 rows
@@ -34,9 +34,9 @@ Projection Est. 83006653 rows
                            │                 │     Group by: {}
                            │                 │     Aggregates: expr#avg(c_acctbal):=AggNull(avg)(c_acctbal_1)
                            │                 └─ Filter Est. 136369022 rows
-                           │                    │     Condition: (c_acctbal_1 > '0') AND (substring(c_phone_1, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
+                           │                    │     Condition: (c_acctbal_1 > 0.) AND (substring(c_phone_1, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31'))
                            │                    └─ TableScan tpch1000_sample.customer Est. 150000000 rows
-                           │                             Where: (c_acctbal > '0') AND (substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
+                           │                             Where: (c_acctbal > 0.) AND (substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31'))
                            │                             Outputs: c_phone_1:=c_phone, c_acctbal_1:=c_acctbal
                            └─ Projection Est. 89074167 rows
                               │     Expressions: [o_custkey], build_side_non_null_symbol:=1

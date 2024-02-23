@@ -19,7 +19,7 @@ CTEDef [0]
    Projection Est. 4460166 rows
    │     Expressions: [d_moy, expr#avg(inv_quantity_on_hand), i_item_sk, w_warehouse_sk], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean)):=caseWithExpression(`expr#avg(inv_quantity_on_hand)`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)` / `expr#avg(inv_quantity_on_hand)`)
    └─ Filter Est. 4460166 rows
-      │     Condition: caseWithExpression(`expr#avg(inv_quantity_on_hand)`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)` / `expr#avg(inv_quantity_on_hand)`) > 1
+      │     Condition: caseWithExpression(`expr#avg(inv_quantity_on_hand)`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)` / `expr#avg(inv_quantity_on_hand)`) > 1.
       └─ Aggregating Est. 4955741 rows
          │     Group by: {w_warehouse_sk, i_item_sk, d_moy}
          │     Aggregates: expr#stddevSamp(inv_quantity_on_hand):=AggNull(stddevSamp)(inv_quantity_on_hand), expr#avg(inv_quantity_on_hand):=AggNull(avg)(inv_quantity_on_hand)
@@ -63,7 +63,7 @@ Projection Est. 26760985 rows
             │  └─ Projection Est. 2477870 rows
             │     │     Expressions: [d_moy_6, expr#avg(inv_quantity_on_hand)_6, i_item_sk_6, w_warehouse_sk_6], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`)
             │     └─ Filter Est. 2477870 rows
-            │        │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1) AND (((d_moy_6 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1.5)) OR (d_moy_6 = 2)) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1.5)
+            │        │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1.) AND (((d_moy_6 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1.5)) OR (d_moy_6 = 2)) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1.5)
             │        └─ Aggregating Est. 2753189 rows
             │           │     Group by: {w_warehouse_sk_6, i_item_sk_6, d_moy_6}
             │           │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_8:=AggNull(stddevSamp)(inv_quantity_on_hand_4), expr#avg(inv_quantity_on_hand)_6:=AggNull(avg)(inv_quantity_on_hand_4)
@@ -94,7 +94,7 @@ Projection Est. 26760985 rows
                └─ Projection Est. 2477870 rows
                   │     Expressions: [d_moy_7, expr#avg(inv_quantity_on_hand)_7, i_item_sk_7, w_warehouse_sk_7], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_7`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_7`)
                   └─ Filter Est. 2477870 rows
-                     │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_7`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_7`) > 1) AND (((d_moy_7 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_7`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_7`) > 1.5)) OR (d_moy_7 = 2))
+                     │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_7`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_7`) > 1.) AND (((d_moy_7 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_7`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_7`) > 1.5)) OR (d_moy_7 = 2))
                      └─ Aggregating Est. 2753189 rows
                         │     Group by: {w_warehouse_sk_7, i_item_sk_7, d_moy_7}
                         │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_9:=AggNull(stddevSamp)(inv_quantity_on_hand_5), expr#avg(inv_quantity_on_hand)_7:=AggNull(avg)(inv_quantity_on_hand_5)

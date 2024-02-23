@@ -337,8 +337,8 @@ TransformResult MergePredicatesUsingDomainTranslator::transformImpl(PlanNodePtr 
     const auto & step = *old_filter_node->getStep();
     auto predicate = step.getFilter()->clone();
 
-    using ExtractionReuslt = DB::Predicate::ExtractionResult<String>;
-    using DomainTranslator = DB::Predicate::DomainTranslator<String>;
+    using ExtractionReuslt = DB::Predicate::ExtractionResult<ASTPtr>;
+    using DomainTranslator = DB::Predicate::DomainTranslator<ASTPtr>;
 
     DomainTranslator domain_translator{context};
     ExtractionReuslt rewritten = domain_translator.getExtractionResult(predicate, step.getOutputStream().header.getNamesAndTypes());

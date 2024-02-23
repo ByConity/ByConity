@@ -13,7 +13,7 @@ Projection
                │     Expressions: [d_year_4, d_year_5, expr#sum(sales_cnt)_1, expr#sum(sales_cnt)_2, i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4], expr#minus(curr_yr.sales_amt, prev_yr.sales_amt):=`expr#sum(sales_amt)_1` - `expr#sum(sales_amt)_2`, expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt):=`expr#sum(sales_cnt)_1` - `expr#sum(sales_cnt)_2`
                └─ Inner Join
                   │     Condition: i_brand_id_4 == i_brand_id_5, i_category_id_4 == i_category_id_5, i_class_id_4 == i_class_id_5, i_manufact_id_4 == i_manufact_id_5
-                  │     Filter: (`expr#sum(sales_cnt)_1` / `expr#sum(sales_cnt)_2`) < '0.9'
+                  │     Filter: (`expr#sum(sales_cnt)_1` / `expr#sum(sales_cnt)_2`) < 0.9
                   │     Runtime Filters Builder: {i_brand_id_5,i_category_id_5,i_class_id_5,i_manufact_id_5}
                   ├─ Repartition Exchange
                   │  │     Partition by: {i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4}
