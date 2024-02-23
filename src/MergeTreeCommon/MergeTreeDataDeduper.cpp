@@ -381,7 +381,8 @@ namespace
         ReplacingSortedKeysIterator & keys,
         const IMergeTreeDataPartsVector & parts,
         DeleteBitmapVector & delta_bitmaps,
-        MergeTreeDataDeduper::VersionMode version_mode)
+        MergeTreeDataDeduper::VersionMode version_mode,
+        DedupKeyMode dedup_key_mode = DedupKeyMode::REPLACE)
     {
         const IndexFile::Comparator * comparator = IndexFile::BytewiseComparator();
 
@@ -429,6 +430,8 @@ namespace
             else
             {
                 exact_match = true;
+                if (dedup_key_mode == DedupKeyMode::THROW)
+                    throw Exception("Found duplication when insert with setting dedup_key_mode=DedupKeyMode::THROW", ErrorCodes::INCORRECT_DATA);
             }
 
             while (exact_match)
@@ -846,7 +849,7 @@ MergeTreeDataDeduper::dedupImpl(const IMergeTreeDataPartsVector & visible_parts,
     ReplacingSortedKeysIterator keys_iter(
         IndexFile::BytewiseComparator(), new_parts, std::move(input_iters), cb, version_mode, delete_flag_bitmaps);
 
-    dedupKeysWithParts(keys_iter, visible_parts, res, version_mode);
+    dedupKeysWithParts(keys_iter, visible_parts, res, version_mode, context->getSettings().dedup_key_mode);
     return res;
 }
 

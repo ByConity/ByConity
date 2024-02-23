@@ -46,6 +46,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
+    extern const int SUPPORT_IS_DISABLED;
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
@@ -138,6 +139,10 @@ Pipe StorageCloudMergeTree::read(
 BlockOutputStreamPtr StorageCloudMergeTree::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
     bool enable_staging_area = metadata_snapshot->hasUniqueKey() && (getSettings()->cloud_enable_staging_area || local_context->getSettingsRef().enable_staging_area_for_write);
+
+    if (enable_staging_area && local_context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
+        throw Exception("Insert VALUES into staging area with dedup_key_mode=DedupKeyMode::THROW is not allowed", ErrorCodes::SUPPORT_IS_DISABLED);
+
     return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context), enable_staging_area);
 }
 

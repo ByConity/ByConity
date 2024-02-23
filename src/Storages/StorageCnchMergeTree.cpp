@@ -1048,6 +1048,10 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
 BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
     bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
+
+    if (enable_staging_area && local_context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
+        throw Exception("Insert VALUES into staging area with dedup_key_mode=DedupKeyMode::THROW is not allowed", ErrorCodes::SUPPORT_IS_DISABLED);
+
     if (enable_staging_area)
         LOG_DEBUG(log, "enable staging area for write");
 

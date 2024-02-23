@@ -327,4 +327,12 @@ enum class ShortCircuitFunctionEvaluation
 
 DECLARE_SETTING_ENUM(ShortCircuitFunctionEvaluation)
 
+enum class DedupKeyMode
+{
+    REPLACE,
+    THROW,
+};
+
+DECLARE_SETTING_ENUM(DedupKeyMode)
+
 }
