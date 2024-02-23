@@ -286,6 +286,7 @@ public:
             in->setAsyncCallback(std::move(async_callback));
     }
 
+    bool isByConityServer() const { return server_name == "ByConity"; }
 private:
     String host;
     UInt16 port;
