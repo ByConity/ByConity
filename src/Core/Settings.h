@@ -1281,26 +1281,11 @@ enum PreloadLevelSettings : UInt64
     M(ShortCircuitFunctionEvaluation, short_circuit_function_evaluation, ShortCircuitFunctionEvaluation::ENABLE, "Setting for short-circuit function evaluation configuration. Possible values: 'enable', 'disable', 'force_enable'", 0) \
     \
     /** Bytedance */ \
-    M(UInt64, \
-      alter_skip_check, \
-      0, \
-      "Skip check while alter table. 1 for skipping columns and metadate strings check; 2 for skipping metadata_version check", \
-      0) \
-    M(UInt64, \
-      ha_alter_metadata_sync, \
-      1, \
-      "Wait for actions to alter metadata. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", \
-      0) \
-    M(UInt64, \
-      ha_alter_data_sync, \
-      0, \
-      "Wait for actions to alter data. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", \
-      0) \
-    M(String, \
-      blacklist_for_merge_task_regex, \
-      "CHTMP$", \
-      "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", \
-      0) \
+    M(UInt64, force_alter_conflict_check, 1, "force alter conflict check", 0) \
+    M(UInt64, alter_skip_check, 0, "Skip check while alter table. 1 for skipping columns and metadate strings check; 2 for skipping metadata_version check", 0) \
+    M(UInt64, ha_alter_metadata_sync, 1, "Wait for actions to alter metadata. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(UInt64, ha_alter_data_sync, 0, "Wait for actions to alter data. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(String, blacklist_for_merge_task_regex, "CHTMP$", "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", 0) \
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
     M(Bool, enable_element_mv_rows, false, "Whether enable element query calculate base rows and view rows", 0) \
