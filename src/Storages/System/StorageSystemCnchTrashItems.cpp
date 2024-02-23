@@ -97,8 +97,12 @@ void StorageSystemCnchTrashItems::fillData(MutableColumns & res_columns, Context
             continue;
 
         auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-        if (!cnch_merge_tree)
-            throw Exception("Table system.cnch_trash_itesm only support CnchMergeTree engine", ErrorCodes::LOGICAL_ERROR);
+        if (!cnch_merge_tree && !context->getSettingsRef().enable_skip_non_cnch_tables_for_cnch_trash_items)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Table system.cnch_trash_itesm only support CnchMergeTree engine, but got `{}`. "
+                "Consider enable `enable_skip_non_cnch_tables_for_cnch_trash_items` to skip non CnchMergeTree engine.",
+                storage->getName());
 
         auto trash_items = cnch_catalog->getDataItemsInTrash(storage);
 

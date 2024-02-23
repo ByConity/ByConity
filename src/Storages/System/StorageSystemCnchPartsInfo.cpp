@@ -42,6 +42,7 @@ StorageSystemCnchPartsInfo::StorageSystemCnchPartsInfo(const StorageID & table_i
     });
 
     storage_metadata.setColumns(ColumnsDescription({
+        {"uuid", std::make_shared<DataTypeString>()},
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
         {"partition_id", std::make_shared<DataTypeString>()},

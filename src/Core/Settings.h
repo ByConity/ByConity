@@ -1433,7 +1433,8 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(UInt64, cnch_max_cached_storage, 2048, "Cnch storage cache size.", 0) \
     M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
-    M(Bool, enable_skip_non_cnch_tables_for_cnch_parts, 0, "Allow to skip non cnch tables for system.cnch_parts", 0) \
+    M(Bool, enable_skip_non_cnch_tables_for_cnch_parts, true, "Allow to skip non cnch tables for system.cnch_parts", 0) \
+    M(Bool, enable_skip_non_cnch_tables_for_cnch_trash_items, true, "Allow to skip non cnch tables for system.cnch_trash_items", 0) \
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_materialized_mysql_log_profiling, false, "Enable query profiling for cnch_materialized_mysql_log table", 0) \

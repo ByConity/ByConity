@@ -43,6 +43,7 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
     });
 
     storage_metadata.setColumns(ColumnsDescription({
+        {"uuid", std::make_shared<DataTypeString>()},
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
         {"partition_id", std::make_shared<DataTypeString>()},
@@ -207,6 +208,8 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
             size_t dest_index = 0;
             const auto & metrics_data = it->second->partition_info_ptr->metrics_ptr->read();
             bool is_valid_metrics = metrics_data.validateMetrics();
+            if (columns_mask[src_index++])
+                res_columns[dest_index++]->insert(entry->table_uuid);
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->database);
             if (columns_mask[src_index++])
