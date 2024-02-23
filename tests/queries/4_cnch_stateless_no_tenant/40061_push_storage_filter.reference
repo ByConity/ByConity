@@ -59,9 +59,9 @@ Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
-      │     Condition: (b > 0) AND (p_date >= cast(19358, \'Date\')) AND (toYear(p_date) >= 2023) AND ((a + 1) > 0)
+      │     Condition: (toYear(p_date) >= 2023) AND (b > 0) AND (p_date >= cast(19358, \'Date\')) AND ((a + 1) > 0)
       └─ TableScan test.t40061 Est. ? rows
-               Where: (b > 0) AND (p_date >= cast(19358, \'Date\')) AND (toYear(p_date) >= 2023) AND ((a + 1) > 0)
+               Where: (toYear(p_date) >= 2023) AND (b > 0) AND (p_date >= cast(19358, \'Date\')) AND ((a + 1) > 0)
                Outputs: [p_date, a, b]
 SET enable_partition_filter_push_down = 1;
 SET enable_optimizer_early_prewhere_push_down = 0;
@@ -122,7 +122,7 @@ Projection Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: (b > 0) AND ((a + 1) > 0)
       └─ TableScan test.t40061 Est. ? rows
-               Partition filter: (p_date >= cast(19358, \'Date\')) AND (toYear(p_date) >= 2023)
+               Partition filter: (toYear(p_date) >= 2023) AND (p_date >= cast(19358, \'Date\'))
                Where: (b > 0) AND ((a + 1) > 0)
                Outputs: [a, b]
 SET enable_partition_filter_push_down = 1;
@@ -184,7 +184,7 @@ Projection Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: (b > 0) AND ((a + 1) > 0)
       └─ TableScan test.t40061 Est. ? rows
-               Partition filter: (p_date >= cast(19358, \'Date\')) AND (toYear(p_date) >= 2023)
+               Partition filter: (toYear(p_date) >= 2023) AND (p_date >= cast(19358, \'Date\'))
                Where: (b > 0) AND ((a + 1) > 0)
                Outputs: [a, b]
 SET enable_optimizer = 0;

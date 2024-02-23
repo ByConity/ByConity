@@ -25,9 +25,9 @@ Projection Est. 684049 rows
                         │     │  │     Condition: LO_SUPPKEY == S_SUPPKEY
                         │     │  │     Runtime Filters Builder: {S_SUPPKEY}
                         │     │  ├─ Filter Est. 5999989813 rows
-                        │     │  │  │     Condition: (toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998) Runtime Filters: {LO_CUSTKEY, LO_PARTKEY, LO_SUPPKEY}
+                        │     │  │  │     Condition: toYear(LO_ORDERDATE) IN (1997, 1998) Runtime Filters: {LO_CUSTKEY, LO_PARTKEY, LO_SUPPKEY}
                         │     │  │  └─ TableScan ssb1000.lineorder Est. 5999989813 rows
-                        │     │  │           Where: (toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998) Runtime Filters: {LO_CUSTKEY, LO_PARTKEY, LO_SUPPKEY}
+                        │     │  │           Where: toYear(LO_ORDERDATE) IN (1997, 1998) Runtime Filters: {LO_CUSTKEY, LO_PARTKEY, LO_SUPPKEY}
                         │     │  │           Outputs: [LO_CUSTKEY, LO_PARTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE, LO_SUPPLYCOST]
                         │     │  └─ Broadcast Exchange Est. 79875 rows
                         │     │     └─ Filter Est. 79875 rows

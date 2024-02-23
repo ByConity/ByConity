@@ -214,9 +214,9 @@ Projection Est. ? rows
       │  │           └─ Projection Est. ? rows
       │  │              │     Expressions: expr#cast(sk_1, \'Nullable(Int64)\'):=cast(sk_1, \'Nullable(Int64)\')
       │  │              └─ Filter Est. ? rows
-      │  │                 │     Condition: (price < 2000.) AND isNotNull(cast(sk_1, \'Nullable(Int64)\'))
+      │  │                 │     Condition: isNotNull(cast(sk_1, \'Nullable(Int64)\')) AND (price < 2000.)
       │  │                 └─ TableScan test.web Est. ? rows
-      │  │                          Where: (price < 2000.) AND isNotNull(cast(sk, \'Nullable(Int64)\'))
+      │  │                          Where: isNotNull(cast(sk, \'Nullable(Int64)\')) AND (price < 2000.)
       │  │                          Outputs: [price], sk_1:=sk
       │  ├─ Projection Est. ? rows
       │  │  │     Expressions: [expr#cast(sk_3, \'Nullable(Int64)\')], expr#\'c\':=\'c\'
@@ -228,9 +228,9 @@ Projection Est. ? rows
       │  │           └─ Projection Est. ? rows
       │  │              │     Expressions: expr#cast(sk_3, \'Nullable(Int64)\'):=cast(sk_3, \'Nullable(Int64)\')
       │  │              └─ Filter Est. ? rows
-      │  │                 │     Condition: (price_1 < 3000.) AND isNotNull(cast(sk_3, \'Nullable(Int64)\'))
+      │  │                 │     Condition: isNotNull(cast(sk_3, \'Nullable(Int64)\')) AND (price_1 < 3000.)
       │  │                 └─ TableScan test.web Est. ? rows
-      │  │                          Where: (price < 3000.) AND isNotNull(cast(sk, \'Nullable(Int64)\'))
+      │  │                          Where: isNotNull(cast(sk, \'Nullable(Int64)\')) AND (price < 3000.)
       │  │                          Outputs: sk_3:=sk, price_1:=price
       │  └─ Projection Est. ? rows
       │     │     Expressions: [expr#cast(sk_5, \'Nullable(Int64)\')], expr#\'w\':=\'w\'
@@ -242,9 +242,9 @@ Projection Est. ? rows
       │              └─ Projection Est. ? rows
       │                 │     Expressions: expr#cast(sk_5, \'Nullable(Int64)\'):=cast(sk_5, \'Nullable(Int64)\')
       │                 └─ Filter Est. ? rows
-      │                    │     Condition: (price_2 < 4000.) AND isNotNull(cast(sk_5, \'Nullable(Int64)\'))
+      │                    │     Condition: isNotNull(cast(sk_5, \'Nullable(Int64)\')) AND (price_2 < 4000.)
       │                    └─ TableScan test.web Est. ? rows
-      │                             Where: (price < 4000.) AND isNotNull(cast(sk, \'Nullable(Int64)\'))
+      │                             Where: isNotNull(cast(sk, \'Nullable(Int64)\')) AND (price < 4000.)
       │                             Outputs: sk_5:=sk, price_2:=price
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {sk_6}
