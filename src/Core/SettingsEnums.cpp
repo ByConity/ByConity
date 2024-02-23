@@ -190,4 +190,8 @@ IMPLEMENT_SETTING_ENUM(ShortCircuitFunctionEvaluation, ErrorCodes::BAD_ARGUMENTS
     {{"enable",          ShortCircuitFunctionEvaluation::ENABLE},
      {"force_enable",    ShortCircuitFunctionEvaluation::FORCE_ENABLE},
      {"disable",         ShortCircuitFunctionEvaluation::DISABLE}})
+
+IMPLEMENT_SETTING_ENUM(DedupKeyMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"replace",      DedupKeyMode::REPLACE},
+     {"throw",        DedupKeyMode::THROW}})
 } // namespace DB
