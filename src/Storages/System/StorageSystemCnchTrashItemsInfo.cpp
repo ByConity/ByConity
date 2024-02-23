@@ -20,7 +20,8 @@ StorageSystemCnchTrashItemsInfo::StorageSystemCnchTrashItemsInfo(const StorageID
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(ColumnsDescription(
-        {{"database", std::make_shared<DataTypeString>()},
+        {{"uuid", std::make_shared<DataTypeString>()},
+         {"database", std::make_shared<DataTypeString>()},
          {"table", std::make_shared<DataTypeString>()},
          {"total_parts_number", std::make_shared<DataTypeInt64>()},
          {"total_parts_size", std::make_shared<DataTypeInt64>()},

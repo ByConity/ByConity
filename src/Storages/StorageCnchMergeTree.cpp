@@ -118,6 +118,15 @@ namespace ErrorCodes
     extern const int READONLY_SETTING;
     extern const int UNKNOWN_CNCH_SNAPSHOT;
     extern const int INVALID_CNCH_SNAPSHOT;
+    extern const int CANNOT_ASSIGN_ALTER;
+}
+
+static NameSet collectColumnsFromCommands(const AlterCommands & commands)
+{
+    NameSet res;
+    for (auto & command : commands)
+        res.insert(command.column_name);
+    return res;
 }
 
 /// Get basic select query to read from prepared pipe: remove prewhere, sampling, offset, final
@@ -2305,14 +2314,54 @@ void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, 
 
 void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /*table_lock_holder*/)
 {
+    const Settings & settings = local_context->getSettingsRef();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    auto mutation_commands = commands.getMutationCommands(old_metadata, false, local_context);
+
+    if (settings.force_alter_conflict_check)
+    {
+        NameSet columns = collectColumnsFromCommands(commands);
+        NameSet current_columns;
+        if (!columns.empty())
+        {
+            auto table_id = getStorageID();
+            auto catalog = local_context->getCnchCatalog();
+            std::map<TxnTimestamp, CnchMergeTreeMutationEntry> exists_mutations;
+            catalog->fillMutationsByStorage(table_id, exists_mutations);
+            for (const auto & [t, mutation] : exists_mutations)
+            {
+                LOG_TRACE(log, "exists_mutation {}", mutation.toString());
+
+                for (const auto & command : mutation.commands)
+                {
+                    if (!command.column_name.empty())
+                        current_columns.insert(command.column_name);
+                
+                    if (!command.rename_to.empty())
+                        current_columns.insert(command.rename_to);
+                }
+            }
+        }
+
+        for (auto & command : mutation_commands)
+        {
+            if ((command.type == MutationCommand::RENAME_COLUMN) || (command.type == MutationCommand::READ_COLUMN))
+            {
+                if (!command.column_name.empty() && current_columns.count(command.column_name))
+                    throw Exception(ErrorCodes::CANNOT_ASSIGN_ALTER, "There are unfinished async ALTERs which might conflict on column name {}, please wait...",
+                        command.column_name);
+            }
+        }
+
+    }
+
     auto table_id = getStorageID();
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
     auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
-    alter_act.setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
+    alter_act.setMutationCommands(mutation_commands);
 
     commands.apply(new_metadata, local_context);
     checkColumnsValidity(new_metadata.columns, new_metadata.settings_changes);
