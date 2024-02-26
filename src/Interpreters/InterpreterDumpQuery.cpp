@@ -88,6 +88,9 @@ BlockIO InterpreterDumpQuery::execute()
     if (queries_dumped)
         dump_json->set("queries", query_dumper.getJsonDumpResult());
 
+    if (settings.version)
+        dump_json->set("version", Utils::getVersionFromSystem());
+
     if (!dump.output_client)
     {
         //output to file
@@ -294,10 +297,11 @@ ASTPtr InterpreterDumpQuery::prepareQueryLogTableExpression() const
     auto & dump_query = query_ptr->as<ASTDumpQuery &>();
     if (dump_query.cluster())
     {
-        auto table_function = makeASTFunction("cluster",
-                                              dump_query.cluster()->clone(),
-                                              std::make_shared<ASTTableIdentifier>(DatabaseCatalog::SYSTEM_DATABASE),
-                                              std::make_shared<ASTTableIdentifier>("query_log"));
+        auto table_function = makeASTFunction(
+            "clusterAllReplicas",
+            dump_query.cluster()->clone(),
+            std::make_shared<ASTTableIdentifier>(DatabaseCatalog::SYSTEM_DATABASE),
+            std::make_shared<ASTTableIdentifier>("query_log"));
         query_log_table->table_function = table_function;
         query_log_table->children.push_back(table_function);
     }

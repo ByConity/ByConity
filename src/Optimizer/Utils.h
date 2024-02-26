@@ -122,6 +122,8 @@ namespace Utils
             reversed.emplace(entry.second, entry.first);
         return reversed;
     }
+
+    std::string getVersionFromSystem();
 }
 
 }

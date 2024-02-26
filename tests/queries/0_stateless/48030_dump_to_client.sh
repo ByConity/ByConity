@@ -16,9 +16,9 @@ ${CLICKHOUSE_CLIENT0} --query="create table dump.dumpclient as dump.dumpclient_l
 ${CLICKHOUSE_CLIENT0} --query="insert into dump.dumpclient values(1,'a')(2,'d')(3,'c')"
 
 
-${CLICKHOUSE_CLIENT0} --query="dump ddl from dump"
+${CLICKHOUSE_CLIENT0} --query="dump version=0 ddl from dump"
 # codebase have bugs which may change the settings of global context, leading to an unstable output for dump query
-${CLICKHOUSE_CLIENT0} --query_id="dump-test" --query="dump query select * from dump.dumpclient" | grep -F -q '"query" : "SELECT * FROM dump.dumpclient"' && echo 'OK' || echo 'FAIL'
+${CLICKHOUSE_CLIENT0} --query_id="dump-test" --query="dump version=0 query select * from dump.dumpclient" | grep -F -q '"query" : "SELECT * FROM dump.dumpclient"' && echo 'OK' || echo 'FAIL'
 
 # stats dump contains a timestamp which varies for each test run
 # ${CLICKHOUSE_CLIENT0} --query="create stats dumpclient"

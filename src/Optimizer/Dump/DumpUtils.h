@@ -35,15 +35,16 @@ struct DumpSettings
     bool stats = true;
     bool shard_count = true;
     bool compress_directory = false;
+    bool version = true;
 
     constexpr static char name[] = "Dump";
 
-    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
-    {
+    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings = {
         {"without_ddl", without_ddl},
         {"stats", stats},
         {"shard_count", shard_count},
-        {"compress_directory", compress_directory}
+        {"compress_directory", compress_directory},
+        {"version", version},
     };
 };
 }
