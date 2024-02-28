@@ -41,6 +41,7 @@
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
+#include <Disks/DiskByteS3.h>
 
 namespace ProfileEvents
 {
@@ -628,7 +629,7 @@ MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFoo
 {
     const String data_file_path = fs::path(getFullRelativePath()) / DATA_FILE;
     size_t data_file_size = volume->getDisk()->getFileSize(data_file_path);
-    if (!volume->getDisk()->exists(data_file_path))
+    if (!fileExists(volume->getDisk(), data_file_path))
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No data file of part {} under path {}", name, data_file_path);
 
     auto data_file = openForReading(volume->getDisk(), data_file_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
@@ -1134,12 +1135,20 @@ void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
     auto path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path;
     try
     {
-        disk->removeFile(path_on_disk / "data");
-        disk->removeDirectory(path_on_disk);
+        if (disk->getType() == DiskType::Type::ByteS3)
+        {
+            // for DiskByteS3, we need to avoid using removeDirectory() and exists() for better performance
+            std::static_pointer_cast<DiskByteS3>(disk)->removePart(path_on_disk);
+        }
+        else
+        {
+            disk->removeFile(path_on_disk / "data");
+            disk->removeDirectory(path_on_disk);
+        }
     }
     catch (...)
     {
-        if (!disk->exists(path_on_disk)) {
+        if (disk->getType() != DiskType::Type::ByteS3 && !disk->exists(path_on_disk)) {
             /// Early exit if the part has already been deleted.
             LOG_TRACE(storage.log, "the Part {} has already been removed.", fullPath(disk, path_on_disk));
             return;
@@ -1216,7 +1225,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     }
 
     String part_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    if (!volume->getDisk()->exists(part_path))
+    if (!fileExists(volume->getDisk(), part_path))
     {
         LOG_WARNING(storage.log, "Can't find {} when preload level: {} before caching", full_path + DATA_FILE, preload_level);
         return;
@@ -1311,7 +1320,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     }
 
     pool.scheduleOrThrowOnError([this, part_path, full_path, level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
-        if (!volume->getDisk()->exists(part_path))
+        if (!fileExists(volume->getDisk(), part_path))
         {
             LOG_WARNING(storage.log, "Can't find {} when preload level: {} on caching", full_path + DATA_FILE, level);
             if (cb)
@@ -1427,6 +1436,14 @@ std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(co
     ReadSettings settings = storage.getContext()->getReadSettings();
     settings.buffer_size = std::min(settings.buffer_size, file_size);
     return disk->readFile(path, settings);
+}
+
+bool MergeTreeDataPartCNCH::fileExists(const DB::DiskPtr &disk, const String &data_file_path)
+{
+    if (disk->getType() == DiskType::Type::ByteS3)
+        return std::static_pointer_cast<DiskByteS3>(disk)->fileExists(data_file_path);
+    else
+        return disk->exists(data_file_path);
 }
 
 }

@@ -227,6 +227,10 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String& path,
     const WriteSettings& settings)
 {
+    if (!path.ends_with(String("/") + DATA_FILE))
+    {
+        LOG_WARNING(&Poco::Logger::get("DiskByteS3"), "Attempting to write to a file that is not \"{}\", that's dangerous.", DATA_FILE);
+    }
     return std::make_unique<WriteBufferFromByteS3>(s3_util.getClient(), s3_util.getBucket(),
         std::filesystem::path(root_prefix) / path, 16 * 1024 * 1024,
         16 * 1024 * 1024, settings.file_meta, settings.buffer_size, false);
@@ -239,7 +243,10 @@ void DiskByteS3::removeFile(const String& path)
 
 void DiskByteS3::removeFileIfExists(const String& path)
 {
-    s3_util.deleteObject(std::filesystem::path(root_prefix) / path, false);
+    if (fileExists(path))
+    {
+        s3_util.deleteObject(std::filesystem::path(root_prefix) / path);
+    }
 }
 
 void DiskByteS3::removeDirectory(const String & path)
@@ -257,6 +264,16 @@ void DiskByteS3::removeRecursive(const String& path)
     LOG_TRACE(&Poco::Logger::get("DiskByteS3"), "RemoveRecursive: {} - {}", prefix, path);
 
     s3_util.deleteObjectsWithPrefix(prefix, [](const S3::S3Util&, const String&){return true;});
+}
+
+bool DiskByteS3::fileExists(const String & file_path) const
+{
+    return s3_util.exists(std::filesystem::path(root_prefix) / file_path);
+}
+
+void DiskByteS3::removePart(const String & part_path)
+{
+    removeFileIfExists(std::filesystem::path(part_path) / DATA_FILE);
 }
 
 static void checkWriteAccess(IDisk & disk)
