@@ -196,10 +196,10 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     switch(disk->getType())
     {
         case DiskType::Type::ByteHDFS: {
-    if (disk->exists(new_part_rel_path))
-    {
-        LOG_WARNING(log, "Removing old temporary directory  {}", disk->getPath() + new_part_rel_path);
-        disk->removeRecursive(new_part_rel_path);
+            if (disk->exists(new_part_rel_path))
+            {
+                LOG_WARNING(log, "Removing old temporary directory  {}", disk->getPath() + new_part_rel_path);
+                disk->removeRecursive(new_part_rel_path);
             }
             break;
         }
