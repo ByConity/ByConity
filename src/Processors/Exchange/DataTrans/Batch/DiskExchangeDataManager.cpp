@@ -829,7 +829,7 @@ ssize_t DiskExchangeDataManager::getFileSizeRecursively(const String & file_path
     {
         for (auto iter = disk->iterateDirectory(file_path); iter->isValid(); iter->next())
         {
-            file_size += disk->getFileSize(fs::path(file_path) / iter->name());
+            file_size += getFileSizeRecursively(iter->path());
         }
     }
     else if (disk->isFile(file_path))

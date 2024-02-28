@@ -119,7 +119,7 @@ void DDLDumper::addTable(const QualifiedTableName & qualified_table, ContextPtr 
 std::optional<size_t> DDLDumper::addTableFromSelectQuery(ASTPtr query_ptr, ContextPtr context, const NameSet & with_tables_context)
 {
     if (const auto * select_query = query_ptr->as<const ASTSelectQuery>())
-        return addTableFromSelectQueryImpl(*select_query, context, with_tables_context);
+        return addTableFromAST(query_ptr, context, with_tables_context);
 
     if (const auto * subquery = query_ptr->as<const ASTSubquery>())
         return addTableFromSelectQuery(subquery->children.at(0), context, with_tables_context);
@@ -139,56 +139,58 @@ std::optional<size_t> DDLDumper::addTableFromSelectQuery(ASTPtr query_ptr, Conte
     throw Exception("Dump only supports select query", ErrorCodes::LOGICAL_ERROR);
 }
 
-std::optional<size_t> DDLDumper::addTableFromSelectQueryImpl(const ASTSelectQuery & select_query, ContextPtr context, const NameSet & with_tables_context)
+std::optional<size_t> DDLDumper::addTableFromAST(ASTPtr ast, ContextPtr context, const NameSet & with_tables_context)
 {
-    std::string current_database = context->getCurrentDatabase();
-
     std::optional<size_t> shard_count = std::nullopt;
-
-    // 1. collect with tables
     NameSet with_tables = with_tables_context;
-    if (auto with = select_query.with())
+    for (const auto & child : ast->children)
     {
-        for (const auto & child : with->children)
+        // collect with tables
+        if (auto * with_elem = child->as<ASTWithElement>())
         {
-            if (auto * with_elem = child->as<ASTWithElement>())
-            {
-                auto shard_count_opt = addTableFromSelectQuery(with_elem->subquery, context, with_tables);
-                if (!shard_count)
-                    shard_count = shard_count_opt;
-                with_tables.emplace(with_elem->name);
-            }
-        }
-    }
-
-    // 2. collect table expressions
-    for (const auto * table_expression : getTableExpressions(select_query))
-    {
-        if (table_expression->subquery) {
-            auto shard_count_opt = addTableFromSelectQuery(table_expression->subquery, context, with_tables);
+            auto shard_count_opt = addTableFromSelectQuery(with_elem->subquery, context, with_tables);
             if (!shard_count)
                 shard_count = shard_count_opt;
-        } else if (table_expression->table_function) {
-            LOG_WARNING(log, "cannot dump a table within table function");
-        } else if (table_expression->database_and_table_name)
+            with_tables.emplace(with_elem->name);
+        }
+        else if (const auto * table_expression = child->as<ASTTableExpression>())
         {
-            auto storage_id_unresolved = StorageID(table_expression->database_and_table_name);
-            auto & database_name = storage_id_unresolved.database_name;
-            auto & table_name = storage_id_unresolved.table_name;
-            // with-table
-            if (database_name.empty() && with_tables.contains(table_name))
-                continue;
+            // collect table expressions
+            if (table_expression->subquery)
+            {
+                auto shard_count_opt = addTableFromSelectQuery(table_expression->subquery, context, with_tables);
+                if (!shard_count)
+                    shard_count = shard_count_opt;
+            }
+            else if (table_expression->table_function)
+            {
+                LOG_WARNING(log, "cannot dump a table within table function");
+            }
+            else if (table_expression->database_and_table_name)
+            {
+                auto storage_id_unresolved = StorageID(table_expression->database_and_table_name);
+                auto & database_name = storage_id_unresolved.database_name;
+                auto & table_name = storage_id_unresolved.table_name;
+                // with-table
+                if (database_name.empty() && with_tables.contains(table_name))
+                    continue;
 
-            auto storage_id = context->tryResolveStorageID(storage_id_unresolved); // attach current database if needed
-            if (storage_id.database_name.empty() || storage_id.database_name == DatabaseCatalog::SYSTEM_DATABASE)
-                continue;
+                auto storage_id = context->tryResolveStorageID(storage_id_unresolved); // attach current database if needed
+                if (storage_id.database_name.empty() || storage_id.database_name == DatabaseCatalog::SYSTEM_DATABASE)
+                    continue;
 
-            addTable(storage_id.database_name, storage_id.table_name, context);
-            if (!shard_count && shard_counts.contains(QualifiedTableName{storage_id.database_name, storage_id.table_name}))
-                shard_count = shard_counts.at(QualifiedTableName{storage_id.database_name, storage_id.table_name});
+                addTable(storage_id.database_name, storage_id.table_name, context);
+                if (!shard_count && shard_counts.contains(QualifiedTableName{storage_id.database_name, storage_id.table_name}))
+                    shard_count = shard_counts.at(QualifiedTableName{storage_id.database_name, storage_id.table_name});
+            }
+        }
+        else
+        {
+            auto shard_count_opt = addTableFromAST(child, context, with_tables_context);
+            if (!shard_count)
+                shard_count = shard_count_opt;
         }
     }
-
     return shard_count;
 }
 
