@@ -1673,6 +1673,9 @@ int ReadFromMergeTree::getPartitionMonotonicity(
         monotonicity_ = func.getMonotonicityForRange(*func.getArgumentTypes().at(key_arg_pos), {}, {});
     }
 
+    if (!found_function)
+        return -7;
+
     return 0;
 }
 
