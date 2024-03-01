@@ -1613,7 +1613,7 @@ int ReadFromMergeTree::getPartitionMonotonicity(
         return false;
     };
 
-    const std::unordered_map<String, int/*key_pos_for_monotoinic*/> two_args_func = {
+    const std::unordered_map<String, int/*key_arg_pos for monotoinic*/> two_args_func = {
         {"toStartOfInterval", 0}
     };
 
