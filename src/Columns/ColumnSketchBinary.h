@@ -102,6 +102,12 @@ public:
         res = std::string_view{reinterpret_cast<const char *>(&chars[offsetAt(n)]), sizeAt(n) - 1};
     }
 
+    bool isDefaultAt(size_t n) const override
+    {
+        assert(n < size());
+        return chars[n] == 0;
+    }
+
     StringRef getDataAt(size_t n) const override
     {
         assert(n < size());
@@ -217,6 +223,8 @@ public:
     void insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
+
+    void expand(const IColumn::Filter & mask, bool inverted) override;
 
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
 

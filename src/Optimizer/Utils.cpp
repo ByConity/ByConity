@@ -30,6 +30,8 @@
 #include <boost/math/special_functions/math_fwd.hpp>
 #include <common/logger_useful.h>
 
+extern const char * build_version;
+
 namespace DB
 {
 
@@ -292,6 +294,13 @@ std::optional<NameToType> extractNameToType(const PlanNodeBase & node)
     std::optional<NameToType> res = NameToType{};
     extractNameToTypeImpl(const_cast<PlanNodeBase *>(&node), res);
     return res;
+}
+
+std::string getVersionFromSystem()
+{
+    if(build_version != nullptr && build_version[0] != '\0')
+        return std::string(build_version);
+    return "";
 }
 }
 }

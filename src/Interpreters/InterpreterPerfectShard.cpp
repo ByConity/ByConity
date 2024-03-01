@@ -335,6 +335,7 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
                                         : static_cast<size_t>(settings.max_threads);
 
     bool storage_has_evenly_distributed_read = false;
+    PlanHints hints{};
 
     //LOG_DEBUG(log, fmt::format("query plan header: {}, header_before_aggregation: {}", query_plan.getCurrentDataStream().header.dumpStructure(), header_before_aggregation.dumpStructure()));
     auto aggregating_step = std::make_unique<AggregatingStep>(
@@ -351,7 +352,9 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
         std::move(group_by_sort_description),
         // because final_=true => no further merging/aggregating step =>
         // should_produce_results_in_order_of_bucket_number_ = false
-        false);
+        false,
+        false,
+        hints);
 
     query_plan.addStep(std::move(aggregating_step));
 }

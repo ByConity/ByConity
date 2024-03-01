@@ -8,7 +8,7 @@ Projection Est. 1 rows
          └─ Projection Est. 327270489 rows
             │     Expressions: expr#multiply(LO_EXTENDEDPRICE, LO_DISCOUNT):=LO_EXTENDEDPRICE * LO_DISCOUNT
             └─ Filter Est. 327270489 rows
-               │     Condition: (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35) AND (toYYYYMM(LO_ORDERDATE) = 199401)
+               │     Condition: (toYYYYMM(LO_ORDERDATE) = 199401) AND (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35)
                └─ TableScan ssb1000.lineorder_flat Est. 5999989813 rows
-                        Where: (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35) AND (toYYYYMM(LO_ORDERDATE) = 199401)
+                        Where: (toYYYYMM(LO_ORDERDATE) = 199401) AND (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35)
                         Outputs: [LO_ORDERDATE, LO_QUANTITY, LO_EXTENDEDPRICE, LO_DISCOUNT]

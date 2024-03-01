@@ -390,7 +390,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                             ssize_t group_size = group_elements_ast.size();
                             const auto & column_name = group_elements_ast[j]->getColumnName();
                             const auto & column_ast = group_elements_ast[j];
-                            const auto * node = temp_actions->tryFindInIndex(column_name);
+                            const auto * node = temp_actions->tryFindInOutputs(column_name);
                             if (!node)
                                 throw Exception("Unknown identifier (in GROUP BY): " + column_name, ErrorCodes::UNKNOWN_IDENTIFIER);
 
@@ -453,7 +453,7 @@ void ExpressionAnalyzer::analyzeAggregation()
 
                         const auto & column_name = group_asts[i]->getColumnName();
                         const auto & column_ast = group_asts[i];
-                        const auto * node = temp_actions->tryFindInIndex(column_name);
+                        const auto * node = temp_actions->tryFindInOutputs(column_name);
                         if (!node)
                             throw Exception("Unknown identifier (in GROUP BY): " + column_name, ErrorCodes::UNKNOWN_IDENTIFIER);
 
@@ -751,7 +751,7 @@ void SelectQueryExpressionAnalyzer::makeSetsForIndex(const ASTPtr & node)
                 auto temp_actions = std::make_shared<ActionsDAG>(columns_after_join);
                 getRootActions(left_in_operand, true, temp_actions);
 
-                if (temp_actions->tryFindInIndex(left_in_operand->getColumnName()))
+                if (temp_actions->tryFindInOutputs(left_in_operand->getColumnName()))
                     makeExplicitSet(func, *temp_actions, true, getContext(), settings.size_limits_for_set, prepared_sets);
             }
         }
@@ -874,7 +874,7 @@ bool ExpressionAnalyzer::makeAggregateDescriptions(ActionsDAGPtr & actions)
         for (size_t i = 0; i < arguments.size(); ++i)
         {
             const std::string & name = arguments[i]->getColumnName();
-            const auto * dag_node = actions->tryFindInIndex(name);
+            const auto * dag_node = actions->tryFindInOutputs(name);
             if (!dag_node)
             {
                 throw Exception(
@@ -1073,7 +1073,7 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
         for (size_t i = 0; i < arguments.size(); ++i)
         {
             const std::string & name = arguments[i]->getColumnName();
-            const auto * node = actions->tryFindInIndex(name);
+            const auto * node = actions->tryFindInOutputs(name);
 
             if (!node)
             {
@@ -1182,8 +1182,8 @@ ArrayJoinActionPtr ExpressionAnalyzer::addMultipleArrayJoinAction(ActionsDAGPtr 
         /// Assign new names to columns, if needed.
         if (result_source.first != result_source.second)
         {
-            const auto & node = actions->findInIndex(result_source.second);
-            actions->getIndex().push_back(&actions->addAlias(node, result_source.first));
+            const auto & node = actions->findInOutputs(result_source.second);
+            actions->getOutputs().push_back(&actions->addAlias(node, result_source.first));
         }
 
         /// Make ARRAY JOIN (replace arrays with their insides) for the columns in these new names.
@@ -1357,7 +1357,7 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
                 {
                     auto pos = sample_block.getPositionByName(name_with_alias.first);
                     const auto & alias = rename_dag->addAlias(*rename_dag->getInputs()[pos], name_with_alias.second);
-                    rename_dag->getIndex()[pos] = &alias;
+                    rename_dag->getOutputs()[pos] = &alias;
                 }
             }
 
@@ -1414,7 +1414,7 @@ SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bo
     String prewhere_column_name = select_query->prewhere()->getColumnName();
     step.addRequiredOutput(prewhere_column_name);
 
-    const auto & node = step.actions()->findInIndex(prewhere_column_name);
+    const auto & node = step.actions()->findInOutputs(prewhere_column_name);
     auto filter_type = node.result_type;
     if (!filter_type->canBeUsedInBooleanContext())
         throw Exception("Invalid type for filter in PREWHERE: " + filter_type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
@@ -1581,7 +1581,7 @@ bool SelectQueryExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, 
     auto where_column_name = select_query->where()->getColumnName();
     step.addRequiredOutput(where_column_name);
 
-    const auto & node = step.actions()->findInIndex(where_column_name);
+    const auto & node = step.actions()->findInOutputs(where_column_name);
     auto filter_type = node.result_type;
     if (!filter_type->canBeUsedInBooleanContext())
         throw Exception("Invalid type for filter in WHERE: " + filter_type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
@@ -2002,11 +2002,16 @@ ExpressionActionsPtr ExpressionAnalyzer::getActions(bool add_aliases, bool proje
         getActionsDAG(add_aliases, project_result), ExpressionActionsSettings::fromContext(getContext(), compile_expressions));
 }
 
-ExpressionActionsPtr ExpressionAnalyzer::getConstActions(const ColumnsWithTypeAndName & constant_inputs)
+ActionsDAGPtr ExpressionAnalyzer::getConstActionsDAG(const ColumnsWithTypeAndName & constant_inputs)
 {
     auto actions = std::make_shared<ActionsDAG>(constant_inputs);
+    getRootActions(query, true /* no_makeset_for_subqueries */, actions, true /* only_consts */);
+    return actions;
+}
 
-    getRootActions(query, true, actions, true);
+ExpressionActionsPtr ExpressionAnalyzer::getConstActions(const ColumnsWithTypeAndName & constant_inputs)
+{
+    auto actions = getConstActionsDAG(constant_inputs);
     return std::make_shared<ExpressionActions>(actions, ExpressionActionsSettings::fromContext(getContext()));
 }
 
@@ -2149,7 +2154,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 auto own_index_context = std::make_shared<MergeTreeIndexContext>();
                 query_analyzer.getRootActionsWithOwnBitmapInfo(predicate, !first_stage, tmp_actions, own_index_context);
                 /// Santinizer the filter colums
-                const auto & node = tmp_actions->findInIndex(predicate->getColumnName());
+                const auto & node = tmp_actions->findInOutputs(predicate->getColumnName());
                 sanitizeDataType(node.result_type);
                 /// Generate actions for `accumulated predicates`
                 current_ast = current_ast ? makeASTFunction("and", predicate, std::move(current_ast)) : predicate;

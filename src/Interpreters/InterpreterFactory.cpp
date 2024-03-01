@@ -52,12 +52,14 @@
 #include <Parsers/ASTSetRoleQuery.h>
 #include <Parsers/ASTShowAccessEntitiesQuery.h>
 #include <Parsers/ASTShowAccessQuery.h>
+#include <Parsers/ASTShowColumnsQuery.h>
 #include <Parsers/ASTShowCreateAccessEntityQuery.h>
 #include <Parsers/ASTShowGrantsQuery.h>
 #include <Parsers/ASTShowPrivilegesQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTShowWarehousesQuery.h>
+#include <Parsers/ASTShowSettingQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTDumpQuery.h>
@@ -112,6 +114,7 @@
 #include <Interpreters/InterpreterSetRoleQuery.h>
 #include <Interpreters/InterpreterShowAccessEntitiesQuery.h>
 #include <Interpreters/InterpreterShowAccessQuery.h>
+#include <Interpreters/InterpreterShowColumnsQuery.h>
 #include <Interpreters/InterpreterShowCreateAccessEntityQuery.h>
 #include <Interpreters/InterpreterShowCreateQuery.h>
 #include <Interpreters/InterpreterShowGrantsQuery.h>
@@ -119,6 +122,7 @@
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
 #include <Interpreters/InterpreterShowWarehousesQuery.h>
+#include <Interpreters/InterpreterShowSettingQuery.h>
 #include <Interpreters/InterpreterSystemQuery.h>
 #include <Interpreters/InterpreterReproduceQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
@@ -255,9 +259,17 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         return std::make_unique<InterpreterShowTablesQuery>(query, context);
     }
+    else if (query->as<ASTShowColumnsQuery>())
+    {
+        return std::make_unique<InterpreterShowColumnsQuery>(query, context);
+    }
     else if (query->as<ASTUseQuery>())
     {
         return std::make_unique<InterpreterUseQuery>(query, context);
+    }
+    else if (query->as<ASTShowSettingQuery>())
+    {
+        return std::make_unique<InterpreterShowSettingQuery>(query, context);
     }
     else if (query->as<ASTSwitchQuery>())
     {

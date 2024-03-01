@@ -1,75 +1,111 @@
 COLUMNS
+EVENTS
 KEY_COLUMN_USAGE
+PARTITIONS
 REFERENTIAL_CONSTRAINTS
+ROUTINES
 SCHEMATA
+STATISTICS
 TABLES
+TRIGGERS
 VIEWS
 columns
+events
 key_column_usage
+partitions
 referential_constraints
+routines
 schemata
+statistics
 tables
+triggers
 views
 COLUMNS
+EVENTS
 KEY_COLUMN_USAGE
+PARTITIONS
 REFERENTIAL_CONSTRAINTS
+ROUTINES
 SCHEMATA
+STATISTICS
 TABLES
+TRIGGERS
 VIEWS
 columns
+events
 key_column_usage
+partitions
 referential_constraints
+routines
 schemata
+statistics
 tables
+triggers
 views
 INFORMATION_SCHEMA	INFORMATION_SCHEMA	default	\N	\N	\N	\N	INFORMATION_SCHEMA	INFORMATION_SCHEMA	default	\N	\N	\N	\N
 information_schema	information_schema	default	\N	\N	\N	\N	information_schema	information_schema	default	\N	\N	\N	\N
-default	default	kcu	FOREIGN TABLE	utf8mb4_0900_ai_ci		default	default	kcu	FOREIGN TABLE	utf8mb4_0900_ai_ci	
-default	default	kcu2	FOREIGN TABLE	utf8mb4_0900_ai_ci		default	default	kcu2	FOREIGN TABLE	utf8mb4_0900_ai_ci	
-default	default	t	FOREIGN TABLE	utf8mb4_0900_ai_ci		default	default	t	FOREIGN TABLE	utf8mb4_0900_ai_ci	
-default	default	v	VIEW	utf8mb4_0900_ai_ci		default	default	v	VIEW	utf8mb4_0900_ai_ci	
-		tmp	LOCAL TEMPORARY	utf8mb4_0900_ai_ci				tmp	LOCAL TEMPORARY	utf8mb4_0900_ai_ci	
-default	default	v	SELECT n, f FROM default.t	NONE	NO	NO	NO	NO	NO	default	default	v	SELECT n, f FROM default.t	NONE	NO	NO	NO	NO	NO
-default	default	kcu	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	default	default	kcu	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32
-default	default	kcu	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	default	default	kcu	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String
-default	default	kcu2	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	default	default	kcu2	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32
-default	default	kcu2	d	2		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date	default	default	kcu2	d	2		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date
-default	default	kcu2	u	3		0	UUID	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UUID	default	default	kcu2	u	3		0	UUID	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UUID
-default	default	t	n	1		0	UInt64	\N	\N	64	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt64	default	default	t	n	1		0	UInt64	\N	\N	64	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt64
-default	default	t	f	2		0	Float32	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float32	default	default	t	f	2		0	Float32	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float32
-default	default	t	s	3		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	default	default	t	s	3		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String
-default	default	t	fs	4		0	FixedString(42)	42	42	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		FixedString(42)	default	default	t	fs	4		0	FixedString(42)	42	42	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		FixedString(42)
-default	default	t	d	5		0	Decimal(9, 6)	\N	\N	9	10	6	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Decimal(9, 6)	default	default	t	d	5		0	Decimal(9, 6)	\N	\N	9	10	6	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Decimal(9, 6)
-default	default	v	n	1		1	Nullable(Int32)	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Nullable(Int32)	default	default	v	n	1		1	Nullable(Int32)	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Nullable(Int32)
-default	default	v	f	2		0	Float64	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float64	default	default	v	f	2		0	Float64	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float64
-		tmp	d	1		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date			tmp	d	1		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date
-		tmp	dt	2		0	DateTime	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime			tmp	dt	2		0	DateTime	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime
-		tmp	dtms	3		0	DateTime64(3)	\N	\N	\N	\N	\N	3	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime64(3)			tmp	dtms	3		0	DateTime64(3)	\N	\N	\N	\N	\N	3	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime64(3)
+01161_information_schema	01161_information_schema	kcu	TABLE	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	kcu	TABLE	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	kcu2	TABLE	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	kcu2	TABLE	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	partitioned	TABLE	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	partitioned	TABLE	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	t	TABLE	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	t	TABLE	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	v	VIEW	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	v	VIEW	\N	0	utf8mb4_0900_ai_ci	
+		tmp	LOCAL TEMPORARY	\N	0	utf8mb4_0900_ai_ci				tmp	LOCAL TEMPORARY	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	v	SELECT n, f FROM `01161_information_schema`.t	NONE	NO	NO	NO	NO	NO	01161_information_schema	01161_information_schema	v	SELECT n, f FROM `01161_information_schema`.t	NONE		NO	NO	NO	NO	NO
+01161_information_schema	01161_information_schema	kcu	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	01161_information_schema	01161_information_schema	kcu	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	
+01161_information_schema	01161_information_schema	kcu	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	01161_information_schema	01161_information_schema	kcu	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	
+01161_information_schema	01161_information_schema	kcu2	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	01161_information_schema	01161_information_schema	kcu2	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	
+01161_information_schema	01161_information_schema	kcu2	d	2		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date	01161_information_schema	01161_information_schema	kcu2	d	2		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date	
+01161_information_schema	01161_information_schema	kcu2	u	3		0	UUID	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UUID	01161_information_schema	01161_information_schema	kcu2	u	3		0	UUID	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UUID	
+01161_information_schema	01161_information_schema	partitioned	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	01161_information_schema	01161_information_schema	partitioned	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	
+01161_information_schema	01161_information_schema	partitioned	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	01161_information_schema	01161_information_schema	partitioned	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	
+01161_information_schema	01161_information_schema	t	n	1		0	UInt64	\N	\N	64	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt64	01161_information_schema	01161_information_schema	t	n	1		0	UInt64	\N	\N	64	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt64	
+01161_information_schema	01161_information_schema	t	f	2		0	Float32	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float32	01161_information_schema	01161_information_schema	t	f	2		0	Float32	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float32	
+01161_information_schema	01161_information_schema	t	s	3		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	01161_information_schema	01161_information_schema	t	s	3		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	
+01161_information_schema	01161_information_schema	t	fs	4		0	FixedString(42)	42	42	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		FixedString(42)	01161_information_schema	01161_information_schema	t	fs	4		0	FixedString(42)	42	42	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		FixedString(42)	
+01161_information_schema	01161_information_schema	t	d	5		0	Decimal(9, 6)	\N	\N	9	10	6	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Decimal(9, 6)	01161_information_schema	01161_information_schema	t	d	5		0	Decimal(9, 6)	\N	\N	9	10	6	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Decimal(9, 6)	
+01161_information_schema	01161_information_schema	v	n	1		1	Nullable(Int32)	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Nullable(Int32)	01161_information_schema	01161_information_schema	v	n	1		1	Nullable(Int32)	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Nullable(Int32)	
+01161_information_schema	01161_information_schema	v	f	2		0	Float64	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float64	01161_information_schema	01161_information_schema	v	f	2		0	Float64	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float64	
+		tmp	d	1		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date			tmp	d	1		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date	
+		tmp	dt	2		0	DateTime	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime			tmp	dt	2		0	DateTime	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime	
+		tmp	dtms	3		0	DateTime64(3)	\N	\N	\N	\N	\N	3	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime64(3)			tmp	dtms	3		0	DateTime64(3)	\N	\N	\N	\N	\N	3	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime64(3)	
 INFORMATION_SCHEMA	INFORMATION_SCHEMA	default	\N	\N	\N	\N	INFORMATION_SCHEMA	INFORMATION_SCHEMA	default	\N	\N	\N	\N
 information_schema	information_schema	default	\N	\N	\N	\N	information_schema	information_schema	default	\N	\N	\N	\N
-default	default	kcu	FOREIGN TABLE	utf8mb4_0900_ai_ci		default	default	kcu	FOREIGN TABLE	utf8mb4_0900_ai_ci	
-default	default	kcu2	FOREIGN TABLE	utf8mb4_0900_ai_ci		default	default	kcu2	FOREIGN TABLE	utf8mb4_0900_ai_ci	
-default	default	t	FOREIGN TABLE	utf8mb4_0900_ai_ci		default	default	t	FOREIGN TABLE	utf8mb4_0900_ai_ci	
-default	default	v	VIEW	utf8mb4_0900_ai_ci		default	default	v	VIEW	utf8mb4_0900_ai_ci	
-		tmp	LOCAL TEMPORARY	utf8mb4_0900_ai_ci				tmp	LOCAL TEMPORARY	utf8mb4_0900_ai_ci	
-default	default	v	SELECT n, f FROM default.t	NONE	0	0	0	0	0	default	default	v	SELECT n, f FROM default.t	NONE	0	0	0	0	0
-default	default	kcu	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	default	default	kcu	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32
-default	default	kcu	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	default	default	kcu	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String
-default	default	kcu2	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	default	default	kcu2	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32
-default	default	kcu2	d	2		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date	default	default	kcu2	d	2		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date
-default	default	kcu2	u	3		0	UUID	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UUID	default	default	kcu2	u	3		0	UUID	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UUID
-default	default	t	n	1		0	UInt64	\N	\N	64	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt64	default	default	t	n	1		0	UInt64	\N	\N	64	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt64
-default	default	t	f	2		0	Float32	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float32	default	default	t	f	2		0	Float32	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float32
-default	default	t	s	3		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	default	default	t	s	3		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String
-default	default	t	fs	4		0	FixedString(42)	42	42	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		FixedString(42)	default	default	t	fs	4		0	FixedString(42)	42	42	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		FixedString(42)
-default	default	t	d	5		0	Decimal(9, 6)	\N	\N	9	10	6	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Decimal(9, 6)	default	default	t	d	5		0	Decimal(9, 6)	\N	\N	9	10	6	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Decimal(9, 6)
-default	default	v	n	1		1	Nullable(Int32)	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Nullable(Int32)	default	default	v	n	1		1	Nullable(Int32)	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Nullable(Int32)
-default	default	v	f	2		0	Float64	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float64	default	default	v	f	2		0	Float64	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float64
-		tmp	d	1		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date			tmp	d	1		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date
-		tmp	dt	2		0	DateTime	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime			tmp	dt	2		0	DateTime	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime
-		tmp	dtms	3		0	DateTime64(3)	\N	\N	\N	\N	\N	3	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime64(3)			tmp	dtms	3		0	DateTime64(3)	\N	\N	\N	\N	\N	3	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime64(3)
+01161_information_schema	01161_information_schema	kcu	TABLE	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	kcu	TABLE	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	kcu2	TABLE	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	kcu2	TABLE	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	partitioned	TABLE	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	partitioned	TABLE	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	t	TABLE	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	t	TABLE	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	v	VIEW	\N	0	utf8mb4_0900_ai_ci		01161_information_schema	01161_information_schema	v	VIEW	\N	0	utf8mb4_0900_ai_ci	
+		tmp	LOCAL TEMPORARY	\N	0	utf8mb4_0900_ai_ci				tmp	LOCAL TEMPORARY	\N	0	utf8mb4_0900_ai_ci	
+01161_information_schema	01161_information_schema	v	SELECT n, f FROM `01161_information_schema`.t	NONE	0	0	0	0	0	01161_information_schema	01161_information_schema	v	SELECT n, f FROM `01161_information_schema`.t	NONE		0	0	0	0	0
+01161_information_schema	01161_information_schema	kcu	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	01161_information_schema	01161_information_schema	kcu	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	
+01161_information_schema	01161_information_schema	kcu	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	01161_information_schema	01161_information_schema	kcu	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	
+01161_information_schema	01161_information_schema	kcu2	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	01161_information_schema	01161_information_schema	kcu2	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	
+01161_information_schema	01161_information_schema	kcu2	d	2		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date	01161_information_schema	01161_information_schema	kcu2	d	2		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date	
+01161_information_schema	01161_information_schema	kcu2	u	3		0	UUID	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UUID	01161_information_schema	01161_information_schema	kcu2	u	3		0	UUID	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UUID	
+01161_information_schema	01161_information_schema	partitioned	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	01161_information_schema	01161_information_schema	partitioned	i	1		0	UInt32	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt32	
+01161_information_schema	01161_information_schema	partitioned	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	01161_information_schema	01161_information_schema	partitioned	s	2		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	
+01161_information_schema	01161_information_schema	t	n	1		0	UInt64	\N	\N	64	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt64	01161_information_schema	01161_information_schema	t	n	1		0	UInt64	\N	\N	64	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		UInt64	
+01161_information_schema	01161_information_schema	t	f	2		0	Float32	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float32	01161_information_schema	01161_information_schema	t	f	2		0	Float32	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float32	
+01161_information_schema	01161_information_schema	t	s	3		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	01161_information_schema	01161_information_schema	t	s	3		0	String	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		String	
+01161_information_schema	01161_information_schema	t	fs	4		0	FixedString(42)	42	42	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		FixedString(42)	01161_information_schema	01161_information_schema	t	fs	4		0	FixedString(42)	42	42	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		FixedString(42)	
+01161_information_schema	01161_information_schema	t	d	5		0	Decimal(9, 6)	\N	\N	9	10	6	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Decimal(9, 6)	01161_information_schema	01161_information_schema	t	d	5		0	Decimal(9, 6)	\N	\N	9	10	6	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Decimal(9, 6)	
+01161_information_schema	01161_information_schema	v	n	1		1	Nullable(Int32)	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Nullable(Int32)	01161_information_schema	01161_information_schema	v	n	1		1	Nullable(Int32)	\N	\N	32	2	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Nullable(Int32)	
+01161_information_schema	01161_information_schema	v	f	2		0	Float64	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float64	01161_information_schema	01161_information_schema	v	f	2		0	Float64	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N		Float64	
+		tmp	d	1		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date			tmp	d	1		0	Date	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		Date	
+		tmp	dt	2		0	DateTime	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime			tmp	dt	2		0	DateTime	\N	\N	\N	\N	\N	0	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime	
+		tmp	dtms	3		0	DateTime64(3)	\N	\N	\N	\N	\N	3	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime64(3)			tmp	dtms	3		0	DateTime64(3)	\N	\N	\N	\N	\N	3	\N	\N	\N	\N	\N	\N	\N	\N	\N		DateTime64(3)	
 1
 1
-def	default	PRIMARY	def	default	kcu	i	1	\N	\N	\N	\N	def	default	PRIMARY	def	default	kcu	i	1	\N	\N	\N	\N
-def	default	PRIMARY	def	default	kcu2	d	1	\N	\N	\N	\N	def	default	PRIMARY	def	default	kcu2	d	1	\N	\N	\N	\N
-def	default	PRIMARY	def	default	kcu2	u	1	\N	\N	\N	\N	def	default	PRIMARY	def	default	kcu2	u	1	\N	\N	\N	\N
+def	01161_information_schema	PRIMARY	def	01161_information_schema	kcu	i	1	\N	\N	\N	\N	def	01161_information_schema	PRIMARY	def	01161_information_schema	kcu	i	1	\N	\N	\N	\N
+def	01161_information_schema	PRIMARY	def	01161_information_schema	kcu2	d	1	\N	\N	\N	\N	def	01161_information_schema	PRIMARY	def	01161_information_schema	kcu2	d	1	\N	\N	\N	\N
+def	01161_information_schema	PRIMARY	def	01161_information_schema	kcu2	u	1	\N	\N	\N	\N	def	01161_information_schema	PRIMARY	def	01161_information_schema	kcu2	u	1	\N	\N	\N	\N
+-- information_schema.referential_constraints
+-- information_schema.statistics
+-- information_schema.events
+-- information_schema.routines
+-- information_schema.triggers
+-- information_schema.partitions
+-- information_schema.partitions (After INSERT)
+partitioned	0	i % 3	2
+partitioned	1	i % 3	3
+partitioned	2	i % 3	2

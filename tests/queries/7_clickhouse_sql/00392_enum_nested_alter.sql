@@ -6,13 +6,22 @@ INSERT INTO test.enum_nested_alter (x, n.e) VALUES (1, ['Hello']);
 SELECT * FROM test.enum_nested_alter;
 
 ALTER TABLE test.enum_nested_alter MODIFY COLUMN n.e Array(Enum8('Hello' = 1, 'World' = 2));
+-- wait task finish
+SELECT sleepEachRow(3) FROM numbers(30) FORMAT Null;
+
 INSERT INTO test.enum_nested_alter (x, n.e) VALUES (2, ['World']);
 SELECT * FROM test.enum_nested_alter ORDER BY x;
 
 ALTER TABLE test.enum_nested_alter MODIFY COLUMN n.e Array(Enum16('Hello' = 1, 'World' = 2, 'a' = 300));
+-- wait task finish
+SELECT sleepEachRow(3) FROM numbers(30) FORMAT Null;
+
 SELECT * FROM test.enum_nested_alter ORDER BY x;
 
 ALTER TABLE test.enum_nested_alter MODIFY COLUMN n.e Array(Int16);
+-- wait task finish
+SELECT sleepEachRow(3) FROM numbers(30) FORMAT Null;
+
 SELECT * FROM test.enum_nested_alter ORDER BY x;
 
 DROP TABLE test.enum_nested_alter;
@@ -62,6 +71,9 @@ INSERT INTO test.enum_nested_alter (x, n.e) VALUES (1, ['Hello.world']);
 SELECT * FROM test.enum_nested_alter;
 
 ALTER TABLE test.enum_nested_alter MODIFY COLUMN n.e Array(Enum8('Hello.world' = 1, 'a' = 2));
+-- wait task finish
+SELECT sleepEachRow(3) FROM numbers(30) FORMAT Null;
+
 SELECT * FROM test.enum_nested_alter;
 
 DROP TABLE test.enum_nested_alter;

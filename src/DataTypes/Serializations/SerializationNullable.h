@@ -11,7 +11,10 @@ private:
     SerializationPtr nested;
 
 public:
-    SerializationNullable(const SerializationPtr & nested_) : nested(nested_) {}
+    SerializationNullable(const SerializationPtr & nested_) : nested(nested_)
+    {
+        const_cast<ISerialization *>(nested.get())->setInSerializationNullable();
+    }
 
     void enumerateStreams(
         EnumerateStreamsSettings & settings,
@@ -86,6 +89,8 @@ public:
     static ReturnType deserializeTextJSONImpl(IColumn & column, ReadBuffer & istr, const FormatSettings &, const SerializationPtr & nested);
 
 private:
+    static void convertOverflowDateToNull(IColumn & column, const FormatSettings & settings);
+
     struct SubcolumnCreator : public ISubcolumnCreator
     {
         const ColumnPtr null_map;

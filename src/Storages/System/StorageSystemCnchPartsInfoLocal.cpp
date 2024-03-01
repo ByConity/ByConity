@@ -43,6 +43,7 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
     });
 
     storage_metadata.setColumns(ColumnsDescription({
+        {"uuid", std::make_shared<DataTypeString>()},
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
         {"partition_id", std::make_shared<DataTypeString>()},
@@ -168,7 +169,8 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                         auto entry = active_tables[(*filtered_index_column)[current_task].get<UInt64>()];
                         PartitionData & metrics_data = metrics_collection[current_task];
                         storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
-                        if (storage)
+                        /// Extra check to avoid double counting of the same table.
+                        if (storage && UUIDHelpers::UUIDToString(storage->getStorageUUID()) == entry->table_uuid)
                             cache_manager->getPartsInfoMetrics(*storage, metrics_data, require_partition_info);
                     }
                     catch (Exception & e)
@@ -206,6 +208,8 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
             size_t dest_index = 0;
             const auto & metrics_data = it->second->partition_info_ptr->metrics_ptr->read();
             bool is_valid_metrics = metrics_data.validateMetrics();
+            if (columns_mask[src_index++])
+                res_columns[dest_index++]->insert(entry->table_uuid);
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->database);
             if (columns_mask[src_index++])

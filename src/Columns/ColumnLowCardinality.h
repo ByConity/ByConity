@@ -118,6 +118,14 @@ public:
             return getDictionary().getDataAt(getIndexes().getUInt(n));
     }
 
+    bool isDefaultAt(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().isDefaultAt(n);
+        else
+            return getDictionary().isDefaultAt(getIndexes().getUInt(n));
+    }
+
     StringRef getDataAtWithTerminatingZero(size_t n) const override
     {
         if (full_state)
@@ -241,6 +249,11 @@ public:
                                                  getIndexes().cloneEmpty(), getNestedColumn().filter(filt, result_size_hint));
         else
             return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().filter(filt, result_size_hint));
+    }
+
+    void expand(const Filter & mask, bool inverted) override
+    {
+        idx.getPositionsPtr()->expand(mask, inverted);
     }
 
     ColumnPtr permute(const Permutation & perm, size_t limit) const override

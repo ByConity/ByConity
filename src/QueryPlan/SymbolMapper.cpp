@@ -319,6 +319,7 @@ Aggregator::Params SymbolMapper::map(const Aggregator::Params & params)
         params.group_by_two_level_threshold,
         params.group_by_two_level_threshold_bytes,
         params.max_bytes_before_external_group_by,
+        params.spill_buffer_bytes_before_external_group_by,
         params.empty_result_for_aggregation_by_empty_set,
         params.tmp_volume,
         params.max_threads,
@@ -370,7 +371,9 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
         SortDescription{map(agg.getGroupBySortDescription())},
         map(agg.getGroupings()),
         agg.needOverflowRow(),
-        agg.shouldProduceResultsInOrderOfBucketNumber());
+        agg.shouldProduceResultsInOrderOfBucketNumber(),
+        agg.isNoShuffle(),
+        agg.getHints());
 }
 
 std::shared_ptr<ApplyStep> SymbolMapper::map(const ApplyStep & apply)

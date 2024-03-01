@@ -105,3 +105,8 @@ SELECT id, adddate(str, interval '3' day) FROM test.dates ORDER BY id;
 SELECT id, date_sub(str, interval '3' day) FROM test.dates ORDER BY id;
 
 DROP TABLE IF EXISTS test.dates;
+
+set enable_implicit_arg_type_convert=1;
+select adddate(20220122,interval '3' day);
+select timestampadd(second,1,20220102121212);
+set enable_implicit_arg_type_convert=0;

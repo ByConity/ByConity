@@ -19,6 +19,7 @@
 #include <vector>
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
@@ -28,6 +29,7 @@
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
+#include <Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
@@ -62,11 +64,10 @@
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
+#include <Common/time.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include <Interpreters/Context_fwd.h>
-#include <Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h>
 
 namespace ProfileEvents
 {
@@ -92,8 +93,11 @@ void PlanSegmentExecutor::prepareSegmentInfo() const
     query_log_element->segment_parallel = plan_segment->getParallelSize();
     query_log_element->segment_parallel_index = plan_segment_instance->info.parallel_id;
     query_log_element->type = QueryLogElementType::QUERY_START;
-    query_log_element->event_time = time(nullptr);
-    query_log_element->query_start_time = time(nullptr);
+    const auto current_time = std::chrono::system_clock::now();
+    query_log_element->event_time = time_in_seconds(current_time);
+    query_log_element->event_time_microseconds = time_in_microseconds(current_time);
+    query_log_element->query_start_time = time_in_seconds(current_time);
+    query_log_element->query_start_time_microseconds = time_in_microseconds(current_time);
 }
 
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_)
@@ -161,6 +165,9 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         runtime_segment_status.message = "execute success";
 
         query_log_element->type = QueryLogElementType::QUERY_FINISH;
+        const auto finish_time = std::chrono::system_clock::now();
+        query_log_element->event_time = time_in_seconds(finish_time);
+        query_log_element->event_time_microseconds = time_in_microseconds(finish_time);
         sendSegmentStatus(runtime_segment_status);
         return runtime_segment_status;
     }
@@ -172,6 +179,9 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         query_log_element->type = QueryLogElementType::EXCEPTION_WHILE_PROCESSING;
         query_log_element->exception_code = exception_code;
         query_log_element->stack_trace = exception_message;
+        const auto time_now = std::chrono::system_clock::now();
+        query_log_element->event_time = time_in_seconds(time_now);
+        query_log_element->event_time_microseconds = time_in_microseconds(time_now);
 
         const auto & host = extractExchangeHostPort(plan_segment_instance->info.execution_address);
         runtime_segment_status.query_id = plan_segment->getQueryId();

@@ -102,7 +102,8 @@ struct TracerConfiguration final : public TracerConfigurationData
     M(String, storage_policy, "", "default", ConfigFlag::Default, "storage policy for bsp mode disk exchange data") \
     M(String, volume, "", "local", ConfigFlag::Default, "volume to store bsp mode disk exchange data") \
     M(UInt64, gc_interval_seconds, "", 1800, ConfigFlag::Default, "by default, garbage collection for bsp directory is done every 1800 seconds") \
-    M(UInt64, file_expire_seconds, "", 172800, ConfigFlag::Default, "by default, bsp mode disk exchange data expire after two days")
+    M(UInt64, file_expire_seconds, "", 172800, ConfigFlag::Default, "by default, bsp mode disk exchange data expire after two days") \
+    M(Int64, max_disk_bytes, "", 1024LL * 1024 * 1024 * 100, ConfigFlag::Default, "by default, exchange data file will consume at most 100 GB disk space")
 
 DECLARE_CONFIG_DATA(BSPConfigurationData, BSP_CONFIG_FIELDS_LISTS)
 

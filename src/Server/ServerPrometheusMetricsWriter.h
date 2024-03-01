@@ -529,10 +529,9 @@ namespace ProfileEvents
     // extern const Event S3PUTRequestsErrors;
     // extern const Event S3PUTRequestsThrottling;
     // extern const Event S3PUTRequestsRedirects;
-    // extern const Event WriteBufferFromS3Write;
-    // extern const Event WriteBufferFromS3WriteFailed;
-    // extern const Event WriteBufferFromS3WriteMicro;
+    // extern const Event WriteBufferFromS3WriteMicroseconds;
     // extern const Event WriteBufferFromS3WriteBytes;
+    // extern const Event WriteBufferFromS3WriteErrors;
     // extern const Event ReadFromS3BufferCount;
     // extern const Event ReadBufferFromS3ReadFailed;
     // extern const Event ReadBufferFromS3ReadBytes;
@@ -1222,10 +1221,9 @@ private:
         // ProfileEvents::S3PUTRequestsErrors,
         // ProfileEvents::S3PUTRequestsThrottling,
         // ProfileEvents::S3PUTRequestsRedirects,
-        // ProfileEvents::WriteBufferFromS3Write,
-        // ProfileEvents::WriteBufferFromS3WriteFailed,
-        // ProfileEvents::WriteBufferFromS3WriteMicro,
+        // ProfileEvents::WriteBufferFromS3WriteMicroseconds,
         // ProfileEvents::WriteBufferFromS3WriteBytes,
+        // ProfileEvents::WriteBufferFromS3WriteErrors,
         // ProfileEvents::ReadBufferFromS3Read,
         // ProfileEvents::ReadBufferFromS3ReadFailed,
         // ProfileEvents::ReadBufferFromS3ReadBytes,

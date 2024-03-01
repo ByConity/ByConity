@@ -284,18 +284,18 @@ void AbstractPlanTestSuite::loadTableStatistics()
 {
     auto path = getStatisticsFile();
 
-    auto context = createQueryContext(std::unordered_map<String, Field>{{"graphviz_path", path.parent_path().string()}});
+    auto context = createQueryContext(std::unordered_map<String, Field>{{"graphviz_path", path.parent_path().parent_path().string()}});
 
-    auto file = path.parent_path() / std::filesystem::path(database_name + ".bin");
-    std::string expected_database = path.filename().string().substr(0, path.filename().string().size() - 4);
+    std::string expected_database = path.parent_path().filename();
     if (expected_database != database_name)
         throw Exception("database should be " + expected_database, ErrorCodes::BAD_ARGUMENTS);
-    if (!std::filesystem::exists(file))
-        throw Exception(file.string() + " not found.", ErrorCodes::BAD_ARGUMENTS);
+    if (!std::filesystem::exists(path))
+        throw Exception(path.string() + " not found.", ErrorCodes::BAD_ARGUMENTS);
 
     ThreadStatus thread_status;
     thread_status.attachQueryContext(context);
-    InterpreterShowStatsQuery interpreter(parse("show stats __load;", context), context);
+    InterpreterShowStatsQuery interpreter(parse("show stats __jsonload;", context), context);
+
     interpreter.execute();
 }
 

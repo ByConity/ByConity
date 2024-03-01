@@ -15,11 +15,12 @@
 
 #pragma once
 
+#include <Interpreters/ServerPartLog.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Transaction/Actions/IAction.h>
-#include <WorkerTasks/ManipulationType.h>
 #include <Transaction/TransactionCommon.h>
+#include <WorkerTasks/ManipulationType.h>
 
 namespace DB
 {
@@ -27,8 +28,19 @@ namespace DB
 class MergeMutateAction : public IAction
 {
 public:
-    MergeMutateAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, TransactionRecord record, ManipulationType type_, const StoragePtr table_)
-        : IAction(query_context_, txn_id_), txn_record(std::move(record)), table(table_), type(type_), log(&Poco::Logger::get("MergeMutationAction"))
+    MergeMutateAction(
+        const ContextPtr & query_context_,
+        const TxnTimestamp & txn_id_,
+        TransactionRecord record,
+        ManipulationType type_,
+        const StoragePtr table_,
+        const Strings & source_part_names_)
+        : IAction(query_context_, txn_id_)
+        , txn_record(std::move(record))
+        , type(type_)
+        , table(table_)
+        , source_part_names(source_part_names_)
+        , log(&Poco::Logger::get("MergeMutationAction"))
     {
     }
 
@@ -40,22 +52,28 @@ public:
 
     /// V2 APIs
     void executeV2() override;
-
     void postCommit(TxnTimestamp commit_time) override;
     void abort() override;
 
     static void updatePartData(MutableMergeTreeDataPartCNCHPtr part, TxnTimestamp commit_time);
 
     UInt32 getSize() const override { return parts.size() + delete_bitmaps.size(); }
+
 private:
+    ServerPartLogElement::Type getPartLogType() const
+    {
+        return type == ManipulationType::Merge ? ServerPartLogElement::MERGE_PARTS : ServerPartLogElement::MUTATE_PART;
+    }
+
+    MutableMergeTreeDataPartsCNCHVector getMergedPart() const;
+
     TransactionRecord txn_record;
+    ManipulationType type;
     const StoragePtr table;
-    [[maybe_unused]] ManipulationType type;
+    Strings source_part_names;
     Poco::Logger * log;
 
     MutableMergeTreeDataPartsCNCHVector parts;
-    std::vector<String> added_parts;
-
     DeleteBitmapMetaPtrVector delete_bitmaps;
     bool executed{false};
 };

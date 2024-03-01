@@ -21,6 +21,8 @@ enum class ArgType
     STR_STR_UINT,           /// (String a, String b, UInt c)
     SAME_TYPE,              /// Two arguments of same type
     DATE_NUM_STR,           /// (General Date/Datetime type a, Number b, String c)
+    DATE_INTERVAL,          /// (Date/DateTime a, Interval b)
+    INTERVAL_DATE,          /// (Interval a, Date/DateTime b)
     DATE_STR,               /// (General Date/Datetime type a, String b)
     STR_DATETIME_STR,       /// (String a, General Date/Datetime b,  General Date/Datetime c, String d)
     UNDEFINED               /// All MySql functions should override getArgumentsType()

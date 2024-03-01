@@ -189,7 +189,6 @@ bool DataTypeTuple::equals(const IDataType & rhs) const
     return true;
 }
 
-
 size_t DataTypeTuple::getPositionByName(const String & name) const
 {
     size_t size = elems.size();

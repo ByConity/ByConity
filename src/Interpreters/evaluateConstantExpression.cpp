@@ -25,6 +25,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/FieldToDataType.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/ExpressionActions.h>
@@ -49,8 +50,18 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
+static EvaluateConstantExpressionResult getFieldAndDataTypeFromLiteral(ASTLiteral * literal)
+{
+    auto type = applyVisitor(FieldToDataType(), literal->value);
+    /// In case of Array field nested fields can have different types.
+    /// Example: Array [1, 2.3] will have 2 fields with types UInt64 and Float64
+    /// when result type is Array(Float64).
+    /// So, we need to convert this field to the result type.
+    Field res = convertFieldToType(literal->value, *type);
+    return {res, type};
+}
 
-std::pair<Field, std::shared_ptr<const IDataType>> evaluateConstantExpression(const ASTPtr & node, ContextPtr context)
+EvaluateConstantExpressionResult evaluateConstantExpression(const ASTPtr & node, ContextPtr context)
 {
     NamesAndTypesList source_columns = {{ "_dummy", std::make_shared<DataTypeUInt8>() }};
     auto ast = node->clone();
@@ -63,32 +74,45 @@ std::pair<Field, std::shared_ptr<const IDataType>> evaluateConstantExpression(co
     if (context->getClientInfo().query_kind != ClientInfo::QueryKind::SECONDARY_QUERY && context->getSettingsRef().normalize_function_names)
         FunctionNameNormalizer().visit(ast.get());
 
-    String name = ast->getColumnName();
     auto syntax_result = TreeRewriter(context).analyze(ast, source_columns);
-    ExpressionActionsPtr expr_for_constant_folding = ExpressionAnalyzer(ast, syntax_result, context).getConstActions();
 
-    /// There must be at least one column in the block so that it knows the number of rows.
-    Block block_with_constants{{ ColumnConst::create(ColumnUInt8::create(1, 0), 1), std::make_shared<DataTypeUInt8>(), "_dummy" }};
+    /// AST potentially could be transformed to literal during TreeRewriter analyze.
+    /// For example if we have SQL user defined function that return literal AS subquery.
+    if (ASTLiteral * literal = ast->as<ASTLiteral>())
+        return getFieldAndDataTypeFromLiteral(literal);
 
-    expr_for_constant_folding->execute(block_with_constants);
+    auto actions = ExpressionAnalyzer(ast, syntax_result, context).getConstActionsDAG();
 
-    if (!block_with_constants || block_with_constants.rows() == 0)
-        throw Exception("Logical error: empty block after evaluation of constant expression for IN, VALUES or LIMIT or aggregate function parameter",
-                        ErrorCodes::LOGICAL_ERROR);
+    ColumnPtr result_column;
+    DataTypePtr result_type;
+    String result_name = ast->getColumnName();
+    for (const auto & action_node : actions->getOutputs())
+    {
+        if ((action_node->result_name == result_name) && action_node->column)
+        {
+            result_column = action_node->column;
+            result_type = action_node->result_type;
+            break;
+        }
+    }
 
-    if (!block_with_constants.has(name))
+    if (!result_column)
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "Element of set in IN, VALUES or LIMIT or aggregate function parameter is not a constant expression (result column not found): {}", name);
+                        "Element of set in IN, VALUES or LIMIT or aggregate function parameter "
+                        "is not a constant expression (result column not found): {}", result_name);
 
-    const ColumnWithTypeAndName & result = block_with_constants.getByName(name);
-    const IColumn & result_column = *result.column;
+    if (result_column->empty())
+        throw Exception(ErrorCodes::LOGICAL_ERROR,
+                        "Logical error: empty result column after evaluation "
+                        "of constant expression for IN, VALUES or LIMIT or aggregate function parameter");
 
     /// Expressions like rand() or now() are not constant
-    if (!isColumnConst(result_column))
+    if (!isColumnConst(*result_column))
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "Element of set in IN, VALUES or LIMIT or aggregate function parameter is not a constant expression (result column is not const): {}", name);
+                        "Element of set in IN, VALUES or LIMIT or aggregate function parameter "
+                        "is not a constant expression (result column is not const): {}", result_name);
 
-    return std::make_pair(result_column[0], result.type);
+    return std::make_pair((*result_column)[0], result_type);
 }
 
 

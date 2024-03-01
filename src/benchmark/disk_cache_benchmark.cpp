@@ -279,7 +279,7 @@ BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state
             {
                 auto & buffer = buffer_permutation[i % 100];
                 auto read_buffer = ReadBuffer(reinterpret_cast<char *>(buffer.data()), buffer.size());
-                cache->set(fmt::format("{}/", key_permutation[i]), read_buffer, buffer.size());
+                cache->set(fmt::format("{}/", key_permutation[i]), read_buffer, buffer.size(), false);
             }
         };
 

@@ -1682,6 +1682,7 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
 
 void IMergeTreeDataPart::setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta, bool force_set) const
 {
+    DeleteBitmapWriteLock wlock(delete_bitmap_mutex);
     if (!delete_bitmap_metas.empty())
         throw Exception("Part " + name + " already has delete bitmap meta, can't set twice", ErrorCodes::LOGICAL_ERROR);
     if (!bitmap_meta)
@@ -1724,6 +1725,8 @@ UInt64 IMergeTreeDataPart::getVersionFromPartition() const
 
 bool IMergeTreeDataPart::enableDiskCache() const
 {
+    if (!storage.getContext()->getSettingsRef().enable_local_disk_cache)
+        return false;
     if (disk_cache_mode == DiskCacheMode::AUTO)
         return storage.getSettings()->enable_local_disk_cache;
     else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
@@ -1781,7 +1784,7 @@ void IMergeTreeDataPart::createDeleteBitmapForDetachedPart() const
     auto meta_writer = volume->getDisk()->writeFile(delete_bitmap_meta_rel_path);
     writeIntBinary(DeleteBitmapMeta::delete_file_meta_format_version, *meta_writer);
     writeIntBinary(bitmap->cardinality(), *meta_writer);
-    if (delete_bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
+    if (bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
     {
         String value;
         value.reserve(bitmap->cardinality() * sizeof(UInt32));
@@ -1802,14 +1805,12 @@ void IMergeTreeDataPart::createDeleteBitmapForDetachedPart() const
 
             auto bitmap_writer = volume->getDisk()->writeFile(delete_bitmap_rel_path);
             bitmap_writer->write(buf.data(), size);
-            /// It's necessary to do next() and sync() here, otherwise it will omit the error in WriteBufferFromHDFS::WriteBufferFromHDFSImpl::~WriteBufferFromHDFSImpl() which case file incomplete.
-            bitmap_writer->next();
             bitmap_writer->sync();
             bitmap_writer->finalize();
         }
     }
-    meta_writer->next();
     meta_writer->sync();
+    meta_writer->finalize();
     LOG_DEBUG(
         storage.log,
         "Write delete bitmap for detached part {} to path: {}, cardinality: {}",
@@ -2002,10 +2003,10 @@ IMergeTreeDataPart::ColumnSizeByName IMergeTreeDataPart::getColumnsSkipIndicesSi
         ColumnSize size;
         auto index_file_name = index_helper->getFileName();
         static const std::vector<String> idx_extension = {
-            INDEX_FILE_EXTENSION, 
-            GIN_SEGMENT_ID_FILE_EXTENSION, 
-            GIN_SEGMENT_METADATA_FILE_EXTENSION, 
-            GIN_DICTIONARY_FILE_EXTENSION, 
+            INDEX_FILE_EXTENSION,
+            GIN_SEGMENT_ID_FILE_EXTENSION,
+            GIN_SEGMENT_METADATA_FILE_EXTENSION,
+            GIN_DICTIONARY_FILE_EXTENSION,
             GIN_POSTINGS_FILE_EXTENSION
         };
         std::for_each(idx_extension.begin(), idx_extension.end(), [&](const String & ext) {

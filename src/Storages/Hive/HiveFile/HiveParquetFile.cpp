@@ -167,10 +167,11 @@ SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<
 
     auto arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
         block,
-        schema,
         "Parquet",
+        params->format_settings.parquet.import_nested,
         params->format_settings.parquet.allow_missing_columns,
-        params->format_settings.null_as_default);
+        params->format_settings.null_as_default,
+        params->format_settings.parquet.case_insensitive_column_matching);
 
     std::vector<int> column_indices = ParquetBlockInputFormat::getColumnIndices(schema, block, params->format_settings);
     if (!params->read_buf)
@@ -221,7 +222,7 @@ Chunk ParquetSliceSource::generate()
 
     std::shared_ptr<arrow::Table> table;
     THROW_ARROW_NOT_OK(reader->ReadRowGroup(slice_to_read, column_indices, &table));
-    arrow_column_to_ch_column->arrowTableToCHChunk(res, table);
+    arrow_column_to_ch_column->arrowTableToCHChunk(res, table, table->num_rows());
     return res;
 }
 

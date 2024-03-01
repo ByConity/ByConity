@@ -2,7 +2,6 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Storages/CnchTablePartitionMetrics.h>
-#include <Common/CurrentMetrics.h>
 
 namespace DB
 {
@@ -143,6 +142,7 @@ bool PartitionMetrics::recalculate(size_t current_time, ContextPtr context, bool
                 {
                     recalculate_task
                         = context->getMetricsRecalculationSchedulePool().createTask("Recalculate-" + getTraceID(), [this, context]() {
+                              SCOPE_EXIT({ recalculating = false; });
                               recalculateBottomHalf(context);
                           });
                     recalculate_task_initialized = true;
@@ -151,6 +151,8 @@ bool PartitionMetrics::recalculate(size_t current_time, ContextPtr context, bool
             if (shutdown)
                 return false;
             /// Only update current_time when schedule success
+            /// There is no need to reset `recalculating` since the task will
+            /// be executed asynchronously.
             if (recalculate_task->scheduleAfter(2 * BIAS * 1000))
                 recalculate_current_time = current_time;
             else
@@ -208,7 +210,6 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
     if (!old_store.has_value())
     {
         LOG_WARNING(log, "{} recalculateBottomHalf seems not executed in right order.", getTraceID());
-        recalculating = false;
         return;
     }
 
@@ -276,7 +277,6 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
             old_store = std::nullopt;
         }
     }
-    recalculating = false;
 }
 
 void PartitionMetrics::update(const Protos::DataModelPart & part_model)

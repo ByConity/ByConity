@@ -166,7 +166,7 @@ void WriteBufferFromHTTPServerResponse::onProgress(const Progress & progress)
 }
 
 
-void WriteBufferFromHTTPServerResponse::finalize()
+void WriteBufferFromHTTPServerResponse::finalizeImpl()
 {
     try
     {
@@ -196,8 +196,14 @@ void WriteBufferFromHTTPServerResponse::finalize()
 WriteBufferFromHTTPServerResponse::~WriteBufferFromHTTPServerResponse()
 {
     /// FIXME move final flush into the caller
-    MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
-    finalize();
+    try
+    {
+        finalize();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 }

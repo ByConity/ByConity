@@ -52,6 +52,9 @@ struct FormatSettings
     bool null_as_default = true;
     bool defaults_for_omitted_fields = true;
     bool decimal_trailing_zeros = false;
+    bool throw_on_date_overflow = false;
+    /// set to true for MYSQL dialect
+    bool check_date_overflow = false;
 
     enum class DateTimeInputFormat
     {
@@ -78,7 +81,12 @@ struct FormatSettings
     {
         UInt64 row_group_size = 1000000;
         bool low_cardinality_as_dictionary = false;
+        bool import_nested = false;
         bool allow_missing_columns = false;
+        bool skip_columns_with_unsupported_types_in_schema_inference = false;
+        bool case_insensitive_column_matching = false;
+        bool output_string_as_string = false;
+        bool output_fixed_string_as_fixed_byte_array = true;
     } arrow;
 
     struct
@@ -134,6 +142,8 @@ struct FormatSettings
         bool import_nested = false;
         bool allow_missing_columns = false;
         std::unordered_set<int> skip_row_groups;
+        bool output_string_as_string = false;
+        bool output_fixed_string_as_fixed_byte_array = true;
         bool preserve_order = false;
         size_t file_size = 0 ;
         bool case_insensitive_column_matching = false;
@@ -142,8 +152,11 @@ struct FormatSettings
 
     struct Orc
     {
+        bool import_nested = false;
         bool allow_missing_columns = false;
+        bool case_insensitive_column_matching = false;
         std::vector<bool> skip_stripes;
+        bool output_string_as_string = false;
     } orc;
 
     struct Pretty

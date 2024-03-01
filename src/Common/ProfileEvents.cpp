@@ -19,11 +19,14 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <cstdint>
 #include <Common/ProfileEvents.h>
 #include <Common/CurrentThread.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/typeid_cast.h>
 #include <Columns/ColumnArray.h>
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
 
 /// Available events. Add something here as you wish.
 #define APPLY_FOR_EVENTS(M) \
@@ -328,6 +331,13 @@
     M(S3WriteRequestsErrors, "Number of non-throttling errors in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(S3WriteRequestsThrottling, "Number of 429 and 503 errors in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(S3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to S3 storage.") \
+\
+    M(S3CreateMultipartUpload, "Number of S3 API CreateMultipartUpload calls.") \
+    M(S3UploadPart, "Number of S3 API UploadPart calls.") \
+    M(S3AbortMultipartUpload, "Number of S3 API AbortMultipartUpload calls.") \
+    M(S3CompleteMultipartUpload, "Number of S3 API CompleteMultipartUpload calls.") \
+    M(S3PutObject, "Number of S3 API PutObject calls.") \
+\
     M(QueryMemoryLimitExceeded, "Number of times when memory limit exceeded for query.") \
     M(MarkBitmapIndexReadMicroseconds, "Total time spent in reading mark bitmap index.") \
     M(RemoteFSReadMicroseconds, "Time of reading from remote filesystem.") \
@@ -378,6 +388,7 @@
     M(DiskCacheGetMetaMicroSeconds, "Total time for disk cache get operations") \
     M(DiskCacheGetTotalOps, "Total count of disk cache get operations") \
     M(DiskCacheSetTotalOps, "Total count of disk cache set operations") \
+    M(DiskCacheSetTotalBytes, "Total  of disk cache set operations") \
     M(DiskCacheDeviceBytesWritten, "Total bytes written of disk cache device") \
     M(DiskCacheDeviceBytesRead, "Total bytes read of disk cache device") \
     M(DiskCacheDeviceWriteIOErrors, "Total errors of disk cache device write io") \
@@ -857,11 +868,10 @@
     M(PreloadSubmitTotalOps, "Total count of preload submit by writer node") \
     M(PreloadSendTotalOps, "Total count of preload send by server node") \
     M(PreloadExecTotalOps, "Total count of preload run by reader node") \
-    \
-    M(WriteBufferFromS3Write, "S3 write op count") \
-    M(WriteBufferFromS3WriteFailed, "s3 write op failed count") \
-    M(WriteBufferFromS3WriteMicro, "s3 write op time") \
-    M(WriteBufferFromS3WriteBytes, "s3 write op size") \
+\
+    M(WriteBufferFromS3WriteMicroseconds, "Time spent on writing to S3.") \
+    M(WriteBufferFromS3WriteBytes, "Bytes written to S3.") \
+    M(WriteBufferFromS3WriteErrors, "Number of exceptions while writing to S3.") \
     \
     M(ReadBufferFromS3ReadCount, "The count of ReadBufferFromS3 read from s3 stream") \
     M(ReadBufferFromS3FailedCount, "ReadBuffer from s3 failed count") \
@@ -1071,6 +1081,29 @@ Counters::Snapshot::Snapshot()
     : counters_holder(new Count[num_counters] {})
 {}
 
+uint64_t Counters::Snapshot::getIOReadTime(bool use_async_read) const
+{
+    if (counters_holder)
+    {
+        // If we use async read, we only calculate the time of wait for asynchronous result
+        if (use_async_read)
+        {
+            return counters_holder[ProfileEvents::RemoteFSAsynchronousReadWaitMicroseconds]
+                + counters_holder[ProfileEvents::RemoteFSSynchronousReadWaitMicroseconds]
+                + counters_holder[ProfileEvents::DiskReadElapsedMicroseconds];
+        }
+        // Else, we calculate the origin read IO time
+        else
+        {
+            return counters_holder[ProfileEvents::HDFSReadElapsedMicroseconds]
+                + counters_holder[ProfileEvents::ReadBufferFromS3ReadMicroseconds]
+                + counters_holder[ProfileEvents::DiskReadElapsedMicroseconds];
+        }
+    }
+
+    return 0;
+}
+
 Counters::Snapshot Counters::getPartiallyAtomicSnapshot() const
 {
     Snapshot res;
@@ -1115,9 +1148,20 @@ const char * getDocumentation(Event event)
 
 Event end() { return END; }
 
-void increment(Event event, Count amount)
+void increment(Event event, Count amount, Metrics::MetricType type, LabelledMetrics::MetricLabels labels, time_t ts)
 {
     DB::CurrentThread::getProfileEvents().increment(event, amount);
+    try
+    {
+        if (type != Metrics::MetricType::None)
+        {
+            Metrics::EmitMetric(type, getSnakeName(event), amount, LabelledMetrics::toString(labels), ts);
+        }
+    }
+    catch (DB::Exception & e)
+    {
+        LOG_ERROR(&Poco::Logger::get("ProfileEvents"), "Metrics emit metric failed: {}", e.message());
+    }
 }
 
 }

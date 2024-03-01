@@ -1,5 +1,6 @@
 #include "convertMySQLDataType.h"
-
+#include <algorithm>
+#include <charconv>
 #include <Core/Field.h>
 #include <common/types.h>
 #include <Core/MultiEnum.h>
@@ -7,10 +8,10 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/IAST.h>
+#include <boost/container/container_fwd.hpp>
 #include "DataTypeDate.h"
 #include "DataTypeDateTime.h"
 #include "DataTypeDateTime64.h"
-#include "DataTypeEnum.h"
 #include "DataTypesDecimal.h"
 #include "DataTypeFixedString.h"
 #include "DataTypeNullable.h"
@@ -122,5 +123,103 @@ DataTypePtr convertMySQLDataType(MultiEnum<MySQLDataTypesSupport> type_support,
 
     return res;
 }
+
+template <bool full_type>
+std::conditional_t<full_type, std::string, std::string_view> convertClickHouseDataTypeToMysqlColumnProperties(
+    std::string_view clickhouse_data_type, ClickHouseToMySQLDataTypeConversionSettings settings
+)
+{
+    static const std::unordered_map<std::string_view, std::string_view> mapping{{
+        {"Int8",        "TINYINT"},
+        {"Int16",       "SMALLINT"},
+        {"Int32",       "INTEGER"},
+        {"Int64",       "BIGINT"},
+        {"UInt8",       "TINYINT"},
+        {"UInt16",      "SMALLINT"},
+        {"UInt32",      "INTEGER"},
+        {"UInt64",      "BIGINT"},
+        {"Float32",     "FLOAT"},
+        {"Float64",     "DOUBLE"},
+        {"UUID",        "CHAR"},
+        {"Bool",        "TINYINT"},
+        {"Date",        "DATE"},
+        {"Date32",      "DATE"},
+        {"DateTime",    "DATETIME"},
+        {"DateTime64",  "DATETIME"},
+        {"Map",         "JSON"},
+        {"Tuple",       "JSON"},
+        {"Object",      "JSON"},
+    }};
+    std::conditional_t<full_type, std::string, std::string_view> result;
+    std::string_view sv = clickhouse_data_type;
+    if (sv.starts_with("LowCardinality"))
+    {
+        sv.remove_prefix(strlen("LowCardinality("));
+        sv.remove_suffix(strlen(")"));
+    }
+
+    if (sv.starts_with("Nullable"))
+    {
+        sv.remove_prefix(strlen("Nullable("));
+        sv.remove_suffix(strlen(")"));
+    }
+    const std::string_view inner_type = sv.substr(0, sv.find('('));
+    do 
+    {
+        if (inner_type == "Decimal")
+        {
+            sv.remove_prefix(strlen("Decimal("));
+            sv.remove_suffix(strlen(")"));
+            size_t comma_pos = sv.find(',');
+            const std::string_view scale_s = sv.substr(0, comma_pos);
+            const std::string_view precision_s = sv.substr(comma_pos + strlen(", "));    
+            int scale;
+            int precision;
+            (void)std::from_chars(scale_s.begin(), scale_s.end(), scale);
+            (void)std::from_chars(precision_s.begin(), precision_s.end(), precision);
+            if (scale <= 65 && precision <= 30)
+            {
+                if constexpr (full_type)
+                    result = fmt::format("DECIMAL({})", sv);
+                else
+                    result = "DECIMAL";
+                break;
+            }
+        }
+        
+        if (const auto it = mapping.find(inner_type); it != mapping.end())
+        {
+            result = it->second;
+            if constexpr (full_type)
+            {
+                if (inner_type.starts_with("UInt"))
+                    result += " UNSIGNED";
+            }
+            break;
+        }
+
+        const std::array<std::pair<std::string_view, std::string_view>, 2> mapping2{{
+            {"String", settings.remap_string_as_text ? "TEXT" : "BLOB"},
+            {"FixedString", settings.remap_fixed_string_as_text ? "TEXT" : "BLOB"}, 
+        }};
+        if (const auto it = std::find_if(mapping2.begin(), mapping2.end(), [inner_type](const auto & pair){ return pair.first == inner_type; }); it != mapping2.end())
+        {    
+            result = it->second;
+            break;
+        }
+        result = "TEXT";
+    } while (false);
+    return result;
+}
+
+template
+std::string convertClickHouseDataTypeToMysqlColumnProperties<true>(
+    std::string_view clickhouse_data_type, ClickHouseToMySQLDataTypeConversionSettings settings
+);
+
+template
+std::string_view convertClickHouseDataTypeToMysqlColumnProperties<false>(
+    std::string_view clickhouse_data_type, ClickHouseToMySQLDataTypeConversionSettings settings
+);
 
 }

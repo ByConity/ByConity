@@ -60,10 +60,6 @@ namespace
     constexpr auto DELAY_SCHEDULE_TIME_IN_SECOND = 60ul;
     constexpr auto DELAY_SCHEDULE_RANDOM_TIME_IN_SECOND = 3ul;
 
-    /// XXX: some settings for MutateTask
-    constexpr auto max_mutate_part_num = 100UL;
-    constexpr auto max_mutate_part_size = 20UL * 1024 * 1024 * 1024; // 20GB
-
     bool needMutate(const ServerDataPartPtr & part, const TxnTimestamp & commit_ts, bool change_schema)
     {
         /// Some mutation commands (@see MutationCommands::changeSchema()) will not change the table schema
@@ -156,6 +152,14 @@ ManipulationTaskRecord::~ManipulationTaskRecord()
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
+}
+
+Strings ManipulationTaskRecord::getSourcePartNames() const
+{
+    Strings res;
+    for (const auto & part : parts)
+        res.emplace_back(part->name());
+    return res;
 }
 
 FutureManipulationTask::~FutureManipulationTask()
@@ -941,7 +945,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
             std::lock_guard lock(currently_synchronous_tasks_mutex);
             currently_synchronous_tasks.emplace(params.task_id);
         }
-        
+
         const auto & worker_addr_str = worker_client->getHostWithPorts().toDebugString();
         if (maybe_sync_task)
             LOG_TRACE(log, "[SyncMergeTask] Submit a sync merge task to {}", worker_addr_str);
@@ -1129,7 +1133,7 @@ void CnchMergeMutateThread::removeTaskImpl(const String & task_id, std::lock_gua
     task_records.erase(it);
 }
 
-void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDataPartPtr & merged_part, std::function<void()> && commit_parts)
+void CnchMergeMutateThread::finishTask(const String & task_id, std::function<void(const ManipulationTaskRecord &)> && commit_parts)
 {
     auto local_context = getContext();
 
@@ -1168,7 +1172,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
                 task_id, storage_id.getFullTableName());
     }
 
-    commit_parts();
+    commit_parts(*curr_task);
 
     auto now = time(nullptr);
 
@@ -1189,31 +1193,8 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
     }
 
     auto partition_id = curr_task->parts.front()->info().partition_id;
-    if (auto server_part_log = local_context->getServerPartLog())
-    {
-        ServerPartLogElement server_part_log_elem;
-        server_part_log_elem.event_type
-            = curr_task->type == ManipulationType::Merge ? ServerPartLogElement::MERGE_PARTS : ServerPartLogElement::MUTATE_PART;
-        server_part_log_elem.event_time = now;
-        server_part_log_elem.txn_id = curr_task->transaction->getTransactionID();
-        server_part_log_elem.database_name = storage_id.database_name;
-        server_part_log_elem.table_name = storage_id.table_name;
-        server_part_log_elem.uuid = storage_id.uuid;
-        server_part_log_elem.part_name = curr_task->result_part_name;
-        server_part_log_elem.partition_id = partition_id;
-        for (auto & part : curr_task->parts)
-            server_part_log_elem.source_part_names.push_back(part->name());
-        server_part_log_elem.rows = merged_part->rows_count;
-        server_part_log_elem.bytes = merged_part->bytes_on_disk;
-
-        /// TODO: support error & exception
-        server_part_log->add(server_part_log_elem);
-    }
-
     if(auto gc_thread = getContext()->tryGetCnchBGThread(CnchBGThreadType::PartGC, storage_id))
         gc_thread->addCandidatePartition(partition_id);
-
-    partition_selector->addMergeParts(storage_id.uuid, partition_id, curr_task->parts.size(), now);
 
     LOG_TRACE(log, "Finish manipulation task {}", task_id);
 }
@@ -1284,6 +1265,7 @@ void CnchMergeMutateThread::calcMutationPartitions(CnchMergeTreeMutationEntry & 
 bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage)
 {
     LOG_TRACE(log, "Try to mutate parts... running task {}", running_mutation_tasks);
+    auto storage_settings = storage.getSettings();
 
     std::lock_guard lock(try_mutate_parts_mutex);
     auto merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
@@ -1372,9 +1354,16 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
 
                 alter_parts.push_back(part);
                 curr_mutate_part_size += part->part_model().size();
+                auto p_part = part->tryGetPreviousPart();
+                while (p_part)
+                {
+                    curr_mutate_part_size += p_part->part_model().size();
+                    p_part = p_part->tryGetPreviousPart();
+                }
 
                 /// Batch n parts in one task.
-                if (alter_parts.size() >= max_mutate_part_num || curr_mutate_part_size >= max_mutate_part_size)
+                if (alter_parts.size() >= storage_settings->cnch_mutate_max_parts_to_mutate
+                    || curr_mutate_part_size >= storage_settings->cnch_mutate_max_total_bytes_to_mutate)
                 {
                     submitFutureManipulationTask(
                         storage,

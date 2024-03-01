@@ -272,6 +272,7 @@ public:
         return data[n];
     }
 
+
     void get(size_t n, Field & res) const override
     {
         res = (*this)[n];
@@ -319,6 +320,8 @@ public:
 
     ColumnPtr filter(const IColumn::Filter & filt, ssize_t result_size_hint) const override;
 
+    void expand(const IColumn::Filter & mask, bool inverted) override;
+
     ColumnPtr permute(const IColumn::Permutation & perm, size_t limit) const override;
 
     ColumnPtr index(const IColumn & indexes, size_t limit) const override;
@@ -350,6 +353,8 @@ public:
     {
         return StringRef(reinterpret_cast<const char *>(&data[n]), sizeof(data[n]));
     }
+
+    bool isDefaultAt(size_t n) const override { return data[n] == T{}; }
 
     bool structureEquals(const IColumn & rhs) const override
     {

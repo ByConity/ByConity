@@ -76,6 +76,7 @@ public:
     void get(size_t n, Field & res) const override;
     bool getBool(size_t n) const override { return isNullAt(n) ? false : nested_column->getBool(n); }
     UInt64 get64(size_t n) const override { return nested_column->get64(n); }
+    bool isDefaultAt(size_t n) const override { return isNullAt(n); }
 
     /**
      * If isNullAt(n) returns false, returns the nested column's getDataAt(n), otherwise returns a special value
@@ -111,6 +112,7 @@ public:
 
     void popBack(size_t n) override;
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
+    void expand(const Filter & mask, bool inverted) override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     ColumnPtr index(const IColumn & indexes, size_t limit) const override;
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;

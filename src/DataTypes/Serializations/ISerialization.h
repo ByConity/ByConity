@@ -108,7 +108,7 @@ public:
     };
 
     using SubcolumnCreatorPtr = std::shared_ptr<const ISubcolumnCreator>;
-    
+
     struct SubstreamData
     {
         SubstreamData() = default;
@@ -407,15 +407,24 @@ public:
     static ColumnPtr getFromSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path);
 
     static bool isSpecialCompressionAllowed(const SubstreamPath & path);
-    
+
     static size_t getArrayLevel(const SubstreamPath & path);
     static bool hasSubcolumnForPath(const SubstreamPath & path, size_t prefix_len);
     static SubstreamData createFromPath(const SubstreamPath & path, size_t prefix_len);
+
+    void setInSerializationNullable()
+    {
+        in_serialization_nullable = true;
+    }
 
 protected:
     template <typename State, typename StatePtr>
     State * checkAndGetState(const StatePtr & state) const;
     [[noreturn]] void throwUnexpectedDataAfterParsedValue(IColumn & column, ReadBuffer & istr, const FormatSettings &, const String & type_name) const;
+
+    /// set by SerializationNullable to indicate this is a
+    /// nested serialization method inside SerializationNullable
+    bool in_serialization_nullable = false;
 };
 
 using SerializationPtr = std::shared_ptr<const ISerialization>;

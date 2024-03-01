@@ -12,5 +12,6 @@ REGISTER_FUNCTION(EndsWith)
 {
     factory.registerFunction<FunctionEndsWith>();
 }
+
 }
 

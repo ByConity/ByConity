@@ -10,12 +10,14 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <ctype.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -23,6 +25,7 @@
 #include <Disks/DiskType.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <IO/ReadSettings.h>
 #include <IO/VarInt.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
@@ -50,6 +53,8 @@
 #include <QueryPlan/QueryPlan.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <asm-generic/errno-base.h>
+#include <boost/filesystem/directory.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
 #include <brpc/controller.h>
@@ -66,7 +71,6 @@
 #include <common/logger_useful.h>
 #include <common/sleep.h>
 #include <common/types.h>
-#include <IO/ReadSettings.h>
 
 
 namespace
@@ -89,6 +93,7 @@ namespace ErrorCodes
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int CANNOT_UNLINK;
     extern const int FILE_DOESNT_EXIST;
+    extern const int EXCHANGE_DATA_DISK_LIMIT_EXCEEDED;
 }
 
 namespace
@@ -150,7 +155,16 @@ DiskExchangeDataManager::DiskExchangeDataManager(
     , service_discovery_client(std::move(service_discovery_client_))
     , psm_name(psm_name_)
     , cleanup_thread_pool(options_.cleanup_thread_pool_size, options_.cleanup_thread_pool_size / 10, options_.cleanup_thread_pool_size * 2)
+    , max_disk_bytes(options_.max_disk_bytes)
 {
+    ssize_t current_size = getFileSizeRecursively(path);
+    if (current_size > max_disk_bytes)
+        throw Exception(
+            ErrorCodes::EXCHANGE_DATA_DISK_LIMIT_EXCEEDED,
+            "current file size(which is {}) already exceeded max_disk_bytes(which is {})",
+            current_size,
+            max_disk_bytes);
+    global_disk_written_bytes.store(current_size, std::memory_order_relaxed);
     gc_task
         = context_.lock()
               ->getExtraSchedulePool(
@@ -414,18 +428,16 @@ Protos::AliveQueryInfo DiskExchangeDataManager::readQueryInfo(UInt64 query_uniqu
 
 void DiskExchangeDataManager::gc()
 {
-    std::vector<String> delete_files;
+    std::vector<std::variant<String, UInt64>> delete_files;
     std::vector<Protos::AliveQueryInfo> not_alive_queries;
     std::vector<String> file_names;
     disk->listFiles(path, file_names);
-    std::unordered_map<UInt64, Protos::AliveQueryInfo> req_contents;
+    std::unordered_map<UInt64, AliveQueryInfo> req_contents;
     {
         std::lock_guard<bthread::Mutex> lock(mutex);
         /// all alive_queries in mem will be checked for aliveness
         for (const auto & alive_query : alive_queries)
-        {
             req_contents.insert({alive_query.first, alive_query.second});
-        }
     }
     auto now = std::chrono::system_clock::now();
     auto expire = std::chrono::seconds(file_expire_seconds);
@@ -452,7 +464,8 @@ void DiskExchangeDataManager::gc()
             // if not found in alive_queries, request server for aliveness
             else if (req_contents.find(query_unique_id) == req_contents.end())
             {
-                req_contents.insert({query_unique_id, std::move(query_info)});
+                ssize_t file_size = getFileSizeRecursively(file_name);
+                req_contents.insert({query_unique_id, AliveQueryInfo{std::move(query_info), file_size}});
             }
         }
         catch (boost::bad_lexical_cast & /*exception*/)
@@ -496,8 +509,8 @@ void DiskExchangeDataManager::gc()
     for (const auto & content : req_contents)
     {
         auto * query_info = req->add_infos();
-        query_info->set_query_unique_id(content.second.query_unique_id());
-        query_info->set_query_id(content.second.query_id());
+        query_info->set_query_unique_id(content.second.proto.query_unique_id());
+        query_info->set_query_id(content.second.proto.query_id());
     }
 
     std::vector<BrpcAsyncResultHolder<Protos::ExchangeDataHeartbeatRequest, Protos::ExchangeDataHeartbeatResponse>> result_holders;
@@ -546,7 +559,7 @@ void DiskExchangeDataManager::gc()
         std::unique_lock<bthread::Mutex> lock(mutex);
         for (const auto & not_alive_query : not_alive_queries)
         {
-            delete_files.push_back(path / std::to_string(not_alive_query.query_unique_id()));
+            delete_files.push_back(not_alive_query.query_unique_id());
             alive_queries.erase(not_alive_query.query_unique_id());
             LOG_INFO(
                 logger,
@@ -555,20 +568,15 @@ void DiskExchangeDataManager::gc()
             req_contents.erase(not_alive_query.query_unique_id());
         }
         /// add alive queries back
-        for (const auto & content : req_contents)
+        for (auto & content : req_contents)
         {
-            alive_queries.insert({content.first, content.second});
+            auto & p = alive_queries[content.first];
+            p = std::move(content.second);
         }
     }
     /// delete all files need to delete
     for (const auto & delete_file : delete_files)
-    {
-        if (disk->exists(delete_file))
-        {
-            disk->removeRecursive(delete_file);
-            LOG_INFO(logger, "GC removed files under directory {}", delete_file);
-        }
-    }
+        removeWriteTaskDirectory(delete_file);
 }
 
 void DiskExchangeDataManager::runGC()
@@ -682,13 +690,16 @@ std::unique_ptr<WriteBufferFromFileBase> DiskExchangeDataManager::createFileBuff
 
 void DiskExchangeDataManager::createWriteTaskDirectory(UInt64 query_unique_id, const String & query_id, const String & coordinator_addr)
 {
+    checkEnoughSpace();
     Protos::AliveQueryInfo proto;
     proto.set_query_unique_id(query_unique_id);
     proto.set_query_id(query_id);
     proto.set_coordinator_address(coordinator_addr);
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
-        alive_queries.insert({query_unique_id, proto});
+        auto & p = alive_queries[query_unique_id];
+        if (p.proto.query_id().empty())
+            p.proto = proto;
     }
     std::unique_lock<std::mutex> lock(disk_mutex);
     if (!disk->exists(path / std::to_string(query_unique_id)))
@@ -747,5 +758,84 @@ void DiskExchangeDataManager::shutdown()
                 lock, std::chrono::seconds(60), [&]() { return read_tasks.empty() && write_tasks.empty() && cleanup_tasks.empty(); }))
             LOG_ERROR(logger, "tasks still running");
     }
+}
+
+void DiskExchangeDataManager::updateWrittenBytes(UInt64 query_unique_id, ssize_t disk_written_bytes)
+{
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        auto it = alive_queries.find(query_unique_id);
+        if (it != alive_queries.end())
+            it->second.disk_written_bytes += disk_written_bytes;
+        else
+        {
+            LOG_WARNING(
+                logger,
+                "cant find query when updateWrittenBytes query_unique_id:{} disk_written_bytes:{}",
+                query_unique_id,
+                disk_written_bytes);
+            return;
+        }
+    }
+    global_disk_written_bytes.fetch_add(disk_written_bytes, std::memory_order_relaxed);
+}
+
+void DiskExchangeDataManager::checkEnoughSpace()
+{
+    if (global_disk_written_bytes.load(std::memory_order_relaxed) > max_disk_bytes)
+        throw Exception(
+            ErrorCodes::EXCHANGE_DATA_DISK_LIMIT_EXCEEDED,
+            "exchange data file exceeded max_disk_bytes, current size:{} max_disk_bytes:{}",
+            global_disk_written_bytes.load(std::memory_order_relaxed),
+            max_disk_bytes);
+}
+
+void DiskExchangeDataManager::removeWriteTaskDirectory(const std::variant<String, UInt64> & delete_item)
+{
+    String delete_file = std::holds_alternative<String>(delete_item) ? std::get<String>(delete_item)
+                                                                     : (path / std::to_string(std::get<UInt64>(delete_item))).string();
+    if (disk->exists(delete_file))
+    {
+        disk->removeRecursive(delete_file);
+        LOG_INFO(logger, "removed disk exchange data files under directory {}", delete_file);
+        if (std::holds_alternative<UInt64>(delete_item))
+        {
+            auto query_unique_id = std::get<UInt64>(delete_item);
+            ssize_t disk_written_bytes = 0;
+            {
+                std::unique_lock<bthread::Mutex> lock(mutex);
+                auto it = alive_queries.find(query_unique_id);
+                if (it != alive_queries.end())
+                    disk_written_bytes = alive_queries[query_unique_id].disk_written_bytes;
+            }
+            global_disk_written_bytes.fetch_sub(disk_written_bytes, std::memory_order_relaxed);
+        }
+        else
+        {
+            auto file_size = getFileSizeRecursively(delete_file);
+            global_disk_written_bytes.fetch_sub(file_size, std::memory_order_relaxed);
+        }
+    }
+    else
+    {
+        LOG_WARNING(logger, "cannot find file {} to delete", delete_file);
+    }
+}
+
+ssize_t DiskExchangeDataManager::getFileSizeRecursively(const String & file_path)
+{
+    ssize_t file_size = 0;
+    if (disk->isDirectory(file_path))
+    {
+        for (auto iter = disk->iterateDirectory(file_path); iter->isValid(); iter->next())
+        {
+            file_size += getFileSizeRecursively(iter->path());
+        }
+    }
+    else if (disk->isFile(file_path))
+    {
+        file_size += disk->getFileSize(file_path);
+    }
+    return file_size;
 }
 }

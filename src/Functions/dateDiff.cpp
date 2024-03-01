@@ -25,6 +25,7 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Common/IntervalKind.h>
+#include <Common/DateLUTImpl.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsDateTime.h>
 #include <Columns/ColumnsNumber.h>
@@ -141,12 +142,13 @@ public:
 
     explicit DateDiffImpl(const String & name_) : name(name_) {}
 
-    template <typename TimeUnit>
+    template <typename TimeUnit, typename ContainerType>
     void dispatchForColumns(
         const IColumn & x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result) const
+        ContainerType & result) const
     {
+
         if (const auto * x_vec_16 = checkAndGetColumn<ColumnDate>(&x))
             dispatchForSecondColumn<TimeUnit>(*x_vec_16, y, timezone_x, timezone_y, result);
         else if (const auto * x_vec_32 = checkAndGetColumn<ColumnDateTime>(&x))
@@ -155,6 +157,8 @@ public:
             dispatchForSecondColumn<TimeUnit>(*x_vec_32_s, y, timezone_x, timezone_y, result);
         else if (const auto * x_vec_64 = checkAndGetColumn<ColumnDateTime64>(&x))
             dispatchForSecondColumn<TimeUnit>(*x_vec_64, y, timezone_x, timezone_y, result);
+        else if (const auto * x_vec_64_s = checkAndGetColumn<ColumnTime>(&x))
+            dispatchForSecondColumn<TimeUnit>(*x_vec_64_s, y, timezone_x, timezone_y, result);
         else if (const auto * x_const_16 = checkAndGetColumnConst<ColumnDate>(&x))
             dispatchConstForSecondColumn<TimeUnit>(x_const_16->getValue<UInt16>(), y, timezone_x, timezone_y, result);
         else if (const auto * x_const_32 = checkAndGetColumnConst<ColumnDateTime>(&x))
@@ -169,11 +173,11 @@ public:
                 name);
     }
 
-    template <typename TimeUnit, typename LeftColumnType>
+    template <typename TimeUnit, typename LeftColumnType, typename ContainerType>
     void dispatchForSecondColumn(
         const LeftColumnType & x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result) const
+        ContainerType & result) const
     {
         if (const auto * y_vec_16 = checkAndGetColumn<ColumnDate>(&y))
             vectorVector<TimeUnit>(x, *y_vec_16, timezone_x, timezone_y, result);
@@ -183,6 +187,8 @@ public:
             vectorVector<TimeUnit>(x, *y_vec_32_s, timezone_x, timezone_y, result);
         else if (const auto * y_vec_64 = checkAndGetColumn<ColumnDateTime64>(&y))
             vectorVector<TimeUnit>(x, *y_vec_64, timezone_x, timezone_y, result);
+        else if (const auto * y_vec_64_s = checkAndGetColumn<ColumnTime>(&y))
+            vectorVector<TimeUnit>(x, *y_vec_64_s, timezone_x, timezone_y, result);
         else if (const auto * y_const_16 = checkAndGetColumnConst<ColumnDate>(&y))
             vectorConstant<TimeUnit>(x, y_const_16->getValue<UInt16>(), timezone_x, timezone_y, result);
         else if (const auto * y_const_32 = checkAndGetColumnConst<ColumnDateTime>(&y))
@@ -197,11 +203,11 @@ public:
                 name);
     }
 
-    template <typename TimeUnit, typename T1>
+    template <typename TimeUnit, typename T1, typename ContainerType>
     void dispatchConstForSecondColumn(
         T1 x, const IColumn & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result) const
+        ContainerType & result) const
     {
         if (const auto * y_vec_16 = checkAndGetColumn<ColumnDate>(&y))
             constantVector<TimeUnit>(x, *y_vec_16, timezone_x, timezone_y, result);
@@ -217,11 +223,11 @@ public:
                 name);
     }
 
-    template <typename TimeUnit, typename LeftColumnType, typename RightColumnType>
+    template <typename TimeUnit, typename LeftColumnType, typename RightColumnType, typename ContainerType>
     void vectorVector(
         const LeftColumnType & x, const RightColumnType & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result) const
+        ContainerType & result) const
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
@@ -239,11 +245,11 @@ public:
         }
     }
 
-    template <typename TimeUnit, typename LeftColumnType, typename T2>
+    template <typename TimeUnit, typename LeftColumnType, typename T2, typename ContainerType>
     void vectorConstant(
         const LeftColumnType & x, T2 y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result) const
+        ContainerType & result) const
     {
         const auto & x_data = x.getData();
         const auto y_value = stripDecimalFieldValue(y);
@@ -263,11 +269,11 @@ public:
         }
     }
 
-    template <typename TimeUnit, typename T1, typename RightColumnType>
+    template <typename TimeUnit, typename T1, typename RightColumnType, typename ContainerType>
     void constantVector(
         T1 x, const RightColumnType & y,
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
-        ColumnInt64::Container & result) const
+        ContainerType & result) const
     {
         const auto & y_data = y.getData();
         const auto x_value = stripDecimalFieldValue(x);
@@ -737,10 +743,13 @@ public:
     static constexpr auto name = "TimeDiff";
     static FunctionPtr create(ContextPtr context)
     {
+        const bool mysql_mode = context->getSettingsRef().dialect_type == DialectType::MYSQL;
         if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionTimeDiff>());
-        return std::make_shared<FunctionTimeDiff>();
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionTimeDiff>(mysql_mode));
+        return std::make_shared<FunctionTimeDiff>(mysql_mode);
     }
+
+    explicit FunctionTimeDiff(bool mysql_mode_) : mysql_mode(mysql_mode_) { }
 
     ArgType getArgumentsType() const override
     {
@@ -763,18 +772,21 @@ public:
                 "Number of arguments for function {} doesn't match: passed {}, should be 2",
                 getName(), arguments.size());
 
-        if (!isDate(arguments[0]) && !isDate32(arguments[0]) && !isDateTime(arguments[0]) && !isDateTime64(arguments[0]))
+        if (!isDate(arguments[0]) && !isTime(arguments[0]) && !isDate32(arguments[0]) && !isDateTime(arguments[0]) && !isDateTime64(arguments[0]))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "First argument for function {} must be Date, Date32, DateTime or DateTime64",
+                "First argument for function {} must be Date, Time, Date32, DateTime or DateTime64",
                 getName());
 
-        if (!isDate(arguments[1]) && !isDate32(arguments[1]) && !isDateTime(arguments[1]) && !isDateTime64(arguments[1]))
+        if (!isDate(arguments[1]) && !isTime(arguments[1]) && !isDate32(arguments[1]) && !isDateTime(arguments[1]) && !isDateTime64(arguments[1]))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Second argument for function {} must be Date, Date32, DateTime or DateTime64",
+                "Second argument for function {} must be Date, Time, Date32, DateTime or DateTime64",
                 getName()
                 );
 
-        return std::make_shared<DataTypeInt64>();
+        if (mysql_mode)
+            return std::make_shared<DataTypeTime>(0);
+        else
+            return std::make_shared<DataTypeInt64>();
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -783,18 +795,27 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         // TODO: call function subTime if dialect_type == MYSQL
-        const IColumn & x = *arguments[0].column;
-        const IColumn & y = *arguments[1].column;
+        const IColumn & x = *arguments[mysql_mode ? 1 : 0].column;
+        const IColumn & y = *arguments[mysql_mode ? 0 : 1].column;
 
         size_t rows = input_rows_count;
-        auto res = ColumnInt64::create(rows);
+        if (mysql_mode)
+        {
+            auto res = ColumnTime::create(rows, 0);
 
-        impl.dispatchForColumns<Second>(x, y, DateLUT::instance(), DateLUT::instance(), res->getData());
+            impl.dispatchForColumns<Second>(x, y, DateLUT::instance(), DateLUT::instance(), res->getData());
+            return res;
+        } else
+        {
+            auto res = ColumnInt64::create(rows);
 
-        return res;
+            impl.dispatchForColumns<Second>(x, y, DateLUT::instance(), DateLUT::instance(), res->getData());
+            return res;
+        }
     }
 private:
     DateDiffImpl<DiffType::TimestampDiff> impl{name};
+    bool mysql_mode;
 };
 
 }

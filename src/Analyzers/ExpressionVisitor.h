@@ -27,10 +27,9 @@ namespace DB
 template <typename C, typename R = void>
 class AnalyzerExpressionVisitor : public ASTVisitor<R, C>
 {
-private:
+protected:
     ContextPtr context;
 
-protected:
     virtual R visitExpression(ASTPtr &, IAST &, C &) { throw Exception("not implemented", ErrorCodes::NOT_IMPLEMENTED); }
 
     virtual R visitLiteral(ASTPtr & node, ASTLiteral & ast, C & visitor_context) { return visitExpression(node, ast, visitor_context); }

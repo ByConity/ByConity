@@ -122,6 +122,11 @@ public:
         res = Field(std::move(s));
     }
 
+    bool isDefaultAt(size_t ) const override
+    {
+        throw Exception("Method isDefaultAt is not supported for ColumnBitMap", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     StringRef getDataAt(size_t n) const override
     {
         assert(n < size());
@@ -257,6 +262,8 @@ public:
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
 
+    void expand(const Filter & /*mask*/, bool /*inverted*/) override;
+
     double getRatioOfDefaultRows(double) const override
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method getRatioOfDefaultRows is not supported for {}", getName());
@@ -337,6 +344,7 @@ public:
 
     // Throws an exception if offsets/chars are messed up
     void validate() const;
+
 };
 
 }

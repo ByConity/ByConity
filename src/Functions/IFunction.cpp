@@ -481,6 +481,7 @@ static std::optional<DataTypes> removeNullables(const DataTypes & types)
 
 bool IFunction::isCompilable(const DataTypes & arguments) const
 {
+
     if (useDefaultImplementationForNulls())
         if (auto denulled = removeNullables(arguments))
             return isCompilableImpl(*denulled);

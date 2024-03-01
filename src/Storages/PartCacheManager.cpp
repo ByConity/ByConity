@@ -28,6 +28,7 @@
 #include <Storages/CnchStorageCache.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
+#include <Storages/TableMetaEntry.h>
 #include <Common/ConsistentHashUtils/Hash.h>
 #include <Common/HostWithPorts.h>
 #include <Common/RWLock.h>
@@ -477,16 +478,25 @@ void PartCacheManager::invalidCacheWithNewTopology(const CnchServerTopology & to
             part_cache_ptr->dropCache(it->first);
             storageCachePtr->remove(it->second->database, it->second->table);
 
-            /// Send to-be-removed `TableMetaEntryPtr` to trash in order to destruct it asynchronously.
-            it->second->forEachPartition([](PartitionInfoPtr ptr) {
-                if (ptr->metrics_ptr)
-                    ptr->metrics_ptr->notifyShutDown();
-            });
             {
+                /// 1. Put it into the trashcan.
+                /// 2. Remove it from `active_tables`.
+                /// 3. Notify the `TableMetaEntry` to be destructed.
+                ///   (to accelerate the destruction of `TableMetaEntry`)
+                ///
+                /// As a side effect, `it` will be updated to the next element.
+                ///
+                /// Lock will be held to make sure trash always have the last reference counter.
                 std::unique_lock<std::mutex> lock_of_trashcan(trashed_active_tables_mutex);
-                trashed_active_tables.push_back(it->second);
+                {
+                    trashed_active_tables.push_back(it->second);
+                    it = active_tables.erase(it);
+                    trashed_active_tables.back()->forEachPartition([](PartitionInfoPtr ptr) {
+                        if (ptr->metrics_ptr)
+                            ptr->metrics_ptr->notifyShutDown();
+                    });
+                }
             }
-            it = active_tables.erase(it);
         }
         else
             it++;
@@ -501,15 +511,27 @@ void PartCacheManager::invalidPartCacheWithoutLock(const UUID & uuid, std::uniqu
     auto it = active_tables.find(uuid);
     if (it != active_tables.end())
     {
-        it->second->forEachPartition([](PartitionInfoPtr ptr) {
-            if (ptr->metrics_ptr)
-                ptr->metrics_ptr->notifyShutDown();
-        });
         {
+            /// 1. Put it into the trashcan.
+            /// 2. Remove it from `active_tables`.
+            /// 3. Notify the `TableMetaEntry` to be destructed.
+            ///   (to accelerate the destruction of `TableMetaEntry`)
+            ///
+            /// As a side effect, `it` will be invalid.
+            ///
+            /// Lock will be held to make sure trash always have the last reference counter.
             std::unique_lock<std::mutex> lock_of_trashcan(trashed_active_tables_mutex);
-            trashed_active_tables.push_back(it->second);
+            {
+                trashed_active_tables.push_back(it->second);
+                /// Make sure that the `TableMetaEntry` won't destruct
+                /// before being removed from `active_tables`.
+                active_tables.erase(it);
+                trashed_active_tables.back()->forEachPartition([](PartitionInfoPtr ptr) {
+                    if (ptr->metrics_ptr)
+                        ptr->metrics_ptr->notifyShutDown();
+                });
+            }
         }
-        active_tables.erase(it);
     }
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::invalidPartCacheWithoutLock"), "Dropping part cache of {}", UUIDHelpers::UUIDToString(uuid));
     part_cache_ptr->dropCache(uuid);
@@ -1341,22 +1363,36 @@ void PartCacheManager::reset()
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::reset"), "Resetting part cache manager.");
     std::unique_lock<std::mutex> lock(cache_mutex);
     {
+        /// 1. Remember the current size of the active_tables.
+        /// 2. Put all data into the trashcan.
+        /// 3. Clear `active_tables`.
+        /// 4. Notify these amount `TableMetaEntry` to be destructed.
+        ///   (to accelerate the destruction of `TableMetaEntry`)
+        ///
+        /// As a side effect, `it` will be updated to the next element.
+        ///
+        /// Lock will be held to make sure trash always have the last reference counter.
+        size_t num_of_active_tables = active_tables.size();
         std::unique_lock<std::mutex> lock_of_trashcan(trashed_active_tables_mutex);
-        /// We notify all the `PartitionMetrics` to shutdown in order to abort recalculation tasks ASAP.
-        /// This is a lightweight operation.
         transform(
             active_tables.begin(),
             active_tables.end(),
             std::back_inserter(trashed_active_tables),
-            [](std::unordered_map<UUID, TableMetaEntryPtr>::value_type val) {
-                val.second->forEachPartition([](PartitionInfoPtr ptr) {
-                    if (ptr->metrics_ptr)
-                        ptr->metrics_ptr->notifyShutDown();
-                });
-                return val.second;
+            [](std::unordered_map<UUID, TableMetaEntryPtr>::value_type val) { return val.second; });
+        active_tables.clear();
+        /// [ 0 | ...| i | i + 1 (last new element) | ... | i + n, rbegin() ]
+        std::list<TableMetaEntryPtr>::reverse_iterator it = trashed_active_tables.rbegin();
+        while (num_of_active_tables > 0 && it != trashed_active_tables.rend())
+        {
+            (*it)->forEachPartition([](PartitionInfoPtr ptr) {
+                if (ptr->metrics_ptr)
+                    ptr->metrics_ptr->notifyShutDown();
             });
+
+            num_of_active_tables--;
+            it++;
+        }
     }
-    active_tables.clear();
 
     part_cache_ptr->reset();
     storageCachePtr->reset();

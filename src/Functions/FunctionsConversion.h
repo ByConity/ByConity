@@ -1525,7 +1525,7 @@ struct ConvertThroughParsing
 
     template <typename Additions = void *>
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & res_type, size_t input_rows_count,
-                        Additions additions [[maybe_unused]] = Additions())
+                        Additions additions [[maybe_unused]] = Additions(), bool mysql_mode [[maybe_unused]] = false)
     {
         using ColVecTo = typename ToDataType::ColumnType;
 
@@ -1715,6 +1715,8 @@ struct ConvertThroughParsing
                         DateTime64 res = 0;
                         parsed = tryParseDateTime64BestEffort(res, vec_to.getScale(), read_buffer, *local_time_zone, *utc_time_zone);
                         vec_to[i] = res;
+                        if (mysql_mode)
+                            read_buffer.ignore(read_buffer.buffer().end() - read_buffer.position());
                     }
                     else if (std::is_same_v<ToDataType, DataTypeFloat64>)
                     {
@@ -2090,6 +2092,10 @@ public:
 
     static constexpr bool to_string_or_fixed_string = std::is_same_v<ToDataType, DataTypeFixedString> ||
                                                       std::is_same_v<ToDataType, DataTypeString>;
+    
+    static constexpr bool to_date_or_datetime = std::is_same_v<ToDataType, DataTypeDate> ||
+                                                std::is_same_v<ToDataType, DataTypeDate32> ||
+                                                std::is_same_v<ToDataType, DataTypeDateTime>;
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -2132,6 +2138,11 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return std::is_same_v<Name, NameToString>; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & arguments) const override
+    {
+        /// TODO: We can make more optimizations here.
+        return !(to_date_or_datetime && isNumber(*arguments[0].type));
+    }
 
     using DefaultReturnTypeGetter = std::function<DataTypePtr(const ColumnsWithTypeAndName &)>;
     static DataTypePtr getReturnTypeDefaultImplementationForNulls(const ColumnsWithTypeAndName & arguments, const DefaultReturnTypeGetter & getter)
@@ -2520,6 +2531,8 @@ template <typename ToDataType, typename Name,
     ConvertFromStringParsingMode parsing_mode = ConvertFromStringParsingMode::Normal>
 class FunctionConvertFromString : public IFunction
 {
+private:
+    bool mysql_mode;
 public:
     static constexpr auto name = Name::name;
     static constexpr bool to_decimal =
@@ -2533,10 +2546,12 @@ public:
     static FunctionPtr create(ContextPtr context)
     {
         if (context && (context->getSettingsRef().enable_implicit_arg_type_convert || context->getSettingsRef().dialect_type == DialectType::MYSQL))
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertFromString>());
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertFromString>(true));
         return std::make_shared<FunctionConvertFromString>();
     }
     static FunctionPtr create() { return std::make_shared<FunctionConvertFromString>(); }
+
+    explicit FunctionConvertFromString(bool mysql_mode_ = false) : mysql_mode(mysql_mode_) {}
 
     ArgType getArgumentsType() const override
     {
@@ -2551,6 +2566,7 @@ public:
     }
 
     bool isVariadic() const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -2661,12 +2677,12 @@ public:
         if (checkAndGetDataType<DataTypeString>(from_type))
         {
             return ConvertThroughParsing<DataTypeString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
-                arguments, result_type, input_rows_count, scale);
+                arguments, result_type, input_rows_count, scale, mysql_mode);
         }
         else if (checkAndGetDataType<DataTypeFixedString>(from_type))
         {
             return ConvertThroughParsing<DataTypeFixedString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
-                arguments, result_type, input_rows_count, scale);
+                arguments, result_type, input_rows_count, scale, mysql_mode);
         }
 
         return nullptr;
@@ -3187,11 +3203,14 @@ public:
 
     FunctionCast(ContextPtr context_, const char * name_, MonotonicityForRange && monotonicity_for_range_
         , const DataTypes & argument_types_, const DataTypePtr & return_type_
-        , std::optional<Diagnostic> diagnostic_, CastType cast_type_, bool adaptive_cast_ = false, bool cast_ipv4_ipv6_default_on_conversion_error_ = false)
+        , std::optional<Diagnostic> diagnostic_, CastType cast_type_, bool adaptive_cast_ = false
+        , bool cast_ipv4_ipv6_default_on_conversion_error_ = false
+        , bool disable_str_to_array_cast_ = false)
         : name(name_), monotonicity_for_range(std::move(monotonicity_for_range_))
         , argument_types(argument_types_), return_type(return_type_), diagnostic(std::move(diagnostic_))
         , cast_type(cast_type_)
         , cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_)
+        , disable_str_to_array_cast(disable_str_to_array_cast_)
         , context(context_)
         , adaptive_cast(adaptive_cast_)
     {
@@ -3220,6 +3239,7 @@ public:
 
     bool isDeterministic() const override { return true; }
     bool isDeterministicInScopeOfQuery() const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
     bool hasInformationAboutMonotonicity() const override
     {
@@ -3242,6 +3262,7 @@ private:
     std::optional<Diagnostic> diagnostic;
     CastType cast_type;
     bool cast_ipv4_ipv6_default_on_conversion_error;
+    bool disable_str_to_array_cast;
     ContextPtr context;
     bool adaptive_cast;
 
@@ -3507,7 +3528,7 @@ private:
     WrapperType createArrayWrapper(const DataTypePtr & from_type_untyped, const DataTypeArray & to_type) const
     {
         /// Conversion from String through parsing.
-        if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
+        if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()) && !disable_str_to_array_cast)
         {
             return &ConvertImplGenericFromString<ColumnString>::execute;
         }
@@ -3754,6 +3775,7 @@ private:
         };
     }
 
+    /// The case of: tuple([key1, key2, ..., key_n], [value1, value2, ..., value_n])
     WrapperType createMapToMapWrapper(const DataTypes & from_kv_types, const DataTypes & to_kv_types) const
     {
         return [element_wrappers = getElementWrappers(from_kv_types, to_kv_types), from_kv_types, to_kv_types]
@@ -4452,21 +4474,35 @@ public:
     static FunctionOverloadResolverPtr create(ContextPtr context)
     {
         const auto & settings = context->getSettingsRef();
-        return createImpl(context, settings.cast_keep_nullable, {}, settings.adaptive_type_cast, settings.cast_ipv4_ipv6_default_on_conversion_error);
+        return createImpl(
+            context, settings.cast_keep_nullable, 
+            {}, settings.adaptive_type_cast, 
+            settings.cast_ipv4_ipv6_default_on_conversion_error, 
+            settings.disable_str_to_array_cast
+        );
     }
 
-    static FunctionOverloadResolverPtr createImpl(ContextPtr context, bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false)
+    static FunctionOverloadResolverPtr createImpl(ContextPtr context, bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, 
+        bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false, bool disable_str_to_array_cast = false)
     {
-        return std::make_unique<CastOverloadResolver>(context, keep_nullable, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error, std::move(diagnostic));
+        return std::make_unique<CastOverloadResolver>(context, keep_nullable, adaptive_cast, 
+            cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_array_cast, std::move(diagnostic));
     }
 
-    static FunctionOverloadResolverPtr createImpl(bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false)
+    static FunctionOverloadResolverPtr createImpl(bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, 
+        bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false, bool disable_str_to_array_cast = false)
     {
-        return std::make_unique<CastOverloadResolver>(ContextPtr(), keep_nullable, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error, std::move(diagnostic));
+        return std::make_unique<CastOverloadResolver>(ContextPtr(), keep_nullable, adaptive_cast, 
+            cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_array_cast, std::move(diagnostic));
     }
 
-    explicit CastOverloadResolver(ContextPtr context_, bool keep_nullable_, bool adaptive_cast_ = false, bool cast_ipv4_ipv6_default_on_conversion_error_ = false, std::optional<Diagnostic> diagnostic_ = {})
-        : keep_nullable(keep_nullable_), diagnostic(std::move(diagnostic_)), adaptive_cast(adaptive_cast_), cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_), context(context_)
+    explicit CastOverloadResolver(ContextPtr context_, bool keep_nullable_, bool adaptive_cast_ = false, 
+        bool cast_ipv4_ipv6_default_on_conversion_error_ = false, bool disable_str_to_array_cast_ = false, 
+        std::optional<Diagnostic> diagnostic_ = {})
+        : keep_nullable(keep_nullable_), diagnostic(std::move(diagnostic_)), adaptive_cast(adaptive_cast_)
+        , cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_)
+        , disable_str_to_array_cast(disable_str_to_array_cast_)
+        , context(context_)
     {}
 
     String getName() const override { return name; }
@@ -4485,7 +4521,8 @@ protected:
             data_types[i] = arguments[i].type;
 
         auto monotonicity = MonotonicityHelper::getMonotonicityInformation(arguments.front().type, return_type.get());
-        return std::make_unique<FunctionCast>(context, name, std::move(monotonicity), data_types, return_type, diagnostic, cast_type, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error);
+        return std::make_unique<FunctionCast>(context, name, std::move(monotonicity), data_types, return_type, 
+            diagnostic, cast_type, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_array_cast);
     }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -4528,6 +4565,7 @@ private:
     std::optional<Diagnostic> diagnostic;
     bool adaptive_cast;
     bool cast_ipv4_ipv6_default_on_conversion_error;
+    bool disable_str_to_array_cast;
     ContextPtr context;
 };
 

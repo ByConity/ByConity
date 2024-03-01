@@ -19,7 +19,7 @@ BitmapIndexDiskCacheSegment::BitmapIndexDiskCacheSegment(
         : IDiskCacheSegment(0, 0)
         , data_part(std::move(data_part_))
         , storage(data_part->storage.shared_from_this()) /// Need to extend the lifetime of storage because disk cache can run async
-        , uuid(UUIDHelpers::UUIDToString(data_part->getUUID()))
+        , uuid(UUIDHelpers::UUIDToString(data_part->get_uuid()))
         , part_name(data_part->name)
         , data_path(data_part->getFullRelativePath() + "/data")
         , stream_name(stream_name_)
@@ -37,7 +37,7 @@ String BitmapIndexDiskCacheSegment::getSegmentName() const
 String BitmapIndexDiskCacheSegment::getSegmentKey(const IMergeTreeDataPartPtr & data_part_, const String & column_name_, UInt32 segment_number_, const String & extension)
 {
     return IDiskCacheSegment::formatSegmentName(
-        UUIDHelpers::UUIDToString(data_part_->getUUID()), data_part_->name, column_name_, segment_number_, extension);
+        UUIDHelpers::UUIDToString(data_part_->get_uuid()), data_part_->name, column_name_, segment_number_, extension);
 }
 
 void BitmapIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
@@ -59,7 +59,7 @@ void BitmapIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
 
         segment_file->seek(index_offset);
         LimitReadBuffer index_value(*segment_file, index_size, false);
-        disk_cache.set(index_key, index_value, index_size);
+        disk_cache.set(index_key, index_value, index_size, false);
 
         LOG_TRACE(log, "Init local cache for BitmapIndex bin of column " + stream_name);
     }
@@ -72,10 +72,10 @@ void BitmapIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
     {
         off_t mark_offset = mark_checksum->second.file_offset;
         size_t mark_size = mark_checksum->second.file_size;
-        
+
         segment_file->seek(mark_offset);
         LimitReadBuffer mark_value(*segment_file, mark_size, false);
-        disk_cache.set(mark_key, mark_value, mark_size);
+        disk_cache.set(mark_key, mark_value, mark_size, false);
 
         LOG_TRACE(log, "Init local cache for BitmapIndex mark of column " + stream_name);
     }

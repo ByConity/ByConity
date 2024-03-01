@@ -253,6 +253,7 @@ void Aggregator::Params::toProto(Protos::AggregatorParams & proto) const
     proto.set_group_by_two_level_threshold(group_by_two_level_threshold);
     proto.set_group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes);
     proto.set_max_bytes_before_external_group_by(max_bytes_before_external_group_by);
+    proto.set_spill_buffer_bytes_before_external_group_by(spill_buffer_bytes_before_external_group_by);
     proto.set_empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set);
 
     proto.set_max_threads(max_threads);
@@ -282,6 +283,7 @@ Aggregator::Params Aggregator::Params::fromProto(const Protos::AggregatorParams 
     auto group_by_two_level_threshold = proto.group_by_two_level_threshold();
     auto group_by_two_level_threshold_bytes = proto.group_by_two_level_threshold_bytes();
     auto max_bytes_before_external_group_by = proto.max_bytes_before_external_group_by();
+    auto spill_buffer_bytes_before_external_group_by = proto.spill_buffer_bytes_before_external_group_by();
     auto empty_result_for_aggregation_by_empty_set = proto.empty_result_for_aggregation_by_empty_set();
     VolumePtr tmp_volume = context ? context->getTemporaryVolume() : nullptr;
     auto max_threads = proto.max_threads();
@@ -299,6 +301,7 @@ Aggregator::Params Aggregator::Params::fromProto(const Protos::AggregatorParams 
         group_by_two_level_threshold,
         group_by_two_level_threshold_bytes,
         max_bytes_before_external_group_by,
+        spill_buffer_bytes_before_external_group_by,
         empty_result_for_aggregation_by_empty_set,
         tmp_volume,
         max_threads,
@@ -1163,7 +1166,8 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     if (params.max_bytes_before_external_group_by
         && result.isTwoLevel()
         && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)
-        && worth_convert_to_two_level)
+        && worth_convert_to_two_level
+        && result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by)
     {
         size_t size = current_memory_usage + params.min_free_disk_space;
 
@@ -2508,7 +2512,8 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
     if (params.max_bytes_before_external_group_by
         && result.isTwoLevel()
         && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)
-        && worth_convert_to_two_level)
+        && worth_convert_to_two_level
+        && result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by)
     {
         size_t size = current_memory_usage + params.min_free_disk_space;
 

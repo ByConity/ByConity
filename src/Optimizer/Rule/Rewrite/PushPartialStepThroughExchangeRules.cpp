@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <utility>
 #include <Optimizer/Rule/Rewrite/PushPartialStepThroughExchangeRules.h>
 
 #include <Core/SortDescription.h>
@@ -24,7 +25,9 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <QueryPlan/ExchangeStep.h>
+#include <QueryPlan/Hints/PushPartialAgg.h>
 #include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <Poco/StringTokenizer.h>
 
@@ -32,6 +35,37 @@ namespace DB
 {
 
 NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationFuse"};
+
+static std::pair<bool, bool> canPushPartialWithHint(const AggregatingStep * step)
+{
+    const auto & hint_list = step->getHints();
+    bool enable_push_partical_agg = true;
+    for (const auto & hint : hint_list)
+    {
+        if (hint->getType() == HintCategory::PUSH_PARTIAL_AGG)
+        {
+            auto match = [&](String & name) -> bool {
+                for (const auto & agg : step->getAggregates())
+                {
+                    if (name == agg.function->getName())
+                        return true;
+                }
+                return false;
+            };
+
+            if (auto enable_hint = std::dynamic_pointer_cast<EnablePushPartialAgg>(hint))
+            {
+                enable_push_partical_agg = match(enable_hint->getFunctionName());
+            }
+            else if (auto disable_hint = std::dynamic_pointer_cast<DisablePushPartialAgg>(hint))
+            {
+                enable_push_partical_agg = !match(disable_hint->getFunctionName());
+            }
+            return {true, enable_push_partical_agg};
+        }
+    }
+    return {false, true};
+}
 
 PatternPtr PushPartialAggThroughExchange::getPattern() const
 {
@@ -52,7 +86,8 @@ TransformResult split(const PlanNodePtr & node, RuleContext & context)
         step->getGroupings(),
         step->needOverflowRow(),
         false,
-        step->isNoShuffle());
+        step->isNoShuffle(),
+        step->getHints());
 
     auto partial_agg_node
         = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(partial_agg), node->getChildren(), node->getStatistics());
@@ -160,7 +195,13 @@ TransformResult pushPartial(const PlanNodePtr & node, RuleContext & context)
 TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
     const auto * step = dynamic_cast<const AggregatingStep *>(node->getStep().get());
-    if (!context.context->getSettingsRef().enable_push_partial_agg && !step->isGroupingSet())
+    auto [has_push_partial_hint, enable_push_partical_agg] = canPushPartialWithHint(step);
+    if (has_push_partial_hint)
+    {
+        if (!enable_push_partical_agg)
+            return {};
+    }
+    else if (!context.context->getSettingsRef().enable_push_partial_agg && !step->isGroupingSet())
         return {};
 
     for (const auto & agg : step->getAggregates())
@@ -206,6 +247,10 @@ TransformResult PushPartialAggThroughUnion::transformImpl(PlanNodePtr node, cons
 {
     const auto * step = dynamic_cast<const AggregatingStep *>(node->getStep().get());
     auto union_node = node->getChildren()[0];
+    auto [has_push_partial_hint, enable_push_partical_agg] = canPushPartialWithHint(step);
+    if (has_push_partial_hint && !enable_push_partical_agg)
+        return {};
+
     const auto * union_step = dynamic_cast<const UnionStep *>(union_node->getStep().get());
 
     PlanNodes partials;

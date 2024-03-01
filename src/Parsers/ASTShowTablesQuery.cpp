@@ -86,7 +86,7 @@ void ASTShowTablesQuery::formatQueryImpl(const FormatSettings & settings, Format
     else
     {
         String name = dictionaries ? "DICTIONARIES" : (snapshots ? "SNAPSHOTS" : "TABLES");
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW " << (temporary ? "TEMPORARY " : "") <<
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW " << (full ? "FULL " : "") << (temporary ? "TEMPORARY " : "") <<
              name << (history ? " HISTORY" : "") << (settings.hilite ? hilite_none : "");
 
         if (!from.empty())

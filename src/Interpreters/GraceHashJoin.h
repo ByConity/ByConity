@@ -96,12 +96,16 @@ private:
     InMemoryJoinPtr makeInMemoryJoin();
 
     /// Add right table block to the @join. Calls @rehash on overflow.
-    void addJoinedBlockImpl(Block block);
+    void addJoinedBlockImpl(Block block, bool is_delay_read = false);
 
     /// Check that join satisfies limits on rows/bytes in table_join.
     bool hasMemoryOverflow(size_t total_rows, size_t total_bytes) const;
     bool hasMemoryOverflow(const InMemoryJoinPtr & hash_join_) const;
     bool hasMemoryOverflow(const BlocksList & blocks) const;
+
+    /// Add bucket_count new buckets
+    /// Throws if a bucket creation fails
+    void addBuckets(size_t bucket_count);
 
     /// Create new bucket at the end of @destination.
     void addBucket(Buckets & destination);
@@ -111,7 +115,7 @@ private:
     ///
     /// NB: after @rehashBuckets there may be rows that are written to the buckets that they do not belong to.
     /// It is fine; these rows will be written to the corresponding buckets during the third stage.
-    Buckets rehashBuckets(size_t to_size);
+    Buckets rehashBuckets();
 
     /// Perform some bookkeeping after all calls to @joinBlock.
     void startReadingDelayedBlocks();
@@ -129,6 +133,7 @@ private:
     Block right_sample_block;
     Block output_sample_block;
     bool any_take_last_row;
+    bool rehash;
     const size_t max_num_buckets;
     size_t max_block_size;
 

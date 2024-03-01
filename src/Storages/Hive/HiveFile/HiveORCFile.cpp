@@ -189,12 +189,17 @@ SourcePtr HiveORCFile::getReader(const Block & block, const std::shared_ptr<IHiv
 
     auto arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
         block,
-        schema,
         "ORC",
+        params->format_settings.orc.import_nested,
         params->format_settings.orc.allow_missing_columns,
-        params->format_settings.null_as_default);
+        params->format_settings.null_as_default,
+        params->format_settings.orc.case_insensitive_column_matching);
 
-    std::vector<int> column_indices = ORCBlockInputFormat::getColumnIndices(schema, block);
+    std::vector<int> column_indices = ORCBlockInputFormat::getColumnIndices(
+        schema,
+        block,
+        params->format_settings.orc.case_insensitive_column_matching,
+        params->format_settings.orc.import_nested);
     if (!params->read_buf)
         params->read_buf = readFile(params->read_settings);
 
@@ -238,7 +243,7 @@ Chunk ORCSliceSource::generate()
                                "Error while reading batch of ORC data: {}", batch_status.status().ToString());
 
     THROW_ARROW_NOT_OK(arrow::Table::FromRecordBatches({batch_status.ValueOrDie()}).Value(&table));
-    arrow_column_to_ch_column->arrowTableToCHChunk(res, table);
+    arrow_column_to_ch_column->arrowTableToCHChunk(res, table, table->num_rows());
     return res;
 }
 

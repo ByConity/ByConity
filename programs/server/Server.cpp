@@ -1947,4 +1947,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
     return Application::EXIT_OK;
 }
 
+void Server::initMetrics2()
+{
+    auto & load_config = config();
+    bool enable_metrics2 = load_config.getBool("metrics2.enable_metrics", true);
+    if (!enable_metrics2)
+        return;
+
+    metrics2::MetricCollectorConf conf;
+    conf.auto_batch = load_config.getInt("metrics2.auto_batch", 1);
+    conf.enable_debug_metric = load_config.getBool("metrics2.enable_debug_metric", false);
+    conf.namespace_prefix = load_config.getString("metrics2.metric_name_prefix", "cnch");
+    conf.send_batch_size = load_config.getInt("metrics2.send_batch_size", 1);
+    conf.sock_path = load_config.getString("metrics2.sock_path", "/tmp/metric.sock");
+    conf.udp_server_ip = load_config.getString("metrics2.udp_server_ip", "127.0.0.1");
+    conf.udp_server_port = load_config.getInt("metrics2.udp_server_port", 9123);
+    conf.use_remote_server = load_config.getInt("metrics2.use_remote_server", false);
+
+    String custom_tags = load_config.getString("metrics2.tags", "");
+    Metrics::InitMetrics(conf, custom_tags);
+}
+
 }

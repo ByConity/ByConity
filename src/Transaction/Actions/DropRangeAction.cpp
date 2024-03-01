@@ -59,7 +59,7 @@ void DropRangeAction::executeV1(TxnTimestamp commit_time)
     auto catalog = global_context.getCnchCatalog();
     catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false);
 
-    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::DROP_RANGE, parts, {}, txn_id, /*error=*/ false);
 }
 
 void DropRangeAction::executeV2()
@@ -68,7 +68,7 @@ void DropRangeAction::executeV2()
         return;
 
     executed = true;
-    
+
     auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(table.get());
     if (!cnch_table)
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
@@ -83,7 +83,7 @@ void DropRangeAction::postCommit(TxnTimestamp commit_time)
     /// set commit time for part
     global_context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, commit_time);
 
-    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::DROP_RANGE, parts, staged_parts, txn_id, /*error=*/ false);
 }
 
 void DropRangeAction::abort()
@@ -91,7 +91,7 @@ void DropRangeAction::abort()
     // clear parts in kv
     global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps,  {staged_parts.begin(), staged_parts.end()}});
 
-    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::DROP_RANGE, parts, txn_id, true);
+    ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::DROP_RANGE, parts, staged_parts, txn_id, /*error=*/ true);
 }
 
 }

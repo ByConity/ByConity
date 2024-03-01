@@ -31,6 +31,26 @@ namespace Nested
 
     /// Extract all column names that are nested for specifying table.
     Names getAllNestedColumnsForTable(const Block & block, const std::string & table_name);
+    
+    /// Get all nested tables names from a block.
+    std::unordered_set<String> getAllTableNames(const Block & block, bool to_lower_case = false);
+
 }
+
+/// Use this class to extract element columns from columns of nested type in a block, e.g. named Tuple.
+/// It can extract a column from a multiple nested type column, e.g. named Tuple in named Tuple
+/// Keeps some intermediate data to avoid rebuild them multi-times.
+class NestedColumnExtractHelper
+{
+public:
+    explicit NestedColumnExtractHelper(const Block & block_, bool case_insentive_);
+    std::optional<ColumnWithTypeAndName> extractColumn(const String & column_name);
+private:
+    std::optional<ColumnWithTypeAndName>
+    extractColumn(const String & original_column_name, const String & column_name_prefix, const String & column_name_suffix);
+    const Block & block;
+    bool case_insentive;
+    std::map<String, BlockPtr> nested_tables;
+};
 
 }

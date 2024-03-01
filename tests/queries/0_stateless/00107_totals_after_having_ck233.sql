@@ -32,6 +32,7 @@ SELECT '*** External aggregation.';
 
 SET max_bytes_before_external_group_by = 1000000;
 SET group_by_two_level_threshold = 100000;
+SET spill_buffer_bytes_before_external_group_by=1000;
 
 SELECT '**** totals_mode = after_having_auto';
 SET totals_mode = 'after_having_auto';

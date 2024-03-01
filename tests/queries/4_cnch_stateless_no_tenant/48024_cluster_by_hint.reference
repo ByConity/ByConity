@@ -8,9 +8,9 @@ Projection Est. ? rows
             │     Group by: {app_id, split_key}
             │     Aggregates: expr#max(timestamp):=AggNull(max)(timestamp)
             └─ Filter Est. ? rows
-               │     Condition: (toDateTime(timestamp) >= \'2023-08-13 20:12:15\') AND (toDateTime(timestamp) <= \'2023-08-14 00:41:00\')
+               │     Condition: (toDateTime(timestamp) >= cast(1691946735, \'DateTime\')) AND (toDateTime(timestamp) <= cast(1691962860, \'DateTime\'))
                └─ TableScan my_test.dwd_abtest_vid_log_realtime_aweme Est. ? rows
-                        Where: (toDateTime(timestamp) >= \'2023-08-13 20:12:15\') AND (toDateTime(timestamp) <= \'2023-08-14 00:41:00\')
+                        Where: (toDateTime(timestamp) >= cast(1691946735, \'DateTime\')) AND (toDateTime(timestamp) <= cast(1691962860, \'DateTime\'))
                         Outputs: [split_key, timestamp, app_id]
 Projection Est. ? rows
 │     Expressions: [app_id, split_key], update_time:=`expr#max(timestamp)`
@@ -19,7 +19,7 @@ Projection Est. ? rows
       │     Group by: {app_id, split_key}
       │     Aggregates: expr#max(timestamp):=AggNull(max)(timestamp)
       └─ Filter Est. ? rows
-         │     Condition: (toDateTime(timestamp) >= \'2023-08-13 20:12:15\') AND (toDateTime(timestamp) <= \'2023-08-14 00:41:00\')
+         │     Condition: (toDateTime(timestamp) >= cast(1691946735, \'DateTime\')) AND (toDateTime(timestamp) <= cast(1691962860, \'DateTime\'))
          └─ TableScan my_test.dwd_abtest_vid_log_realtime_aweme Est. ? rows
-                  Where: (toDateTime(timestamp) >= \'2023-08-13 20:12:15\') AND (toDateTime(timestamp) <= \'2023-08-14 00:41:00\')
+                  Where: (toDateTime(timestamp) >= cast(1691946735, \'DateTime\')) AND (toDateTime(timestamp) <= cast(1691962860, \'DateTime\'))
                   Outputs: [split_key, timestamp, app_id]

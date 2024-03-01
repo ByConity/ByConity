@@ -720,6 +720,25 @@ struct AggregatedDataVariants : private boost::noncopyable
         __builtin_unreachable();
     }
 
+    size_t getVariantsBufferSizeInBytes() const
+    {
+        switch (type)
+        {
+            case Type::EMPTY:
+            return 0;
+            case Type::without_key:
+            return 1;
+
+#define M(NAME, IS_TWO_LEVEL) \
+    case Type::NAME: \
+        return NAME->data.getBufferSizeInBytes();
+            APPLY_FOR_AGGREGATED_VARIANTS(M)
+#undef M
+        }
+
+        __builtin_unreachable();
+    }
+
     const char * getMethodName() const
     {
         switch (type)
@@ -945,6 +964,9 @@ public:
         /// Settings to flush temporary data to the filesystem (external aggregation).
         const size_t max_bytes_before_external_group_by;        /// 0 - do not use external aggregation.
 
+        /// Control the size of the memory in the agg stage when flushing the disk (external aggregation).
+        const size_t spill_buffer_bytes_before_external_group_by;
+
         /// Return empty result when aggregating without keys on empty set.
         bool empty_result_for_aggregation_by_empty_set;
 
@@ -969,6 +991,7 @@ public:
             bool overflow_row_, size_t max_rows_to_group_by_, OverflowMode group_by_overflow_mode_,
             size_t group_by_two_level_threshold_, size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
+            size_t spill_buffer_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
             VolumePtr tmp_volume_, size_t max_threads_,
             size_t min_free_disk_space_,
@@ -982,6 +1005,7 @@ public:
             overflow_row(overflow_row_), max_rows_to_group_by(max_rows_to_group_by_), group_by_overflow_mode(group_by_overflow_mode_),
             group_by_two_level_threshold(group_by_two_level_threshold_), group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_),
             max_bytes_before_external_group_by(max_bytes_before_external_group_by_),
+            spill_buffer_bytes_before_external_group_by(spill_buffer_bytes_before_external_group_by_),
             empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_),
             tmp_volume(tmp_volume_), max_threads(max_threads_),
             min_free_disk_space(min_free_disk_space_),
@@ -994,7 +1018,7 @@ public:
         /// Only parameters that matter during merge.
         Params(const Block & intermediate_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_, bool overflow_row_, size_t max_threads_)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, max_threads_, 0, false, 0)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, 10485760, false, nullptr, max_threads_, 0, false, 0)
         {
             intermediate_header = intermediate_header_;
         }

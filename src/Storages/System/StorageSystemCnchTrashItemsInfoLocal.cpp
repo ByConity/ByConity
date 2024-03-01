@@ -21,7 +21,8 @@ StorageSystemCnchTrashItemsInfoLocal::StorageSystemCnchTrashItemsInfoLocal(const
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(ColumnsDescription(
-        {{"database", std::make_shared<DataTypeString>()},
+        {{"uuid", std::make_shared<DataTypeString>()},
+         {"database", std::make_shared<DataTypeString>()},
          {"table", std::make_shared<DataTypeString>()},
          {"metrics_available", std::make_shared<DataTypeUInt8>()},
          {"total_parts_number", std::make_shared<DataTypeInt64>()},
@@ -111,39 +112,48 @@ Pipe StorageSystemCnchTrashItemsInfoLocal::read(
     std::atomic_size_t task_index{0};
     std::size_t total_task_size = filtered_index_column->size();
     std::vector<std::shared_ptr<TableMetrics>> metrics_collection{total_task_size};
+    std::atomic_bool need_abort = false;
 
-    for (size_t i = 0; i < max_threads; i++)
+    try {
+        for (size_t i = 0; i < max_threads; i++)
+        {
+            collect_metrics_pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]() {
+                DB::ThreadStatus thread_status;
+
+                if (thread_group)
+                    CurrentThread::attachTo(thread_group);
+
+                size_t current_task;
+                while ((current_task = task_index++) < total_task_size && !need_abort)
+                {
+                    StoragePtr storage = nullptr;
+                    try
+                    {
+                        auto entry = active_tables[(*filtered_index_column)[current_task].get<UInt64>()];
+                        storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
+                        if (storage && UUIDHelpers::UUIDToString(storage->getStorageUUID()) == entry->table_uuid)
+                            metrics_collection[current_task] = cache_manager->getTrashItemsInfoMetrics(*storage);
+                    }
+                    catch (Exception & e)
+                    {
+                        if (e.code() == ErrorCodes::CANNOT_GET_TABLE_LOCK && storage)
+                            LOG_WARNING(
+                                &Poco::Logger::get("TrashItemsInfoLocal"),
+                                "Failed to get parts info for table {} because cannot get table lock, skip it.",
+                                storage->getStorageID().getFullTableName());
+                    }
+                    catch (...)
+                    {
+                    }
+                }
+            });
+        }
+    }
+    catch (...)
     {
-        collect_metrics_pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]() {
-            DB::ThreadStatus thread_status;
-
-            if (thread_group)
-                CurrentThread::attachTo(thread_group);
-
-            size_t current_task;
-            while ((current_task = task_index++) < total_task_size)
-            {
-                StoragePtr storage = nullptr;
-                try
-                {
-                    auto entry = active_tables[(*filtered_index_column)[current_task].get<UInt64>()];
-                    storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
-                    if (storage)
-                        metrics_collection[current_task] = cache_manager->getTrashItemsInfoMetrics(*storage);
-                }
-                catch (Exception & e)
-                {
-                    if (e.code() == ErrorCodes::CANNOT_GET_TABLE_LOCK && storage)
-                        LOG_WARNING(
-                            &Poco::Logger::get("TrashItemsInfoLocal"),
-                            "Failed to get parts info for table {} because cannot get table lock, skip it.",
-                            storage->getStorageID().getFullTableName());
-                }
-                catch (...)
-                {
-                }
-            }
-        });
+        need_abort = true;
+        collect_metrics_pool.wait();
+        throw;
     }
     collect_metrics_pool.wait();
 
@@ -156,6 +166,8 @@ Pipe StorageSystemCnchTrashItemsInfoLocal::read(
             size_t src_index = 0;
             size_t dest_index = 0;
             bool is_valid_metrics = metrics? metrics->getDataRef().validateMetrics(): false;
+            if (columns_mask[src_index++])
+                res_columns[dest_index++]->insert(entry->table_uuid);
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->database);
             if (columns_mask[src_index++])

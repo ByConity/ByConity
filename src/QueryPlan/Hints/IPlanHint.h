@@ -14,6 +14,7 @@ using PlanHintPtr = std::shared_ptr<IPlanHint>;
 struct HintOptions
 {
     Strings table_name_list = {};
+    Strings func_names = {};
 };
 
 enum class HintCategory
@@ -22,6 +23,7 @@ enum class HintCategory
     DISTRIBUTION_TYPE,
     JOIN_ORDER,
     JOIN_ALGORITHM,
+    PUSH_PARTIAL_AGG,
 };
 
 class IPlanHint

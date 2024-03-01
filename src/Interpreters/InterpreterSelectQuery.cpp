@@ -195,7 +195,7 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     actions->projectInput(false);
 
     for (const auto * node : actions->getInputs())
-        actions->getIndex().push_back(node);
+        actions->getOutputs().push_back(node);
 
     return column_name;
 }
@@ -2440,6 +2440,7 @@ static Aggregator::Params getAggregatorParams(
         group_by_two_level_threshold,
         group_by_two_level_threshold_bytes,
         settings.max_bytes_before_external_group_by,
+        settings.spill_buffer_bytes_before_external_group_by,
         settings.empty_result_for_aggregation_by_empty_set || (keys.empty() && query_analyzer.hasConstAggregationKeys()),
         context.getTemporaryVolume(),
         settings.max_threads,

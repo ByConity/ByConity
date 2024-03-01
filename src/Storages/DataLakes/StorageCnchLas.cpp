@@ -97,9 +97,17 @@ PrepareContextResult StorageCnchLas::prepareReadContext(
     const auto & settings = local_context->getSettingsRef();
     read_properties["buffer_size"] = std::to_string(settings.max_read_buffer_size);
 
+    const auto & hive_table_properties = hive_table->parameters;
+    Strings fs_options_props;
+    for (const auto & [k, v] : hive_table_properties)
+    {
+        fs_options_props.emplace_back(fmt::format("{}={}", k, v));
+    }
+    read_properties["fs_options_props"] = fmt::format("{}", fmt::join(fs_options_props, "#"));
+
     watch.restart();
-    size_t num_workers = local_context->getCurrentWorkerGroup()->getShardsInfo().size();
-    HiveFiles hive_files = jni_meta_client->getFilesInPartition(partitions, num_workers, static_cast<size_t>(num_streams));
+    size_t num_splits = local_context->getCurrentWorkerGroup()->getShardsInfo().size() * settings.max_threads;
+    HiveFiles hive_files = jni_meta_client->getFilesInPartition(partitions, num_splits, static_cast<size_t>(num_streams));
 
     LOG_TRACE(log, "Elapsed {} ms to get {} FileSplits", watch.elapsedMilliseconds(), hive_files.size());
     PrepareContextResult result{.hive_files = std::move(hive_files)};
@@ -129,7 +137,7 @@ void StorageCnchLas::serializeHiveFiles(Protos::ProtoHiveFiles & proto, const Hi
         hive_file->serialize(*proto_file);
     }
 
-    LOG_TRACE(log, "Hive files {}" + proto.DebugString());
+    LOG_TRACE(log, "Send {} Hive files. {}", hive_files.size(), proto.DebugString());
 }
 
 Strings StorageCnchLas::getHiveColumnTypes() const

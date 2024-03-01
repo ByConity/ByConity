@@ -46,7 +46,8 @@ public:
         const IMergeTreeDataPartPtr & data_part_,
         const FileOffsetAndSize & mrk_file_pos,
         size_t marks_count_,
-        MarkCache * mark_cache_,
+        MarkCache * mark_mem_cache_,
+        IDiskCache * mark_disk_cache_,
         const String & stream_name_,
         const String & extension_,
         const FileOffsetAndSize & stream_file_pos,
@@ -65,7 +66,7 @@ private:
     ConstStoragePtr storage;
     FileOffsetAndSize mrk_file_pos;
     size_t marks_count;
-    MarkCache * mark_cache;
+    MarkCache * mark_mem_cache;
 
     MergeTreeReaderSettings merge_tree_reader_settings;
 

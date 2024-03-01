@@ -532,7 +532,7 @@ BlockIO InterpreterInsertQuery::execute()
             compression_method = compression_method_node.value.safeGet<std::string>();
         }
 
-        auto input_stream = buildInputStreamFromSource(getContext(), out_streams.at(0)->getHeader(),
+        auto input_stream = buildInputStreamFromSource(getContext(), metadata_snapshot->getColumns(), out_streams.at(0)->getHeader(),
             settings, uristr, format, false, compression_method);
 
         res.in = std::make_shared<NullAndDoCopyBlockInputStream>(input_stream, out_streams.at(0));
@@ -610,6 +610,7 @@ void InterpreterInsertQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
 
 BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
     const ContextPtr context_ptr,
+    const ColumnsDescription & columns, 
     const Block & sample,
     const Settings & settings,
     const String & source_uri,
@@ -679,11 +680,12 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
                 read_buf = wrapReadBufferWithCompressionMethod(std::move(read_buf), chooseCompressionMethod(name, compression_method), settings.snappy_format_blocked);
 
                 inputs.emplace_back(
-                        std::make_shared<OwningBlockInputStream<ReadBuffer>>(
-                            context_ptr->getInputFormat(format, *read_buf,
-                                sample, // sample_block
-                                settings.max_insert_block_size),
-                            std::move(read_buf)));
+                    std::make_shared<OwningBlockInputStream<ReadBuffer>>(
+                        context_ptr->getInputStreamByFormatNameAndBuffer(format, *read_buf,
+                            sample, // sample_block
+                            settings.max_insert_block_size,
+                            columns),
+                std::move(read_buf)));
             }
         }
     }

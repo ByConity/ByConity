@@ -398,7 +398,7 @@ void CnchDataWriter::schedule(
     const IMutableMergeTreeDataPartsVector & temp_staged_parts)
 {
     Stopwatch watch;
-    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchWriteDataElapsedMilliseconds, watch.elapsedMilliseconds()); });
+    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchWriteDataElapsedMilliseconds, watch.elapsedMilliseconds(), Metrics::MetricType::Timer);});
 
     if (!thread_pool)
     {
@@ -597,8 +597,8 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             }
             else
             {
-                merge_mutate_thread->finishTask(task_id, dumped_data.parts.back(), [&] {
-                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr);
+                merge_mutate_thread->finishTask(task_id, [&](const ManipulationTaskRecord & task) {
+                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, task.getSourcePartNames());
 
                     for (const auto & part : dumped_data.parts)
                         action->as<MergeMutateAction &>().appendPart(part);

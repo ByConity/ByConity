@@ -153,6 +153,7 @@ namespace
 
         bool isVariadic() const override { return !is_space_func; }
         size_t getNumberOfArguments() const override { return !is_space_func ? 0 : 1; }
+        bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
         bool useDefaultImplementationForConstants() const override { return true; }
         ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {2}; }

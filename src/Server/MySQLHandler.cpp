@@ -68,10 +68,91 @@ namespace ErrorCodes
 static const size_t PACKET_HEADER_SIZE = 4;
 static const size_t SSL_REQUEST_PAYLOAD_SIZE = 32;
 
-static String selectEmptyReplacementQuery(const String & query);
-static String showTableStatusReplacementQuery(const String & query);
-static String killConnectionIdReplacementQuery(const String & query);
+static String selectEmptyReplacementQuery(const String & query, const String & prefix);
+static String showTableStatusReplacementQuery(const String & query, const String & prefix);
+static String killConnectionIdReplacementQuery(const String & query, const String & prefix);
 static std::optional<String> setSettingReplacementQuery(const String & query, const String & mysql_setting, const String & native_setting);
+// static String showCreateTableReplacementQuery(const String & query, const String & prefix);
+
+// For MySQL workbench
+static String showVariableReplacementQuery(const String & query, const String & prefix)
+{
+    std::regex pattern(prefix + R"((?: LIKE (.*))?)");
+    std::smatch match;
+
+    if (!std::regex_search(query, match, pattern))
+        return query;
+
+    if (match[1].matched)
+    {
+        String name = match[1].str();
+        return "SELECT " + name + " AS Variable_name, globalVariable(" + name + ") AS Value";
+    }
+    else
+    {
+        return "SELECT * FROM null('Variable_name String, Value String')";
+    }
+}
+
+static String showVariableWhereReplacementQuery(const String & query, const String & prefix)
+{
+    if (query.size() <= prefix.size())
+        return query;
+
+    RE2 pattern("'(.*?)'");
+    std::vector<std::string> variable_names;
+    re2::StringPiece input_sp(query.data() + prefix.length()); // RE2 uses its own StringPiece type rather than std::string
+    std::string match;
+    while (RE2::FindAndConsume(&input_sp, pattern, &match))
+        variable_names.push_back(match);
+
+    std::string q;
+    for (const auto& name : variable_names) {
+        if (!q.empty())
+            q += " UNION ALL ";
+        q += "SELECT '" + name + "' AS Variable_name, toString(globalVariable('" + name + "')) AS Value";
+    }
+
+    return q;
+}
+
+template<const char * q>
+struct ReplaceWith
+{
+    // Simple replacement
+    static String fn(const String & query, const String & prefix)
+    {
+        if (query.size() <= prefix.size())
+            return q;
+
+        String suffix = query.data() + prefix.length();
+        return String(q) + suffix;
+    }
+
+    // Replace identifier with string
+    static String id2str(const String & query, const String & prefix)
+    {
+        if (query.size() <= prefix.size())
+            return q;
+
+        // TODO: replace identifier without `
+        // TODO: support FROM database
+        String suffix = query.data() + prefix.length();
+
+        auto begin = suffix.find('`');
+        if (begin != String::npos)
+        {
+            auto end = suffix.find('`', begin + 1);
+            if (end != String::npos)
+            {
+                suffix[begin] = '\'';
+                suffix[end] = '\'';
+            }
+        }
+
+        return String(q) + suffix;
+    }
+};
 
 MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poco::Net::StreamSocket & socket_,
     bool ssl_enabled, uint32_t connection_id_)
@@ -87,12 +168,32 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
     if (ssl_enabled)
         server_capabilities |= CLIENT_SSL;
 
-    queries_replacements.emplace("KILL QUERY", killConnectionIdReplacementQuery);
-    queries_replacements.emplace("SHOW TABLE STATUS LIKE", showTableStatusReplacementQuery);
-    queries_replacements.emplace("SHOW VARIABLES", selectEmptyReplacementQuery);
+    static constexpr const char SHOW_CHARSET[] = "SELECT 'utf8mb4' AS charset, 'UTF-8 Unicode' AS Description, 'utf8mb4_0900_ai_ci' AS `Default collation`, 4 AS Maxlen";
+    static constexpr const char SHOW_COLLATION[] = "SELECT 'utf8_bin' AS collation, 'utf8' AS Charset, '255' AS Id, 'Yes' AS Default, 'Yes' AS Compiled, 0 AS Sortlen, 'NO PAD' AS Pad_attribute";
+    static constexpr const char SHOW_ENGINES[] = "SELECT name AS Engine, 'Yes' AS Support, concat(name, ' engine') AS Comment, 'NO' AS Transcations,  'NO' AS XA, 'NO' AS Savepoints FROM system.table_engines";
+    static constexpr const char SHOW_TABLE_STATUS_LIKE[] = "SELECT name AS Name, engine AS Engine, '10' AS Version, 'Dynamic' AS Row_format, 0 AS Rows, 0 AS Avg_row_length, 0 AS Data_length, 0 AS Max_data_length, 0 AS Index_length, 0 AS Data_free, 'NULL' AS Auto_increment, metadata_modification_time AS Create_time, metadata_modification_time AS Update_time, metadata_modification_time AS Check_time, 'utf8_bin' AS Collation, 'NULL' AS Checksum, '' AS Create_options, '' AS Comment FROM system.tables WHERE name LIKE ";
+
+    queries_replacements.emplace_back("KILL QUERY ", killConnectionIdReplacementQuery);
+    queries_replacements.emplace_back("SHOW TABLE STATUS FROM ", showTableStatusReplacementQuery);
+    queries_replacements.emplace_back("SHOW TABLE STATUS LIKE ", ReplaceWith<SHOW_TABLE_STATUS_LIKE>::fn);
+    queries_replacements.emplace_back("SHOW VARIABLES WHERE ", showVariableWhereReplacementQuery);
+    queries_replacements.emplace_back("SHOW VARIABLES", selectEmptyReplacementQuery);
+    queries_replacements.emplace_back("SHOW PLUGINS", selectEmptyReplacementQuery);
+    queries_replacements.emplace_back("SHOW SESSION STATUS", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW SESSION VARIABLES", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW GLOBAL STATUS", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW GLOBAL VARIABLES", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW STATUS", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW VARIABLES", showVariableReplacementQuery);
+    //queries_replacements,emplace_back("SHOW CREATE TABLE", showCreateTableReplacementQuery);
+    queries_replacements.emplace_back("SHOW CHARACTER SET", ReplaceWith<SHOW_CHARSET>::fn);
+    queries_replacements.emplace_back("SHOW CHARSET", ReplaceWith<SHOW_CHARSET>::fn);
+    queries_replacements.emplace_back("SHOW COLLATION", ReplaceWith<SHOW_COLLATION>::fn);
+    queries_replacements.emplace_back("SHOW ENGINES", ReplaceWith<SHOW_ENGINES>::fn);
     settings_replacements.emplace("SQL_SELECT_LIMIT", "limit");
     settings_replacements.emplace("NET_WRITE_TIMEOUT", "send_timeout");
     settings_replacements.emplace("NET_READ_TIMEOUT", "receive_timeout");
+    settings_replacements.emplace("CHARACTER SET utf8", "SQL_CHARSET='utf8'");
 }
 
 void MySQLHandler::run()
@@ -161,13 +262,16 @@ void MySQLHandler::run()
                 if (!default_database.empty())
                     connection_context->setCurrentDatabase(default_database);
             }
+            connection_context->setSetting("dialect_type", String("MYSQL"));
+            /// Temporay fix, need to default enable it under mysql dialect
+            connection_context->setSetting("enable_implicit_arg_type_convert", 1);
             connection_context->setCurrentQueryId(fmt::format("mysql:{}", connection_id));
 
         }
         catch (const Exception & exc)
         {
             log->log(exc);
-            packet_endpoint->sendPacket(ERRPacket(exc.code(), "00000", exc.message()), true);
+            packet_endpoint->sendPacket(ERRPacket(exc.code(), "HY000", exc.message()), true);
         }
 
         OKPacket ok_packet(0, handshake_response.capability_flags, 0, 0, 0);
@@ -233,7 +337,7 @@ void MySQLHandler::run()
             catch (...)
             {
                 tryLogCurrentException(log, "MySQLHandler: Cannot read packet: ");
-                packet_endpoint->sendPacket(ERRPacket(getCurrentExceptionCode(), "00000", getCurrentExceptionMessage(false)), true);
+                packet_endpoint->sendPacket(ERRPacket(getCurrentExceptionCode(), "HY000", getCurrentExceptionMessage(false)), true);
             }
         }
     }
@@ -310,7 +414,7 @@ void MySQLHandler::authenticate(const String & user_name, const String & auth_pl
     catch (const Exception & exc)
     {
         LOG_ERROR(log, "Authentication for user {} failed.", user_name);
-        packet_endpoint->sendPacket(ERRPacket(exc.code(), "00000", exc.message()), true);
+        packet_endpoint->sendPacket(ERRPacket(exc.code(), "HY000", exc.message()), true);
         throw;
     }
     LOG_DEBUG(log, "Authentication for user {} succeeded.", user_name);
@@ -353,6 +457,25 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
 {
     String query = String(payload.position(), payload.buffer().end());
 
+    /* strip comments */
+    if (query.starts_with("/*"))
+    {
+        auto sz = query.find("*/", 2);
+        if (sz != String::npos)
+        {
+            sz += 2;
+
+            /* remove space */
+            if (query.size() > sz && query[sz] == ' ')
+                sz++;
+
+            query = query.substr(sz);
+            payload.ignore(sz);
+        }
+    }
+
+    LOG_INFO(log, "MySQL server received: " + query);
+
     // This is a workaround in order to support adding ClickHouse to MySQL using federated server.
     // As Clickhouse doesn't support these statements, we just send OK packet in response.
     if (isFederatedServerSetupSetCommand(query))
@@ -371,7 +494,7 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
             if (0 == strncasecmp(query_to_replace.c_str(), query.c_str(), query_to_replace.size()))
             {
                 should_replace = true;
-                replacement_query = replacement_fn(query);
+                replacement_query = replacement_fn(query, query_to_replace);
                 break;
             }
         }
@@ -390,7 +513,6 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
             }
 
         ReadBufferFromString replacement(replacement_query);
-
         auto query_context = Context::createCopy(connection_context);
         query_context->setCurrentQueryId(fmt::format("mysql:{}:{}", connection_id, toString(UUIDHelpers::generateV4())));
         CurrentThread::QueryScope query_scope{query_context};
@@ -571,42 +693,62 @@ static bool isFederatedServerSetupSetCommand(const String & query)
 }
 
 /// Replace "[query(such as SHOW VARIABLES...)]" into "".
-static String selectEmptyReplacementQuery(const String & query)
+static String selectEmptyReplacementQuery(const String & /*query*/, const String & /*prefix*/)
 {
-    std::ignore = query;
     return "select ''";
 }
 
-/// Replace "SHOW TABLE STATUS LIKE 'xx'" into "SELECT ... FROM system.tables WHERE name LIKE 'xx'".
-static String showTableStatusReplacementQuery(const String & query)
+/// Replace "SHOW TABLE STATUS FROM 'value1' LIKE 'value2'" into "SELECT ... FROM system.tables WHERE name LIKE 'xx'".
+static String showTableStatusReplacementQuery(const String & query, const String & prefix)
 {
-    const String prefix = "SHOW TABLE STATUS LIKE ";
     if (query.size() > prefix.size())
     {
-        String suffix = query.data() + prefix.length();
-        return (
-            "SELECT"
-            " name AS Name,"
-            " engine AS Engine,"
-            " '10' AS Version,"
-            " 'Dynamic' AS Row_format,"
-            " 0 AS Rows,"
-            " 0 AS Avg_row_length,"
-            " 0 AS Data_length,"
-            " 0 AS Max_data_length,"
-            " 0 AS Index_length,"
-            " 0 AS Data_free,"
-            " 'NULL' AS Auto_increment,"
-            " metadata_modification_time AS Create_time,"
-            " metadata_modification_time AS Update_time,"
-            " metadata_modification_time AS Check_time,"
-            " 'utf8_bin' AS Collation,"
-            " 'NULL' AS Checksum,"
-            " '' AS Create_options,"
-            " '' AS Comment"
-            " FROM system.tables"
-            " WHERE name LIKE "
-            + suffix);
+        std::regex regexPattern(prefix + R"(((?:\x60.*\x60)|[^ ]+)(?: LIKE (.*))?)");
+
+        std::smatch match;
+        if (std::regex_search(query, match, regexPattern))
+        {
+            String dbName = match[1].str();
+            if (dbName.size() > 2 and dbName.front() == '`' and dbName.back() == '`')
+                dbName.front() = dbName.back() = '\'';
+            else
+                dbName = '\'' + dbName + '\'';
+            std::optional<String> tableName;
+            if (match[2].matched)
+                tableName.emplace(match[2].str());
+
+            String rewritten_query =
+                "SELECT"
+                " name AS Name,"
+                " engine AS Engine,"
+                " '10' AS Version,"
+                " 'Dynamic' AS Row_format,"
+                " 0 AS Rows,"
+                " 0 AS Avg_row_length,"
+                " 0 AS Data_length,"
+                " 0 AS Max_data_length,"
+                " 0 AS Index_length,"
+                " 0 AS Data_free,"
+                " 'NULL' AS Auto_increment,"
+                " metadata_modification_time AS Create_time,"
+                " metadata_modification_time AS Update_time,"
+                " metadata_modification_time AS Check_time,"
+                " 'utf8_bin' AS Collation,"
+                " 'NULL' AS Checksum,"
+                " '' AS Create_options,"
+                " '' AS Comment"
+                " FROM"
+                " system.tables"
+                " WHERE"
+                " database = " + dbName
+                ;
+            if (tableName)
+            {
+                rewritten_query +=
+                    " AND name LIKE " + *tableName;
+            }
+            return rewritten_query;
+        }
     }
     return query;
 }
@@ -620,9 +762,8 @@ static std::optional<String> setSettingReplacementQuery(const String & query, co
 }
 
 /// Replace "KILL QUERY [connection_id]" into "KILL QUERY WHERE query_id LIKE 'mysql:[connection_id]:xxx'".
-static String killConnectionIdReplacementQuery(const String & query)
+static String killConnectionIdReplacementQuery(const String & query, const String & prefix)
 {
-    const String prefix = "KILL QUERY ";
     if (query.size() > prefix.size())
     {
         String suffix = query.data() + prefix.length();

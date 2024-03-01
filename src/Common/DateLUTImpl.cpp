@@ -20,7 +20,7 @@
  */
 
 #include <Common/DateLUTImpl.h>
-
+#include <Common/ThreadStatus.h>
 #include <cctz/civil_time.h>
 #include <cctz/time_zone.h>
 #include <cctz/zone_info_source.h>
@@ -209,6 +209,43 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
         for (; day >= 0; --day)
             lut_saturated[day] = lut_saturated[day + 1];
     }
+}
+
+DateLUTImpl::LUTIndex DateLUTImpl::makeLUTIndex(Int16 year, UInt8 month, UInt8 day_of_month) const
+{
+    if (unlikely(year < DATE_LUT_MIN_YEAR || month < 1 || month > 12 || day_of_month < 1 || day_of_month > 31))
+    {
+        if (DB::current_thread)
+            DB::current_thread->has_truncated_date = true;
+        return LUTIndex(0);
+    }
+
+    if (unlikely(year > DATE_LUT_MAX_YEAR))
+    {
+        if (DB::current_thread)
+            DB::current_thread->has_truncated_date = true;
+        return LUTIndex(DATE_LUT_SIZE - 1);
+    }
+
+    auto year_lut_index = (year - DATE_LUT_MIN_YEAR) * 12 + month - 1;
+    UInt32 index = years_months_lut[year_lut_index].toUnderType() + day_of_month - 1;
+    if (index > static_cast<UInt32>(DATE_LUT_SIZE - 1) && DB::current_thread)
+        DB::current_thread->has_truncated_date = true;
+    /// When date is out of range, default value is DATE_LUT_SIZE - 1 (2299-12-31)
+    return LUTIndex{std::min(index, static_cast<UInt32>(DATE_LUT_SIZE - 1))};
+}
+
+/// Create DayNum from year, month, day of month.
+ExtendedDayNum DateLUTImpl::makeDayNum(Int16 year, UInt8 month, UInt8 day_of_month, Int32 default_error_day_num) const
+{
+    if (unlikely(year < DATE_LUT_MIN_YEAR || month < 1 || month > 12 || day_of_month < 1 || day_of_month > 31))
+    {
+        if (DB::current_thread)
+            DB::current_thread->has_truncated_date = true;
+        return ExtendedDayNum(default_error_day_num);
+    }
+
+    return toDayNum(makeLUTIndex(year, month, day_of_month));
 }
 
 

@@ -173,8 +173,9 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
             else if (enable_filter_by_table)
                 throw Exception(
                     ErrorCodes::NOT_IMPLEMENTED,
-                    "Table system.cnch_parts only support CnchMergeTree engine, but got `{}`",
-                    table ? table->getName(): "unknown engine");
+                    "Table system.cnch_parts only support CnchMergeTree engine, but got `{}`. "
+                    "Consider enable `enable_skip_non_cnch_tables_for_cnch_parts` to skip non CnchMergeTree engine.",
+                    table ? table->getName() : "unknown engine");
             else
                 continue;
         }
@@ -241,12 +242,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 res_columns[col_num++]->insert(visible);
                 res_columns[col_num++]->insert(static_cast<Int8>(type));
 
-                UUID part_id = UUIDHelpers::Nil;
-                if (curr_part->part_model().has_part_id())
-                {
-                    part_id = RPCHelpers::createUUID(curr_part->part_model().part_id());
-                }
-                res_columns[col_num++]->insert(part_id);
+                res_columns[col_num++]->insert(curr_part->get_uuid());
                 res_columns[col_num++]->insert(curr_part->getCommitTime());
                 res_columns[col_num++]->insert(curr_part->getEndTime());
 

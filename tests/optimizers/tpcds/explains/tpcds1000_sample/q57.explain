@@ -22,7 +22,7 @@ Projection Est. 100 rows
                   │     │  └─ Buffer Est. 121111 rows
                   │     │     └─ CTERef[1] Est. 121111 rows
                   │     └─ Filter Est. 108999 rows
-                  │        │     Condition: (d_year_1 = 1999) AND (`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1` > 0.) AND (multiIf(`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1` > 0, abs(`expr#sum(cs_sales_price)_1` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1`) / `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1`, NULL) > '0.1')
+                  │        │     Condition: (d_year_1 = 1999) AND (`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1` > 0.) AND (multiIf(`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1` > 0, abs(`expr#sum(cs_sales_price)_1` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1`) / `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1`, NULL) > 0.1)
                   │        └─ Buffer Est. 121111 rows
                   │           └─ CTERef[1] Est. 121111 rows
                   └─ Projection Est. 121111 rows

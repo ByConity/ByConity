@@ -172,6 +172,10 @@ void MultiplexedConnections::sendQuery(
             modified_settings.tenant_id = context->getTenantId();
     }
 
+    /// DefaultDatabaseEngine::CNCH is invalid outside Byconity
+    if (!replica_states[0].connection->isByConityServer())
+        modified_settings.default_database_engine = DefaultDatabaseEngine::Atomic;
+
     if (num_replicas > 1)
     {
         if (is_cnch_query)
@@ -188,7 +192,7 @@ void MultiplexedConnections::sendQuery(
     }
     else
     {
-        if (is_cnch_query)
+        if (is_cnch_query && (replica_states[0].connection->isByConityServer()))
         {
             auto txn = current_context->getCurrentTransaction();
             auto primary_txn_id = txn->isSecondary() ? txn->getPrimaryTransactionID().toUInt64() : 0;

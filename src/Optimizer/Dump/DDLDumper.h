@@ -51,7 +51,7 @@ public:
     void setDumpSettings(DumpUtils::DumpSettings & settings_) { settings = settings_; }
 private:
     // returns the first shard_count to avoid planning
-    std::optional<size_t> addTableFromSelectQueryImpl(const ASTSelectQuery & select_query, ContextPtr context, const NameSet & with_tables_context);
+    std::optional<size_t> addTableFromAST(ASTPtr ast, ContextPtr context, const NameSet & with_tables_context);
     std::string getPath(const char * file_name) { return dump_path + '/' + file_name; }
 
     const std::string dump_path;

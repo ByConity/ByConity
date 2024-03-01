@@ -46,6 +46,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Poco/Path.h>
 #include <Common/HashTable/HashMap.h>
+#include <Common/SharedMutex.h>
 #include <common/types.h>
 #include "Storages/MergeTree/Index/MergeTreeIndexHelper.h"
 #include <roaring.hh>
@@ -239,7 +240,7 @@ public:
     const auto & get_partition() const { return partition; }
     const auto & get_deleted() const { return deleted; }
     const auto & get_commit_time() const { return commit_time; }
-    const auto & getUUID() const { return uuid; }
+    const auto & get_uuid() const { return uuid; }
 
     const MergeTreeMetaBase & storage;
 
@@ -249,8 +250,7 @@ public:
     std::atomic<bool> has_bitmap {false};
 
     /// Part unique identifier.
-    /// The intention is to use it for identifying cases where the same part is
-    /// processed by multiple shards.
+    /// Used by parts on object storage (S3) to compute an unique object key.
     UUID uuid = UUIDHelpers::Nil;
 
     VolumePtr volume;
@@ -592,21 +592,33 @@ public:
     UInt64 table_definition_hash = 0;       // cluster by definition hash for data file
 
     /************** Unique Table Delete Bitmap ***********/
-    /// Should be not-null once set
-    ImmutableDeleteBitmapPtr delete_bitmap;
+    mutable SharedMutex delete_bitmap_mutex;
+    using DeleteBitmapReadLock = std::shared_lock<SharedMutex>;
+    using DeleteBitmapWriteLock = std::unique_lock<SharedMutex>;
+    /// Should be not-null once set in normal case
+    mutable ImmutableDeleteBitmapPtr delete_bitmap;
     /// stored in descending order of commit time
     mutable std::forward_list<DataModelDeleteBitmapPtr> delete_bitmap_metas;
 
     void setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta, bool force_set = true) const;
 
-    void setDeleteBitmap(ImmutableDeleteBitmapPtr delete_bitmap_) { delete_bitmap = std::move(delete_bitmap_); }
+    void setDeleteBitmap(ImmutableDeleteBitmapPtr delete_bitmap_)
+    {
+        DeleteBitmapWriteLock wlock(delete_bitmap_mutex);
+        delete_bitmap = std::move(delete_bitmap_);
+    }
 
-    size_t getDeleteBitmapMetaDepth() const { return std::distance(delete_bitmap_metas.begin(), delete_bitmap_metas.end()); }
+    size_t getDeleteBitmapMetaDepth() const
+    {
+        DeleteBitmapReadLock rlock(delete_bitmap_mutex);
+        return std::distance(delete_bitmap_metas.begin(), delete_bitmap_metas.end());
+    }
 
     /// Return null if the part doesn't have delete bitmap.
     /// Otherwise load the bitmap on demand and return.
-    virtual const ImmutableDeleteBitmapPtr & getDeleteBitmap([[maybe_unused]] bool allow_null = false) const
+    virtual ImmutableDeleteBitmapPtr getDeleteBitmap([[maybe_unused]] bool allow_null = false) const
     {
+        DeleteBitmapReadLock rlock(delete_bitmap_mutex);
         return delete_bitmap;
     }
 

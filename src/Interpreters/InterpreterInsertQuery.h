@@ -55,6 +55,7 @@ public:
 
     static BlockInputStreamPtr buildInputStreamFromSource(
       const ContextPtr context_ptr,
+      const ColumnsDescription & columns, 
       const Block & sample,
       const Settings & settings,
       const String & source_uri,

@@ -134,6 +134,15 @@ void ColumnTuple::get(size_t n, Field & res) const
     res = tuple;
 }
 
+bool ColumnTuple::isDefaultAt(size_t n) const
+{
+    const size_t tuple_size = columns.size();
+    for (size_t i = 0; i < tuple_size; ++i)
+        if (!columns[i]->isDefaultAt(n))
+            return false;
+    return true;
+}
+
 StringRef ColumnTuple::getDataAt(size_t) const
 {
     throw Exception("Method getDataAt is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
@@ -263,6 +272,12 @@ ColumnPtr ColumnTuple::filter(const Filter & filt, ssize_t result_size_hint) con
         new_columns[i] = columns[i]->filter(filt, result_size_hint);
 
     return ColumnTuple::create(new_columns);
+}
+
+void ColumnTuple::expand(const Filter & mask, bool inverted)
+{
+    for (auto & column : columns)
+        column->expand(mask, inverted);
 }
 
 ColumnPtr ColumnTuple::permute(const Permutation & perm, size_t limit) const

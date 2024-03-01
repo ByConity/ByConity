@@ -120,7 +120,7 @@ void PlanReproducer::createTables(bool load_stats)
 
 void PlanReproducer::createTable(const std::string & ddl)
 {
-    ContextMutablePtr query_context = makeQueryContext({SettingChange("dialect_type", "CLICKHOUSE")}); // avoid ansi nullable issue
+    ContextMutablePtr query_context = makeQueryContext({}); // avoid ansi nullable issue
     ASTPtr ast = ReproduceUtils::parse(ddl, query_context);
     if (!ast)
     {

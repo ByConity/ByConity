@@ -178,6 +178,11 @@ void ColumnMap::get(size_t n, Field & res) const
     }
 }
 
+bool ColumnMap::isDefaultAt(size_t n) const
+{
+    return nested->isDefaultAt(n);
+}
+
 StringRef ColumnMap::getDataAt(size_t) const
 {
     throw Exception("Method getDataAt is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
@@ -256,6 +261,11 @@ ColumnPtr ColumnMap::filter(const Filter & filt, ssize_t result_size_hint) const
 {
     auto filtered = nested->filter(filt, result_size_hint);
     return ColumnMap::create(filtered);
+}
+
+void ColumnMap::expand(const IColumn::Filter & mask, bool inverted)
+{
+    nested->expand(mask, inverted);
 }
 
 ColumnPtr ColumnMap::permute(const Permutation & perm, size_t limit) const

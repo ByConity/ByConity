@@ -56,7 +56,7 @@ public:
     {
         try
         {
-            RestartAwareWriteBuffer::finalize();
+            finalize();
         }
         catch (...)
         {
@@ -64,13 +64,10 @@ public:
         }
     }
 
-    void finalize() override
+protected:
+    void finalizeImpl() override
     {
-        if (finalized)
-            return;
-
-        WriteBufferFromFileDecorator::finalize();
-
+        WriteBufferFromFileDecorator::finalizeImpl();
         lock.unlock();
     }
 

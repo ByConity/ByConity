@@ -331,7 +331,10 @@ void NestedLoopJoin::joinImpl(
                     // column from right table
                     else
                     {
-                        new_block.insert({right_col.column->filter(*filter_and_holder->data, 1), right_col.type, right_col.name});
+                        new_block.insert(
+                            {right_col.column->filter(*filter_and_holder->data, 1)->convertToFullColumnIfConst(),
+                             right_col.type,
+                             right_col.name});
                     }
                 }
             }
@@ -352,8 +355,8 @@ void NestedLoopJoin::joinImpl(
                     }
                     else
                     {
-                        auto mutable_column = IColumn::mutate(std::move(new_block.getByPosition(i).column));
-                        const auto source_column = right_col.column->filter(*filter_and_holder->data, 1);
+                        auto mutable_column = IColumn::mutate(new_block.getByPosition(i).column);
+                        const auto source_column = right_col.column->filter(*filter_and_holder->data, 1)->convertToFullColumnIfConst();
                         mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
                         new_block.getByPosition(i).column = std::move(mutable_column);
                     }

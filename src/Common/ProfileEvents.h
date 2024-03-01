@@ -74,6 +74,8 @@ namespace ProfileEvents
                 return counters_holder[event];
             }
 
+            uint64_t getIOReadTime(bool use_async_read) const;
+
         private:
             std::unique_ptr<Count[]> counters_holder;
 
@@ -105,7 +107,7 @@ namespace ProfileEvents
     };
 
     /// Increment a counter for event. Thread-safe
-    void increment(Event event, Count amount = 1);
+    void increment(Event event, Count amount = 1, Metrics::MetricType type = Metrics::None, LabelledMetrics::MetricLabels labels = {}, time_t ts = {});
 
     /// Get name of event by identifier. Returns statically allocated string.
     const char * getName(Event event);

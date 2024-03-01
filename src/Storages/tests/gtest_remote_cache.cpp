@@ -118,7 +118,7 @@ TEST_F(RemoteCacheTest, read)
         file->seek(0);
         LimitReadBuffer segment_value(*file, 26, false);
         auto key = PartFileDiskCacheSegment::getSegmentKey({"test", "test"}, "distributed_file", "", 0, DATA_FILE_EXTENSION);
-        disk_cache->set(key, segment_value, 26);
+        disk_cache->set(key, segment_value, 26, false);
 
         auto client = std::make_shared<DistributedDataClient>("127.0.0.1:12346", key);
         client->createReadStream();

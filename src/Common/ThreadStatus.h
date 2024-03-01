@@ -128,6 +128,11 @@ public:
     /// Each thread could new/delete memory in range of (-untracked_memory_limit, untracked_memory_limit) without access to common counters.
     Int64 untracked_memory_limit = 4 * 1024 * 1024;
 
+    /// Set this flag if the date is truncated due to overflow (out of range) during deserialization
+    /// Used under mysql dialect for convert overflow to null
+    /// TODO(fredwang) remove this flag --- return the flag from the date deserialization/parsing functions directly.
+    bool has_truncated_date {false};
+
     /// Statistics of read and write rows/bytes
     Progress progress_in;
     Progress progress_out;

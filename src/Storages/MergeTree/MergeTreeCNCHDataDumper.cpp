@@ -29,16 +29,24 @@
 #include <Common/filesystemHelpers.h>
 #include <common/logger_useful.h>
 #include <Common/escapeForFileName.h>
+#include <metric_helper.h>
+#include <DataTypes/Serializations/ISerialization.h>
 #include <Core/UUID.h>
 #include <IO/WriteSettings.h>
 #include <Storages/IStorage.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <DataTypes/Serializations/ISerialization.h>
 
 #include <chrono>
 #include <filesystem>
 #include <memory>
 #include <utility>
+
+namespace ProfileEvents
+{
+    extern const Event CnchDumpParts;
+    extern const Event CnchDumpPartsElapsedMilliseconds;
+    extern const Event CnchDumpPartsBytes;
+}
 
 namespace DB
 {
@@ -135,6 +143,12 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     const DiskPtr & remote_disk,
     bool is_temp_prefix) const
 {
+    ProfileEvents::increment(ProfileEvents::CnchDumpParts);
+    Stopwatch watch;
+    SCOPE_EXIT({
+        ProfileEvents::increment(ProfileEvents::CnchDumpPartsElapsedMilliseconds, watch.elapsedMilliseconds(), Metrics::MetricType::Timer);
+    });
+
     const String TMP_PREFIX = "tmp_dump_";
     MergeTreePartInfo new_part_info(
         local_part->info.partition_id,
@@ -277,6 +291,10 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         write_settings.file_meta.insert(std::pair<String, String>(S3ObjectMetadata::PART_GENERATOR_ID, generator_id.str()));
 
         auto data_out = disk->writeFile(data_file_rel_path, write_settings);
+        SCOPE_EXIT({
+            if (data_out)
+                ProfileEvents::increment(ProfileEvents::CnchDumpPartsBytes, data_out->count(), Metrics::MetricType::Rate);
+        });
 
         writeDataFileHeader(*data_out, new_part);
 
@@ -409,8 +427,8 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                             meta_info_offset, meta_info_size, meta_info_hash,
                             static_cast<off_t>(uki_checksum.file_offset), uki_checksum.file_size, uki_checksum.file_hash};
         writeDataFileFooter(*data_out, meta);
-        data_out->next();
         data_out->sync();
+        data_out->finalize();
     }
 
     size_t bytes_on_disk = check(new_part, new_part->checksums_ptr, meta);
