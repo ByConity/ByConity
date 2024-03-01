@@ -1476,7 +1476,14 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
     IFunctionBase::Monotonicity & monotonicity_
 ) const
 {
-    //1. parition key has only one column && column in sorting key
+    //1. has limit
+    const ASTSelectQuery & select = query_info_.query->as<ASTSelectQuery &>();
+    if (!select.limitLength())
+    {
+        return false;
+    }
+
+    //2. parition key has only one column && column in sorting key
     const auto & partition_key = metadata_for_reading->getPartitionKey();
     Names sorting_key_columns = metadata_for_reading->getSortingKeyColumns();
     sorting_key_columns.resize(input_order_info_->order_key_prefix_descr.size());
@@ -1511,9 +1518,8 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
         return false;
     }
 
-    //2. partition key is the first range filter
+    //3. partition key is the first range filter
     ASTPtr ast;
-    const ASTSelectQuery & select = query_info_.query->as<ASTSelectQuery &>();
     if (select.where() && select.prewhere())
     {
         ast = makeASTFunction("and", select.prewhere()->clone(), select.where()->clone());
@@ -1545,7 +1551,7 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
         return false;
     }
 
-    //3. partition key is monotonic
+    //4. partition key is monotonic
     auto query_clone = query_info.query->clone();
     auto get_block_with_constants = [](const ASTPtr & query_, const TreeRewriterResultPtr & syntax_analyzer_result_, ContextPtr context_) {
         Block result
