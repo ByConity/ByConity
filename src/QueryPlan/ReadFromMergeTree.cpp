@@ -1714,7 +1714,7 @@ std::map<String, std::vector<std::pair<String, Field>>> ReadFromMergeTree::colle
     }
     else if (func_names_.find(func->name) != func_names_.end())
     {
-        auto p = collectEqualRangeClause(ast_, func_names_);
+        auto p = collectEqualClause(ast_, func_names_);
         if (!p.first.empty())
         {
             LOG_ERROR(logger, "name {} condition {}", p.first, p.second.first);
@@ -1725,7 +1725,7 @@ std::map<String, std::vector<std::pair<String, Field>>> ReadFromMergeTree::colle
     return res;
 }
 
-std::pair<String, std::pair<String, Field>> ReadFromMergeTree::collectEqualRangeClause(
+std::pair<String, std::pair<String, Field>> ReadFromMergeTree::collectEqualClause(
     const ASTPtr & ast_, 
     const std::set<String> & func_names_) const
 {

@@ -232,7 +232,7 @@ private:
         const std::set<String> & func_names_
     ) const;
 
-    std::pair<String, std::pair<String, Field>> collectEqualRangeClause(
+    std::pair<String, std::pair<String, Field>> collectEqualClause(
         const ASTPtr & ast_, 
         const std::set<String> & func_names_
     ) const;
