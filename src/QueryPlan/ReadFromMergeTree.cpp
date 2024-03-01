@@ -492,8 +492,6 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
     const InputOrderInfoPtr & input_order_info,
     const IFunctionBase::Monotonicity & monotonicity)
 {
-    auto logger = &Poco::Logger::get("ReadFromMergeTree");
-
     if ((input_order_info->direction == 1 && monotonicity.is_positive) 
         || (input_order_info->direction == -1 && !monotonicity.is_positive))
     {
@@ -519,7 +517,6 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
     std::vector<std::pair<Field, RangesInDataParts>> partition_ranges;
     for (size_t i = 0; i < parts_with_ranges.size(); i++)
     {
-        LOG_ERROR(logger, "pos {} value {}", i, parts_with_ranges[i].data_part->partition.value.begin()->dump());
         if (!partition_ranges.empty() 
             && applyVisitor(
                 FieldVisitorAccurateEquals(), 
