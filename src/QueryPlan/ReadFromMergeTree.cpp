@@ -1479,8 +1479,6 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
     IFunctionBase::Monotonicity & monotonicity_
 ) const
 {
-    auto logger = &Poco::Logger::get("ReadFromMergeTree");
-
     //1. parition key has only one column && column in sorting key
     const auto & partition_key = metadata_for_reading->getPartitionKey();
     Names sorting_key_columns = metadata_for_reading->getSortingKeyColumns();
@@ -1491,8 +1489,6 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
         partition_names = partition_key.expression->getRequiredColumns();
     if (partition_key.column_names.size() != 1 || partition_names.size() != 1)
     {
-        LOG_ERROR(logger, "partition_key.column_names.size() {} partition_names.size() {}", 
-            partition_key.column_names.size(), partition_names.size());
         return false;
     }
     
@@ -1500,8 +1496,6 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
     {
         if (sorting_key_columns[i] != input_order_info_->order_key_prefix_descr[i].column_name)
         {
-            LOG_ERROR(logger, "sorting_key_columns[i] {} input_order_info_->order_key_prefix_descr[i].column_name {}",
-                sorting_key_columns[i], input_order_info_->order_key_prefix_descr[i].column_name);
             return false;
         }
     }
@@ -1517,7 +1511,6 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
     }
     if (partition_key_idx == -1)
     {
-        LOG_ERROR(logger, "partition_key_idx {}", partition_key_idx);
         return false;
     }
 
@@ -1552,15 +1545,6 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
     }
     if (!variable_before_partition_key_are_all_equals)
     {
-        for (const auto & item : predicates)
-        {
-            for (const auto & cond : item.second)
-            {
-                LOG_ERROR(logger, "key {} condition {}", item.first, cond.first);
-            }
-        }
-        LOG_ERROR(logger, "variable_before_partition_key_are_all_equals {}", 
-            variable_before_partition_key_are_all_equals);
         return false;
     }
 
@@ -1579,18 +1563,12 @@ bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
     };
 
     auto block_with_constants = get_block_with_constants(partition_key.expression_list_ast, query_info.syntax_analyzer_result, context);
-    for (const auto & item : block_with_constants.getNames())
-    {
-        LOG_ERROR(logger, "const column {}", item);
-    }
     int monotonic_ret = getPartitionMonotonicity(partition_key, block_with_constants, partition_names[0], monotonicity_);
     if (monotonic_ret != 0)
     {
-        LOG_ERROR(logger, "monotonic_ret {}", monotonic_ret);
         return false;
     }
 
-    LOG_ERROR(logger, "is_monotonic {} is_positive {}",  monotonicity_.is_monotonic,  monotonicity_.is_positive);
     return monotonicity_.is_monotonic;
 }
 
@@ -1601,8 +1579,6 @@ int ReadFromMergeTree::getPartitionMonotonicity(
     IFunctionBase::Monotonicity & monotonicity_
 ) const
 {
-    auto logger = &Poco::Logger::get("ReadFromMergeTree");
-
     const auto & actions = partition_key_.expression->getActions();
 
     auto is_const_node = [](Block & block_with_constants, const ActionsDAG::Node * node){
@@ -1659,9 +1635,6 @@ int ReadFromMergeTree::getPartitionMonotonicity(
             if (action.node->children.at(key_arg_pos)->result_name != partition_column_
                 || !is_const_node(block_with_constants_, action.node->children.at(key_arg_pos == 0 ? 1 : 0)))
             {
-                LOG_ERROR(logger, "partition_column_ {} action.node->children.at(key_arg_pos)->result_name {} another arg {}",
-                    partition_column_, action.node->children.at(key_arg_pos)->result_name, 
-                    action.node->children.at(key_arg_pos == 0 ? 1 : 0)->result_name);
                 return -5;
             }
         }
@@ -1686,9 +1659,6 @@ std::map<String, std::vector<std::pair<String, Field>>> ReadFromMergeTree::colle
 {
     std::map<String, std::vector<std::pair<String, Field>>> res;
 
-    auto logger = &Poco::Logger::get("ReadFromMergeTree");
-
-    LOG_ERROR(logger, "ast query {}", ast_->getColumnName());
     if (!ast_)
         return res;
 
@@ -1708,7 +1678,6 @@ std::map<String, std::vector<std::pair<String, Field>>> ReadFromMergeTree::colle
                 {
                     for (const auto & second: first.second)
                     {
-                        LOG_ERROR(logger, "name {} condition {}", first.first, second.first);
                         res[first.first].push_back(second);
                     }
                 }
@@ -1720,7 +1689,6 @@ std::map<String, std::vector<std::pair<String, Field>>> ReadFromMergeTree::colle
         auto p = collectEqualClause(ast_, func_names_);
         if (!p.first.empty())
         {
-            LOG_ERROR(logger, "name {} condition {}", p.first, p.second.first);
             res[p.first].push_back(p.second);
         }
     }
@@ -1736,13 +1704,9 @@ std::pair<String, std::pair<String, Field>> ReadFromMergeTree::collectEqualClaus
     if (!ast_)
         return res;
 
-    auto logger = &Poco::Logger::get("ReadFromMergeTree");
-
     ASTFunction * func = ast_->as<ASTFunction>();
     if (!func)
         return res;
-
-    LOG_ERROR(logger, "start visit {} column name {}", func->name, func->getColumnName());
 
     if (func_names_.find(func->name) == func_names_.end())
         return res;
