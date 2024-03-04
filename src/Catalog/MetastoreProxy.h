@@ -916,6 +916,7 @@ public:
     IMetaStore::IteratorPtr getAllUDFsMeta(const String & name_space, const String & database_name = "");
     Strings getUDFsMetaByName(const String & name_space, const std::unordered_set<String> &function_names);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getAllTablesId(const String & name_space, const String & db = "");
+    std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesIdByPrefix(const String & name_space, const String & prefix = "");
     Strings getAllDependence(const String & name_space, const String & uuid);
     IMetaStore::IteratorPtr getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTrashTableID(const String & name_space);
@@ -943,6 +944,7 @@ public:
     IMetaStore::IteratorPtr getPartsInRange(const String & name_space, const String & table_uuid, const String & range_start, const String & range_end, bool include_start, bool include_end);
     void dropDataPart(const String & name_space, const String & uuid, const String & part_name);
     void dropAllPartInTable(const String & name_space, const String & uuid);
+    void dropAllMutationsInTable(const String & name_space, const String & uuid);
 
     /// scan staged parts
     IMetaStore::IteratorPtr getStagedParts(const String & name_space, const String & uuid);

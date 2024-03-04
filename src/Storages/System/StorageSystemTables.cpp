@@ -33,6 +33,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/queryToString.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/typeid_cast.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -90,14 +91,24 @@ StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
 static ColumnPtr getFilteredDatabases(const SelectQueryInfo & query_info, ContextPtr context)
 {
     MutableColumnPtr column = ColumnString::create();
+    String tenant_id = context->getTenantId();
 
     const auto databases = DatabaseCatalog::instance().getDatabases(context);
     for (const auto & database_name : databases | boost::adaptors::map_keys)
     {
+        String database_strip_tenantid = database_name;
         if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
             continue; /// We don't want to show the internal database for temporary tables in system.tables
 
-        column->insert(database_name);
+        if (!tenant_id.empty())
+        {
+            if (startsWith(database_name, tenant_id + "."))
+                database_strip_tenantid = getOriginalDatabaseName(database_name, tenant_id);
+            // Will skip database of other tenants.
+            else if (database_name.find(".") != std::string::npos)
+                continue;
+        }
+        column->insert(database_strip_tenantid);
     }
 
     Block block { ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), "database") };
@@ -303,7 +314,7 @@ protected:
                     else
                     {
                         if (!cnch_tables_snapshot)
-                            cnch_tables_snapshot = context->getCnchCatalog()->getAllTables();
+                            loadCnchTableSnapshot();
                         tables_it = cnch_db->getTablesIteratorWithCommonSnapshot(context, *cnch_tables_snapshot);
                     }
                 }
@@ -549,6 +560,23 @@ protected:
         UInt64 num_rows = res_columns.at(0)->size();
         return Chunk(std::move(res_columns), num_rows);
     }
+
+    void loadCnchTableSnapshot()
+    {
+        String tenant_id = context->getTenantId();
+        // speed up table scan if the tenant only owns few tables.
+        if (!tenant_id.empty())
+        {
+            auto tableIDs = context->getCnchCatalog()->getTablesIDByTenant(tenant_id);
+            if (tableIDs.size() <= context->getSettingsRef().scan_all_table_threshold)
+            {
+                cnch_tables_snapshot = context->getCnchCatalog()->getTablesByIDs(tableIDs);
+                return;
+            }
+        }
+        cnch_tables_snapshot = context->getCnchCatalog()->getAllTables();
+    }
+
 private:
     std::vector<UInt8> columns_mask;
     UInt64 max_block_size;

@@ -1005,7 +1005,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                     log_,
                     index_time_watcher
                 );
-                
+
                 (*filter_bitmap) |= tmp_filter_bitmap;
 
                 index_and_condition.total_granules.fetch_add(total_granules, std::memory_order_relaxed);
@@ -1210,14 +1210,14 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
         // Compute sampled size
         size_t marks_size = range.end - range.begin;
         UInt64 sampled_size;
-        if (ensure_one_mark_in_part_when_sample_by_range) 
+        if (ensure_one_mark_in_part_when_sample_by_range)
         {
             // old logic to ensure at least one mark is sample in this part
             // keep it as default mode
             RelativeSize total_size = RelativeSize(marks_size);
             sampled_size = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * total_size + RelativeSize(1)));
-        } 
-        else 
+        }
+        else
         {
             // new logic will sample part
             // and make sure that the number of rows sampled meets the expected value

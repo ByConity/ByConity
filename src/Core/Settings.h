@@ -1089,6 +1089,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
     M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \
     M(String, mutation_query_id, "", "Used to overwrite mutation's query id in tests", 0) \
+    M(Bool, system_mutations_only_basic_info, false, "Only return basic information that stored in KV. It avoid acquiring merge thread of tables", 0) \
     M(Bool, enable_lightweight_delete, true, "Enable lightweight DELETE for mergetree tables.", 0) \
     M(Bool, optimize_move_functions_out_of_any, false, "Move functions out of aggregate functions 'any', 'anyLast'.", 0) \
     M(Bool, optimize_normalize_count_variants, true, "Rewrite aggregate functions that semantically equals to count() as count().", 0) \
@@ -1435,6 +1436,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, force_grouping_standard_compatibility, true, "Make GROUPING function to return 1 when argument is not used as an aggregation key", 0) \
     M(Bool, disable_optimize_final, true, "Disable optimize final command", 0) \
     M(Milliseconds, brpc_data_parts_timeout_ms, 30000, "Timeout for transmitting data parts in brpc", 0) \
+    M(UInt64, scan_all_table_threshold, 20, "The upper limit to avoid scan all tables in some system tables, like tables and cnch_tables.", 0) \
     /** Settings for hive */ \
     M(Bool, use_hive_metastore_filter, true, "", 0) \
     M(Bool, use_hive_cluster_key_filter, true, "", 0) \

@@ -401,7 +401,7 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
 {
     if (!metadata_snapshot->hasUniqueKey())
         return FilterInfo{};
-
+    
     const ColumnWithTypeAndName * version_column = nullptr;
     if (metadata_snapshot->hasUniqueKey() && storage.merging_params.hasExplicitVersionColumn())
         version_column = &block.getByName(storage.merging_params.version_column);
