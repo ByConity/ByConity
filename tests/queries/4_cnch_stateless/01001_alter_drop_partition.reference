@@ -1,0 +1,12 @@
+------ WRONG PARTITION ID, DROP NOTHING ------
+1
+------ DROP PARTITION ID 20240101-1 ------
+0
+------ WRONG PARTITION, DROP NOTHING ------
+4
+------ DROP PARTITION (20240101, 2) ------
+3
+------ FINAL STATE ------
+0
+3
+4

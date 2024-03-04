@@ -143,6 +143,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
         if (dynamic_cast<const StorageView *>(view_table.get()))
            continue;
 
+        Block output_header;
         if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(view_table.get()))
         {
             addTableLock(
@@ -166,6 +167,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
                 auto target_metadata_snapshot = cnch_target_table->getInMemoryMetadataPtr();
                 bool enable_staging_area = target_metadata_snapshot->hasUniqueKey() && bool(getContext()->getSettingsRef().enable_staging_area_for_write);
                 out = std::make_shared<CloudMergeTreeBlockOutputStream>(*cnch_target_table, target_metadata_snapshot, insert_context, enable_staging_area);
+                output_header = target_metadata_snapshot->getSampleBlockNonMaterialized(true);
             }
             else
             {
@@ -179,13 +181,12 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
                 auto header = InterpreterSelectQuery(query, select_context, SelectQueryOptions().analyze())
                     .getSampleBlock();
 
-                /// Insert only columns returned by select.
+                /// Select columns without materialized columns and columns function of uniq merge tree.
                 auto list = std::make_shared<ASTExpressionList>();
-                const auto & target_table_columns = target_metadata_snapshot->getColumns();
+                const auto & target_table_columns = target_metadata_snapshot->getSampleBlockNonMaterialized(true);
                 for (const auto & column : header)
                 {
-                    /// But skip columns which storage doesn't have.
-                    if (target_table_columns.hasPhysical(column.name))
+                    if (target_table_columns.has(column.name))
                         list->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
                 }
 
@@ -194,16 +195,22 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
                 InterpreterInsertQuery interpreter(insert_query_ptr, insert_context);
                 BlockIO io = interpreter.execute();
                 out = io.out;
+                output_header = out->getHeader();
             }
         }
         else if (dynamic_cast<const StorageLiveView *>(view_table.get()))
+        {
             out = std::make_shared<PushingToViewsBlockOutputStream>(
                 view_table, dependent_metadata_snapshot, insert_context, ASTPtr(), true);
+            output_header = dependent_metadata_snapshot->getSampleBlockNonMaterialized(true);
+        }
         else
-            out = std::make_shared<PushingToViewsBlockOutputStream>(
-                view_table, dependent_metadata_snapshot, insert_context, ASTPtr());
+        {
+            out = std::make_shared<PushingToViewsBlockOutputStream>(view_table, dependent_metadata_snapshot, insert_context, ASTPtr());
+            output_header = dependent_metadata_snapshot->getSampleBlockNonMaterialized(true);
+        }
 
-        views.emplace_back(ViewInfo{std::move(query), database_table, std::move(out), nullptr, 0});
+        views.emplace_back(ViewInfo{std::move(query), database_table, std::move(out), nullptr, 0, output_header});
     }
 
     /// Do not push to destination table if the flag is set
@@ -532,7 +539,7 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
             /// and two-level aggregation is triggered).
             in = std::make_shared<SquashingBlockInputStream>(
                     in, getContext()->getSettingsRef().min_insert_block_size_rows, getContext()->getSettingsRef().min_insert_block_size_bytes);
-            in = std::make_shared<ConvertingBlockInputStream>(in, view.out->getHeader(), ConvertingBlockInputStream::MatchColumnsMode::Name);
+            in = std::make_shared<ConvertingBlockInputStream>(in, view.output_header ? view.output_header : view.out->getHeader(), ConvertingBlockInputStream::MatchColumnsMode::Name);
         }
         else
             in = std::make_shared<OneBlockInputStream>(block);
