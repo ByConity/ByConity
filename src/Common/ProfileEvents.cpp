@@ -680,6 +680,8 @@
     M(GetDatabaseInTrashFailed, "") \
     M(GetAllTablesIDSuccess, "") \
     M(GetAllTablesIDFailed, "") \
+    M(GetTablesIDByTenantSuccess, "") \
+    M(GetTablesIDByTenantFailed, "") \
     M(GetTableIDByNameSuccess, "") \
     M(GetTableIDByNameFailed, "") \
     M(GetTableIDsByNamesSuccess, "") \

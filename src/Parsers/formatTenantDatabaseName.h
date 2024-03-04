@@ -30,6 +30,8 @@ bool isTenantMatchedEntityName(const String & tenant_entity_name);
 
 String getOriginalDatabaseName(const String & tenant_database_name);
 
+String getOriginalDatabaseName(const String & tenant_database_name, const String & tenant_id);
+
 void pushTenantId(const String &tenant_id);
 
 void popTenantId();

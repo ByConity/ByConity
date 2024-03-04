@@ -512,6 +512,7 @@ public:
     DataModelDBs getDatabaseInTrash();
 
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getAllTablesID(const String & db = "");
+    std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesIDByTenant(const String & tenant_id);
 
     std::shared_ptr<Protos::TableIdentifier> getTableIDByName(const String & db, const String & table);
     std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> getTableIDsByNames(const std::vector<std::pair<String, String>> & db_table_pairs);
@@ -527,6 +528,7 @@ public:
     void clearDataPartsMeta(const StoragePtr & storage, const DataPartsVector & parts, const bool skip_part_cache = false);
     void clearStagePartsMeta(const StoragePtr & storage, const ServerDataPartsVector & parts);
     void clearDataPartsMetaForTable(const StoragePtr & table);
+    void clearMutationEntriesForTable(const StoragePtr & storage);
     void clearDeleteBitmapsMetaForTable(const StoragePtr & table);
 
     /**

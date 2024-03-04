@@ -315,6 +315,8 @@ namespace ProfileEvents
     extern const Event GetDatabaseInTrashFailed;
     extern const Event GetAllTablesIDSuccess;
     extern const Event GetAllTablesIDFailed;
+    extern const Event GetTablesIDByTenantSuccess;
+    extern const Event GetTablesIDByTenantFailed;
     extern const Event GetTableIDByNameSuccess;
     extern const Event GetTableIDByNameFailed;
     extern const Event GetTableIDsByNamesSuccess;
@@ -1258,7 +1260,9 @@ namespace Catalog
                 auto table_id = meta_proxy->getTableID(name_space, database, name);
 
                 if (!table_id)
+                {
                     throw Exception("Table not found: " + database + "." + name, ErrorCodes::UNKNOWN_TABLE);
+                }
 
 
                 auto cache_manager = context.getPartCacheManager();
@@ -1281,9 +1285,11 @@ namespace Catalog
                 auto table = tryGetTableFromMetastore(table_id->uuid(), ts.toUInt64(), true);
 
                 if (!table)
+                {
                     throw Exception(
                         "Cannot get metadata of table " + database + "." + name + " by UUID : " + table_id->uuid(),
                         ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+                }
 
                 res = createTableFromDataModel(query_context, *table);
 
@@ -3851,6 +3857,16 @@ namespace Catalog
         return res;
     }
 
+    std::vector<std::shared_ptr<Protos::TableIdentifier>> Catalog::getTablesIDByTenant(const String & tenant_id)
+    {
+        std::vector<std::shared_ptr<Protos::TableIdentifier>> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getTablesIdByPrefix(name_space, tenant_id + "."); },
+            ProfileEvents::GetTablesIDByTenantSuccess,
+            ProfileEvents::GetTablesIDByTenantFailed);
+        return res;
+    }
+
     std::shared_ptr<Protos::TableIdentifier> Catalog::getTableIDByName(const String & db, const String & table)
     {
         std::shared_ptr<Protos::TableIdentifier> res;
@@ -4048,6 +4064,19 @@ namespace Catalog
             },
             ProfileEvents::ClearDataPartsMetaForTableSuccess,
             ProfileEvents::ClearDataPartsMetaForTableFailed);
+    }
+
+    void Catalog::clearMutationEntriesForTable(const StoragePtr & storage)
+    {
+        runWithMetricSupport(
+            [&] {
+                LOG_INFO(log, "Start clear all mutation entries for table: {}", storage->getStorageID().getNameForLogs());
+                meta_proxy->dropAllMutationsInTable(name_space, UUIDHelpers::UUIDToString(storage->getStorageUUID()));
+                LOG_INFO(log, "Finish clear all mutation entries for table: {}", storage->getStorageID().getNameForLogs());
+            },
+            ProfileEvents::ClearDataPartsMetaForTableSuccess,
+            ProfileEvents::ClearDataPartsMetaForTableFailed);
+
     }
 
     void Catalog::clearDeleteBitmapsMetaForTable(const StoragePtr & storage)

@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include "Storages/HDFS/ReadBufferFromByteHDFS.h"
 
 #if USE_HDFS
 
