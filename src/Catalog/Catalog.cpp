@@ -4050,6 +4050,19 @@ namespace Catalog
             ProfileEvents::ClearDataPartsMetaForTableFailed);
     }
 
+    void Catalog::clearMutationEntriesForTable(const StoragePtr & storage)
+    {
+        runWithMetricSupport(
+            [&] {
+                LOG_INFO(log, "Start clear all mutation entries for table: {}", storage->getStorageID().getNameForLogs());
+                meta_proxy->dropAllMutationsInTable(name_space, UUIDHelpers::UUIDToString(storage->getStorageUUID()));
+                LOG_INFO(log, "Finish clear all mutation entries for table: {}", storage->getStorageID().getNameForLogs());
+            },
+            ProfileEvents::ClearDataPartsMetaForTableSuccess,
+            ProfileEvents::ClearDataPartsMetaForTableFailed);
+
+    }
+
     void Catalog::clearDeleteBitmapsMetaForTable(const StoragePtr & storage)
     {
         runWithMetricSupport(

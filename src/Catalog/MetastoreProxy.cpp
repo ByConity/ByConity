@@ -895,6 +895,12 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
     metastore_ptr->clean(tableTrashItemsMetricsSnapshotPrefix(name_space, uuid));
 }
 
+void MetastoreProxy::dropAllMutationsInTable(const String & name_space, const String & uuid)
+{
+    /// clear mutations metadata
+    metastore_ptr->clean(tableMutationPrefix(name_space, uuid));
+}
+
 void MetastoreProxy::dropAllDeleteBitmapInTable(const String & name_space, const String & uuid)
 {
     /// clear delete bitmaps metadata
