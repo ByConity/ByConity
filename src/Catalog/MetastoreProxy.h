@@ -943,6 +943,7 @@ public:
     IMetaStore::IteratorPtr getPartsInRange(const String & name_space, const String & table_uuid, const String & range_start, const String & range_end, bool include_start, bool include_end);
     void dropDataPart(const String & name_space, const String & uuid, const String & part_name);
     void dropAllPartInTable(const String & name_space, const String & uuid);
+    void dropAllMutationsInTable(const String & name_space, const String & uuid);
 
     /// scan staged parts
     IMetaStore::IteratorPtr getStagedParts(const String & name_space, const String & uuid);

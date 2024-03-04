@@ -527,6 +527,7 @@ public:
     void clearDataPartsMeta(const StoragePtr & storage, const DataPartsVector & parts, const bool skip_part_cache = false);
     void clearStagePartsMeta(const StoragePtr & storage, const ServerDataPartsVector & parts);
     void clearDataPartsMetaForTable(const StoragePtr & table);
+    void clearMutationEntriesForTable(const StoragePtr & storage);
     void clearDeleteBitmapsMetaForTable(const StoragePtr & table);
 
     /**
