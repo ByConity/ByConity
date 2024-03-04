@@ -1258,7 +1258,9 @@ namespace Catalog
                 auto table_id = meta_proxy->getTableID(name_space, database, name);
 
                 if (!table_id)
+                {
                     throw Exception("Table not found: " + database + "." + name, ErrorCodes::UNKNOWN_TABLE);
+                }
 
 
                 auto cache_manager = context.getPartCacheManager();
@@ -1281,9 +1283,11 @@ namespace Catalog
                 auto table = tryGetTableFromMetastore(table_id->uuid(), ts.toUInt64(), true);
 
                 if (!table)
+                {
                     throw Exception(
                         "Cannot get metadata of table " + database + "." + name + " by UUID : " + table_id->uuid(),
                         ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+                }
 
                 res = createTableFromDataModel(query_context, *table);
 
