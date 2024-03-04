@@ -3212,8 +3212,11 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     auto metadata_snapshot = getInMemoryMetadataPtr();
     auto storage_snapshot = getStorageSnapshot(metadata_snapshot, local_context);
     /// So this step will throws if WHERE expression contains columns not in partition key, and it's a good thing
-    TreeRewriterResult syntax_analyzer_result(
-        metadata_snapshot->partition_key.sample_block.getNamesAndTypesList(), shared_from_this(), storage_snapshot, true);
+    auto source_columns = metadata_snapshot->partition_key.sample_block.getNamesAndTypesList();
+    source_columns.push_back(NameAndTypePair("_part", std::make_shared<DataTypeString>()));
+    source_columns.push_back(NameAndTypePair("_partition_id", std::make_shared<DataTypeString>()));
+    source_columns.push_back(NameAndTypePair("_partition_value", getPartitionValueType()));
+    TreeRewriterResult syntax_analyzer_result(source_columns, {}, storage_snapshot, true);
     auto analyzed_result = TreeRewriter(local_context).analyzeSelect(query, std::move(syntax_analyzer_result));
     query_info.query = std::move(query);
     query_info.syntax_analyzer_result = std::move(analyzed_result);
