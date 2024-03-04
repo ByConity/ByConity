@@ -315,6 +315,8 @@ namespace ProfileEvents
     extern const Event GetDatabaseInTrashFailed;
     extern const Event GetAllTablesIDSuccess;
     extern const Event GetAllTablesIDFailed;
+    extern const Event GetTablesIDByTenantSuccess;
+    extern const Event GetTablesIDByTenantFailed;
     extern const Event GetTableIDByNameSuccess;
     extern const Event GetTableIDByNameFailed;
     extern const Event GetTableIDsByNamesSuccess;
@@ -3852,6 +3854,16 @@ namespace Catalog
             [&] { res = meta_proxy->getAllTablesId(name_space, db); },
             ProfileEvents::GetAllTablesIDSuccess,
             ProfileEvents::GetAllTablesIDFailed);
+        return res;
+    }
+
+    std::vector<std::shared_ptr<Protos::TableIdentifier>> Catalog::getTablesIDByTenant(const String & tenant_id)
+    {
+        std::vector<std::shared_ptr<Protos::TableIdentifier>> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getTablesIdByPrefix(name_space, tenant_id + "."); },
+            ProfileEvents::GetTablesIDByTenantSuccess,
+            ProfileEvents::GetTablesIDByTenantFailed);
         return res;
     }
 

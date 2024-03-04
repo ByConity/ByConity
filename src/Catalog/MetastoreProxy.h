@@ -916,6 +916,7 @@ public:
     IMetaStore::IteratorPtr getAllUDFsMeta(const String & name_space, const String & database_name = "");
     Strings getUDFsMetaByName(const String & name_space, const std::unordered_set<String> &function_names);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getAllTablesId(const String & name_space, const String & db = "");
+    std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesIdByPrefix(const String & name_space, const String & prefix = "");
     Strings getAllDependence(const String & name_space, const String & uuid);
     IMetaStore::IteratorPtr getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTrashTableID(const String & name_space);

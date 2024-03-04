@@ -225,7 +225,11 @@ String getOriginalEntityName(const String & tenant_entity_name)
 // {tenant_id}.{original_database_name}
 String getOriginalDatabaseName(const String & tenant_database_name)
 {
-    auto tenant_id = getTenantId();
+    return getOriginalDatabaseName(tenant_database_name, getTenantId());
+}
+
+String getOriginalDatabaseName(const String & tenant_database_name, const String & tenant_id)
+{
     if (!tenant_id.empty())
     {
         auto size = tenant_id.size();

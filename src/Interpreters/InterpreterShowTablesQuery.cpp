@@ -63,7 +63,6 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
 String InterpreterShowTablesQuery::getRewrittenQueryImpl()
 {
     const auto & query = query_ptr->as<ASTShowTablesQuery &>();
-
     /// SHOW DATABASES
     if (query.databases)
     {
@@ -72,35 +71,17 @@ String InterpreterShowTablesQuery::getRewrittenQueryImpl()
             return rewriteShowDatabaseForExternal(query, current_catalog);
         }
         WriteBufferFromOwnString rewritten_query;
-        const auto & tenant_id = getContext()->getTenantId();
-        if (!tenant_id.empty())
-        {
-            if (query.history)
-                rewritten_query << "SELECT arrayStringConcat(arraySlice(splitByChar('.',name), 2),'.') AS name, uuid, delete_time FROM "
-                                   "system.cnch_databases_history";
-            else
-                rewritten_query << "SELECT arrayStringConcat(arraySlice(splitByChar('.',name), 2),'.') AS name FROM system.databases";
-        }
-        else
-        {
-            if (query.history)
-                rewritten_query << "SELECT name, uuid, delete_time FROM system.cnch_databases_history";
-            else
-                rewritten_query << "SELECT name FROM system.databases";
-        }
 
+        if (query.history)
+            rewritten_query << "SELECT name, uuid, delete_time FROM system.cnch_databases_history";
+        else
+            rewritten_query << "SELECT name FROM system.databases";
 
         if (!query.like.empty())
         {
             rewritten_query << " WHERE " << (query.history ? "system.cnch_databases_history.name " : "system.databases.name ")
                             << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ") << DB::quote
                             << query.like;
-        }
-        if (!tenant_id.empty())
-        {
-            rewritten_query << (!query.like.empty() ? " AND " : " WHERE ")
-                            << (query.history ? "system.cnch_databases_history.name " : "system.databases.name ") << "LIKE '" << tenant_id
-                            << ".%'";
         }
 
         if (query.limit_length)
@@ -216,7 +197,7 @@ String InterpreterShowTablesQuery::getRewrittenQueryImpl()
         rewritten_query << "is_temporary";
     }
     else
-        rewritten_query << "database = " << DB::quote << database;
+        rewritten_query << "database = " << DB::quote << ((query.dictionaries || query.snapshots) ? database : getOriginalDatabaseName(database));
 
     if (!query.like.empty())
         rewritten_query << " AND name " << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ") << DB::quote

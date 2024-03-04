@@ -512,6 +512,7 @@ public:
     DataModelDBs getDatabaseInTrash();
 
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getAllTablesID(const String & db = "");
+    std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesIDByTenant(const String & tenant_id);
 
     std::shared_ptr<Protos::TableIdentifier> getTableIDByName(const String & db, const String & table);
     std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> getTableIDsByNames(const std::vector<std::pair<String, String>> & db_table_pairs);

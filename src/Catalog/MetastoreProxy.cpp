@@ -463,8 +463,14 @@ Strings MetastoreProxy::getUDFsMetaByName(const String & name_space, const std::
 
 std::vector<std::shared_ptr<Protos::TableIdentifier>> MetastoreProxy::getAllTablesId(const String & name_space, const String & db)
 {
+    return getTablesIdByPrefix(name_space, db.empty() ? escapeString(db) : escapeString(db) + "_");
+}
+
+std::vector<std::shared_ptr<Protos::TableIdentifier>> MetastoreProxy::getTablesIdByPrefix(const String & name_space, const String & prefix)
+{
     std::vector<std::shared_ptr<Protos::TableIdentifier>> res;
-    auto it = metastore_ptr->getByPrefix(tableUUIDMappingPrefix(name_space, db));
+    String meta_prefix = tableUUIDMappingPrefix(name_space) + prefix;
+    auto it = metastore_ptr->getByPrefix(meta_prefix);
     while(it->next())
     {
         std::shared_ptr<Protos::TableIdentifier> identifier_ptr(new Protos::TableIdentifier());
