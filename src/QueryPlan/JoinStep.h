@@ -177,6 +177,7 @@ public:
     JoinPtr makeJoin(
         ContextPtr context,
         std::shared_ptr<RuntimeFilterConsumer> && consumer,
+        size_t num_streams,
         ExpressionActionsPtr filter_action,
         String filter_column_name);
 

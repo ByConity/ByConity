@@ -1463,11 +1463,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     M(UInt64, grace_hash_join_initial_buckets, 1, "Initial number of grace hash join buckets", 0) \
     M(UInt64, grace_hash_join_max_buckets, 1024, "Limit on the number of grace hash join buckets", 0) \
-    M(UInt64, \
-      filesystem_cache_max_download_size, \
-      (128UL * 1024 * 1024 * 1024), \
-      "Max remote filesystem cache size that can be downloaded by a single query", \
-      0) \
+    M(UInt64, grace_hash_join_left_side_parallel, 1, "Initial number of grace hash join left side parallel", 0) \
+    M(UInt64, grace_hash_join_read_result_block_size, 65536, "Initial number of grace hash join left side parallel", 0) \
+    M(UInt64, filesystem_cache_max_download_size, (128UL * 1024 * 1024 * 1024), "Max remote filesystem cache size that can be downloaded by a single query", 0) \
     M(Bool, skip_download_if_exceeds_query_cache, true, "Skip download from remote filesystem if exceeds query cache size", 0) \
     \
     /** Complex query settings **/\

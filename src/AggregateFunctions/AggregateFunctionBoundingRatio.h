@@ -58,6 +58,9 @@ struct AggregateFunctionBoundingRatioData //-V730
         {
             *this = other;
         }
+        else if (other.empty)
+        {
+        }
         else
         {
             if (other.left.x < left.x)
