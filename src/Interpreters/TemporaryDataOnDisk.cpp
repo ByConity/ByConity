@@ -46,15 +46,17 @@ void TemporaryDataOnDiskScope::deltaAllocAndCheck(ssize_t compressed_delta, ssiz
     stat.uncompressed_size += uncompressed_delta;
 }
 
+/*
 TemporaryFileStream & TemporaryDataOnDisk::createStream(const Block & header, size_t max_file_size)
 {
     if (file_cache)
         return createStreamToCacheFile(header, max_file_size);
     else if (volume)
-        return createStreamToRegularFile(header, max_file_size);
+        return *createStreamPtrToRegularFile(header, max_file_size);
 
     throw Exception(ErrorCodes::LOGICAL_ERROR, "TemporaryDataOnDiskScope has no cache and no volume");
 }
+*/
 
 TemporaryFileStream & TemporaryDataOnDisk::createStreamToCacheFile(const Block & header, size_t max_file_size)
 {
@@ -68,7 +70,7 @@ TemporaryFileStream & TemporaryDataOnDisk::createStreamToCacheFile(const Block &
     return *tmp_stream;
 }
 
-TemporaryFileStream & TemporaryDataOnDisk::createStreamToRegularFile(const Block & header, size_t max_file_size)
+TemporaryFileStreamShardPtr TemporaryDataOnDisk::createStreamPtrToRegularFile(const Block & header, size_t max_file_size)
 {
     if (!volume)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "TemporaryDataOnDiskScope has no volume");
@@ -90,8 +92,9 @@ TemporaryFileStream & TemporaryDataOnDisk::createStreamToRegularFile(const Block
     auto tmp_file = std::make_unique<TemporaryFileOnDisk>(disk);
 
     std::lock_guard lock(mutex);
-    TemporaryFileStreamPtr & tmp_stream = streams.emplace_back(std::make_unique<TemporaryFileStream>(std::move(tmp_file), header, this));
-    return *tmp_stream;
+    // TemporaryFileStreamPtr & tmp_stream = streams.emplace_back(std::make_unique<TemporaryFileStream>(std::move(tmp_file), header, this));
+    TemporaryFileStreamShardPtr tmp_stream = std::make_unique<TemporaryFileStream>(std::move(tmp_file), header, this);
+    return tmp_stream;
 }
 
 std::vector<TemporaryFileStream *> TemporaryDataOnDisk::getStreams() const
