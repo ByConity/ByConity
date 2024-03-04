@@ -1852,6 +1852,7 @@ enum PreloadLevelSettings : UInt64
     /* Outfile related Settings */ \
     M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
+    M(UInt64, fuzzy_max_files, 100, "The max number of files when insert with fuzzy names.", 0) \
     /** OSS related settings */ \
     M(String, oss_access_key, "", "The access_key set by user when accessing oss.", 0) \
     M(String, oss_secret_key, "", "The secret_key set by user when accessing oss.", 0) \
