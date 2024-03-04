@@ -150,6 +150,8 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
         std::cout << formatDataModel<DB::Protos::PartitionPartsMetricsSnapshot>(metadata) << std::endl;
     else if (key.starts_with("TTS_"))
         std::cout << formatDataModel<DB::Protos::TableTrashItemsMetricsSnapshot>(metadata) << std::endl;
+    else if (key.starts_with("GCTRASH_"))
+        std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
     else
         std::cout << metadata << std::endl;
 };
