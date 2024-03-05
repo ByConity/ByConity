@@ -158,8 +158,13 @@ services:
     cap_add:
       - SYS_PTRACE
   community-clickhouse:
-    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     image: clickhouse/clickhouse-server:24.2.1.2248-alpine
+  community-clickhouse_init:
+    image: clickhouse/clickhouse-server:24.2.1.2248-alpine
+    depends_on:
+      - community-clickhouse
+    entrypoint: > 
+      clickhouse-client --host community-clickhouse -n -q "create database db; create table db.tb (d Date, i Int64) Engine=MergeTree partition by d order by i; insert into db.tb Values('2010-01-01', 1)"
 volumes:
     config_volume:
       name: "${CONFIG_VOL}"
