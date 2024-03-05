@@ -12,7 +12,7 @@ services:
     ports:
       - "${CLICKHOUSE_PORT_HDFS}:9870"
     volumes:
-      - ./hdfs_config/conf:/etc/hadoop/conf
+      - hdfs_volume:/etc/hadoop/conf
       - /var/log/hadoop
       - /data1
       - /data2
@@ -27,7 +27,7 @@ services:
     environment:
       - HADOOP_CONF_DIR=/etc/hadoop/conf
     volumes:
-      - ./hdfs_config/conf:/etc/hadoop/conf
+      - hdfs_volume:/etc/hadoop/conf
       - /var/log/hadoop
       - /data1
       - /data2
@@ -49,13 +49,13 @@ services:
   tso:
     # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     image: byconity/debian:buster-runit-fdb7.1.27
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/; fdbcli -C /config/fdb.cluster --exec \"configure new single memory\"; tso-server --config-file /config/tso.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/; sleep 100000;fdbcli -C /config/fdb.cluster --exec \"configure new single memory\"; tso-server --config-file /config/tso.yml"
     depends_on:
       - fdb
       - hdfs
     volumes:
-      - ${GITHUB_WORKSPACE}/build/programs/:/opt/byconity/bin/
-      - ./config:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     # evironment:
     container_name: "${COMPOSE_PROJECT_NAME}_tso-0"
     cap_add:
@@ -70,8 +70,8 @@ services:
     depends_on:
       - tso
     volumes:
-      - ${GITHUB_WORKSPACE}/build/programs/:/opt/byconity/bin/
-      - ./config:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     container_name: "${COMPOSE_PROJECT_NAME}_resource-manager-0"
     cap_add:
       - SYS_PTRACE
@@ -91,8 +91,8 @@ services:
       - "${CLICKHOUSE_PORT_HTTP}:21557"
     container_name: "${COMPOSE_PROJECT_NAME}_server-0"
     volumes:
-      - ${GITHUB_WORKSPACE}/build/programs/:/opt/byconity/bin/
-      - ./config:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -108,8 +108,8 @@ services:
       - "${CNCH_WRITE_WORKER_PORT_TCP}:52145"
     container_name: "${COMPOSE_PROJECT_NAME}_worker-write-0"
     volumes:
-      - ${GITHUB_WORKSPACE}/build/programs/:/opt/byconity/bin/
-      - ./config:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -123,8 +123,8 @@ services:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_worker-default-0"
     volumes:
-      - ${GITHUB_WORKSPACE}/build/programs/:/opt/byconity/bin/
-      - ./config:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -138,8 +138,8 @@ services:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_worker-default-1"
     volumes:
-      - ${GITHUB_WORKSPACE}/build/programs/:/opt/byconity/bin/
-      - ./config:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -153,10 +153,17 @@ services:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_daemon-manager-0"
     volumes:
-      - ${GITHUB_WORKSPACE}/build/programs/:/opt/byconity/bin/
-      - ./config:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
   community-clickhouse:
     # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     image: clickhouse/clickhouse-server:24.2.1.2248-alpine
+volumes:
+    config_volume:
+      name: "${CONFIG_VOL}"
+    hdfs_volume:
+      name: "${HDFS_VOL}"
+    binary_volume:
+      name: "${BINARY_VOL}"
