@@ -23,6 +23,11 @@ jobs:
         run: |
           export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
           echo "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}" >> $GITHUB_ENV
+          echo "BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume" >> $GITHUB_ENV
+          echo "HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume" >> $GITHUB_ENV
+          echo "CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume" >> $GITHUB_ENV
+          echo "CONFIG_VOL_FOR_S3=${COMPOSE_PROJECT_NAME}_config_volume_for_s3" >> $GITHUB_ENV
+          echo "SCRIPTS_VOL=${COMPOSE_PROJECT_NAME}_scripts_volume" >> $GITHUB_ENV
           echo "CLICKHOUSE_PORT_TCP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           echo "CLICKHOUSE_PORT_HTTP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
           echo "CLICKHOUSE_PORT_HDFS=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
