@@ -84,6 +84,7 @@ explain select distinct id
 
 select '---------test cte';
 set dialect_type='ANSI';
+set cte_mode='AUTO'; -- ToDo(WangTao): remove this
 explain with dw as (select distinct id as avg_id from test_distinct.unique_1)
 select distinct id3 + 10 from  test_distinct.unique_3
 where unique_3.id3 >(select sum(avg_id)/25 from dw) and unique_3.id3 > (select sum(avg_id)/20 from dw);

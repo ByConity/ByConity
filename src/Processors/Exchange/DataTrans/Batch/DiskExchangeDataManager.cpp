@@ -667,7 +667,7 @@ std::vector<std::unique_ptr<ReadBufferFromFileBase>> DiskExchangeDataManager::re
     auto file_path = path / std::to_string(key.query_unique_id);
     disk->listFiles(file_path, file_names);
     std::vector<String> filtered_files;
-    String prefix = fmt::format("exchange_{}_{}_", key.exchange_id, key.partition_id);
+    String prefix = fmt::format("exchange_{}_{}_{}", key.exchange_id, key.partition_id, key.parallel_index);
     String suffix = ".data";
     std::copy_if(file_names.begin(), file_names.end(), std::back_inserter(filtered_files), [&prefix, &suffix](String s) {
         return s.starts_with(prefix) && s.ends_with(suffix);
