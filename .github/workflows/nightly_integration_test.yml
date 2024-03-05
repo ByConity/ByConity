@@ -90,6 +90,7 @@ jobs:
         run: |
           mkdir -p integration
           cd integration
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
@@ -99,13 +100,13 @@ jobs:
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/external_table_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/integration_test_result.txt
+          sleep 10000
           cd ..
           rm -rf integration
       - name: After test
         if: always()
         continue-on-error: true
         run: |
-          sleep 10000
           docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/log/byconity /test_output/$2/log' sh || true
           mv /test_output /Artifacts || true
       - name: Upload Artifact
