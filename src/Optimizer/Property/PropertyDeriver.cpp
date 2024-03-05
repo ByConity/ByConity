@@ -34,6 +34,7 @@
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int OPTIMIZER_NONSUPPORT;
@@ -220,32 +221,20 @@ Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, Derive
         {
             if (item.second->as<ASTFunction>())
             {
-                std::set<String> symbols = SymbolsExtractor::extract(item.second);
-                bool contains_all = true;
-                auto partition_col = context.getInput()[0].getNodePartitioning().getPartitioningColumns();
-                for (const auto & col : partition_col)
+                try
                 {
-                    if (!symbols.count(col))
+                    auto partition_col = context.getInput()[0].getNodePartitioning().getPartitioningColumns();
+                    NameSet partition_col_set{partition_col.begin(), partition_col.end()};
+                    if (FunctionIsInjective::isInjective(
+                            item.second, context.getContext(), step.getInputStreams()[0].getNamesAndTypes(), partition_col_set))
                     {
-                        contains_all = false;
-                        break;
+                        auto prop = context.getInput()[0];
+                        prop.getNodePartitioningRef().setPartitioningColumns({item.first});
+                        return prop;
                     }
                 }
-                if (contains_all)
+                catch (...)
                 {
-                    try
-                    {
-                        if (FunctionIsInjective::isInjective(
-                                item.second, context.getContext(), step.getInputStreams()[0].getNamesAndTypes()))
-                        {
-                            auto prop = context.getInput()[0];
-                            prop.getNodePartitioningRef().setPartitioningColumns({item.first});
-                            return prop;
-                        }
-                    }
-                    catch (...)
-                    {
-                    }
                 }
             }
         }

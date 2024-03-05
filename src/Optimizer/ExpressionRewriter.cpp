@@ -33,7 +33,7 @@ ASTPtr ExpressionRewriterVisitor::visitNode(ASTPtr & node, ConstASTMap & express
     return result;
 }
 
-bool FunctionIsInjective::isInjective(const ConstASTPtr & expr, ContextMutablePtr & context, const NamesAndTypes & input_types)
+bool FunctionIsInjective::isInjective(const ConstASTPtr & expr, ContextMutablePtr & context, const NamesAndTypes & input_types, const NameSet & partition_cols)
 {
     Analysis analysis;
     FieldDescriptions fields;
@@ -45,13 +45,12 @@ bool FunctionIsInjective::isInjective(const ConstASTPtr & expr, ContextMutablePt
     Scope scope(Scope::ScopeType::RELATION, nullptr, true, fields);
     ExprAnalyzerOptions options;
     ExprAnalyzer::analyze(std::const_pointer_cast<IAST>(expr), &scope, context, analysis, options);
-    auto contextc = std::const_pointer_cast<const Context>(context);
-    FunctionIsInjectiveVisitor visitor{contextc, analysis.getExpressionColumnWithTypes()};
-    std::set<String> s;
-    return ASTVisitorUtil::accept(expr, visitor, s);
+    FunctionIsInjectiveVisitor visitor{context, analysis.getExpressionColumnWithTypes()};
+    NameSet remind_partition_cols = partition_cols;
+    return ASTVisitorUtil::accept(expr, visitor, remind_partition_cols) && remind_partition_cols.empty();
 }
 
-bool FunctionIsInjectiveVisitor::visitNode(const ConstASTPtr & node, std::set<String> & c)
+bool FunctionIsInjectiveVisitor::visitNode(const ConstASTPtr & node, NameSet & c)
 {
     bool is_injective = true;
     for (ConstASTPtr child : node->children)
@@ -61,7 +60,14 @@ bool FunctionIsInjectiveVisitor::visitNode(const ConstASTPtr & node, std::set<St
     return is_injective;
 }
 
-bool FunctionIsInjectiveVisitor::visitASTFunction(const ConstASTPtr & node, std::set<String> & c)
+bool FunctionIsInjectiveVisitor::visitASTIdentifier(const ConstASTPtr & node, NameSet & c)
+{
+    auto identifier = node->as<ASTIdentifier>();
+    c.erase(identifier->name());
+    return true;
+}
+
+bool FunctionIsInjectiveVisitor::visitASTFunction(const ConstASTPtr & node, NameSet & c)
 {
     auto function = node->as<ASTFunction>();
     FunctionOverloadResolverPtr function_builder = FunctionFactory::instance().get(function->name, context);
@@ -72,8 +78,11 @@ bool FunctionIsInjectiveVisitor::visitASTFunction(const ConstASTPtr & node, std:
         processed_arguments.emplace_back(col_type.column, col_type.type, arg->getColumnName());
     }
     auto function_base = function_builder->build(processed_arguments);
-    bool is_injective = function_base->isInjective(processed_arguments);
-
-    return is_injective && visitNode(node, c);
+    bool is_injective = function_base->isInjective(processed_arguments);    
+    if (is_injective)
+    {
+        visitNode(node, c);
+    }
+    return is_injective;
 }
 }
