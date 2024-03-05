@@ -33,19 +33,17 @@ Projection Est. 500000 rows, cost 1.170006e+05
                                        └─ Projection Est. ? rows, cost 0.000000e+00
                                           │     Expressions: [hash_uid_1], expr#tupleElement(tuple, 1):=`expr#arrayJoin(arrayMap(lambda(tuple(x), if(greater(indexOf(t, x), 0), tuple(x, arrayElement(cnt, indexOf(t, x))), tuple(x, 0))), range(toUInt32(0), toUInt32(7), 1)))`.1, expr#tupleElement(tuple, 2):=`expr#arrayJoin(arrayMap(lambda(tuple(x), if(greater(indexOf(t, x), 0), tuple(x, arrayElement(cnt, indexOf(t, x))), tuple(x, 0))), range(toUInt32(0), toUInt32(7), 1)))`.2
                                           └─ Projection Est. ? rows, cost 0.000000e+00
-                                             │     Expressions: [hash_uid_1], expr#arrayJoin(arrayMap(lambda(tuple(x), if(greater(indexOf(t, x), 0), tuple(x, arrayElement(cnt, indexOf(t, x))), tuple(x, 0))), range(toUInt32(0), toUInt32(7), 1))):=`expr#arrayJoin(arrayMap(lambda(tuple(x), if(greater(indexOf(expr#groupArray(t), x), 0), tuple(x, arrayElement(expr#groupArray(cnt), indexOf(expr#groupArray(t), x))), tuple(x, 0))), range(toUInt32(0), toUInt32(7), 1)))`
-                                             └─ Projection Est. ? rows, cost 0.000000e+00
-                                                │     Expressions: [hash_uid_1], expr#arrayJoin(arrayMap(lambda(tuple(x), if(greater(indexOf(expr#groupArray(t), x), 0), tuple(x, arrayElement(expr#groupArray(cnt), indexOf(expr#groupArray(t), x))), tuple(x, 0))), range(toUInt32(0), toUInt32(7), 1))):=arrayJoin(arrayMap(x -> if(indexOf(`expr#groupArray(t)`, x) > 0, (x, `expr#groupArray(cnt)`[indexOf(`expr#groupArray(t)`, x)]), (x, 0)), range(toUInt32(0), toUInt32(7), 1)))
+                                             │     Expressions: [hash_uid_1], expr#arrayJoin(arrayMap(lambda(tuple(x), if(greater(indexOf(t, x), 0), tuple(x, arrayElement(cnt, indexOf(t, x))), tuple(x, 0))), range(toUInt32(0), toUInt32(7), 1))):=arrayJoin(arrayMap(x -> if(indexOf(`expr#groupArray(t)`, x) > 0, (x, `expr#groupArray(cnt)`[indexOf(`expr#groupArray(t)`, x)]), (x, 0)), range(toUInt32(0), toUInt32(7), 1)))
+                                             └─ Aggregating Est. ? rows, cost 0.000000e+00
+                                                │     Group by: {hash_uid_1}
+                                                │     Aggregates: expr#groupArray(t):=AggNull(groupArray)(expr#toUInt32(divide(minus(server_time, 1691596800), 86400))), expr#groupArray(cnt):=AggNull(groupArray)(expr#count())
                                                 └─ Aggregating Est. ? rows, cost 0.000000e+00
-                                                   │     Group by: {hash_uid_1}
-                                                   │     Aggregates: expr#groupArray(t):=AggNull(groupArray)(expr#toUInt32(divide(minus(server_time, 1691596800), 86400))), expr#groupArray(cnt):=AggNull(groupArray)(expr#count())
-                                                   └─ Aggregating Est. ? rows, cost 0.000000e+00
-                                                      │     Group by: {hash_uid_1, expr#toUInt32(divide(minus(server_time, 1691596800), 86400))}
-                                                      │     Aggregates: expr#count():=AggNull(count)()
-                                                      └─ Projection Est. ? rows, cost 0.000000e+00
-                                                         │     Expressions: [hash_uid_1], expr#toUInt32(divide(minus(server_time, 1691596800), 86400)):=toUInt32((server_time_1 - 1691596800) / 86400)
-                                                         └─ Filter Est. ? rows, cost 0.000000e+00
-                                                            │     Condition: (tea_app_id_1 = 172) AND (event_date_1 >= cast(19579, \'Date\')) AND (event_date_1 <= cast(19585, \'Date\')) AND (event_1 = \'push_click\')
-                                                            └─ TableScan test.tea_event_table_medium_v3 Est. ? rows, cost 0.000000e+00
-                                                                     Where: (tea_app_id = 172) AND (event_date >= cast(19579, \'Date\')) AND (event_date <= cast(19585, \'Date\')) AND (event = \'push_click\')
-                                                                     Outputs: hash_uid_1:=hash_uid, server_time_1:=server_time, event_1:=event, event_date_1:=event_date, tea_app_id_1:=tea_app_id
+                                                   │     Group by: {hash_uid_1, expr#toUInt32(divide(minus(server_time, 1691596800), 86400))}
+                                                   │     Aggregates: expr#count():=AggNull(count)()
+                                                   └─ Projection Est. ? rows, cost 0.000000e+00
+                                                      │     Expressions: [hash_uid_1], expr#toUInt32(divide(minus(server_time, 1691596800), 86400)):=toUInt32((server_time_1 - 1691596800) / 86400)
+                                                      └─ Filter Est. ? rows, cost 0.000000e+00
+                                                         │     Condition: (tea_app_id_1 = 172) AND (event_date_1 >= cast(19579, \'Date\')) AND (event_date_1 <= cast(19585, \'Date\')) AND (event_1 = \'push_click\')
+                                                         └─ TableScan test.tea_event_table_medium_v3 Est. ? rows, cost 0.000000e+00
+                                                                  Where: (tea_app_id = 172) AND (event_date >= cast(19579, \'Date\')) AND (event_date <= cast(19585, \'Date\')) AND (event = \'push_click\')
+                                                                  Outputs: hash_uid_1:=hash_uid, server_time_1:=server_time, event_1:=event, event_date_1:=event_date, tea_app_id_1:=tea_app_id
