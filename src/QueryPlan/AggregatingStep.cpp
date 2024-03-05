@@ -327,6 +327,10 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
 {
     QueryPipelineProcessorsCollector collector(pipeline, this);
     const auto & settings = build_settings.context->getSettingsRef();
+    this->max_block_size = settings.max_block_size;
+    this->temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads
+        ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
+        : static_cast<size_t>(settings.max_threads);
 
     if (isFinal() && hasNonParallelAggregateFunctions(params.aggregates))
     {
