@@ -67,7 +67,7 @@ jobs:
           echo "Bring up ByConity Cluster HDFS"
           cd /CI/
           docker compose -f docker-compose-integration-test.yml up -d
-          sleep 10
+          sleep 100000
           hdfs_config/script/create_users.sh
 
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0) 
