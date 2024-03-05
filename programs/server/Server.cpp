@@ -136,7 +136,6 @@
 #include <common/logger_useful.h>
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
-#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/ChineseTokenExtractor.h>
 
 #include <CloudServices/CnchServerClientPool.h>
@@ -1791,9 +1790,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         global_context->setEnableSSL(enable_ssl);
-
-        bool enable_tenant_systemdb = config().getBool("enable_tenant_systemdb", true);
-        setEnableTenantSystemDB(enable_tenant_systemdb);
 
         buildLoggers(config(), logger());
 
