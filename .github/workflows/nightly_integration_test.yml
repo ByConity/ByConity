@@ -60,7 +60,9 @@ jobs:
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/fdb.cluster
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/cnch-config.yml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/daemon-manager.yml
+          # Have to create volumes because can't bind mount in docker in docker env
           echo "Create volumes for ByConity Cluster"
+          /bin/bash create_docker_volume_ci.sh
           mkdir -p /test_output
       - name: Create ByConity Cluster HDFS
         run: |
