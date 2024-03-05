@@ -74,7 +74,7 @@ jobs:
           echo "Bring up ByConity Cluster HDFS"
           cd /CI/
           docker compose -f docker-compose-integration-test.yml up -d
-          sleep 100000
+          sleep 10
           hdfs_config/script/create_users.sh
 
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0) 
@@ -85,7 +85,6 @@ jobs:
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
           echo "Check status of cluster"
           docker ps --filter name=$COMPOSE_PROJECT_NAME
-          sleep 10000
       - name: Run ByConity Intergration test
         continue-on-error: true
         run: |
@@ -106,6 +105,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
+          sleep 10000
           docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/log/byconity /test_output/$2/log' sh || true
           mv /test_output /Artifacts || true
       - name: Upload Artifact
