@@ -7,8 +7,6 @@ namespace DB
 
 class Context;
 
-void setEnableTenantSystemDB(bool v);
-
 // database_name -> tenant_id.[catalog$$].database_name
 String formatTenantDatabaseName(const String & database_name);
 
