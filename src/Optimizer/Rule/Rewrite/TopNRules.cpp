@@ -102,7 +102,7 @@ TransformResult PushTopNThroughProjection::transformImpl(PlanNodePtr node, const
             source->getStep()->getOutputStream(),
             new_sort,
             topn_step->getLimit(),
-            topn_step->isPartial(),
+            topn_step->getStage(),
             topn_step->getPrefixDescription()),
         {source});
 

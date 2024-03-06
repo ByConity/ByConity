@@ -347,11 +347,10 @@ TEST_F(ProtobufTest, SortingStep)
         for (int i = 0; i < 2; ++i)
             result_description.emplace_back(generateSortColumnDescription(eng));
         auto limit = eng() % 1000;
-        auto partial = eng() % 2 == 1;
         SortDescription prefix_description;
         for (int i = 0; i < 2; ++i)
             prefix_description.emplace_back(generateSortColumnDescription(eng));
-        auto result = std::make_shared<SortingStep>(base_input_stream, result_description, limit, partial, prefix_description);
+        auto result = std::make_shared<SortingStep>(base_input_stream, result_description, limit, SortingStep::Stage::FULL, prefix_description);
         result->setStepDescription(step_description);
         return result;
     }();

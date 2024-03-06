@@ -352,10 +352,7 @@ Property DeriverVisitor::visitJoinStep(const JoinStep & step, DeriverContext & c
         return Property{};
     }
 
-    if (step.enforceNestLoopJoin())
-    {
-        translated = translated.clearSorting();
-    }
+    translated = translated.clearSorting();
     return translated;
 }
 

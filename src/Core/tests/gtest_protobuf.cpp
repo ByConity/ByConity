@@ -316,7 +316,7 @@ TEST_F(ProtobufTest, InputOrderInfo)
     Protos::InputOrderInfo pb;
     step->toProto(pb);
     // deserialize from protobuf
-    auto step2 = InputOrderInfo::fromProto(pb, context);
+    auto step2 = InputOrderInfo::fromProto(pb);
     // re-serialize to protobuf
     Protos::InputOrderInfo pb2;
     step2->toProto(pb2);

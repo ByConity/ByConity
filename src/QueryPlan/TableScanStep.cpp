@@ -1079,8 +1079,10 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         partition_filter = query_info.partition_filter->clone();
     auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, options);
     interpreter->execute(true);
+    auto backup_input_order_info = query_info.input_order_info;
     query_info = interpreter->getQueryInfo();
     query_info = fillQueryInfo(build_context.context);
+    query_info.input_order_info = backup_input_order_info;
     LOG_DEBUG(log, "init pipeline stage run time: make up query info, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
     // always do filter underneath, as WHERE filter won't reuse PREWHERE result in optimizer mode
