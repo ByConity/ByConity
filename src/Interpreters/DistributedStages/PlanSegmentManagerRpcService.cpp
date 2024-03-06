@@ -102,6 +102,11 @@ void PlanSegmentManagerRpcService::executeQuery(
             request->password(),
             static_cast<UInt16>(request->current_exchange_port())};
         execution_info.parallel_id = request->parallel_id();
+        if (request->has_source_task_index() && request->has_source_task_count())
+        {
+            execution_info.source_task_index = request->source_task_index();
+            execution_info.source_task_count = request->source_task_count();
+        }
         query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{request->plan_segment_id(), request->parallel_id()});
         /// Set client info.
         ClientInfo & client_info = query_context->getClientInfo();
@@ -473,6 +478,11 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
 
         execution_info.parallel_id = request->parallel_id();
         execution_info.execution_address = AddressInfo(request->execution_address());
+        if (request->has_source_task_index() && request->has_source_task_count())
+        {
+            execution_info.source_task_index = request->source_task_index();
+            execution_info.source_task_count = request->source_task_count();
+        }
         query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{request->plan_segment_id(), request->parallel_id()});
 
         /// Set client info.

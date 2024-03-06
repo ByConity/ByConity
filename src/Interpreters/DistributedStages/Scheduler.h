@@ -10,6 +10,7 @@
 #include <Interpreters/DAGGraph.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/NodeSelector.h>
 #include <Parsers/queryToString.h>
 #include <butil/endpoint.h>
@@ -149,10 +150,21 @@ protected:
     void genTopology();
     void genSourceTasks();
     bool getBatchTaskToSchedule(BatchTaskPtr & task);
+    virtual void sendResources(PlanSegment * plan_segment_ptr)
+    {
+        (void)plan_segment_ptr;
+    }
     virtual void prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size)
     {
         (void)plan_segment_ptr;
         (void)parallel_size;
+    }
+    virtual PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index)
+    {
+        (void)task_id;
+        PlanSegmentExecutionInfo execution_info;
+        execution_info.parallel_id = index;
+        return execution_info;
     }
     void dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx);
     TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);

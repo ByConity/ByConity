@@ -13,24 +13,25 @@
  * limitations under the License.
  */
 
-#include <CloudServices/CnchServerResource.h>
+#include <unordered_map>
 #include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <CloudServices/CnchPartsHelper.h>
+#include <CloudServices/CnchServerResource.h>
 #include <CloudServices/CnchWorkerResource.h>
+#include <DataTypes/ObjectUtils.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <Storages/Hive/HiveFile/IHiveFile.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <brpc/controller.h>
 #include "Common/ProfileEvents.h"
 #include "common/logger_useful.h"
-#include <common/logger_useful.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
-#include <DataTypes/ObjectUtils.h>
-#include <Interpreters/Context_fwd.h>
-#include <Storages/Hive/HiveFile/IHiveFile.h>
-#include <Storages/Hive/StorageCnchHive.h>
+#include <common/logger_useful.h>
 
 #include <Storages/RemoteFile/StorageCnchHDFS.h>
 #include <Storages/RemoteFile/StorageCnchS3.h>
@@ -246,7 +247,6 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
     // filter resource for stage send resource
     resource_stage_info.filterResource(resource_option);
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
-    std::vector<brpc::CallId> call_ids;
     {
         auto lock = getLock();
         allocateResource(context, lock, resource_option);
@@ -259,7 +259,9 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
 
     if (all_resources.empty())
         return;
+    computeResourceSize(resource_option, all_resources);
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
+    std::vector<brpc::CallId> call_ids;
     call_ids.resize(all_resources.size());
     auto worker_send_resources = [&](const HostWithPorts & host_ports, const std::vector<AssignedResource> & resources_to_send, size_t i)
     {
@@ -326,7 +328,6 @@ void CnchServerResource::sendResources(const ContextPtr & context, WorkerAction 
 {
     auto handler = std::make_shared<ExceptionHandler>();
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
-    std::vector<brpc::CallId> call_ids;
     {
         auto lock = getLock();
         allocateResource(context, lock);
@@ -337,6 +338,7 @@ void CnchServerResource::sendResources(const ContextPtr & context, WorkerAction 
         std::swap(all_resources, assigned_worker_resource);
     }
 
+    std::vector<brpc::CallId> call_ids;
     for (auto & [host_ports, resource] : all_resources)
     {
         auto worker_client = worker_group->getWorkerClient(host_ports);
@@ -384,7 +386,6 @@ void CnchServerResource::allocateResource(
             ServerAssignmentMap assigned_map;
             HivePartsAssignMap assigned_hive_map;
             FilePartsAssignMap assigned_file_map;
-            BucketNumbersAssignmentMap assigned_bucket_numbers_map;
             ServerDataPartsVector bucket_parts;
             ServerDataPartsVector leftover_server_parts;
 
@@ -457,12 +458,6 @@ void CnchServerResource::allocateResource(
                         assigned_file_parts.size());
                 }
 
-                std::set<Int64> assigned_bucket_numbers;
-                if (auto it = assigned_bucket_numbers_map.find(host_ports.id); it != assigned_bucket_numbers_map.end())
-                {
-                    assigned_bucket_numbers = std::move(it->second);
-                }
-
                 auto it = assigned_worker_resource.find(host_ports);
                 if (it == assigned_worker_resource.end())
                 {
@@ -478,11 +473,41 @@ void CnchServerResource::allocateResource(
                 worker_resource.sent_create_query = resource.sent_create_query;
                 worker_resource.create_table_query = resource.create_table_query;
                 worker_resource.worker_table_name = resource.worker_table_name;
-                worker_resource.bucket_numbers = assigned_bucket_numbers;
                 worker_resource.object_columns = resource.object_columns;
             }
         }
     }
 }
 
+void CnchServerResource::computeResourceSize(
+    std::optional<ResourceOption> & resource_option, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources)
+{
+    if (resource_option)
+    {
+        for (const auto & [host_ports, assinged_resource] : all_resources)
+        {
+            std::unordered_map<UUID, size_t> table_size;
+            for (const auto & r : assinged_resource)
+            {
+                size_t s = std::accumulate(r.server_parts.cbegin(), r.server_parts.cend(), 0, [](size_t sum, ServerDataPartPtr p) {
+                    return sum + p->rowsCount();
+                });
+                auto & t_size = table_size[r.storage->getStorageID().uuid];
+                if (t_size)
+                    t_size += s;
+                else
+                    t_size = s;
+            }
+            for (const auto & [t, s] : table_size)
+            {
+                assigned_resources_size[t][host_ports] = s;
+            }
+        }
+    }
+}
+
+std::unordered_map<HostWithPorts, size_t> & CnchServerResource::getResourceSizeMap(UUID & table_id)
+{
+    return assigned_resources_size[table_id];
+}
 }

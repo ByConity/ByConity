@@ -40,8 +40,7 @@ void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask &
 {
     const auto & selector_info = node_selector_result[task.task_id];
     const auto & worker_node = selector_info.worker_nodes[idx];
-    PlanSegmentExecutionInfo execution_info;
-    execution_info.parallel_id = idx;
+    PlanSegmentExecutionInfo execution_info = generateExecutionInfo(task.task_id, idx);
     std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
     {
         std::unique_lock<std::mutex> lk(segment_bufs_mutex);
@@ -80,11 +79,12 @@ void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask &
 TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
     TaskResult res;
+    sendResources(plan_segment_ptr);
     auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.is_source));
     auto & selector_info = selector_result.first->second;
     prepareTask(plan_segment_ptr, selector_info.worker_nodes.size());
     dag_graph_ptr->scheduled_segments.emplace(task.task_id);
-    dag_graph_ptr->segment_paralle_size_map[task.task_id] = selector_info.worker_nodes.size();
+    dag_graph_ptr->segment_parallel_size_map[task.task_id] = selector_info.worker_nodes.size();
 
     PlanSegmentExecutionInfo execution_info;
 

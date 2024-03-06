@@ -1,8 +1,10 @@
 #pragma once
+#include <cstddef>
 #include <limits>
 #include <memory>
-#include <common/types.h>
+#include <optional>
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <common/types.h>
 namespace DB {
 struct PlanSegmentInstanceId
 {
@@ -17,6 +19,8 @@ struct PlanSegmentExecutionInfo
 {
     UInt32 parallel_id = std::numeric_limits<UInt32>::max();
     AddressInfo execution_address;
+    std::optional<size_t> source_task_index;
+    std::optional<size_t> source_task_count;
 };
 
 struct PlanSegmentInstance
