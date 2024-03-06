@@ -86,7 +86,10 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
         /// SCOPE_EXIT wrap logic which run after done->Run(),
         /// since host socket of the accpeted stream is set in done->Run()
         key = std::make_shared<ExchangeDataKey>(
-            request->registry().query_unique_id(), request->registry().exchange_id(), request->registry().parallel_id());
+            request->registry().query_unique_id(),
+            request->registry().exchange_id(),
+            request->registry().parallel_id(),
+            request->registry().parallel_index());
         Block header = deserializeHeaderFromProto(request->header());
         auto mgr = context->getDiskExchangeDataManager();
         auto query_context = Context::createCopy(context);
