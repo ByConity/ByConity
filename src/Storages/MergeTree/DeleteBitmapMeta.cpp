@@ -253,7 +253,7 @@ void DeleteBitmapMeta::removeFile()
             }
             else
                 LOG_WARNING(storage.getLogger(), "Trying to remove file {}, but it doest exist.", rel_file_path);
-            }
+        }
     }
 }
 
