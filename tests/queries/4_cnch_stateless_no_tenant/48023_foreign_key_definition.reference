@@ -1,4 +1,4 @@
-CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192
 Projection Est. ? rows
 │     Expressions: [description, id, parent_id]
 └─ Sorting Est. ? rows
@@ -15,5 +15,5 @@ Projection Est. ? rows
 2	1	CHILD ONE
 3	2	CHILD TWO
 4	2	CHILD TWO
-CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id),\n    CONSTRAINT my_name_1 FOREIGN KEY (id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id),\n    CONSTRAINT my_name_1 FOREIGN KEY (id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192
+CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192

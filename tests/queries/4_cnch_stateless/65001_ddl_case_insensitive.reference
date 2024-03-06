@@ -1,7 +1,7 @@
 1	Nullable(String)
-test_case0	CREATE TABLE test.test_case0\n(\n    `xx` Nullable(String)\n)\nENGINE = CnchMergeTree\nORDER BY xx\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-test_case1	CREATE TABLE test.test_case1\n(\n    `event_date` Nullable(Date),\n    `event_type` Nullable(String),\n    `event_count` Nullable(Int32),\n    `eventdate` Nullable(Date) DEFAULT toDate(event_date)\n)\nENGINE = CnchMergeTree\nPARTITION BY toYYYYMM(event_date)\nORDER BY (event_type, event_count)\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-test_case2	CREATE TABLE test.test_case2\n(\n    `id` Nullable(UInt64),\n    `updated_at` Nullable(DateTime64(3)) MATERIALIZED now(),\n    `size_bytes` Nullable(Int64),\n    `size` Nullable(String) ALIAS formatReadableSize(size_bytes)\n)\nENGINE = CnchMergeTree\nPRIMARY KEY id\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+test_case0	CREATE TABLE test.test_case0\n(\n    `xx` Nullable(String)\n)\nENGINE = CnchMergeTree\nORDER BY xx\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192
+test_case1	CREATE TABLE test.test_case1\n(\n    `event_date` Nullable(Date),\n    `event_type` Nullable(String),\n    `event_count` Nullable(Int32),\n    `eventdate` Nullable(Date) DEFAULT toDate(event_date)\n)\nENGINE = CnchMergeTree\nPARTITION BY toYYYYMM(event_date)\nORDER BY (event_type, event_count)\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192
+test_case2	CREATE TABLE test.test_case2\n(\n    `id` Nullable(UInt64),\n    `updated_at` Nullable(DateTime64(3)) MATERIALIZED now(),\n    `size_bytes` Nullable(Int64),\n    `size` Nullable(String) ALIAS formatReadableSize(size_bytes)\n)\nENGINE = CnchMergeTree\nPRIMARY KEY id\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192
 2022-01-01	Type1
 2022-01-02	Type2
 2022-01-03	Type3

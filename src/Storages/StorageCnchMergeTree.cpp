@@ -639,24 +639,49 @@ void StorageCnchMergeTree::filterPartitionByTTL(std::vector<std::shared_ptr<Merg
         time_t query_time = start_ts.toSecond();
         std::vector<std::shared_ptr<MergeTreePartition>> filtered_result;
 
-        for (size_t index = 0; index < column->size(); index++)
-        {
-            time_t ttl_value = 0;
-            if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
-            {
-                const auto & date_lut = DateLUT::instance();
-                ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
-            }
-            else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))
-            {
-                ttl_value = column_date_time->getElement(index);
-            }
-            else
-                throw Exception("Unexpected type of result ttl column", ErrorCodes::LOGICAL_ERROR);
+        if (column->isNullable())
+            column = static_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get();
 
-            if (ttl_value >= query_time)
-                filtered_result.push_back(partition_list[index]);
+        if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
+        {
+            const auto & date_lut = DateLUT::instance();
+            for (size_t index = 0; index < column->size(); index++)
+            {
+                auto ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
+                if (ttl_value >= query_time)
+                    filtered_result.push_back(partition_list[index]);
+            }
         }
+        else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))
+        {
+            for (size_t index = 0; index < column->size(); index++)
+            {
+                auto ttl_value = column_date_time->getElement(index);
+                if (ttl_value >= query_time)
+                    filtered_result.push_back(partition_list[index]);
+            }
+        }
+        else
+            throw Exception("Unexpected type of result ttl column", ErrorCodes::LOGICAL_ERROR); 
+
+        // for (size_t index = 0; index < column->size(); index++)
+        // {
+        //     time_t ttl_value = 0;
+        //     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
+        //     {
+        //         const auto & date_lut = DateLUT::instance();
+        //         ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
+        //     }
+        //     else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))
+        //     {
+        //         ttl_value = column_date_time->getElement(index);
+        //     }
+        //     else
+        //         throw Exception("Unexpected type of result ttl column", ErrorCodes::LOGICAL_ERROR);
+
+        //     if (ttl_value >= query_time)
+        //         filtered_result.push_back(partition_list[index]);
+        // }
 
         if (filtered_result.size() < partition_list.size())
             LOG_DEBUG(log, "TTL rules dropped {} partitions (before: {}).", partition_list.size() - filtered_result.size(), partition_list.size());
