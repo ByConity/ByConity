@@ -100,7 +100,6 @@ jobs:
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/external_table_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/integration_test_result.txt
-          sleep 10000
           cd ..
           rm -rf integration
       - name: After test
