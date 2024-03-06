@@ -169,7 +169,7 @@ services:
     depends_on:
       - community-clickhouse
     entrypoint: > 
-      clickhouse-client --host community-clickhouse -n -q "SELECT sleep(3); create database db; create table db.tb (d Date, i Int64) Engine=MergeTree partition by d order by i; insert into db.tb Values('2010-01-01', 1)"
+      /bin/sh -c "sleep 5; clickhouse-client --host community-clickhouse -n -q \"create database db; create table db.tb (d Date, i Int64) Engine=MergeTree partition by d order by i; insert into db.tb Values('2010-01-01', 1)\""
 volumes:
     config_volume:
       name: "${CONFIG_VOL}"
