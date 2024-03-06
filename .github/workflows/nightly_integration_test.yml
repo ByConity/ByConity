@@ -1,0 +1,128 @@
+name: Nightly integration test 
+on:
+  schedule:
+    # * is a special character in YAML so you have to quote this string, run at 19:00 utc (3 am Singapore time)
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scm_build:
+    name: Build binary and run stateless tests
+    # Use digest instead of tag to avoid network issue, original image byconity/byconity-ci:24Jan16
+    container: byconity/byconity-ci:24Jan16
+    runs-on: self-hosted
+    steps:
+      - name: Preload docker images
+        run: |
+          cd /docker_image_archive && ls -1 *.tar | xargs --no-run-if-empty -L 1 docker image load -i
+      - name: Set environment variables and git
+        run: |
+          export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
+          echo "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}" >> $GITHUB_ENV
+          echo "BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume" >> $GITHUB_ENV
+          echo "HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume" >> $GITHUB_ENV
+          echo "CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume" >> $GITHUB_ENV
+          echo "CONFIG_VOL_FOR_S3=${COMPOSE_PROJECT_NAME}_config_volume_for_s3" >> $GITHUB_ENV
+          echo "SCRIPTS_VOL=${COMPOSE_PROJECT_NAME}_scripts_volume" >> $GITHUB_ENV
+          echo "CLICKHOUSE_PORT_TCP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
+          echo "CLICKHOUSE_PORT_HTTP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
+          echo "CLICKHOUSE_PORT_HDFS=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
+          echo "CNCH_WRITE_WORKER_PORT_TCP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Setup git proxy
+        if: ${{ runner.name != 'ec2-aws-id4-10.10.129.157' }}
+        run: | 
+          git config --global http.proxy http://${{ secrets.HTTP_PROXY }}
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive  
+          path: '.'
+      - name: Build binary with build_bin.sh
+        env:
+          CUSTOM_CMAKE_BUILD_TYPE: "Release"
+        run: |
+          ./build_bin.sh
+      - name: run unit tests
+        run: |
+          bash $GITHUB_WORKSPACE/unittest.sh
+      - name: glibc_compatibility_check 
+        run: |
+          python3 $GITHUB_WORKSPACE/tests/ci/compatibility_check.py --binary $GITHUB_WORKSPACE/build/programs/clickhouse
+      - name: Preparing
+        run: |
+          mkdir /CI/
+          cd /CI/
+          cp -r $GITHUB_WORKSPACE/docker/ci-deploy/* ./          
+          cp $GITHUB_WORKSPACE/docker/ci-deploy/.env ./
+          mkdir bin
+          cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" hdfs_config/conf/core-site.xml
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/fdb.cluster
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/cnch-config.yml
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/daemon-manager.yml
+          # Have to create volumes because can't bind mount in docker in docker env
+          echo "Create volumes for ByConity Cluster"
+          /bin/bash create_docker_volume_ci.sh
+          mkdir -p /test_output
+      - name: Create ByConity Cluster HDFS
+        run: |
+          echo "Bring up ByConity Cluster HDFS"
+          cd /CI/
+          docker compose -f docker-compose-integration-test.yml up -d
+          sleep 10
+          hdfs_config/script/create_users.sh
+
+          export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0) 
+          echo "CLICKHOUSE_HOST=${CLICKHOUSE_HOST}" >> $GITHUB_ENV
+          export CNCH_WRITE_WORKER_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_worker-write-0) 
+          echo "CNCH_WRITE_WORKER_HOST=${CNCH_WRITE_WORKER_HOST}" >> $GITHUB_ENV
+          echo "Check connection to ByConity Server at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT_HTTP}"
+          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
+          echo "Check status of cluster"
+          docker ps --filter name=$COMPOSE_PROJECT_NAME
+      - name: Run ByConity Intergration test
+        continue-on-error: true
+        run: |
+          mkdir -p integration
+          cd integration
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
+          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
+          mkdir queries
+          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_integration/ queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          mkdir -p test_output
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/external_table_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/integration_test_result.txt
+          cd ..
+          rm -rf integration
+      - name: After test
+        if: always()
+        continue-on-error: true
+        run: |
+          docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/log/byconity /test_output/$2/log' sh || true
+          mv /test_output /Artifacts || true
+      - name: Upload Artifact
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: Artifacts
+          path: /Artifacts
+      - name: Analyse Result
+        run:
+          /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
+      - name: Cleanup docker compose
+        if: always()
+        run: |
+          cd /CI/
+          docker compose -f docker-compose-integration-test.yml down --volumes || true
+          docker container prune -f
+          docker network prune -f
+          docker volume prune -f

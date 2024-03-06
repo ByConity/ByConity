@@ -283,9 +283,62 @@ PlanNodePtr UnifyNullableVisitor::visitUnionNode(UnionNode & node, Void & v)
         new_output_header.insert(ColumnWithTypeAndName{item.type, item.name});
     }
 
+    // add cast projection, make Union's input stream/output stream type Nullable consistent.
+    PlanNodes children_add_nullable;
+    for (size_t i = 0; i < new_children.size(); i++)
+    {
+        Assignments add_cast;
+        NameToType name_to_type;
+
+        bool need_add_cast_projection = false;
+        for (auto const & value : step.getOutToInputs())
+        {
+            auto output_name = value.first;
+            auto output_type = new_output_header.getByName(output_name).type;
+
+            auto input_name = value.second[i];
+            auto input_type = new_children[i]->getOutputNamesToTypes().at(input_name);
+
+            if (isNullableOrLowCardinalityNullable(output_type) && !isNullableOrLowCardinalityNullable(input_type))
+            {
+                need_add_cast_projection = true;
+                input_type = JoinCommon::tryConvertTypeToNullable(input_type);
+                Assignment assignment{
+                    input_name,
+                    makeASTFunction("cast", std::make_shared<ASTIdentifier>(input_name), std::make_shared<ASTLiteral>(input_type->getName()))};
+                add_cast.emplace_back(assignment);                    
+                name_to_type[input_name] = input_type;
+            }
+            else
+            {
+                Assignment assignment{input_name, std::make_shared<ASTIdentifier>(input_name)};
+                add_cast.emplace_back(assignment);
+                name_to_type[input_name] = input_type;
+            }
+        }
+
+        if (need_add_cast_projection)
+        {
+            auto add_cast_step = std::make_shared<ProjectionStep>(new_children[i]->getStep()->getOutputStream(), add_cast, name_to_type);
+            auto add_cast_node
+                = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(add_cast_step), PlanNodes{new_children[i]});
+            children_add_nullable.emplace_back(add_cast_node);
+        }
+        else
+        {
+            children_add_nullable.emplace_back(new_children[i]);
+        }
+    }
+
+    DataStreams new_inputs_add_cast;
+    for (auto & i : children_add_nullable)
+    {
+        new_inputs_add_cast.push_back(i->getStep()->getOutputStream());
+    }
+
     auto rewritten_step = std::make_unique<UnionStep>(
-        new_inputs, DataStream{new_output_header}, step.getOutToInputs(), step.getMaxThreads(), step.isLocal());
-    auto rewritten_node = UnionNode::createPlanNode(context->nextNodeId(), std::move(rewritten_step), new_children, node.getStatistics());
+        new_inputs_add_cast, DataStream{new_output_header}, step.getOutToInputs(), step.getMaxThreads(), step.isLocal());
+    auto rewritten_node = UnionNode::createPlanNode(context->nextNodeId(), std::move(rewritten_step), children_add_nullable, node.getStatistics());
     return rewritten_node;
 }
 

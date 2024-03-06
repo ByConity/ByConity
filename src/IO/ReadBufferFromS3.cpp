@@ -135,7 +135,9 @@ bool ReadBufferFromS3::nextImpl()
             return false;
 
         if (read_until_position < offset)
+        {
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Attempt to read beyond right offset ({} > {})", offset, read_until_position - 1);
+        }
     }
 
     bool next_result = false;
@@ -202,7 +204,9 @@ bool ReadBufferFromS3::nextImpl()
         {
             if (!S3::processReadException(e, log, bucket, key, getPosition(), ++attempt)
                 || attempt >= max_single_read_retries)
+            {
                 throw;
+            }
 
             sleepForMilliseconds(sleep_ms);
             sleep_ms *= 2;

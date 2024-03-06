@@ -31,13 +31,6 @@ static String getTenantId()
     return CurrentThread::get().getTenantId();
 }
 
-static bool enable_tenant_systemdb = true;
-
-void setEnableTenantSystemDB(bool v)
-{
-    enable_tenant_systemdb = v;
-}
-
 String getCurrentCatalog()
 {
     String empty_result;
@@ -62,11 +55,6 @@ static bool isInternalDatabaseName(const String & database_name)
     for (auto & db : internal_databases)
     {
         if (db == database_name)
-            return true;
-    }
-    if(!enable_tenant_systemdb)
-    {
-        if (DatabaseCatalog::SYSTEM_DATABASE == database_name)
             return true;
     }
     return false;
@@ -225,7 +213,11 @@ String getOriginalEntityName(const String & tenant_entity_name)
 // {tenant_id}.{original_database_name}
 String getOriginalDatabaseName(const String & tenant_database_name)
 {
-    auto tenant_id = getTenantId();
+    return getOriginalDatabaseName(tenant_database_name, getTenantId());
+}
+
+String getOriginalDatabaseName(const String & tenant_database_name, const String & tenant_id)
+{
     if (!tenant_id.empty())
     {
         auto size = tenant_id.size();

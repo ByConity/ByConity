@@ -58,6 +58,7 @@ void StorageSystemManipulations::fillData(MutableColumns & res_columns, ContextP
 {
     auto manipulation_list = context->getManipulationList().get();
 
+    String tenant_id = context->getTenantId();
     const auto access = context->getAccess();
     bool check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES);
 
@@ -65,6 +66,9 @@ void StorageSystemManipulations::fillData(MutableColumns & res_columns, ContextP
     {
         if (check_access_for_tables &&
             !access->isGranted(AccessType::SHOW_TABLES, elem.storage_id.database_name, elem.storage_id.table_name))
+            continue;
+
+        if (!tenant_id.empty() && !startsWith(elem.storage_id.database_name, tenant_id))
             continue;
 
         size_t i = 0;

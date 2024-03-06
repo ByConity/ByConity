@@ -340,6 +340,10 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
         LOG_DEBUG(log, "Remove data parts meta for table {}", storage_id.getNameForLogs());
         catalog->clearDataPartsMetaForTable(storage);
 
+        /// delete mutation entries of the table
+        LOG_DEBUG(log, "Remove mutation entries for table {}", storage_id.getNameForLogs());
+        catalog->clearMutationEntriesForTable(storage);
+
         /// delete bitmaps
         if (mergetree && mergetree->getInMemoryMetadataPtr()->hasUniqueKey())
         {

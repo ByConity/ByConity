@@ -40,7 +40,7 @@ Using [Docker Compose](./docker/docker-compose/README.md) would be convenient fo
 
 - [Official Website](https://byconity.github.io/): has a quick high-level overview of ByConity on the home page.
 - [Documentation](https://byconity.github.io/docs/introduction/main-principle-concepts): introduce basic usage guide and tech deep dive.
-- [Getting started with Kubernetes](https://byconity.github.io/docs/deployment/deploy-k8s): demonstrates how to deploy a ByConity cluster in your Kubernetes clusters.
+- [Getting started with Kubernetes](https://byconity.github.io/docs/deployment/deployment-with-k8s): demonstrates how to deploy a ByConity cluster in your Kubernetes clusters.
 - [Getting started with physical machines](https://byconity.github.io/docs/deployment/package-deployment): demonstrates how to deploy ByConity in your physical clusters.
 - [Contribution Guideline](https://github.com/ByConity/ByConity/blob/master/CONTRIBUTING.md): Welcome you to join ByConity developer group and list some tips for fresh joiners to be quickly hands-on.
 - **Contact Us** : you can easily find us in [Discord server](https://discord.gg/V4BvTWGEQJ), [Youtube Channel](https://www.youtube.com/@ByConity/featured) and [Twitter](https://twitter.com/ByConity)

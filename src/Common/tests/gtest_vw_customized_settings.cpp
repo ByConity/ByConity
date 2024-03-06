@@ -29,7 +29,6 @@ TEST(VWCustomizedSettings, loadCustomizedSettings)
     std::stringstream input_conf_stream(input_conf);
     Poco::AutoPtr<Poco::Util::AbstractConfiguration> raw_conf_ptr = Poco::AutoPtr(new Poco::Util::XMLConfiguration(input_conf_stream));
     VWCustomizedSettings vw_customized_settings(raw_conf_ptr);
-    vw_customized_settings.loadCustomizedSettings();
     Settings default_settings;
     DB::ContextMutablePtr local_context = Context::createCopy(getContext().context);
     local_context->setSetting("enable_optimizer", true);

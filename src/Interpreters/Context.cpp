@@ -465,6 +465,7 @@ struct ContextSharedPart
     Context::ConfigReloadCallback config_reload_callback;
 
     VWCustomizedSettingsPtr vw_customized_settings_ptr;
+    mutable std::mutex vw_customized_settings_update_mutex;
 
     /// @ByteDance
     bool ready_for_query = false; /// Server is ready for incoming queries
@@ -1435,11 +1436,23 @@ ConfigurationPtr Context::getUsersConfig()
 
 VWCustomizedSettingsPtr Context::getVWCustomizedSettings() const
 {
+    std::lock_guard<std::mutex> lock(shared->vw_customized_settings_update_mutex);
     return shared->vw_customized_settings_ptr;
 }
 
 void Context::setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_settings_ptr_)
 {
+    if (shared->vw_customized_settings_ptr)
+        LOG_INFO(
+            &Poco::Logger::get("Context"),
+            fmt::format(
+                "VWCustomizedSetting before update:[{}] and after update:[{}]",
+                shared->vw_customized_settings_ptr->toString(),
+                vw_customized_settings_ptr_->toString()));
+    else
+        LOG_INFO(&Poco::Logger::get("Context"), fmt::format("VWCustomizedSetting :[{}]", vw_customized_settings_ptr_->toString()));
+
+    std::lock_guard<std::mutex> lock(shared->vw_customized_settings_update_mutex);
     shared->vw_customized_settings_ptr = vw_customized_settings_ptr_;
 }
 

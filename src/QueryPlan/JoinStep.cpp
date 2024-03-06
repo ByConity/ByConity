@@ -46,6 +46,7 @@ namespace ErrorCodes
 JoinPtr JoinStep::makeJoin(
     ContextPtr context,
     std::shared_ptr<RuntimeFilterConsumer> && consumer,
+    size_t num_streams,
     ExpressionActionsPtr filter_action,
     String filter_column_name)
 {
@@ -148,17 +149,22 @@ JoinPtr JoinStep::makeJoin(
             LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use ConcurrentHashJoin");
             return std::make_shared<ConcurrentHashJoin>(table_join, context->getSettings().max_threads, r_sample_block);
         }
-        else if (join_algorithm == JoinAlgorithm::GRACE_HASH)
+        else if (join_algorithm == JoinAlgorithm::GRACE_HASH && distribution_type == DistributionType::REPARTITION)
         {
             table_join->join_algorithm = JoinAlgorithm::GRACE_HASH;
-            return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk());
+            // todo aron let optimizer decide this(parallel)
+            auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
+            return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel);
         }
         return std::make_shared<HashJoin>(table_join, r_sample_block);
     }
     else if (table_join->forceMergeJoin() || (table_join->preferMergeJoin() && allow_merge_join))
         return std::make_shared<MergeJoin>(table_join, r_sample_block);
-    else if (table_join->forceGraceHashLoopJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH)
-        return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk());
+    else if ((table_join->forceGraceHashLoopJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH) && distribution_type == DistributionType::REPARTITION)
+    {
+        auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
+        return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel);
+    }
     return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
 }
 
@@ -268,11 +274,11 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
                 settings.distributed_settings.coordinator_address,
                 settings.distributed_settings.current_address);
 
-            join = makeJoin(settings.context, std::move(consumer), filter_action, filter->getColumnName());
+            join = makeJoin(settings.context, std::move(consumer), pipelines[0]->getNumStreams(), filter_action, filter->getColumnName());
             need_build_runtime_filter = true;
         }
         else
-            join = makeJoin(settings.context, nullptr, filter_action, filter->getColumnName());
+            join = makeJoin(settings.context, nullptr, pipelines[0]->getNumStreams(), filter_action, filter->getColumnName());
         max_block_size = settings.context->getSettingsRef().max_block_size;
     }
 

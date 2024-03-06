@@ -286,7 +286,10 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
         for (auto it = all_resources.begin(); it != all_resources.end(); it++)
         {
             thread_pool.scheduleOrThrowOnError(createExceptionHandledJob(
-                [&, i, it](){ worker_send_resources(it->first, it->second, i); },
+                [&, i, it]()
+                    {
+                        worker_send_resources(it->first, it->second, i);
+                    },
                 exception_handler));
             i++;
         }

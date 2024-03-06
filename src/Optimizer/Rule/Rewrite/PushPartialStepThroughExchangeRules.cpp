@@ -34,7 +34,7 @@
 namespace DB
 {
 
-NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationFuse"};
+NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationFuse", "attribution", "attributionCorrelation"};
 
 static std::pair<bool, bool> canPushPartialWithHint(const AggregatingStep * step)
 {

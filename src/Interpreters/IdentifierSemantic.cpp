@@ -218,8 +218,14 @@ bool IdentifierSemantic::doesIdentifierBelongTo(const ASTIdentifier & identifier
 {
     size_t num_components = identifier.name_parts.size();
     if (num_components >= 3)
-        return identifier.name_parts[0] == database &&
-               identifier.name_parts[1] == table;
+    {
+        if (identifier.name_parts[1] == table)
+        {
+            if (identifier.name_parts[0] != database)
+                return formatTenantDatabaseName(identifier.name_parts[0]) == database;
+            return true;
+        }
+    }
     return false;
 }
 
