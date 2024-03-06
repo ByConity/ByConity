@@ -159,6 +159,11 @@ services:
       - SYS_PTRACE
   community-clickhouse:
     image: clickhouse/clickhouse-server:24.2.1.2248-alpine
+    healthcheck:
+      test: clickhouse-client -q "select 1;"
+      interval: 5s
+      timeout: 3s
+      retries: 4
   community-clickhouse_init:
     image: clickhouse/clickhouse-server:24.2.1.2248-alpine
     depends_on:
