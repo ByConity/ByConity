@@ -41,6 +41,8 @@ public:
     friend class DiskByteS3Reservation;
 
     static constexpr auto DATA_FILE = "data";
+    static constexpr auto BITMAP_DIR = "DeleteFiles/";
+    static constexpr auto BITMAP_FILE = ".bitmap";
 
     DiskByteS3(const String& name_, const String& root_prefix_, const String& bucket_,
         const std::shared_ptr<Aws::S3::S3Client>& client_);

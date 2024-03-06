@@ -227,9 +227,10 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String& path,
     const WriteSettings& settings)
 {
-    if (!path.ends_with(String("/") + DATA_FILE))
+    if (!path.ends_with(String("/") + DATA_FILE) && !(path.starts_with(BITMAP_DIR) && path.ends_with(BITMAP_FILE)))
     {
-        LOG_WARNING(&Poco::Logger::get("DiskByteS3"), "Attempting to write to a file that is not \"{}\", that's dangerous.", DATA_FILE);
+        LOG_WARNING(&Poco::Logger::get("DiskByteS3"),
+            "Attempting to write to a file {}, which is neither \"data\" nor \"bitmap\", that's dangerous.", path);
     }
     return std::make_unique<WriteBufferFromByteS3>(s3_util.getClient(), s3_util.getBucket(),
         std::filesystem::path(root_prefix) / path, 16 * 1024 * 1024,
