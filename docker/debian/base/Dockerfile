@@ -3,10 +3,16 @@ FROM alpine as downloader
 ARG FDB_VERSION=7.1.27
 WORKDIR /downloads
 RUN apk --no-cache add wget
-RUN wget -qO cmake.3.17.tar.gz https://cmake.org/files/v3.17/cmake-3.17.0-Linux-x86_64.tar.gz
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+        wget -qO cmake.3.17.tar.gz https://cmake.org/files/v3.17/cmake-3.17.0-Linux-x86_64.tar.gz; \
+    fi
 # RUN wget https://apt.llvm.org/llvm.sh
 RUN wget -q https://mirrors.tuna.tsinghua.edu.cn/llvm-apt/llvm.sh
-RUN wget -qO foundationdb-clients.deb https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+        wget -qO foundationdb-clients.deb https://github.com/frankye1982/fdb-build-support/releases/download/v1.0-arm/foundationdb-clients_7.1.27-1_aarch64.deb; \
+    else \
+        wget -qO foundationdb-clients.deb https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb; \
+    fi
 RUN wget -qO tini https://github.com/krallin/tini/releases/download/v0.19.0/tini
 
 # Debian builder
@@ -18,12 +24,18 @@ RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     binutils gettext-base strace bpftrace sysstat gdb maven default-jdk ninja-build \
     lsb-release wget curl software-properties-common gnupg ccache git vim zlib1g-dev \
-    autoconf automake m4 bison flex \
+    autoconf automake m4 bison flex && \
+    if [ "$(uname -m)" = "aarch64" ]; then apt-get install --no-install-recommends -y  cmake; fi \
     && rm -rf /var/lib/apt/lists/*
+
 
 COPY --from=downloader /downloads /downloads
 WORKDIR /downloads
-RUN tar --strip-components=1 -xzf cmake.3.17.tar.gz -C /usr/local
+
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+        tar --strip-components=1 -xzf cmake.3.17.tar.gz -C /usr/local; \
+    fi
+#RUN tar --strip-components=1 -xzf cmake.3.17.tar.gz -C /usr/local
 RUN chmod +x llvm.sh && ./llvm.sh 11 -m https://mirrors.tuna.tsinghua.edu.cn/llvm-apt
 RUN dpkg -i foundationdb-clients.deb
 RUN rm -rf /downloads
