@@ -280,7 +280,6 @@ jobs:
           mv test_output/test_result.txt /test_output/ChSQL_tenant_wo_optimizer_test_result.txt
           cd ..
           rm -rf ci_clickhouse_sql
-          sleep 600
       - name: After test
         if: always()
         continue-on-error: true

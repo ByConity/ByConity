@@ -102,6 +102,7 @@ jobs:
           mv test_output/test_result.txt /test_output/integration_test_result.txt
           cd ..
           rm -rf integration
+          sleep 6000000
       - name: After test
         if: always()
         continue-on-error: true
