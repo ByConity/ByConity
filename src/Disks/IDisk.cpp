@@ -24,14 +24,6 @@ bool IDisk::isDirectoryEmpty(const String & path)
     return !iterateDirectory(path)->isValid();
 }
 
-bool IDisk::fileExists(const String & file_path)
-{
-    if (getType() == DiskType::Type::ByteS3)
-        return dynamic_cast<DiskByteS3*>(this)->fileExists(file_path);
-    else
-        return exists(file_path);
-}
-
 void copyFile(IDisk & from_disk, const String & from_path, IDisk & to_disk, const String & to_path)
 {
     LOG_DEBUG(&Poco::Logger::get("IDisk"), "Copying from {} (path: {}) {} to {} (path: {}) {}.",

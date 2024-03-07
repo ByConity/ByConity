@@ -41,7 +41,6 @@
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
-#include <Disks/DiskByteS3.h>
 
 namespace ProfileEvents
 {
@@ -1135,20 +1134,12 @@ void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
     auto path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path;
     try
     {
-        if (disk->getType() == DiskType::Type::ByteS3)
-        {
-            // for DiskByteS3, we need to avoid using removeDirectory() and exists() for better performance
-            std::static_pointer_cast<DiskByteS3>(disk)->removePart(path_on_disk);
-        }
-        else
-        {
-            disk->removeFile(path_on_disk / "data");
-            disk->removeDirectory(path_on_disk);
-        }
+        disk->removeFile(path_on_disk / "data");
+        disk->removeDirectory(path_on_disk);
     }
     catch (...)
     {
-        if (disk->getType() != DiskType::Type::ByteS3 && !disk->exists(path_on_disk)) {
+        if (!disk->fileExists(path_on_disk / "data")) {
             /// Early exit if the part has already been deleted.
             LOG_TRACE(storage.log, "the Part {} has already been removed.", fullPath(disk, path_on_disk));
             return;

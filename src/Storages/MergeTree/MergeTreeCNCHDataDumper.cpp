@@ -16,7 +16,6 @@
 #include "Storages/MergeTree/MergeTreeCNCHDataDumper.h"
 
 #include <Disks/HDFS/DiskHDFS.h>
-#include <Disks/DiskByteS3.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
@@ -205,7 +204,13 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         }
         case DiskType::Type::ByteS3: {
             // for DiskByteS3, we need to avoid using exists() and removeRecursive() for better performance
-            std::static_pointer_cast<DiskByteS3>(disk)->removePart(new_part_rel_path);
+            // since there is only one file "data" in each part, we use fileExists() and removeFile() instead
+            String new_part_rel_file_path = fs::path(new_part_rel_path) / "data";
+            if (disk->fileExists(new_part_rel_file_path))
+            {
+                LOG_WARNING(log, "Removing old temporary file  {}", disk->getPath() + new_part_rel_file_path);
+                disk->removeFile(new_part_rel_file_path);
+            }
             break;
         }
         default:

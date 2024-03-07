@@ -40,10 +40,6 @@ class DiskByteS3: public IDisk
 public:
     friend class DiskByteS3Reservation;
 
-    static constexpr auto DATA_FILE = "data";
-    static constexpr auto BITMAP_DIR = "DeleteFiles/";
-    static constexpr auto BITMAP_FILE = ".bitmap";
-
     DiskByteS3(const String& name_, const String& root_prefix_, const String& bucket_,
         const std::shared_ptr<Aws::S3::S3Client>& client_);
 
@@ -64,6 +60,10 @@ public:
     virtual UInt64 getKeepingFreeSpace() const override { return 0; }
 
     virtual bool exists(const String & path) const override;
+
+    // This function calls HeadObject, instead of the poorly performing ListObjects used in exists()
+    // If you want to check if a file exists, we strongly suggest using this function
+    virtual bool fileExists(const String & file_path) const override;
 
     virtual bool isFile(const String & ) const override { throw Exception("isFile is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
@@ -126,14 +126,6 @@ public:
     const String& getS3Bucket() const { return s3_util.getBucket(); }
     std::shared_ptr<Aws::S3::S3Client> getS3Client() const { return s3_util.getClient(); }
     const S3::S3Util& getS3Util() const { return s3_util; }
-
-    // This function calls HeadObject, instead of the poorly performing ListObjects used in exists()
-    // If you want to check if a file exists, we strongly suggest using this function
-    bool fileExists(const String & file_path) const;
-
-    // remove the data file of the given part
-    // removeRecursive() should be avoided, because it calls the poorly performing ListObjects
-    void removePart(const String & part_path);
 
 private:
     bool tryReserve(UInt64 bytes);
