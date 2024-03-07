@@ -30,7 +30,7 @@ until db_sync_finished; do
 	if [ $n -eq $maxAttempts ]; then
 		echo "Timeout!"
 		set -x
-		${CLICKHOUSE_CLIENT} --query="SELECT * FROM test_ch_db.test"
+		${CLICKHOUSE_CLIENT} --query="SELECT * FROM materialized_my_sql_02478.test"
 		${CLICKHOUSE_CLIENT} --query="SELECT * FROM system.cnch_materialized_mysql where database = 'materialized_my_sql_02478'"
 		${CLICKHOUSE_CLIENT} --query="SELECT * FROM system.cnch_materialized_mysql"
 		exit 1
