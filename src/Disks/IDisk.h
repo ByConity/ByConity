@@ -127,6 +127,10 @@ public:
     /// Return `true` if the specified file exists.
     virtual bool exists(const String & path) const = 0;
 
+    /// Return `true` if the specified file exists.
+    /// If this disk could be DiskByteS3, this function is more recommended than exists()
+    bool fileExists(const String & file_path);
+
     /// Return `true` if the specified file exists and it's a regular file (not a directory or special file type).
     virtual bool isFile(const String & path) const = 0;
 

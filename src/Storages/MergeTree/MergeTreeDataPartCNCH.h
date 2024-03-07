@@ -151,8 +151,6 @@ private:
     void fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file);
 
     std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr& disk, const String& path, size_t file_size) const;
-
-    static bool fileExists(const DB::DiskPtr &disk, const String &data_file_path);
 };
 
 }

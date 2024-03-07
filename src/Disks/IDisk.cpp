@@ -1,5 +1,6 @@
 #include "IDisk.h"
 #include "Disks/Executor.h"
+#include "Disks/DiskByteS3.h"
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/WriteBufferFromFileBase.h>
 #include <IO/copyData.h>
@@ -21,6 +22,14 @@ std::atomic<UInt64> next_disk_id = 0;
 bool IDisk::isDirectoryEmpty(const String & path)
 {
     return !iterateDirectory(path)->isValid();
+}
+
+bool IDisk::fileExists(const String & file_path)
+{
+    if (getType() == DiskType::Type::ByteS3)
+        return dynamic_cast<DiskByteS3*>(this)->fileExists(file_path);
+    else
+        return exists(file_path);
 }
 
 void copyFile(IDisk & from_disk, const String & from_path, IDisk & to_disk, const String & to_path)

@@ -128,8 +128,6 @@ private:
 
     NamesAndTypesList getKeyColumns() const;
 
-    static bool fileExists(const DB::DiskPtr &disk, const String &file_rel_path);
-
     MergeTreeMetaBase & data;
     S3ObjectMetadata::PartGeneratorID generator_id;
     Poco::Logger * log;
