@@ -67,11 +67,13 @@ void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask &
     if (const auto & id_to_addr_iter = dag_graph_ptr->id_to_address.find(task.task_id);
         id_to_addr_iter != dag_graph_ptr->id_to_address.end())
     {
-        id_to_addr_iter->second.push_back(worker_node.address);
+        id_to_addr_iter->second.at(idx) = worker_node.address;
     }
     else
     {
-        dag_graph_ptr->id_to_address.emplace(task.task_id, AddressInfos{worker_node.address});
+        AddressInfos infos(selector_info.worker_nodes.size());
+        dag_graph_ptr->id_to_address.emplace(task.task_id, std::move(infos));
+        dag_graph_ptr->id_to_address[task.task_id].at(idx) = worker_node.address;
     }
 }
 
@@ -91,7 +93,7 @@ TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segment
         if (auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
             iter != selector_info.source_addresses.end())
         {
-            plan_segment_input->insertSourceAddresses(iter->second.addresses, query_context->getSettingsRef().bsp_mode);
+            plan_segment_input->insertSourceAddresses(iter->second.addresses);
         }
     }
     std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
@@ -220,7 +222,7 @@ void Scheduler::prepareFinalTask()
                 "Logical error: address of segment " + std::to_string(plan_segment_input->getPlanSegmentId()) + " not found",
                 ErrorCodes::LOGICAL_ERROR);
         if (plan_segment_input->getSourceAddresses().empty())
-            plan_segment_input->insertSourceAddresses(address_it->second, query_context->getSettingsRef().bsp_mode);
+            plan_segment_input->insertSourceAddresses(address_it->second);
     }
     dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start = true;
 }

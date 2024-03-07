@@ -61,6 +61,7 @@ ENGINE = CnchMergeTree()
 ORDER BY (p_date, btn_id, entity_cd);
 
 set enable_optimizer=1;
+set cte_mode='AUTO'; -- ToDo(WangTao): remove this
 
 EXPLAIN
 WITH user_tags AS

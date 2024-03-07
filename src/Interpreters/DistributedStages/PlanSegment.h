@@ -144,18 +144,9 @@ public:
 
     void insertSourceAddress(const AddressInfo & address_info) { source_addresses.push_back(address_info); }
 
-    void insertSourceAddresses(AddressInfos & address_infos, bool unique = false)
+    void insertSourceAddresses(AddressInfos & address_infos)
     {
-        if (unique)
-        {
-            std::sort(address_infos.begin(), address_infos.end());
-            auto last = std::unique(address_infos.begin(), address_infos.end());
-            source_addresses.insert(source_addresses.end(), address_infos.begin(), last);
-        }
-        else
-        {
-            source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end());
-        }
+        source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end());
     }
 
     const AddressInfos & getSourceAddress() const { return source_addresses; }
