@@ -51,9 +51,14 @@
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 
+#include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -62,6 +67,7 @@
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/ParserQuery.h>
+#include <Parsers/parseDatabaseAndTableName.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryNormalization.h>
 #include <Parsers/queryToString.h>
@@ -874,21 +880,21 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
             parser.setContext(context.get());
 
-        /// TODO Parser should fail early when max_query_size limit is reached.
-        ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
-        if (settings.use_sql_binding && !internal)
-        {
-            try
+            /// TODO Parser should fail early when max_query_size limit is reached.
+            ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+            if (settings.use_sql_binding && !internal)
             {
-                ASTPtr binding_ast = SQLBindingUtils::getASTFromBindings(begin, end, ast, context);
-                if (binding_ast)
-                    ast = binding_ast;
+                try
+                {
+                    ASTPtr binding_ast = SQLBindingUtils::getASTFromBindings(begin, end, ast, context);
+                    if (binding_ast)
+                        ast = binding_ast;
+                }
+                catch (...)
+                {
+                    tryLogWarningCurrentException(&Poco::Logger::get("SQL Binding"), "SQL binding match error.");
+                }
             }
-            catch (...)
-            {
-                tryLogWarningCurrentException(&Poco::Logger::get("SQL Binding"), "SQL binding match error.");
-            }
-        }
         }
         else
         {
@@ -928,7 +934,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
         if (input_ast == nullptr)
-            interpretSettings(ast, context);
+            InterpreterSetQuery::applySettingsFromQuery(ast, context);
 
         if (context->getServerType() == ServerType::cnch_server && context->hasQueryContext())
         {
@@ -938,22 +944,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 IdentifierNameNormalizer().visit<false>(ast.get());
         }
 
-        if (auto * explain_select_query = ast->as<ASTExplainQuery>())
-        {
-            const auto * select_with_union_query = explain_select_query->getExplainedQuery()->as<ASTSelectWithUnionQuery>();
-            if (select_with_union_query && !select_with_union_query->list_of_selects->children.empty())
-            {
-                const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
-                if (last_select && last_select->settings())
-                    InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
-            }
-            else
-            {
-                auto * insert_query = explain_select_query->getExplainedQuery()->as<ASTInsertQuery>();
-                if (insert_query && insert_query->settings_ast)
-                    InterpreterSetQuery(insert_query->settings_ast, context).executeForCurrentContext();
-            }
-        }
+        /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
+        /// to allow settings to take effect.
 
         if (const auto * query_with_table_output = dynamic_cast<const ASTQueryWithTableAndOutput *>(ast.get()))
         {
@@ -961,10 +953,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             query_table = query_with_table_output->table;
         }
 
-        auto * insert_query = ast->as<ASTInsertQuery>();
-
         context->setQueryExpirationTimeStamp();
-
+        auto * insert_query = ast->as<ASTInsertQuery>();
         if (insert_query && insert_query->data)
         {
             query_end = insert_query->data;
@@ -1164,7 +1154,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 else
                 {
                     InterpreterSelectQueryUseOptimizer * optimizer_interpret = typeid_cast<InterpreterSelectQueryUseOptimizer *>(&*interpreter);
-                    if (optimizer_interpret)
+                    if (optimizer_interpret && !optimizer_interpret->isCreatePreparedStatement())
                     {
                         res = optimizer_interpret->readFromQueryCache(context, query_cache_context);
                         if (query_cache_context.query_cache_usage != QueryCache::Usage::Read)
@@ -1176,6 +1166,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
             catch (...)
             {
+                if (ast->as<ASTExecutePreparedStatementQuery>() || ast->as<ASTCreatePreparedStatementQuery>())
+                    throw;
+
                 if (typeid_cast<const InterpreterSelectQueryUseOptimizer *>(&*interpreter))
                 {
                     static std::unordered_set<int> no_fallback_error_codes = {159, 202, 209, 252, 394, 2010, 2012, 2013, 1159, 241};

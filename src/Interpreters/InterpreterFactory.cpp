@@ -43,6 +43,7 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTReproduceQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
@@ -92,6 +93,7 @@
 #include <Interpreters/InterpreterDropAccessEntityQuery.h>
 #include <Interpreters/InterpreterDropWarehouseQuery.h>
 #include <Interpreters/InterpreterDropWorkerGroupQuery.h>
+#include <Interpreters/InterpreterDropPreparedStatementQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterUndropQuery.h>
 #include <Interpreters/InterpreterDumpQuery.h>
@@ -118,6 +120,7 @@
 #include <Interpreters/InterpreterShowCreateAccessEntityQuery.h>
 #include <Interpreters/InterpreterShowCreateQuery.h>
 #include <Interpreters/InterpreterShowGrantsQuery.h>
+#include <Interpreters/InterpreterShowPreparedStatementQuery.h>
 #include <Interpreters/InterpreterShowPrivilegesQuery.h>
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
@@ -503,6 +506,27 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTDropBinding>())
     {
         return std::make_unique<InterpreterDropBinding>(query, context);
+    }
+    else if (query->as<ASTCreatePreparedStatementQuery>())
+    {
+        if (QueryUseOptimizerChecker::check(query, context, true))
+            return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
+
+        throw Exception("Prepared statements requires optimizer enabled", ErrorCodes::NOT_IMPLEMENTED);
+    }
+    else if (query->as<ASTExecutePreparedStatementQuery>())
+    {
+        if (!context->getSettings().enable_optimizer)
+            throw Exception("Execute prepared statements requires optimizer enabled", ErrorCodes::NOT_IMPLEMENTED);
+        return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
+    }
+    else if (query->as<ASTShowPreparedStatementQuery>())
+    {
+        return std::make_unique<InterpreterShowPreparedStatementQuery>(query, context);
+    }
+    else if (query->as<ASTDropPreparedStatementQuery>())
+    {
+        return std::make_unique<InterpreterDropPreparedStatementQuery>(query, context);
     }
     else
     {

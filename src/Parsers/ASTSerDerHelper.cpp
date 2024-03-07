@@ -54,6 +54,8 @@
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTPartToolKit.h>
 #include <Parsers/ASTPartition.h>
+#include <Parsers/ASTPreparedParameter.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTProjectionDeclaration.h>
 #include <Parsers/ASTProjectionSelectQuery.h>
 #include <Parsers/ASTQualifiedAsterisk.h>

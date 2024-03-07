@@ -41,21 +41,34 @@ Constants ConstantsDeriverVisitor::visitFilterStep(const FilterStep & step, Cons
     Predicate::ExtractionResult<String> result
         = translator.getExtractionResult(step.getFilter()->clone(), step.getOutputStream().header.getNamesAndTypes());
     auto values = result.tuple_domain.extractFixedValues();
-    if (values.has_value())
+    std::map<String, FieldWithType> filter_values;
+    const Constants & origin_constants = context.getInput()[0];
+    for (const auto & value : origin_constants.getValues())
     {
-        std::map<String, FieldWithType> filter_values;
-        const Constants & origin_constants = context.getInput()[0];
-        for (const auto & value : origin_constants.getValues())
-        {
-            filter_values[value.first] = value.second;
-        }
+        filter_values[value.first] = value.second;
+    }
+    if (values)
+    {
         for (auto & value : values.value())
         {
             filter_values[value.first] = value.second;
         }
-        return Constants{filter_values};
     }
-    return context.getInput()[0];
+    // tmpfix for prepared params
+    for (const auto & conjunct : PredicateUtils::extractConjuncts(step.getFilter()->clone()))
+    {
+        const auto * func = conjunct->as<ASTFunction>();
+        if (!func || func->name != "equals")
+            continue;
+        const auto * column = func->arguments->children[0]->as<ASTIdentifier>();
+        if (!column)
+            continue;
+        const auto * prepared_param = func->arguments->children[1]->as<ASTPreparedParameter>();
+        if (!prepared_param)
+            continue;
+        filter_values[column->name()] = FieldWithType{DataTypeFactory::instance().get(prepared_param->type), String{prepared_param->name}};
+    }
+    return Constants{filter_values};
 }
 
 Constants ConstantsDeriverVisitor::visitJoinStep(const JoinStep & step, ConstantsDeriverContext & context)

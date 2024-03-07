@@ -42,7 +42,8 @@ bool IsDistinctPlanVisitor::visitValuesNode(ValuesNode & node, Void &)
 
 bool IsDistinctPlanVisitor::visitLimitNode(LimitNode & node, Void &)
 {
-    return dynamic_cast<const LimitStep *>(node.getStep().get())->getLimit() <= 1;
+    const auto * step = dynamic_cast<const LimitStep *>(node.getStep().get());
+    return !step->hasPreparedParam() && step->getLimitValue() <= 1;
 }
 
 bool IsDistinctPlanVisitor::visitIntersectNode(IntersectNode & node, Void & context)

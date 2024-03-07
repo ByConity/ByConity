@@ -55,11 +55,12 @@
 #include <Parsers/IAST.h>
 #include <Parsers/ASTAssignment.h>
 
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserCase.h>
+#include <Parsers/ParserPreparedParameter.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/parseIdentifierOrStringLiteral.h>
 #include <Parsers/parseIntervalKind.h>
-#include <Parsers/ExpressionListParsers.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserCase.h>
 
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -2585,7 +2586,8 @@ bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         || ParserExistsExpression(dt).parse(pos, node, expected)
         || ParserCompoundIdentifier(false, true).parse(pos, node, expected)
         || ParserSubstitution(dt).parse(pos, node, expected)
-        || ParserMySQLGlobalVariable().parse(pos, node, expected);
+        || ParserMySQLGlobalVariable().parse(pos, node, expected)
+        || ParserPreparedParameter().parse(pos, node, expected);
 }
 
 

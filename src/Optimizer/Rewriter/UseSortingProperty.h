@@ -2,7 +2,9 @@
 
 #include <Core/SortDescription.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/prepared_statement.h>
 #include <Optimizer/Property/Equivalences.h>
+#include <Optimizer/Property/Property.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/SimplePlanRewriter.h>
@@ -49,7 +51,7 @@ private:
 struct SortInfo
 {
     SortDescription sort_desc;
-    size_t limit;
+    SizeOrVariable limit;
 };
 
 class PushSortingInfoRewriter : public SimplePlanRewriter<SortInfo>

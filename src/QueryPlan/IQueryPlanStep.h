@@ -16,6 +16,7 @@
 #pragma once
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
+#include <Interpreters/prepared_statement.h>
 #include <Parsers/IAST_fwd.h>
 #include <Protos/EnumMacros.h>
 #include <Protos/plan_node.pb.h>
@@ -288,6 +289,9 @@ public:
     }
     static String toString(Type type);
 
+    virtual void prepare(const PreparedStatementContext &)
+    {
+    }
 protected:
     DataStreams input_streams;
     std::optional<DataStream> output_stream;

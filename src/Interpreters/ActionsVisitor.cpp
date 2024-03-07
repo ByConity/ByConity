@@ -29,13 +29,19 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
-#include <DataTypes/DataTypeSet.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeBitMap64.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeFunction.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
 
 #include <Columns/ColumnSet.h>
@@ -725,6 +731,8 @@ void ActionsMatcher::visit(const ASTPtr & ast, Data & data)
         visit(*literal, ast, data);
     else if (auto * expression_list = ast->as<ASTExpressionList>())
         visit(*expression_list, ast, data);
+    else if (auto * prepared_param = ast->as<ASTPreparedParameter>())
+        visit(*prepared_param, ast, data);
     else
     {
         for (auto & child : ast->children)
@@ -855,6 +863,19 @@ void ActionsMatcher::visit(const ASTIdentifier & identifier, const ASTPtr &, Dat
         if (identifier.prefer_alias_to_column_name && !identifier.alias.empty())
             data.addAlias(identifier.name(), identifier.alias);
     }
+}
+
+void ActionsMatcher::visit(const ASTPreparedParameter & prepared_param, const ASTPtr &, Data & data)
+{
+    auto column_name = prepared_param.getColumnName();
+
+    if (data.hasColumn(column_name))
+        return;
+
+    auto column_type = DataTypeFactory::instance().get(prepared_param.type);
+    auto & level = data.actions_stack.stack.back();
+    const auto & node = level.actions_dag->addPreparedColumn(column_name, column_type);
+    level.index->addNode(&node);
 }
 
 static bool checkIdentifier(const ASTPtr & node)

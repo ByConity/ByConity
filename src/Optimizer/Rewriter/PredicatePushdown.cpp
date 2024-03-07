@@ -822,7 +822,7 @@ PlanNodePtr PredicateVisitor::visitPartialSortingNode(PartialSortingNode & node,
 
 PlanNodePtr PredicateVisitor::visitSortingNode(SortingNode & node, PredicateContext & predicate_context)
 {
-    if (node.getStep()->getLimit() != 0)
+    if (node.getStep()->hasPreparedParam() || node.getStep()->getLimitValue() != 0)
         return visitPlanNode(node, predicate_context);
     return processChild(node, predicate_context);
 }

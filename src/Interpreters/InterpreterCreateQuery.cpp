@@ -29,7 +29,7 @@
 #include <Common/typeid_cast.h>
 #include <Common/Macros.h>
 #include <Common/randomSeed.h>
-#include <Common/renameat2.h>
+#include <Common/atomicRename.h>
 
 #include <Core/Defines.h>
 #include <Core/Settings.h>
@@ -800,12 +800,18 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
         {
             auto cloned_query = create.select->clone();
             if (QueryUseOptimizerChecker::check(cloned_query, getContext()))
-                as_select_sample = InterpreterSelectQueryUseOptimizer(cloned_query, getContext(), {}).getSampleBlock();
+                as_select_sample = InterpreterSelectQueryUseOptimizer(
+                                       cloned_query, getContext(), SelectQueryOptions().analyze().setWithoutExtendedObject())
+                                       .getSampleBlock();
             else
-                as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(cloned_query, getContext());
+                as_select_sample
+                    = InterpreterSelectWithUnionQuery(cloned_query, getContext(), SelectQueryOptions().analyze().setWithoutExtendedObject())
+                          .getSampleBlock();
         }
         else
-            as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), getContext());
+            as_select_sample = InterpreterSelectWithUnionQuery(
+                                   create.select->clone(), getContext(), SelectQueryOptions().analyze().setWithoutExtendedObject())
+                                   .getSampleBlock();
         properties.columns = ColumnsDescription(as_select_sample.getNamesAndTypesList());
     }
     else if (create.as_table_function)

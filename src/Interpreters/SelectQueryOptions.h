@@ -65,6 +65,7 @@ struct SelectQueryOptions
     bool is_internal = false;
     bool is_subquery = false; // non-subquery can also have subquery_depth > 0, e.g. insert select
     bool with_all_cols = false; /// asterisk include materialized and aliased columns
+    bool without_extended_objects = false;
 
     /**
      * if true, it means we should generate plans being compatible with distributed plansegments.
@@ -154,6 +155,12 @@ struct SelectQueryOptions
     SelectQueryOptions & distributedStages(bool value = true)
     {
         distributed_stages = value;
+        return *this;
+    }
+
+    SelectQueryOptions & setWithoutExtendedObject(bool value = true)
+    {
+        without_extended_objects = value;
         return *this;
     }
 };

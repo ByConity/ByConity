@@ -22,6 +22,7 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/misc.h>
 #include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTWithElement.h>
 #include <Storages/StorageView.h>
@@ -135,6 +136,11 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             || explain->getKind() ==  ASTExplainQuery::MetaData;
          return explain_plan && check(explain->getExplainedQuery(), context, throw_exception);
     }
+    if (auto * prepare = node->as<ASTCreatePreparedStatementQuery>())
+    {
+        return check(prepare->getQuery(), context, throw_exception);
+    }
+
 
     bool support = false;
 
