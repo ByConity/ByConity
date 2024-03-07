@@ -600,7 +600,8 @@ PlanNodePtr ColumnPruningVisitor::visitSortingNode(SortingNode & node, NameSet &
         require.insert(item.column_name);
     }
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, require);
-    auto sort_step = std::make_shared<SortingStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getLimit(), step->isPartial(), step->getPrefixDescription());
+    auto sort_step = std::make_shared<SortingStep>(
+        child->getStep()->getOutputStream(), step->getSortDescription(), step->getLimit(), step->getStage(), step->getPrefixDescription());
     return SortingNode::createPlanNode(context->nextNodeId(), std::move(sort_step), PlanNodes{child}, node.getStatistics());
 }
 

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <vector>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/WorkerGroupHandle.h>
@@ -57,4 +58,18 @@ splitCnchParts(const ContextPtr & context, const IStorage & storage, const Serve
 void moveBucketTablePartsToAssignedParts(std::unordered_map<String, ServerDataPartsVector> & assigned_map, ServerDataPartsVector & bucket_parts, const WorkerList & workers, std::set<Int64> required_bucket_numbers = {});
 BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers = {});
 
+}
+
+template <class F>
+constexpr void filterParts(std::vector<F> & parts, size_t index, size_t count)
+{
+    size_t c = 0;
+    for (auto iter = parts.begin(); iter != parts.end();)
+    {
+        if (c % count != index)
+            iter = parts.erase(iter);
+        else
+            iter++;
+        c++;
+    }
 }

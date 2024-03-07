@@ -192,7 +192,6 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
             if (part->assign_compute_host_port != part->disk_cache_host_port)
                 ProfileEvents::increment(ProfileEvents::CnchDiskCacheNodeUnLocalityParts, 1);
         }
-
         else
             exceed_parts.emplace_back(part);
     }

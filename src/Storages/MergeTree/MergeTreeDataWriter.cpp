@@ -47,6 +47,7 @@
 #include <Common/HashTable/HashMap.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/typeid_cast.h>
+#include <Columns/ColumnNullable.h>
 #include <DataTypes/ObjectUtils.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 
@@ -138,6 +139,9 @@ void updateTTL(
     bool update_part_min_max_ttls)
 {
     auto ttl_column = ITTLAlgorithm::executeExpressionAndGetColumn(ttl_entry.expression, block, ttl_entry.result_column);
+
+    if (ttl_column->isNullable())
+        ttl_column = static_cast<const ColumnNullable *>(ttl_column.get())->getNestedColumnPtr();
 
     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(ttl_column.get()))
     {

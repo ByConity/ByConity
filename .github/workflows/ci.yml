@@ -216,8 +216,6 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
-          # TODO remove disabled test case after it is fixed
-          mv queries/4_cnch_stateless/00715_bounding_ratio_ck233.sql queries/4_cnch_stateless/00715_bounding_ratio_ck233.sql.disabled
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1 cte_mode=INLINED enable_runtime_filter=0'

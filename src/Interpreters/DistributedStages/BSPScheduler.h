@@ -1,3 +1,5 @@
+#include <cstddef>
+#include <unordered_map>
 #include <Interpreters/DistributedStages/Scheduler.h>
 
 namespace DB
@@ -40,7 +42,9 @@ public:
 private:
     std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
     void triggerDispatch(const std::vector<WorkerNode> & available_workers);
+    void sendResources(PlanSegment * plan_segment_ptr) override;
     void prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size) override;
+    PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) override;
 
     std::mutex segment_status_counter_mutex;
     std::unordered_map<size_t, std::unordered_set<UInt64>> segment_status_counter;
@@ -51,6 +55,8 @@ private:
     // segment id -> [segment instance, node]
     std::unordered_map<size_t, std::unordered_map<UInt64, AddressInfo>> segment_parallel_locations;
     PendingTaskIntances pending_task_instances;
+    // segment task instance -> <index, total> count in this worker
+    std::unordered_map<SegmentTaskInstance, std::pair<size_t, size_t>, SegmentTaskInstance::Hash> source_task_idx;
 };
 
 }

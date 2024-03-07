@@ -1242,9 +1242,18 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
         metadata_copy.column_ttls_by_name[name] = new_ttl_entry;
     }
 
+    bool allow_nullable_key = false;
+    if (metadata_copy.hasSettingsChanges())
+    {
+        auto settings_changes = metadata_copy.getSettingsChanges()->as<const ASTSetQuery &>().changes;
+        auto * field = settings_changes.tryGet("allow_nullable_key");
+        if (field && field->get<bool>())
+            allow_nullable_key = true;
+    }
+
     if (metadata_copy.table_ttl.definition_ast != nullptr)
         metadata_copy.table_ttl = TTLTableDescription::getTTLForTableFromAST(
-            metadata_copy.table_ttl.definition_ast, metadata_copy.columns, context, metadata_copy.primary_key);
+            metadata_copy.table_ttl.definition_ast, metadata_copy.columns, context, metadata_copy.primary_key, allow_nullable_key);
 
     metadata = std::move(metadata_copy);
 }

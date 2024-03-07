@@ -628,7 +628,7 @@ std::shared_ptr<SortingStep> SymbolMapper::map(const SortingStep & sorting)
         map(sorting.getInputStreams()[0]),
         SortDescription{map(sorting.getSortDescription())},
         sorting.getLimit(),
-        sorting.isPartial(),
+        sorting.getStage(),
         SortDescription{map(sorting.getPrefixDescription())});
 }
 

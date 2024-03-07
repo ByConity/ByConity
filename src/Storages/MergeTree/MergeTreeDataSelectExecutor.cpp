@@ -68,9 +68,10 @@
 
 #include <Interpreters/InterpreterSelectQuery.h>
 
+#include <IO/WriteBufferFromOStream.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
-#include <IO/WriteBufferFromOStream.h>
 #include <roaring.hh>
 
 namespace ProfileEvents
@@ -169,6 +170,12 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     const auto & metadata_for_reading = storage_snapshot->getMetadataForQuery();
 
     auto parts = data.getDataPartsVector();
+
+    if (data.source_index && data.source_count)
+    {
+        LOG_TRACE(log, "Filter the data parts with index {} count {}", data.source_index.value(), data.source_count.value());
+        filterParts(parts, data.source_index.value(), data.source_count.value());
+    }
 
     if (settings.enable_ab_index_optimization)
         query_info.index_context->enable_read_bitmap_index = settings.enable_ab_index_optimization;

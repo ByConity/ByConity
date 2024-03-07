@@ -30,6 +30,7 @@
 #include <QueryPlan/SortingStep.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <Poco/StringTokenizer.h>
+#include "QueryPlan/SortingStep.h"
 
 namespace DB
 {
@@ -325,7 +326,7 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
         }
 
         auto before_exchange_sort = std::make_unique<SortingStep>(
-            exchange_child->getStep()->getOutputStream(), new_sort_desc, step->getLimit(), true, SortDescription{});
+            exchange_child->getStep()->getOutputStream(), new_sort_desc, step->getLimit(), SortingStep::Stage::PARTIAL, SortDescription{});
         PlanNodes children{exchange_child};
         auto before_exchange_sort_node
             = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(before_exchange_sort), children, node->getStatistics());
@@ -333,10 +334,12 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
     }
 
     auto exchange_step = old_exchange_step->copy(context.context);
+    dynamic_cast<ExchangeStep *>(exchange_step.get())->setKeepOrder(true);
     auto exchange_node = PlanNodeBase::createPlanNode(
         context.context->nextNodeId(), std::move(exchange_step), exchange_children, old_exchange_node->getStatistics());
 
     QueryPlanStepPtr final_sort = step->copy(context.context);
+    dynamic_cast<SortingStep *>(final_sort.get())->setStage(SortingStep::Stage::MERGE);
     PlanNodes exchange{exchange_node};
     auto final_sort_node
         = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(final_sort), exchange, node->getStatistics());

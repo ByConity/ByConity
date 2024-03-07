@@ -82,11 +82,20 @@ message OffsetStep {
 }
 
 message SortingStep {
+  message Stage {
+    enum Enum {
+        FULL = 0;
+        MERGE = 1;
+        PARTIAL = 2;
+    }
+  }
+
   required ITransformingStep query_plan_base = 1;
   repeated SortColumnDescription result_description = 2;
   required uint64 limit = 3;
   required bool partial = 4;
   repeated SortColumnDescription prefix_description = 5;
+  optional Stage.Enum stage = 6;
 }
 
 message ValuesStep {

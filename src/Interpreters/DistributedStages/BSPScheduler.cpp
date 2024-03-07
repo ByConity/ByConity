@@ -1,6 +1,12 @@
-#include <CloudServices/CnchServerResource.h>
-
 #include "BSPScheduler.h"
+
+#include <cstddef>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <CloudServices/CnchServerResource.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/Scheduler.h>
 
 namespace DB
 {
@@ -10,6 +16,7 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
 {
     (void)plan_segment_ptr;
     const auto selector_info = node_selector_result[task.task_id];
+    std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_count_on_workers;
     for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
@@ -21,6 +28,22 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
         else
         {
             pending_task_instances.for_nodes[selector_info.worker_nodes[i].address].emplace(task.task_id, i);
+            if (task.is_source)
+            {
+                source_task_count_on_workers[selector_info.worker_nodes[i].address] += 1;
+            }
+        }
+    }
+    if (task.is_source)
+    {
+        std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_index_on_workers;
+        for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
+        {
+            const auto & addr = selector_info.worker_nodes[i].address;
+            source_task_idx.emplace(
+                SegmentTaskInstance{task.task_id, i},
+                std::make_pair(source_task_index_on_workers[addr], source_task_count_on_workers[addr]));
+            source_task_index_on_workers[addr]++;
         }
     }
     triggerDispatch(cluster_nodes.rank_workers);
@@ -79,7 +102,7 @@ void BSPScheduler::updateSegmentStatusCounter(const size_t & segment_id, const U
     }
     segment_status_counter[segment_id].insert(parallel_index);
 
-    if (segment_status_counter[segment_id].size() == dag_graph_ptr->segment_paralle_size_map[segment_id])
+    if (segment_status_counter[segment_id].size() == dag_graph_ptr->segment_parallel_size_map[segment_id])
     {
         onSegmentFinished(segment_id, /*is_succeed=*/true, /*is_canceled=*/true);
     }
@@ -115,20 +138,23 @@ std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const A
         }
     }
 
-    for (auto no_pref = pending_task_instances.no_prefs.begin(); no_pref != pending_task_instances.no_prefs.end();)
+    if (worker != local_address)
     {
-        const auto & node_iter = occupied_workers.find(no_pref->task_id);
-        // If the target node is busy, skip it.
-        if (node_iter != occupied_workers.end() && node_iter->second.contains(worker))
+        for (auto no_pref = pending_task_instances.no_prefs.begin(); no_pref != pending_task_instances.no_prefs.end();)
         {
-            no_pref++;
-            continue;
-        }
-        else
-        {
-            SegmentTaskInstance ret = *no_pref;
-            pending_task_instances.no_prefs.erase(no_pref);
-            return std::make_pair(true, ret);
+            const auto & node_iter = occupied_workers.find(no_pref->task_id);
+            // If the target node is busy, skip it.
+            if (node_iter != occupied_workers.end() && node_iter->second.contains(worker))
+            {
+                no_pref++;
+                continue;
+            }
+            else
+            {
+                SegmentTaskInstance ret = *no_pref;
+                pending_task_instances.no_prefs.erase(no_pref);
+                return std::make_pair(true, ret);
+            }
         }
     }
     return std::make_pair(false, SegmentTaskInstance(0, 0));
@@ -172,7 +198,7 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
     }
 }
 
-void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size)
+void BSPScheduler::sendResources(PlanSegment * plan_segment_ptr)
 {
     // Send table resources to worker.
     ResourceOption option;
@@ -190,12 +216,28 @@ void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_s
         query_context->getCnchServerResource()->setSendMutations(true);
         query_context->getCnchServerResource()->sendResources(query_context, option);
     }
+}
 
+void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size)
+{
     // Register exchange for all outputs.
     for (const auto & output : plan_segment_ptr->getPlanSegmentOutputs())
     {
         query_context->getExchangeDataTracker()->registerExchange(
             query_context->getCurrentQueryId(), output->getExchangeId(), parallel_size);
     }
+}
+
+PlanSegmentExecutionInfo BSPScheduler::generateExecutionInfo(size_t task_id, size_t index)
+{
+    PlanSegmentExecutionInfo execution_info;
+    execution_info.parallel_id = index;
+    SegmentTaskInstance instance{task_id, index};
+    if (source_task_idx.contains(instance))
+    {
+        execution_info.source_task_index = source_task_idx[instance].first;
+        execution_info.source_task_count = source_task_idx[instance].second;
+    }
+    return execution_info;
 }
 }
