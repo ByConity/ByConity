@@ -23,7 +23,11 @@
 namespace DB
 {
 bool PropertyMatcher::matchNodePartitioning(
-    const Context & context, Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences, const Constants & constants)
+    const Context & context,
+    Partitioning & required,
+    const Partitioning & actual,
+    const SymbolEquivalences & equivalences,
+    const Constants & constants)
 {
     if (required.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
         return true;
@@ -57,15 +61,15 @@ Sorting PropertyMatcher::matchSorting(
 /// Optimize in case of exact match with order key element
 /// or in some simple cases when order key element is wrapped into monotonic function.
 /// Returns on of {-1, 0, 1} - direction of the match. 0 means - doesn't match.
-std::optional<SortOrder> matchSortDescription(const SortColumnDescription & require, const SortColumnDescription & actual)
+SortOrder matchSortDescription(const SortColumnDescription & require, const SortColumnDescription & actual)
 {
     /// If required order depend on collation, it cannot be matched with primary key order.
     /// Because primary keys cannot have collations.
     if (require.collator)
-        return {};
+        return SortOrder::UNKNOWN;
 
     if (actual.collator)
-        return {};
+        return SortOrder::UNKNOWN;
 
     auto match_direction = [&](int require_dir, int actual_dir) {
         int current_direction = 0;
@@ -107,7 +111,7 @@ std::optional<SortOrder> matchSortDescription(const SortColumnDescription & requ
     if (require.column_name == actual.column_name)
         return SortColumn::directionToSortOrder(direction, null_direction);
 
-    return {};
+    return SortOrder::UNKNOWN;
 }
 
 Sorting PropertyMatcher::matchSorting(const Context &, const SortDescription & required, const Sorting & actual, const SymbolEquivalences &)
@@ -128,7 +132,7 @@ Sorting PropertyMatcher::matchSorting(const Context &, const SortDescription & r
         while (desc_pos < required.size() && key_pos < actual.size())
         {
             auto match = matchSortDescription(required[desc_pos], actual[key_pos].toSortColumnDesc());
-            bool is_matched = match && (desc_pos == 0 || match == read_direction);
+            bool is_matched = match != SortOrder::UNKNOWN && (desc_pos == 0 || match == read_direction);
 
             if (!is_matched)
             {
@@ -144,7 +148,7 @@ Sorting PropertyMatcher::matchSorting(const Context &, const SortDescription & r
             }
 
             if (desc_pos == 0)
-                read_direction = match.value();
+                read_direction = match;
 
             sort_description_for_merging.push_back(required[desc_pos]);
 

@@ -384,11 +384,11 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
                 }
             }
             break;
-        case Partitioning::Handle::FIXED_HASH:
+        case Partitioning::Handle::FIXED_HASH: {
             /// if all input are not table type, parallel size should respect distributed_max_parallel_size setting
+            size_t max_parallel_size = plan_segment_context.context->getSettingsRef().distributed_max_parallel_size;
             if (!input_has_table && !split_context.inputs.empty())
             {
-                size_t max_parallel_size = plan_segment_context.context->getSettingsRef().distributed_max_parallel_size;
                 size_t ret = plan_segment_context.shard_number;
                 if (max_parallel_size > 0 || plan_segment_context.health_parallel)
                 {
@@ -402,7 +402,12 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
                     return {plan_segment_context.cluster_name, ret};
                 }
             }
-            return {plan_segment_context.cluster_name, plan_segment_context.shard_number};
+            /// Respect distributed_max_parallel_size in bsp mode.
+            if (max_parallel_size > 0 && max_parallel_size > plan_segment_context.shard_number)
+                return {plan_segment_context.cluster_name, max_parallel_size};
+            else
+                return {plan_segment_context.cluster_name, plan_segment_context.shard_number};
+        }
         default:
             break;
     }

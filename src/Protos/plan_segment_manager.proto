@@ -120,6 +120,8 @@ message SubmitPlanSegmentRequest {
   required uint32 plan_segment_id = 5;
   required uint32 parallel_id = 6;
   optional AddressInfo execution_address = 7;
+  optional uint32 source_task_index = 8;
+  optional uint32 source_task_count = 9;
 }
 
 message ExecutePlanSegmentRequest {
@@ -172,6 +174,8 @@ message ExecutePlanSegmentRequest {
   optional string initial_user = 28;
   optional bool check_session = 29;
   optional uint32 parallel_id = 30;
+  optional uint32 source_task_index = 31;
+  optional uint32 source_task_count = 32;
 }
 
 message ExecutePlanSegmentResponse {

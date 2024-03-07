@@ -805,7 +805,7 @@ std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::Aggreg
 
     InputOrderInfoPtr group_by_info = nullptr;
     if (proto.has_group_by_info())
-        group_by_info = InputOrderInfo::fromProto(proto.group_by_info(), context);
+        group_by_info = InputOrderInfo::fromProto(proto.group_by_info());
     SortDescription group_by_sort_description;
     for (const auto & proto_element : proto.group_by_sort_description())
     {

@@ -1,7 +1,7 @@
 1	Nullable(String)
-TEST_CASE0	CREATE TABLE TEST_UPPERCASE.TEST_CASE0\n(\n    `XX` Nullable(String)\n)\nENGINE = CnchMergeTree\nORDER BY XX\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-TEST_CASE1	CREATE TABLE TEST_UPPERCASE.TEST_CASE1\n(\n    `EVENT_DATE` Nullable(Date),\n    `EVENT_TYPE` Nullable(String),\n    `EVENT_COUNT` Nullable(Int32),\n    `EVENTDATE` Nullable(Date) DEFAULT toDate(EVENT_DATE)\n)\nENGINE = CnchMergeTree\nPARTITION BY toYYYYMM(EVENT_DATE)\nORDER BY (EVENT_TYPE, EVENT_COUNT)\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-TEST_CASE2	CREATE TABLE TEST_UPPERCASE.TEST_CASE2\n(\n    `ID` Nullable(UInt64),\n    `UPDATED_AT` Nullable(DateTime) MATERIALIZED now(),\n    `SIZE_BYTES` Nullable(Int64),\n    `SIZE` Nullable(String) ALIAS formatReadableSize(SIZE_BYTES)\n)\nENGINE = CnchMergeTree\nPRIMARY KEY ID\nORDER BY ID\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+TEST_CASE0	CREATE TABLE TEST_UPPERCASE.TEST_CASE0\n(\n    `XX` Nullable(String)\n)\nENGINE = CnchMergeTree\nORDER BY XX\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192
+TEST_CASE1	CREATE TABLE TEST_UPPERCASE.TEST_CASE1\n(\n    `EVENT_DATE` Nullable(Date),\n    `EVENT_TYPE` Nullable(String),\n    `EVENT_COUNT` Nullable(Int32),\n    `EVENTDATE` Nullable(Date) DEFAULT toDate(EVENT_DATE)\n)\nENGINE = CnchMergeTree\nPARTITION BY toYYYYMM(EVENT_DATE)\nORDER BY (EVENT_TYPE, EVENT_COUNT)\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192
+TEST_CASE2	CREATE TABLE TEST_UPPERCASE.TEST_CASE2\n(\n    `ID` Nullable(UInt64),\n    `UPDATED_AT` Nullable(DateTime) MATERIALIZED now(),\n    `SIZE_BYTES` Nullable(Int64),\n    `SIZE` Nullable(String) ALIAS formatReadableSize(SIZE_BYTES)\n)\nENGINE = CnchMergeTree\nPRIMARY KEY ID\nORDER BY ID\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, index_granularity = 8192
 2022-01-01	Type1
 2022-01-02	Type2
 2022-01-03	Type3

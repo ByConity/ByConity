@@ -699,8 +699,31 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     else
         storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getMergeTreeSettings(args.skip_unknown_settings));
 
+    /// In ANSI mode, allow_nullable_key must be true
+    if (args.getLocalContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+    {
+        // If user sets allow_nullable_key=0.
+        if (storage_settings->allow_nullable_key.changed && !storage_settings->allow_nullable_key.value)
+            throw Exception("In ANSI mode, allow_nullable_key must be true.", ErrorCodes::BAD_ARGUMENTS);
+
+        storage_settings->allow_nullable_key.value = true;
+    }
+
+    bool allow_nullable_key = storage_settings->allow_nullable_key;
+
     if (is_extended_storage_def)
     {
+        do
+        {
+            if (!args.storage_def->settings)
+                break;
+            auto * field = args.storage_def->settings->changes.tryGet("allow_nullable_key");
+            if (!field)
+                break;
+            if (field->get<bool>())
+                allow_nullable_key = true;
+        } while (false);
+
         ASTPtr partition_by_key;
         if (args.storage_def->partition_by)
             partition_by_key = args.storage_def->partition_by->ptr();
@@ -756,7 +779,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         if (args.storage_def->ttl_table)
         {
             metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(
-                args.storage_def->ttl_table->ptr(), metadata.columns, args.getContext(), metadata.primary_key);
+                args.storage_def->ttl_table->ptr(),
+                metadata.columns, args.getContext(),
+                metadata.primary_key,
+                allow_nullable_key);
         }
 
         if (args.query.columns_list && args.query.columns_list->indices)
@@ -789,7 +815,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             metadata.column_ttls_by_name[name] = new_ttl_entry;
         }
 
-        // For cnch, if storage_policy is not specified, modify it to cnch's default
         if (is_cnch || is_cloud)
         {
             if (!args.storage_def->settings)
@@ -799,10 +824,17 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 args.storage_def->set(args.storage_def->settings, settings_ast);
             }
 
+            /// For cnch, if storage_policy is not specified, modify it to cnch's default
             if (!args.storage_def->settings->changes.tryGet("storage_policy"))
             {
                 args.storage_def->settings->changes.push_back(
                     SettingChange("storage_policy", args.getContext()->getDefaultCnchPolicyName()));
+            }
+
+            /// Persist allow_nullable_key to kv for MYSQL and ANSI dialect when creating table.
+            if (storage_settings->allow_nullable_key && !args.storage_def->settings->changes.tryGet("allow_nullable_key"))
+            {
+                args.storage_def->settings->changes.push_back(SettingChange("allow_nullable_key", 1));
             }
         }
 
@@ -913,15 +945,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (arg_num != arg_cnt)
         throw Exception("Wrong number of engine arguments.", ErrorCodes::BAD_ARGUMENTS);
 
-    /// In ANSI mode, allow_nullable_key must be true
-    if (args.getLocalContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
-    {
-        // If user sets allow_nullable_key=0.
-        if (storage_settings->allow_nullable_key.changed && !storage_settings->allow_nullable_key.value)
-            throw Exception("In ANSI mode, allow_nullable_key must be true.", ErrorCodes::BAD_ARGUMENTS);
-
-        storage_settings->allow_nullable_key.value = true;
-    }
 
     if (replicated)
     {

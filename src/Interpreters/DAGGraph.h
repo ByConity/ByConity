@@ -51,7 +51,7 @@ struct DAGGraph
 #endif
     mutable bthread::Mutex status_mutex;
     AsyncContextPtr async_context;
-    std::unordered_map<size_t, UInt64> segment_paralle_size_map;
+    std::unordered_map<size_t, UInt64> segment_parallel_size_map;
     butil::IOBuf query_common_buf;
     butil::IOBuf query_settings_buf;
 };

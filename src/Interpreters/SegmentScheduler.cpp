@@ -423,7 +423,7 @@ void SegmentScheduler::updateReceivedSegmentStatusCounter(const String & query_i
             }
             query_status_received_counter_map[query_id][segment_id].insert(parallel_index);
 
-            for (auto & parallel : dag_ptr->segment_paralle_size_map)
+            for (auto & parallel : dag_ptr->segment_parallel_size_map)
             {
                 if (parallel.first == 0)
                     continue;
@@ -608,7 +608,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
                 }
             }
         }
-        graph_ptr->segment_paralle_size_map.emplace(it->first, it->second->getParallelSize());
+        graph_ptr->segment_parallel_size_map.emplace(it->first, it->second->getParallelSize());
     }
 }
 

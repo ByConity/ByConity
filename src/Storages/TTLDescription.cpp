@@ -21,6 +21,7 @@
 
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeNullable.h>
 
 
 namespace DB
@@ -95,7 +96,7 @@ void normalizeTTLExpression(ASTPtr & ttl_ast, const ColumnsDescription & columns
     replace_unexpected_indentifier(ttl_ast);
 }
 
-void checkTTLExpression(const ExpressionActionsPtr & ttl_expression, const String & result_column_name)
+void checkTTLExpression(const ExpressionActionsPtr & ttl_expression, const String & result_column_name, bool allow_nullable_type = false)
 {
     for (const auto & action : ttl_expression->getActions())
     {
@@ -113,13 +114,35 @@ void checkTTLExpression(const ExpressionActionsPtr & ttl_expression, const Strin
 
     const auto & result_column = ttl_expression->getSampleBlock().getByName(result_column_name);
 
-    if (!typeid_cast<const DataTypeDateTime *>(result_column.type.get())
-        && !typeid_cast<const DataTypeDate *>(result_column.type.get()))
+    const auto * result_type = result_column.type.get();
+
+    if (result_type->isNullable())
     {
-        throw Exception(
-            "TTL expression result column should have DateTime or Date type, but has " + result_column.type->getName(),
-            ErrorCodes::BAD_TTL_EXPRESSION);
+        if (!allow_nullable_type)
+        {
+            throw Exception(ErrorCodes::BAD_TTL_EXPRESSION,
+                "TTL expression result type is {} but allow_nullable_type is false.", result_type->getName());
+        }
+
+        auto nested_type = static_cast<const DataTypeNullable *>(result_type)->getNestedType();
+        if (!typeid_cast<const DataTypeDateTime *>(nested_type.get())
+            && !typeid_cast<const DataTypeDate *>(nested_type.get()))
+        {
+            throw Exception(ErrorCodes::BAD_TTL_EXPRESSION,
+                "TTL expression result column should have Nullable(DateTime) or Nullable(Date) type, but has " + result_type->getName());
+        }
     }
+    else
+    {
+        if (!typeid_cast<const DataTypeDateTime *>(result_column.type.get())
+            && !typeid_cast<const DataTypeDate *>(result_column.type.get()))
+        {
+            throw Exception(
+                "TTL expression result column should have DateTime or Date type, but has " + result_column.type->getName(),
+                ErrorCodes::BAD_TTL_EXPRESSION);
+        }
+    }
+
 }
 
 class FindAggregateFunctionData
@@ -202,7 +225,8 @@ TTLDescription TTLDescription::getTTLFromAST(
     const ASTPtr & definition_ast,
     const ColumnsDescription & columns,
     ContextPtr context,
-    const KeyDescription & primary_key)
+    const KeyDescription & primary_key,
+    bool allow_nullable_type)
 {
     TTLDescription result;
     const auto * ttl_element = definition_ast->as<ASTTTLElement>();
@@ -333,7 +357,7 @@ TTLDescription TTLDescription::getTTLFromAST(
         }
     }
 
-    checkTTLExpression(result.expression, result.result_column);
+    checkTTLExpression(result.expression, result.result_column, allow_nullable_type);
     return result;
 }
 
@@ -424,7 +448,8 @@ TTLTableDescription TTLTableDescription::getTTLForTableFromAST(
     const ASTPtr & definition_ast,
     const ColumnsDescription & columns,
     ContextPtr context,
-    const KeyDescription & primary_key)
+    const KeyDescription & primary_key,
+    bool allow_nullable_type)
 {
     TTLTableDescription result;
     if (!definition_ast)
@@ -435,7 +460,7 @@ TTLTableDescription TTLTableDescription::getTTLForTableFromAST(
     bool have_unconditional_delete_ttl = false;
     for (const auto & ttl_element_ptr : definition_ast->children)
     {
-        auto ttl = TTLDescription::getTTLFromAST(ttl_element_ptr, columns, context, primary_key);
+        auto ttl = TTLDescription::getTTLFromAST(ttl_element_ptr, columns, context, primary_key, allow_nullable_type);
         if (ttl.mode == TTLMode::DELETE)
         {
             if (!ttl.where_expression)

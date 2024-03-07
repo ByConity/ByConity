@@ -25,7 +25,15 @@ namespace DB
 class SortingStep : public ITransformingStep
 {
 public:
-    explicit SortingStep(const DataStream & input_stream, SortDescription description_, UInt64 limit_, bool partial_, SortDescription prefix_description_ = {});
+    ENUM_WITH_PROTO_CONVERTER(
+        Stage, // enum name
+        Protos::SortingStep::Stage, // proto enum message
+        (FULL),
+        (MERGE),
+        (PARTIAL)
+    );
+
+    explicit SortingStep(const DataStream & input_stream, SortDescription description_, UInt64 limit_, Stage stage_, SortDescription prefix_description_ = {});
 
     String getName() const override { return "Sorting"; }
 
@@ -34,7 +42,8 @@ public:
     const SortDescription & getPrefixDescription() const { return prefix_description; }
     void setPrefixDescription(const SortDescription & prefix_description_) { prefix_description = prefix_description_; }
     UInt64 getLimit() const { return limit; }
-    bool isPartial() const { return partial; }
+    Stage getStage() const { return stage; }
+    void setStage(Stage stage_) { stage = stage_; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
@@ -52,7 +61,7 @@ public:
 private:
     const SortDescription result_description;
     UInt64 limit;
-    bool partial;
+    Stage stage;
     SortDescription prefix_description;
 };
 

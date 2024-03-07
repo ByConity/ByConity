@@ -257,7 +257,7 @@ TransformResult PushdownLimitIntoWindow::transformImpl(PlanNodePtr node, const C
     auto new_sort = PlanNodeBase::createPlanNode(
         context.context->nextNodeId(),
         std::make_shared<SortingStep>(
-            source->getStep()->getOutputStream(), window_step->getWindow().order_by, limit_step->getLimit(), false, SortDescription{}),
+            source->getStep()->getOutputStream(), window_step->getWindow().order_by, limit_step->getLimit(), SortingStep::Stage::FULL, SortDescription{}),
         {source});
 
     auto new_limit = PlanNodeBase::createPlanNode(
@@ -305,7 +305,8 @@ TransformResult PushLimitIntoSorting::transformImpl(PlanNodePtr node, const Capt
             sorting_step->getInputStreams()[0],
             sorting_step->getSortDescription(),
             limit_step->getLimit() + limit_step->getOffset(),
-            sorting_step->isPartial()),
+            sorting_step->getStage(),
+            sorting_step->getPrefixDescription()),
         sorting->getChildren());
     node->replaceChildren({new_sorting});
     return TransformResult{node};

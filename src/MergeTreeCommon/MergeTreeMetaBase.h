@@ -44,6 +44,9 @@ public:
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
 
+    std::optional<size_t> source_index;
+    std::optional<size_t> source_count;
+
     /// Function to call if the part is suspected to contain corrupt data.
     using BrokenPartCallback = std::function<void (const String &)>;
 

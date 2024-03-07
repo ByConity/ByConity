@@ -132,6 +132,10 @@ void executePlanSegmentRemotely(
     request.set_query_id(plan_segment.getQueryId());
     request.set_plan_segment_id(plan_segment.getPlanSegmentId());
     request.set_parallel_id(execution_info.parallel_id);
+    if (execution_info.source_task_index)
+        request.set_source_task_index(execution_info.source_task_index.value());
+    if (execution_info.source_task_count)
+        request.set_source_task_count(execution_info.source_task_count.value());
     request.set_initial_query_start_time(context->getClientInfo().initial_query_start_time_microseconds.value);
     auto settings = context->getSettingsRef().dumpToMap();
     request.mutable_settings()->insert(settings.begin(), settings.end());
@@ -247,6 +251,10 @@ void executePlanSegmentRemotelyWithPreparedBuf(
     request.set_brpc_protocol_major_revision(DBMS_BRPC_PROTOCOL_MAJOR_VERSION);
     request.set_plan_segment_id(plan_segment.getPlanSegmentId());
     request.set_parallel_id(execution_info.parallel_id);
+    if (execution_info.source_task_index)
+        request.set_source_task_index(execution_info.source_task_index.value());
+    if (execution_info.source_task_count)
+        request.set_source_task_count(execution_info.source_task_count.value());
 
     execution_info.execution_address.toProto(*request.mutable_execution_address());
 
