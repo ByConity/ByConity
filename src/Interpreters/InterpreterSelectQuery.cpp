@@ -186,7 +186,8 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     table_expr->children.push_back(table_expr->database_and_table_name);
 
     /// Using separate expression analyzer to prevent any possible alias injection
-    auto syntax_result = TreeRewriter(context).analyzeSelect(query_ast, TreeRewriterResult({}, storage, storage_snapshot));
+    auto syntax_result = TreeRewriter(context).analyzeSelect(
+        query_ast, TreeRewriterResult({}, storage, storage_snapshot, !options.without_extended_objects));
     SelectQueryExpressionAnalyzer analyzer(query_ast, syntax_result, context, metadata_snapshot);
     actions = analyzer.simpleSelectActions();
 

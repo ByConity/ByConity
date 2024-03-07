@@ -159,22 +159,24 @@ size_t FunctionJSONHelpers::calculateMaxSize(const ColumnString::Offsets & offse
 
 REGISTER_FUNCTION(JSON)
 {
-    factory.registerFunction<FunctionJSON<NameJSONHas, JSONHasImpl>>();
-    factory.registerFunction<FunctionJSON<NameIsValidJSON, IsValidJSONImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONLength, JSONLengthImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONKey, JSONKeyImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONType, JSONTypeImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractInt, JSONExtractInt64Impl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractUInt, JSONExtractUInt64Impl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractFloat, JSONExtractFloat64Impl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractBool, JSONExtractBoolImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractString, JSONExtractStringImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtract, JSONExtractImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractKeysAndValues, JSONExtractKeysAndValuesImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractRaw, JSONExtractRawImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractArrayRaw, JSONExtractArrayRawImpl>>();
-    factory.registerFunction<FunctionJSON<NameJSONExtractKeysAndValuesRaw, JSONExtractKeysAndValuesRawImpl>>();
-    factory.registerFunction<FunctionJSON<NameGetJSONObject, GetJsonObjectImpl>>(FunctionFactory::CaseSensitiveness::CaseInsensitive);
+    factory.registerFunction<JSONOverloadResolver<NameJSONHas, JSONHasImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameIsValidJSON, IsValidJSONImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONLength, JSONLengthImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONKey, JSONKeyImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONType, JSONTypeImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractInt, JSONExtractInt64Impl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractUInt, JSONExtractUInt64Impl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractFloat, JSONExtractFloat64Impl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractBool, JSONExtractBoolImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractString, JSONExtractStringImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtract, JSONExtractImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractKeysAndValues, JSONExtractKeysAndValuesImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractRaw, JSONExtractRawImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractArrayRaw, JSONExtractArrayRawImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractKeysAndValuesRaw, JSONExtractKeysAndValuesRawImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractKeys, JSONExtractKeysImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONUnquote, JSONUnquoteImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameGetJSONObject, GetJsonObjectImpl>>(FunctionFactory::CaseSensitiveness::CaseInsensitive);
 }
 
 }

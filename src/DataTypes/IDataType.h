@@ -690,6 +690,18 @@ template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime> = t
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime64> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeTime> = true;
 
+#define FOR_BASIC_NUMERIC_TYPES(M) \
+    M(UInt8) \
+    M(UInt16) \
+    M(UInt32) \
+    M(UInt64) \
+    M(Int8) \
+    M(Int16) \
+    M(Int32) \
+    M(Int64) \
+    M(Float32) \
+    M(Float64)
+    
 #define FOR_NUMERIC_TYPES(M) \
     M(UInt8) \
     M(UInt16) \
