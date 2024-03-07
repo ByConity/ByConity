@@ -1,6 +1,5 @@
 #include "IDisk.h"
 #include "Disks/Executor.h"
-#include "Disks/DiskByteS3.h"
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/WriteBufferFromFileBase.h>
 #include <IO/copyData.h>

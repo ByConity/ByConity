@@ -244,10 +244,7 @@ void DiskByteS3::removeFile(const String& path)
 
 void DiskByteS3::removeFileIfExists(const String& path)
 {
-    if (fileExists(path))
-    {
-        s3_util.deleteObject(std::filesystem::path(root_prefix) / path);
-    }
+    s3_util.deleteObject(std::filesystem::path(root_prefix) / path, false);
 }
 
 void DiskByteS3::removeDirectory(const String & path)
