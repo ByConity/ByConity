@@ -62,7 +62,7 @@ struct FilterDAGInfo;
 using FilterDAGInfoPtr = std::shared_ptr<FilterDAGInfo>;
 
 struct InputOrderInfo;
-using InputOrderInfoPtr = std::shared_ptr<const InputOrderInfo>;
+using InputOrderInfoPtr = std::shared_ptr<InputOrderInfo>;
 
 struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;

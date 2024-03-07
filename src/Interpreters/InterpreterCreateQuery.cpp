@@ -29,7 +29,7 @@
 #include <Common/typeid_cast.h>
 #include <Common/Macros.h>
 #include <Common/randomSeed.h>
-#include <Common/renameat2.h>
+#include <Common/atomicRename.h>
 
 #include <Core/Defines.h>
 #include <Core/Settings.h>

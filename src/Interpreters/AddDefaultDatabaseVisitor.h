@@ -31,6 +31,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ASTWithElement.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/DumpASTNode.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
@@ -48,8 +49,17 @@ namespace DB
 class AddDefaultDatabaseVisitor
 {
 public:
+    struct Data
+    {
+        std::set<String> subqueries;
+    };
+
     explicit AddDefaultDatabaseVisitor(
-        ContextPtr context_, const String & database_name_, bool only_replace_current_database_function_ = false, bool only_replace_in_join_ = false, WriteBuffer * ostr_ = nullptr)
+        ContextPtr context_,
+        const String & database_name_,
+        bool only_replace_current_database_function_ = false,
+        bool only_replace_in_join_ = false,
+        WriteBuffer * ostr_ = nullptr)
         : context(context_)
         , database_name(database_name_)
         , only_replace_current_database_function(only_replace_current_database_function_)
@@ -78,22 +88,19 @@ public:
 
     void visit(ASTPtr & ast) const
     {
-        if (!tryVisit<ASTSelectQuery>(ast) &&
-            !tryVisit<ASTSelectWithUnionQuery>(ast) &&
-            !tryVisit<ASTFunction>(ast))
-            visitChildren(*ast);
+        Data data;
+        visit(ast, data);
     }
 
     void visit(ASTSelectQuery & select) const
     {
-        ASTPtr unused;
-        visit(select, unused);
+        Data data;
+        visit(select, data);
     }
-
     void visit(ASTSelectWithUnionQuery & select) const
     {
-        ASTPtr unused;
-        visit(select, unused);
+        Data data;
+        visit(select, data);
     }
 
 private:
@@ -107,68 +114,104 @@ private:
     mutable size_t visit_depth;
     WriteBuffer * ostr;
 
-    void visit(ASTSelectWithUnionQuery & select, ASTPtr &) const
+    void visit(ASTPtr & ast, Data & data) const
+    {
+        if (!tryVisit<ASTSelectQuery>(ast, data) && !tryVisit<ASTSelectWithUnionQuery>(ast, data) && !tryVisit<ASTFunction>(ast, data))
+            visitChildren(*ast, data);
+    }
+
+    void visit(ASTSelectQuery & select, Data & data) const
+    {
+        ASTPtr unused;
+        visit(select, unused, data);
+    }
+
+    void visit(ASTSelectWithUnionQuery & select, Data & data) const
+    {
+        ASTPtr unused;
+        visit(select, unused, data);
+    }
+
+    void visit(ASTSelectWithUnionQuery & select, ASTPtr &, Data & data) const
     {
         for (auto & child : select.list_of_selects->children)
         {
             if (child->as<ASTSelectQuery>())
-                tryVisit<ASTSelectQuery>(child);
+                tryVisit<ASTSelectQuery>(child, data);
             else if (child->as<ASTSelectIntersectExceptQuery>())
-                tryVisit<ASTSelectIntersectExceptQuery>(child);
+                tryVisit<ASTSelectIntersectExceptQuery>(child, data);
         }
     }
 
-    void visit(ASTSelectQuery & select, ASTPtr &) const
+    void visit(ASTSelectQuery & select, ASTPtr &, Data & data) const
     {
-        if (select.tables())
-            tryVisit<ASTTablesInSelectQuery>(select.refTables());
+        std::optional<Data> new_data;
+        if (auto with = select.with())
+        {
+            for (auto & child : with->children)
+            {
+                visit(child, new_data ? *new_data : data);
+                if (auto * ast_with_elem = child->as<ASTWithElement>())
+                {
+                    if (!new_data)
+                        new_data = data;
+                    new_data->subqueries.emplace(ast_with_elem->name);
+                }
+            }
+        }
 
-        visitChildren(select);
+        if (select.tables())
+            tryVisit<ASTTablesInSelectQuery>(select.refTables(), new_data ? *new_data : data);
+
+        visitChildren(select, new_data ? *new_data : data);
     }
 
-    void visit(ASTSelectIntersectExceptQuery & select, ASTPtr &) const
+    void visit(ASTSelectIntersectExceptQuery & select, ASTPtr &, Data & data) const
     {
         for (auto & child : select.getListOfSelects())
         {
             if (child->as<ASTSelectQuery>())
-                tryVisit<ASTSelectQuery>(child);
+                tryVisit<ASTSelectQuery>(child, data);
             else if (child->as<ASTSelectIntersectExceptQuery>())
-                tryVisit<ASTSelectIntersectExceptQuery>(child);
+                tryVisit<ASTSelectIntersectExceptQuery>(child, data);
             else if (child->as<ASTSelectWithUnionQuery>())
-                tryVisit<ASTSelectWithUnionQuery>(child);
+                tryVisit<ASTSelectWithUnionQuery>(child, data);
         }
     }
 
-    void visit(ASTTablesInSelectQuery & tables, ASTPtr &) const
+    void visit(ASTTablesInSelectQuery & tables, ASTPtr &, Data & data) const
     {
         for (auto & child : tables.children)
-            tryVisit<ASTTablesInSelectQueryElement>(child);
+            tryVisit<ASTTablesInSelectQueryElement>(child, data);
     }
 
-    void visit(ASTTablesInSelectQueryElement & tables_element, ASTPtr &) const
+    void visit(ASTTablesInSelectQueryElement & tables_element, ASTPtr &, Data & data) const
     {
         if (only_replace_in_join && !tables_element.table_join)
             return;
 
         if (tables_element.table_expression)
-            tryVisit<ASTTableExpression>(tables_element.table_expression);
+            tryVisit<ASTTableExpression>(tables_element.table_expression, data);
     }
 
-    void visit(ASTTableExpression & table_expression, ASTPtr &) const
+    void visit(ASTTableExpression & table_expression, ASTPtr &, Data & data) const
     {
         if (table_expression.database_and_table_name)
-            tryVisit<ASTTableIdentifier>(table_expression.database_and_table_name);
+            tryVisit<ASTTableIdentifier>(table_expression.database_and_table_name, data);
     }
 
-    void visit(const ASTTableIdentifier & identifier, ASTPtr & ast) const
+    void visit(const ASTTableIdentifier & identifier, ASTPtr & ast, Data & data) const
     {
 		/// Already has database.
         if (identifier.compound())
             return;
 
-		/// There is temporary table with such name, should not be rewritten.
+        /// There is temporary table with such name, should not be rewritten.
         if (external_tables.count(identifier.shortName()))
 			return;
+
+        if (data.subqueries.count(identifier.shortName()))
+            return;
 
         auto qualified_identifier = std::make_shared<ASTTableIdentifier>(database_name, identifier.name());
         if (!identifier.alias.empty())
@@ -176,7 +219,7 @@ private:
         ast = qualified_identifier;
     }
 
-    void visit(ASTFunction & function, ASTPtr &) const
+    void visit(ASTFunction & function, ASTPtr &, Data & data) const
     {
         bool is_operator_in = false;
         for (const auto * name : {"in", "notIn", "globalIn", "globalNotIn"})
@@ -203,31 +246,31 @@ private:
 
                         /// Second argument of the "in" function (or similar) may be a table name or a subselect.
                         /// Rewrite the table name or descend into subselect.
-                        if (!tryVisit<ASTTableIdentifier>(child->children[i]))
-                            visit(child->children[i]);
+                        if (!tryVisit<ASTTableIdentifier>(child->children[i], data))
+                            visit(child->children[i], data);
                     }
                     else
-                        visit(child->children[i]);
+                        visit(child->children[i], data);
                 }
             }
             else
-                visit(child);
+                visit(child, data);
         }
     }
 
-    void visitChildren(IAST & ast) const
+    void visitChildren(IAST & ast, Data & data) const
     {
         for (auto & child : ast.children)
-            visit(child);
+            visit(child, data);
     }
 
     template <typename T>
-    bool tryVisit(ASTPtr & ast) const
+    bool tryVisit(ASTPtr & ast, Data & data) const
     {
         if (T * t = typeid_cast<T *>(ast.get()))
         {
             DumpASTNode dump(*ast, ostr, visit_depth, "addDefaultDatabaseName");
-            visit(*t, ast);
+            visit(*t, ast, data);
             return true;
         }
         return false;

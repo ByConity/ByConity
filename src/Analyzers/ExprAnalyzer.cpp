@@ -80,6 +80,7 @@ public:
     ColumnWithTypeAndName visitASTOrderByElement(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTQuantifiedComparison(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTTableColumnReference(ASTPtr & node, const Void &) override;
+    ColumnWithTypeAndName visitASTPreparedParameter(ASTPtr & node, const Void &) override;
 
     ExprAnalyzerVisitor(ContextPtr context_, Analysis & analysis_, ScopePtr scope_, ExprAnalyzerOptions options_)
         : context(std::move(context_))
@@ -304,6 +305,12 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const
 
     analysis.scalar_subqueries[options.select_query].push_back(node);
     return {nullptr, type, node->getColumnName()};
+}
+
+ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTPreparedParameter(ASTPtr & node, const Void &)
+{
+    const auto & prepared_param = node->as<ASTPreparedParameter &>();
+    return {nullptr, DataTypeFactory::instance().get(prepared_param.type), node->getColumnName()};
 }
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPtr & function)

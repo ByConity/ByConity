@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Parsers/ParserAdviseQuery.h>
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserAlterWarehouseQuery.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -38,8 +39,8 @@
 #include <Parsers/ParserGrantQuery.h>
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/ParserOptimizeQuery.h>
+#include <Parsers/ParserPreparedStatement.h>
 #include <Parsers/ParserQuery.h>
-#include <Parsers/ParserAdviseQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/ParserRenameQuery.h>
 #include <Parsers/ParserSetQuery.h>
@@ -82,36 +83,25 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserDeleteQuery delete_p;
     ParserUpdateQuery update_query_p;
     ParserCreateBinding create_binding(dt);
+    ParserCreatePreparedStatementQuery prepare(dt);
+    ParserDropPreparedStatementQuery drop_prepare;
     ParserShowBindings show_bindings;
     ParserDropBinding drop_binding(dt);
+    ParserAlterQuery alter_p(dt);
 
-    bool res = query_with_output_p.parse(pos, node, expected)
-        || insert_p.parse(pos, node, expected)
-        || use_p.parse(pos, node, expected)
-        || switch_p.parse(pos,node,expected)
-        || set_role_p.parse(pos, node, expected)
-        || set_p.parse(pos, node, expected)
-        || advise_p.parse(pos, node, expected)
-        || system_p.parse(pos, node, expected)
-        || create_user_p.parse(pos, node, expected)
-        || create_role_p.parse(pos, node, expected)
-        || create_quota_p.parse(pos, node, expected)
-        || create_row_policy_p.parse(pos, node, expected)
-        || create_settings_profile_p.parse(pos, node, expected)
-        || drop_access_entity_p.parse(pos, node, expected)
-        || grant_p.parse(pos, node, expected)
-        || external_ddl_p.parse(pos, node, expected)
-        || create_warehouse_p.parse(pos, node, expected)
-        || alter_warehouse_p.parse(pos, node, expected)
-        || drop_warehouse_p.parse(pos, node, expected)
-        || show_warehouse_p.parse(pos, node, expected)
-        || create_worker_group_p.parse(pos, node, expected)
-        || drop_worker_group_p.parse(pos, node, expected)
-        || delete_p.parse(pos, node, expected)
-        || update_query_p.parse(pos, node ,expected)
-        || create_binding.parse(pos, node, expected)
-        || show_bindings.parse(pos, node, expected)
-        || drop_binding.parse(pos, node, expected);
+    bool res = query_with_output_p.parse(pos, node, expected) || insert_p.parse(pos, node, expected) || use_p.parse(pos, node, expected)
+        || switch_p.parse(pos, node, expected) || set_role_p.parse(pos, node, expected) || set_p.parse(pos, node, expected)
+        || advise_p.parse(pos, node, expected) || system_p.parse(pos, node, expected) || create_user_p.parse(pos, node, expected)
+        || create_role_p.parse(pos, node, expected) || create_quota_p.parse(pos, node, expected)
+        || create_row_policy_p.parse(pos, node, expected) || create_settings_profile_p.parse(pos, node, expected)
+        || drop_access_entity_p.parse(pos, node, expected) || grant_p.parse(pos, node, expected)
+        || external_ddl_p.parse(pos, node, expected) || create_warehouse_p.parse(pos, node, expected)
+        || alter_warehouse_p.parse(pos, node, expected) || drop_warehouse_p.parse(pos, node, expected)
+        || show_warehouse_p.parse(pos, node, expected) || create_worker_group_p.parse(pos, node, expected)
+        || drop_worker_group_p.parse(pos, node, expected) || delete_p.parse(pos, node, expected)
+        || update_query_p.parse(pos, node, expected) || create_binding.parse(pos, node, expected)
+        || show_bindings.parse(pos, node, expected) || drop_binding.parse(pos, node, expected) || alter_p.parse(pos, node, expected)
+        || prepare.parse(pos, node, expected) || drop_prepare.parse(pos, node, expected);
 
     return res;
 }

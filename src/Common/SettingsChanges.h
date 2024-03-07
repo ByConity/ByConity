@@ -26,6 +26,11 @@
 
 namespace DB
 {
+namespace Protos
+{
+    class SettingChange;
+    class SettingsChanges;
+}
 struct SettingChange
 {
     String name;
@@ -40,6 +45,8 @@ struct SettingChange
 
     void serialize(WriteBuffer & buf) const;
     void deserialize(ReadBuffer & buf);
+    void toProto(Protos::SettingChange & proto) const;
+    void fillFromProto(const Protos::SettingChange & proto);
 };
 
 
@@ -52,8 +59,19 @@ public:
     const Field * tryGet(const std::string_view & name) const;
     Field * tryGet(const std::string_view & name);
 
+    /// Inserts element if doesn't exists and returns true, otherwise just returns false
+    bool insertSetting(std::string_view name, const Field & value);
+    /// Sets element to value, inserts if doesn't exist
+    void setSetting(std::string_view name, const Field & value);
+    /// If element exists - removes it and returns true, otherwise returns false
+    bool removeSetting(std::string_view name);
+
+    void merge(const SettingsChanges & other);
+
     void serialize(WriteBuffer & buf) const;
     void deserialize(ReadBuffer & buf);
+    void toProto(Protos::SettingsChanges & proto) const;
+    void fillFromProto(const Protos::SettingsChanges & proto);
 };
 
 }

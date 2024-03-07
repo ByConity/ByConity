@@ -16,6 +16,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Protos/PreparedStatementHelper.h>
 #include <Protos/plan_node_utils.pb.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Interpreters/InterpreterSelectQuery.h>

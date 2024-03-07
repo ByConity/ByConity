@@ -822,18 +822,37 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         for (const auto & desc : sort->getSortDescription())
             sort_columns.emplace_back(desc.format());
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
-        if (sort->getLimit())
-            out << intent.detailIntent() << "Limit: " << sort->getLimit();
+
+        std::visit(
+            overloaded{
+                [&](size_t x) {
+                    if (x)
+                        out << intent.detailIntent() << "Limit: " << x;
+                },
+                [&](const String & x) { out << intent.detailIntent() << "Limit: " << x; }},
+            sort->getLimit());
     }
 
     if (verbose && plan->getType() == IQueryPlanStep::Type::Limit)
     {
         const auto * limit = dynamic_cast<const LimitStep *>(plan.get());
         out << intent.detailIntent();
-        if (limit->getLimit())
-            out << "Limit: " << limit->getLimit();
-        if (limit->getOffset())
-            out << " Offset: " << limit->getOffset();
+
+        std::visit([&](const auto & v) { out << "Limit: " << v; }, limit->getLimit());
+        std::visit(
+            [&](const auto & v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (std::is_same_v<T, size_t>)
+                {
+                    if (v)
+                        out << " Offset: " << v;
+                }
+                else
+                {
+                    out << " Offset: " << v;
+                }
+            },
+            limit->getOffset());
     }
 
     if (verbose && plan->getType() == IQueryPlanStep::Type::Offset)
@@ -1094,18 +1113,39 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
         const auto * sort = dynamic_cast<const SortingStep *>(step.get());
         std::vector<String> sort_columns;
         for (const auto & desc : sort->getSortDescription())
-            step_vector_detail["OrderBy"].emplace_back(desc.format());
-        if (sort->getLimit())
-            step_detail["Limit"] = std::to_string(sort->getLimit());
+            step_vector_detail["OrderBy"].emplace_back(
+                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+        std::visit(
+            overloaded{
+                [&](size_t x) {
+                    if (x)
+                        step_detail["Limit"] = std::to_string(x);
+                },
+                [&](const String & x) { step_detail["Limit"] = x; }},
+            sort->getLimit());
     }
 
     if (step->getType() == IQueryPlanStep::Type::Limit)
     {
         const auto * limit = dynamic_cast<const LimitStep *>(step.get());
-        if (limit->getLimit())
-            step_detail["Limit"] = std::to_string(limit->getLimit());
-        if (limit->getOffset())
-            step_detail["Offset"] = std::to_string(limit->getOffset());
+        std::visit(
+            [&](const auto & e) {
+                using T = std::decay_t<decltype(e)>;
+                if constexpr (std::is_same_v<T, size_t>)
+                    step_detail["Limit"] = std::to_string(e);
+                else
+                    step_detail["Limit"] = e;
+            },
+            limit->getLimit());
+        std::visit(
+            [&](const auto & e) {
+                using T = std::decay_t<decltype(e)>;
+                if constexpr (std::is_same_v<T, size_t>)
+                    step_detail["Offset"] = std::to_string(e);
+                else
+                    step_detail["Offset"] = e;
+            },
+            limit->getOffset());
     }
 
         if (step->getType() == IQueryPlanStep::Type::Offset)

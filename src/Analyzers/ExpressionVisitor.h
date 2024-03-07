@@ -45,6 +45,10 @@ protected:
     virtual R visitExistsSubquery(ASTPtr & node, ASTFunction & ast, C & visitor_context) { return visitFunction(node, ast, visitor_context); }
     virtual R visitScalarSubquery(ASTPtr & node, ASTSubquery & ast, C & visitor_context) { return visitExpression(node, ast, visitor_context); }
     virtual R visitQuantifiedComparisonSubquery(ASTPtr & node, ASTQuantifiedComparison & ast, C & visitor_context) { return visitExpression(node, ast, visitor_context); }
+    virtual R visitPreparedParameter(ASTPtr & node, ASTPreparedParameter & ast, C & visitor_context)
+    {
+        return visitExpression(node, ast, visitor_context);
+    }
 
 public:
     explicit AnalyzerExpressionVisitor(ContextPtr context_): context(context_) {}
@@ -103,6 +107,11 @@ public:
     R visitASTQuantifiedComparison(ASTPtr & node, C & visitor_context) final
     {
         return visitQuantifiedComparisonSubquery(node, node->as<ASTQuantifiedComparison &>(), visitor_context);
+    }
+
+    R visitASTPreparedParameter(ASTPtr & node, C & visitor_context) final
+    {
+        return visitPreparedParameter(node, node->as<ASTPreparedParameter &>(), visitor_context);
     }
 };
 
@@ -176,7 +185,8 @@ public:
     void process(ASTPtr & node, const Void & traversal_context) override
     {
         // node is expression AST
-        if (node->as<ASTIdentifier>() || node->as<ASTFunction>() || node->as<ASTLiteral>() || node->as<ASTSubquery>() || node->as<ASTFieldReference>() || node->as<ASTQuantifiedComparison>())
+        if (node->as<ASTIdentifier>() || node->as<ASTFunction>() || node->as<ASTLiteral>() || node->as<ASTSubquery>()
+            || node->as<ASTFieldReference>() || node->as<ASTQuantifiedComparison>() || node->as<ASTPreparedParameter>())
             user_visitor.process(node, user_context);
 
         return ASTVisitorUtil::accept(node, *this, traversal_context);

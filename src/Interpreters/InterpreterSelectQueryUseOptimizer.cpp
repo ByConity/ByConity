@@ -12,21 +12,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/QueryRewriter.h>
 #include <Interpreters/Cache/QueryCache.h>
+#include <Analyzers/SubstituteLiteralToPreparedParams.h>
+#include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
-#include <Interpreters/DistributedStages/PlanSegment.h>
-#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
+#include <Interpreters/InDepthNodeVisitor.h>
+#include <Interpreters/InterpreterSetQuery.h>
+#include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
+#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/executeQuery.h>
 #include <Optimizer/JoinOrderUtils.h>
 #include <Optimizer/PlanNodeSearcher.h>
 #include <Optimizer/PlanOptimizer.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTTEALimit.h>
 #include <Parsers/ASTWithAlias.h>
 #include <Parsers/formatAST.h>
@@ -49,6 +55,7 @@
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
 
+#include <memory>
 
 namespace ProfileEvents
 {
@@ -64,22 +71,73 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int TOO_MANY_PLAN_SEGMENTS;
-extern const int OPTIMIZER_NONSUPPORT;
-extern const int LOGICAL_ERROR;
+    extern const int TOO_MANY_PLAN_SEGMENTS;
+    extern const int OPTIMIZER_NONSUPPORT;
+    extern const int LOGICAL_ERROR;
+    extern const int TOO_MANY_PLAN_SEGMENT;
+    extern const int PLAN_CACHE_NOT_USED;
+    extern const int BAD_PREPARED_PARAMETER;
 }
 
 Block InterpreterSelectQueryUseOptimizer::getSampleBlock()
 {
     if (!block)
     {
-        auto query_plan = buildQueryPlan();
+        auto query_plan = getQueryPlan(true);
     }
 
     return block;
 }
 
-QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan(bool skip_optimize)
+namespace
+{
+    struct RemoveSettings
+    {
+        using TypeToVisit = ASTSelectQuery;
+
+        void visit(ASTSelectQuery & select_query, ASTPtr &) const
+        {
+            select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, nullptr);
+        }
+    };
+
+    using RemoveSettingsVisitor = InDepthNodeVisitor<OneTypeMatcher<RemoveSettings>, true>;
+
+    class CollectPreparedParams
+    {
+    public:
+        using TypeToVisit = ASTPreparedParameter;
+        PreparedParameterSet prepared_params;
+
+        void visit(ASTPreparedParameter & ast, ASTPtr &)
+        {
+            PreparedParameter param{ast.name, DataTypeFactory::instance().get(ast.type)};
+            auto it = prepared_params.emplace(std::move(param));
+            if (!it.second)
+                throw Exception(ErrorCodes::BAD_PREPARED_PARAMETER, "Prepared param {} is duplicated", ast.name);
+        }
+    };
+
+    using CollectPreparedParamsVisitor = InDepthNodeVisitor<OneTypeMatcher<CollectPreparedParams>, true>;
+}
+
+InterpreterSelectQueryUseOptimizer::InterpreterSelectQueryUseOptimizer(
+    const ASTPtr & query_ptr_,
+    PlanNodePtr sub_plan_ptr_,
+    CTEInfo cte_info_,
+    ContextMutablePtr & context_,
+    const SelectQueryOptions & options_)
+    : query_ptr(query_ptr_ ? query_ptr_->clone() : nullptr)
+    , sub_plan_ptr(sub_plan_ptr_)
+    , cte_info(std::move(cte_info_))
+    , context(context_)
+    , options(options_)
+    , log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
+{
+    interpret_sub_query = !!sub_plan_ptr;
+}
+
+QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize)
 {
     // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
     if (interpret_sub_query)
@@ -89,68 +147,86 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan(bool skip_optimi
         return sub_query_plan;
     }
 
+    AnalysisPtr analysis;
     QueryPlanPtr query_plan;
     UInt128 query_hash;
-    context->createPlanNodeIdAllocator();
-    context->createSymbolAllocator();
-    context->createOptimizerMetrics();
     // not cache internal query
     bool enable_plan_cache = !options.is_internal && PlanCacheManager::enableCachePlan(query_ptr, context);
+    // remove settings to avoid plan cache miss
+    RemoveSettings remove_settings_data;
+    RemoveSettingsVisitor(remove_settings_data).visit(query_ptr);
 
+    if (const auto * execute_query = query_ptr->as<ASTExecutePreparedStatementQuery>())
+    {
+        auto * prepared_stat_manager = context->getPreparedStatementManager();
+        if (!prepared_stat_manager)
+            throw Exception("Prepared statement cache is not initialized", ErrorCodes::LOGICAL_ERROR);
+
+        auto cache_result = prepared_stat_manager->getPlanFromCache(execute_query->name, context);
+        query_plan = std::move(cache_result.plan);
+        GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3997_get_prepared_plan");
+        PreparedParameterBindings parameter_bindings;
+        const auto * settings = execute_query->getValues()->as<const ASTSetQuery>();
+        for (const auto & change : settings->changes)
+        {
+            if (auto it = cache_result.prepared_params.find(PreparedParameter{.name = change.name});
+                it != cache_result.prepared_params.end())
+                parameter_bindings.emplace(*it, change.value);
+        }
+        PreparedStatementContext prepare_context{std::move(parameter_bindings), context};
+        query_plan->prepare(prepare_context);
+        GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3998_prepare_query_plan");
+    }
+    else
     {
         if (enable_plan_cache)
         {
+            if (context->getSettingsRef().enable_auto_prepared_statement)
+            {
+                SubstituteLiteralToPreparedParamsMatcher::Data substitude_prepared_param_data(context);
+                SubstituteLiteralToPreparedParamsVisitor(substitude_prepared_param_data).visit(query_ptr);
+                auto_prepared_params = std::move(substitude_prepared_param_data.extracted_binding);
+                LOG_DEBUG(
+                    log,
+                    "extract auto prepared statement, SQL: {}, params: {}",
+                    query_ptr->formatForErrorMessage(),
+                    toString(auto_prepared_params));
+            }
+
             query_hash = PlanCacheManager::hash(query_ptr, context);
             query_plan = PlanCacheManager::getPlanFromCache(query_hash, context);
             if (query_plan)
             {
-                query_plan->addInterpreterContext(context);
                 LOG_INFO(log, "hit plan cache");
+                GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3996_get_plan_from_cache");
             }
+            else if (context->getSettingsRef().force_plan_cache)
+                throw Exception(ErrorCodes::PLAN_CACHE_NOT_USED, "plan cache not used");
         }
 
-        if (!query_plan)
+        if (!query_plan || context->getSettingsRef().iterative_optimizer_timeout == 999999)
         {
-            Stopwatch stage_watch;
-            stage_watch.start();
-            auto cloned_query = query_ptr->clone();
-            cloned_query = QueryRewriter().rewrite(cloned_query, context);
-            context->logOptimizerProfile(
-                log, "Optimizer stage run time: ", "Rewrite", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
-            ProfileEvents::increment(ProfileEvents::QueryRewriterTime, stage_watch.elapsedMilliseconds());
-
-            stage_watch.restart();
-            AnalysisPtr analysis = QueryAnalyzer::analyze(cloned_query, context);
+            buildQueryPlan(query_plan, analysis, skip_optimize);
+            GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3997_build_plan_from_query");
             fillContextQueryAccessInfo(context, analysis);
-            context->logOptimizerProfile(
-                log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
-            ProfileEvents::increment(ProfileEvents::QueryAnalyzerTime, stage_watch.elapsedMilliseconds());
-
-            stage_watch.restart();
-            query_plan = QueryPlanner().plan(cloned_query, *analysis, context);
-            context->logOptimizerProfile(
-                log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
-            ProfileEvents::increment(ProfileEvents::QueryPlannerTime, stage_watch.elapsedMilliseconds());
-
-            if (!skip_optimize)
-            {
-                stage_watch.restart();
-                    PlanOptimizer::optimize(*query_plan, context);
-                context->logOptimizerProfile(
-                    log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
-                ProfileEvents::increment(ProfileEvents::QueryOptimizerTime, stage_watch.elapsedMilliseconds());
-            }
-
             if (enable_plan_cache && query_hash && query_plan)
             {
                if (PlanCacheManager::addPlanToCache(query_hash, query_plan, analysis, context))
                    LOG_INFO(log, "plan cache added");
             }
         }
+
+        if (!auto_prepared_params.empty())
+        {
+            query_plan->prepare(PreparedStatementContext{auto_prepared_params, context});
+            GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3998_auto_prepare_query_plan");
+        }
     }
 
     if (query_plan->getPlanNodeRoot())
         block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
+    GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3999_final_plan");
+    query_plan->addInterpreterContext(context);
     LOG_DEBUG(log, "join order {}", JoinOrderUtils::getJoinOrder(*query_plan));
     return query_plan;
 }
@@ -170,7 +246,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     Stopwatch stage_watch, total_watch;
     total_watch.start();
     setUnsupportedSettings(context);
-    QueryPlanPtr query_plan = buildQueryPlan();
+    QueryPlanPtr query_plan = getQueryPlan();
 
     query_plan->setResetStepId(false);
     stage_watch.start();
@@ -417,6 +493,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::readFromQueryCache(ContextPtr local_
 {
     auto query_cache = local_context->getQueryCache();
     const Settings & settings = local_context->getSettingsRef();
+    auto query = query_ptr->clone();
     std::optional<std::set<StorageID>> used_storage_ids = getUsedStorageIds();
     TxnTimestamp & source_update_time_for_query_cache = query_cache_context.source_update_time_for_query_cache;
     query_cache_context.query_executed_by_optimizer = true;
@@ -438,7 +515,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::readFromQueryCache(ContextPtr local_
             || (source_update_time_for_query_cache.toUInt64() != 0))
         {
             QueryCache::Key key(
-                query_ptr,
+                query,
                 block,
                 local_context->getUserName(),
                 /*dummy for is_shared*/ false,
@@ -463,6 +540,13 @@ BlockIO InterpreterSelectQueryUseOptimizer::readFromQueryCache(ContextPtr local_
 
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
+    if (auto * create_prepared = query_ptr->as<ASTCreatePreparedStatementQuery>())
+    {
+        // if (!create_prepared->cluster.empty())
+        //     return executeDDLQueryOnCluster(query_ptr, context);
+        return executeCreatePreparedStatementQuery();
+    }
+
     if (!plan_segment_tree_ptr)
     {
         std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
@@ -545,6 +629,85 @@ void InterpreterSelectQueryUseOptimizer::setUnsupportedSettings(ContextMutablePt
     setting_changes.emplace_back("distributed_aggregation_memory_efficient", false);
 
     context->applySettingsChanges(setting_changes);
+}
+
+void InterpreterSelectQueryUseOptimizer::buildQueryPlan(QueryPlanPtr & query_plan, AnalysisPtr & analysis, bool skip_optimize)
+{
+    context->createPlanNodeIdAllocator();
+    context->createSymbolAllocator();
+    context->createOptimizerMetrics();
+
+    Stopwatch stage_watch;
+    stage_watch.start();
+    query_ptr = QueryRewriter().rewrite(query_ptr, context);
+    context->logOptimizerProfile(
+        log, "Optimizer stage run time: ", "Rewrite", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+    ProfileEvents::increment(ProfileEvents::QueryRewriterTime, stage_watch.elapsedMilliseconds());
+
+    stage_watch.restart();
+    analysis = QueryAnalyzer::analyze(query_ptr, context);
+    fillContextQueryAccessInfo(context, analysis);
+    context->logOptimizerProfile(
+        log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+    ProfileEvents::increment(ProfileEvents::QueryAnalyzerTime, stage_watch.elapsedMilliseconds());
+
+    stage_watch.restart();
+    query_plan = QueryPlanner().plan(query_ptr, *analysis, context);
+    context->logOptimizerProfile(
+        log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+    ProfileEvents::increment(ProfileEvents::QueryPlannerTime, stage_watch.elapsedMilliseconds());
+
+    if (!skip_optimize)
+    {
+        stage_watch.restart();
+        PlanOptimizer::optimize(*query_plan, context);
+        context->logOptimizerProfile(
+            log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+        ProfileEvents::increment(ProfileEvents::QueryOptimizerTime, stage_watch.elapsedMilliseconds());
+    }
+}
+
+BlockIO InterpreterSelectQueryUseOptimizer::executeCreatePreparedStatementQuery()
+{
+    auto * prep_stat_manager = context->getPreparedStatementManager();
+    if (!prep_stat_manager)
+        throw Exception("Prepare cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
+
+    AddDefaultDatabaseVisitor add_default_db_visitor(context, context->getCurrentDatabase());
+    add_default_db_visitor.visit(query_ptr);
+
+    String name;
+    String formatted_query;
+    SettingsChanges settings_changes;
+    const auto & prepare = query_ptr->as<const ASTCreatePreparedStatementQuery &>();
+    {
+        name = prepare.getName();
+        formatted_query = prepare.formatForErrorMessage();
+        settings_changes = InterpreterSetQuery::extractSettingsFromQuery(query_ptr, context);
+    }
+
+    QueryPlanPtr query_plan;
+    AnalysisPtr analysis;
+    buildQueryPlan(query_plan, analysis);
+    CollectPreparedParams prepared_params_collector;
+    CollectPreparedParamsVisitor(prepared_params_collector).visit(query_ptr);
+    prep_stat_manager->addPlanToCache(
+        name,
+        formatted_query,
+        settings_changes,
+        query_plan,
+        analysis,
+        std::move(prepared_params_collector.prepared_params),
+        context,
+        !prepare.if_not_exists,
+        prepare.or_replace,
+        prepare.is_permanent);
+    return {};
+}
+
+bool InterpreterSelectQueryUseOptimizer::isCreatePreparedStatement()
+{
+    return query_ptr->as<ASTCreatePreparedStatementQuery>();
 }
 
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)

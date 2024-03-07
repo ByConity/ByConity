@@ -2724,7 +2724,7 @@ void InterpreterSelectQuery::executeWindow(QueryPlan & query_plan)
                 query_plan.getCurrentDataStream(),
                 w.full_sort_description,
                 settings.max_block_size,
-                0 /* LIMIT */,
+                size_t{0} /* LIMIT */,
                 settings.max_bytes_before_remerge_sort,
                 settings.remerge_sort_lowered_memory_bytes_ratio,
                 settings.max_bytes_before_external_sort,

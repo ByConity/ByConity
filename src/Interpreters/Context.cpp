@@ -35,9 +35,9 @@
 #include <Access/ExternalAuthenticators.h>
 #include <Access/GSSAcceptor.h>
 #include <Access/QuotaUsage.h>
-#include <Access/SettingsProfilesInfo.h>
 #include <Access/SettingsConstraintsAndProfileIDs.h>
 #include <Access/SettingsProfile.h>
+#include <Access/SettingsProfilesInfo.h>
 #include <Access/User.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchBGThreadsMap.h>
@@ -85,9 +85,12 @@
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/NamedSession.h>
+#include <Interpreters/Lemmatizers.h>
+#include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueueManager.h>
 #include <Interpreters/SegmentScheduler.h>
+#include <Interpreters/SynonymsExtensions.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/VirtualWarehousePool.h>
 #include <Interpreters/WorkerGroupHandle.h>
@@ -474,6 +477,9 @@ struct ContextSharedPart
     std::unique_ptr<Statistics::AutoStats::AutoStatisticsManager> auto_stats_manager;
 
     std::unique_ptr<PlanCacheManager> plan_cache_manager;
+
+    std::unique_ptr<PreparedStatementManager> prepared_statement_manager;
+
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
     {
@@ -585,6 +591,8 @@ struct ContextSharedPart
             ///
             /// But they cannot be created before storages since they may required table as a source,
             /// but at least they can be preserved for storage termination.
+            prepared_statement_manager.reset();
+
             dictionaries_xmls.reset();
             dictionaries_cnch_catalog.reset();
 
@@ -5720,6 +5728,18 @@ PlanCacheManager* Context::getPlanCacheManager()
 {
     auto lock = getLock();
     return shared->plan_cache_manager ? shared->plan_cache_manager.get() : nullptr;
+}
+
+void Context::setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager)
+{
+    auto lock = getLock();
+    shared->prepared_statement_manager = std::move(manager);
+}
+
+PreparedStatementManager * Context::getPreparedStatementManager()
+{
+    auto lock = getLock();
+    return shared->prepared_statement_manager ? shared->prepared_statement_manager.get() : nullptr;
 }
 
 UInt32 Context::getQueryMaxExecutionTime() const

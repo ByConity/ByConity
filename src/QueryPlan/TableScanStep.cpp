@@ -1518,12 +1518,14 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
     return step;
 }
 
-std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr /*context*/) const
+std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr) const
 {
     SelectQueryInfo copy_query_info = query_info; // fixme@kaixi: deep copy here
     copy_query_info.query = query_info.query->clone();
-    auto new_prewhere = copy_query_info.query->as<ASTSelectQuery &>().prewhere();
-
+    if (query_info.partition_filter)
+        copy_query_info.partition_filter = query_info.partition_filter->clone();
+    if (query_info.input_order_info)
+        copy_query_info.input_order_info = std::make_shared<InputOrderInfo>(*query_info.input_order_info);
     return std::make_unique<TableScanStep>(
         output_stream.value(),
         storage,
@@ -1833,5 +1835,11 @@ NameToNameMap TableScanStep::getAliasToColumnMap() const
     for (const auto & column_to_alias : column_alias)
         ret.emplace(column_to_alias.second, column_to_alias.first);
     return ret;
+}
+
+void TableScanStep::prepare(const PreparedStatementContext & prepared_context)
+{
+    prepared_context.prepare(query_info.partition_filter);
+    prepared_context.prepare(query_info.query);
 }
 }

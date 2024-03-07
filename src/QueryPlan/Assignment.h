@@ -24,6 +24,10 @@ namespace DB
 {
 using Assignment = std::pair<String, ConstASTPtr>;
 // using Assignments = std::vector<Assignment>;
-using Assignments = LinkedHashMap<String, ConstASTPtr>;
-
+class Assignments : public LinkedHashMap<String, ConstASTPtr>
+{
+public:
+    using LinkedHashMap::LinkedHashMap;
+    Assignments copy() const;
+};
 }

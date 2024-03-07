@@ -17,6 +17,7 @@
 
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/prepared_statement.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <Interpreters/StorageID.h>
@@ -192,6 +193,8 @@ public:
     void setResetStepId(bool reset_id) { reset_step_id = reset_id; }
 
     QueryPlanPtr copy(ContextMutablePtr context);
+    void prepare(const PreparedStatementContext & prepared_context);
+
 private:
     Poco::Logger * log = &Poco::Logger::get("QueryPlan");
     // Flatten, in segment only

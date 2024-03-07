@@ -356,6 +356,7 @@ using ExcludedRules = std::unordered_set<UInt32>;
 using ExcludedRulesMap = std::unordered_map<PlanNodeId, ExcludedRules>;
 
 class PlanCacheManager;
+class PreparedStatementManager;
 
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
@@ -1626,6 +1627,9 @@ public:
     void setQueryExpirationTimeStamp();
 
     AsynchronousReaderPtr getThreadPoolReader() const;
+
+    void setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager);
+    PreparedStatementManager * getPreparedStatementManager();
 
 private:
     String tenant_id;
