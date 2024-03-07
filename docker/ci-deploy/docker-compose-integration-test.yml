@@ -179,7 +179,7 @@ services:
       MYSQL_ROOT_PASSWORD: password
   mysql_server_init:
     image: mysql:5.7.25
-    command: /bin/sh -c "sleep 5; echo \"CREATE DATABASE test; USE test; CREATE TABLE test (id INT, column1 VARCHAR(10), PRIMARY KEY(id)) ENGINE = InnoDB; INSERT INTO test (id, column1) VALUES (1, 'abc'), (2, 'def'), (3, 'ghi');\" | mysql -hmysql_server -uroot -ppassword" 
+    command: /bin/sh -c "sleep 15; echo \"CREATE DATABASE test; USE test; CREATE TABLE test (id INT, column1 VARCHAR(10), PRIMARY KEY(id)) ENGINE = InnoDB; INSERT INTO test (id, column1) VALUES (1, 'abc'), (2, 'def'), (3, 'ghi');\" | mysql -hmysql_server -uroot -ppassword" 
 
 volumes:
     config_volume:
