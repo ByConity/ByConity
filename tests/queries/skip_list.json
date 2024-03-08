@@ -629,5 +629,50 @@
         "10027_bucket",
         "11007_atomic_attach_parts",
         "11007_attach_commit_time_bug"
+    ],
+    
+    /// Please do not add new tests to this list. It is only for backward compatibility.
+    "multi-servers": [
+        /// Wrong diff
+        "00388_enum_with_totals",
+        "50009_custom_cnch_merge_tree",
+        "10113_uniquekey_rename_with_staged_parts",
+        "control_all_bg_jobs",
+        /// ---- Need to forward `SYSTEM GC` to host server.
+        "10202_part_gc",
+        "10200_table_snapshots",
+        "50010_parts_info",
+        "50011_parts_info_for_unique_table",
+        /// Code: 57 -- Table xxx already exists.
+        "45005_memory_stats",
+        "45004_stats_star",
+        "45004_create_stats_sample_acc_ndv",
+        "45004_create_stats_sample_acc",
+        "45004_create_stats_sample",
+        "45007_ip_stats",
+        "45007_date_stats",
+        "45015_explain_stats_lowcard",
+        "45013_cache_policy",
+        "40023_mv_with_topn_filtering",
+        "01007_ttl_create_nullable_date_in_mysql",
+        /// Code: 36 -- Dictionary xxx not found
+        "01676_range_hashed_dictionary_ck233",
+        "01682_cache_dictionary_complex_key_ck233",
+        "01765_hashed_dictionary_simple_key_ck233",
+        /// Code: 49 -- Can't execute optimize, because background job xxx at server server-1:30605 in Stopped status 
+        "10102_uniquekey_insert_values",
+        "10112_uniquekey_merge_vertical",
+        "01004_optimize_final",
+        "10120_optimize_query",
+        "01918_test_nullable_skip_index",
+        /// Code: 8052 -- Cannot rename table because of choosing wrong server according to current topology
+        "10023_rename",
+        "65001_ddl_case_insensitive_upper",
+        "65001_ddl_case_insensitive",
+        /// Code: 216 -- Query with id = xxx is already running.
+        "10054_mv_refresh1",
+        "10054_mv_refresh_where_sync",
+        /// Code: 5030 -- Tables MergeMutateThread is not found on the server. Please check tables host server first.
+        "01001_alter_delete"
     ]
 }
