@@ -1171,7 +1171,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (typeid_cast<const InterpreterSelectQueryUseOptimizer *>(&*interpreter))
                 {
-                    static std::unordered_set<int> no_fallback_error_codes = {159, 202, 209, 252, 394, 2010, 2012, 2013, 1159, 241};
+                    static std::unordered_set<int> no_fallback_error_codes = {135, 159, 202, 209, 252, 394, 2010, 2012, 2013, 1159, 241};
                     // fallback to simple query process
                     if (context->getSettingsRef().enable_optimizer_fallback && !no_fallback_error_codes.contains(getCurrentExceptionCode()))
                     {
@@ -1490,7 +1490,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (element.max_thread_io_profile_counters)
                 {
                     auto max_io_ms = element.max_thread_io_profile_counters->getIOReadTime(element.query_settings->remote_filesystem_read_prefetch) / 1000;
-                    auto io_ms = max_io_ms < element.query_duration_ms ? max_io_ms : 0; 
+                    auto io_ms = max_io_ms < element.query_duration_ms ? max_io_ms : 0;
                     if (is_unlimited_query)
                     {
                         HistogramMetrics::increment(
@@ -1714,7 +1714,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         if (elem.max_thread_io_profile_counters)
                         {
                             auto max_io_ms = elem.max_thread_io_profile_counters->getIOReadTime(elem.query_settings->remote_filesystem_read_prefetch) / 1000;
-                            auto io_ms = max_io_ms < elem.query_duration_ms ? max_io_ms : 0; 
+                            auto io_ms = max_io_ms < elem.query_duration_ms ? max_io_ms : 0;
                             if (process_list_elem->isUnlimitedQuery())
                             {
                                 HistogramMetrics::increment(

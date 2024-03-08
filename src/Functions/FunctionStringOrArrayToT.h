@@ -22,7 +22,7 @@ namespace ErrorCodes
 }
 
 
-template <typename Impl, typename Name, typename ResultType, bool is_suitable_for_short_circuit_arguments_execution = true>
+template <typename Impl, typename Name, typename ResultType, bool is_suitable_for_short_circuit_arguments_execution = true, bool is_array = false>
 class FunctionStringOrArrayToT : public IFunction
 {
 public:
@@ -34,7 +34,7 @@ public:
         return std::make_shared<FunctionStringOrArrayToT>();
     }
 
-    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
+    ArgType getArgumentsType() const override { return is_array ? ArgType::UNDEFINED : ArgType::STRINGS; }
 
     String getName() const override
     {

@@ -1,5 +1,6 @@
 #pragma once
 #include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <DataTypes/DataTypeArray.h>
@@ -362,7 +363,16 @@ class FunctionArrayIndex : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayIndex>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionArrayIndex>(context));
+        return std::make_shared<FunctionArrayIndex>(context);
+    }
+
+    explicit FunctionArrayIndex(ContextPtr context_) :  context(context_) {}
+
+    ArgType getArgumentsType() const override { return ArgType::ARRAY_FIRST; }
 
     /// Get function name.
     String getName() const override { return name; }
@@ -390,14 +400,16 @@ public:
                 "numeric types, or Enum and numeric type. Passed: {} and {}.",
                 getName(), arguments[0]->getName(), arguments[1]->getName());
 
-        if (nullable_type)
+        if (nullable_type || (context && context->getSettingsRef().enable_implicit_arg_type_convert && arguments[1]->isNullable()))
             return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
-        
+
         return std::make_shared<DataTypeNumber<ResultType>>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
+        if (context && context->getSettingsRef().enable_implicit_arg_type_convert && arguments[1].column->onlyNull())
+            return result_type->createColumnConstWithDefaultValue(input_rows_count);
         /// Execute on nested columns and wrap results with nullable
         auto * nullable_col = checkAndGetColumn<ColumnNullable>(arguments[0].column.get());
         auto * const_col = checkAndGetColumn<ColumnConst>(arguments[0].column.get());
@@ -508,6 +520,7 @@ public:
     }
 
 private:
+    ContextPtr context;
     using ResultType = typename ConcreteAction::ResultType;
     using ResultColumnType = ColumnVector<ResultType>;
     using ResultColumnPtr = decltype(ResultColumnType::create());
@@ -526,7 +539,7 @@ private:
         inline void moveResult() { result_column = std::move(result); }
     };
 
-    static inline bool allowArguments(const DataTypePtr & array_inner_type, const DataTypePtr & arg)
+    inline bool allowArguments(const DataTypePtr & array_inner_type, const DataTypePtr & arg) const
     {
         auto inner_type_decayed = removeNullable(removeLowCardinality(array_inner_type));
         auto arg_decayed = removeNullable(removeLowCardinality(arg));

@@ -18,6 +18,7 @@
 #include <Columns/ColumnMap.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -37,10 +38,16 @@ public:
     static constexpr auto name = "arrayElement";
     static FunctionPtr create(ContextPtr context);
 
+    explicit FunctionArrayElement(ContextPtr context)
+    {
+        is_mysql = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
+    }
+
     String getName() const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+    bool useDefaultImplementationForNulls() const override { return !is_mysql; }
     size_t getNumberOfArguments() const override { return 2; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
@@ -49,6 +56,8 @@ public:
 
 private:
     friend class FunctionMapElement;
+
+    bool is_mysql;
 
     ColumnPtr perform(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type,
                       ArrayImpl::NullMapBuilder & builder, size_t input_rows_count) const;
@@ -101,11 +110,11 @@ private:
     static bool matchKeyToIndexString(
         const IColumn & data, const Offsets & offsets, bool is_key_const,
         const IColumn & index, PaddedPODArray<UInt64> & matched_idxs);
- 
+
     static bool matchKeyToIndexStringConst(
         const IColumn & data, const Offsets & offsets,
          const Field & index, PaddedPODArray<UInt64> & matched_idxs);
- 
+
      template <typename Matcher>
      static void executeMatchKeyToIndex(const Offsets & offsets,
          PaddedPODArray<UInt64> & matched_idxs, const Matcher & matcher);

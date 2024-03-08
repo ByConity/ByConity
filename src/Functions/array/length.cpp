@@ -21,8 +21,9 @@
 
 #include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionStringOrArrayToT.h>
-
+#include <common/map.h>
 
 namespace DB
 {
@@ -83,12 +84,57 @@ struct NameLength
 };
 
 using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64, false>;
+struct NameArraySize
+{
+    static constexpr auto name = "arraySize";
+};
+
+
+using FunctionArraySize = FunctionStringOrArrayToT<LengthImpl, NameArraySize, UInt64, false, true>;
+
+
+/// Also works with arrays.
+class SizeOverloadResolver : public IFunctionOverloadResolver
+{
+public:
+    static constexpr auto name = "size";
+    static FunctionOverloadResolverPtr create(ContextPtr context) { return std::make_unique<SizeOverloadResolver>(context); }
+
+    explicit SizeOverloadResolver(ContextPtr context_) : context(context_) {}
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
+    {
+        if (isArray(removeNullable(arguments.at(0).type)))
+            return FunctionFactory::instance().getImpl("arraySize", context)->build(arguments);
+        else
+            return std::make_unique<FunctionToFunctionBaseAdaptor>(
+                FunctionLength::create(context),
+                collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
+                return_type);
+    }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (isArray(removeNullable(arguments.at(0))))
+            return FunctionArraySize::create(context)->getReturnTypeImpl(arguments);
+        else
+            return FunctionLength::create(context)->getReturnTypeImpl(arguments);
+    }
+
+private:
+    ContextPtr context;
+};
 
 REGISTER_FUNCTION(Length)
 {
     factory.registerFunction<FunctionLength>(FunctionFactory::CaseInsensitive);
-    factory.registerAlias("size", NameLength::name, FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionArraySize>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("octet_length", NameLength::name, FunctionFactory::CaseInsensitive);
+
+    factory.registerFunction<SizeOverloadResolver>(FunctionFactory::CaseInsensitive);
 }
 
 }
