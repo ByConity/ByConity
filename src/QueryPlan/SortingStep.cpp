@@ -227,6 +227,7 @@ void SortingStep::toProto(Protos::SortingStep & proto, bool) const
     ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
     for (const auto & element : result_description)
         element.toProto(*proto.add_result_description());
+    proto.set_limit(0);
     setSizeOrVariableToProto(limit, *proto.mutable_limit_or_var());
     proto.set_partial(false);
     proto.set_stage(StageConverter::toProto(stage));
