@@ -85,7 +85,6 @@ jobs:
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
           echo "Check status of cluster"
           docker ps --filter name=$COMPOSE_PROJECT_NAME
-          sleep 6000000
       - name: Run ByConity Intergration test
         continue-on-error: true
         run: |
