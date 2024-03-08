@@ -33,6 +33,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/ExchangeDataTracker.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Processors/Exchange/DataTrans/Batch/Reader/DiskExchangeDataSource.h>
@@ -59,6 +60,7 @@
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
 #include <brpc/controller.h>
 #include <bthread/mutex.h>
+#include <fmt/format.h>
 #include <incubator-brpc/src/brpc/controller.h>
 #include <Poco/Exception.h>
 #include <Poco/Logger.h>
@@ -69,6 +71,7 @@
 #include <Common/ThreadStatus.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
+#include <common/scope_guard.h>
 #include <common/sleep.h>
 #include <common/types.h>
 
@@ -93,7 +96,7 @@ namespace ErrorCodes
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int CANNOT_UNLINK;
     extern const int FILE_DOESNT_EXIST;
-    extern const int EXCHANGE_DATA_DISK_LIMIT_EXCEEDED;
+    extern const int BSP_EXCHANGE_DATA_DISK_LIMIT_EXCEEDED;
 }
 
 namespace
@@ -160,7 +163,7 @@ DiskExchangeDataManager::DiskExchangeDataManager(
     ssize_t current_size = getFileSizeRecursively(path);
     if (current_size > max_disk_bytes)
         throw Exception(
-            ErrorCodes::EXCHANGE_DATA_DISK_LIMIT_EXCEEDED,
+            ErrorCodes::BSP_EXCHANGE_DATA_DISK_LIMIT_EXCEEDED,
             "current file size(which is {}) already exceeded max_disk_bytes(which is {})",
             current_size,
             max_disk_bytes);
@@ -218,8 +221,14 @@ void DiskExchangeDataManager::submitReadTask(
             }
 
             finishSenders(task_cp, code, msg);
-            std::unique_lock<bthread::Mutex> lock(mutex);
-            read_tasks.erase(task_cp->key);
+            {
+                std::unique_lock<bthread::Mutex> lock(mutex);
+                read_tasks.erase(task_cp->key);
+            }
+            // release sender proxy before setDone
+            task_cp->executor = nullptr;
+            task_cp->processors = {};
+            task_cp->setDone();
             all_task_done_cv.notify_all();
         });
         thread.detach();
@@ -237,12 +246,14 @@ void DiskExchangeDataManager::submitReadTask(
     }
 }
 
-void DiskExchangeDataManager::submitWriteTask(DiskPartitionWriterPtr writer, ThreadGroupStatusPtr thread_group)
+void DiskExchangeDataManager::submitWriteTask(
+    UInt64 query_unique_id, PlanSegmentInstanceId instance_id, DiskPartitionWriterPtr writer, ThreadGroupStatusPtr thread_group)
 {
     std::multimap<UInt64, ExchangeDataKeyPtr>::iterator iter;
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
         write_tasks.insert({writer->getKey(), writer});
+        alive_queries[query_unique_id].segment_write_task_keys.insert({instance_id, writer->getKey()});
     }
     try
     {
@@ -257,7 +268,7 @@ void DiskExchangeDataManager::submitWriteTask(DiskPartitionWriterPtr writer, Thr
             }
             catch (...)
             {
-                auto msg = fmt::format("key:{} write task execution exception", *writer_cp->getKey()) + getCurrentExceptionMessage(true);
+                auto msg = fmt::format("key:{} write task execution exception {}", *writer_cp->getKey(), getCurrentExceptionMessage(true));
                 writer_cp->finish(BroadcastStatusCode::SEND_UNKNOWN_ERROR, msg);
                 tryLogCurrentException(logger, msg);
             }
@@ -281,11 +292,10 @@ void DiskExchangeDataManager::submitWriteTask(DiskPartitionWriterPtr writer, Thr
     }
 }
 
-void DiskExchangeDataManager::cancel(uint64_t query_unique_id, uint64_t exchange_id)
+void DiskExchangeDataManager::cancelReadTask(uint64_t query_unique_id, uint64_t exchange_id)
 {
     auto from = std::make_shared<ExchangeDataKey>(query_unique_id, exchange_id, 0);
     auto to = std::make_shared<ExchangeDataKey>(query_unique_id, exchange_id, std::numeric_limits<uint64_t>::max());
-    chassert(*from < *to);
     // 1. remove tasks
     std::vector<ReadTaskPtr> cancel_tasks;
     {
@@ -299,11 +309,108 @@ void DiskExchangeDataManager::cancel(uint64_t query_unique_id, uint64_t exchange
     for (auto & task : cancel_tasks)
     {
         auto & executor = task->executor;
-        executor->cancel();
+        if (executor)
+            executor->cancel();
+        task->waitDone();
         LOG_TRACE(logger, fmt::format("query:{} key:{} cancel task", task->query_id, *task->key));
-        std::unique_lock<bthread::Mutex> lock(mutex);
-        read_tasks.erase(task->key);
     }
+    SCOPE_EXIT({
+        for (auto & task : cancel_tasks)
+        {
+            std::unique_lock<bthread::Mutex> lock(mutex);
+            read_tasks.erase(task->key);
+        }
+    });
+}
+
+void DiskExchangeDataManager::cancelReadTask(const ExchangeDataKeyPtr & key)
+{
+    // 1. remove tasks
+    ReadTaskPtr cancel_task;
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        auto iter = read_tasks.find(key);
+        if (iter != read_tasks.end())
+            cancel_task = iter->second;
+    }
+    // 2. cancel all executors
+    if (cancel_task)
+    {
+        auto executor = cancel_task->executor;
+        if (executor)
+            executor->cancel();
+        cancel_task->waitDone();
+        LOG_TRACE(logger, fmt::format("query:{} key:{} cancel task", cancel_task->query_id, *cancel_task->key));
+    }
+    SCOPE_EXIT({
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        if (cancel_task)
+            read_tasks.erase(cancel_task->key);
+    });
+}
+
+bool DiskExchangeDataManager::cleanupPreviousSegmentInstance(UInt64 query_unique_id, PlanSegmentInstanceId instance_id)
+{
+    LOG_TRACE(
+        logger,
+        "cleanupPreviousSegmentInstance for query_unique_id:{} segment_id:{} parallel_id:{}",
+        query_unique_id,
+        instance_id.segment_id,
+        instance_id.parallel_id);
+    std::vector<DiskPartitionWriterPtr> cancel_tasks;
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        if (alive_queries.find(query_unique_id) != alive_queries.end())
+        {
+            const auto & alive_query = alive_queries[query_unique_id];
+            auto iter = alive_query.segment_write_task_keys.find(instance_id);
+            auto end = alive_query.segment_write_task_keys.end();
+            if (iter != end)
+            {
+                auto w_iter = write_tasks.find(iter->second);
+                if (w_iter != write_tasks.end())
+                    cancel_tasks.emplace_back(w_iter->second);
+            }
+        }
+    }
+    if (!cancelWriteTasks(cancel_tasks))
+        return false;
+    for (const auto & writer : cancel_tasks)
+    {
+        if (!is_shutdown.load(std::memory_order_acquire))
+        {
+            disk->removeFileIfExists(getFileName(*writer->getKey()));
+            disk->removeFileIfExists(getTemporaryFileName(*writer->getKey()));
+            LOG_INFO(logger, "try removing file for key:{}", *writer->getKey());
+        }
+    }
+    return true;
+}
+
+bool DiskExchangeDataManager::cancelWriteTasks(const std::vector<DiskPartitionWriterPtr> & writers)
+{
+    bool wait_succ = true;
+    for (const auto & writer : writers)
+    {
+        auto status = writer->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled by cancelWriteTasks");
+        if (status.code != BroadcastStatusCode::SEND_CANCELLED)
+            LOG_WARNING(logger, "key:{} finish status.code:{} status.message:{}", *writer->getKey(), status.code, status.message);
+    }
+    try
+    {
+        UInt64 timeout_ms = time_in_milliseconds(std::chrono::system_clock::now()) + disk_partition_wait_done_timeout_ms;
+        for (const auto & writer : writers)
+        {
+            auto curr = time_in_milliseconds(std::chrono::system_clock::now());
+            writer->waitDone(curr < timeout_ms ? timeout_ms - curr : 0); /// might throw
+        }
+    }
+    catch (...)
+    {
+        wait_succ = false;
+        tryLogCurrentException(logger);
+    }
+    return wait_succ;
 }
 
 void DiskExchangeDataManager::submitCleanupTask(UInt64 query_unique_id)
@@ -358,27 +465,7 @@ void DiskExchangeDataManager::cleanup(uint64_t query_unique_id)
         if (rbegin != rend)
             std::transform(rbegin, rend, std::back_inserter(read_on_the_run), [](auto & iter) { return iter.second; });
     }
-    bool wait_failed = false;
-    for (auto & writer : write_on_the_run)
-    {
-        auto status = writer->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled by cleanup");
-        if (status.code != BroadcastStatusCode::SEND_CANCELLED)
-            LOG_WARNING(logger, "key:{} finish status.code:{} status.message:{}", *writer->getKey(), status.code, status.message);
-    }
-    try
-    {
-        UInt64 timeout_ms = time_in_milliseconds(std::chrono::system_clock::now()) + disk_partition_wait_done_timeout_ms;
-        for (auto & writer : write_on_the_run)
-        {
-            auto curr = time_in_milliseconds(std::chrono::system_clock::now());
-            writer->waitDone(curr < timeout_ms ? timeout_ms - curr : 0); /// might throw
-        }
-    }
-    catch (...)
-    {
-        wait_failed = true;
-        tryLogCurrentException(logger, fmt::format("wait for disk_partition_writer done failed for query_unique_id:{}", query_unique_id));
-    }
+    bool wait_succ = cancelWriteTasks(write_on_the_run);
     {
         /// wbegin and wend is recalculated, as other tasks might have modified the iterator, same for rbegin and rend below
         std::unique_lock<bthread::Mutex> lock(mutex);
@@ -397,11 +484,10 @@ void DiskExchangeDataManager::cleanup(uint64_t query_unique_id)
             read_tasks.erase(rbegin, rend);
     }
     bool removed = false;
-    auto disk_cp = disk; // copied to avoid disk being release during execution
-    if (!wait_failed && !is_shutdown.load(std::memory_order_acquire) && disk_cp->exists(file_path))
+    if (wait_succ && !is_shutdown.load(std::memory_order_acquire) && disk->exists(file_path))
     {
         removed = true;
-        disk_cp->removeRecursive(file_path);
+        disk->removeRecursive(file_path);
     }
     LOG_INFO(logger, "cleanup for query_unique_id:{} removed:{} file_path:{}", query_unique_id, removed, file_path.string());
 }
@@ -465,7 +551,7 @@ void DiskExchangeDataManager::gc()
             else if (req_contents.find(query_unique_id) == req_contents.end())
             {
                 ssize_t file_size = getFileSizeRecursively(file_name);
-                req_contents.insert({query_unique_id, AliveQueryInfo{std::move(query_info), file_size}});
+                req_contents.insert({query_unique_id, AliveQueryInfo{std::move(query_info), file_size, {}}});
             }
         }
         catch (boost::bad_lexical_cast & /*exception*/)
@@ -676,7 +762,7 @@ std::vector<std::unique_ptr<ReadBufferFromFileBase>> DiskExchangeDataManager::re
     for (const auto & file : filtered_files)
     {
         auto abs_file_path = file_path / file;
-        ret.push_back(disk->readFile(abs_file_path));
+        ret.push_back(disk->readFile(abs_file_path, {.local_fs_method = LocalFSReadMethod::read}));
     }
     return ret;
 }
@@ -784,7 +870,7 @@ void DiskExchangeDataManager::checkEnoughSpace()
 {
     if (global_disk_written_bytes.load(std::memory_order_relaxed) > max_disk_bytes)
         throw Exception(
-            ErrorCodes::EXCHANGE_DATA_DISK_LIMIT_EXCEEDED,
+            ErrorCodes::BSP_EXCHANGE_DATA_DISK_LIMIT_EXCEEDED,
             "exchange data file exceeded max_disk_bytes, current size:{} max_disk_bytes:{}",
             global_disk_written_bytes.load(std::memory_order_relaxed),
             max_disk_bytes);
@@ -837,5 +923,23 @@ ssize_t DiskExchangeDataManager::getFileSizeRecursively(const String & file_path
         file_size += disk->getFileSize(file_path);
     }
     return file_size;
+}
+
+void DiskExchangeDataManager::ReadTask::setDone()
+{
+    {
+        std::unique_lock<bthread::Mutex> lk(done_mutex);
+        done = true;
+    }
+    done_cv.notify_all();
+}
+
+void DiskExchangeDataManager::ReadTask::waitDone()
+{
+    std::unique_lock<bthread::Mutex> lock(done_mutex);
+    if (!done_cv.wait_for(lock, std::chrono::milliseconds(disk_partition_wait_done_timeout_ms), [&]() { return done; }))
+    {
+        throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, fmt::format("wait for DiskExchangeDataSource {} done timeout", *key));
+    }
 }
 }

@@ -363,6 +363,16 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
             receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(local_channel);
             if (context->getSettingsRef().bsp_mode)
             {
+                /// we need to do this as to avoid previous sender waitBecomeRealSender in finish
+                auto previous_sender = BroadcastSenderProxyRegistry::instance().get(data_key);
+                if (previous_sender)
+                {
+                    previous_sender->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled as previous sender");
+                    BroadcastSenderProxyRegistry::instance().remove(data_key);
+                    LOG_WARNING(logger, "previous_sender found for query_id:{} key:{}", query_id, *data_key);
+                }
+                previous_sender = nullptr; // dont forget to release
+                disk_mgr->cancelReadTask(data_key); /// cancel possible previous read task from last execution
                 auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
                 sender_proxy->accept(context, exchange_header);
                 auto processors = disk_mgr->createProcessors(std::move(sender_proxy), exchange_header, context);

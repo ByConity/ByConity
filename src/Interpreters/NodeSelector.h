@@ -198,6 +198,7 @@ public:
     }
 
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, bool is_source);
+    static PlanSegmentInputPtr tryGetLocalInput(PlanSegment * plan_segment_ptr);
 
 private:
     ContextPtr query_context;
