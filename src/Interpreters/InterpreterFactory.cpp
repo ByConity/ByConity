@@ -25,11 +25,12 @@
 #include <Parsers/ASTAlterWarehouseQuery.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTCreateQuotaQuery.h>
+#include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
+#include <Parsers/ASTCreateUserQuery.h>
 #include <Parsers/ASTCreateRoleQuery.h>
+#include <Parsers/ASTCreateQuotaQuery.h>
 #include <Parsers/ASTCreateRowPolicyQuery.h>
 #include <Parsers/ASTCreateSettingsProfileQuery.h>
-#include <Parsers/ASTCreateUserQuery.h>
 #include <Parsers/ASTCreateWarehouseQuery.h>
 #include <Parsers/ASTCreateWorkerGroupQuery.h>
 #include <Parsers/ASTSQLBinding.h>
@@ -143,6 +144,8 @@
 #include <Interpreters/InterpreterShowBindings.h>
 #include <Interpreters/InterpreterDropBinding.h>
 
+#include <Interpreters/MySQL/InterpretersAnalyticalMySQLDDLQuery.h>
+
 #include <Parsers/ASTSystemQuery.h>
 
 #include <Databases/MySQL/MaterializeMySQLSyncThread.h>
@@ -237,6 +240,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTUpdateQuery>())
     {
         return std::make_unique<InterpreterUpdateQuery>(query, context);
+    }
+    else if (query->as<ASTCreateQueryAnalyticalMySQL>())
+    {
+        return std::make_unique<MySQLInterpreter::InterpreterAnalyticalMySQLCreateQuery>(query, context);
     }
     else if (query->as<ASTCreateQuery>())
     {
@@ -346,6 +353,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTShowProcesslistQuery>())
     {
         return std::make_unique<InterpreterShowProcesslistQuery>(query, context);
+    }
+    else if (query->as<ASTAlterAnalyticalMySQLQuery>())
+    {
+        return std::make_unique<MySQLInterpreter::InterpreterAnalyticalMySQLAlterQuery>(query, context);
     }
     else if (query->as<ASTAlterQuery>())
     {

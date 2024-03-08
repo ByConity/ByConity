@@ -75,6 +75,7 @@ public:
     IAST              * primary_key = nullptr;
     ASTExpressionList * foreign_keys = nullptr;
     ASTExpressionList * unique = nullptr; // unique is not enforced.
+    ASTExpressionList * mysql_indices = nullptr;
 
     String getID(char) const override { return "Columns definition"; }
 
@@ -87,7 +88,8 @@ public:
     bool empty() const
     {
         return (!columns || columns->children.empty()) && (!indices || indices->children.empty()) && (!constraints || constraints->children.empty())
-            && (!projections || projections->children.empty()) && (!foreign_keys || foreign_keys->children.empty())&& (!unique || unique->children.empty());
+            && (!projections || projections->children.empty()) && (!foreign_keys || foreign_keys->children.empty())&& (!unique || unique->children.empty())
+            && (!mysql_indices || mysql_indices->children.empty());
     }
 };
 

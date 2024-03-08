@@ -1,31 +1,13 @@
-/*
- * Copyright 2016-2023 ClickHouse, Inc.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-
-/*
- * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
- */
-
-#include <Parsers/ASTCreateQuery.h>
+#include <memory>
+#include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Common/quoteString.h>
+#include "Parsers/ASTCreateQuery.h"
+#include "Parsers/IAST_fwd.h"
 #include <Interpreters/StorageID.h>
 #include <IO/Operators.h>
 
@@ -33,59 +15,144 @@
 namespace DB
 {
 
-ASTPtr ASTStorage::clone() const
+// ASTPtr ASTStorageAnalyticalMySQL::clone() const
+// {
+//     //return ASTStorage::clone();
+//     auto res = std::make_shared<ASTStorageAnalyticalMySQL>(*this);
+//     res->children.clear();
+//     // Clickhouse
+//     if (engine)
+//         res->set(res->engine, engine->clone());
+//     if (partition_by)
+//         res->set(res->partition_by, partition_by->clone());
+//     if (cluster_by)
+//         res->set(res->cluster_by, cluster_by->clone());
+//     if (primary_key)
+//         res->set(res->primary_key, primary_key->clone());
+//     if (order_by)
+//         res->set(res->order_by, order_by->clone());
+//     if (unique_key)
+//         res->set(res->unique_key, unique_key->clone());
+//     if (sample_by)
+//         res->set(res->sample_by, sample_by->clone());
+//     if (ttl_table)
+//         res->set(res->ttl_table, ttl_table->clone());
+//     if (settings)
+//         res->set(res->settings, settings->clone());
+//     if (comment)
+//         res->set(res->comment, comment->clone());
+
+//     // MySQL
+//     if (mysql_engine)
+//         res->set(res->mysql_engine, mysql_engine->clone());
+//     if (mysql_primary_key)
+//         res->set(res->mysql_primary_key, mysql_primary_key->clone());
+//     if (distributed_by)
+//         res->set(res->distributed_by, distributed_by->clone());
+//     if (storage_policy)
+//         res->set(res->storage_policy, storage_policy->clone());
+//     if (hot_partition_count)
+//         res->set(res->hot_partition_count, hot_partition_count->clone());
+//     if (block_size)
+//         res->set(res->block_size, block_size->clone());
+//     if (rt_engine)
+//         res->set(res->rt_engine, rt_engine->clone());
+//     if (table_properties)
+//         res->set(res->table_properties, table_properties->clone());
+//     if (mysql_partition_by)
+//         res->set(res->mysql_partition_by, mysql_partition_by->clone());
+//     if (life_cycle)
+//         res->set(res->life_cycle, life_cycle->clone());
+//     res->broadcast = broadcast;
+
+//     return res;
+// }
+
+void ASTStorageAnalyticalMySQL::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
 {
-    auto res = std::make_shared<ASTStorage>(*this);
-    res->children.clear();
-
-    if (engine)
-        res->set(res->engine, engine->clone());
-    if (partition_by)
-        res->set(res->partition_by, partition_by->clone());
-    if (cluster_by)
-        res->set(res->cluster_by, cluster_by->clone());
-    if (primary_key)
-        res->set(res->primary_key, primary_key->clone());
-    if (order_by)
-        res->set(res->order_by, order_by->clone());
-    if (unique_key)
-        res->set(res->unique_key, unique_key->clone());
-    if (sample_by)
-        res->set(res->sample_by, sample_by->clone());
-    if (ttl_table)
-        res->set(res->ttl_table, ttl_table->clone());
-
-    if (settings)
-        res->set(res->settings, settings->clone());
-
-    if (comment)
-        res->set(res->comment, comment->clone());
-
-    return res;
-}
-
-void ASTStorage::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
-{
-    if (engine)
+    if (mysql_engine)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "ENGINE" << (s.hilite ? hilite_none : "") << " = ";
+        mysql_engine->formatImpl(s, state, frame);
+    }
+    else if (engine)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "ENGINE" << (s.hilite ? hilite_none : "") << " = ";
         engine->formatImpl(s, state, frame);
     }
-    if (partition_by)
+
+    if (mysql_partition_by)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "PARTITION BY VALUE(" << (s.hilite ? hilite_none : "");
+        mysql_partition_by->formatImpl(s, state, frame);
+        s.ostr << ")";
+
+        if (life_cycle)
+        {
+            s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "LIFECYCLE " << (s.hilite ? hilite_none : "");
+            life_cycle->formatImpl(s, state, frame);
+        }
+    }
+    else if (partition_by)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "PARTITION BY " << (s.hilite ? hilite_none : "");
         partition_by->formatImpl(s, state, frame);
     }
-    if (cluster_by)
+
+    if (distributed_by)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "DISTRIBUTED BY HASH(" << (s.hilite ? hilite_none : "");
+        distributed_by->formatImpl(s, state, frame);
+        s.ostr << ")";
+    }
+    else if (cluster_by)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "CLUSTER BY " << (s.hilite ? hilite_none : "");
         cluster_by->formatImpl(s, state, frame);
     }
-    if (primary_key)
+
+    if (mysql_primary_key)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "PRIMARY KEY(" << (s.hilite ? hilite_none : "");
+        primary_key->formatImpl(s, state, frame);
+        s.ostr << ")";
+    }
+    else if (primary_key)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "PRIMARY KEY " << (s.hilite ? hilite_none : "");
         primary_key->formatImpl(s, state, frame);
     }
+
+    // MySQL only
+    if (storage_policy)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "STORAGE_POLICY = " << (s.hilite ? hilite_none : "");
+        storage_policy->formatImpl(s, state, frame);
+
+        if (hot_partition_count)
+        {
+            s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "hot_partition_count = " << (s.hilite ? hilite_none : "");
+            hot_partition_count->formatImpl(s, state, frame);
+        }
+    }
+
+    if (block_size)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "BLOCK_SIZE = " << (s.hilite ? hilite_none : "");
+        block_size->formatImpl(s, state, frame);
+    }
+    if (rt_engine)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "RT_ENGINE = " << (s.hilite ? hilite_none : "");
+        rt_engine->formatImpl(s, state, frame);
+    }
+    if (table_properties)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "TABLE_PROPERTIES = " << (s.hilite ? hilite_none : "");
+        table_properties->formatImpl(s, state, frame);
+    }
+
+    // Clickhouse
     if (order_by)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "ORDER BY " << (s.hilite ? hilite_none : "");
@@ -119,185 +186,16 @@ void ASTStorage::formatImpl(const FormatSettings & s, FormatState & state, Forma
 
 }
 
-
-class ASTColumnsElement : public IAST
+ASTPtr ASTCreateQueryAnalyticalMySQL::transform() const
 {
-public:
-    String prefix;
-    IAST * elem;
-
-    String getID(char c) const override { return "ASTColumnsElement for " + elem->getID(c); }
-
-    ASTPtr clone() const override;
-
-    void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
-};
-
-ASTPtr ASTColumnsElement::clone() const
-{
-    auto res = std::make_shared<ASTColumnsElement>();
-    res->prefix = prefix;
-    if (elem)
-        res->set(res->elem, elem->clone());
-    return res;
+    // this function is designed for transform mysql ast to ck ast
+    // only ck class members will be kept
+    return ASTCreateQuery::clone();
 }
 
-void ASTColumnsElement::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
+ASTPtr ASTCreateQueryAnalyticalMySQL::clone() const
 {
-    if (!elem)
-        return;
-
-    if (prefix.empty())
-    {
-        elem->formatImpl(s, state, frame);
-        return;
-    }
-
-    s.ostr << (s.hilite ? hilite_keyword : "") << prefix << (s.hilite ? hilite_none : "");
-    s.ostr << ' ';
-    elem->formatImpl(s, state, frame);
-}
-
-
-ASTPtr ASTColumns::clone() const
-{
-    auto res = std::make_shared<ASTColumns>();
-
-    if (columns)
-        res->set(res->columns, columns->clone());
-    if (indices)
-        res->set(res->indices, indices->clone());
-    if (constraints)
-        res->set(res->constraints, constraints->clone());
-    if (foreign_keys)
-        res->set(res->foreign_keys, foreign_keys->clone());
-    if (unique)
-        res->set(res->unique, unique->clone());
-    if (projections)
-        res->set(res->projections, projections->clone());
-    if (primary_key)
-        res->set(res->primary_key, primary_key->clone());
-    if (mysql_indices)
-        res->set(res->mysql_indices, mysql_indices->clone());
-
-    return res;
-}
-
-void ASTColumns::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
-{
-    ASTExpressionList list;
-
-    if (columns)
-    {
-        for (const auto & column : columns->children)
-        {
-            auto elem = std::make_shared<ASTColumnsElement>();
-            elem->prefix = "";
-            elem->set(elem->elem, column->clone());
-            list.children.push_back(elem);
-        }
-    }
-    if (indices)
-    {
-        for (const auto & index : indices->children)
-        {
-            auto elem = std::make_shared<ASTColumnsElement>();
-            elem->prefix = "INDEX";
-            elem->set(elem->elem, index->clone());
-            list.children.push_back(elem);
-        }
-    }
-    if (constraints)
-    {
-        for (const auto & constraint : constraints->children)
-        {
-            auto elem = std::make_shared<ASTColumnsElement>();
-            if (constraint->as<ASTBitEngineConstraintDeclaration>())
-                elem->prefix = "BITENGINE_CONSTRAINT";
-            else
-                elem->prefix = "CONSTRAINT";
-            elem->set(elem->elem, constraint->clone());
-            list.children.push_back(elem);
-        }
-    }
-    if (projections)
-    {
-        for (const auto & projection : projections->children)
-        {
-            auto elem = std::make_shared<ASTColumnsElement>();
-            elem->prefix = "PROJECTION";
-            elem->set(elem->elem, projection->clone());
-            list.children.push_back(elem);
-        }
-    }
-    if (foreign_keys)
-    {
-        for (const auto & foreign_key : foreign_keys->children)
-        {
-            auto elem = std::make_shared<ASTColumnsElement>();
-            elem->prefix = "CONSTRAINT";
-            elem->set(elem->elem, foreign_key->clone());
-            list.children.push_back(elem);
-        }
-    }
-    if (unique)
-    {
-        for (const auto & unique_key : unique->children)
-        {
-            auto elem = std::make_shared<ASTColumnsElement>();
-            elem->prefix = "CONSTRAINT";
-            elem->set(elem->elem, unique_key->clone());
-            list.children.push_back(elem);
-        }
-    }
-    if (mysql_indices)
-    {
-        for (const auto & mysql_index : mysql_indices->children)
-        {
-            auto elem = std::make_shared<ASTColumnsElement>();
-            elem->set(elem->elem, mysql_index->clone());
-            list.children.push_back(elem);
-        }
-    }
-
-    if (!list.children.empty())
-    {
-        if (s.one_line)
-            list.formatImpl(s, state, frame);
-        else
-            list.formatImplMultiline(s, state, frame);
-    }
-}
-
-ASTPtr ASTCreateSnapshotQuery::clone() const
-{
-    auto res = std::make_shared<ASTCreateSnapshotQuery>(*this);
-    cloneOutputOptions(*res);
-    return res;
-}
-
-void ASTCreateSnapshotQuery::formatQueryImpl(const FormatSettings & settings, FormatState & /*state*/, FormatStateStacked /*frame*/) const
-{
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << "CREATE SNAPSHOT " << (if_not_exists ? "IF NOT EXISTS " : "")
-                  << (settings.hilite ? hilite_none : "");
-
-    settings.ostr << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
-    if (uuid != UUIDHelpers::Nil)
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << " UUID " << (settings.hilite ? hilite_none : "")
-                      << quoteString(toString(uuid));
-
-    if (to_table_id)
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
-                      << (!to_table_id.database_name.empty() ? backQuoteIfNeed(to_table_id.database_name) + "." : "")
-                      << backQuoteIfNeed(to_table_id.table_name);
-
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << " TTL " << (settings.hilite ? hilite_none : "") << ttl_in_days
-                  << (settings.hilite ? hilite_keyword : "") << " DAYS " << (settings.hilite ? hilite_none : "");
-}
-
-ASTPtr ASTCreateQuery::clone() const
-{
-    auto res = std::make_shared<ASTCreateQuery>(*this);
+    auto res = std::make_shared<ASTCreateQueryAnalyticalMySQL>(*this);
     res->children.clear();
 
     if (columns_list && !columns_list->empty())
@@ -323,15 +221,19 @@ ASTPtr ASTCreateQuery::clone() const
     return res;
 }
 
-void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTCreateQueryAnalyticalMySQL::formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     frame.need_parens = false;
 
     if (!catalog.empty() && database.empty() && table.empty())
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "CREATE EXTERNAL CATALOG " << (if_not_exists ? "IF NOT EXISTS " : "")
-                      << (settings.hilite ? hilite_none : "") << backQuoteIfNeed(catalog) << " PROPERTIES ";
-        if (catalog_properties)
+        settings.ostr << (settings.hilite ? hilite_keyword : "")
+            << "CREATE EXTERNAL CATALOG "
+            << (if_not_exists ? "IF NOT EXISTS " : "")
+            << (settings.hilite ? hilite_none : "")
+            << backQuoteIfNeed(catalog)
+            << " PROPERTIES ";
+        if(catalog_properties)
             catalog_properties->formatImpl(settings, state, frame);
         return;
     }
@@ -360,7 +262,6 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
             settings.ostr << settings.nl_or_ws;
             table_overrides->formatImpl(settings, state, frame);
         }
-        
         return;
     }
 
@@ -504,6 +405,9 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     if (storage)
         storage->formatImpl(settings, state, frame);
 
+    if (mysql_storage)
+        mysql_storage->formatImpl(settings, state, frame);
+
     if (dictionary)
         dictionary->formatImpl(settings, state, frame);
 
@@ -521,22 +425,6 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " WITH " << (settings.hilite ? hilite_none : "");
         tables->formatImpl(settings, state, frame);
     }
-}
-
-void ASTCreateQuery::toLowerCase()
-{
-    boost::to_lower(database);
-    boost::to_lower(table);
-    boost::to_lower(as_database);
-    boost::to_lower(as_table);
-}
-
-void ASTCreateQuery::toUpperCase()
-{
-    boost::to_upper(database);
-    boost::to_upper(table);
-    boost::to_upper(as_database);
-    boost::to_upper(as_table);
 }
 
 }

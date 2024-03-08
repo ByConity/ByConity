@@ -25,6 +25,7 @@
 #include <Parsers/ASTColumnsTransformers.h>
 #include <Parsers/ASTConstraintDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
 #include <Parsers/ASTCreateQuotaQuery.h>
 #include <Parsers/ASTCreateRoleQuery.h>
 #include <Parsers/ASTCreateRowPolicyQuery.h>

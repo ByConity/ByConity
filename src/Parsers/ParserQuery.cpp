@@ -88,6 +88,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserShowBindings show_bindings;
     ParserDropBinding drop_binding(dt);
     ParserAlterQuery alter_p(dt);
+    ParserAlterAnalyticalMySQLQuery alter_mysql_p(dt);
 
     bool res = query_with_output_p.parse(pos, node, expected) || insert_p.parse(pos, node, expected) || use_p.parse(pos, node, expected)
         || switch_p.parse(pos, node, expected) || set_role_p.parse(pos, node, expected) || set_p.parse(pos, node, expected)
@@ -100,9 +101,9 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || show_warehouse_p.parse(pos, node, expected) || create_worker_group_p.parse(pos, node, expected)
         || drop_worker_group_p.parse(pos, node, expected) || delete_p.parse(pos, node, expected)
         || update_query_p.parse(pos, node, expected) || create_binding.parse(pos, node, expected)
-        || show_bindings.parse(pos, node, expected) || drop_binding.parse(pos, node, expected) || alter_p.parse(pos, node, expected)
+        || show_bindings.parse(pos, node, expected) || drop_binding.parse(pos, node, expected)
+        || (dt.parse_mysql_ddl && alter_mysql_p.parse(pos, node, expected)) || alter_p.parse(pos, node, expected)
         || prepare.parse(pos, node, expected) || drop_prepare.parse(pos, node, expected);
-
     return res;
 }
 

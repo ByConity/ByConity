@@ -88,6 +88,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowProcesslistQuery show_processlist_p;
     ParserCreateQuery create_p(dt);
     ParserAlterQuery alter_p(dt);
+    ParserAlterAnalyticalMySQLQuery alter_mysql_p(dt);
     ParserRenameQuery rename_p;
     ParserDropQuery drop_p;
     ParserUndropQuery undrop_p;
@@ -132,6 +133,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || describe_table_p.parse(pos, query, expected)
         || show_processlist_p.parse(pos, query, expected)
         || create_p.parse(pos, query, expected)
+        || (dt.parse_mysql_ddl && alter_mysql_p.parse(pos, query, expected))
         || alter_p.parse(pos, query, expected)
         || rename_p.parse(pos, query, expected)
         || drop_p.parse(pos, query, expected)

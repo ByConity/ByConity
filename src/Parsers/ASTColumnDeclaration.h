@@ -37,6 +37,8 @@ public:
     std::optional<bool> null_modifier;
     String default_specifier;
     ASTPtr default_expression;
+    bool auto_increment;
+    bool mysql_primary_key;
     ASTPtr comment;
     ASTPtr codec;
     ASTPtr ttl;

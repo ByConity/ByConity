@@ -129,6 +129,7 @@ public:
 
     StorageID getTableId() const;
     String getDatabaseName() const;
+    String getTableName() const;
 
     // FIXME: used only when it's needed to rewrite distributed table name to real remote table name.
     void resetTable(const String & database_name, const String & table_name);  // TODO(ilezhankin): get rid of this
