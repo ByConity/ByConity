@@ -64,7 +64,7 @@ namespace
 
         if (type->canBeInsideNullable())
             return makeNullable(type);
-        
+
         /// Can't be inside nullable
         return type;
     }
@@ -700,7 +700,7 @@ public:
             arguments[1]
         };
 
-        return FunctionArrayIndex<HasAction, NameMapContains>().executeImpl(new_arguments, result_type, input_rows_count);
+        return FunctionArrayIndex<HasAction, NameMapContains>(nullptr).executeImpl(new_arguments, result_type, input_rows_count);
     }
 };
 
@@ -1047,7 +1047,7 @@ public:
         }
     }
 
-    /// override executeImplDryRun to prevent calling getMapKeys multi times under 
+    /// override executeImplDryRun to prevent calling getMapKeys multi times under
     /// same txn id, which may cause worker create table multi times
     ColumnPtr executeImplDryRun(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {

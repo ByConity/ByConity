@@ -37,11 +37,11 @@ creATe Table uPdate_SeT_upper1.COmMON_TaBle(
     `dATE` DATe,
     `DATeTIme` daTEtImE,
     `FlOat` FLOat,
-    `DOUBLE` DoUblE
+    `DOUBLE` DoUblE,
+    PRIMARY KEY(ID)
 )EnginE=CnchMergeTree
 OrDEr bY ID
-PriMaRY key ID
-unique key id
+UNIQUE KEY ID
 paRTitION BY dAte;
 
 UpDAtE uPdate_SeT_upper1.CoMMon_TablE sEt stRINg='tODaYISmoNDAY' wHEre ID < 10 OrDeR bY ID limit 3;

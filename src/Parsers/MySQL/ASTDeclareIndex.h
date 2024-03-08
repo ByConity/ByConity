@@ -30,13 +30,10 @@ public:
     String getID(char /*delimiter*/) const override { return "index declaration"; }
 
 protected:
-    void formatImpl(const FormatSettings & /*settings*/, FormatState & /*state*/, FormatStateStacked /*frame*/) const override
-    {
-        throw Exception("Method formatImpl is not supported by MySQLParser::ASTDeclareIndex.", ErrorCodes::NOT_IMPLEMENTED);
-    }
+    void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
 };
 
-class ParserDeclareIndex : public IParserBase
+class ParserDeclareIndex : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "index declaration"; }

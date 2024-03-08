@@ -9,6 +9,7 @@
 #include <Common/HashTable/ClearableHashSet.h>
 #include <Common/SipHash.h>
 #include <Common/assert_cast.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -26,10 +27,11 @@ class FunctionArrayDistinct : public IFunction
 public:
     static constexpr auto name = "arrayDistinct";
 
-    static FunctionPtr create(ContextPtr)
-    {
-        return std::make_shared<FunctionArrayDistinct>();
+    static FunctionPtr create(ContextPtr context) {
+        return std::make_shared<FunctionArrayDistinct>(context);
     }
+
+    explicit FunctionArrayDistinct(ContextPtr context_) : context(context_) {}
 
     String getName() const override
     {
@@ -52,8 +54,9 @@ public:
                 " has type " + arguments[0]->getName() + ".",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        auto nested_type = removeNullable(array_type->getNestedType());
-
+        auto nested_type = array_type->getNestedType();
+        if (!(context && context->getSettingsRef().dialect_type == DialectType::MYSQL))
+            nested_type = removeNullable(nested_type);
         return std::make_shared<DataTypeArray>(nested_type);
     }
 
@@ -62,6 +65,8 @@ public:
 private:
     /// Initially allocate a piece of memory for 512 elements. NOTE: This is just a guess.
     static constexpr size_t INITIAL_SIZE_DEGREE = 9;
+
+    ContextPtr context;
 
     template <typename T>
     static bool executeNumber(
@@ -148,7 +153,12 @@ bool FunctionArrayDistinct::executeNumber(
     }
 
     const PaddedPODArray<T> & values = src_data_concrete->getData();
-    PaddedPODArray<T> & res_data = typeid_cast<ColumnVector<T> &>(res_data_col).getData();
+
+    /// to keep NULL in the result for MYSQL
+    auto * res_null_col = typeid_cast<ColumnNullable *>(&res_data_col);
+    auto * res_null_map = res_null_col ? &(res_null_col->getNullMapData()) : nullptr;
+    IColumn & res_ref = res_null_col ? res_null_col->getNestedColumn() : res_data_col;
+    PaddedPODArray<T> & res_data = assert_cast<ColumnVector<T> &>(res_ref).getData();
 
     const PaddedPODArray<UInt8> * src_null_map = nullptr;
 
@@ -167,19 +177,29 @@ bool FunctionArrayDistinct::executeNumber(
     {
         set.clear();
 
+        bool inserted_null = false;
         for (ColumnArray::Offset j = prev_src_offset; j < curr_src_offset; ++j)
         {
             if (nullable_col && (*src_null_map)[j])
+            {
+                if (!inserted_null && res_null_col)
+                {
+                    res_null_col->insertDefault();
+                    inserted_null = true;
+                }
                 continue;
+            }
 
             if (!set.find(values[j]))
             {
                 res_data.emplace_back(values[j]);
                 set.insert(values[j]);
+                if (res_null_map)
+                    res_null_map->push_back(0);
             }
         }
 
-        res_offset += set.size();
+        res_offset += set.size() + inserted_null;
         res_offsets.emplace_back(res_offset);
 
         prev_src_offset = curr_src_offset;
@@ -199,7 +219,12 @@ bool FunctionArrayDistinct::executeString(
     if (!src_data_concrete)
         return false;
 
-    ColumnString & res_data_column_string = typeid_cast<ColumnString &>(res_data_col);
+
+    /// to keep NULL in the result for MYSQL
+    auto * res_null_col = typeid_cast<ColumnNullable *>(&res_data_col);
+    auto * res_null_map = res_null_col ? &(res_null_col->getNullMapData()) : nullptr;
+    IColumn & res_ref = res_null_col ? res_null_col->getNestedColumn() : res_data_col;
+    ColumnString & res_data_column_string = assert_cast<ColumnString &>(res_ref);
 
     using Set = ClearableHashSetWithStackMemory<StringRef, StringRefHash,
         INITIAL_SIZE_DEGREE>;
@@ -218,10 +243,18 @@ bool FunctionArrayDistinct::executeString(
     {
         set.clear();
 
+        bool inserted_null = false;
         for (ColumnArray::Offset j = prev_src_offset; j < curr_src_offset; ++j)
         {
             if (nullable_col && (*src_null_map)[j])
+            {
+                if (!inserted_null && res_null_col)
+                {
+                    res_null_col->insertDefault();
+                    inserted_null = true;
+                }
                 continue;
+            }
 
             StringRef str_ref = src_data_concrete->getDataAt(j);
 
@@ -229,10 +262,12 @@ bool FunctionArrayDistinct::executeString(
             {
                 set.insert(str_ref);
                 res_data_column_string.insertData(str_ref.data, str_ref.size);
+                if (res_null_map)
+                    res_null_map->push_back(0);
             }
         }
 
-        res_offset += set.size();
+        res_offset += set.size() + inserted_null;
         res_offsets.emplace_back(res_offset);
 
         prev_src_offset = curr_src_offset;
@@ -250,8 +285,10 @@ void FunctionArrayDistinct::executeHashed(
     using Set = ClearableHashSetWithStackMemory<UInt128, UInt128TrivialHash,
         INITIAL_SIZE_DEGREE>;
 
-    const PaddedPODArray<UInt8> * src_null_map = nullptr;
+    auto * res_null_col = typeid_cast<ColumnNullable *>(&res_data_col);
+    auto * res_null_map = res_null_col ? &(res_null_col->getNullMapData()) : nullptr;
 
+    const PaddedPODArray<UInt8> * src_null_map = nullptr;
     if (nullable_col)
         src_null_map = &nullable_col->getNullMapData();
 
@@ -264,10 +301,18 @@ void FunctionArrayDistinct::executeHashed(
     {
         set.clear();
 
+        bool inserted_null = false;
         for (ColumnArray::Offset j = prev_src_offset; j < curr_src_offset; ++j)
         {
             if (nullable_col && (*src_null_map)[j])
+            {
+                if (!inserted_null && res_null_col)
+                {
+                    res_data_col.insertDefault();
+                    inserted_null = true;
+                }
                 continue;
+            }
 
             UInt128 hash;
             SipHash hash_function;
@@ -278,10 +323,12 @@ void FunctionArrayDistinct::executeHashed(
             {
                 set.insert(hash);
                 res_data_col.insertFrom(src_data, j);
+                if (res_null_map)
+                    res_null_map->push_back(0);
             }
         }
 
-        res_offset += set.size();
+        res_offset += set.size() + inserted_null;
         res_offsets.emplace_back(res_offset);
 
         prev_src_offset = curr_src_offset;
@@ -292,6 +339,7 @@ void FunctionArrayDistinct::executeHashed(
 REGISTER_FUNCTION(ArrayDistinct)
 {
     factory.registerFunction<FunctionArrayDistinct>();
+    factory.registerAlias("array_distinct", FunctionArrayDistinct::name, FunctionFactory::CaseInsensitive);
 }
 
 }

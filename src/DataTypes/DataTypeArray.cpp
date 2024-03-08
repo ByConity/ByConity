@@ -9,6 +9,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/Serializations/SerializationArray.h>
 #include <DataTypes/Serializations/SerializationTupleElement.h>
 #include <DataTypes/Serializations/SerializationNumber.h>
@@ -123,7 +124,9 @@ SerializationPtr DataTypeArray::doGetDefaultSerialization() const
 
 size_t DataTypeArray::getNumberOfDimensions() const
 {
-    const DataTypeArray * nested_array = typeid_cast<const DataTypeArray *>(nested.get());
+    /// for MySQL, array(nullable(array)) is allowed
+    /// therefore, removeNullabel(nested) to get the real nested
+    const DataTypeArray * nested_array = typeid_cast<const DataTypeArray *>(removeNullable(nested).get());
     if (!nested_array)
         return 1;
     return 1 + nested_array->getNumberOfDimensions();   /// Every modern C++ compiler optimizes tail recursion.
