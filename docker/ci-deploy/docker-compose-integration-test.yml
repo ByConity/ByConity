@@ -179,7 +179,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 2
-      start_period: 20s
+      start_period: 30s
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
       MYSQL_DATABASE: test
