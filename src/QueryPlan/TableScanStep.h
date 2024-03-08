@@ -221,6 +221,8 @@ private:
     // enforce calculating inline expressions(an example is to calculate arraySetCheck for data parts without index), then alias outputs
     void aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings &, const String & pipeline_name);
     void setQuotaAndLimits(QueryPipeline & pipeline, const SelectQueryOptions & options, const BuildQueryPipelineSettings &);
+
+    bool hasFunctionCanUseBitmapIndex() const;
 };
 
 }

@@ -51,6 +51,7 @@
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/planning_common.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 #include <Storages/MergeTree/Index/TableScanExecutorWithIndex.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
@@ -1416,7 +1417,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     if (!pipes.empty())
     {
         pipe = Pipe::unitePipes(std::move(pipes));
-        pipe.resize(1);
+        if (pushdown_aggregation)
+            pipe.resize(1);
     }
     else
     {
@@ -1797,7 +1799,7 @@ Names TableScanStep::getRequiredColumns(GetFlags flags) const
         for (const auto & item : inline_expressions)
         {
             const auto * func = item.second->as<ASTFunction>();
-            if (func && Poco::toLower(func->name) == "arraysetcheck")
+            if (func && functionCanUseBitmapIndex(*func))
                 add_columns_in_expr(item.second);
         }
     }
@@ -1841,5 +1843,16 @@ void TableScanStep::prepare(const PreparedStatementContext & prepared_context)
 {
     prepared_context.prepare(query_info.partition_filter);
     prepared_context.prepare(query_info.query);
+}
+
+bool TableScanStep::hasFunctionCanUseBitmapIndex() const
+{
+    for (const auto & item : inline_expressions)
+    {
+        const auto * func = item.second->as<ASTFunction>();
+        if (func && functionCanUseBitmapIndex(*func))
+            return true;
+    }
+    return false;
 }
 }
