@@ -175,10 +175,10 @@ services:
     image: mysql:5.7.25
     command: bash /entrypoint.sh --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --sql-mode="" --log-bin --server-id=123 --gtid-mode=ON --enforce-gtid-consistency=ON # For 8.x: --default-authentication-plugin=mysql_native_password
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppassword", "--silent"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ppassword", "--silent"]
       interval: 5s
-      timeout: 3s
-      retries: 2
+      timeout: 5s
+      retries: 10
       start_period: 30s
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
