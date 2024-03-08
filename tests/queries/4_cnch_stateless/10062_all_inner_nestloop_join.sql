@@ -9,4 +9,5 @@ ALL INNER JOIN
 (
     SELECT intDiv(number, 2) AS k, number AS joined FROM system.numbers LIMIT 10
 ) AS b
-on a.k > b.k;
+on a.k > b.k
+order by a.k, b.k, b.joined;

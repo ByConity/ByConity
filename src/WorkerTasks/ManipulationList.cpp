@@ -53,7 +53,7 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
             total_rows_count += source_part->index_granularity.getTotalRows();
         }
     }
-    else
+    else if (!params.source_parts.empty())
     {
         partition_id = params.source_parts.front()->info().partition_id;
         num_parts = params.source_parts.size();

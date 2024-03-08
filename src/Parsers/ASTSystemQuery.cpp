@@ -222,6 +222,12 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "RESYNC MATERIALIZEDMYSQL TABLE";
         case Type::RECALCULATE_METRICS:
             return "RECALCULATE METRICS FOR";
+        case Type::START_VIEW:
+            return "START VIEW";
+        case Type::STOP_VIEW:
+            return "STOP VIEW";
+        case Type::DROP_VIEW_META:
+            return "DROP VIEW META";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");

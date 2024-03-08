@@ -82,6 +82,7 @@
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Transaction/Actions/S3DetachMetaAction.h>
 #include <brpc/controller.h>
+#include <fmt/ranges.h>
 #include <Common/Exception.h>
 #include <Common/RowExistsColumnInfo.h>
 #include <Common/parseAddress.h>
@@ -662,7 +663,7 @@ void StorageCnchMergeTree::filterPartitionByTTL(std::vector<std::shared_ptr<Merg
             }
         }
         else
-            throw Exception("Unexpected type of result ttl column", ErrorCodes::LOGICAL_ERROR); 
+            throw Exception("Unexpected type of result ttl column", ErrorCodes::LOGICAL_ERROR);
 
         // for (size_t index = 0; index < column->size(); index++)
         // {
@@ -869,7 +870,7 @@ static String extractTableSuffix(const String & gen_table_name)
     return gen_table_name.substr(gen_table_name.find_last_of('_') + 1);
 }
 
-static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const String & table_suffix)
+static std::pair<String, ASTPtr> replaceMaterializedViewQuery(StorageMaterializedView * mv, const String & table_suffix)
 {
     auto query = mv->getCreateTableSql();
 
@@ -899,11 +900,11 @@ static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const S
         mv->getInMemoryMetadataPtr()->select.select_table_id.database_name,
         mv->getInMemoryMetadataPtr()->select.select_table_id.table_name + "_" + table_suffix);
 
-    return getTableDefinitionFromCreateQuery(ast, false);
+    return {getTableDefinitionFromCreateQuery(ast, false), select_query.clone()};
 }
 
 Names StorageCnchMergeTree::genViewDependencyCreateQueries(
-    const StorageID & storage_id, ContextPtr local_context, const String & table_suffix)
+    const StorageID & storage_id, ContextPtr local_context, const String & table_suffix, std::set<String> & cnch_table_create_queries)
 {
     Names create_view_sqls;
     std::set<StorageID> view_dependencies;
@@ -956,7 +957,22 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(
                 enable_staging_area,
                 cnch_merge->getStorageID());
             create_view_sqls.emplace_back(create_local_target_query);
-            create_view_sqls.emplace_back(replaceMaterializedViewQuery(mv, table_suffix));
+
+            ASTPtr rewrite_inner_ast;
+            String rewrite_mv_sql;
+            std::tie(rewrite_mv_sql, rewrite_inner_ast) = replaceMaterializedViewQuery(mv, table_suffix);
+            create_view_sqls.emplace_back(rewrite_mv_sql);
+
+            /// After rewrite try to analyze materialized view inner query and extract cnch tables which need be dispatched to worker
+            ASTs related_tables;
+            bool have_table_function = false;
+            ASTSelectQuery::collectAllTables(rewrite_inner_ast.get(), related_tables, have_table_function);
+            for (auto & db_and_table_ast : related_tables)
+            {
+                DatabaseAndTableWithAlias db_and_table(db_and_table_ast);
+                if (auto cnch_table = DatabaseCatalog::instance().tryGetTable(StorageID(db_and_table.database, db_and_table.table), local_context))
+                    cnch_table_create_queries.insert(cnch_table->getCreateTableSql());
+            }
         }
 
         /// TODO: Check cascade view dependency
@@ -1040,12 +1056,13 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
         worker_client->sendCreateQueries(local_context, {create_local_tb_query});
 
         auto table_suffix = extractTableSuffix(generated_tb_name);
-        Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write");
+        std::set<String> cnch_table_create_queries;
+        Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write", cnch_table_create_queries);
         for (const auto & dependency_create_query : dependency_create_queries)
-        {
-            LOG_DEBUG(log, "Will send create query {}", dependency_create_query);
-        }
-        worker_client->sendCreateQueries(local_context, dependency_create_queries);
+            LOG_DEBUG(log, "send local table (for view write) create query {}", dependency_create_query);
+        for (const auto & cnch_table_query : cnch_table_create_queries)
+            LOG_DEBUG(log, "send cnch table (for view subquery join) create query {}", cnch_table_query);
+        worker_client->sendCreateQueries(local_context, dependency_create_queries, cnch_table_create_queries);
     }
 
     if (send_query_in_normal_mode)
@@ -1070,17 +1087,24 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
     return std::make_pair(local_table_name, write_shard_ptr);
 }
 
-BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
     bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
 
     if (enable_staging_area && local_context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
         throw Exception("Insert VALUES into staging area with dedup_key_mode=DedupKeyMode::THROW is not allowed", ErrorCodes::SUPPORT_IS_DISABLED);
 
+
+    auto modified_query_ast = query->clone();
+    auto & insert_query = modified_query_ast->as<ASTInsertQuery &>();
+
+    if (insert_query.table_id.database_name.empty())
+        insert_query.table_id.database_name = local_context->getCurrentDatabase();
+
     if (enable_staging_area)
         LOG_DEBUG(log, "enable staging area for write");
 
-    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area);
+    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area, insert_query.is_overwrite ? insert_query.overwrite_partition : nullptr);
 }
 
 /// for insert select and insert infile
@@ -2365,7 +2389,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
                 {
                     if (!command.column_name.empty())
                         current_columns.insert(command.column_name);
-                
+
                     if (!command.rename_to.empty())
                         current_columns.insert(command.rename_to);
                 }
@@ -2512,6 +2536,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "cnch_merge_only_realtime_partition",
         "cnch_merge_select_nonadjacent_parts",
         "cnch_merge_pick_worker_algo",
+        "max_refresh_materialized_view_task_num",
         "cnch_merge_round_robin_partitions_interval",
         "cnch_gc_round_robin_partitions_interval",
         "cnch_gc_round_robin_partitions_number",
@@ -2570,15 +2595,105 @@ void StorageCnchMergeTree::truncate(
     dropPartitionOrPart(command, local_context);
 }
 
-void StorageCnchMergeTree::dropPartitionOrPart(
-    const PartitionCommand & command, ContextPtr local_context, IMergeTreeDataPartsVector * dropped_parts, size_t max_threads)
+void StorageCnchMergeTree::overwritePartitions(const ASTPtr & overwrite_partition, ContextPtr local_context, CnchLockHolderPtrs * lock_holders)
 {
+    if (auto * partition_list = typeid_cast<ASTExpressionList *>(overwrite_partition.get()))
+    {
+        for (const auto & partition : partition_list->children)
+            overwritePartition(partition, local_context, lock_holders);
+    }
+    else
+    {
+        overwritePartition(overwrite_partition, local_context, lock_holders);
+    }
+}
+
+void StorageCnchMergeTree::overwritePartition(const ASTPtr & overwrite_partition, ContextPtr local_context, CnchLockHolderPtrs * lock_holders)
+{
+    PartitionCommand command;
+    if (overwrite_partition)
+    {
+        command.type = PartitionCommand::DROP_PARTITION;
+        command.partition = overwrite_partition;
+    }
+    else
+    {
+        command.type = PartitionCommand::DROP_PARTITION_WHERE;
+        command.partition = std::make_shared<ASTLiteral>(Field(UInt8(1)));
+    }
+    command.part = false;
+
+    dropPartitionOrPart(command, local_context, nullptr, false, lock_holders);
+}
+
+/// Main steps of DROP PARTITION
+/// 1. aquire the (task_domain) partition lock, to block the merge scheduling.
+/// 2. cancel existing merge tasks (make sure all tasks are aborted or committed before step 3).
+/// 3. get data parts from catalog using the newest timestamp.
+/// 4. generate DropRange parts based on parts from step 3.
+void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
+    ContextPtr local_context, IMergeTreeDataPartsVector* dropped_parts,
+    bool do_commit, CnchLockHolderPtrs * lock_holders, size_t max_threads)
+{
+    if (!command.part)
+    {
+        /// 1. aquire partition lock
+        auto cur_txn = local_context->getCurrentTransaction();
+        TxnTimestamp txn_id = cur_txn->getTransactionID();
+        LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
+        partition_lock->setMode(LockMode::X);
+        partition_lock->setTimeout(local_context->getSettingsRef().drop_range_memory_lock_timeout.value.totalMilliseconds()); // default 5s
+        partition_lock->setUUIDAndPrefix(getStorageUUID(), LockInfo::task_domain);
+
+        String partition_id = "all";
+        if (!partitionCommandHasWhere(command))
+        {
+            partition_id = getPartitionIDFromQuery(command.partition, local_context);
+            partition_lock->setPartition(partition_id);
+        }
+        /// else { lock all partitions }
+        Stopwatch lock_watch;
+        auto cnch_lock = cur_txn->createLockHolder({std::move(partition_lock)});
+        cnch_lock->lock();
+        LOG_DEBUG(log, "DROP PARTITION acquired lock in {} ms", lock_watch.elapsedMilliseconds());
+
+        if (lock_holders)
+            lock_holders->push_back(cnch_lock);
+
+        /// 2. cancel merge tasks
+        auto daemon_manager_client_ptr = local_context->getDaemonManagerClient();
+        if (!daemon_manager_client_ptr)
+            throw Exception("Failed to get daemon manager client", ErrorCodes::SYSTEM_ERROR);
+
+        const StorageID target_storage_id = getStorageID();
+        std::optional<DaemonManager::BGJobInfo> merge_job_info = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate, local_context->getCurrentQueryId());
+
+        if (!merge_job_info || merge_job_info->host_port.empty())
+            LOG_DEBUG(log, "Skip removing related merge tasks as there is no valid host server for table's merge job: {}", target_storage_id.getNameForLogs());
+        else
+        {
+            auto server_client_ptr = local_context->getCnchServerClient(merge_job_info->host_port);
+            if (!server_client_ptr)
+                throw Exception("Failed to get server client with host port " + merge_job_info->host_port, ErrorCodes::SYSTEM_ERROR);
+            if (!server_client_ptr->removeMergeMutateTasksOnPartitions(target_storage_id, {partition_id}))
+            {
+                auto msg = fmt::format(
+                    "Failed to remove MergeMutateTasks for partitions: {}, table: {}.",
+                    fmt::join({partition_id}, ","),
+                    target_storage_id.getNameForLogs());
+
+                throw Exception(msg, ErrorCodes::SYSTEM_ERROR);
+            }
+        }
+    }
+
     if (!getInMemoryMetadata().hasUniqueKey() && command.staging_area)
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "DROP/DETACH STAGED PARTITION/PART command is only for unique table, table {} does not have unique key.",
             getStorageID().getNameForLogs());
 
+    /// 3. get data parts
     auto svr_parts = selectPartsByPartitionCommand(local_context, command);
     if (svr_parts.empty())
     {
@@ -2587,7 +2702,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(
     }
 
     auto parts = createPartVectorFromServerParts(*this, svr_parts);
-    dropPartsImpl(svr_parts, parts, command.detach, local_context, max_threads, command.staging_area);
+    dropPartsImpl(svr_parts, parts, command.detach, local_context, do_commit, max_threads, command.staging_area);
 
     if (dropped_parts != nullptr)
     {
@@ -2596,14 +2711,16 @@ void StorageCnchMergeTree::dropPartitionOrPart(
 }
 
 void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-    IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context, size_t max_threads, bool staging_area)
+    IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context,
+    bool do_commit, size_t max_threads, bool staging_area)
 {
     auto txn = local_context->getCurrentTransaction();
     if (svr_parts_to_drop.empty())
     {
         /// Note that it doesn't matter if we commit or rollback here, because there's no data anyway. But commit is more
         /// semantically correct, because there's no exception, so client side expect that the transaction is success.
-        txn->commitV2();
+        if (do_commit)
+            txn->commitV2();
         return;
     }
 
@@ -2834,11 +2951,13 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         cnch_writer.commitDumpedParts(dumped_data);
     }
 
-    txn->commitV2();
+    if (do_commit)
+        txn->commitV2();
 }
 
-StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRangesFromParts(
-    ContextPtr query_context, const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn)
+StorageCnchMergeTree::MutableDataPartsVector
+StorageCnchMergeTree::createDropRangesFromParts([[maybe_unused]] ContextPtr query_context, const ServerDataPartsVector & parts_to_drop,
+    const TransactionCnchPtr & txn)
 {
     PartitionDropInfos partition_infos;
     std::unordered_set<String> partitions;
@@ -2861,50 +2980,6 @@ StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRan
                 iter->second.size += cur_part->part_model().size();
                 iter->second.parts_count += 1;
             } while ((cur_part = cur_part->tryGetPreviousPart()));
-        }
-    }
-
-    /// Remove related merge mutate tasks before creating DropRange to avoid merged parts become visible.
-    auto cur_txn = query_context->getCurrentTransaction();
-    TxnTimestamp txn_id = cur_txn->getTransactionID();
-    LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
-    partition_lock->setMode(LockMode::X);
-    partition_lock->setTimeout(query_context->getSettingsRef().drop_range_memory_lock_timeout.value.totalMilliseconds()); // default 5s
-    partition_lock->setUUID(getStorageUUID());
-    if (partitions.size() == 1)
-        partition_lock->setPartition(*partitions.begin());
-
-    Stopwatch lock_watch;
-    auto cnch_lock = cur_txn->createLockHolder({std::move(partition_lock)});
-    cnch_lock->lock();
-    LOG_DEBUG(log, "DropRanges qcquired lock in {} ms", lock_watch.elapsedMilliseconds());
-
-    auto daemon_manager_client_ptr = query_context->getDaemonManagerClient();
-    if (!daemon_manager_client_ptr)
-        throw Exception("Failed to get daemon manager client", ErrorCodes::SYSTEM_ERROR);
-
-    const StorageID target_storage_id = getStorageID();
-    std::optional<DaemonManager::BGJobInfo> merge_job_info
-        = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate, query_context->getCurrentQueryId());
-
-    if (!merge_job_info || merge_job_info->host_port.empty())
-        LOG_DEBUG(
-            log,
-            "Will skip removing related merge tasks as there is no valid host server for table's merge job: {}",
-            target_storage_id.getNameForLogs());
-    else
-    {
-        auto server_client_ptr = query_context->getCnchServerClient(merge_job_info->host_port);
-        if (!server_client_ptr)
-            throw Exception("Failed to get server client with host port " + merge_job_info->host_port, ErrorCodes::SYSTEM_ERROR);
-        if (!server_client_ptr->removeMergeMutateTasksOnPartitions(target_storage_id, partitions))
-        {
-            auto msg = fmt::format(
-                "Failed to remove MergeMutateTasks for partitions: {}, table: {}.",
-                fmt::join(partitions, ","),
-                target_storage_id.getNameForLogs());
-
-            throw Exception(msg, ErrorCodes::SYSTEM_ERROR);
         }
     }
 
@@ -2980,34 +3055,6 @@ StoragePolicyPtr StorageCnchMergeTree::getStoragePolicy(StorageLocation location
 const String & StorageCnchMergeTree::getRelativeDataPath(StorageLocation location) const
 {
     return location == StorageLocation::MAIN ? MergeTreeMetaBase::getRelativeDataPath(location) : relative_auxility_storage_path;
-}
-
-Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(
-    const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const
-{
-    DataTypePtr partition_value_type = getPartitionValueType();
-    bool has_partition_value = typeid_cast<const DataTypeTuple *>(partition_value_type.get());
-    Block block{
-        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
-        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")};
-
-
-    MutableColumns columns = block.mutateColumns();
-
-    auto & partition_id_column = columns[0];
-    auto & partition_value_column = columns[1];
-
-    for (const auto & partition : partition_list)
-    {
-        partition_id_column->insert(partition->getID(*this));
-        Tuple tuple(partition->value.begin(), partition->value.end());
-        if (has_partition_value)
-            partition_value_column->insert(std::move(tuple));
-    }
-    block.setColumns(std::move(columns));
-    if (!has_partition_value)
-        block.erase(block.getPositionByName("_partition_value"));
-    return block;
 }
 
 std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr local_context) const
@@ -3243,7 +3290,10 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     source_columns.push_back(NameAndTypePair("_partition_value", getPartitionValueType()));
     TreeRewriterResult syntax_analyzer_result(source_columns, {}, storage_snapshot, true);
     auto analyzed_result = TreeRewriter(local_context).analyzeSelect(query, std::move(syntax_analyzer_result));
+    SelectQueryExpressionAnalyzer analyzer(query, analyzed_result, local_context, metadata_snapshot);
+    analyzer.makeSetsForIndex(select->where());
     query_info.query = std::move(query);
+    query_info.sets = std::move(analyzer.getPreparedSets());
     query_info.syntax_analyzer_result = std::move(analyzed_result);
     return selectPartsToRead(column_names_to_return, local_context, query_info, /*snapshot_ts=*/0, /*staging_area=*/command.staging_area);
 }

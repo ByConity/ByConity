@@ -667,7 +667,8 @@ void Connection::sendPlanSegment(
     const ConnectionTimeouts & timeouts,
     const PlanSegment * plan_segment,
     const Settings * settings,
-    const ClientInfo * client_info)
+    const ClientInfo * client_info,
+    UInt16 server_rpc_port)
 {
      if (!connected)
         connect(timeouts);
@@ -695,9 +696,9 @@ void Connection::sendPlanSegment(
     if (server_revision >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
     {
         if (client_info && !client_info->empty())
-            client_info->write(*out, server_revision);
+            client_info->write(*out, server_revision, server_rpc_port);
         else
-            ClientInfo().write(*out, server_revision);
+            ClientInfo().write(*out, server_revision, server_rpc_port);
     }
 
     /// Per query settings.

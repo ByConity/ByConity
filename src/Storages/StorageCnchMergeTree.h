@@ -24,6 +24,7 @@
 #include <Storages/StorageSnapshot.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Transaction/CnchLock.h>
 
 namespace DB
 {
@@ -177,11 +178,9 @@ public:
         TableExclusiveLockHolder &) override;
 
     ServerDataPartsVector selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
-
+    void overwritePartitions(const ASTPtr & overwrite_partition, ContextPtr local_context, CnchLockHolderPtrs * lock_holders);
     void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
-        IMergeTreeDataPartsVector* dropped_parts = nullptr, size_t max_threads = 16);
-
-    Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
+        IMergeTreeDataPartsVector* dropped_parts = nullptr, bool do_commit = true, CnchLockHolderPtrs * lock_holders = nullptr, size_t max_threads = 16);
 
     struct PartitionDropInfo
     {
@@ -247,6 +246,7 @@ private:
     /// protected by @data_parts_mutex.
     ObjectSchemas object_schemas;
 
+    void overwritePartition(const ASTPtr & overwrite_partition, ContextPtr local_context, CnchLockHolderPtrs * lock_holders);
     CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts) const;
 
     /**
@@ -272,7 +272,8 @@ private:
         const Names & column_names_to_return) const;
 
     void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context, size_t max_threads, bool staging_area = false);
+        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context,
+        bool do_commit, size_t max_threads, bool staging_area = false);
 
     void collectResource(
         ContextPtr local_context,
@@ -290,7 +291,7 @@ private:
     ServerDataPartsVector filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const;
 
     /// Generate view dependency create queries for materialized view writing
-    Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
+    Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix, std::set<String> & cnch_table_create_queries);
 
     Pipe ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);
 

@@ -215,7 +215,7 @@ public:
         NamesAndTypes columns;
         for (int i = 0; i < 2; ++i)
             columns.emplace_back(generateNameAndTypePair(eng));
-        auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns);
+        auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns, nullptr);
         return step;
     }
 

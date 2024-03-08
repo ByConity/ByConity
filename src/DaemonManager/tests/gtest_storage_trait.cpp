@@ -16,37 +16,56 @@ TEST(StorageTraitTest, operations_test)
         StorageTrait s{StorageTrait::Param {
                 .is_cnch_merge_tree = true,
                 .is_cnch_kafka = false,
-                .is_cnch_unique = false
+                .is_cnch_unique = false,
+                .is_cnch_refresh_materialized_view = false
             }};
         EXPECT_TRUE(s.isCnchMergeTree());
         EXPECT_FALSE(s.isCnchKafka());
         EXPECT_FALSE(s.isCnchUniqueAndNeedDedup());
+        EXPECT_FALSE(s.isCnchRefreshMaterializedView());
     }
     {
         StorageTrait s{StorageTrait::Param {
                 .is_cnch_merge_tree = false,
                 .is_cnch_kafka = true,
-                .is_cnch_unique = false
+                .is_cnch_unique = false,
+                .is_cnch_refresh_materialized_view = false
             }};
         EXPECT_FALSE(s.isCnchMergeTree());
         EXPECT_TRUE(s.isCnchKafka());
         EXPECT_FALSE(s.isCnchUniqueAndNeedDedup());
+        EXPECT_FALSE(s.isCnchRefreshMaterializedView());
     }
     {
         StorageTrait s{StorageTrait::Param {
                 .is_cnch_merge_tree = false,
                 .is_cnch_kafka = false,
-                .is_cnch_unique = true
+                .is_cnch_unique = true,
+                .is_cnch_refresh_materialized_view = false
             }};
         EXPECT_FALSE(s.isCnchMergeTree());
         EXPECT_FALSE(s.isCnchKafka());
         EXPECT_TRUE(s.isCnchUniqueAndNeedDedup());
+        EXPECT_FALSE(s.isCnchRefreshMaterializedView());
+    }
+    {
+        StorageTrait s{StorageTrait::Param {
+                .is_cnch_merge_tree = false,
+                .is_cnch_kafka = false,
+                .is_cnch_unique = false,
+                .is_cnch_refresh_materialized_view = true
+            }};
+        EXPECT_FALSE(s.isCnchMergeTree());
+        EXPECT_FALSE(s.isCnchKafka());
+        EXPECT_FALSE(s.isCnchUniqueAndNeedDedup());
+        EXPECT_TRUE(s.isCnchRefreshMaterializedView());
     }
     {
         StorageTrait s;
         EXPECT_FALSE(s.isCnchMergeTree());
         EXPECT_FALSE(s.isCnchKafka());
         EXPECT_FALSE(s.isCnchUniqueAndNeedDedup());
+        EXPECT_FALSE(s.isCnchRefreshMaterializedView());
     }
 }
 
@@ -76,7 +95,8 @@ SETTINGS region = 'S3_REGION', endpoint = 'S3_ENDPOINT', ak_id = 'S3_ACCESS_KEY'
     StorageTrait expected_result{StorageTrait::Param {
             .is_cnch_merge_tree = false,
             .is_cnch_kafka = false,
-            .is_cnch_unique = false
+            .is_cnch_unique = false,
+            .is_cnch_refresh_materialized_view = false
         }};
 
     EXPECT_EQ(storage_trait, expected_result);

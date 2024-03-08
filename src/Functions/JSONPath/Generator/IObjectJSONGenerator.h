@@ -18,7 +18,6 @@ public:
     /**
      * Used to yield next non-ignored element describes by JSONPath query.
      *
-     * @param element to be extracted into
      * @return true if generator is not exhausted
      */
     virtual VisitorStatus getNextItem(ObjectIterator & iterator) = 0;

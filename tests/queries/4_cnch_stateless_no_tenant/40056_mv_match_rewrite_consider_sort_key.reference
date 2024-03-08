@@ -1,0 +1,30 @@
+Projection
+│     Expressions: a:=a_4, b:=b_4, sum(c):=`expr#sumMerge(expr#sumState(c))_2`
+└─ Gather Exchange
+   └─ MergingAggregated
+      └─ Repartition Exchange
+         │     Partition by: {b_4, a_4}
+         └─ Aggregating
+            │     Group by: {b_4, a_4}
+            │     Aggregates: expr#sumMerge(expr#sumState(c))_2:=AggNull(sumMerge)(expr#sumState(c)_3)
+            └─ Filter
+               │     Condition: a_4 = 1
+               └─ TableScan test.t40056_target1
+                        Where: a = 1
+                        Outputs: expr#sumState(c)_3:=sum_c, b_4:=b, a_4:=a
+note: Materialized Views is applied for 1 times: test.t40056_mv1.
+Projection
+│     Expressions: a:=a_4, b:=b_4, sum(c):=`expr#sumMerge(expr#sumState(c))_2`
+└─ Gather Exchange
+   └─ MergingAggregated
+      └─ Repartition Exchange
+         │     Partition by: {b_4, a_4}
+         └─ Aggregating
+            │     Group by: {b_4, a_4}
+            │     Aggregates: expr#sumMerge(expr#sumState(c))_2:=AggNull(sumMerge)(expr#sumState(c)_3)
+            └─ Filter
+               │     Condition: b_4 = 1
+               └─ TableScan test.t40056_target1
+                        Where: b = 1
+                        Outputs: expr#sumState(c)_3:=sum_c, b_4:=b, a_4:=a
+note: Materialized Views is applied for 1 times: test.t40056_mv1.

@@ -1,15 +1,18 @@
 #include <Optimizer/Rewriter/ShareCommonExpression.h>
 
 #include <Optimizer/EqualityASTMap.h>
+#include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/ProjectionPlanner.h>
 #include <Optimizer/SymbolTransformMap.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/ASTVisitor.h>
 #include <Parsers/formatAST.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/PlanVisitor.h>
 
 #include <fmt/format.h>
 #include <common/logger_useful.h>
+
 
 #include <algorithm>
 #include <functional>
@@ -30,7 +33,7 @@ namespace
 
     using CachedExpressions = std::unordered_map<ConstASTPtr, ASTPtr>;
 
-    bool isExpressionSharableStep(const PlanNodeBase * node)
+    bool isExpressionSharableStep(const PlanNodeBase * node, ContextMutablePtr context)
     {
         assert(node != nullptr);
         auto type = node->getStep()->getType();
@@ -42,7 +45,16 @@ namespace
         if (type == IQueryPlanStep::Type::Projection)
         {
             const auto & projection = dynamic_cast<ProjectionStep &>(*node->getStep());
+            for (const auto & assignment : projection.getAssignments())
+                if (ExpressionDeterminism::canChangeOutputRows(assignment.second, context))
+                    return false;
             return !projection.isFinalProject();
+        }
+
+        if (type == IQueryPlanStep::Type::Filter)
+        {
+            const auto & filter = dynamic_cast<FilterStep &>(*node->getStep());
+            return !ExpressionDeterminism::canChangeOutputRows(filter.getFilter(), context);
         }
 
         const static std::unordered_set<IQueryPlanStep::Type> sharable_steps{
@@ -506,7 +518,7 @@ PlanNodePtr ShareCommonExpression::rewriteImpl(PlanNodePtr root, ContextMutableP
         }
 
         auto & bottom = back.node;
-        if (!isExpressionSharableStep(bottom))
+        if (!isExpressionSharableStep(bottom, context))
         {
             stack.pop_back();
             continue;
@@ -514,7 +526,7 @@ PlanNodePtr ShareCommonExpression::rewriteImpl(PlanNodePtr root, ContextMutableP
 
         auto top_idx = stack.size() - 1;
 
-        while (top_idx > 0 && isExpressionSharableStep(stack.at(top_idx - 1).node))
+        while (top_idx > 0 && isExpressionSharableStep(stack.at(top_idx - 1).node, context))
             --top_idx;
 
         // skip segments with single step

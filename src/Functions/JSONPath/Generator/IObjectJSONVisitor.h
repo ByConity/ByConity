@@ -12,13 +12,11 @@ public:
 
     /**
      * Applies this visitor to document and mutates its state
-     * @param element simdjson element
      */
     virtual VisitorStatus visit(ObjectIterator & iterator) = 0;
 
     /**
      * Applies this visitor to document, but does not mutate state
-     * @param element simdjson element
      */
     virtual VisitorStatus apply(ObjectIterator & iterator) = 0;
 

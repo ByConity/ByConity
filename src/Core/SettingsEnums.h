@@ -289,6 +289,8 @@ enum class MaterializedViewConsistencyCheckMethod
     PARTITION,
 };
 
+DECLARE_SETTING_ENUM(MaterializedViewConsistencyCheckMethod);
+
 enum class BackupVWMode
 {
     BACKUP = 0,
@@ -298,14 +300,13 @@ enum class BackupVWMode
 
 DECLARE_SETTING_ENUM(BackupVWMode)
 
-DECLARE_SETTING_ENUM(MaterializedViewConsistencyCheckMethod)
-
 enum class SpanHierarchy : int
 {
     TRACE = 0,
     DEBUG = 1,
     INFO = 2
 };
+
 
 DECLARE_SETTING_ENUM(SpanHierarchy)
 
@@ -334,5 +335,22 @@ enum class DedupKeyMode
 };
 
 DECLARE_SETTING_ENUM(DedupKeyMode)
+
+enum class RefreshViewTaskStatus : int8_t
+{
+    START = 1,
+    FINISH = 2,
+    EXCEPTION = 3,
+};
+
+DECLARE_SETTING_ENUM(RefreshViewTaskStatus);
+
+enum class RefreshViewTaskType : int8_t
+{
+    PARTITION_BASED_REFRESH = 1,
+    FULL_REFRESH = 2,
+};
+
+DECLARE_SETTING_ENUM(RefreshViewTaskType);
 
 }

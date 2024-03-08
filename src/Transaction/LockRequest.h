@@ -93,6 +93,10 @@ public:
     LockStatus status{LockStatus::LOCK_INIT};
     LockRequestPtrs requests;
     static constexpr auto task_domain{"task_"};
+    static constexpr auto default_domain {""};
+    /// TODO: (litianan, zuochuang.zema) use this domain for unique table.
+    static constexpr auto dedup_domain {"dedup_"};
+
 public:
     LockInfo(TxnTimestamp txn_id_) : txn_id(txn_id_) { }
 
@@ -122,15 +126,15 @@ public:
         return *this;
     }
 
-    inline LockInfo & setUUID(UUID table_uuid)
+    inline LockInfo & setUUIDAndPrefix(UUID table_uuid, const String & prefix = default_domain)
     {
-        table_uuid_with_prefix = UUIDHelpers::UUIDToString(table_uuid);
+        table_uuid_with_prefix = prefix + UUIDHelpers::UUIDToString(table_uuid);
         return *this;
     }
-
-    inline LockInfo & setTablePrefix(const String & prefix)
+    
+    inline LockInfo & setUUIDAndPrefixFromModel(const String & uuid_and_prefix)
     {
-        table_uuid_with_prefix = prefix;
+        table_uuid_with_prefix = uuid_and_prefix;
         return *this;
     }
 

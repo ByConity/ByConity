@@ -40,6 +40,13 @@ namespace ErrorCodes
     extern const int UNKNOWN_DATABASE;
 }
 
+StorageID::StorageID(const QualifiedTableName & qualified_name)
+: StorageID(qualified_name.database, qualified_name.table) 
+{ 
+    assertNotEmpty();
+}
+
+
 StorageID::StorageID(const ASTQueryWithTableAndOutput & query)
 {
     database_name = query.database;

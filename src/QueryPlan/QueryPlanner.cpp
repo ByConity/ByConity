@@ -294,7 +294,7 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
     auto select_plan = process(insert_query.select);
     select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context));
 
-    auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns);
+    auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns, node);
 
     auto insert_node = select_plan.getRoot()->addStep(
         context->nextNodeId(),
@@ -309,7 +309,7 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
 
     auto return_node = PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol),
+        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol, node),
         {insert_node});
 
     PRINT_PLAN(return_node, plan_insert);

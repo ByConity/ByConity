@@ -19,14 +19,18 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <Interpreters/PartLog.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/TreeRewriter.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
+#include <Parsers/ASTPartition.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationType.h>
-
+#include <iostream>
 namespace DB
 {
 namespace ErrorCodes
@@ -42,7 +46,8 @@ CloudMergeTreeBlockOutputStream::CloudMergeTreeBlockOutputStream(
     MergeTreeMetaBase & storage_,
     StorageMetadataPtr metadata_snapshot_,
     ContextPtr context_,
-    bool to_staging_area_)
+    bool to_staging_area_,
+    ASTPtr overwrite_partition_)
     : storage(storage_)
     , log(storage.getLogger())
     , metadata_snapshot(std::move(metadata_snapshot_))
@@ -50,9 +55,29 @@ CloudMergeTreeBlockOutputStream::CloudMergeTreeBlockOutputStream(
     , to_staging_area(to_staging_area_)
     , writer(storage, IStorage::StorageLocation::AUXILITY)
     , cnch_writer(storage, context, ManipulationType::Insert)
+    , overwrite_partition(overwrite_partition_)
 {
     if (!metadata_snapshot->hasUniqueKey() && to_staging_area)
         throw Exception("Table doesn't have UNIQUE KEY specified, can't write to staging area", ErrorCodes::LOGICAL_ERROR);
+
+    initOverwritePartitionPruner();
+}
+
+void CloudMergeTreeBlockOutputStream::initOverwritePartitionPruner()
+{
+    if (!overwrite_partition)
+        return;
+
+    if (auto * partition_list = typeid_cast<ASTExpressionList *>(overwrite_partition.get()))
+    {
+        /// Get overwrite partition ids from query
+        for (const auto & partition : partition_list->children)
+            overwrite_partition_ids.insert(storage.getPartitionIDFromQuery(partition, context));
+    }
+    else
+    {
+        overwrite_partition_ids.insert(storage.getPartitionIDFromQuery(overwrite_partition, context));
+    }
 }
 
 Block CloudMergeTreeBlockOutputStream::getHeader() const
@@ -133,6 +158,16 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     // Get all blocks of partition by expression
     for (auto & block_with_partition : part_blocks)
     {
+        if (overwrite_partition)
+        {
+            auto partition_id = MergeTreePartition{block_with_partition.partition}.getID(storage);
+            if (!overwrite_partition_ids.count(partition_id))
+            {
+                LOG_DEBUG(storage.getLogger(), "Ignore part block due to not match overwrite partition for partition id: {}", partition_id);
+                continue;
+            }
+        }
+
         Row original_partition{block_with_partition.partition};
 
         /// We need to dedup in block before split block by cluster key when unique table supports cluster key because cluster key may be different with unique key. Otherwise, we will lost the insert order.
@@ -401,7 +436,7 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
 {
     if (!metadata_snapshot->hasUniqueKey())
         return FilterInfo{};
-    
+
     const ColumnWithTypeAndName * version_column = nullptr;
     if (metadata_snapshot->hasUniqueKey() && storage.merging_params.hasExplicitVersionColumn())
         version_column = &block.getByName(storage.merging_params.version_column);

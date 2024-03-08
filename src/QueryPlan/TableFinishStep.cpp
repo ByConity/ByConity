@@ -1,5 +1,6 @@
 #include <IO/VarInt.h>
 #include <Interpreters/Aggregator.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <QueryPlan/TableFinishStep.h>
 #include <Storages/IStorage.h>
 #include "Processors/Transforms/TableFinishTransform.h"
@@ -18,23 +19,25 @@ static ITransformingStep::Traits getTraits()
 }
 
 TableFinishStep::TableFinishStep(
-    const DataStream & input_stream_, TableWriteStep::TargetPtr target_, String output_affected_row_count_symbol_)
+    const DataStream & input_stream_, TableWriteStep::TargetPtr target_,
+    String output_affected_row_count_symbol_, ASTPtr query_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits())
     , target(std::move(target_))
     , output_affected_row_count_symbol(std::move(output_affected_row_count_symbol_))
+    , query(query_)
     , log(&Poco::Logger::get("TableFinishStep"))
 {
 }
 
 std::shared_ptr<IQueryPlanStep> TableFinishStep::copy(ContextPtr) const
 {
-    return std::make_shared<TableFinishStep>(input_streams[0], target, output_affected_row_count_symbol);
+    return std::make_shared<TableFinishStep>(input_streams[0], target, output_affected_row_count_symbol, query);
 }
 
 void TableFinishStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
     pipeline.resize(1);
-    pipeline.addTransform(std::make_shared<TableFinishTransform>(getInputStreams()[0].header, target->getStorage(), settings.context));
+    pipeline.addTransform(std::make_shared<TableFinishTransform>(getInputStreams()[0].header, target->getStorage(), settings.context, query));
 }
 
 void TableFinishStep::toProto(Protos::TableFinishStep & proto, bool) const
@@ -44,6 +47,7 @@ void TableFinishStep::toProto(Protos::TableFinishStep & proto, bool) const
         throw Exception("Target cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
     target->toProto(*proto.mutable_target());
     proto.set_output_affected_row_count_symbol(output_affected_row_count_symbol);
+    serializeASTToProto(query, *proto.mutable_query());
 }
 
 std::shared_ptr<TableFinishStep> TableFinishStep::fromProto(const Protos::TableFinishStep & proto, ContextPtr context)
@@ -53,6 +57,8 @@ std::shared_ptr<TableFinishStep> TableFinishStep::fromProto(const Protos::TableF
     auto output_affected_row_count_symbol = proto.output_affected_row_count_symbol();
     auto step = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol);
     step->setStepDescription(step_description);
+    if (proto.has_query())
+        step->setQuery(deserializeASTFromProto(proto.query()));
     return step;
 }
 }

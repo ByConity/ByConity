@@ -47,6 +47,8 @@ namespace Utils
     bool isIdentity(const Assignment & assignment);
     bool isIdentity(const Assignments & assignments);
     bool isIdentity(const ProjectionStep & project);
+    bool isAlias(const Assignment & assignment);
+    bool isAlias(const Assignments & assignments);
 
     bool isIdentifierOrIdentifierCast(const ConstASTPtr & ast);
     // return inside expression if cast don't affect the data in the bound column, such as cast to Nullable(column_name), int8 to int32.

@@ -317,6 +317,12 @@ public:
         Protos::notifyAccessEntityChangeResp * response,
         google::protobuf::Closure *done) override;
 
+    void handleRefreshTaskOnFinish(
+        google::protobuf::RpcController *,
+        const Protos::handleRefreshTaskOnFinishReq * request,
+        Protos::handleRefreshTaskOnFinishResp * response,
+        google::protobuf::Closure *done) override;
+
 #if USE_MYSQL
     void submitMaterializedMySQLDDLQuery(
         google::protobuf::RpcController * cntl,
@@ -341,6 +347,12 @@ public:
         google::protobuf::RpcController * cntl,
         const Protos::ForceRecalculateMetricsReq * request,
         Protos::ForceRecalculateMetricsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getLastModificationTimeHints(
+        google::protobuf::RpcController * cntl,
+        const Protos::getLastModificationTimeHintsReq * request,
+        Protos::getLastModificationTimeHintsResp * response,
         google::protobuf::Closure * done) override;
 
 private:

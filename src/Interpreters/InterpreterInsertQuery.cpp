@@ -28,6 +28,7 @@
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsFilterBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
+#include <DataStreams/LockHoldBlockInputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
 #include <DataStreams/OwningBlockInputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
@@ -61,6 +62,7 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <Storages/PartitionCommands.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
@@ -318,7 +320,16 @@ BlockIO InterpreterInsertQuery::execute()
     }
 
 
-    StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(table.get());
+    StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree*>(table.get());
+    CnchLockHolderPtrs lock_holders;
+    if (getContext()->getServerType() == ServerType::cnch_server && cnch_merge_tree)
+    {
+        /// handle insert overwrite first
+        if (insert_query.is_overwrite)
+        {
+            cnch_merge_tree->overwritePartitions(insert_query.overwrite_partition, getContext(), &lock_holders);
+        }
+    }
     /// Directly forward the query to cnch worker if select or infile
     if (getContext()->getServerType() == ServerType::cnch_server && (insert_query.select || insert_query.in_file) && cnch_merge_tree)
     {
@@ -337,6 +348,11 @@ BlockIO InterpreterInsertQuery::execute()
             auto txn = getContext()->getCurrentTransaction();
             txn->setMainTableUUID(table->getStorageUUID());
             res.in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(txn));
+        }
+        if (insert_query.is_overwrite && !lock_holders.empty())
+        {
+            /// Make sure lock is release after txn commit
+            res.in = std::make_shared<LockHoldBlockInputStream>(res.in, std::move(lock_holders));
         }
         return res;
     }
@@ -587,6 +603,11 @@ BlockIO InterpreterInsertQuery::execute()
     }
 
     table->setUpdateTimeNow();
+    if (insert_query.is_overwrite && !lock_holders.empty())
+    {
+        /// Make sure lock is release after txn commit
+        res.in = std::make_shared<LockHoldBlockInputStream>(res.in, std::move(lock_holders));
+    }
     return res;
 }
 
@@ -610,7 +631,7 @@ void InterpreterInsertQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
 
 BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
     const ContextPtr context_ptr,
-    const ColumnsDescription & columns, 
+    const ColumnsDescription & columns,
     const Block & sample,
     const Settings & settings,
     const String & source_uri,

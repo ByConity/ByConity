@@ -35,6 +35,7 @@
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/formatAST.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 
@@ -498,6 +499,8 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
             return visitInFunction(*ast_func, node);
         return visitOrdinaryFunction(*ast_func, node);
     }
+    if (const auto * ast_table_column = node->as<ASTTableColumnReference>())
+        return originalNode(node);
 
     throw Exception(ErrorCodes::LOGICAL_ERROR, "Unable to evaluate AST");
 }
@@ -572,7 +575,9 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
 
     ASTPtr simplified_node = makeFunction(function.name, argument_results, context);
 
-    auto function_builder = FunctionFactory::instance().get(function.name, context);
+    auto function_builder = FunctionFactory::instance().tryGet(function.name, context);
+    if (!function_builder)
+        return originalNode(node);
     auto function_builder_params = convertToFunctionBuilderParams(argument_results);
     FunctionBasePtr function_base = function_builder->build(function_builder_params);
     // arguments' type may be changed by some simplify rules, so refresh current node's type

@@ -73,6 +73,7 @@
 #include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <Storages/PartCacheManager.h>
+#include <Storages/StorageMaterializedView.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/formatAST.h>
@@ -506,6 +507,8 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::STOP_DEDUP_WORKER:
         case Type::START_CLUSTER:
         case Type::STOP_CLUSTER:
+        case Type::START_VIEW:
+        case Type::STOP_VIEW:
             executeBGTaskInCnchServer(system_context, query.type);
             break;
         case Type::GC:
@@ -538,10 +541,31 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::RECALCULATE_METRICS:
             recalculateMetrics(query);
             break;
+        case Type::DROP_VIEW_META:
+            dropMvMeta(query);
+            break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
     }
     return {};
+}
+
+void InterpreterSystemQuery::dropMvMeta(ASTSystemQuery & query)
+{
+    if (!query.database.empty() && !query.table.empty())
+    {
+        auto storage = DatabaseCatalog::instance().getTable(StorageID{query.database, query.table}, getContext());
+        if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get()))
+            materialized_view->dropMvMeta(getContext());
+        else
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS, "System command {} is only accept materialized view", ASTSystemQuery::typeToString(query.type));
+    }
+    else
+    {
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS, "system drop view meta need both databse and table name with format database.table", ASTSystemQuery::typeToString(query.type));
+    }
 }
 
 BlockIO InterpreterSystemQuery::executeLocalCommand(ASTSystemQuery & query, ContextMutablePtr & system_context)
@@ -654,8 +678,8 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
 
     auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
 
-    if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()))
-        throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+    if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()) && !dynamic_cast<StorageMaterializedView *>(storage.get()))
+        throw Exception("StorageCnchMergeTree or StorageMaterializedView is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
     switch (type)
     {
@@ -688,6 +712,12 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
             break;
         case Type::STOP_CLUSTER:
             daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
+            break;
+        case Type::START_VIEW:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::CnchRefreshMaterializedView, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
+            break;
+        case Type::STOP_VIEW:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::CnchRefreshMaterializedView, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
             break;
         default:
             throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
@@ -1558,15 +1588,18 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
         executeActionOnCNCHLogImpl(getContext()->getQueryWorkerMetricsLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getCnchQueryLog(), type, table_name, log);
+    else if (table_name == CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME)
+        executeActionOnCNCHLogImpl(getContext()->getViewRefreshTaskLog(), type, table_name, log);
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "there is no log corresponding to table name {}, available names are {}, {}, {}, {}",
+            "there is no log corresponding to table name {}, available names are {}, {}, {}, {}, {}",
             table_name,
             CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME,
-            CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME);
+            CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME,
+            CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME);
 }
 
 void InterpreterSystemQuery::cleanTransaction(UInt64 txn_id)
@@ -1679,11 +1712,8 @@ void InterpreterSystemQuery::lockMemoryLock(const ASTSystemQuery & query, const 
     LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
     partition_lock->setMode(LockMode::X);
     partition_lock->setTimeout(1000); //1 seconds
-    if (!query.string_data.empty())
-        partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(storage->getStorageUUID()));
-    else
-        partition_lock->setUUID(storage->getStorageUUID());
     partition_lock->setPartition(partition_id);
+    partition_lock->setUUIDAndPrefix(storage->getStorageUUID(), query.string_data.empty() ? LockInfo::default_domain : LockInfo::task_domain);
 
     Stopwatch lock_watch;
 
