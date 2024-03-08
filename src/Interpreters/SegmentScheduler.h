@@ -93,10 +93,12 @@ public:
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
     void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
 
-    void updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index);
+    void updateReceivedSegmentStatusCounter(
+        const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentsStatus & status);
     // Return true if only the query runs in bsp mode and all statuses of specified segment has been received.
     bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
     void onSegmentFinished(const RuntimeSegmentsStatus & status);
+    std::shared_ptr<BSPScheduler> getBSPScheduler(const String & query_id);
 
 private:
     // Protect `query_map`.

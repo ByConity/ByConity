@@ -1018,7 +1018,7 @@ void DaemonJobForMergeMutate::executeOptimize(const StorageID & storage_id, cons
 
     auto info = bg_ptr->getBGJobInfo();
 
-    if (info.status != CnchBGThreadStatus::Running)
+    if (info.status != CnchBGThreadStatus::Running && info.status != CnchBGThreadStatus::Stopped)
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,

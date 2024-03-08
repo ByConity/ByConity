@@ -34,7 +34,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int EXCHANGE_DATA_DISK_LIMIT_EXCEEDED;
+    extern const int BSP_EXCHANGE_DATA_DISK_LIMIT_EXCEEDED;
 }
 }
 
@@ -60,7 +60,7 @@ void write(ContextMutablePtr & context, Block header, DiskExchangeDataManagerPtr
     auto origin_chunk = createUInt8Chunk(10, 1, 7);
     BroadcastStatus status = writer->sendImpl(std::move(origin_chunk));
     ASSERT_EQ(status.code, BroadcastStatusCode::RUNNING) << fmt::format("status_code:{} message:{}", status.code, status.message);
-    mgr->submitWriteTask(writer, nullptr);
+    mgr->submitWriteTask(writer->getKey()->query_unique_id, {1, 0}, writer, nullptr);
     status = writer->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "writer test");
     ASSERT_EQ(status.code, BroadcastStatusCode::ALL_SENDERS_DONE) << fmt::format("status_code:{} message:{}", status.code, status.message);
 }
@@ -127,7 +127,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
         key, rpc_host, context, header, true, name, queue, BrpcExchangeReceiverRegistryService::BRPC);
     receiver->registerToSenders(1000);
     // cancel executor
-    manager->cancel(key->query_unique_id, key->exchange_id);
+    manager->cancelReadTask(key->query_unique_id, key->exchange_id);
     auto packet = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver)->recv(1000);
     ASSERT_TRUE(std::holds_alternative<BroadcastStatus>(packet));
     auto status = std::get<BroadcastStatus>(packet);
@@ -228,6 +228,6 @@ TEST_F(ExchangeRemoteTest, DiskExchangeSizeLimit)
     }
     catch (const Exception & e)
     {
-        ASSERT_EQ(e.code(), ErrorCodes::EXCHANGE_DATA_DISK_LIMIT_EXCEEDED) << "code:" << e.code() << " e.message:" << e.message();
+        ASSERT_EQ(e.code(), ErrorCodes::BSP_EXCHANGE_DATA_DISK_LIMIT_EXCEEDED) << "code:" << e.code() << " e.message:" << e.message();
     }
 }

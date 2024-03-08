@@ -34,7 +34,8 @@ void sendPlanSegmentToAddress(
     static auto * log = &Poco::Logger::get("SegmentScheduler::sendPlanSegment");
     LOG_TRACE(
         log,
-        "segment_id {}, parallel index {}, address {}, plansegment {}",
+        "query_id {} segment_id {}, parallel index {}, address {}, plansegment {}",
+        plan_segment_ptr->getQueryId(),
         plan_segment_ptr->getPlanSegmentId(),
         execution_info.parallel_id,
         addressinfo.toString(),

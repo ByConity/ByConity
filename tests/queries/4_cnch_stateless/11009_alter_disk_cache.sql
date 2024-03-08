@@ -26,4 +26,17 @@ SELECT a FROM test_bucket_preload ORDER BY a SETTINGS disk_cache_mode = 'FORCE_D
 ALTER DISK CACHE DROP TABLE test.test_bucket_preload SYNC SETTINGS drop_vw_disk_cache = 1;
 SELECT a FROM test_bucket_preload WHERE p = 1 ORDER BY a SETTINGS disk_cache_mode = 'FORCE_DISK_CACHE'; -- { serverError 5046 } --
 
-DROP TABLE test_bucket_preload
+DROP TABLE test_bucket_preload;
+
+
+DROP TABLE IF EXISTS 11009_alter_disk_cache;
+
+SELECT '---all segments stores in single compressed block---';
+CREATE TABLE 11009_alter_disk_cache (d Decimal(4, 3)) ENGINE = CnchMergeTree ORDER BY d SETTINGS index_granularity = 1, parts_preload_level = 1;
+INSERT INTO 11009_alter_disk_cache SELECT toDecimal64(number, 3) FROM numbers(10000);
+ALTER DISK CACHE PRELOAD TABLE test.11009_alter_disk_cache SYNC SETTINGS parts_preload_level = 3;
+SELECT d FROM 11009_alter_disk_cache WHERE toFloat64(d) = 7777.0 settings disk_cache_mode = 'FORCE_DISK_CACHE';
+SELECT d FROM 11009_alter_disk_cache WHERE toFloat64(d) = 8888.0 settings disk_cache_mode = 'FORCE_DISK_CACHE';
+
+DROP TABLE 11009_alter_disk_cache;
+

@@ -1,3 +1,15 @@
+#include <atomic>
+#include <mutex>
+#include <CloudServices/CnchServerResource.h>
+#include <bthread/mutex.h>
+#include <Poco/Logger.h>
+
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
+#include <Interpreters/DistributedStages/Scheduler.h>
+#include <Interpreters/NodeSelector.h>
+#include <QueryPlan/QueryPlan.h>
 #include "BSPScheduler.h"
 
 #include <cstddef>
@@ -15,7 +27,11 @@ namespace DB
 void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
     (void)plan_segment_ptr;
-    const auto selector_info = node_selector_result[task.task_id];
+    NodeSelectorResult selector_info;
+    {
+        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+        selector_info = node_selector_result[task.task_id];
+    }
     std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_count_on_workers;
     for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
     {
@@ -66,7 +82,6 @@ void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed,
 
 void BSPScheduler::onQueryFinished()
 {
-    UInt64 query_unique_id = query_context->getCurrentTransactionID().toUInt64();
     for (const auto & address : dag_graph_ptr->plan_send_addresses)
     {
         try
@@ -92,28 +107,102 @@ void BSPScheduler::onQueryFinished()
     }
 }
 
-void BSPScheduler::updateSegmentStatusCounter(const size_t & segment_id, const UInt64 & parallel_index)
+void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentsStatus & status)
 {
-    std::unique_lock<std::mutex> lock(segment_status_counter_mutex);
-    auto segment_status_counter_iterator = segment_status_counter.find(segment_id);
-    if (segment_status_counter_iterator == segment_status_counter.end())
+    if (status.is_succeed)
     {
-        segment_status_counter[segment_id] = {};
-    }
-    segment_status_counter[segment_id].insert(parallel_index);
+        AddressInfo available_worker;
+        {
+            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+            available_worker = segment_parallel_locations[segment_id][parallel_index];
+            occupied_workers[segment_id].erase(available_worker);
+        }
+        {
+            /// update finished_address before onSegmentFinished(where new task might be added to queue)
+            std::unique_lock<std::mutex> lock(dag_graph_ptr->finished_address_mutex);
+            dag_graph_ptr->finished_address[segment_id][parallel_index] = available_worker;
+        }
+        {
+            std::unique_lock<std::mutex> lock(segment_status_counter_mutex);
+            auto segment_status_counter_iterator = segment_status_counter.find(segment_id);
+            if (segment_status_counter_iterator == segment_status_counter.end())
+            {
+                segment_status_counter[segment_id] = {};
+            }
+            segment_status_counter[segment_id].insert(parallel_index);
 
-    if (segment_status_counter[segment_id].size() == dag_graph_ptr->segment_parallel_size_map[segment_id])
-    {
-        onSegmentFinished(segment_id, /*is_succeed=*/true, /*is_canceled=*/true);
-    }
+            if (segment_status_counter[segment_id].size() == dag_graph_ptr->segment_parallel_size_map[segment_id])
+            {
+                onSegmentFinished(segment_id, /*is_succeed=*/true, /*is_canceled=*/false);
+            }
+        }
 
-    AddressInfo available_worker;
+        triggerDispatch({WorkerNode{available_worker}});
+    }
+    else if (!status.is_succeed && !status.is_cancelled)
     {
+        /// if a task has failed in a node, we wont schedule this segment to it anymore
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        available_worker = segment_parallel_locations[segment_id][parallel_index];
-        occupied_workers[segment_id].erase(available_worker);
+        auto failed_worker = segment_parallel_locations[segment_id][parallel_index];
+        failed_workers[segment_id].insert(failed_worker);
+        auto iter = pending_task_instances.for_nodes[failed_worker].begin();
+        while (iter != pending_task_instances.for_nodes[failed_worker].end())
+        {
+            if (iter->task_id == segment_id)
+            {
+                pending_task_instances.no_prefs.insert({iter->task_id, iter->parallel_index});
+                iter = pending_task_instances.for_nodes[failed_worker].erase(iter);
+            }
+            else
+            {
+                iter++;
+            }
+        }
     }
-    triggerDispatch({WorkerNode{available_worker}});
+}
+
+bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
+{
+    if (retry_count.load(std::memory_order_acquire) >= query_context->getSettings().bsp_max_retry_num)
+        return false;
+    /// currently disable retry for TableWite && TableFinish
+    auto * plansegment = dag_graph_ptr->getPlanSegmentPtr(segment_id);
+    for (const auto & node : plansegment->getQueryPlan().getNodes())
+    {
+        if (node.step->getType() == IQueryPlanStep::Type::TableWrite || node.step->getType() == IQueryPlanStep::Type::TableFinish)
+            return false;
+    }
+    auto cnt = retry_count.fetch_add(1, std::memory_order_acq_rel);
+    if (cnt < query_context->getSettingsRef().bsp_max_retry_num)
+    {
+        {
+            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+            // table scan plansegment will retry at the same worker
+            if (dag_graph_ptr->any_tables.contains(segment_id) ||
+                // in case all workers are occupied, simply retry at last node
+                failed_workers[segment_id].size() == cluster_nodes.rank_workers.size() ||
+                // for local no repartion and local may no repartition, schedule to original node
+                NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)))
+            {
+                auto available_worker = segment_parallel_locations[segment_id][parallel_index];
+                occupied_workers[segment_id].erase(available_worker);
+                pending_task_instances.for_nodes[available_worker].insert({segment_id, parallel_index});
+                lk.unlock();
+                triggerDispatch({WorkerNode{available_worker}});
+            }
+            else
+            {
+                pending_task_instances.no_prefs.insert({segment_id, parallel_index});
+                lk.unlock();
+                triggerDispatch(cluster_nodes.rank_workers);
+            }
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const AddressInfo & worker)
@@ -164,37 +253,36 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
 {
     for (const auto & worker : available_workers)
     {
-        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
         const auto & address = worker.address;
-        const auto & [has_result, result] = getInstanceToSchedule(address);
-        if (!has_result)
-            continue;
+        std::optional<SegmentTaskInstance> task_instance;
+        {
+            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+            const auto & [has_result, result] = getInstanceToSchedule(address);
+            if (!has_result)
+            {
+                LOG_INFO(&Poco::Logger::get("debug"), "query_id:{} addr:{} no instance found", query_id, address.toString());
+                continue;
+            }
+            task_instance.emplace(result);
+        }
 
-        auto & worker_node = node_selector_result[result.task_id].worker_nodes[result.parallel_index];
-        if (worker_node.address.getHostName().empty())
-            worker_node.address = address;
+        WorkerNode worker_node;
+        {
+            std::unique_lock<std::mutex> res_lk(node_selector_result_mutex);
+            node_selector_result[task_instance->task_id].worker_nodes[task_instance->parallel_index] = worker;
+            worker_node = node_selector_result[task_instance->task_id].worker_nodes[task_instance->parallel_index];
+            if (worker_node.address.getHostName().empty())
+                worker_node.address = address;
+        }
 
-        dispatchTask(dag_graph_ptr->getPlanSegmentPtr(result.task_id), SegmentTask{result.task_id}, result.parallel_index);
+        {
+            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+            occupied_workers[task_instance->task_id].insert(address);
+            segment_parallel_locations[task_instance->task_id][task_instance->parallel_index] = address;
+        }
 
-        const auto & node_iter = occupied_workers.find(result.task_id);
-        if (node_iter != occupied_workers.end())
-        {
-            node_iter->second.insert(address);
-        }
-        else
-        {
-            occupied_workers.emplace(result.task_id, std::unordered_set<AddressInfo, AddressInfo::Hash>{address});
-        }
-        const auto & parallel_nodes_iter = segment_parallel_locations.find(result.task_id);
-        if (parallel_nodes_iter != segment_parallel_locations.end())
-        {
-            parallel_nodes_iter->second.insert({result.parallel_index, address});
-        }
-        else
-        {
-            segment_parallel_locations.emplace(
-                result.task_id, std::unordered_map<UInt64, AddressInfo>{std::make_pair(result.parallel_index, address)});
-        }
+        dispatchTask(
+            dag_graph_ptr->getPlanSegmentPtr(task_instance->task_id), SegmentTask{task_instance->task_id}, task_instance->parallel_index);
     }
 }
 

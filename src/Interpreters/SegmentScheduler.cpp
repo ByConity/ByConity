@@ -17,6 +17,7 @@
 #include <set>
 #include <CloudServices/CnchServerResource.h>
 #include <Interpreters/DistributedStages/MPPScheduler.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/SegmentScheduler.h>
@@ -392,7 +393,8 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
     }
 }
 
-void SegmentScheduler::updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index)
+void SegmentScheduler::updateReceivedSegmentStatusCounter(
+    const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentsStatus & status)
 {
     std::shared_ptr<DAGGraph> dag_ptr;
     {
@@ -446,7 +448,7 @@ void SegmentScheduler::updateReceivedSegmentStatusCounter(const String & query_i
         std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
         if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
         {
-            bsp_scheduler_map_iterator->second->updateSegmentStatusCounter(segment_id, parallel_index);
+            bsp_scheduler_map_iterator->second->updateSegmentStatusCounter(segment_id, parallel_index, status);
         }
     }
 }
@@ -458,6 +460,16 @@ void SegmentScheduler::onSegmentFinished(const RuntimeSegmentsStatus & status)
     {
         bsp_scheduler_map_iterator->second->onSegmentFinished(status.segment_id, status.is_succeed, status.is_cancelled);
     }
+}
+
+std::shared_ptr<BSPScheduler> SegmentScheduler::getBSPScheduler(const String & query_id)
+{
+    std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
+    if (auto iter = bsp_scheduler_map.find(query_id); iter != bsp_scheduler_map.end())
+    {
+        return iter->second;
+    }
+    return nullptr;
 }
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
@@ -505,22 +517,25 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
         // value, readnothing, system table
         if (plan_segment_ptr->getPlanSegmentInputs().empty())
         {
-            graph_ptr->sources.emplace_back(plan_segment_ptr->getPlanSegmentId());
+            graph_ptr->sources.insert(plan_segment_ptr->getPlanSegmentId());
+            graph_ptr->any_tables.insert(plan_segment_ptr->getPlanSegmentId());
         }
         // source
-        if (plan_segment_ptr->getPlanSegmentInputs().size() >= 1)
+        if (!plan_segment_ptr->getPlanSegmentInputs().empty())
         {
             bool all_tables = true;
+            bool any_tables = false;
             for (const auto & input : plan_segment_ptr->getPlanSegmentInputs())
             {
                 if (input->getPlanSegmentType() != PlanSegmentType::SOURCE)
-                {
                     all_tables = false;
-                    break;
-                }
+                if (input->getPlanSegmentType() == PlanSegmentType::SOURCE)
+                    any_tables = true;
             }
             if (all_tables)
-                graph_ptr->sources.emplace_back(plan_segment_ptr->getPlanSegmentId());
+                graph_ptr->sources.insert(plan_segment_ptr->getPlanSegmentId());
+            if (any_tables)
+                graph_ptr->any_tables.insert(plan_segment_ptr->getPlanSegmentId());
         }
         // final stage
         if (plan_segment_ptr->getPlanSegmentOutput()->getPlanSegmentType() == PlanSegmentType::OUTPUT)

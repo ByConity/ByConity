@@ -25,6 +25,19 @@ BroadcastSenderProxyRegistry::BroadcastSenderProxyRegistry() : logger(&Poco::Log
 {
 }
 
+BroadcastSenderProxyPtr BroadcastSenderProxyRegistry::get(ExchangeDataKeyPtr data_key)
+{
+    std::lock_guard lock(mutex);
+    auto it = proxies.find(*data_key);
+    if (it != proxies.end())
+    {
+        auto channel_ptr = it->second.lock();
+        if (channel_ptr)
+            return channel_ptr;
+    }
+    return nullptr;
+}
+
 BroadcastSenderProxyPtr BroadcastSenderProxyRegistry::getOrCreate(ExchangeDataKeyPtr data_key)
 {
     return getOrCreate(std::move(data_key), SenderProxyOptions{.wait_timeout_ms = 5000});
