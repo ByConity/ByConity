@@ -23,6 +23,7 @@
 #include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/ProcessorProfile.h>
@@ -84,6 +85,7 @@ namespace ErrorCodes
     extern const int QUERY_WAS_CANCELLED;
     extern const int MEMORY_LIMIT_EXCEEDED;
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
+    extern const int BSP_CLEANUP_PREVIOUS_SEGMENT_INSTANCE_FAILED;
 }
 
 void PlanSegmentExecutor::prepareSegmentInfo() const
@@ -301,6 +303,23 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     PlanSegmentProcessList::EntryPtr process_plan_segment_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
     context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
 
+    if (context->getSettingsRef().bsp_mode)
+    {
+        auto query_unique_id = context->getCurrentTransactionID().toUInt64();
+        PlanSegmentInstanceId instance_id
+            = {static_cast<UInt32>(plan_segment->getPlanSegmentId()), plan_segment_instance->info.parallel_id};
+        if (!context->getDiskExchangeDataManager()->cleanupPreviousSegmentInstance(query_unique_id, instance_id))
+        {
+            throw Exception(
+                ErrorCodes::BSP_CLEANUP_PREVIOUS_SEGMENT_INSTANCE_FAILED,
+                fmt::format(
+                    "cleanup previous segment instance for query_unique_id:{} segment_id:{} parallel_id:{} failed",
+                    query_unique_id,
+                    plan_segment->getPlanSegmentId(),
+                    plan_segment_instance->info.parallel_id));
+        }
+    }
+
     QueryPipelinePtr pipeline;
     BroadcastSenderPtrs senders;
     buildPipeline(pipeline, senders);
@@ -465,7 +484,9 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
             {
                 data_key->parallel_index = plan_segment_instance->info.parallel_id;
                 auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key);
-                disk_exchange_mgr->submitWriteTask(writer, thread_group);
+                PlanSegmentInstanceId instance_id
+                    = {static_cast<UInt32>(plan_segment->getPlanSegmentId()), plan_segment_instance->info.parallel_id};
+                disk_exchange_mgr->submitWriteTask(current_tx_id, instance_id, writer, thread_group);
                 sender = writer;
             }
             else

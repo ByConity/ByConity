@@ -22,6 +22,7 @@
 #include <Common/SettingsChanges.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <Protos/plan_node_utils.pb.h>
 
 namespace DB
 {
@@ -56,6 +57,18 @@ void SettingChange::deserialize(ReadBuffer & buf)
     readFieldBinary(value, buf);
 }
 
+void SettingChange::toProto(Protos::SettingChange & proto) const
+{
+    proto.set_name(name);
+    value.toProto(*proto.mutable_value());
+}
+
+void SettingChange::fillFromProto(const Protos::SettingChange & proto)
+{
+    name = proto.name();
+    value.fillFromProto(proto.value());
+}
+
 bool SettingsChanges::tryGet(const std::string_view & name, Field & out_value) const
 {
     const auto * change = find(*this, name);
@@ -81,6 +94,38 @@ Field * SettingsChanges::tryGet(const std::string_view & name)
     return &change->value;
 }
 
+bool SettingsChanges::insertSetting(std::string_view name, const Field & value)
+{
+    auto it = std::find_if(begin(), end(), [&name](const SettingChange & change) { return change.name == name; });
+    if (it != end())
+        return false;
+    emplace_back(name, value);
+    return true;
+}
+
+void SettingsChanges::setSetting(std::string_view name, const Field & value)
+{
+    if (auto * setting_value = tryGet(name))
+        *setting_value = value;
+    else
+        insertSetting(name, value);
+}
+
+bool SettingsChanges::removeSetting(std::string_view name)
+{
+    auto it = std::find_if(begin(), end(), [&name](const SettingChange & change) { return change.name == name; });
+    if (it == end())
+        return false;
+    erase(it);
+    return true;
+}
+
+void SettingsChanges::merge(const SettingsChanges & other)
+{
+    for (const auto & change : other)
+        setSetting(change.name, change.value);
+}
+
 void SettingsChanges::serialize(WriteBuffer & buf) const
 {
     writeBinary(size(), buf);
@@ -97,6 +142,22 @@ void SettingsChanges::deserialize(ReadBuffer & buf)
         SettingChange change;
         change.deserialize(buf);
         this->push_back(change);
+    }
+}
+
+void SettingsChanges::toProto(Protos::SettingsChanges & proto) const
+{
+    for (const auto & element : *this)
+        element.toProto(*proto.add_settings_changes());
+}
+
+void SettingsChanges::fillFromProto(const Protos::SettingsChanges & proto)
+{
+    for (const auto & proto_element : proto.settings_changes())
+    {
+        SettingChange element;
+        element.fillFromProto(proto_element);
+        this->emplace_back(std::move(element));
     }
 }
 

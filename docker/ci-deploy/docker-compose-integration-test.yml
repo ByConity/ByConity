@@ -167,22 +167,29 @@ services:
   community-clickhouse_init:
     image: clickhouse/clickhouse-server:24.2.1.2248-alpine
     depends_on:
-      - community-clickhouse
+      community-clickhouse:
+        condition: service_healthy
     entrypoint: > 
       /bin/sh -c "sleep 5; clickhouse-client --host community-clickhouse -n -q \"create database db; create table db.tb (d Date, i Int64) Engine=MergeTree partition by d order by i; insert into db.tb Values('2010-01-01', 1)\""
   mysql_server:
     image: mysql:5.7.25
     command: bash /entrypoint.sh --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --sql-mode="" --log-bin --server-id=123 --gtid-mode=ON --enforce-gtid-consistency=ON # For 8.x: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ppassword", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
       MYSQL_DATABASE: test
       MYSQL_ROOT_PASSWORD: password
   mysql_server_init:
     image: mysql:5.7.25
-    command: /bin/sh -c "sleep 5; echo $INIT_QUERY | mysql -hmysql_server -uroot -p$MYSQL_ROOT_PASSWORD" 
-    environment:
-      MYSQL_ROOT_PASSWORD: password
-      INIT_QUERY: "CREATE DATABASE test; USE test; CREATE TABLE test (id INT, column1 VARCHAR(10), PRIMARY KEY(id)) ENGINE = InnoDB; INSERT INTO test (id, column1) VALUES (1, 'abc'), (2, 'def'), (3, 'ghi');"
+    depends_on:
+      mysql_server:
+        condition: service_healthy
+    command: /bin/sh -c "sleep 5; echo \"CREATE DATABASE IF NOT EXISTS test; USE test; CREATE TABLE IF NOT EXISTS test (id INT, column1 VARCHAR(10), PRIMARY KEY(id)) ENGINE = InnoDB; INSERT IGNORE INTO test (id, column1) VALUES (1, 'abc'), (2, 'def'), (3, 'ghi');\" | mysql -hmysql_server -uroot -ppassword" 
 
 volumes:
     config_volume:

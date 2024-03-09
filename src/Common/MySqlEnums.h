@@ -25,6 +25,8 @@ enum class ArgType
     INTERVAL_DATE,          /// (Interval a, Date/DateTime b)
     DATE_STR,               /// (General Date/Datetime type a, String b)
     STR_DATETIME_STR,       /// (String a, General Date/Datetime b,  General Date/Datetime c, String d)
+    ARRAY_FIRST,            /// (Array<T> a, T b, T c...)
+    ARRAY_COMMON,           /// (Array<T> a, Array<T> b)
     UNDEFINED               /// All MySql functions should override getArgumentsType()
 };
 }

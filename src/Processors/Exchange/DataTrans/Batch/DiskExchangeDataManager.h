@@ -9,6 +9,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeDataTracker.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
@@ -66,13 +67,17 @@ public:
     /// Submit read exchange data task, the task will be run in global thread pool
     void submitReadTask(const String & query_id, const ExchangeDataKeyPtr & key, Processors processors, const String & addr = "");
     /// Submit write exchange data task, the task will be run in global thread pool
-    void submitWriteTask(DiskPartitionWriterPtr writer, ThreadGroupStatusPtr thread_group);
+    void submitWriteTask(
+        UInt64 query_unique_id, PlanSegmentInstanceId instance_id, DiskPartitionWriterPtr writer, ThreadGroupStatusPtr thread_group);
     /// create processors, this executor will read exchange data, and send them through brpc
     static Processors createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context);
     /// cancel all exchange read data tasks in query_id, exchange_id.
-    void cancel(UInt64 query_unique_id, UInt64 exchange_id);
+    void cancelReadTask(UInt64 query_unique_id, UInt64 exchange_id);
+    /// cancel read tasks by key
+    void cancelReadTask(const ExchangeDataKeyPtr & key);
     void submitCleanupTask(UInt64 query_unique_id);
-    void cleanup(UInt64 query_unique_id); /// TODO @lianxuechao make cleanup async for brpc
+    void cleanup(UInt64 query_unique_id);
+    bool cleanupPreviousSegmentInstance(UInt64 query_unique_id, PlanSegmentInstanceId instance_id);
     PipelineExecutorPtr getExecutor(const ExchangeDataKeyPtr & key);
     /// write file name, formatted as "root_path/<query_unique_id>/exchange_<exchange_id>_<partition_id>.data.tmp"
     String getTemporaryFileName(const ExchangeDataKey & key) const;
@@ -126,12 +131,18 @@ private:
         ExchangeDataKeyPtr key;
         Processors processors;
         PipelineExecutorPtr executor;
+        bthread::Mutex done_mutex;
+        bthread::ConditionVariable done_cv;
+        bool done = false;
+        void setDone();
+        void waitDone();
     };
     using ReadTaskPtr = std::shared_ptr<ReadTask>;
     /// finish senders of a specific task, so that downstream wont wait until timeout
-    static void finishSenders(const ReadTaskPtr & task, BroadcastStatusCode code, String message);
+    void finishSenders(const ReadTaskPtr & task, BroadcastStatusCode code, String message);
     void removeWriteTaskDirectory(const std::variant<String, UInt64> & delete_item);
     ssize_t getFileSizeRecursively(const String & file_path);
+    bool cancelWriteTasks(const std::vector<DiskPartitionWriterPtr> & writers);
 
     Poco::Logger * logger;
     /// this mutex protects read_tasks, write_tasks, cleanup_tasks, alive_queries
@@ -143,6 +154,7 @@ private:
     {
         Protos::AliveQueryInfo proto;
         ssize_t disk_written_bytes = {0};
+        std::multimap<PlanSegmentInstanceId, ExchangeDataKeyPtr> segment_write_task_keys = {};
     };
     /// this controls the life time for disk exchange shuffule files, only deletes from it when cleanup() is called
     /// insert <query unique id, query id> into alive_queries before creating the corresponding directory

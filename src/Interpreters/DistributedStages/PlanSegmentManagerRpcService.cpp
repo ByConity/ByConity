@@ -275,6 +275,14 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             request->message(),
             request->code()};
         SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
+        /// if retry is successful, this status is not used anymore
+        auto bsp_scheduler = scheduler->getBSPScheduler(request->query_id());
+        if (bsp_scheduler && !status.is_succeed && !status.is_cancelled)
+        {
+            bsp_scheduler->updateSegmentStatusCounter(request->segment_id(), request->parallel_index(), status);
+            if (bsp_scheduler->retryTaskIfPossible(request->segment_id(), request->parallel_index()))
+                return;
+        }
         scheduler->updateSegmentStatus(status);
         scheduler->updateQueryStatus(status);
         if (request->has_sender_metrics())
@@ -286,8 +294,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             }
         }
         // TODO(WangTao): fine grained control, conbining with retrying.
-        if (status.is_succeed)
-            scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index());
+        scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index(), status);
 
         if (!status.is_cancelled && status.code == 0)
         {

@@ -46,7 +46,8 @@ UInt128 PlanCacheManager::hash(const ASTPtr & query_ast, ContextMutablePtr & con
 
     String settings_string;
     WriteBufferFromString buffer(settings_string);
-    settings.write(buffer);
+    const static std::unordered_set<String> whitelist{"enable_plan_cache", "force_plan_cache"};
+    settings.write(buffer, SettingsWriteFormat::DEFAULT, whitelist);
 
     UInt128 key;
     SipHash hash;

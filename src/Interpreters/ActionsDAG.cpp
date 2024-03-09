@@ -68,6 +68,8 @@ const char * ActionsDAG::typeToString(ActionsDAG::ActionType type)
             return "ArrayJoin";
         case ActionType::FUNCTION:
             return "Function";
+        case ActionType::PREPARED_COLUMN:
+            return "PREPARED_COLUMN";
     }
 
     __builtin_unreachable();
@@ -394,6 +396,16 @@ const ActionsDAG::Node & ActionsDAG::addFunction(
     return addNode(std::move(node));
 }
 
+const ActionsDAG::Node & ActionsDAG::addPreparedColumn(std::string name, DataTypePtr type)
+{
+    Node node;
+    node.type = ActionType::PREPARED_COLUMN;
+    node.result_type = std::move(type);
+    node.result_name = std::move(name);
+
+    return addNode(std::move(node));
+}
+
 const ActionsDAG::Node & ActionsDAG::findInOutputs(const std::string & name) const
 {
     if (const auto * node = tryFindInOutputs(name))
@@ -651,6 +663,11 @@ static ColumnWithTypeAndName executeActionForHeader(const ActionsDAG::Node * nod
         }
 
         case ActionsDAG::ActionType::INPUT:
+        {
+            break;
+        }
+
+        case ActionsDAG::ActionType::PREPARED_COLUMN:
         {
             break;
         }
@@ -1088,6 +1105,10 @@ std::string ActionsDAG::dumpDAG() const
 
             case ActionsDAG::ActionType::INPUT:
                 out << "INPUT ";
+                break;
+
+            case ActionsDAG::ActionType::PREPARED_COLUMN:
+                out << "PREPARED_COLUMN ";
                 break;
         }
 

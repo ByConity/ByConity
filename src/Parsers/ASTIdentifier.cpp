@@ -360,6 +360,16 @@ StorageID ASTTableIdentifier::getTableId() const
         return {{}, name_parts[0], uuid};
 }
 
+String ASTTableIdentifier::getTableName() const
+{
+    if (name_parts.size() == 3)
+        return name_parts[2];
+    if (name_parts.size() == 2)
+        return name_parts[1];
+    else
+        return name_parts[0];
+}
+
 String ASTTableIdentifier::getDatabaseName() const
 {
     if (name_parts.size() == 3)

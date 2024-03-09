@@ -151,10 +151,13 @@ TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Ca
     const auto * limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
     auto table_scan = node->getChildren()[0];
 
+    if (limit_step->hasPreparedParam())
+        return {};
+
     auto copy_table_step = table_scan->getStep()->copy(rule_context.context);
 
-    auto * table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
-    bool applied = table_step->setLimit(limit_step->getLimit() + limit_step->getOffset(), rule_context.context);
+    auto table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
+    bool applied = table_step->setLimit(limit_step->getLimitValue() + limit_step->getOffsetValue(), rule_context.context);
     if (!applied)
         return {}; // repeat calls
 

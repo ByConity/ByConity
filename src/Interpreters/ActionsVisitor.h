@@ -31,6 +31,9 @@
 #include <Parsers/ASTExpressionList.h>
 #include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 #include <Storages/MergeTree/Index/MergeTreeIndexHelper.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTPreparedParameter.h>
+#include <Parsers/IAST.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
 namespace DB
@@ -275,6 +278,7 @@ private:
     static void visit(const ASTIdentifier & identifier, const ASTPtr & ast, Data & data);
     static void visit(const ASTFunction & node, const ASTPtr & ast, Data & data);
     static void visit(const ASTLiteral & literal, const ASTPtr & ast, Data & data);
+    static void visit(const ASTPreparedParameter & prepared_param, const ASTPtr & ast, Data & data);
     static void visit(ASTExpressionList & expression_list, const ASTPtr & ast, Data & data);
 
     static SetPtr tryMakeSet(const ASTFunction & node, Data & data, bool no_subqueries, bool create_ordered_set = false);

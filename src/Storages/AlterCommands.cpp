@@ -110,6 +110,8 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         if (ast_col_decl.type)
         {
             command.data_type = data_type_factory.get(ast_col_decl.type, ast_col_decl.flags);
+            if (ast_col_decl.null_modifier && *ast_col_decl.null_modifier)
+                command.data_type = makeNullable(command.data_type);
         }
         if (ast_col_decl.default_expression)
         {
@@ -129,6 +131,10 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
                 throw Exception{"Cannot specify codec for column type ALIAS", ErrorCodes::BAD_ARGUMENTS};
             command.codec = ast_col_decl.codec;
         }
+
+        if (ast_col_decl.mysql_primary_key)
+            command.mysql_primary_key = ast_col_decl.mysql_primary_key;
+
         if (command_ast->column)
             command.after_column = getIdentifierName(command_ast->column);
 
@@ -169,6 +175,8 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         if (ast_col_decl.type)
         {
             command.data_type = data_type_factory.get(ast_col_decl.type, ast_col_decl.flags);
+            if (ast_col_decl.null_modifier && *ast_col_decl.null_modifier)
+                command.data_type = makeNullable(command.data_type);
         }
 
         if (ast_col_decl.default_expression)
@@ -472,6 +480,14 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.ast = command_ast->clone();
         command.type = AlterCommand::MODIFY_DATABASE_SETTING;
         command.settings_changes = command_ast->settings_changes->as<ASTSetQuery &>().changes;
+        return command;
+    }
+    else if (command_ast->type == ASTAlterCommand::RENAME_TABLE)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::RENAME_TABLE;
+        command.rename_to = command_ast->rename_table_to->as<ASTTableIdentifier &>().name();
         return command;
     }
     else
@@ -1163,6 +1179,8 @@ String alterTypeToString(const AlterCommand::Type type)
         return "REMOVE TTL";
     case AlterCommand::Type::CLEAR_MAP_KEY:
         return "CLEAR MAP KEY";
+    case AlterCommand::Type::RENAME_TABLE:
+        return "RENAME TABLE";
     default:
         throw Exception("Uninitialized ALTER command", ErrorCodes::LOGICAL_ERROR);
     }
@@ -1419,7 +1437,7 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             // if (command.data_type && command.data_type->isSegmentBitmapIndex() && !MergeTreeSegmentBitmapIndex::isValidSegmentBitmapIndexColumnType(column.type))
             //     throw Exception("Unsupported type of segment bitmap index: " + column.type->getName() + ". Need: [Array | Nullable] String/Int/UInt/Float", ErrorCodes::BAD_TYPE_OF_FIELD);
 
-            if (command.data_type && command.data_type->isMap() && column.type->isMap() 
+            if (command.data_type && command.data_type->isMap() && column.type->isMap()
                 && command.data_type->isKVMap() != column.type->isKVMap())
                 throw Exception("Not support modifying map column between KV Map and Byte Map", ErrorCodes::TYPE_MISMATCH);
 

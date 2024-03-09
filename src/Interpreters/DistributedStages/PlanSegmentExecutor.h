@@ -21,7 +21,9 @@
 #include <vector>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/QueryLog.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeOptions.h>
@@ -31,52 +33,15 @@
 #include <boost/core/noncopyable.hpp>
 #include <Poco/Logger.h>
 #include <common/types.h>
-#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 
 namespace DB
 {
 class ThreadGroupStatus;
 struct BlockIO;
 
-namespace Protos
-{
-    class RuntimeSegmentsMetrics;
-}
-
-struct RuntimeSegmentsMetrics
-{
-    UInt64 cpu_micros;
-
-    RuntimeSegmentsMetrics() : cpu_micros(0)
-    {
-    }
-
-    RuntimeSegmentsMetrics(const Protos::RuntimeSegmentsMetrics & metrics_)
-    {
-        cpu_micros = metrics_.cpu_micros();
-    }
-
-    void setProtos(Protos::RuntimeSegmentsMetrics & metrics_) const
-    {
-        metrics_.set_cpu_micros(cpu_micros);
-    }
-};
-
 struct SenderMetrics
 {
     std::unordered_map<size_t, std::vector<std::pair<UInt64, size_t>>> bytes_sent;
-};
-
-struct RuntimeSegmentsStatus
-{
-    String query_id;
-    int32_t segment_id{0};
-    size_t parallel_index{0};
-    bool is_succeed{true};
-    bool is_cancelled{false};
-    RuntimeSegmentsMetrics metrics;
-    String message;
-    int32_t code{0};
 };
 
 class PlanSegmentExecutor : private boost::noncopyable

@@ -1533,6 +1533,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(UInt64, plan_optimizer_rule_warning_time, 1000, "Send warning if a optimize rule optimize time exceed timeout", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
+    M(Bool, force_plan_cache, false, "Force to use plan cache", 0) \
     M(UInt64, max_plannode_count, 200, "The max plannode count", 0) \
     M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
     M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \
@@ -1548,6 +1549,7 @@ enum PreloadLevelSettings : UInt64
     /** */ \
     M(Bool, late_materialize_aggressive_push_down, false, "When table use early materialize strategy, this setting enable aggressively moving predicates to read chain w/o considering other factor like columns size or number of columns in the query", 0) \
     /** Optimizer relative settings, Plan build and RBO */ \
+    M(Bool, enable_auto_prepared_statement, false, "Whether to enable automatic prepared statement", 0) \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
     M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
     M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
@@ -1883,6 +1885,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, true, "Whether to compute locality preferences for reduce tasks", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
+    M(UInt64, bsp_max_retry_num, 0, "max retry number for a query in bsp mode",0) \
     /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \

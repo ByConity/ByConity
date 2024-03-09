@@ -56,6 +56,7 @@
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
@@ -1833,6 +1834,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Statistics::CacheManager::initialize(global_context);
             BindingCacheManager::initializeGlobalBinding(global_context);
             PlanCacheManager::initialize(global_context);
+            PreparedStatementManager::initialize(global_context);
             Statistics::AutoStats::AutoStatisticsManager::initialize(global_context, global_context->getConfigRef());
         }
 

@@ -1,6 +1,8 @@
 #include "DAGGraph.h"
+#include <iterator>
 
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 
 namespace DB
 {
@@ -32,6 +34,38 @@ void DAGGraph::joinAsyncRpcAtLast()
 {
     if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last)
         joinAsyncRpcWithThrow();
+}
+
+AddressInfos DAGGraph::getAddressInfos(size_t segment_id)
+{
+    /// for bsp_mode we need get worker addresses from finished_address, because retry might happen
+    if (query_context->getSettingsRef().bsp_mode)
+    {
+        std::unique_lock<std::mutex> lock(finished_address_mutex);
+        if (!finished_address.contains(segment_id))
+        {
+            throw Exception(
+                "Logical error: address of segment " + std::to_string(segment_id) + " can not be found in finished_address",
+                ErrorCodes::LOGICAL_ERROR);
+        }
+        AddressInfos addresses;
+        addresses.reserve(finished_address[segment_id].size());
+        for (const auto & p : finished_address[segment_id])
+        {
+            addresses.push_back(p.second);
+        }
+        return addresses;
+    }
+    else
+    {
+        if (!id_to_address.contains(segment_id))
+        {
+            throw Exception(
+                "Logical error: address of segment " + std::to_string(segment_id) + " can not be found in id_to_address",
+                ErrorCodes::LOGICAL_ERROR);
+        }
+        return id_to_address[segment_id];
+    }
 }
 
 PlanSegment * DAGGraph::getPlanSegmentPtr(size_t id)

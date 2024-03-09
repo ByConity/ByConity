@@ -487,6 +487,8 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
         return visitASTLiteral(*ast_literal, node);
     if (const auto * ast_identifier = node->as<ASTIdentifier>())
         return visitASTIdentifier(*ast_identifier, node);
+    if (const auto * ast_prepared_param = node->as<ASTPreparedParameter>())
+        return visitASTPreparedParameter(*ast_prepared_param, node);
     if (const auto * ast_func = node->as<ASTFunction>())
     {
         const auto & func_name = ast_func->name;
@@ -511,6 +513,11 @@ InterpretIMResult ExpressionInterpreter::visitASTIdentifier(const ASTIdentifier 
         it != setting.identifier_values.end())
         return {getType(node), node->clone(), it->second};
 
+    return originalNode(node);
+}
+
+InterpretIMResult ExpressionInterpreter::visitASTPreparedParameter(const ASTPreparedParameter &, const ConstASTPtr & node) const
+{
     return originalNode(node);
 }
 

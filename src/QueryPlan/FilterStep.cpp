@@ -175,7 +175,7 @@ void FilterStep::toProto(Protos::FilterStep & proto, bool) const
 
 std::shared_ptr<IQueryPlanStep> FilterStep::copy(ContextPtr) const
 {
-    return std::make_shared<FilterStep>(input_streams[0], filter, remove_filter_column);
+    return std::make_shared<FilterStep>(input_streams[0], filter->clone(), remove_filter_column);
 }
 
 ConstASTPtr
@@ -197,4 +197,8 @@ FilterStep::rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & /*p
     return PredicateUtils::combineConjuncts(predicates);
 }
 
+void FilterStep::prepare(const PreparedStatementContext & prepared_context)
+{
+    prepared_context.prepare(filter);
+}
 }

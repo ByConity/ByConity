@@ -76,9 +76,10 @@ BlockIO executeQuery(
     const String & query,
     ASTPtr ast,
     ContextMutablePtr context,
-    bool internal,
-    QueryProcessingStage::Enum stage,
-    bool may_have_embedded_data);
+    bool internal = false,    /// If true, this query is caused by another query and thus needn't be registered in the ProcessList.
+    QueryProcessingStage::Enum stage = QueryProcessingStage::Complete,    /// To which stage the query must be executed.
+    bool may_have_embedded_data  = false /// If insert query may have embedded data
+);
 
 /// Old interface with allow_processors flag. For compatibility.
 BlockIO executeQuery(

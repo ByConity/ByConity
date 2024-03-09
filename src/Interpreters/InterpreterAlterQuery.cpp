@@ -533,6 +533,14 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_DATABASE_SETTINGS, database, table);
             break;
         }
+        case ASTAlterCommand::RENAME_TABLE:
+        {
+            break;
+        }
+        case ASTAlterCommand::PARTITION_BY:
+        {
+            break;
+        }
     }
 
     return required_access;

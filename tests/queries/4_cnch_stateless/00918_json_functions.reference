@@ -140,6 +140,9 @@ Friday
 {}
 "\\n\\u0000"
 "☺"
+--JSONUnquote--
+abc
+\t2
 --const/non-const mixed--
 a
 b

@@ -103,6 +103,7 @@ public:
     Scheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
         : query_id(query_id_)
         , query_context(query_context_)
+        , query_unique_id(query_context->getCurrentTransactionID().toUInt64())
         , dag_graph_ptr(dag_graph_ptr_)
         , cluster_nodes(query_context_)
         , node_selector(cluster_nodes, query_context, dag_graph_ptr)
@@ -129,6 +130,7 @@ protected:
 
     const String query_id;
     ContextPtr query_context;
+    size_t query_unique_id;
     std::shared_ptr<DAGGraph> dag_graph_ptr;
     std::mutex segment_bufs_mutex;
     std::unordered_map<size_t, std::shared_ptr<butil::IOBuf>> segment_bufs;
@@ -170,6 +172,7 @@ protected:
     TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);
     void prepareFinalTask();
 
+    std::mutex node_selector_result_mutex;
     NodeSelector::SelectorResultMap node_selector_result;
 };
 

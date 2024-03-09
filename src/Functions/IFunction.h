@@ -311,7 +311,7 @@ class IFunctionOverloadResolver
 public:
     virtual ~IFunctionOverloadResolver() = default;
 
-    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments) const;
+    virtual FunctionBasePtr build(const ColumnsWithTypeAndName & arguments) const;
 
     DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments) const;
 
@@ -356,7 +356,10 @@ public:
     friend class ExpressionInterpreter;
 protected:
 
-    virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type) const = 0;
+    virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*result_type*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "buildImpl is not implemented for {}", getName());
+    }
 
     virtual DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const
     {

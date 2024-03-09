@@ -63,6 +63,7 @@ template <class Traits_>
 class BaseSettings : public Traits_::Data
 {
     using CustomSettingMap = std::unordered_map<std::string_view, std::pair<std::shared_ptr<const String>, SettingFieldCustom>>;
+    using Whitelist = std::unordered_set<String>;
 public:
     using Traits = Traits_;
 
@@ -101,7 +102,7 @@ public:
     static String valueToStringUtil(const std::string_view & name, const Field & value);
     static Field stringToValueUtil(const std::string_view & name, const String & str);
 
-    void write(WriteBuffer & out, SettingsWriteFormat write_format = SettingsWriteFormat::DEFAULT) const;
+    void write(WriteBuffer & out, SettingsWriteFormat write_format = SettingsWriteFormat::DEFAULT, Whitelist white_list = {}) const;
     void read(ReadBuffer & in, SettingsWriteFormat read_format = SettingsWriteFormat::DEFAULT);
 
     // A debugging aid.
@@ -431,7 +432,7 @@ Field BaseSettings<Traits_>::stringToValueUtil(const std::string_view & name, co
 }
 
 template <typename Traits_>
-void BaseSettings<Traits_>::write(WriteBuffer & out, SettingsWriteFormat write_format) const
+void BaseSettings<Traits_>::write(WriteBuffer & out, SettingsWriteFormat write_format, Whitelist white_list) const
 {
     const auto & accessor = Traits::Accessor::instance();
 
@@ -439,6 +440,10 @@ void BaseSettings<Traits_>::write(WriteBuffer & out, SettingsWriteFormat write_f
     {
         bool is_custom = field.isCustom();
         bool is_important = !is_custom && accessor.isImportant(field.index);
+
+        // Skip serialization of settings in the whitelist
+        if (white_list.count(field.getName()))
+            continue;
 
         BaseSettingsHelpers::writeString(field.getName(), out);
 

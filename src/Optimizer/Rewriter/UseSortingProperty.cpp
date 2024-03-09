@@ -132,7 +132,7 @@ PlanNodePtr PushSortingInfoRewriter::visitAggregatingNode(AggregatingNode & node
 {
 
     auto prefix_desc = node.getStep()->getGroupBySortDescription();
-    SortInfo s{prefix_desc, 0};
+    SortInfo s{prefix_desc, size_t{0}};
     return visitPlanNode(node, s);
 }
 
@@ -140,7 +140,7 @@ PlanNodePtr PushSortingInfoRewriter::visitWindowNode(WindowNode & node, SortInfo
 {
 
     auto prefix_desc = node.getStep()->getPrefixDescription();
-    SortInfo s{prefix_desc, 0};
+    SortInfo s{prefix_desc, size_t{0}};
     return visitPlanNode(node, s);
 }
 

@@ -85,8 +85,8 @@ public:
     }
 
     void toLowerCase() override
-    {   
-        for (auto & elem: elements) 
+    {
+        for (auto & elem: elements)
         {
             boost::to_lower(elem.from.database);
             boost::to_lower(elem.from.table);
@@ -96,8 +96,8 @@ public:
     }
 
      void toUpperCase() override
-    {   
-        for (auto & elem: elements) 
+    {
+        for (auto & elem: elements)
         {
             boost::to_upper(elem.from.database);
             boost::to_upper(elem.from.table);

@@ -38,13 +38,33 @@
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ParserAlterQuery.h>
+#include <Parsers/ParserCheckQuery.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ParserDescribeTableQuery.h>
+#include <Parsers/ParserDropQuery.h>
+#include <Parsers/ParserDumpQuery.h>
+#include <Parsers/ParserExplainQuery.h>
+#include <Parsers/ParserKillQueryQuery.h>
+#include <Parsers/ParserOptimizeQuery.h>
+#include <Parsers/ParserPreparedStatement.h>
+#include <Parsers/ParserQueryWithOutput.h>
+#include <Parsers/ParserRefreshQuery.h>
+#include <Parsers/ParserRenameQuery.h>
+#include <Parsers/ParserReproduceQuery.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
+#include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserShowAccessEntitiesQuery.h>
 #include <Parsers/ParserShowAccessQuery.h>
 #include <Parsers/ParserShowColumnsQuery.h>
 #include <Parsers/ParserShowCreateAccessEntityQuery.h>
 #include <Parsers/ParserShowGrantsQuery.h>
 #include <Parsers/ParserShowPrivilegesQuery.h>
-#include <Parsers/ParserExplainQuery.h>
+#include <Parsers/ParserShowProcesslistQuery.h>
+#include <Parsers/ParserShowTablesQuery.h>
+#include <Parsers/ParserStatsQuery.h>
+#include <Parsers/ParserTablePropertiesQuery.h>
+#include <Parsers/ParserWatchQuery.h>
 #include <Parsers/QueryWithOutputSettingsPushDownVisitor.h>
 #include <Parsers/ParserRefreshQuery.h>
 #include <Parsers/ParserStatsQuery.h>
@@ -68,6 +88,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowProcesslistQuery show_processlist_p;
     ParserCreateQuery create_p(dt);
     ParserAlterQuery alter_p(dt);
+    ParserAlterAnalyticalMySQLQuery alter_mysql_p(dt);
     ParserRenameQuery rename_p;
     ParserDropQuery drop_p;
     ParserUndropQuery undrop_p;
@@ -93,22 +114,26 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserBeginQuery begin_p;
     ParserCommitQuery commit_p;
     ParserRollbackQuery rollback_p;
+    ParserExecutePreparedStatementQuery execute_p;
+    ParserShowPreparedStatementQuery show_prepared;
 
     ASTPtr query;
 
-    bool parsed =
-           explain_p.parse(pos, query, expected)
+    bool parsed = execute_p.parse(pos, query, expected)
+        || select_p.parse(pos, query, expected)
+        || explain_p.parse(pos, query, expected)
         || reproduce_p.parse(pos, query, expected)
         || dump_p.parse(pos, query, expected)
-        || select_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         || show_tables_p.parse(pos, query, expected)
+        || show_prepared.parse(pos, query, expected)
         || show_setting_p.parse(pos, query, expected)
         || show_columns_p.parse(pos, query, expected)
         || table_p.parse(pos, query, expected)
         || describe_table_p.parse(pos, query, expected)
         || show_processlist_p.parse(pos, query, expected)
         || create_p.parse(pos, query, expected)
+        || (dt.parse_mysql_ddl && alter_mysql_p.parse(pos, query, expected))
         || alter_p.parse(pos, query, expected)
         || rename_p.parse(pos, query, expected)
         || drop_p.parse(pos, query, expected)

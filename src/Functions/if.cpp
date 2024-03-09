@@ -22,6 +22,7 @@
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/FunctionIfBase.h>
 #include <Interpreters/castColumn.h>
+#include <Interpreters/Context.h>
 #include <Functions/FunctionFactory.h>
 
 
@@ -215,9 +216,16 @@ class FunctionIf : public FunctionIfBase
 {
 public:
     static constexpr auto name = "if";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIf>(); }
+    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionIf>(context); }
+
+    explicit FunctionIf(ContextPtr context)
+    {
+        is_mysql = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
+    }
 
 private:
+    bool is_mysql = false;
+
     template <typename T0, typename T1>
     static UInt32 decimalScale(const ColumnsWithTypeAndName & arguments [[maybe_unused]])
     {
@@ -1024,7 +1032,12 @@ public:
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument (condition) of function if. Must be UInt8.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return getLeastSupertype(DataTypes{arguments[1], arguments[2]});
+        if (!is_mysql)
+            return getLeastSupertype(DataTypes{arguments[1], arguments[2]});
+        /// mysql supports if (cond, Nullable<Array>, Array)
+        bool has_nullable = arguments[1]->isNullable() || arguments[2]->isNullable();
+        auto ret_type =  getLeastSupertype(DataTypes{removeNullable(arguments[1]), removeNullable(arguments[2])});
+        return has_nullable ? makeNullable(ret_type) : ret_type;
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count) const override
