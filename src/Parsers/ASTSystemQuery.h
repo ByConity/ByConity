@@ -139,6 +139,9 @@ public:
         STOP_MATERIALIZEDMYSQL,
         RESYNC_MATERIALIZEDMYSQL_TABLE,
         RECALCULATE_METRICS,
+        START_VIEW,
+        STOP_VIEW,
+        DROP_VIEW_META,
         END
     };
 

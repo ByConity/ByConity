@@ -206,7 +206,7 @@ Pipe ingestPartitionInServer(
     LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
     partition_lock->setMode(LockMode::X);
     partition_lock->setTimeout(local_context->getSettingsRef().ingest_column_memory_lock_timeout.value.totalMilliseconds()); // default 5s
-    partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(target_storage_id.uuid));
+    partition_lock->setUUIDAndPrefix(target_storage_id.uuid, LockInfo::task_domain);
     partition_lock->setPartition(partition_id);
 
     Stopwatch lock_watch;

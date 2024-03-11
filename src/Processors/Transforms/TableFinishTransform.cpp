@@ -1,16 +1,23 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <Interpreters/Context.h>
 #include <Processors/Transforms/TableFinishTransform.h>
-#include <Storages/IStorage.h>
+#include <Storages/PartitionCommands.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Poco/Logger.h>
+#include <Parsers/ASTInsertQuery.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
 
-TableFinishTransform::TableFinishTransform(const Block & header_, const StoragePtr & storage_, const ContextPtr & context_)
-    : IProcessor({header_}, {header_}), input(inputs.front()), output(outputs.front()), storage(storage_), context(context_)
+TableFinishTransform::TableFinishTransform(const Block & header_, const StoragePtr & storage_, 
+    const ContextPtr & context_, ASTPtr & query_)
+    : IProcessor({header_}, {header_}), input(inputs.front())
+    , output(outputs.front())
+    , storage(storage_)
+    , context(context_)
+    , query(query_)
 {
 }
 
@@ -21,6 +28,18 @@ Block TableFinishTransform::getHeader()
 
 TableFinishTransform::Status TableFinishTransform::prepare()
 {
+    /// Handle drop partition for insert overwrite
+    if (query)
+    {
+        auto * insert_query = dynamic_cast<ASTInsertQuery *>(query.get());
+        auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree*>(storage.get());
+        if (insert_query && insert_query->is_overwrite && cnch_merge_tree)
+        {
+            cnch_merge_tree->overwritePartitions(insert_query->overwrite_partition, context, &lock_holders);
+            query.reset();
+        }
+    }
+
     if (output.isFinished())
     {
         output.finish();
@@ -80,9 +99,21 @@ void TableFinishTransform::consume(Chunk chunk)
 
 void TableFinishTransform::onFinish()
 {
-    TransactionCnchPtr txn = context->getCurrentTransaction();
-    txn->setMainTableUUID(storage->getStorageUUID());
-    txn->commitV2();
+    if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+        cnch_table && cnch_table->getInMemoryMetadataPtr()->hasUniqueKey() && !context->getSettingsRef().enable_staging_area_for_write)
+    {
+        /// for unique table, insert select|infile is committed from worker side
+        /// TODO: should also commit in server side
+    }
+    else
+    {
+        TransactionCnchPtr txn = context->getCurrentTransaction();
+        txn->setMainTableUUID(storage->getStorageUUID());
+        txn->commitV2();
+    }
+    /// Make sure locks are release after transaction commit
+    if (!lock_holders.empty())
+        lock_holders.clear();
     LOG_DEBUG(&Poco::Logger::get("TableFinishTransform"), "Finish insert select commit in table finish.");
     output.finish();
 }

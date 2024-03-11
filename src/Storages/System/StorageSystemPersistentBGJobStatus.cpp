@@ -39,13 +39,14 @@ namespace DB
     {
         /// TODO: can optimize further to reduce number of request by checking where condition
 
-        const std::vector<CnchBGThreadType> types {
+        const std::vector<CnchBGThreadType> types{
             CnchBGThreadType::MergeMutate,
             CnchBGThreadType::Clustering,
             CnchBGThreadType::PartGC,
             CnchBGThreadType::Consumer,
             CnchBGThreadType::DedupWorker,
-            CnchBGThreadType::ObjectSchemaAssemble
+            CnchBGThreadType::ObjectSchemaAssemble,
+            CnchBGThreadType::CnchRefreshMaterializedView
         };
 
         std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();

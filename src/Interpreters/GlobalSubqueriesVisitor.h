@@ -17,6 +17,7 @@
 #include <Parsers/IAST.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Common/typeid_cast.h>
+#include <Parsers/queryToString.h>
 
 namespace DB
 {

@@ -1,12 +1,16 @@
 0
 0
-Projection Est. 1 rows, cost 2.220000e-01
-│     Expressions: 0:=0
-└─ Filter Est. 1 rows, cost 1.480000e-01
-   │     Condition: notEmpty(arrayFilter(x -> (x > 1), [1, 2]))
-   └─ Values Est. 1 rows, cost 7.400000e-02
-Projection Est. 1 rows, cost 2.220000e-01
-│     Expressions: 0:=0
-└─ Filter Est. 1 rows, cost 1.480000e-01
-   │     Condition: notEmpty(arrayFilter(x -> notEmpty(arrayFilter(y -> ((y > 1) AND (toInt64(y) > length(x))), x)), [[1, 2], [3]]))
-   └─ Values Est. 1 rows, cost 7.400000e-02
+Projection Est. 1 rows, cost 2.960000e-01
+│     Expressions: 0:=`expr#0`
+└─ Projection Est. 1 rows, cost 2.220000e-01
+   │     Expressions: expr#0:=0
+   └─ Filter Est. 1 rows, cost 1.480000e-01
+      │     Condition: notEmpty(arrayFilter(x -> (x > 1), [1, 2]))
+      └─ Values Est. 1 rows, cost 7.400000e-02
+Projection Est. 1 rows, cost 2.960000e-01
+│     Expressions: 0:=`expr#0`
+└─ Projection Est. 1 rows, cost 2.220000e-01
+   │     Expressions: expr#0:=0
+   └─ Filter Est. 1 rows, cost 1.480000e-01
+      │     Condition: notEmpty(arrayFilter(x -> notEmpty(arrayFilter(y -> ((y > 1) AND (toInt64(y) > length(x))), x)), [[1, 2], [3]]))
+      └─ Values Est. 1 rows, cost 7.400000e-02

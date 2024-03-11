@@ -29,6 +29,7 @@
 #include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTableOverrides.h>
+#include <Parsers/ASTRefreshStrategy.h>
 #include <Interpreters/StorageID.h>
 #include "Parsers/IAST_fwd.h"
 
@@ -129,6 +130,7 @@ public:
 
     StorageID to_table_id = StorageID::createEmpty();   /// For CREATE MATERIALIZED VIEW mv TO table.
     UUID to_inner_uuid = UUIDHelpers::Nil;      /// For materialized view with inner table
+    
     ASTStorage * storage = nullptr;
     String as_database;
     String as_table;
@@ -140,6 +142,7 @@ public:
     ASTExpressionList * dictionary_attributes_list = nullptr; /// attributes of
     ASTDictionary * dictionary = nullptr; /// dictionary definition (layout, primary key, etc.)
 
+    ASTRefreshStrategy * refresh_strategy = nullptr; // For CREATE MATERIALIZED VIEW ... REFRESH ...
     std::optional<UInt64> live_view_timeout;    /// For CREATE LIVE VIEW ... WITH TIMEOUT ...
     std::optional<UInt64> live_view_periodic_refresh;    /// For CREATE LIVE VIEW ... WITH [PERIODIC] REFRESH ...
 

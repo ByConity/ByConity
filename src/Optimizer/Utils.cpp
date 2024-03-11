@@ -27,8 +27,11 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/IAST.h>
+#include <Storages/StorageDistributed.h>
 #include <boost/math/special_functions/math_fwd.hpp>
 #include <common/logger_useful.h>
+#include "Parsers/IAST.h"
 
 extern const char * build_version;
 
@@ -104,6 +107,16 @@ bool isIdentity(const Assignments & assignments)
 bool isIdentity(const ProjectionStep & step)
 {
     return !step.isFinalProject() && Utils::isIdentity(step.getAssignments());
+}
+
+bool isAlias(const Assignment & assignment)
+{
+    return assignment.second->getType() == ASTType::ASTIdentifier;
+}
+
+bool isAlias(const Assignments & assignments)
+{
+    return std::all_of(assignments.begin(), assignments.end(), [](const Assignment & assignment) { return isAlias(assignment); });
 }
 
 bool isIdentifierOrIdentifierCast(const ConstASTPtr & expression)

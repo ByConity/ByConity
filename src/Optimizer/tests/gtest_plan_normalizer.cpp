@@ -138,7 +138,7 @@ TEST_F(PlanNormalizerTest, testTableScanNormalizeWithPushdownFilter)
     std::unordered_map<std::string, Field> settings;
     settings.emplace("optimizer_projection_support", 1);
 
-    std::string sql = "select d_moy from date_dim where d_date_sk=1";
+    std::string sql = "select d_date_sk, d_moy from date_dim where d_date_sk=1";
     std::string sql_ok = "select d_date_sk, d_moy from date_dim where d_date_sk=1";
     std::string sql_diff = "select d_date_sk, d_moy from date_dim where d_date_sk=2";
     std::string sql_diff_1 = "select d_date_sk, d_moy from date_dim where d_moy=1";

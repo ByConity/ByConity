@@ -39,6 +39,7 @@ StorageSystemCnchPartsInfo::StorageSystemCnchPartsInfo(const StorageID & table_i
         {"Unloaded", static_cast<Int8>(StorageSystemCnchPartsInfoLocal::ReadyState::Unloaded)},
         {"Loading", static_cast<Int8>(StorageSystemCnchPartsInfoLocal::ReadyState::Loading)},
         {"Loaded", static_cast<Int8>(StorageSystemCnchPartsInfoLocal::ReadyState::Loaded)},
+        {"Recalculated", static_cast<Int8>(StorageSystemCnchPartsInfoLocal::ReadyState::Recalculated)},
     });
 
     storage_metadata.setColumns(ColumnsDescription({
@@ -56,6 +57,7 @@ StorageSystemCnchPartsInfo::StorageSystemCnchPartsInfo(const StorageID & table_i
         {"recalculating", std::make_shared<DataTypeUInt8>()},
         {"last_update_time", std::make_shared<DataTypeUInt64>()},
         {"last_snapshot_time", std::make_shared<DataTypeUInt64>()},
+        {"last_modification_time", std::make_shared<DataTypeDateTime>()},
     }));
     setInMemoryMetadata(storage_metadata);
 }

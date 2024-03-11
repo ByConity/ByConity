@@ -37,6 +37,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
 #include "common/types.h"
+#include <Common/Exception.h>
 #include <Common/Config/MetastoreConfig.h>
 #include <Common/Configurations.h>
 #include <Common/DNSResolver.h>
@@ -292,6 +293,7 @@ public:
     void dropAllPart(const StoragePtr & storage, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
     std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList(const ConstStoragePtr & table, const Context * session_context);
+    std::vector<Protos::LastModificationTimeHint> getLastModificationTimeHints(const ConstStoragePtr & table);
 
     template<typename Map>
     void getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list);
@@ -642,6 +644,13 @@ public:
 
     std::list<CnchServerTopology> getTopologies();
 
+    // materialized view meta.
+    BatchCommitRequest constructMvMetaRequests(const String & uuid,
+            std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions);
+    std::vector<std::shared_ptr<Protos::VersionedPartitions>> getMvBaseTables(const String & uuid);
+    void updateMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+    void dropMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+
     /// Time Travel relate interfaces
     std::vector<UInt64> getTrashDBVersions(const String & database);
     void undropDatabase(const String & database, const UInt64 & ts);
@@ -679,6 +688,10 @@ public:
     void dropWorkerGroup(const String & worker_group_id);
 
     UInt64 getNonHostUpdateTimestampFromByteKV(const UUID & uuid);
+
+    String getDictionaryBucketUpdateTimeKey(const StorageID & storage_id, Int64 bucket_number) const;
+
+    String getByKey(const String & key);
 
     /** Masking policy NOTEs
      * 1. Column masking policy refers to the masking policy data model, it will be applied to multiple columns with 1-n association.

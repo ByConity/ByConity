@@ -158,6 +158,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     part->bucket_number = part_model.bucket_number();
     part->table_definition_hash = part_model.table_definition_hash();
     part->mutation_commit_time = part_model.has_mutation_commit_time() ? part_model.mutation_commit_time() : 0;
+    part->last_modification_time = part_model.last_modification_time();
     if (part_model.has_commit_time())
         part->commit_time = TxnTimestamp{part_model.commit_time()};
     else
@@ -282,6 +283,8 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
         part_model.set_delete_flag(part.delete_flag);
     if (part.low_priority)
         part_model.set_low_priority(part.low_priority);
+    if (part.last_modification_time)
+        part_model.set_last_modification_time(part.last_modification_time);
 
     if (!ignore_column_commit_time && part.columns_commit_time)
     {
@@ -443,7 +446,7 @@ LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model)
     lock_info->setLockID(model.lock_id())
         .setMode(mode)
         .setTimeout(model.timeout())
-        .setTablePrefix(field.table_prefix())
+        .setUUIDAndPrefixFromModel(field.table_prefix())
         .setBucket(bucket)
         .setPartition(partition);
     return lock_info;

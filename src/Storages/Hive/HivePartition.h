@@ -49,6 +49,8 @@ struct HivePartition
     /// non partition case
     void load(const Apache::Hadoop::Hive::StorageDescriptor & sd);
 
+    void store(WriteBuffer & buf, const KeyDescription & description) const;
+
     /// just for listing
     String file_format;
     String location;

@@ -20,7 +20,7 @@
 #include <QueryPlan/PlanSymbolReallocator.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/UnionStep.h>
-#include "QueryPlan/SymbolAllocator.h"
+#include <QueryPlan/SymbolAllocator.h>
 
 namespace DB
 {
@@ -48,24 +48,15 @@ TransformResult PushJoinThroughUnion::transformImpl(PlanNodePtr node, const Capt
 
     for (size_t i = 0; i < union_node->getChildren().size(); i++)
     {
-        // reallocate if need
-        std::unordered_map<std::string, std::string> symbol_mapping;
-        PlanNodePtr right_node = node->getChildren()[1];
-        if (PlanSymbolReallocator::isOverlapping(union_node->getChildren()[i]->getStep()->getOutputStream(), join.getInputStreams()[1]))
-        {
-            right_node = PlanSymbolReallocator::reallocate(right_node, context, symbol_mapping);
-        }
+        // reallocate
+        auto plan_node_and_mappings = PlanSymbolReallocator::reallocate(node->getChildren()[1], context);
 
         // copy join
         SymbolMapper symbol_mapper{[&, i](const std::string & symbol) {
             if (unionn.getOutToInputs().contains(symbol))
-            {
                 return unionn.getOutToInputs().at(symbol)[i];
-            }
-            if (symbol_mapping.contains(symbol))
-            {
-                return symbol_mapping.at(symbol);
-            }
+            if (plan_node_and_mappings.mappings.contains(symbol))
+                return plan_node_and_mappings.mappings.at(symbol);
             return symbol;
         }};
         auto new_join_step = symbol_mapper.map(join);
@@ -79,8 +70,8 @@ TransformResult PushJoinThroughUnion::transformImpl(PlanNodePtr node, const Capt
             new_output_to_inputs[outputs.getByPosition(j).name].emplace_back(name_and_type.name);
             input_streams.back().header.insert(name_and_type);
         }
-        new_union_children.emplace_back(
-            PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(new_join_step), PlanNodes{union_node->getChildren()[i], right_node}));
+        new_union_children.emplace_back(PlanNodeBase::createPlanNode(
+            context->nextNodeId(), std::move(new_join_step), PlanNodes{union_node->getChildren()[i], plan_node_and_mappings.plan_node}));
     }
 
     return {PlanNodeBase::createPlanNode(

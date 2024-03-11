@@ -30,6 +30,8 @@
 
 namespace DB
 {
+static constexpr size_t MAX_LOOKUP_TIMES = 10000;
+
 class SymbolMapper::IdentifierRewriter : public SimpleExpressionRewriter<Void>
 {
 public:
@@ -54,44 +56,45 @@ SymbolMapper SymbolMapper::simpleMapper(std::unordered_map<Symbol, Symbol> & map
 
 SymbolMapper SymbolMapper::symbolMapper(std::unordered_map<Symbol, Symbol> & mapping)
 {
-    return SymbolMapper(
-        [&mapping](Symbol symbol) {
-            auto it = mapping.find(symbol);
+    return SymbolMapper([&mapping](Symbol symbol) {
+        auto it = mapping.find(symbol);
+        size_t lookup = 0;
+        while (it != mapping.end() && it->second != symbol)
+        {
+            if (++lookup > MAX_LOOKUP_TIMES)
+                    throw Exception("endless loop in SymbolMapper", ErrorCodes::LOGICAL_ERROR);
+            symbol = it->second;
+            it = mapping.find(symbol);
+        }
+        return symbol;
+    });
+}
+
+SymbolMapper SymbolMapper::symbolReallocator(std::unordered_map<Symbol, Symbol> & mapping, SymbolAllocator & symbolAllocator)
+{
+    return SymbolMapper([&](Symbol symbol) {
+        auto it = mapping.find(symbol);
+        if (it != mapping.end())
+        {
+            size_t lookup = 0;
             while (it != mapping.end() && it->second != symbol)
             {
+                if (++lookup > MAX_LOOKUP_TIMES)
+                        throw Exception("endless loop in SymbolMapper", ErrorCodes::LOGICAL_ERROR);
                 symbol = it->second;
                 it = mapping.find(symbol);
             }
-            return symbol;
-        },
-        [&mapping](const Symbol & from, const Symbol & to) { mapping[from] = to; });
-}
-
-SymbolMapper
-SymbolMapper::symbolReallocator(std::unordered_map<Symbol, Symbol> & mapping, SymbolAllocator & symbolAllocator)
-{
-    return SymbolMapper(
-        [&](Symbol symbol) {
-            auto it = mapping.find(symbol);
-            if (it != mapping.end())
-            {
-                while (it != mapping.end() && it->second != symbol)
-                {
-                    symbol = it->second;
-                    it = mapping.find(symbol);
-                }
-                // do not remap the symbol further
-                mapping[symbol] = symbol;
-                return symbol;
-            }
-
-            Symbol new_symbol = symbolAllocator.newSymbol(symbol);
-            mapping[symbol] = new_symbol;
             // do not remap the symbol further
-            mapping[new_symbol] = new_symbol;
-            return new_symbol;
-        },
-        [&mapping](const Symbol & from, const Symbol & to) { mapping[from] = to; });
+            mapping[symbol] = symbol;
+            return symbol;
+        }
+
+        Symbol new_symbol = symbolAllocator.newSymbol(symbol);
+        mapping[symbol] = new_symbol;
+        // do not remap the symbol further
+        mapping[new_symbol] = new_symbol;
+        return new_symbol;
+    });
 }
 
 NameSet SymbolMapper::mapToDistinct(const Names & symbols)
@@ -123,7 +126,12 @@ Assignments SymbolMapper::map(const Assignments & assignments)
     Assignments ret;
     for (const auto & assignment : assignments)
     {
-        ret.emplace(map(assignment.first), map(assignment.second));
+        auto output = map(assignment.first);
+        // fixme: handle duplicate assignment
+        if (!ret.contains(output))
+        {
+            ret.emplace(output, map(assignment.second));
+        }
     }
     return ret;
 }
@@ -157,7 +165,11 @@ Block SymbolMapper::map(const Block & name_and_types)
     Block ret;
     for (const auto & item : name_and_types)
     {
-        ret.insert(ColumnWithTypeAndName{item.column, item.type, mapping_function(item.name)});
+        auto mapped = mapping_function(item.name);
+        if (!ret.has(mapped))
+        {
+            ret.insert(ColumnWithTypeAndName{item.column, item.type, mapped});
+        }
     }
     return ret;
 }
@@ -232,7 +244,14 @@ LinkedHashMap<String, RuntimeFilterBuildInfos> SymbolMapper::map(const LinkedHas
 {
     LinkedHashMap<String, RuntimeFilterBuildInfos> res;
     for (const auto & info : infos)
-        res.emplace(map(info.first), info.second);
+    {
+        auto symbol = map(info.first);
+        // fixme: handle duplicate symbol
+        if (!res.contains(symbol))
+        {
+            res.emplace(symbol, info.second);
+        }
+    }
     return res;
 }
 
@@ -309,9 +328,32 @@ GroupingSetsParams SymbolMapper::map(const GroupingSetsParams & param)
 
 Aggregator::Params SymbolMapper::map(const Aggregator::Params & params)
 {
+    auto header = map(params.src_header);
+    auto intermediate_header = map(params.intermediate_header);
+    ColumnNumbers keys;
+    std::unordered_set<String> distinct_keys;
+    if (params.src_header.columns() != 0)
+    {
+        for (const auto & key : params.keys)
+        {
+            auto name = map(params.src_header.getByPosition(key).name);
+            if (distinct_keys.emplace(name).second)
+                keys.emplace_back(header.getPositionByName(name));
+        }
+    }
+    else
+    {
+        for (const auto & key : params.keys)
+        {
+            auto name = map(params.intermediate_header.getByPosition(key).name);
+            if (distinct_keys.emplace(name).second)
+                keys.emplace_back(intermediate_header.getPositionByName(name));
+        }
+    }
+
     return {
-        map(params.src_header),
-        params.keys,
+        header,
+        keys,
         map(params.aggregates),
         params.overflow_row,
         params.max_rows_to_group_by,
@@ -326,7 +368,7 @@ Aggregator::Params SymbolMapper::map(const Aggregator::Params & params)
         params.min_free_disk_space,
         params.compile_aggregate_expressions,
         params.min_count_to_compile_aggregate_expression,
-        map(params.intermediate_header),
+        intermediate_header,
         params.enable_lc_group_by_opt};
 }
 
@@ -363,7 +405,7 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
 {
     return std::make_shared<AggregatingStep>(
         map(agg.getInputStreams()[0]),
-        map(agg.getKeys()),
+        distinct(map(agg.getKeys())),
         map(agg.getKeysNotHashed()),
         map(agg.getAggregates()),
         map(agg.getGroupingSetsParams()),
@@ -544,7 +586,7 @@ std::shared_ptr<MergingAggregatedStep> SymbolMapper::map(const MergingAggregated
 {
     return std::make_shared<MergingAggregatedStep>(
         map(merging_agg.getInputStreams()[0]),
-        map(merging_agg.getKeys()),
+        distinct(map(merging_agg.getKeys())),
         map(merging_agg.getGroupingSetsParamsList()),
         map(merging_agg.getGroupings()),
         map(merging_agg.getAggregatingTransformParams()),
@@ -602,6 +644,20 @@ std::shared_ptr<PartialSortingStep> SymbolMapper::map(const PartialSortingStep &
 
 std::shared_ptr<ProjectionStep> SymbolMapper::map(const ProjectionStep & projection)
 {
+    if (projection.isFinalProject())
+    {
+        Assignments assignments;
+        for (const auto & item : projection.getAssignments())
+            assignments.emplace(item.first, map(item.second));
+
+        return std::make_shared<ProjectionStep>(
+            map(projection.getInputStreams()[0]),
+            std::move(assignments),
+            projection.getNameToType(),
+            projection.isFinalProject(),
+            projection.isIndexProject(),
+            projection.getHints());
+    }
     return std::make_shared<ProjectionStep>(
         map(projection.getInputStreams()[0]),
         map(projection.getAssignments()),

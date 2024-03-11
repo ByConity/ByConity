@@ -1058,6 +1058,22 @@ void CnchServerClient::reportSyncFailedForSyncThread(const String & database_nam
 }
 #endif
 
+void CnchServerClient::handleRefreshTaskOnFinish(StorageID & mv_storage_id, String task_id, Int64 txn_id)
+{
+    brpc::Controller cntl;
+    Protos::handleRefreshTaskOnFinishReq request;
+    Protos::handleRefreshTaskOnFinishResp response;
+
+    RPCHelpers::fillStorageID(mv_storage_id, *request.mutable_mv_storage_id());
+    request.set_task_id(task_id);
+    request.set_txn_id(txn_id);
+
+    stub->handleRefreshTaskOnFinish(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 void CnchServerClient::forceRecalculateMetrics(const StorageID & storage_id)
 {
     brpc::Controller cntl;
@@ -1072,4 +1088,47 @@ void CnchServerClient::forceRecalculateMetrics(const StorageID & storage_id)
     RPCHelpers::checkResponse(response);
 }
 
+std::vector<Protos::LastModificationTimeHint> CnchServerClient::getLastModificationTimeHints(const StorageID & storage_id)
+{
+    brpc::Controller cntl;
+    Protos::getLastModificationTimeHintsReq request;
+    Protos::getLastModificationTimeHintsResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
+
+    stub->getLastModificationTimeHints(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    std::vector<Protos::LastModificationTimeHint> ret;
+    RPCHelpers::checkResponse(response);
+    for (const auto & last_modification_time_hint : response.last_modification_time_hints())
+    {
+        ret.push_back(last_modification_time_hint);
+    }
+
+    return ret;
+}
+
+
+MergeTreeDataPartsCNCHVector CnchServerClient::fetchCloudTableMeta(
+    const StorageCloudMergeTree & storage, const TxnTimestamp & ts, const std::unordered_set<Int64> & bucket_numbers)
+{
+    brpc::Controller cntl;
+    cntl.set_timeout_ms(storage.getSettings()->cnch_meta_rpc_timeout_ms);
+    Protos::FetchCloudTableMetaReq request;
+    Protos::FetchCloudTableMetaResp response;
+
+    RPCHelpers::fillStorageID(storage.getCnchStorageID(), *request.mutable_storage_id());
+
+    request.set_timestamp(ts.toUInt64());
+
+    for (const auto & bucket_number : bucket_numbers)
+        request.add_bucket_numbers(bucket_number);
+
+    stub->fetchCloudTableMeta(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+    return createPartVectorFromModelsForSend<MergeTreeDataPartCNCHPtr>(storage, response.parts());
+}
 }

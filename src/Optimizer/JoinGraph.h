@@ -71,6 +71,7 @@ public:
         bool contains_cross_join_);
 
     const std::vector<ConstASTPtr> & getFilters() const { return filter; }
+    std::vector<std::pair<String, String>> getJoinClauses() const;
     PlanNodeId getRootId() const { return root; }
     bool isEmpty() const { return nodes.empty(); }
     size_t size() const { return nodes.size(); }

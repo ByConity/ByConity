@@ -110,6 +110,7 @@ void PlanSegmentManagerRpcService::executeQuery(
         query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{request->plan_segment_id(), request->parallel_id()});
         /// Set client info.
         ClientInfo & client_info = query_context->getClientInfo();
+        client_info.rpc_port = request->coordinator_exchange_port();
         client_info.brpc_protocol_major_version = request->brpc_protocol_major_revision();
         client_info.brpc_protocol_minor_version = request->brpc_protocol_minor_revision();
         client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
@@ -496,6 +497,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         ClientInfo & client_info = query_context->getClientInfo();
         Poco::Net::SocketAddress initial_socket_address(query_common->initial_client_host(), query_common->initial_client_port());
 
+        client_info.rpc_port = query_common->mutable_coordinator_address()->exchange_port();
         client_info.brpc_protocol_major_version = request->brpc_protocol_major_revision();
         client_info.brpc_protocol_minor_version = query_common->brpc_protocol_minor_revision();
         client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
@@ -527,6 +529,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     ErrorCodes::LOGICAL_ERROR);
             }
             ReadBufferFromBrpcBuf settings_read_buf(settings_io_buf);
+
             /// Sets an extra row policy based on `client_info.initial_user`.
             /// Not saft since KVAccessStorage will call rpc inside lock
             // query_context->setInitialRowPolicy();

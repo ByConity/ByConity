@@ -36,6 +36,7 @@
 #include <common/logger_useful.h>
 #include "Transaction/LockRequest.h"
 #include <bthread/recursive_mutex.h>
+#include <Catalog/MetastoreCommon.h>
 
 #if USE_MYSQL
 #include <Databases/MySQL/MaterializedMySQLCommon.h>
@@ -60,6 +61,13 @@ class ICnchTransaction : public TypePromotion<ICnchTransaction>, public WithCont
 {
 public:
     friend class CnchLockHolder;
+    // insert action.
+    struct TransFunction
+    {
+        std::function<Catalog::BatchCommitRequest(ContextPtr context)> commit_func;
+        std::function<Catalog::BatchCommitRequest(ContextPtr context)> abort_func;
+    };
+
     explicit ICnchTransaction(const ContextPtr & context_) : WithContext(context_), global_context(context_->getGlobalContext()) { }
     explicit ICnchTransaction(const ContextPtr & context_, TransactionRecord record)
         : WithContext(context_), global_context(context_->getGlobalContext()), txn_record(std::move(record))
@@ -201,6 +209,11 @@ public:
     DatabasePtr tryGetDatabaseViaCache(const String & database_name);
     void addDatabaseIntoCache(DatabasePtr db);
 
+    void addCommitAbortFunc(std::function<Catalog::BatchCommitRequest (ContextPtr context)> commit_f, std::function<Catalog::BatchCommitRequest (ContextPtr context)> abort_f)
+    {
+        extern_commit_functions.push_back({commit_f, abort_f});
+    }
+
     bool async_post_commit = false;
 protected:
     void setStatus(CnchTransactionStatus status);
@@ -208,7 +221,6 @@ protected:
     void assertLockAcquired() const;
     void setLockHolder(std::shared_ptr<CnchLockHolder> p) { lock_holder = p; }
 
-protected:
     /// Transaction still needs global context because the query context will expired after query is finished, but
     /// the transaction still running even query is finished.
     ContextPtr global_context;
@@ -226,6 +238,8 @@ protected:
 
     InsertionLabelPtr insertion_label;
     std::weak_ptr<CnchLockHolder> lock_holder;
+
+    std::vector<TransFunction> extern_commit_functions;
 
 private:
     String creator;

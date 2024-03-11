@@ -35,6 +35,7 @@ public:
         Unloaded = 1,
         Loading = 2,
         Loaded = 3,
+        Recalculated = 4,
     };
 
     Pipe read(

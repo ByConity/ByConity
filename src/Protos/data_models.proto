@@ -141,6 +141,9 @@ message DataModelPart {
   // remote disk cache config
   optional string disk_cache_host_port = 37;
   optional string assign_compute_host_port = 38;
+  // Store the actuall modification time of a part (merge actions are not
+  // included). So only merged part will contains this field.
+  optional uint64 last_modification_time = 39;
 };
 
 message CnchFilePartInfo { required string name = 1; }
@@ -662,6 +665,7 @@ message PartitionPartsMetricsSnapshot {
   required uint64 is_deleted = 7;
   required uint64 last_update_time = 8;
   required uint64 last_snapshot_time = 9;
+  optional uint64 last_modification_time = 10;
 }
 
 // Key: <prefix><table_uuid>
@@ -689,3 +693,8 @@ message DataModelSnapshot {
   // absent if the snapshot binds to all tables in the database
   optional UUID table_uuid = 4;
 };
+
+message LastModificationTimeHint {
+  required bytes partition_id = 1;
+  optional uint64 last_modification_time = 2;
+}

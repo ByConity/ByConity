@@ -44,7 +44,7 @@ public:
         }).execution();
     }
 
-    void noMat()
+    void noMat(const String & reason = "")
     {
         withChecker([&](QueryPlan & plan) {
             auto tables = PlanNodeSearcher::searchFrom(plan)
@@ -53,7 +53,7 @@ public:
             bool contains_mv = std::any_of(tables.begin(), tables.end(), [&](auto & node) {
                 return dynamic_cast<const TableScanStep *>(node->getStep().get())->getTable().find("MV_DATA") != std::string::npos;
             });
-            ASSERT_FALSE(contains_mv) << "expect no matched materialized views";
+            ASSERT_FALSE(contains_mv) << "expect no matched materialized views" << (reason.empty() ? "" : ": " + reason);
         }).execution();
     }
 
@@ -140,6 +140,11 @@ public:
 
         execute("CREATE TABLE IF NOT EXISTS locations("
                 "  locationid UInt32,"
+                "  name Nullable(String)"
+                ") ENGINE=Memory();");
+
+        execute("CREATE TABLE IF NOT EXISTS dependents("
+                "  empid UInt32,"
                 "  name Nullable(String)"
                 ") ENGINE=Memory();");
 

@@ -21,6 +21,7 @@
 #include <Catalog/CatalogFactory.h>
 #include <CloudServices/CnchServerClient.h>
 #include <Core/Types.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -28,6 +29,7 @@
 #include <Storages/CnchStorageCache.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/TableMetaEntry.h>
 #include <Common/ConsistentHashUtils/Hash.h>
 #include <Common/HostWithPorts.h>
@@ -701,7 +703,7 @@ void PartCacheManager::insertDataPartsIntoCache(
                           .emplace(
                               partition_id,
                               std::make_shared<CnchPartitionInfo>(
-                                  UUIDHelpers::UUIDToString(uuid), partitionid_to_partition[partition_id], partition_id))
+                                  UUIDHelpers::UUIDToString(uuid), partitionid_to_partition[partition_id], partition_id, true))
                           .first;
             meta_partitions.emplace(partition_id, *it);
         }
@@ -1513,4 +1515,105 @@ bool PartCacheManager::forceRecalculate(StoragePtr table)
     return false;
 }
 
+std::vector<Protos::LastModificationTimeHint>
+PartCacheManager::getLastModificationTimeHints(const ConstStoragePtr & storage, const bool allow_regression)
+{
+    if (!storage)
+    {
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Receive a empty table.");
+    }
+    auto rpc_port = getContext()->getRPCPort();
+    auto host_port = getContext()->getCnchTopologyMaster()->getTargetServer(
+        UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+    if (host_port.empty())
+        return {};
+
+    if (isLocalServer(host_port.getRPCAddress(), toString(rpc_port)))
+        mayUpdateTableMeta(*storage, host_port.topology_version);
+    else
+        return {};
+
+    std::vector<Protos::LastModificationTimeHint> ret;
+    auto table_meta = getTableMeta(storage->getStorageUUID());
+    time_t now = time(nullptr);
+    if (table_meta)
+    {
+        using RetType = std::optional<std::pair<PartitionMetrics::PartitionMetricsStore, bool>>;
+        /// Return a partition metrics snapshot.
+        std::function<RetType(std::shared_ptr<CnchPartitionInfo>)> load_func;
+        if (table_meta->partition_metrics_loaded)
+        {
+            load_func = [](std::shared_ptr<CnchPartitionInfo> partition_info) -> RetType {
+                bool finish_first_recalculation = partition_info->metrics_ptr->finishFirstRecalculation();
+                return std::make_optional(std::make_pair(partition_info->metrics_ptr->read(), finish_first_recalculation));
+            };
+        }
+        else
+        {
+            std::unordered_map<String, std::shared_ptr<PartitionMetrics>> snapshots
+                = getContext()->getCnchCatalog()->loadPartitionMetricsSnapshotFromMetastore(
+                    UUIDHelpers::UUIDToString(storage->getStorageUUID()));
+            load_func = [snapshots = std::move(snapshots)](std::shared_ptr<CnchPartitionInfo> partition_info) -> RetType {
+                auto it = snapshots.find(partition_info->partition_id);
+                if (it != snapshots.end())
+                    return std::make_optional(std::make_pair(it->second->read(), false));
+                else
+                    return std::nullopt;
+            };
+        }
+
+        auto & meta_partitions = table_meta->partitions;
+        ret.reserve(meta_partitions.size());
+        for (auto it = meta_partitions.begin(); it != meta_partitions.end(); it++)
+        {
+            Protos::LastModificationTimeHint hint = Protos::LastModificationTimeHint{};
+
+            const auto * meta_storage = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+            if (!meta_storage)
+                throw Exception("Table is not a Meta Based MergeTree", ErrorCodes::UNKNOWN_TABLE);
+            String partition;
+            {
+                WriteBufferFromString write_buffer(partition);
+                (*it)->partition_ptr->store(*meta_storage, write_buffer);
+            }
+
+            // Skip if it passes TTL
+            auto ttl = meta_storage->getTTLForPartition(*(*it)->partition_ptr);
+
+            if (ttl && ttl < now) {
+                continue;
+            }
+
+            hint.set_partition_id(partition);
+
+            std::optional<std::pair<PartitionMetrics::PartitionMetricsStore, bool>> data = load_func(*it);
+
+            if (!data.has_value() || (data->first.total_parts_number < 0 || data->first.total_rows_count < 0))
+            {
+                LOG_WARNING(
+                    &Poco::Logger::get("PartCacheManager::getLastModificationTimeHints"),
+                    "Can not get partition metrics for partition {} from snapshots.",
+                    partition);
+                hint.set_last_modification_time(0);
+            }
+            else if (!allow_regression && !data->second)
+            {
+                /// not a accurate metrics, so return 0.
+                hint.set_last_modification_time(0);
+            }
+            else if (data->first.total_parts_number == 0 && data->first.total_rows_count == 0)
+            {
+                continue;
+            }
+            else
+            {
+                hint.set_last_modification_time(data->first.last_modification_time);
+            }
+
+            ret.push_back(std::move(hint));
+        }
+    }
+
+    return ret;
+}
 }

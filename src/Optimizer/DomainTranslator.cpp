@@ -290,19 +290,25 @@ ExtractionResult<T> DomainVisitor<T>::visitASTFunction(ASTPtr & node, const bool
     auto & ast_fun = node->as<ASTFunction &>();
     const String & fun_name = ast_fun.name;
 
-    if (fun_name == "and" || fun_name == "or")
-        return visitLogicalFunction(node, complement, fun_name);
-    if (fun_name == "not")
-        return visitNotFunction(node, complement);
-    if (fun_name == "in")
-        return visitInFunction(node, complement);
-    if (fun_name == "isNotNull")
-        return visitIsNotNullFunction(node, complement);
-    if (fun_name == "isNull")
-        return visitIsNullFunction(node, complement);
-    if (fun_name == "equals" || fun_name == "notEquals" || fun_name == "less" || fun_name == "greater" || fun_name == "lessOrEquals"
-        || fun_name == "greaterOrEquals")
-        return visitComparisonFunction(node, complement);
+    try
+    {
+        if (fun_name == "and" || fun_name == "or")
+            return visitLogicalFunction(node, complement, fun_name);
+        if (fun_name == "not")
+            return visitNotFunction(node, complement);
+        if (fun_name == "in")
+            return visitInFunction(node, complement);
+        if (fun_name == "isNotNull")
+            return visitIsNotNullFunction(node, complement);
+        if (fun_name == "isNull")
+            return visitIsNullFunction(node, complement);
+        if (fun_name == "equals" || fun_name == "notEquals" || fun_name == "less" || fun_name == "greater" || fun_name == "lessOrEquals"
+            || fun_name == "greaterOrEquals")
+            return visitComparisonFunction(node, complement);
+    }
+    catch (...)
+    {
+    }
 
     //TODO:@cdy
     //  if (fun_name == "startsWith")

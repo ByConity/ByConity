@@ -2,6 +2,7 @@ syntax = "proto2";
 package DB.Protos;
 
 import "data_models.proto";
+import "data_models_mv.proto";
 import "cnch_common.proto";
 import "auto_statistics.proto";
 
@@ -204,6 +205,19 @@ message FetchUniqueTableMetaResp {
   optional string exception = 1;
   repeated DataModelPart parts = 2;
   repeated DataModelDeleteBitmap bitmaps = 3;
+}
+
+message FetchCloudTableMetaReq
+{
+  required StorageID storage_id = 1;
+  required uint64 timestamp = 2;
+  repeated int64 bucket_numbers = 3;
+}
+
+message FetchCloudTableMetaResp
+{
+  optional string exception = 1;
+  repeated DataModelPart parts = 2;
 }
 
 message GetTablePartitionInfoReq { repeated DataModelTable tables = 1; }
@@ -433,14 +447,28 @@ message ForceRecalculateMetricsReq { required StorageID storage_id = 1; }
 
 message ForceRecalculateMetricsResp { optional string exception = 1; }
 
-message notifyAccessEntityChangeReq
-{
+message notifyAccessEntityChangeReq {
   required string type = 1;
   required string name = 2;
   required UUID uuid = 3;
 }
 
-message notifyAccessEntityChangeResp
+message notifyAccessEntityChangeResp { optional string exception = 1; }
+
+message getLastModificationTimeHintsReq { required StorageID storage_id = 1; }
+message getLastModificationTimeHintsResp {
+  optional string exception = 1;
+  repeated LastModificationTimeHint last_modification_time_hints = 2;
+}
+
+message handleRefreshTaskOnFinishReq
+{
+  required string task_id = 1;
+  required uint64 txn_id = 2;
+  required StorageID mv_storage_id = 3;
+}
+
+message handleRefreshTaskOnFinishResp
 {
   optional string exception = 1;
 }
@@ -488,6 +516,8 @@ service CnchServerService {
 
   rpc fetchUniqueTableMeta(FetchUniqueTableMetaReq)
       returns(FetchUniqueTableMetaResp);
+
+  rpc fetchCloudTableMeta(FetchCloudTableMetaReq) returns (FetchCloudTableMetaResp);
 
   rpc getTablePartitionInfo(GetTablePartitionInfoReq)
       returns(GetTablePartitionInfoResp);
@@ -566,5 +596,11 @@ service CnchServerService {
   rpc forceRecalculateMetrics(ForceRecalculateMetricsReq)
       returns(ForceRecalculateMetricsResp);
 
-  rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
+  rpc notifyAccessEntityChange(notifyAccessEntityChangeReq)
+      returns(notifyAccessEntityChangeResp);
+  rpc getLastModificationTimeHints(getLastModificationTimeHintsReq)
+      returns(getLastModificationTimeHintsResp);
+
+  rpc handleRefreshTaskOnFinish(handleRefreshTaskOnFinishReq) 
+      returns (handleRefreshTaskOnFinishResp);
 };
