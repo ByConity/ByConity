@@ -637,10 +637,11 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
 
     BlockInputStreams inputs;
     {
-        std::vector<String> fuzzyNameList = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',' , 100/* hard coded max files */);
+        auto max_files = context_ptr->getSettingsRef().fuzzy_max_files;
+        std::vector<String> fuzzyNameList = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',' , max_files);
         std::vector<std::vector<String> > fileNames;
         for (auto fuzzyName : fuzzyNameList)
-            fileNames.push_back(parseDescription(fuzzyName, 0, fuzzyName.length(), '|', 100));
+            fileNames.push_back(parseDescription(fuzzyName, 0, fuzzyName.length(), '|', max_files));
 
         for (auto & vecNames : fileNames)
         {
