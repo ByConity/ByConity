@@ -509,9 +509,6 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeAggregateFunction(ASTFunctionP
         throw Exception("Aggregate function is not supported in " + options.statement_name,
                         ErrorCodes::SYNTAX_ERROR);
 
-    if (!options.select_query)
-        throw Exception("Provide query node if aggregate function is allowed", ErrorCodes::LOGICAL_ERROR);
-
     if (in_aggregate)
         throw Exception("Nested aggregate function is not supported", ErrorCodes::ILLEGAL_AGGREGATION);
 
@@ -525,7 +522,8 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeAggregateFunction(ASTFunctionP
     aggregate_analysis.expression = function;
     aggregate_analysis.function = aggregator;
     aggregate_analysis.parameters = parameters;
-    analysis.aggregate_results[options.select_query].push_back(aggregate_analysis);
+    if (options.select_query)
+        analysis.aggregate_results[options.select_query].push_back(aggregate_analysis);
     in_aggregate = false;
     return {nullptr, aggregate_analysis.function->getReturnType(), column_name};
 }

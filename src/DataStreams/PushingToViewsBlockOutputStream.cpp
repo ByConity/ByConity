@@ -146,8 +146,9 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
         Block output_header;
         if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(view_table.get()))
         {
-            addTableLock(
-                materialized_view->lockForShare(getContext()->getInitialQueryId(), getContext()->getSettingsRef().lock_acquire_timeout));
+            if (materialized_view->async())
+                continue;
+            addTableLock(materialized_view->lockForShare(getContext()->getInitialQueryId(), getContext()->getSettingsRef().lock_acquire_timeout));
 
             StoragePtr target_table;
             if (getContext()->getServerType() == ServerType::cnch_server)

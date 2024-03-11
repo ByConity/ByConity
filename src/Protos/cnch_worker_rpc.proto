@@ -50,6 +50,28 @@ message SubmitManipulationTaskResp
   optional string exception = 1;
 }
 
+// ManipulationTaskParams::type = MvRefresh
+message SubmitMVRefreshTaskReq
+{
+  required uint64 txn_id = 1;
+  required uint64 timestamp = 2;
+
+  required string task_id = 3;
+  required uint32 rpc_port = 4;
+  required StorageID mv_storage_id = 5;
+
+  required string create_table_query = 6;
+  required string drop_partition_query = 7;
+  required string insert_select_query = 8;
+  repeated string target_partitions = 9;
+}
+
+message SubmitMVRefreshTaskResp
+{
+  optional string exception = 1;
+}
+
+
 message SubmitKafkaConsumeTaskReq
 {
   required uint32 type = 1;
@@ -326,6 +348,7 @@ message SendCreateQueryReq
   required uint64 primary_txn_id = 2;
   required uint64 timeout = 3;
   repeated string create_queries = 4;
+  repeated string cnch_table_create_queries = 5;
 }
 
 message SendCreateQueryResp
@@ -496,6 +519,7 @@ service CnchWorkerService
   rpc touchManipulationTasks(TouchManipulationTasksReq) returns (TouchManipulationTasksResp);
   rpc shutdownManipulationTasks(ShutdownManipulationTasksReq) returns (ShutdownManipulationTasksResp);
   rpc getManipulationTasksStatus(GetManipulationTasksStatusReq) returns (GetManipulationTasksStatusResp);
+  rpc submitMVRefreshTask(SubmitMVRefreshTaskReq) returns (SubmitMVRefreshTaskResp);
 
   rpc submitKafkaConsumeTask(SubmitKafkaConsumeTaskReq) returns (SubmitKafkaConsumeTaskResp);
   rpc getConsumerStatus(GetConsumerStatusReq) returns (GetConsumerStatusResp);

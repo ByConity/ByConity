@@ -3550,6 +3550,15 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
         out << "<TR><TD COLSPAN=\"3\">" << dynamic_cast<const FilterStep *>(head_step)->getFilterColumnName() << "</TD></TR>";
     }
 
+    // if (group.getEquivalences())
+    // {
+    //     out << R"(<TR><TD COLSPAN="3">Equivalences:<BR/>)";
+    //     auto map = group.getEquivalences()->representMap();
+    //     for (const auto & item : map)
+    //         out << item.first << ":=" << item.second << "<BR/>";
+    //     out << "</TD></TR>";
+    // }
+
     if (group.isJoinRoot())
     {
         out << "<TR><TD COLSPAN=\"3\">JoinRoot</TD></TR>";
@@ -3709,7 +3718,7 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
             out << "\n";
 
             out << join(
-                winner->getRequireChildren(), [&](const auto & item) { return property_str(item); }, ", ", "child: ")
+                winner->getRequireChildren(), [&](const auto & item) { return property_str(item); }, ", ", "child required: ")
                 << "\n";
             if (is_winner)
                 out << "</B>";

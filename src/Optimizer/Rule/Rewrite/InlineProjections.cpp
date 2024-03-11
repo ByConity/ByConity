@@ -34,18 +34,12 @@ PatternPtr InlineProjections::getPattern() const
 TransformResult InlineProjections::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & parent = node;
-    const auto & step = dynamic_cast<const ProjectionStep &>(*node->getStep());
     auto & child = node->getChildren()[0];
+
+    const auto & step = dynamic_cast<const ProjectionStep &>(*node->getStep());
     const auto & child_step = dynamic_cast<const ProjectionStep &>(*child->getStep());
-    if (step.isFinalProject())
-    {
-        for (const auto & item : child_step.getAssignments())
-        {
-            auto func_count = CollectFuncs::collect(item.second, rule_context.context).size();
-            if (func_count > 0)
-                return {};
-        }
-    }
+    if (step.isFinalProject() && !Utils::isAlias(child_step.getAssignments()))
+        return {};
     return TransformResult::of(inlineProjections(parent, child, rule_context.context, inline_arraysetcheck));
 }
 

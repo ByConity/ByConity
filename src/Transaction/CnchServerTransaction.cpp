@@ -315,7 +315,21 @@ TxnTimestamp CnchServerTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
 
-                bool success = global_context->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+                bool success = false;
+                if (!extern_commit_functions.empty())
+                {
+                    for (auto & txn_f : extern_commit_functions)
+                    {
+                        auto extern_requests = txn_f.commit_func(getContext());
+                        for (auto & req : extern_requests.puts)
+                            requests.AddPut(req);
+                        for (auto & req : extern_requests.deletes)
+                            requests.AddDelete(req.key);
+                    }
+                    success = getContext()->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+                }
+                else
+                    success = global_context->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
 
                 txn_record = std::move(target_record);
 
@@ -400,8 +414,23 @@ TxnTimestamp CnchServerTransaction::abort()
     target_record.setStatus(CnchTransactionStatus::Aborted)
                  .setCommitTs(global_context->getTimestamp())
                  .setMainTableUUID(getMainTableUUID());
-
-    bool success = global_context->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+    bool success = false;
+    Catalog::BatchCommitRequest requests(true, true);
+    Catalog::BatchCommitResponse response;
+    if (!extern_commit_functions.empty())
+    {
+        for (auto & txn_f : extern_commit_functions)
+        {
+            auto extern_requests = txn_f.abort_func(getContext());
+            for (auto & req : extern_requests.puts)
+                requests.AddDelete(req.key);
+            for (auto & req : extern_requests.deletes)
+                requests.AddPut(req);
+        }
+        success = getContext()->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+    }
+    else 
+        success = global_context->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
     txn_record = std::move(target_record);
 
     if (success)

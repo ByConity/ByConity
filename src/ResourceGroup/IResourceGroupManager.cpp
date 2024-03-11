@@ -17,6 +17,7 @@
 #include <common/logger_useful.h>
 // #include <Parsers/ASTCreateMaskingPolicyQuery.h>
 #include <Interpreters/Context.h>
+#include <ResourceGroup/IResourceGroupManager.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
@@ -29,7 +30,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTUpdateQuery.h>
-#include <ResourceGroup/IResourceGroupManager.h>
+#include <Parsers/ASTRefreshQuery.h>
 #include <Storages/AlterCommands.h>
 
 namespace DB
@@ -67,7 +68,11 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
     else if (ast->as<ASTSelectQuery>() || ast->as<ASTSelectWithUnionQuery>())
         return ResourceSelectCase::QueryType::SELECT;
 
-    else if (ast->as<ASTInsertQuery>() || ast->as<ASTDeleteQuery>() || ast->as<ASTUpdateQuery>())
+    else if (ast->as<ASTInsertQuery>()
+        || ast->as<ASTDeleteQuery>()
+        || ast->as<ASTUpdateQuery>()
+        || ast->as<ASTRefreshQuery>()
+    )
         return ResourceSelectCase::QueryType::DATA;
 
     else if (const auto * ast_system = ast->as<ASTSystemQuery>(); ast_system

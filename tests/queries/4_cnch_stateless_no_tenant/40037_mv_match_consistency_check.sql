@@ -1,6 +1,8 @@
 SET enable_optimizer = 1;
 SET enable_materialized_view_rewrite = 1;
-SET enable_materialized_view_rewrite_verbose_log = 1;
+SET enforce_materialized_view_rewrite = 1;
+SET enable_optimizer_fallback=0;
+set enable_materialized_view_union_rewriting = 0;
 SET materialized_view_consistency_check_method = 'PARTITION';
 
 CREATE DATABASE IF NOT EXISTS test_40037;
@@ -43,56 +45,83 @@ AS SELECT
     uid,
     sumState(click) AS sum_click
 FROM base40037
+WHERE event_date = '2023-01-01' 
 GROUP BY server_time_hour, event_date, uid;
 
+-- { echo }
+
 -- not hit mv
-EXPLAIN SELECT
+SELECT
     toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
     event_date,
     uid,
     sum(click) AS sum_click
 FROM base40037
-GROUP BY server_time_hour, event_date, uid;
+GROUP BY server_time_hour, event_date, uid; -- { serverError 3011 }
 
 -- hit mv
-EXPLAIN SELECT
+SELECT
     toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
     event_date,
     uid,
     sum(click) AS sum_click
 FROM base40037
 WHERE event_date = '2023-01-01'
-GROUP BY server_time_hour, event_date, uid;
+GROUP BY server_time_hour, event_date, uid
+ORDER BY server_time_hour, event_date, uid;
+
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+WHERE event_date = '2023-01-01'
+GROUP BY server_time_hour, event_date, uid
+ORDER BY server_time_hour, event_date, uid
+settings enable_materialized_view_rewrite=0;
 
 -- not hit mv
-EXPLAIN SELECT
+SELECT
     toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
     event_date,
     uid,
     sum(click) AS sum_click
 FROM base40037
 WHERE toHour(toDateTime(server_time, 'Europe/Moscow')) = 8
-GROUP BY server_time_hour, event_date, uid;
+GROUP BY server_time_hour, event_date, uid; -- { serverError 3011 }
 
 -- not hit mv
-EXPLAIN SELECT
+SELECT
     toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
     event_date,
     uid,
     sum(click) AS sum_click
 FROM base40037
 WHERE event_date BETWEEN '2023-01-01' AND '2023-01-10'
-GROUP BY server_time_hour, event_date, uid;
+GROUP BY server_time_hour, event_date, uid; -- { serverError 3011 }
 
 -- hit mv
-EXPLAIN SELECT
+SELECT
     toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
     event_date,
     uid,
     sum(click) AS sum_click
 FROM base40037
-WHERE toHour(toDateTime(server_time, 'Europe/Moscow')) IN (9, 10, 11)
-GROUP BY server_time_hour, event_date, uid;
+WHERE toHour(toDateTime(server_time, 'Europe/Moscow')) IN (9, 10, 11) AND event_date = '2023-01-01'
+GROUP BY server_time_hour, event_date, uid
+ORDER BY server_time_hour, event_date, uid;
+
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+WHERE toHour(toDateTime(server_time, 'Europe/Moscow')) IN (9, 10, 11) AND event_date = '2023-01-01'
+GROUP BY server_time_hour, event_date, uid
+ORDER BY server_time_hour, event_date, uid
+settings enable_materialized_view_rewrite=0;
 
 DROP TABLE IF EXISTS mv40037;
 DROP TABLE IF EXISTS mv40037_2;

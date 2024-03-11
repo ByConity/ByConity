@@ -94,6 +94,7 @@
 
 #include <Parsers/formatAST.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <Parsers/queryToString.h>
 
 namespace DB
 {
@@ -655,6 +656,7 @@ void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables(bool do_global)
 {
     if (do_global && !getContext()->getSettingsRef().distributed_perfect_shard)
     {
+        LOG_DEBUG(&Poco::Logger::get("ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables"), "input query-{}", queryToString(query));
         GlobalSubqueriesVisitor::Data subqueries_data(
             getContext(), subquery_depth, isRemoteStorage(), external_tables, subqueries_for_sets, has_global_subqueries);
         GlobalSubqueriesVisitor(subqueries_data).visit(query);

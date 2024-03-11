@@ -37,6 +37,12 @@ public:
         Protos::ExecuteSimpleQueryResp * response,
         google::protobuf::Closure * done) override;
 
+    void submitMVRefreshTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitMVRefreshTaskReq * request,
+        Protos::SubmitMVRefreshTaskResp * response,
+        google::protobuf::Closure * done) override;
+
     void submitManipulationTask(
         google::protobuf::RpcController * cntl,
         const Protos::SubmitManipulationTaskReq * request,

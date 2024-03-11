@@ -99,6 +99,9 @@ public:
      */
     bool forceRecalculate(StoragePtr table);
 
+    std::vector<Protos::LastModificationTimeHint>
+    getLastModificationTimeHints(const ConstStoragePtr & storage, bool allow_regression = false);
+
     bool getPartitionList(const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const PairInt64 & topology_version);
 
     bool getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids, const PairInt64 & topology_version);

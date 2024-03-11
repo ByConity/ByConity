@@ -191,10 +191,6 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             }
         }
 
-        // only disable optimizer when insert in interactive session
-        if (isQueryInInteractiveSession(context, node))
-            support = false;
-
         LOG_DEBUG(
             &Poco::Logger::get("QueryUseOptimizerChecker"),
             fmt::format("support: {}, check: {}", support, check(insert_query->select, context)));

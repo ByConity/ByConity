@@ -1667,6 +1667,7 @@ enum PreloadLevelSettings : UInt64
     M(Float, multi_agg_keys_correlated_coefficient, 0.9, "Coefficient about multi agg keys, the smaller the value, the smaller the estimated agg cardnlity, do nothing when equals 1.0", 0) \
     M(Bool, enable_common_expression_sharing, true, "Whether to share common expression between steps", 0) \
     M(Bool, enable_common_expression_sharing_for_prewhere, true, "Whether to share common expression between steps and PREWHERE", 0) \
+    M(Bool, enable_unalias_symbol_references, true, "Whether to enable unalias symbol references", 0) \
     M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
@@ -1736,12 +1737,13 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(Bool, enable_windows_parallel, false, "Whether run windows in parallel", 0) \
     M(Bool, enable_materialized_view_rewrite, true, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enforce_materialized_view_rewrite, false, "Whether throw exception if materialized view is not applied", 0) \
     M(String, enable_push_partial_block_list, "", "Aggregate names who can push partial agg, split by ',' => axxx,bxxx,cxxx", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
-    M(Bool, enable_materialized_view_rewrite_match_range_filter, false, "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", 0) \
+    M(Bool, enable_materialized_view_join_rewriting, true, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
+    M(Bool, enable_materialized_view_union_rewriting, true, "Whether enable materialized view based rewriter for query using union", 0) \
     M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
     M(UInt64, max_plan_segment_num, 500, "maximum plan segments allowed, 0 means no restriction", 0)\
@@ -1831,11 +1833,11 @@ enum PreloadLevelSettings : UInt64
     \
     M(UInt64, \
       table_partition_metrics_recalculate_recently_used_threshold, \
-      6, \
+      1, \
       "Recalculate partitions/tables that `last_update_time > last_snapshot_time`, in hours.", 0) \
     M(UInt64, \
       table_partition_metrics_recalculate_not_recently_used_threshold, \
-      3, \
+      1, \
       "Recalculate partitions/tables that not recently updated, in days.", 0) \
     M(UInt64, table_partition_metrics_snapshot_threshold, 1, "Snapshot partition/tables that get recently updated, in hours", 0) \
     /* Transaction and catalog */ \
@@ -1896,6 +1898,15 @@ enum PreloadLevelSettings : UInt64
     /** for inverted index*/ \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
     M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
+    /** materialized view async refresh related settings */ \
+    M(Bool, enable_mv_async_insert_overwrite, false, "whether async refresh use insert overwrite instead of drop partition and insert select mode", 0) \
+    M(Bool, enable_non_partitioned_base_refresh_throw_exception, false, "Whether when async refresh non-partitioned base table, throw exception", 0) \
+    M(Bool, async_mv_refresh_offload_mode, false, "offload async mv refresh task to worker.", 0) \
+    M(Bool, async_mv_refresh_task_submit_to_bg_thread, true, "submit async mv refresh task to bg thread.", 0) \
+    M(Bool, async_mv_refresh_task_bsp_mode, true, "whether to execute async mv refresh task in bsp mode.", 0) \
+    M(UInt64, max_server_refresh_materialized_view_task_num, 10, "refresh materialized async max thread num in server.", 0) \
+    \
+
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -2099,7 +2110,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_metric, true, "whether enable exchange metric collection", 0) \
     M(UInt64, exchange_local_no_repartition_extra_threads, 32, "Extra threads for pipeline which reading data from LOCAL_NO_NEED_REPARTITION exchange", 0) \
     M(UInt64, filtered_ratio_to_use_skip_read, 0, "Ratio of origin rows to filtered rows when using skip reading, 0 means disable", 0) \
-
+    \
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

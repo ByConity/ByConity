@@ -35,6 +35,7 @@
 #include <DataTypes/ObjectUtils.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/CnchRefreshMaterializedViewThread.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/DedupWorkerStatus.h>
@@ -339,6 +340,7 @@ void CnchServerServiceImpl::commitTransaction(
             }
         });
 }
+
 void CnchServerServiceImpl::precommitTransaction(
     google::protobuf::RpcController * /*cntl*/,
     const Protos::PrecommitTransactionReq * request,
@@ -1561,6 +1563,29 @@ void CnchServerServiceImpl::reportSyncFailedForSyncThread(
 }
 #endif
 
+void CnchServerServiceImpl::handleRefreshTaskOnFinish(
+    google::protobuf::RpcController *,
+    const Protos::handleRefreshTaskOnFinishReq * request,
+    Protos::handleRefreshTaskOnFinishResp * response,
+    google::protobuf::Closure *done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto storage_id = RPCHelpers::createStorageID(request->mv_storage_id());
+        auto bg_thread = getContext()->getCnchBGThread(CnchBGThreadType::CnchRefreshMaterializedView, storage_id);
+
+        auto * mv_refresh_thread = dynamic_cast<CnchRefreshMaterializedViewThread *>(bg_thread.get());
+        mv_refresh_thread->handleRefreshTaskOnFinish(request->task_id(), request->txn_id());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
 void CnchServerServiceImpl::executeOptimize(
     google::protobuf::RpcController *,
     const Protos::ExecuteOptimizeQueryReq * request,
@@ -1571,7 +1596,7 @@ void CnchServerServiceImpl::executeOptimize(
         done,
         response,
         [request = request, response = response, done = done, global_context = getContext(), log = log] {
-            
+
             brpc::ClosureGuard done_guard(done);
             try
             {
@@ -1630,6 +1655,32 @@ void CnchServerServiceImpl::forceRecalculateMetrics(
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
         RPCHelpers::handleException(response->mutable_exception());
     }
+}
+
+void CnchServerServiceImpl::getLastModificationTimeHints(
+    google::protobuf::RpcController *,
+    const Protos::getLastModificationTimeHintsReq * request,
+    Protos::getLastModificationTimeHintsResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+
+            auto istorage = gc->getCnchCatalog()->getTable(*gc, storage_id.database_name, storage_id.table_name);
+
+            std::vector<Protos::LastModificationTimeHint> hints = gc->getCnchCatalog()->getLastModificationTimeHints(istorage);
+
+            *response->mutable_last_modification_time_hints() = {hints.begin(), hints.end()};
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
 }
 
 void CnchServerServiceImpl::notifyAccessEntityChange(

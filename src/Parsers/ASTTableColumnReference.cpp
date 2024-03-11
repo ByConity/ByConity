@@ -40,6 +40,6 @@ void ASTTableColumnReference::appendColumnName(WriteBuffer & buffer) const
 
 void ASTTableColumnReference::formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const
 {
-    settings.writeIdentifier(column_name);
+    writeString(getID('.'), settings.ostr);
 }
 }

@@ -39,6 +39,7 @@ namespace Protos
 
 class ICnchTransaction;
 struct PrunedPartitions;
+class StorageCloudMergeTree;
 
 class CnchServerClient : public RpcClientBase
 {
@@ -148,6 +149,9 @@ public:
         const cppkafka::TopicPartitionList & tpl = {},
         const MySQLBinLogInfo & binlog = {});
 
+    MergeTreeDataPartsCNCHVector fetchCloudTableMeta(
+        const StorageCloudMergeTree & storage, const TxnTimestamp & ts, const std::unordered_set<Int64> & bucket_numbers = {});
+
     google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
     getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
@@ -173,6 +177,8 @@ public:
 
     UInt32 reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name);
 
+    void handleRefreshTaskOnFinish(StorageID & mv_storage_id, String task_id, Int64 txn_id);
+
     void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms);
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name);
 
@@ -183,7 +189,9 @@ public:
 #endif
 
     void forceRecalculateMetrics(const StorageID & storage_id);
-    
+
+    std::vector<Protos::LastModificationTimeHint> getLastModificationTimeHints(const StorageID & storage_id);
+
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid);
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;

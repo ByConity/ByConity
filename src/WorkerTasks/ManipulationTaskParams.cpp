@@ -67,6 +67,9 @@ String ManipulationTaskParams::toDebugString() const
     if (mutation_commit_time)
         oss << " mutation_commit_time: " << mutation_commit_time;
 
+    if (last_modification_time)
+        oss << " last_modification_time: " << last_modification_time;
+
     return oss.str();
 }
 

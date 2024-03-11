@@ -150,9 +150,11 @@ class ZooKeeperLog;
 class QueryMetricLog;
 class QueryWorkerMetricLog;
 class CnchQueryLog;
+class ViewRefreshTaskLog;
 class AutoStatsTaskLog;
 struct QueryMetricElement;
 struct QueryWorkerMetricElement;
+struct ViewRefreshTaskLogElement;
 using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
 using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 struct ProcessorProfileLogElement;
@@ -1274,10 +1276,12 @@ public:
     void initializeCnchSystemLogs();
     std::shared_ptr<QueryMetricLog> getQueryMetricsLog() const;
     void insertQueryMetricsElement(const QueryMetricElement & element); /// Add the metrics element to the background thread for flushing
+    void insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element) const;
     std::shared_ptr<QueryWorkerMetricLog> getQueryWorkerMetricsLog() const;
     void insertQueryWorkerMetricsElement(
         const QueryWorkerMetricElement & element); /// Add the metrics element to the background thread for flushing
     std::shared_ptr<CnchQueryLog> getCnchQueryLog() const;
+    std::shared_ptr<ViewRefreshTaskLog> getViewRefreshTaskLog() const;
 
     const MergeTreeSettings & getMergeTreeSettings(bool skip_unknown_settings = false) const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;

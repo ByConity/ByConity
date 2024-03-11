@@ -1,4 +1,5 @@
-#include <memory>
+#include <QueryPlan/TableWriteStep.h>
+
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
@@ -9,10 +10,10 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/TableWriteTransform.h>
 #include <QueryPlan/ITransformingStep.h>
-#include <QueryPlan/TableWriteStep.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Common/RpcClientPool.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <Parsers/ASTSerDerHelper.h>
 
 namespace DB
 {
@@ -46,7 +47,8 @@ BlockOutputStreams TableWriteStep::createOutputStream(
     Block & header,
     size_t max_threads,
     bool no_destination,
-    bool no_squash)
+    bool no_squash,
+    ASTPtr query)
 {
     BlockOutputStreams out_streams;
     size_t out_streams_size = 1;
@@ -63,10 +65,10 @@ BlockOutputStreams TableWriteStep::createOutputStream(
         /// NOTE: we explicitly ignore bound materialized views when inserting into Kafka Storage.
         ///       Otherwise we'll get duplicates when MV reads same rows again from Kafka.
         if (target_table->noPushingToViews() && !no_destination)
-            out = target_table->write(nullptr, metadata_snapshot, settings.context);
+            out = target_table->write(query, metadata_snapshot, settings.context);
         else
             out = std::make_shared<PushingToViewsBlockOutputStream>(
-                target_table, metadata_snapshot, settings.context, ASTPtr(), no_destination);
+                target_table, metadata_snapshot, settings.context, query, no_destination);
 
         /// Note that we wrap transforms one on top of another, so we write them in reverse of data processing order.
 
@@ -129,20 +131,10 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
         case TargetType::INSERT: {
             auto * insert_target = dynamic_cast<TableWriteStep::InsertTarget *>(target.get());
             auto target_storage = DatabaseCatalog::instance().getTable(insert_target->getStorageID(), settings.context);
-
-            if (settings.context->getCurrentTransaction() == nullptr || !settings.context->getCurrentTransaction()->isSecondary())
-            {
-                auto host_ports = settings.context->getCnchTopologyMaster()->getTargetServer(
-                    UUIDHelpers::UUIDToString(target_storage->getStorageUUID()), target_storage->getServerVwName(), true);
-                auto server_client = host_ports.empty() ? settings.context->getCnchServerClientPool().get()
-                                                        : settings.context->getCnchServerClientPool().get(host_ports);
-                auto txn = std::make_shared<CnchWorkerTransaction>(settings.context->getGlobalContext(), server_client);
-                const_cast<Context *>(settings.context.get())->setCurrentTransaction(txn);
-            }
-
+            
             auto insert_target_header = getHeader(insert_target->getColumns());
             auto out_streams = createOutputStream(
-                target_storage, settings, insert_target_header, pipeline.getNumThreads(), false, false);
+                target_storage, settings, insert_target_header, pipeline.getNumThreads(), false, false, insert_target->getQuery());
 
             if (out_streams.empty())
                 throw Exception("No output stream when transfrom TableWriteStep", ErrorCodes::LOGICAL_ERROR);
@@ -205,7 +197,7 @@ void TableWriteStep::allocate(const ContextPtr & context)
 {
     auto storage_id = target->getStorage()->prepareTableWrite(context);
     if (auto * input_target = dynamic_cast<InsertTarget *>(target.get()))
-        target = std::make_shared<InsertTarget>(input_target->getStorage(), storage_id, input_target->getColumns());
+        target = std::make_shared<InsertTarget>(input_target->getStorage(), storage_id, input_target->getColumns(), input_target->getQuery());
     else
         throw Exception("unknown TableWrite::Target", ErrorCodes::LOGICAL_ERROR);
 }
@@ -241,6 +233,7 @@ void TableWriteStep::InsertTarget::toProtoImpl(Protos::TableWriteStep::InsertTar
     storage_id.toProto(*proto.mutable_storage_id());
     for (const auto & element : columns)
         element.toProto(*proto.add_columns());
+    serializeASTToProto(query, *proto.mutable_query());
 }
 
 std::shared_ptr<TableWriteStep::InsertTarget>
@@ -255,7 +248,11 @@ TableWriteStep::InsertTarget::createFromProtoImpl(const Protos::TableWriteStep::
         element.fillFromProto(proto_element);
         columns.emplace_back(std::move(element));
     }
-    auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns);
+    ASTPtr query;
+    if (proto.has_query())
+        query = deserializeASTFromProto(proto.query());
+
+    auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns, query);
 
     return step;
 }

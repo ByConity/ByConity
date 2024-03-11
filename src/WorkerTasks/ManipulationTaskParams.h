@@ -20,6 +20,8 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MutationCommands.h>
+#include <Storages/StorageMaterializedView.h>
+
 #include <Transaction/TxnTimestamp.h>
 #include <WorkerTasks/ManipulationType.h>
 
@@ -50,7 +52,11 @@ struct ManipulationTaskParams
     TxnTimestamp columns_commit_time;
     TxnTimestamp mutation_commit_time;
 
+    UInt64 last_modification_time{0}; /// Used by merged & dropped parts.
+
     std::shared_ptr<MutationCommands> mutation_commands;
+
+    AsyncRefreshParamPtr mv_refresh_param;
 
     explicit ManipulationTaskParams(StoragePtr s) : storage(std::move(s)) {}
     ManipulationTaskParams(const ManipulationTaskParams &) = default;

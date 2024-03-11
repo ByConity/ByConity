@@ -47,12 +47,13 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
     {
         if (scope.isBucketLock())
         {
-            for (auto & bucket : scope.getBuckets())
+            for (const auto & bucket : scope.getBuckets())
             {
                 auto lock_info = std::make_shared<LockInfo>(txn_id);
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
-                lock_info->setUUID(storage.getStorageUUID());
+                /// TODO: (lta, zuochuang.zema) use a separated prefix.
+                lock_info->setUUIDAndPrefix(storage.getStorageUUID());
                 lock_info->setBucket(bucket);
                 res.push_back(std::move(lock_info));
             }
@@ -62,7 +63,7 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
             auto lock_info = std::make_shared<LockInfo>(txn_id);
             lock_info->setMode(LockMode::X);
             lock_info->setTimeout(timeout_ms);
-            lock_info->setUUID(storage.getStorageUUID());
+            lock_info->setUUIDAndPrefix(storage.getStorageUUID());
             res.push_back(std::move(lock_info));
         }
     }
@@ -70,12 +71,12 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
     {
         if (scope.isBucketLock())
         {
-            for (auto & bucket_with_partition : scope.getBucketWithPartitionSet())
+            for (const auto & bucket_with_partition : scope.getBucketWithPartitionSet())
             {
                 auto lock_info = std::make_shared<LockInfo>(txn_id);
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
-                lock_info->setUUID(storage.getStorageUUID());
+                lock_info->setUUIDAndPrefix(storage.getStorageUUID());
                 lock_info->setPartition(bucket_with_partition.first);
                 lock_info->setBucket(bucket_with_partition.second);
                 res.push_back(std::move(lock_info));
@@ -83,12 +84,12 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
         }
         else
         {
-            for (auto & partition : scope.getPartitions())
+            for (const auto & partition : scope.getPartitions())
             {
                 auto lock_info = std::make_shared<LockInfo>(txn_id);
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
-                lock_info->setUUID(storage.getStorageUUID());
+                lock_info->setUUIDAndPrefix(storage.getStorageUUID());
                 lock_info->setPartition(partition);
                 res.push_back(std::move(lock_info));
             }

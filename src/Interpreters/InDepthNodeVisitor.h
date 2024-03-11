@@ -59,6 +59,9 @@ private:
 template <typename Matcher, bool top_to_bottom>
 using ConstInDepthNodeVisitor = InDepthNodeVisitor<Matcher, top_to_bottom, const ASTPtr>;
 
+template <typename Matcher, bool top_to_bottom>
+using MutableInDepthNodeVisitor = InDepthNodeVisitor<Matcher, top_to_bottom, ASTPtr>;
+
 struct NeedChild
 {
     using Condition = bool (*)(const ASTPtr & node, const ASTPtr & child);

@@ -42,9 +42,10 @@ public:
         bool is_cnch_merge_tree;
         bool is_cnch_kafka;
         bool is_cnch_unique;
+        bool is_cnch_refresh_materialized_view;
     };
 
-    StorageTrait(Param param);
+    explicit StorageTrait(Param param);
     StorageTrait() = default;
     bool isCnchMergeTree() const
     {
@@ -61,15 +62,21 @@ public:
         return data[IS_CNCH_MERGE_TREE_UNIQUE_FLAG];
     }
 
-    const std::bitset<3> & getData() const /// for testing
+    bool isCnchRefreshMaterializedView() const
+    {
+        return data[IS_CNCH_REFRESH_MATERIALIZED_VIEW];
+    }
+
+    const std::bitset<4> & getData() const /// for testing
     {
         return data;
     }
 private:
-    std::bitset<3> data;
+    std::bitset<4> data;
     static constexpr int IS_CNCH_MERGE_TREE_FLAG = 0;
     static constexpr int IS_CNCH_KAFKA_FLAG = 1;
     static constexpr int IS_CNCH_MERGE_TREE_UNIQUE_FLAG = 2;
+    static constexpr int IS_CNCH_REFRESH_MATERIALIZED_VIEW = 3;
 };
 
 bool operator == (const StorageTrait & lhs, const StorageTrait & rhs);
