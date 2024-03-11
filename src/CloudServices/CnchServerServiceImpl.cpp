@@ -596,6 +596,50 @@ void CnchServerServiceImpl::fetchDataParts(
     });
 }
 
+void CnchServerServiceImpl::fetchDeleteBitmaps(
+    ::google::protobuf::RpcController *,
+    const ::DB::Protos::FetchDeleteBitmapsReq * request,
+    ::DB::Protos::FetchDeleteBitmapsResp * response,
+    ::google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            StoragePtr storage
+                = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(), TxnTimestamp{request->table_commit_time()});
+
+            auto calculated_host
+                = gc->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true).getRPCAddress();
+            if (request->remote_host() != calculated_host)
+                throw Exception(
+                    "Fetch parts failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()
+                        + ", calculated_host: " + calculated_host,
+                    ErrorCodes::LOGICAL_ERROR);
+
+            if (!isLocalServer(calculated_host, std::to_string(gc->getRPCPort())))
+                throw Exception(
+                    "Fetch parts failed because calculated host (" + calculated_host + ") is not remote server.",
+                    ErrorCodes::LOGICAL_ERROR);
+
+            Strings partition_list;
+            for (const auto & partition : request->partitions())
+                partition_list.emplace_back(partition);
+
+            auto bitmaps = gc->getCnchCatalog()->getDeleteBitmapsInPartitions(
+                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr);
+            auto & mutable_parts = *response->mutable_delete_bitmaps();
+            for (const auto & bitmap : bitmaps)
+                *mutable_parts.Add() = *bitmap->getModel();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
 void CnchServerServiceImpl::fetchPartitions(
     [[maybe_unused]] ::google::protobuf::RpcController* controller,
     [[maybe_unused]] const ::DB::Protos::FetchPartitionsReq* request,

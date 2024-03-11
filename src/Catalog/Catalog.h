@@ -264,7 +264,10 @@ public:
     /////////////////////////////
 
     /// fetch all delete bitmaps <= ts in the given partitions
-    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
+    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitions(
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context = nullptr);
+    DeleteBitmapMetaPtrVector
+    getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
     DeleteBitmapMetaPtrVector getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
 
     /// get bitmaps by keys
@@ -820,6 +823,9 @@ private:
         const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash = false);
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false);
+    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts);
+
     void detachOrAttachDictionary(const String & db, const String & name, bool is_detach);
     void moveTableIntoTrash(
         Protos::DataModelTable & table,

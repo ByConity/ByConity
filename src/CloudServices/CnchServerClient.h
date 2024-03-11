@@ -72,6 +72,7 @@ public:
     void removeIntermediateData(const TxnTimestamp & txn_id);
 
     ServerDataPartsVector fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
+    DeleteBitmapMetaPtrVector fetchDeleteBitmaps(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
 
     PrunedPartitions fetchPartitions(
         const String & remote_host,
@@ -189,7 +190,6 @@ public:
 #endif
 
     void forceRecalculateMetrics(const StorageID & storage_id);
-
     std::vector<Protos::LastModificationTimeHint> getLastModificationTimeHints(const StorageID & storage_id);
 
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid);

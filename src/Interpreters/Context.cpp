@@ -4989,7 +4989,7 @@ void Context::setPartCacheManager()
     if (shared->cache_manager)
         throw Exception("Part cache manager has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->cache_manager = std::make_shared<PartCacheManager>(shared_from_this());
+    shared->cache_manager = std::make_shared<PartCacheManager>(shared_from_this(), total_memory_tracker.getHardLimit());
 }
 
 PartCacheManagerPtr Context::getPartCacheManager() const

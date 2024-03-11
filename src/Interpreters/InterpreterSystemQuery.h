@@ -93,7 +93,7 @@ private:
 
     void dumpCnchServerStatus();
 
-    void dropCnchPartCache();
+    void dropCnchMetaCache(bool skip_part_cache = false, bool skip_delete_bitmap_cache = false);
 
     void dropChecksumsCache(const StorageID & table_id) const;
 

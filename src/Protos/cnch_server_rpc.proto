@@ -191,6 +191,20 @@ message FetchDataPartsResp {
   repeated DataModelPart parts = 2;
 }
 
+message FetchDeleteBitmapsReq {
+  required string remote_host = 1;
+  required string database = 2;
+  required string table = 3;
+  required uint64 table_commit_time = 4;
+  repeated string partitions = 5;
+  required uint64 timestamp = 6;
+}
+
+message FetchDeleteBitmapsResp {
+  optional string exception = 1;
+  repeated DataModelDeleteBitmap delete_bitmaps = 2;
+}
+
 message FetchUniqueTableMetaReq {
   // storage id for the cnch table
   required StorageID storage_id = 1;
@@ -511,6 +525,8 @@ service CnchServerService {
       returns(BackgroundThreadNumResp);
 
   rpc fetchDataParts(FetchDataPartsReq) returns(FetchDataPartsResp);
+
+  rpc fetchDeleteBitmaps(FetchDeleteBitmapsReq) returns(FetchDeleteBitmapsResp);
 
   rpc fetchPartitions(FetchPartitionsReq) returns(FetchPartitionsResp);
 

@@ -41,6 +41,24 @@ createPart(const String & partition_id, UInt64 min_block, UInt64 max_block, UInt
     return part_model;
 }
 
+DeleteBitmapMetaPtrVector createDeleteBitmaps(const MergeTreeMetaBase & storage, String partition_id, size_t len = 5)
+{
+    DeleteBitmapMetaPtrVector ret;
+    for (int i = 0; i < len; ++i) {
+        Protos::DataModelDeleteBitmap bitmap;
+        bitmap.set_partition_id(partition_id);
+        bitmap.set_part_min_block(123 + i);
+        bitmap.set_part_max_block(123 + i);
+        bitmap.set_reserved(111);
+        bitmap.set_type(DB::Protos::DataModelDeleteBitmap_Type_Delta);
+        bitmap.set_txn_id(9999);
+        bitmap.set_commit_time(3123);
+
+        ret.emplace_back(std::make_shared<DeleteBitmapMeta>(storage, std::make_shared<Protos::DataModelDeleteBitmap>(bitmap)));
+    }
+    return ret;
+}
+
 Protos::DataModelPartVector createPartBatch(const String & partition_id, size_t count, size_t start_block_index = 0)
 {
     Protos::DataModelPartVector res;
@@ -52,13 +70,13 @@ Protos::DataModelPartVector createPartBatch(const String & partition_id, size_t 
     return res;
 }
 
-DataModelPartWithNameVector createPartsBatch(const String & partition_id, size_t count) {
-    DataModelPartWithNameVector ret;
+DataModelPartWrapperVector createPartsBatch(const String & partition_id, size_t count, StoragePtr storage)
+{
+    DataModelPartWrapperVector ret;
+    const auto & merge_tree = dynamic_cast<const MergeTreeMetaBase &>(*storage);
     for (size_t i = 0; i< count; i++) {
         DataModelPartPtr part_model = createPart(partition_id, i, i, 0);
-        auto part_info = createPartInfoFromModel(part_model->part_info());
-        String part_name = part_info->getPartName();
-        ret.emplace_back(std::make_shared<DataModelPartWithName>(std::move(part_name), std::move(part_model)));
+        ret.emplace_back(createPartWrapperFromModel(merge_tree, Protos::DataModelPart(*part_model)));
     }
     return ret;
 }
@@ -96,7 +114,7 @@ TEST_F(CacheManagerTest, CreateTable)
  */
 TEST_F(CacheManagerTest, GetTableFromCache)
 {
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
     String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
     StoragePtr storage = CacheTestMock::createTable(query, getContext().context);
 
@@ -136,7 +154,7 @@ TEST_F(CacheManagerTest, GetTableFromCache)
 TEST_F(CacheManagerTest, AlterTableContention)
 {
     auto context = getContext().context;
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, 0, true);
     auto topology_version = PairInt64{1, 1};
     UInt64 ts_commit = 1, ts_t2 = 2;
 
@@ -183,7 +201,7 @@ TEST_F(CacheManagerTest, AlterTableContention)
 TEST_F(CacheManagerTest, GetPartsFromCache)
 {
     auto context = getContext().context;
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, 0, true);
     auto topology_version = PairInt64{1, 1};
 
     // mock storage
@@ -219,7 +237,7 @@ TEST_F(CacheManagerTest, GetPartsFromCache)
     (*it_p2)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
         load_from_func = true;
         return {};
     };
@@ -276,7 +294,7 @@ TEST_F(CacheManagerTest, GetPartsFromCache)
 /// Test the functionality of `updateTableNameInMetaEntry`.
 TEST_F(CacheManagerTest, RenameTable)
 {
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
     String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
     StoragePtr storage = CacheTestMock::createTable(query, getContext().context);
 
@@ -298,8 +316,7 @@ TEST_F(CacheManagerTest, RenameTable)
 }
 
 TEST_F(CacheManagerTest, GetAllActiveTables) {
-
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
     String tb1_query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
     String tb2_query = "create table gztest.test2 UUID 'babaf814-7a2c-11ee-b6e0-bfbb87d31a0b' (id Int32) ENGINE=CnchMergeTree order by id";
     StoragePtr storage_1 = CacheTestMock::createTable(tb1_query, getContext().context);
@@ -331,8 +348,7 @@ TEST_F(CacheManagerTest, GetAllActiveTables) {
 }
 
 TEST_F(CacheManagerTest, getAndSetStatus) {
-
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
     String tb1_query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
     StoragePtr storage_1 = CacheTestMock::createTable(tb1_query, getContext().context);
     String storage_1_uuid = UUIDHelpers::UUIDToString(storage_1->getStorageUUID());
@@ -348,7 +364,7 @@ TEST_F(CacheManagerTest, getAndSetStatus) {
     (*it_p0)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
         load_from_func = true;
         return {};
     };
@@ -388,7 +404,7 @@ TEST_F(CacheManagerTest, getAndSetStatus) {
 }
 
 TEST_F(CacheManagerTest, InvalidPartCache) {
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
     String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
     StoragePtr storage = CacheTestMock::createTable(query, getContext().context);
     auto current_topology_version = PairInt64{1, 1};
@@ -403,7 +419,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
     (*it_p0)->cache_status = CacheStatus::LOADED;
 
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
         load_from_func = true;
         return {};
     };
@@ -413,7 +429,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
         *storage, {"1000", "1001"}, load_func, TxnTimestamp::maxTS(), current_topology_version).size(), 10);
     EXPECT_EQ(load_from_func, false);
 
-    cache_manager->invalidPartCache(storage->getStorageUUID());
+    cache_manager->invalidPartAndDeleteBitmapCache(storage->getStorageUUID());
 
     EXPECT_EQ(cache_manager->getOrSetServerDataPartsInPartitions(
         *storage, {"1000", "1001"}, load_func, TxnTimestamp::maxTS(), current_topology_version).size(), 0);
@@ -423,9 +439,9 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
     current_topology_version = PairInt64{2, 1};
     cache_manager->mayUpdateTableMeta(*storage, current_topology_version);
 
-    auto new_load_func = [&](const Strings &, const Strings &) -> DataModelPartWithNameVector {
+    auto new_load_func = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
         load_from_func = true;
-        return CacheTestMock::createPartsBatch("1000", 10);
+        return CacheTestMock::createPartsBatch("1000", 10, storage);
     };
     EXPECT_EQ(parts_models.parts().size(), 10);
 
@@ -456,7 +472,7 @@ TEST_F(CacheManagerTest, DelayTest) {
 
     std::vector<std::thread> tds;
     auto context = getContext().context;
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, 0, true);
 
     // mock storage
     String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
@@ -475,7 +491,7 @@ TEST_F(CacheManagerTest, DelayTest) {
 
 
     tds.emplace_back([cache_manager, storage, current_topology_version] {
-        auto load_func = [](const Strings &, const Strings &) -> DataModelPartWithNameVector {
+        auto load_func = [](const Strings &, const Strings &) ->  DataModelPartWrapperVector{
             std::this_thread::sleep_for(100ms);
             throw Poco::Exception("");
         };
@@ -489,9 +505,9 @@ TEST_F(CacheManagerTest, DelayTest) {
 
     tds.emplace_back([cache_manager, storage, current_topology_version] {
         std::this_thread::sleep_for(50ms);
-        auto load_func = [](const Strings &, const Strings &) -> DataModelPartWithNameVector {
+        auto load_func = [storage](const Strings &, const Strings &) -> DataModelPartWrapperVector {
             std::this_thread::sleep_for(100ms);
-            return CacheTestMock::createPartsBatch("1000", 10);
+            return CacheTestMock::createPartsBatch("1000", 10, storage);
         };
 
         ServerDataPartsVector res = cache_manager->getOrSetServerDataPartsInPartitions(
@@ -508,7 +524,7 @@ TEST_F(CacheManagerTest, DelayTest) {
 }
 
 TEST_F(CacheManagerTest, AsyncReset) {
-    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, true);
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
     String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
     StoragePtr storage = CacheTestMock::createTable(query, getContext().context);
     auto current_topology_version = PairInt64{1, 1};
@@ -577,4 +593,47 @@ TEST_F(CacheManagerTest, RawStorageCacheRenameTest)
     EXPECT_EQ(get_by_uuid, nullptr);
     EXPECT_NE(get_by_name, nullptr);
     EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
+}
+
+TEST_F(CacheManagerTest, DeleteBitmapsWithExtraPartitionMinmax) {
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
+    String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
+    StoragePtr storage = CacheTestMock::createTable(query, getContext().context);
+    const auto & merge_tree = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+
+    auto topology_version = PairInt64{1, 1};
+
+    auto bitmaps = CacheTestMock::createDeleteBitmaps(merge_tree, "123");
+
+    cache_manager->insertDeleteBitmapsIntoCache(*storage, bitmaps, topology_version, {});
+
+    /// When insert delete bitmaps without extra info, getOrSet will fail.
+    /// It is because we need extra info for partition_info to build,
+    /// and partition_info is responsible to index delete bitmaps when querys come.
+    bool load_from_func = false;
+    auto load_func = [&](const Strings &, const Strings &) -> DeleteBitmapMetaPtrVector {
+        load_from_func = true;
+        return bitmaps;
+    };
+
+    auto bitmaps_from_cache
+        = cache_manager->getOrSetDeleteBitmapInPartitions(*storage, {"123"}, load_func, TxnTimestamp::maxTS(), topology_version);
+
+    /// From KV.
+    EXPECT_EQ(bitmaps_from_cache.size(), 0);
+
+    bitmaps_from_cache
+        = cache_manager->getOrSetDeleteBitmapInPartitions(*storage, {"123"}, load_func, TxnTimestamp::maxTS(), topology_version);
+
+    /// From cache.
+    EXPECT_EQ(bitmaps_from_cache.size(), 0);
+
+    auto parts = CacheTestMock::createPartBatch("123", 5);
+    cache_manager->insertDeleteBitmapsIntoCache(*storage, bitmaps, topology_version, parts);
+
+
+    bitmaps_from_cache
+        = cache_manager->getOrSetDeleteBitmapInPartitions(*storage, {"123"}, load_func, TxnTimestamp::maxTS(), topology_version);
+
+    EXPECT_EQ(bitmaps_from_cache.size(), 5);
 }

@@ -520,8 +520,14 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::DUMP_SERVER_STATUS:
             dumpCnchServerStatus();
             break;
+        case Type::DROP_CNCH_META_CACHE:
+            dropCnchMetaCache();
+            break;
         case Type::DROP_CNCH_PART_CACHE:
-            dropCnchPartCache();
+            dropCnchMetaCache(false, true);
+            break;
+        case Type::DROP_CNCH_DELETE_BITMAP_CACHE:
+            dropCnchMetaCache(true);
             break;
         case Type::SYNC_DEDUP_WORKER:
             executeSyncDedupWorker(system_context);
@@ -1222,13 +1228,14 @@ void InterpreterSystemQuery::dumpCnchServerStatus()
         topology_master->dumpStatus();
 }
 
-void InterpreterSystemQuery::dropCnchPartCache()
+void InterpreterSystemQuery::dropCnchMetaCache(bool skip_part_cache, bool skip_delete_bitmap_cache)
 {
     auto local_context = getContext();
     if (local_context->getPartCacheManager())
     {
         auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
-        local_context->getPartCacheManager()->invalidPartCache(storage->getStorageUUID());
+        local_context->getPartCacheManager()->invalidPartAndDeleteBitmapCache(
+            storage->getStorageUUID(), skip_part_cache, skip_delete_bitmap_cache);
         LOG_DEBUG(log, "Dropped cnch part cache of table {}", table_id.getNameForLogs());
     }
 }

@@ -76,8 +76,12 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP QUERY CACHE";
         case Type::DROP_CHECKSUMS_CACHE:
             return "DROP CHECKSUMS CACHE";
+        case Type::DROP_CNCH_META_CACHE:
+            return "DROP CNCH CACHE";
         case Type::DROP_CNCH_PART_CACHE:
             return "DROP CNCH PART CACHE";
+        case Type::DROP_CNCH_DELETE_BITMAP_CACHE:
+            return "DROP CNCH DELETE BITMAP CACHE";
 #if USE_EMBEDDED_COMPILER
         case Type::DROP_COMPILED_EXPRESSION_CACHE:
             return "DROP COMPILED EXPRESSION CACHE";
@@ -334,7 +338,9 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::RESTART_CONSUME
             || type == Type::RESYNC_MATERIALIZEDMYSQL_TABLE
             || type == Type::SYNC_DEDUP_WORKER
+            || type == Type::DROP_CNCH_META_CACHE
             || type == Type::DROP_CNCH_PART_CACHE
+            || type == Type::DROP_CNCH_DELETE_BITMAP_CACHE
             || type == Type::START_CLUSTER
             || type == Type::STOP_CLUSTER)
     {
