@@ -1338,6 +1338,10 @@ public:
     ApplicationType getApplicationType() const;
     void setApplicationType(ApplicationType type);
 
+    bool getIsRestrictSettingsToWhitelist() const;
+    void setIsRestrictSettingsToWhitelist(bool is_restrict);
+    void addRestrictSettingsToWhitelist(const std::vector<String>& name) const;
+
     /// Sets default_profile and system_profile, must be called once during the initialization
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
