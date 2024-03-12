@@ -52,7 +52,7 @@ CloudUniqueMergeTreeMergeTask::CloudUniqueMergeTreeMergeTask(
 DeleteBitmapMetaPtrVector
 CloudUniqueMergeTreeMergeTask::getDeleteBitmapMetas(Catalog::Catalog & catalog, const IMergeTreeDataPartsVector & parts, TxnTimestamp ts)
 {
-    DeleteBitmapMetaPtrVector all_bitmaps = catalog.getDeleteBitmapsInPartitions(params.storage, {partition_id}, ts);
+    DeleteBitmapMetaPtrVector all_bitmaps = catalog.getDeleteBitmapsInPartitionsFromMetastore(params.storage, {partition_id}, ts);
 
     /// construct bitmap version chain, remove invisible ones
     DeleteBitmapMetaPtrVector bitmaps;

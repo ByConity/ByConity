@@ -553,7 +553,7 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
 
     auto log_dedup_detail = [&](const DedupTask & task, const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts) {
         WriteBufferFromOwnString msg;
-        msg << "Start to dedup in txn_id: " << txn_id.toUInt64() << ", dedup level info: " << task.getDedupLevelInfo() << ",, visible_parts: [";
+        msg << "Start to dedup in txn_id: " << txn_id.toUInt64() << ", dedup level info: " << task.getDedupLevelInfo() << ", visible_parts: [";
         for (size_t i = 0; i < visible_parts.size(); ++i)
         {
             if (i > 0)

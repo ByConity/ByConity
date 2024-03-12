@@ -100,6 +100,12 @@ public:
         ::DB::Protos::FetchDataPartsResp * response,
         ::google::protobuf::Closure * done) override;
 
+    void fetchDeleteBitmaps(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::FetchDeleteBitmapsReq * request,
+        ::DB::Protos::FetchDeleteBitmapsResp * response,
+        ::google::protobuf::Closure * done) override;
+
     void fetchPartitions(
         google::protobuf::RpcController * cntl,
         const ::DB::Protos::FetchPartitionsReq* request,

@@ -49,7 +49,7 @@ namespace ErrorCodes
     extern const int EMPTY_PARTITION_IN_DATA_MODEL_PART;
 }
 
-DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, Protos::DataModelPart && part_model, String && part_name)
+DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart && part_model, const String && part_name)
 {
     DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(std::move(part_model), std::move(part_name));
 
@@ -68,7 +68,7 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
     return part_model_wrapper;
 }
 
-DataModelPartWrapperPtr createPartWrapperFromModelBasic(Protos::DataModelPart && part_model, String && part_name)
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart && part_model, const String && part_name)
 {
     DataModelPartWrapperPtr part_model_wrapper = std::make_shared<DataModelPartWrapper>();
 
