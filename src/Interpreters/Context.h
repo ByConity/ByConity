@@ -1471,6 +1471,11 @@ public:
         tenant_id = id;
     }
 
+    bool shouldBlockPrivilegedOperations() const
+    {
+        return getSettingsRef().block_privileged_operations && !getTenantId().empty();
+    }
+
     const String & getCurrentCatalog() const
     {
         if (!current_catalog.empty())

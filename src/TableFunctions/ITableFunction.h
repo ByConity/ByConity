@@ -22,6 +22,7 @@
 #pragma once
 
 #include <Parsers/IAST_fwd.h>
+#include <Interpreters/Context.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/ColumnsDescription.h>
 
@@ -61,6 +62,8 @@ public:
 
     /// Get the main function name.
     virtual std::string getName() const = 0;
+    /// Functions shouldn't be exposed to tenant
+    virtual bool isPreviledgedFunction() const { return false; }
 
     /// Returns true if we always know table structure when executing table function
     /// (e.g. structure is specified in table function arguments)
