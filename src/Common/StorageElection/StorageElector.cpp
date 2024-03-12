@@ -84,17 +84,23 @@ bool StorageElector::setRole(Role role_)
 {
     if (role.load(std::memory_order::acquire) != role_)
     {
+        std::optional<HostWithPorts> curr_leader_host_copy;
+        {
+            std::lock_guard lock(leader_host_mutex);
+            curr_leader_host_copy = curr_leader_host;
+        }
+
         auto old_role = role.load(std::memory_order::acquire);
         if (role_ == Role::Leader)
         {
             role.store(role_, std::memory_order::release);
-            auto ret = on_leader(curr_leader_host.has_value() ? &curr_leader_host.value() : nullptr);
+            auto ret = on_leader(curr_leader_host_copy.has_value() ? &curr_leader_host_copy.value() : nullptr);
             if (!ret)
             {
                 LOG_ERROR(
                     logger,
                     "Failed to call on_leader, try to yield leader on {}",
-                    curr_leader_host.has_value() ? curr_leader_host->toDebugString() : "nullptr");
+                    curr_leader_host_copy.has_value() ? curr_leader_host_copy->toDebugString() : "nullptr");
 
                 doYield(false);
                 return false;
@@ -103,7 +109,7 @@ bool StorageElector::setRole(Role role_)
         else if (role_ == Role::Follower)
         {
             role.store(role_, std::memory_order::release);
-            on_follower(curr_leader_host.has_value() ? &curr_leader_host.value() : nullptr);
+            on_follower(curr_leader_host_copy.has_value() ? &curr_leader_host_copy.value() : nullptr);
         }
         else
         {
@@ -270,7 +276,7 @@ void StorageElector::tryUpdateRemoteRecord(bool refreshed, bool yield)
         if (now_after_put >= last_refresh_local_time + local_expired_interval_ms)
             LOG_WARNING(logger, "Elect or refresh operation cost too much time, now: {}, last_refresh_local_time: {}", now_after_put, last_refresh_local_time);
     }
-    
+
     if (result.first)
     {
         if (tryUpdateLocalRecord(new_leader_info, leader_info_string, !yield))
