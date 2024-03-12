@@ -27,7 +27,7 @@ Projection Est. 100 rows
                   │  │           │     Condition: cs_item_sk == i_item_sk_1
                   │  │           ├─ Repartition Exchange Est. 4695588 rows
                   │  │           │  │     Partition by: {cs_item_sk}
-                  │  │           │  └─ Inner Join Est. 4705818 rows
+                  │  │           │  └─ Inner Join Est. 4695588 rows
                   │  │           │     │     Condition: cs_sold_date_sk == d_date_sk_1
                   │  │           │     │     Runtime Filters Builder: {d_date_sk_1}
                   │  │           │     ├─ Filter Est. 1439980416 rows
@@ -82,7 +82,7 @@ Projection Est. 100 rows
                   │              │     Condition: ss_item_sk == i_item_sk
                   │              ├─ Repartition Exchange Est. 9458088 rows
                   │              │  │     Partition by: {ss_item_sk}
-                  │              │  └─ Inner Join Est. 9478841 rows
+                  │              │  └─ Inner Join Est. 9458088 rows
                   │              │     │     Condition: ss_sold_date_sk == d_date_sk
                   │              │     │     Runtime Filters Builder: {d_date_sk}
                   │              │     ├─ Filter Est. 2879987999 rows
@@ -137,7 +137,7 @@ Projection Est. 100 rows
                               │     Condition: ws_item_sk == i_item_sk_2
                               ├─ Repartition Exchange Est. 2364533 rows
                               │  │     Partition by: {ws_item_sk}
-                              │  └─ Inner Join Est. 2369721 rows
+                              │  └─ Inner Join Est. 2364533 rows
                               │     │     Condition: ws_sold_date_sk == d_date_sk_2
                               │     │     Runtime Filters Builder: {d_date_sk_2}
                               │     ├─ Filter Est. 720000376 rows

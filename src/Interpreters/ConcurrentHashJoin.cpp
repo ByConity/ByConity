@@ -1,9 +1,15 @@
 #include <memory>
 #include <mutex>
+#include <any>
+#include <limits>
 #include <Columns/FilterDescription.h>
 #include <Columns/IColumn.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
+#include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/join_common.h>
+#include <Interpreters/joinDispatch.h>
+#include <Interpreters/TableJoin.h>
 #include <Interpreters/ConcurrentHashJoin.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -26,9 +32,10 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int SET_SIZE_LIMIT_EXCEEDED;
+    extern const int UNSUPPORTED_JOIN_KEYS;
 }
 
-static UInt32 toPowerOfTwo(UInt32 x)
+UInt32 ConcurrentHashJoin::toPowerOfTwo(UInt32 x)
 {
     if (x <= 1)
         return 1;
@@ -155,17 +162,240 @@ bool ConcurrentHashJoin::alwaysReturnsEmptySet() const
     return true;
 }
 
-
-BlockInputStreamPtr ConcurrentHashJoin::createStreamWithNonJoinedRows(const Block &, UInt64) const
+template <typename Mapped>
+struct AdderNonJoined2
 {
-    if (table_join->strictness() == ASTTableJoin::Strictness::Asof || table_join->strictness() == ASTTableJoin::Strictness::Semi
-        || !isRightOrFull(table_join->kind()))
+    static void add(const Mapped & mapped, size_t & rows_added, MutableColumns & columns_right, const std::shared_ptr<HashJoin::RightTableData> & right_data)
+    {
+        constexpr bool mapped_asof = std::is_same_v<Mapped, AsofRowRefs>;
+        [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<Mapped, RowRef>;
+
+        if constexpr (mapped_asof)
+        {
+            /// Do nothing
+        }
+        else if constexpr (mapped_one)
+        {
+            if (right_data->checkUsed(mapped.block, mapped.row_num))
+                return;
+            
+            for (size_t j = 0; j < columns_right.size(); ++j)
+            {
+                const auto & mapped_column = mapped.block->getByPosition(j).column;
+                columns_right[j]->insertFrom(*mapped_column, mapped.row_num);
+            }
+
+            ++rows_added;
+        }
+        else
+        {
+            for (auto it = mapped.begin(); it.ok(); ++it)
+            {
+                if (right_data->checkUsed(it->block, it->row_num))
+                    continue;
+                
+                for (size_t j = 0; j < columns_right.size(); ++j)
+                {
+                    const auto & mapped_column = it->block->getByPosition(j).column;
+                    columns_right[j]->insertFrom(*mapped_column, it->row_num);
+                }
+
+                ++rows_added;
+            }
+        }
+    }
+};
+
+
+/// Stream from not joined earlier rows of the right table.
+class ConcurrentNotJoinedBlockInputStream : private NotJoined, public IBlockInputStream
+{
+public:
+    ConcurrentNotJoinedBlockInputStream(std::vector<HashJoin*> && parents_, const Block & result_sample_block_, UInt64 max_block_size_)
+        : NotJoined(*parents_[0]->table_join,
+                    parents_[0]->savedBlockSample(),
+                    parents_[0]->right_sample_block,
+                    result_sample_block_)
+        , parents(parents_)
+        , max_block_size(max_block_size_)
+    {}
+
+    String getName() const override { return "NonJoined2"; }
+    Block getHeader() const override { return result_sample_block; }
+
+protected:
+    Block readImpl() override
+    {
+        while (current_idx < parents.size())
+        {
+            if (parents[current_idx]->data->blocks.empty())
+                current_idx++;
+            else
+                break;
+        }
+        if (current_idx >= parents.size())
+            return Block();
+        Block res;
+        while (!createBlock(res));
+
+        return res;
+    }
+
+private:
+    std::vector<HashJoin*> parents;
+    size_t current_idx = 0;
+    UInt64 max_block_size;
+
+    std::any position;
+    std::optional<HashJoin::BlockNullmapList::const_iterator> nulls_position;
+
+    bool createBlock(Block & res)
+    {
+        if (current_idx >= parents.size())
+            return true;
+        HashJoin* parent = parents[current_idx];
+        MutableColumns columns_right = saved_block_sample.cloneEmptyColumns();
+
+        size_t rows_added = 0;
+
+        auto fill_callback = [&](auto, auto strictness, auto & map)
+        {
+            rows_added = fillColumnsFromMap<strictness>(map, columns_right);
+        };
+
+        if (!joinDispatch(parent->kind, parent->strictness, parent->data->maps, fill_callback, parent->has_inequal_condition))
+            throw Exception("Logical error: unknown JOIN strictness (must be on of: ANY, ALL, ASOF)", ErrorCodes::LOGICAL_ERROR);
+
+        fillNullsFromBlocks(columns_right, rows_added);
+        if (!rows_added)
+        {
+            current_idx++;
+            return false;
+        }
+
+        correctLowcardAndNullability(columns_right);
+
+        res = result_sample_block.cloneEmpty();
+        addLeftColumns(res, rows_added);
+        addRightColumns(res, columns_right);
+        copySameKeys(res);
+        return true;
+    }
+
+    template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    size_t fillColumnsFromMap(const Maps & maps, MutableColumns & columns_keys_and_right)
+    {
+        switch (parents[current_idx]->data->type)
+        {
+#define M(TYPE) \
+            case HashJoin::Type::TYPE: \
+                return fillColumns<STRICTNESS>(*maps.TYPE, columns_keys_and_right);
+            APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+            default:
+                throw Exception("Unsupported JOIN keys. Type: " + toString(static_cast<UInt32>(parents[current_idx]->data->type)),
+                                ErrorCodes::UNSUPPORTED_JOIN_KEYS);
+        }
+
+        __builtin_unreachable();
+    }
+
+    template <ASTTableJoin::Strictness STRICTNESS, typename Map>
+    size_t fillColumns(const Map & map, MutableColumns & columns_keys_and_right)
+    {
+        using Mapped = typename Map::mapped_type;
+        using Iterator = typename Map::const_iterator;
+
+        size_t rows_added = 0;
+
+        if (!position.has_value())
+            position = std::make_any<Iterator>(map.begin());
+
+        Iterator & it = std::any_cast<Iterator &>(position);
+        auto end = map.end();
+
+        for (; it != end; ++it)
+        {
+            const Mapped & mapped = it->getMapped();
+
+            size_t off = map.offsetInternal(it.getPtr());
+            if (parents[current_idx]->isUsed(off))
+                continue;
+
+            AdderNonJoined2<Mapped>::add(mapped, rows_added, columns_keys_and_right, parents[current_idx]->data);
+
+            if (rows_added >= max_block_size)
+            {
+                ++it;
+                break;
+            }
+        }
+
+        return rows_added;
+    }
+
+    void fillNullsFromBlocks(MutableColumns & columns_keys_and_right, size_t & rows_added)
+    {
+        if (!nulls_position.has_value())
+            nulls_position = parents[current_idx]->data->blocks_nullmaps.begin();
+
+        auto end = parents[current_idx]->data->blocks_nullmaps.end();
+
+        auto & it = *nulls_position;
+        for (; it != end && rows_added < max_block_size; ++it)
+        {
+            const Block * block = it->first;
+            const NullMap & nullmap = assert_cast<const ColumnUInt8 &>(*it->second).getData();
+
+            for (size_t row = 0; row < nullmap.size(); ++row)
+            {
+                if (nullmap[row])
+                {
+                    for (size_t col = 0; col < columns_keys_and_right.size(); ++col)
+                        columns_keys_and_right[col]->insertFrom(*block->getByPosition(col).column, row);
+                    ++rows_added;
+                }
+            }
+        }
+        if (it == end && (rows_added == 0))
+        {
+            position.reset();
+            nulls_position.reset();
+        }
+
+    }
+};
+
+
+BlockInputStreamPtr ConcurrentHashJoin::createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size, size_t total_size, size_t index) const
+{
+    if (table_join->strictness() == ASTTableJoin::Strictness::Asof ||
+        table_join->strictness() == ASTTableJoin::Strictness::Semi ||
+        !isRightOrFull(table_join->kind()))
         return {};
 
-    // todo: What if we referring to createStreamWithNonJoinedRows of hash join and constructing NonJoinedBlockInputStream here?
-    throw Exception(
-        ErrorCodes::LOGICAL_ERROR, "Invalid join type. join kind: {}, strictness: {}", table_join->kind(), table_join->strictness());
+    if (isRightOrFull(table_join->kind()))
+    {
+        std::vector<HashJoin*> parents;
+        for (size_t i = 0; i < hash_joins.size(); i++)
+        {
+            if (i % total_size == index)
+            {
+                if (!hash_joins[i]->data->data->blocks.empty())
+                    parents.push_back(&(*hash_joins[i]->data));
+            }
+        }
+        if (!parents.empty())
+        {
+            LOG_TRACE((&Poco::Logger::get("ConcurrentHashJoin")), "create ConcurrentNotJoinedBlockInputStream with total_size:{} index:{} hash_joins:{}", total_size, index, parents.size());
+            return std::make_shared<ConcurrentNotJoinedBlockInputStream>(std::move(parents), result_sample_block, max_block_size);
+        }
+        else
+            return {};
+    }
+    return {};
 }
+
 
 static ALWAYS_INLINE IColumn::Selector hashToSelector(const WeakHash32 & hash, size_t num_shards)
 {
@@ -219,9 +449,9 @@ Blocks ConcurrentHashJoin::dispatchBlock(const Strings & key_columns_names, cons
     return result;
 }
 
-void ConcurrentHashJoin::tryBuildRuntimeFilters(size_t total_rows) const
+void ConcurrentHashJoin::tryBuildRuntimeFilters() const
 {
-    total_rows = 0;
+    size_t total_rows = 0;
     for (const auto & hash_join : hash_joins)
     {
         total_rows += hash_join->data->getTotalRowCount();
@@ -230,22 +460,20 @@ void ConcurrentHashJoin::tryBuildRuntimeFilters(size_t total_rows) const
     if (total_rows == 0)
     {
         // need bypass
-        hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_EMPTY_HT);
-        return;
+        hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_EMPTY_HT, 0);
+        return ;
     }
 
     if (total_rows > table_join->getInBuildThreshold() && total_rows > table_join->getBloomBuildThreshold())
     {
         // need bypass
-        hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT);
-        return;
+        hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT, total_rows);
+        return ;
     }
-
-    table_join->fixRFParallel(hash_joins.size());
 
     for (const auto & hash_join : hash_joins)
     {
-        hash_join->data->tryBuildRuntimeFilters(total_rows);
+        hash_join->data->tryBuildRuntimeFilters();
     }
 }
 

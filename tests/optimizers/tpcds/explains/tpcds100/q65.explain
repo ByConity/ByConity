@@ -39,7 +39,7 @@ Projection Est. 100 rows
                │     └─ TableScan tpcds100.item Est. 204000 rows
                │              Outputs: [i_item_sk, i_item_desc, i_current_price, i_wholesale_cost, i_brand]
                └─ Broadcast Exchange Est. 201 rows
-                  └─ Inner Join Est. 105 rows
+                  └─ Inner Join Est. 201 rows
                      │     Condition: s_store_sk == ss_store_sk
                      ├─ Repartition Exchange Est. 402 rows
                      │  │     Partition by: {s_store_sk}

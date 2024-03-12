@@ -1352,10 +1352,8 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     {
         details << "Runtime Filters \\n";
         for (const auto & runtime_filter : step.getRuntimeFilterBuilders())
-            details << runtime_filter.first << ": "
-                << runtime_filter.second.id << " "
-                << (runtime_filter.second.distribution == RuntimeFilterDistribution::Distributed ? "Distributed " : "Local ")
-                <<"\\n";
+            details << runtime_filter.first << ": " << runtime_filter.second.id << " "
+                    << distributionToString(runtime_filter.second.distribution) << "\\n";
         details << "|";
     }
 

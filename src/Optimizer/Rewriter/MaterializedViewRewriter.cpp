@@ -673,7 +673,7 @@ protected:
             //         makeASTIdentifier(missing_table_column.first));
 
             // 5-3. check select columns (contains aggregates)
-            NameSet required_columns_set;
+            NameOrderedSet required_columns_set;
             Assignments assignments;
             NameToType name_to_type;
             bool enforce_agg_node = false;
@@ -791,11 +791,6 @@ protected:
                 it_stats = materialized_views_stats.emplace(target_storage_id.getFullTableName(), stats).first;
             }
 
-            auto storage = DatabaseCatalog::instance().getTable(target_storage_id, context);
-            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
-            const auto & ordered_columns = metadata_snapshot->sorting_key.column_names;
-            bool contains_ordered_columns = !ordered_columns.empty() && columns.count(ordered_columns.front());
-
             NamesWithAliases table_columns_with_aliases;
             if (required_columns_set.empty()) {
                 required_columns_set.emplace(*view_outputs.begin());
@@ -809,6 +804,22 @@ protected:
                     continue; // bail out
                 }
                 table_columns_with_aliases.emplace_back(it->second, column);
+            }
+
+            auto storage = DatabaseCatalog::instance().getTable(target_storage_id, context);
+            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
+            const auto & ordered_columns = metadata_snapshot->sorting_key.column_names;
+            bool contains_ordered_columns = false;
+            if (!ordered_columns.empty())
+            {
+                for (const auto & column_with_alias : table_columns_with_aliases)
+                {
+                    if (ordered_columns[0] == column_with_alias.first && columns.count(column_with_alias.second))
+                    {
+                        contains_ordered_columns = true;
+                        break;
+                    }
+                }
             }
 
             // 8. other query info
@@ -1736,6 +1747,9 @@ std::vector<MaterializedViewStructurePtr> MaterializedViewRewriter::getRelatedMa
         if (auto structure = cache.getMaterializedViewStructure(view, context, true, result.local_table_to_distributed_table))
             materialized_views.push_back(*structure);
     }
+    std::sort(materialized_views.begin(), materialized_views.end(), [&](const auto & left, const auto & right) {
+        return left->view_storage_id < right->view_storage_id;
+    });
     return materialized_views;
 }
 }

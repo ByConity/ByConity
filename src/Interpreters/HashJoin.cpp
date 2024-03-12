@@ -2061,7 +2061,7 @@ private:
 };
 
 
-BlockInputStreamPtr HashJoin::createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size) const
+BlockInputStreamPtr HashJoin::createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size, size_t, size_t) const
 {
     if (table_join->strictness() == ASTTableJoin::Strictness::Asof ||
         table_join->strictness() == ASTTableJoin::Strictness::Semi)
@@ -2255,7 +2255,7 @@ static void buildOneBlock(BloomFilterWithRange & bf_with_range, WhichDataType wh
         throw Exception("buildOneBlock unexpected type of column: " + column->getName(), ErrorCodes::LOGICAL_ERROR);
 }
 
-void HashJoin::tryBuildRuntimeFilters(size_t total_rows) const
+void HashJoin::tryBuildRuntimeFilters() const
 {
     auto runtime_filter_consumer = table_join->getRuntimeFilterConsumer();
     if (!runtime_filter_consumer)
@@ -2266,174 +2266,243 @@ void HashJoin::tryBuildRuntimeFilters(size_t total_rows) const
         return;
 
     size_t ht_size = getTotalRowCount();
-    if (ht_size == 0)
+    if (ht_size == 0 && runtime_filter_consumer->getLocalSteamParallel() == 1)
     {
-        bypassRuntimeFilters(BypassType::BYPASS_EMPTY_HT);
+        bypassRuntimeFilters(BypassType::BYPASS_EMPTY_HT, 0);
         return;
     }
 
-    size_t pre_ht_size = ht_size;
-    if (total_rows > 0) // from concurrent hash join
+    if (runtime_filter_consumer->getLocalSteamParallel() > 1)
     {
-        pre_ht_size = total_rows;
+        if (runtime_filter_consumer->isBypassed())
+            return; /// already bypassed
+
+        if (runtime_filter_consumer->addBuildParams(ht_size, &data->blocks))
+        {
+            /// last one, start build
+            size_t total_size = runtime_filter_consumer->totalHashTableSize();
+            if (total_size > table_join->getInBuildThreshold() && total_size > table_join->getBloomBuildThreshold())
+            {
+                bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT, total_size);
+                return;
+            }
+            else if (total_size == 0)
+            {
+                /// edge case all stream is empty
+                bypassRuntimeFilters(BypassType::BYPASS_EMPTY_HT, 0);
+                return;
+            }
+            Stopwatch stopwatch;
+            std::vector<const BlocksList*> && all_blocks = runtime_filter_consumer->buildParamsBlocks();
+            buildAllRF(total_size, all_blocks, runtime_filter_consumer.get());
+            runtime_filter_consumer->finalize();
+            LOG_TRACE(log, "build rf total rows:{} all cost: {} ms", total_size, stopwatch.elapsedMilliseconds());
+            return;
+        }
+
+        size_t total_size = runtime_filter_consumer->totalHashTableSize();
+        if (!runtime_filter_consumer->isBypassed() && total_size > table_join->getInBuildThreshold() && total_size > table_join->getBloomBuildThreshold())
+        {
+            bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT, total_size);
+            return;
+        }
     }
     else
     {
-        if (runtime_filter_consumer->getLocalSteamParallel() > 1)
+        if (ht_size > table_join->getInBuildThreshold() && ht_size > table_join->getBloomBuildThreshold())
         {
-            pre_ht_size *= (runtime_filter_consumer->getLocalSteamParallel());
+            bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT, ht_size);
+            return;
         }
+        Stopwatch stopwatch;
+        buildAllRF(ht_size, {&data->blocks}, runtime_filter_consumer.get());
+        runtime_filter_consumer->finalize();
+        LOG_DEBUG(log, "build local rf runtime filter total rows:{} cost: {} ms", ht_size, stopwatch.elapsedMilliseconds());
     }
+}
 
-    LOG_DEBUG(log, "going build rf: {}, pre:{}", ht_size, pre_ht_size);
-
-    if (pre_ht_size <= table_join->getInBuildThreshold())
+void HashJoin::buildAllRF(size_t total_size, const std::vector<const BlocksList *> & all_blocks, RuntimeFilterConsumer * rf_consumer) const
+{
+    const auto & runtime_filters = rf_consumer->getRuntimeFilters();
+    if (total_size <= table_join->getInBuildThreshold())
     {
         /// only build in filter
         for (const auto & rf : runtime_filters)
         {
             if (!right_table_keys.has(rf.first)) /// shouldn't happen
                 continue ;
-
-            if (runtime_filter_consumer->isBloomFilter(rf.second.id))
-            {
-                buildBloomFilterRF(rf.second, rf.first, pre_ht_size, runtime_filter_consumer.get());
-                continue;
-            }
-
-            buildValueSetRF(rf.second, rf.first, runtime_filter_consumer.get());
+            buildValueSetRF(rf.second, rf.first, all_blocks, rf_consumer);
         }
 
         return ;
     }
 
-    if (pre_ht_size <= table_join->getBloomBuildThreshold())
+    if (total_size <= table_join->getBloomBuildThreshold())
     {
-
         /// just build bloom filter
         for (const auto & rf : runtime_filters)
         {
             if (!right_table_keys.has(rf.first)) /// shouldn't happen
                 continue ;
 
-            if (runtime_filter_consumer->isValueSet(rf.second.id))
-            {
-                buildValueSetRF(rf.second, rf.first, runtime_filter_consumer.get());
-                continue;
-            }
-
-            if (runtime_filter_consumer->isDistributed(rf.first))
-                pre_ht_size
-                    *= runtime_filter_consumer
-                           ->getGrfNdvEnlargeSize(); /// enlarge ndv in case error rate increase. TODO: shuffle-aware global runtime filter
-
-            buildBloomFilterRF(rf.second, rf.first, pre_ht_size, runtime_filter_consumer.get());
+            buildBloomFilterRF(rf.second, rf.first, total_size, all_blocks, rf_consumer);
         }
         return;
     }
-
-    // need bypass
-    bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT);
 }
 
 void HashJoin::buildBloomFilterRF(
-    const RuntimeFilterBuildInfos & rf_info, const String & name, size_t ht_size, RuntimeFilterConsumer * rf_consumer) const
+    const RuntimeFilterBuildInfos & rf_info, const String & name, size_t ht_size, const std::vector<const BlocksList *> & blocks,
+    RuntimeFilterConsumer * rf_consumer) const
 {
     bool is_null_safe = isEqualNull(name);
-    const auto & column = data->blocks.front().getByName(name);
-    const auto type = removeNullable(recursiveRemoveLowCardinality(column.type));
+    DataTypePtr type;
+    for (const auto & lists : blocks)
+    {
+        if (lists != nullptr && !lists->empty())
+        {
+            const auto & col = lists->front().getByName(name);
+            type = removeNullable(recursiveRemoveLowCardinality(col.type));
+            break;
+        }
+    }
     WhichDataType which(type);
-    BloomFilterWithRangePtr bf_with_range = std::make_shared<BloomFilterWithRange>(ht_size, type);
 
-    for (const auto & block : data->blocks)
+    /// try enlarge ndv for none-shuffle-aware grf
+    size_t pre_enlarge_size = ht_size;
+    bool pre_enlarge = true;
+    if (rf_consumer->isDistributed(name))
     {
-        const auto & col = block.getByName(name).column;
-        const auto * nullable = checkAndGetColumn<ColumnNullable>(col.get());
-        if (nullable)
+        pre_enlarge_size *= rf_consumer->getParallelWorkers();
+        // if (table_join->getShuffleAwareNDVThreshold() && pre_enlarge_size > table_join->getShuffleAwareNDVThreshold())
+        // {
+        //     pre_enlarge = false;
+        //     pre_enlarge_size = ht_size;
+        // } // TODO: Yuanning RuntimeFilter
+    }
+
+    BloomFilterWithRangePtr bf_with_range
+        = std::make_shared<BloomFilterWithRange>(pre_enlarge_size, type);
+    bf_with_range->is_pre_enlarged = pre_enlarge;
+    for (const auto & lists : blocks)
+    {
+        if (lists == nullptr || lists->empty())
+            continue;
+        for (const auto & block : *lists)
         {
-            const auto * nest_col = nullable->getNestedColumnPtr().get();
-            if (nest_col->isNumeric())
+            const auto & col = block.getByName(name).column;
+            const auto * nullable = checkAndGetColumn<ColumnNullable>(col.get());
+            if (nullable)
             {
-                if (is_null_safe)
-                    buildOneBlock<true>(*bf_with_range, which, nullable);
-                else
-                    buildOneBlock<false>(*bf_with_range, which, nullable);
-            }
-            else
-            {
-                for (size_t i = 0; i < block.rows(); ++i)
+                const auto * nest_col = nullable->getNestedColumnPtr().get();
+                if (nest_col->isNumeric())
                 {
-                    if (nullable->isNullAt(i))
-                    {
-                        if (is_null_safe)
-                            bf_with_range->addNull();
-                    }
+                    if (is_null_safe)
+                        buildOneBlock<true>(*bf_with_range, which, nullable);
                     else
+                        buildOneBlock<false>(*bf_with_range, which, nullable);
+                }
+                else if (nest_col->getDataType() == TypeIndex::Map || nest_col->getDataType() == TypeIndex::Tuple)
+                {
+                    for (size_t i = 0; i < block.rows(); ++i)
                     {
-                        bf_with_range->addKey(nullable->getNestedColumn().getDataAt(i));
+                        if (nullable->isNullAt(i))
+                        {
+                            if (is_null_safe)
+                                bf_with_range->addNull();
+                        }
+                        else
+                        {
+                            bf_with_range->addKey<true>(*nest_col, i);
+                        }
+                    }
+                }
+                else
+                {
+                    for (size_t i = 0; i < block.rows(); ++i)
+                    {
+                        if (nullable->isNullAt(i))
+                        {
+                            if (is_null_safe)
+                                bf_with_range->addNull();
+                        }
+                        else
+                        {
+                            bf_with_range->addKey<false>(*nest_col, i);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (col->isNumeric())
+                {
+                    if (is_null_safe)
+                        buildOneBlock<true>(*bf_with_range, which, col.get());
+                    else
+                        buildOneBlock<false>(*bf_with_range, which, col.get());
+                }
+                else if (col->getDataType() == TypeIndex::Map || col->getDataType() == TypeIndex::Tuple)
+                {
+                    for (size_t i = 0; i < block.rows(); ++i)
+                    {
+                        bf_with_range->addKey<true>(*col, i);
+                    }
+                }
+                else
+                {
+                    for (size_t i = 0; i < block.rows(); ++i)
+                    {
+                        bf_with_range->addKey<false>(*col, i);
                     }
                 }
             }
         }
-        else
-        {
-            if (col->isNumeric())
-            {
-                if (is_null_safe)
-                    buildOneBlock<true>(*bf_with_range, which, col.get());
-                else
-                    buildOneBlock<false>(*bf_with_range, which, col.get());
-            }
-            else
-            {
-                for (size_t i = 0; i < block.rows(); ++i)
-                {
-                    bf_with_range->addKey(col->getDataAt(i));
-                }
-            }
-        }
     }
-
-    rf_consumer->addFinishRF(std::move(bf_with_range), rf_info.id, rf_info.distribution == RuntimeFilterDistribution::Local);
+    rf_consumer->addFinishRF(std::move(bf_with_range), rf_info.id, rf_info.distribution == RuntimeFilterDistribution::LOCAL);
 }
 
-void HashJoin::buildValueSetRF(const RuntimeFilterBuildInfos & rf_info, const String & name, RuntimeFilterConsumer * rf_consumer) const
+void HashJoin::buildValueSetRF(const RuntimeFilterBuildInfos & rf_info, const String & name, const std::vector<const BlocksList *> & blocks,
+                               RuntimeFilterConsumer * rf_consumer) const
 {
-    const auto & column = data->blocks.front().getByName(name);
-    const auto type = removeNullable(recursiveRemoveLowCardinality(column.type));
-    ValueSetWithRangePtr vs_with_range = std::make_shared<ValueSetWithRange>(type);
-
-    for (const auto & block : data->blocks)
+    DataTypePtr type;
+    for (const auto & lists : blocks)
     {
-        const auto & col = block.getByName(name).column;
-        Field field;
-        for (size_t i = 0; i < block.rows(); ++i)
+        if (lists != nullptr && !lists->empty())
         {
-            col->get(i, field);
-            if (!field.isNull())
-                vs_with_range->insert(field);
+            const auto & col = lists->front().getByName(name);
+            type = removeNullable(recursiveRemoveLowCardinality(col.type));
+            break;
         }
     }
 
-    rf_consumer->addFinishRF(std::move(vs_with_range), rf_info.id, rf_info.distribution == RuntimeFilterDistribution::Local);
+    ValueSetWithRangePtr vs_with_range = std::make_shared<ValueSetWithRange>(type);
+    for (const auto & lists : blocks)
+    {
+        if (lists == nullptr || lists->empty())
+            continue;
+        for (const auto & block : *lists)
+        {
+            const auto & col = block.getByName(name).column;
+            Field field;
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                col->get(i, field);
+                if (!field.isNull())
+                    vs_with_range->insert(field);
+            }
+        }
+    }
+    rf_consumer->addFinishRF(std::move(vs_with_range), rf_info.id, rf_info.distribution == RuntimeFilterDistribution::LOCAL);
 }
 
-void HashJoin::bypassRuntimeFilters(BypassType type) const
+void HashJoin::bypassRuntimeFilters(BypassType type, size_t total_size) const
 {
     const auto & runtime_filter_consumer = table_join->getRuntimeFilterConsumer();
     if (!runtime_filter_consumer)
         return;
-
-    auto & runtime_filters = runtime_filter_consumer->getRuntimeFilters();
-    if (runtime_filters.empty())
-        return;
-
-    LOG_DEBUG(log, "going build rf bypass rf: {}", bypassTypeToString(type));
-
-    for (const auto & rf : runtime_filters)
-    {
-        runtime_filter_consumer->bypass(rf.second.id, rf.second.distribution == RuntimeFilterDistribution::Local, type);
-    }
+    LOG_DEBUG(log, "going build rf bypass rf: {}, size:{}", bypassTypeToString(type), total_size);
+    runtime_filter_consumer->bypass(type);
 }
 
 void HashJoin::validateInequalConditions(const ExpressionActionsPtr & inequal_condition_actions_)

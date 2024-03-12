@@ -13,36 +13,38 @@
  * limitations under the License.
  */
 
+#include <cstddef>
+#include <memory>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>
 #include <Analyzers/ExprAnalyzer.h>
 #include <Analyzers/QueryAnalyzer.h>
-#include <Analyzers/tryEvaluateConstantExpression.h>
 #include <Analyzers/function_utils.h>
+#include <Analyzers/tryEvaluateConstantExpression.h>
 #include <Core/ColumnsWithTypeAndName.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Common/FieldVisitorToString.h>
-#include <Parsers/ASTTableColumnReference.h>
 #include <DataTypes/DataTypeFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeSet.h>
 #include <DataTypes/MapHelpers.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Interpreters/convertFieldToType.h>
-#include <Interpreters/misc.h>
+#include <Functions/InternalFunctionRuntimeFilter.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/convertFieldToType.h>
+#include <Interpreters/join_common.h>
+#include <Interpreters/misc.h>
+#include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/Void.h>
-#include <DataTypes/DataTypeMap.h>
-#include <Interpreters/join_common.h>
-#include <Functions/InternalFunctionRuntimeFilter.h>
+#include <Common/StringUtils/StringUtils.h>
 
 #include <Poco/String.h>
 
@@ -81,6 +83,7 @@ public:
     ColumnWithTypeAndName visitASTQuantifiedComparison(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTTableColumnReference(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTPreparedParameter(ASTPtr & node, const Void &) override;
+    ColumnWithTypeAndName visitASTExpressionList(ASTPtr & node, const Void &) override;
 
     ExprAnalyzerVisitor(ContextPtr context_, Analysis & analysis_, ScopePtr scope_, ExprAnalyzerOptions options_)
         : context(std::move(context_))
@@ -191,6 +194,11 @@ ColumnsWithTypeAndName ExprAnalyzerVisitor::processNodes(ASTs & nodes)
 ColumnWithTypeAndName ExprAnalyzerVisitor::visitNode(ASTPtr & node, const Void &)
 {
     throw Exception("Unsupported Node" + node->getID(), ErrorCodes::NOT_IMPLEMENTED);
+}
+
+ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTExpressionList(ASTPtr &, const Void &)
+{
+    return ColumnWithTypeAndName{nullptr, std::make_shared<DataTypeNothing>(), "list"};
 }
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTTableColumnReference(ASTPtr & node, const Void &)

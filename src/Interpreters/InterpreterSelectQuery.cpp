@@ -117,6 +117,7 @@
 #include "Storages/SelectQueryInfo.h"
 #include <sstream>
 
+#include <Optimizer/PredicateUtils.h>
 
 namespace DB
 {
@@ -539,6 +540,14 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             query.setExpression(
                 ASTSelectQuery::Expression::WHERE, makeASTFunction("and", query.where()->clone(), p->clone()));
         }
+
+        // TODO: Yuanning RuntimeFilter
+        // extract runtime_filters as 2nd-stage of prewhere
+        // if (context->getSettingsRef().enable_two_stages_prewhere && query.prewhere()) {
+        //     auto [tmp_runtime_filters, first_stage_filters] = RuntimeFilterUtils::extractExecutableRuntimeFiltersForTwoStagesPrewhere(query.prewhere());
+        //     query.setExpression(ASTSelectQuery::Expression::PREWHERE, first_stage_filters.empty()? nullptr: PredicateUtils::combineConjuncts(first_stage_filters));
+        //     this->runtime_filters = tmp_runtime_filters;
+        // }
 
         query_analyzer = std::make_unique<SelectQueryExpressionAnalyzer>(
             query_ptr,

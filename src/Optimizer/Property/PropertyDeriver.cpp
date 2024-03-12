@@ -610,9 +610,12 @@ Property DeriverVisitor::visitAssignUniqueIdStep(const AssignUniqueIdStep &, Der
     return context.getInput()[0].clearSorting();
 }
 
-Property DeriverVisitor::visitCTERefStep(const CTERefStep &, DeriverContext &)
+Property DeriverVisitor::visitCTERefStep(const CTERefStep & cte_step, DeriverContext & context)
 {
-    throw Exception("CTERefStep is not supported", ErrorCodes::OPTIMIZER_NONSUPPORT);
+    if (context.getInput().size() != 1)
+        throw Exception("Input porporties should be set for cte property derive", ErrorCodes::LOGICAL_ERROR);
+    auto prop = context.getInput()[0];
+    return prop.translate(cte_step.getReverseOutputColumns());
 }
 
 Property DeriverVisitor::visitExplainAnalyzeStep(const ExplainAnalyzeStep &, DeriverContext & context)

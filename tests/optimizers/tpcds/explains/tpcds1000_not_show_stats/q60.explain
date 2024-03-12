@@ -45,12 +45,13 @@ Projection
                   │           │     └─ Broadcast Exchange
                   │           │        └─ Inner Join
                   │           │           │     Condition: i_item_id == i_item_id_1
+                  │           │           │     Runtime Filters Builder: {i_item_id_1}
                   │           │           ├─ Repartition Exchange
                   │           │           │  │     Partition by: {i_item_id}
                   │           │           │  └─ Filter
-                  │           │           │     │     Condition: isNotNull(i_item_id)
+                  │           │           │     │     Condition: isNotNull(i_item_id) Runtime Filters: {i_item_id}
                   │           │           │     └─ TableScan tpcds1000.item
-                  │           │           │              Where: isNotNull(i_item_id)
+                  │           │           │              Where: isNotNull(i_item_id) Runtime Filters: {i_item_id}
                   │           │           │              Outputs: [i_item_sk, i_item_id]
                   │           │           └─ MergingAggregated
                   │           │              └─ Repartition Exchange
@@ -102,12 +103,13 @@ Projection
                   │           │     └─ Broadcast Exchange
                   │           │        └─ Inner Join
                   │           │           │     Condition: i_item_id_2 == i_item_id_3
+                  │           │           │     Runtime Filters Builder: {i_item_id_3}
                   │           │           ├─ Repartition Exchange
                   │           │           │  │     Partition by: {i_item_id_2}
                   │           │           │  └─ Filter
-                  │           │           │     │     Condition: isNotNull(i_item_id_2)
+                  │           │           │     │     Condition: isNotNull(i_item_id_2) Runtime Filters: {i_item_id_2}
                   │           │           │     └─ TableScan tpcds1000.item
-                  │           │           │              Where: isNotNull(i_item_id)
+                  │           │           │              Where: isNotNull(i_item_id) Runtime Filters: {i_item_id}
                   │           │           │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
                   │           │           └─ MergingAggregated
                   │           │              └─ Repartition Exchange
@@ -159,12 +161,13 @@ Projection
                               │     └─ Broadcast Exchange
                               │        └─ Inner Join
                               │           │     Condition: i_item_id_4 == i_item_id_5
+                              │           │     Runtime Filters Builder: {i_item_id_5}
                               │           ├─ Repartition Exchange
                               │           │  │     Partition by: {i_item_id_4}
                               │           │  └─ Filter
-                              │           │     │     Condition: isNotNull(i_item_id_4)
+                              │           │     │     Condition: isNotNull(i_item_id_4) Runtime Filters: {i_item_id_4}
                               │           │     └─ TableScan tpcds1000.item
-                              │           │              Where: isNotNull(i_item_id)
+                              │           │              Where: isNotNull(i_item_id) Runtime Filters: {i_item_id}
                               │           │              Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
                               │           └─ MergingAggregated
                               │              └─ Repartition Exchange
@@ -185,4 +188,4 @@ Projection
                                     └─ TableScan tpcds1000.customer_address
                                              Where: ca_gmt_offset = -5.
                                              Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
-note: Runtime Filter is applied for 9 times.
+note: Runtime Filter is applied for 12 times.

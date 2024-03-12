@@ -15,7 +15,7 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 42978 rows
                      │     Group by: {i_brand, i_brand_id, i_manufact_id, i_manufact}
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                     └─ Inner Join Est. 83117 rows
+                     └─ Inner Join Est. 82670 rows
                         │     Condition: ca_address_sk == c_current_addr_sk
                         │     Filter: substring(ca_zip, 1, 5) != substring(s_zip, 1, 5)
                         │     Runtime Filters Builder: {c_current_addr_sk}

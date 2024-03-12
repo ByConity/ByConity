@@ -88,7 +88,15 @@ bool StorageElector::setRole(Role role_)
         if (role_ == Role::Leader)
         {
             role.store(role_, std::memory_order::release);
-            auto ret = on_leader(curr_leader_host.has_value() ? &curr_leader_host.value() : nullptr);
+            bool ret = false;
+            try
+            {
+                ret = on_leader(curr_leader_host.has_value() ? &curr_leader_host.value() : nullptr);
+            }
+            catch (...)
+            {
+                //We do nothing here because ret==false.
+            }
             if (!ret)
             {
                 LOG_ERROR(

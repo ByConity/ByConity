@@ -1095,7 +1095,7 @@ private:
 };
 
 
-BlockInputStreamPtr MergeJoin::createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size) const
+BlockInputStreamPtr MergeJoin::createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size, size_t, size_t) const
 {
     if (table_join->strictness() == ASTTableJoin::Strictness::All && (is_right || is_full))
         return std::make_shared<NonMergeJoinedBlockInputStream>(*this, result_sample_block, max_block_size);

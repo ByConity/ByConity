@@ -20,12 +20,12 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 102098 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                  │        └─ Inner Join Est. 376093 rows
+                  │        └─ Inner Join Est. 344343 rows
                   │           │     Condition: ss_addr_sk == ca_address_sk
                   │           │     Runtime Filters Builder: {ca_address_sk}
                   │           ├─ Repartition Exchange Est. 915582 rows
                   │           │  │     Partition by: {ss_addr_sk}
-                  │           │  └─ Inner Join Est. 915832 rows
+                  │           │  └─ Inner Join Est. 915582 rows
                   │           │     │     Condition: ss_item_sk == i_item_sk
                   │           │     │     Runtime Filters Builder: {i_item_sk}
                   │           │     ├─ Inner Join Est. 4581411 rows
@@ -45,12 +45,13 @@ Projection Est. 100 rows
                   │           │     └─ Broadcast Exchange Est. 40768 rows
                   │           │        └─ Inner Join Est. 40768 rows
                   │           │           │     Condition: i_item_id == i_item_id_1
+                  │           │           │     Runtime Filters Builder: {i_item_id_1}
                   │           │           ├─ Repartition Exchange Est. 204000 rows
                   │           │           │  │     Partition by: {i_item_id}
                   │           │           │  └─ Filter Est. 204000 rows
-                  │           │           │     │     Condition: isNotNull(i_item_id)
+                  │           │           │     │     Condition: isNotNull(i_item_id) Runtime Filters: {i_item_id}
                   │           │           │     └─ TableScan tpcds100.item Est. 204000 rows
-                  │           │           │              Where: isNotNull(i_item_id)
+                  │           │           │              Where: isNotNull(i_item_id) Runtime Filters: {i_item_id}
                   │           │           │              Outputs: [i_item_sk, i_item_id]
                   │           │           └─ MergingAggregated Est. 20404 rows
                   │           │              └─ Repartition Exchange Est. 20404 rows
@@ -77,12 +78,12 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 102098 rows
                   │        │     Group by: {i_item_id_2}
                   │        │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
-                  │        └─ Inner Join Est. 376093 rows
+                  │        └─ Inner Join Est. 170951 rows
                   │           │     Condition: cs_bill_addr_sk == ca_address_sk_1
                   │           │     Runtime Filters Builder: {ca_address_sk_1}
                   │           ├─ Repartition Exchange Est. 454545 rows
                   │           │  │     Partition by: {cs_bill_addr_sk}
-                  │           │  └─ Inner Join Est. 454669 rows
+                  │           │  └─ Inner Join Est. 454545 rows
                   │           │     │     Condition: cs_item_sk == i_item_sk_1
                   │           │     │     Runtime Filters Builder: {i_item_sk_1}
                   │           │     ├─ Repartition Exchange Est. 2274463 rows
@@ -105,12 +106,13 @@ Projection Est. 100 rows
                   │           │        │     Partition by: {i_item_sk_1}
                   │           │        └─ Inner Join Est. 40768 rows
                   │           │           │     Condition: i_item_id_2 == i_item_id_3
+                  │           │           │     Runtime Filters Builder: {i_item_id_3}
                   │           │           ├─ Repartition Exchange Est. 204000 rows
                   │           │           │  │     Partition by: {i_item_id_2}
                   │           │           │  └─ Filter Est. 204000 rows
-                  │           │           │     │     Condition: isNotNull(i_item_id_2)
+                  │           │           │     │     Condition: isNotNull(i_item_id_2) Runtime Filters: {i_item_id_2}
                   │           │           │     └─ TableScan tpcds100.item Est. 204000 rows
-                  │           │           │              Where: isNotNull(i_item_id)
+                  │           │           │              Where: isNotNull(i_item_id) Runtime Filters: {i_item_id}
                   │           │           │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
                   │           │           └─ MergingAggregated Est. 20404 rows
                   │           │              └─ Repartition Exchange Est. 20404 rows
@@ -132,12 +134,12 @@ Projection Est. 100 rows
                   │                          Where: ca_gmt_offset = -5.
                   │                          Outputs: ca_address_sk_1:=ca_address_sk, ca_gmt_offset_1:=ca_gmt_offset
                   └─ MergingAggregated Est. 86139 rows
-                     └─ Repartition Exchange Est. 102098 rows
+                     └─ Repartition Exchange Est. 86139 rows
                         │     Partition by: {i_item_id_4}
-                        └─ Aggregating Est. 102098 rows
+                        └─ Aggregating Est. 86139 rows
                            │     Group by: {i_item_id_4}
                            │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                           └─ Inner Join Est. 228901 rows
+                           └─ Inner Join Est. 86139 rows
                               │     Condition: ca_address_sk_2 == ws_bill_addr_sk
                               │     Runtime Filters Builder: {ws_bill_addr_sk}
                               ├─ Repartition Exchange Est. 376093 rows
@@ -149,7 +151,7 @@ Projection Est. 100 rows
                               │              Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
                               └─ Repartition Exchange Est. 228901 rows
                                  │     Partition by: {ws_bill_addr_sk}
-                                 └─ Inner Join Est. 228964 rows
+                                 └─ Inner Join Est. 228901 rows
                                     │     Condition: ws_item_sk == i_item_sk_2
                                     │     Runtime Filters Builder: {i_item_sk_2}
                                     ├─ Repartition Exchange Est. 1145384 rows
@@ -172,12 +174,13 @@ Projection Est. 100 rows
                                        │     Partition by: {i_item_sk_2}
                                        └─ Inner Join Est. 40768 rows
                                           │     Condition: i_item_id_4 == i_item_id_5
+                                          │     Runtime Filters Builder: {i_item_id_5}
                                           ├─ Repartition Exchange Est. 204000 rows
                                           │  │     Partition by: {i_item_id_4}
                                           │  └─ Filter Est. 204000 rows
-                                          │     │     Condition: isNotNull(i_item_id_4)
+                                          │     │     Condition: isNotNull(i_item_id_4) Runtime Filters: {i_item_id_4}
                                           │     └─ TableScan tpcds100.item Est. 204000 rows
-                                          │              Where: isNotNull(i_item_id)
+                                          │              Where: isNotNull(i_item_id) Runtime Filters: {i_item_id}
                                           │              Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
                                           └─ MergingAggregated Est. 20404 rows
                                              └─ Repartition Exchange Est. 20404 rows
@@ -191,4 +194,4 @@ Projection Est. 100 rows
                                                          └─ TableScan tpcds100.item Est. 204000 rows
                                                                   Where: (i_category = 'Music') AND isNotNull(i_item_id)
                                                                   Outputs: i_item_id_5:=i_item_id, i_category_2:=i_category
-note: Runtime Filter is applied for 9 times.
+note: Runtime Filter is applied for 12 times.
