@@ -19,10 +19,16 @@
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
+#include <Core/Types.h>
+#include <Core/UUID.h>
 #include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
+#include <Disks/DiskType.h>
+#include <Disks/IDisk.h>
+#include <Disks/IVolume.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Statistics/AutoStatisticsMemoryRecord.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/S3PartsAttachMeta.h>
 #include <Transaction/Actions/DDLAlterAction.h>
@@ -35,15 +41,9 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
-#include <common/strong_typedef.h>
-#include <Core/Types.h>
-#include <Disks/DiskType.h>
-#include <Disks/IDisk.h>
-#include <Disks/IVolume.h>
 #include <WorkerTasks/ManipulationType.h>
-#include <Core/Types.h>
-#include <Core/UUID.h>
-#include <Statistics/AutoStatisticsMemoryRecord.h>
+#include <common/strong_typedef.h>
+#include "Transaction/CnchServerTransaction.h"
 
 namespace ProfileEvents
 {

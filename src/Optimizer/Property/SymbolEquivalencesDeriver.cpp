@@ -76,7 +76,12 @@ SymbolEquivalencesDeriverVisitor::visitProjectionStep(const ProjectionStep & ste
         revert_identifies[item.second] = item.first;
     }
 
-    return context[0]->translate(revert_identifies);
+    auto equivalences = context[0]->translate(revert_identifies);
+    for (auto & item : identities)
+    {
+        equivalences->add(item.second, item.first);
+    }
+    return equivalences;
 }
 
 SymbolEquivalencesPtr

@@ -9,7 +9,7 @@ namespace DB
 class TableFinishStep : public ITransformingStep
 {
 public:
-    TableFinishStep(const DataStream & input_stream_, TableWriteStep::TargetPtr target_, String output_affected_row_count_symbol_);
+    TableFinishStep(const DataStream & input_stream_, TableWriteStep::TargetPtr target_, String output_affected_row_count_symbol_, ASTPtr query_ = nullptr);
 
     String getName() const override
     {
@@ -35,12 +35,15 @@ public:
 
     const String & getOutputAffectedRowCountSymbol() const { return output_affected_row_count_symbol; }
 
+    void setQuery(const ASTPtr & query_) { query = query_; }
+
     void toProto(Protos::TableFinishStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<TableFinishStep> fromProto(const Protos::TableFinishStep & proto, ContextPtr context);
 
 private:
     TableWriteStep::TargetPtr target;
     String output_affected_row_count_symbol;
+    ASTPtr query;
     Poco::Logger * log;
 };
 }

@@ -8,6 +8,7 @@
 #include <Core/QualifiedTableName.h>
 #include <Core/Types.h>
 #include <Common/SipHash.h>
+#include "Parsers/ASTTableColumnReference.h"
 #include <Interpreters/Context_fwd.h>
 #include <Optimizer/CostModel/PlanNodeCost.h>
 #include <Optimizer/SimplifyExpressions.h>
@@ -63,6 +64,23 @@ public:
 
 namespace
 {
+    class TableColumnToIdentifierRewriter : public SimpleExpressionRewriter<Void>
+    {
+    public:
+        static ASTPtr rewrite(ASTPtr expr)
+        {
+            TableColumnToIdentifierRewriter rewriter;
+            Void c;
+            return ASTVisitorUtil::accept(expr, rewriter, c);
+        }
+
+        ASTPtr visitASTTableColumnReference(ASTPtr & expr, Void &) override
+        {
+            const auto & name = expr->as<ASTTableColumnReference &>().column_name;
+            return std::make_shared<ASTIdentifier>(name);
+        }
+    };
+
     void addSkipSignaturesRecursive(const PlanSignature & signature, std::unordered_set<PlanSignature> & dependents, const SignatureUsages & usages)
     {
         if (dependents.contains(signature))
@@ -228,11 +246,11 @@ public:
         MaterializedViewCandidate::EqASTBySerializeSet group_bys{};
         MaterializedViewCandidate::EqASTBySerializeSet outputs{};
         if (where_filter)
-            wheres.emplace(MaterializedViewCandidate::EqASTBySerialize(symbol_map.inlineReferences(where_filter)));
+            wheres.emplace(MaterializedViewCandidate::EqASTBySerialize(TableColumnToIdentifierRewriter::rewrite(symbol_map.inlineReferences(where_filter))));
         for (const auto & symbol : grouping_symbols)
-            group_bys.emplace(MaterializedViewCandidate::EqASTBySerialize(symbol_map.inlineReferences(symbol)));
+            group_bys.emplace(MaterializedViewCandidate::EqASTBySerialize(TableColumnToIdentifierRewriter::rewrite(symbol_map.inlineReferences(symbol))));
         for (const auto & symbol : output_symbols)
-            outputs.emplace(MaterializedViewCandidate::EqASTBySerialize(symbol_map.inlineReferences(symbol)));
+            outputs.emplace(MaterializedViewCandidate::EqASTBySerialize(TableColumnToIdentifierRewriter::rewrite(symbol_map.inlineReferences(symbol))));
 
         return std::make_optional(MaterializedViewCandidate(
             std::move(table_name), contains_aggregate, std::move(wheres), std::move(group_bys), std::move(outputs)));

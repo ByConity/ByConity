@@ -39,5 +39,6 @@ private:
 };
 
 using CnchLockHolderPtr = std::shared_ptr<CnchLockHolder>;
+using CnchLockHolderPtrs = std::vector<CnchLockHolderPtr>;
 
 }

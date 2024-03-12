@@ -196,6 +196,7 @@ message TableWriteStep {
   message InsertTarget {
     required StorageID storage_id = 1;
     repeated NameAndTypePair columns = 2;
+    optional AST query = 3;
   }
 
   message Target {
@@ -212,6 +213,7 @@ message TableFinishStep {
   required ITransformingStep query_plan_base = 1;
   required TableWriteStep.Target target = 2;
   required string output_affected_row_count_symbol = 3;
+  optional AST query = 4;
 }
 
 message FilterStep {

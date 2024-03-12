@@ -16,7 +16,7 @@ Projection Est. 1 rows
                   ├─ Aggregating Est. 42258802 rows
                   │  │     Group by: {wr_order_number}
                   │  └─ Inner (PARALLEL_HASH) Join Est. 10355302016 rows
-                  │     │     Condition: wr_order_number == ws_order_number_4
+                  │     │     Condition: wr_order_number == ws_order_number_5
                   │     │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
                   │     ├─ Inner (PARALLEL_HASH) Join Est. 863369119 rows
                   │     │  │     Condition: ws_order_number_6 == wr_order_number
@@ -35,12 +35,12 @@ Projection Est. 1 rows
                   │     │                 Where: isNotNull(wr_order_number) Runtime Filters: {wr_order_number}
                   │     │                 Outputs: [wr_order_number]
                   │     └─ Repartition Exchange Est. 720000376 rows
-                  │        │     Partition by: {ws_order_number_4}
+                  │        │     Partition by: {ws_order_number_5}
                   │        └─ Filter Est. 720000376 rows
-                  │           │     Condition: isNotNull(ws_order_number_4) Runtime Filters: {ws_order_number_4}
+                  │           │     Condition: isNotNull(ws_order_number_5) Runtime Filters: {ws_order_number_5}
                   │           └─ TableScan tpcds1000.web_sales Est. 720000376 rows
                   │                    Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
-                  │                    Outputs: ws_warehouse_sk_6:=ws_warehouse_sk, ws_order_number_4:=ws_order_number
+                  │                    Outputs: ws_warehouse_sk_6:=ws_warehouse_sk, ws_order_number_5:=ws_order_number
                   └─ Repartition Exchange Est. 99984 rows
                      │     Partition by: {ws_order_number}
                      └─ Inner Join Est. 99984 rows

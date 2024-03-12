@@ -510,6 +510,12 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     if (is_populate)
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " POPULATE" << (settings.hilite ? hilite_none : "");
 
+    if (refresh_strategy)
+    {
+        settings.ostr << settings.nl_or_ws;
+        refresh_strategy->formatImpl(settings, state, frame);
+    }
+
     if (select)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS" << settings.nl_or_ws << (settings.hilite ? hilite_none : "");

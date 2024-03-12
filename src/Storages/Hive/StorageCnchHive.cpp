@@ -442,6 +442,30 @@ std::optional<TableStatistics> StorageCnchHive::getTableStats(const Strings & co
     return stats;
 }
 
+std::vector<std::pair<String, UInt64>> StorageCnchHive::getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format)
+{
+    String filter = {};
+    auto apache_hive_partitions = hive_client->getPartitionsByFilter(hive_db_name, hive_table_name, filter);
+    std::vector<std::pair<String, UInt64>> partition_last_modification_times;
+    partition_last_modification_times.reserve(apache_hive_partitions.size());
+    for (const auto & apache_partition : apache_hive_partitions)
+    {
+
+        auto partition = std::make_shared<HivePartition>();
+        partition->load(apache_partition, metadata_snapshot->getPartitionKey());
+        if (binary_format)
+        {
+            String partition_str;
+            WriteBufferFromString write_buffer(partition_str);
+            partition->store(write_buffer, metadata_snapshot->getPartitionKey());
+            partition_last_modification_times.emplace_back(partition_str, apache_partition.lastAccessTime);
+        }
+        else
+            partition_last_modification_times.emplace_back(partition->partition_id, apache_partition.lastAccessTime);
+    }
+    return partition_last_modification_times;
+}
+
 void StorageCnchHive::serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
 {
     /// TODO: {caoliu} hack here

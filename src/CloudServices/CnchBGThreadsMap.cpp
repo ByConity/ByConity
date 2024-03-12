@@ -15,6 +15,7 @@
 
 #include <CloudServices/CnchBGThreadsMap.h>
 
+#include <CloudServices/CnchRefreshMaterializedViewThread.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchPartGCThread.h>
 #include <Interpreters/Context.h>
@@ -80,6 +81,10 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     else if (type == CnchBGThreadType::MaterializedMySQL)
     {
         return std::make_shared<MaterializedMySQLSyncThreadManager>(getContext(), storage_id);
+    }
+    else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
+    {
+        return std::make_shared<CnchRefreshMaterializedViewThread>(getContext(), storage_id);
     }
     else
     {

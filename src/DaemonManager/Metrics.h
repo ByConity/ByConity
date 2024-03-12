@@ -41,5 +41,7 @@ namespace DB::DaemonManager::BRPCMetrics
     extern bvar::Adder< int > g_executeImpl_ObjectSchemaAssemble;
     extern bvar::Adder< int > g_executeImpl_MaterializedMySQL_error;
     extern bvar::Adder< int > g_executeImpl_MaterializedMySQL;
+    extern bvar::Adder< int > g_executeImpl_CnchRefreshMaterializedView_error;
+    extern bvar::Adder< int > g_executeImpl_CnchRefreshMaterializedView;
 }/// end namespace
 

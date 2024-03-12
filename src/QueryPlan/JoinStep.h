@@ -103,6 +103,8 @@ public:
 
     bool isCrossJoin() const { return kind == ASTTableJoin::Kind::Cross || (kind == ASTTableJoin::Kind::Inner && left_keys.empty()); }
 
+    bool isInnerJoin() const {return kind == ASTTableJoin::Kind::Inner; }
+
     bool isOuterJoin() const
     {
         return (kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full)

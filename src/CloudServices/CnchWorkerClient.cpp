@@ -26,6 +26,7 @@
 #include <Storages/Hive/HiveFile/IHiveFile.h>
 #include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageMaterializedView.h>
 #include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
@@ -169,7 +170,34 @@ std::vector<ManipulationInfo> CnchWorkerClient::getManipulationTasksStatus()
     return res;
 }
 
-void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries)
+void CnchWorkerClient::submitMvRefreshTask(
+    const StorageMaterializedView & , const ManipulationTaskParams & params, TxnTimestamp txn_id)
+{
+    if (!params.rpc_port)
+        throw Exception("Rpc port is not set in ManipulationTaskParams", ErrorCodes::LOGICAL_ERROR);
+
+    brpc::Controller cntl;
+    Protos::SubmitMVRefreshTaskReq request;
+    Protos::SubmitMVRefreshTaskResp response;
+
+    auto storage_id = params.storage->getStorageID();
+
+    request.set_txn_id(txn_id);
+    request.set_timestamp(0);
+    request.set_task_id(params.task_id);
+    request.set_rpc_port(params.rpc_port);
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_mv_storage_id());
+    request.set_create_table_query(params.create_table_query);
+    request.set_drop_partition_query(params.mv_refresh_param->drop_partition_query);
+    request.set_insert_select_query(params.mv_refresh_param->insert_select_query);
+    stub->submitMVRefreshTask(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchWorkerClient::sendCreateQueries(
+    const ContextPtr & context, const std::vector<String> & create_queries, std::set<String> cnch_table_create_queries)
 {
     brpc::Controller cntl;
     Protos::SendCreateQueryReq request;
@@ -184,6 +212,9 @@ void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::
 
     for (const auto & create_query : create_queries)
         *request.mutable_create_queries()->Add() = create_query;
+
+    for (const auto & cnch_table_create_query : cnch_table_create_queries)
+        *request.mutable_cnch_table_create_queries()->Add() = cnch_table_create_query;
 
     stub->sendCreateQuery(&cntl, &request, &response, nullptr);
 

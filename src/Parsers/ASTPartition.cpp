@@ -1,6 +1,8 @@
 #include <Parsers/ASTPartition.h>
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>
+#include <Parsers/ASTSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {
@@ -40,6 +42,29 @@ void ASTPartition::formatImpl(const FormatSettings & settings, FormatState & sta
         writeQuoted(id, id_buf);
         settings.ostr << id_buf.str();
     }
+}
+
+void ASTPartition::serialize(WriteBuffer & buf) const
+{
+    serializeAST(value, buf);
+    writeBinary(fields_str, buf);
+    writeBinary(fields_count, buf);
+    writeBinary(id, buf);
+}
+
+void ASTPartition::deserializeImpl(ReadBuffer & buf)
+{
+    value = deserializeAST(buf);
+    readBinary(fields_str, buf);
+    readBinary(fields_count, buf);
+    readBinary(id, buf);
+}
+
+ASTPtr ASTPartition::deserialize(ReadBuffer & buf)
+{
+    auto partition = std::make_shared<ASTPartition>();
+    partition->deserializeImpl(buf);
+    return partition;
 }
 
 }

@@ -40,14 +40,15 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserSetQuery.h>
 #include <Parsers/ASTConstraintDeclaration.h>
 #include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/ParserDictionary.h>
 #include <Parsers/ParserDictionaryAttributeDeclaration.h>
 #include <Parsers/ParserProjectionSelectQuery.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
+#include <Parsers/ParserSetQuery.h>
+#include <Parsers/ParserRefreshStrategy.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Poco/Logger.h>
 
@@ -1834,6 +1835,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ASTPtr as_database;
     ASTPtr as_table;
     ASTPtr select;
+    ASTPtr refresh_strategy;
 
     String cluster_str;
     bool attach = false;
@@ -1880,7 +1882,6 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             return false;
     }
 
-
     if (ParserKeyword{"TO INNER UUID"}.ignore(pos, expected))
     {
         ParserLiteral literal_p(dt);
@@ -1915,6 +1916,15 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             is_populate = true;
     }
 
+    if (ParserKeyword{"REFRESH"}.ignore(pos, expected))
+    {
+        // REFRESH only with materialized views
+        if (!is_materialized_view)
+            return false;
+        if (!ParserRefreshStrategy{}.parse(pos, refresh_strategy, expected))
+            return false;
+    }
+
     /// AS SELECT ...
     if (!s_as.ignore(pos, expected))
         return false;
@@ -1946,6 +1956,8 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     query->set(query->columns_list, columns_list);
     query->set(query->storage, storage);
+    if (refresh_strategy)
+        query->set(query->refresh_strategy, refresh_strategy);
 
     tryGetIdentifierNameInto(as_database, query->as_database);
     tryGetIdentifierNameInto(as_table, query->as_table);

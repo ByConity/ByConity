@@ -3745,6 +3745,15 @@ void Context::insertQueryMetricsElement(const QueryMetricElement & element)
     }
 }
 
+void Context::insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element) const
+{
+    auto view_refresh_task_log = getViewRefreshTaskLog();
+    if (view_refresh_task_log)
+        view_refresh_task_log->add(element);
+    else
+        LOG_WARNING(&Poco::Logger::get("Context"), "View Refresh Task Log has not been initialized.");
+}
+
 std::shared_ptr<QueryWorkerMetricLog> Context::getQueryWorkerMetricsLog() const
 {
     auto lock = getLock();
@@ -3776,6 +3785,16 @@ std::shared_ptr<CnchQueryLog> Context::getCnchQueryLog() const
         return {};
 
     return shared->cnch_system_logs->getCnchQueryLog();
+}
+
+std::shared_ptr<ViewRefreshTaskLog> Context::getViewRefreshTaskLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getViewRefreshTaskLog();
 }
 
 std::shared_ptr<TraceLog> Context::getTraceLog() const

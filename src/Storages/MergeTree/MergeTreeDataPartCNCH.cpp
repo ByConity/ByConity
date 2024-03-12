@@ -201,6 +201,7 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     table_definition_hash = storage.getTableHashForClusterBy();
     columns_commit_time = local_part.columns_commit_time;
     mutation_commit_time = local_part.mutation_commit_time;
+    last_modification_time = local_part.last_modification_time;
     min_unique_key = local_part.min_unique_key;
     max_unique_key = local_part.max_unique_key;
     /// TODO:

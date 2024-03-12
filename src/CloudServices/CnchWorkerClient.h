@@ -50,6 +50,7 @@ namespace IngestColumnCnch
 }
 
 class MergeTreeMetaBase;
+class StorageMaterializedView;
 struct MarkRange;
 struct StorageID;
 struct ManipulationInfo;
@@ -75,8 +76,11 @@ public:
     std::unordered_set<String> touchManipulationTasks(const UUID & table_uuid, const Strings & tasks_id);
     std::vector<ManipulationInfo> getManipulationTasksStatus();
 
+    void submitMvRefreshTask(
+        const StorageMaterializedView & storage, const ManipulationTaskParams & params, TxnTimestamp txn_id);
+
     /// send resource to worker async
-    void sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries);
+    void sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries, std::set<String> cnch_table_create_queries = {});
 
     brpc::CallId sendQueryDataParts(
         const ContextPtr & context,

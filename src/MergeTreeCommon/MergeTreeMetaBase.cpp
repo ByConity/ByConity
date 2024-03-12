@@ -787,6 +787,34 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
     return block;
 }
 
+Block MergeTreeMetaBase::getBlockWithVirtualPartitionColumns(
+    const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const
+{
+    DataTypePtr partition_value_type = getPartitionValueType();
+    bool has_partition_value = typeid_cast<const DataTypeTuple *>(partition_value_type.get());
+    Block block{
+        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
+        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")};
+
+
+    MutableColumns columns = block.mutateColumns();
+
+    auto & partition_id_column = columns[0];
+    auto & partition_value_column = columns[1];
+
+    for (const auto & partition : partition_list)
+    {
+        partition_id_column->insert(partition->getID(*this));
+        Tuple tuple(partition->value.begin(), partition->value.end());
+        if (has_partition_value)
+            partition_value_column->insert(std::move(tuple));
+    }
+    block.setColumns(std::move(columns));
+    if (!has_partition_value)
+        block.erase(block.getPositionByName("_partition_value"));
+    return block;
+}
+
 MergeTreeDataPartType MergeTreeMetaBase::choosePartType(size_t bytes_uncompressed, size_t rows_count) const
 {
     // FIXME (UNIQUE KEY): for altering unique table, we only expect the part to be wide

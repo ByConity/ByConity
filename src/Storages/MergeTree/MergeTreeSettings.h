@@ -134,6 +134,8 @@ enum StealingCacheMode : UInt64
     M(UInt64, gc_remove_bitmap_batch_size, 1000, "Submit a batch of bitmaps to a background thread", 0) \
     M(UInt64, gc_remove_bitmap_thread_pool_size, 16, "Turn up the thread pool size to speed up GC processing of bitmaps", 0) \
     \
+    M(UInt64, max_refresh_materialized_view_task_num, 10, "Max threads to refresh for each materialized view.", 0) \
+    \
     /** Inserts settings. */ \
     M(UInt64, \
       parts_to_delay_insert, \

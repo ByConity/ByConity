@@ -67,6 +67,7 @@
 #include <Storages/PartCacheManager.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDictionary.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/getCommitted.h>
 #include <brpc/server.h>
@@ -466,6 +467,12 @@ namespace ProfileEvents
     extern const Event PutAccessEntityFailed;
     extern const Event DropAccessEntitySuccess;
     extern const Event DropAccessEntityFailed;
+    extern const Event GetByKeySuccess;
+    extern const Event GetByKeyFailed;
+    extern const Event GetMvBaseTableIDSuccess;
+    extern const Event GetMvBaseTableIDFailed;
+    extern const Event UpdateMvMetaIDSuccess;
+    extern const Event UpdateMvMetaIDFailed;
 }
 
 namespace DB
@@ -4574,21 +4581,34 @@ namespace Catalog
         const String & table_uuid, const String & partition_id, size_t max_commit_time, std::function<bool()> need_abort)
 
     {
-        auto calculate_metrics_by_partition = [&](std::unordered_map<String, Protos::DataModelPart> & parts) {
+        auto calculate_metrics_by_partition = [&](ServerDataPartsVector & parts) {
             PartitionMetricsStorePtr res = std::make_shared<PartitionMetrics::PartitionMetricsStore>();
 
-            for (auto & [part_name, part] : parts)
+            for (auto & part : parts)
             {
                 if (unlikely(need_abort()))
                 {
                     LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
                     break;
                 }
-                /// for those block only has deleted part, just ignore them because the covered part may be already removed by GC
-                if (part.deleted())
-                    continue;
 
-                res->update(part);
+                /// For those blocks only have deleted part, just ignore them because the covered part may be already removed by GC.
+                /// But we should still calculate it's `last_modification_time`.
+                res->updateLastModificationTime(part->part_model());
+            }
+
+            std::sort(parts.begin(), parts.end(), CnchPartsHelper::PartComparator<ServerDataPartPtr>{});
+            auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, false);
+
+            for (auto & part : visible_parts)
+            {
+                if (unlikely(need_abort()))
+                {
+                    LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
+                    break;
+                }
+
+                res->update(part->part_model());
             }
 
             return res;
@@ -4605,10 +4625,11 @@ namespace Catalog
 
                 /// Get latest table version.
                 StoragePtr storage = getTableByUUID(context, table_uuid, max_commit_time);
+                const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
 
                 IMetaStore::IteratorPtr it = meta_proxy->getPartsInRange(name_space, table_uuid, partition_id);
 
-                std::unordered_map<String, Protos::DataModelPart> block_name_to_part;
+                ServerDataPartsVector parts;
                 while (it->next())
                 {
                     if (unlikely(need_abort()))
@@ -4619,11 +4640,6 @@ namespace Catalog
                     Protos::DataModelPart part_model;
                     part_model.ParseFromString(it->value());
 
-                    auto part_info = createPartInfoFromModel(part_model.part_info());
-                    /// skip partial part.
-                    if (part_info->hint_mutation)
-                        continue;
-
                     /// Skip the Uncommitted parts or the parts that
                     /// cannot be seen by the time `max_commit_time`.
                     if (part_model.commit_time() == 0 || part_model.commit_time() > max_commit_time)
@@ -4632,19 +4648,12 @@ namespace Catalog
                         continue;
                     }
 
-                    String block_name = part_info->getBlockName();
-                    auto it = block_name_to_part.find(block_name);
-                    /// When there are parts with same block ID, it means the part has been marked as deleted (Remember, we have filter out partial part).
-                    /// So we can safely remove them from container since we don't need count in those parts.
-                    if (it != block_name_to_part.end())
-                        block_name_to_part.erase(it);
-                    else
-                        block_name_to_part.emplace(block_name, part_model);
+                    parts.emplace_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(merge_tree_storage, std::move(part_model))));
                 }
 
-                if (!block_name_to_part.empty())
+                if (!parts.empty())
                 {
-                    ret = *calculate_metrics_by_partition(block_name_to_part);
+                    ret = *calculate_metrics_by_partition(parts);
                 }
             },
             ProfileEvents::GetPartitionMetricsFromMetastoreSuccess,
@@ -4689,6 +4698,38 @@ namespace Catalog
             ProfileEvents::GetTopologiesFailed);
         return res;
     }
+
+    std::vector<std::shared_ptr<Protos::VersionedPartitions>> Catalog::getMvBaseTables(const String & uuid)
+    {
+        std::vector<std::shared_ptr<Protos::VersionedPartitions>> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getMvBaseTables(name_space, uuid); },
+            ProfileEvents::GetMvBaseTableIDSuccess,
+            ProfileEvents::GetMvBaseTableIDFailed);
+        return res;
+    }
+
+    BatchCommitRequest Catalog::constructMvMetaRequests(const String & uuid,
+        std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions)
+    {
+        return meta_proxy->constructMvMetaRequests(name_space, uuid, add_partitions, drop_partitions);
+    }
+
+    void Catalog::updateMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->updateMvMeta(name_space, uuid, versioned_partitions); },
+            ProfileEvents::UpdateMvMetaIDSuccess,
+            ProfileEvents::UpdateMvMetaIDFailed);
+    }
+    void Catalog::dropMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->dropMvMeta(name_space, uuid, versioned_partitions); },
+            ProfileEvents::UpdateMvMetaIDSuccess,
+            ProfileEvents::UpdateMvMetaIDFailed);
+    }
+
 
     std::vector<UInt64> Catalog::getTrashDBVersions(const String & database)
     {
@@ -6631,6 +6672,64 @@ namespace Catalog
     void Catalog::saveTableTrashItemsMetricsToMetastore(const String & table_uuid, const Protos::TableTrashItemsMetricsSnapshot & snapshot)
     {
         meta_proxy->updateTableTrashItemsSnapshot(name_space, table_uuid, snapshot.SerializeAsString());
+    }
+
+    String Catalog::getDictionaryBucketUpdateTimeKey(const StorageID & storage_id, Int64 bucket_number) const
+    {
+        return MetastoreProxy::dictionaryBucketUpdateTimeKey(name_space, toString(storage_id.uuid), bucket_number);
+    }
+
+    String Catalog::getByKey(const String & key)
+    {
+        String res;
+        runWithMetricSupport([&] { res = meta_proxy->getByKey(key); }, ProfileEvents::GetByKeySuccess, ProfileEvents::GetByKeyFailed);
+        return res;
+    }
+    std::vector<Protos::LastModificationTimeHint> Catalog::getLastModificationTimeHints(const ConstStoragePtr & table)
+    {
+        if (!table)
+        {
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, "Receive an empty table.");
+        }
+
+        /// if storage is hive, las, hudi, use hive meta store client to get partition last updated time (no cache)
+        if (auto * cnch_hive = const_cast<StorageCnchHive *>(dynamic_cast<const StorageCnchHive *>(table.get())))
+        {
+            StorageMetadataPtr metadata_snapshot = cnch_hive->getInMemoryMetadataPtr();
+            std::vector<std::pair<String, UInt64>> partition_modified_times
+                = cnch_hive->getPartitionLastModificationTime(metadata_snapshot);
+            std::vector<Protos::LastModificationTimeHint> result;
+            for ( const auto & part_modify_time : partition_modified_times)
+            {
+                Protos::LastModificationTimeHint hint = Protos::LastModificationTimeHint{};
+                hint.set_partition_id(part_modify_time.first);
+                hint.set_last_modification_time(part_modify_time.second);
+                result.push_back(std::move(hint));
+            }
+            return result;
+        }
+        const auto host_port = context.getCnchTopologyMaster()->getTargetServer(
+            UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), true);
+
+        if (!host_port.empty() && !isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort())))
+        {
+            try
+            {
+                auto ret = context.getCnchServerClientPool().get(host_port)->getLastModificationTimeHints(table->getStorageID());
+                return ret;
+            }
+            catch (...)
+            {
+                tryLogCurrentException(&Poco::Logger::get("Catalog::getLastModificationTimeHints"));
+            }
+        }
+
+        std::vector<Protos::LastModificationTimeHint> ret;
+
+        if (auto mgr = context.getPartCacheManager())
+            return mgr->getLastModificationTimeHints(table);
+
+        return ret;
     }
 }
 }

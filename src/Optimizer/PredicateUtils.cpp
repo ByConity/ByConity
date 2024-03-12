@@ -22,6 +22,7 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
@@ -678,17 +679,17 @@ PredicateUtils::extractEqualPredicates(const std::vector<ConstASTPtr> & predicat
     std::vector<std::pair<ConstASTPtr, ConstASTPtr>> equal_predicates;
     std::vector<ConstASTPtr> other_predicates;
 
-    for (auto & predicate : predicates)
+    for (const auto & predicate : predicates)
     {
         for (auto & filter : PredicateUtils::extractConjuncts(predicate))
         {
-            auto function = filter->as<ASTFunction>();
+            const auto * function = filter->as<ASTFunction>();
             if (function && function->name == "equals")
             {
-                if (function->children.size() == 2 && function->children[0]->getType() == ASTType::ASTIdentifier
-                    && function->children[1]->getType() == ASTType::ASTIdentifier)
+                if (function->arguments->children.size() == 2 && function->arguments->children[0]->getType() == ASTType::ASTIdentifier
+                    && function->arguments->children[1]->getType() == ASTType::ASTIdentifier)
                 {
-                    equal_predicates.emplace_back(function->children[0], function->children[1]);
+                    equal_predicates.emplace_back(function->arguments->children[0], function->arguments->children[1]);
                     continue;
                 }
             }
