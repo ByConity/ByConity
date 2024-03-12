@@ -17,9 +17,8 @@
 
 #include <Interpreters/Context.h>
 #include <Protos/runtime_filter.pb.h>
-#include <brpc/stream.h>
 #include <brpc/server.h>
-#include <Interpreters/Context.h>
+#include <brpc/stream.h>
 #include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
@@ -49,5 +48,4 @@ private:
 };
 
 REGISTER_SERVICE_IMPL(RuntimeFilterService);
-
 }

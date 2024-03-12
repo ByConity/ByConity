@@ -935,76 +935,175 @@ void TableScanStep::rewriteInForBucketTable(ContextPtr context) const
     LOG_TRACE(log, "After rewriteInForBucketTable:\n: {}", query->dumpTree());
 }
 
-bool TableScanStep::rewriteDynamicFilterIntoPrewhere(ASTSelectQuery * query)
+void TableScanStep::rewriteDynamicFilter(ASTSelectQuery * query, const BuildQueryPipelineSettings & build_settings, bool use_expand_pipe)
 {
-    if (auto filter = query->getWhere())
+    auto where = query->getWhere();
+    auto prehwere = query->getPrewhere();
+    if (where || prehwere)
     {
-        auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
-        if (filters.first.empty())
-            return false;
+        auto [rf_filters, where_predicates] = RuntimeFilterUtils::extractRuntimeFilters(where);
+        auto [prewher_rf_filters, prewhere_predicates] = RuntimeFilterUtils::extractRuntimeFilters(prehwere);
+        if (rf_filters.empty() && prewher_rf_filters.empty())
+            return;
+        rf_filters.insert(rf_filters.end(), prewher_rf_filters.begin(), prewher_rf_filters.end());
 
-        std::vector<ConstASTPtr> prewhere_predicates;
-        std::vector<ConstASTPtr> where_predicates{filters.second.begin(), filters.second.end()};
+        std::vector<ConstASTPtr> tmp_prewhere_predicates;
         std::vector<RuntimeFilterDescription> descriptions;
-        for (const auto & predicate : filters.first)
+        descriptions.reserve(rf_filters.size());
+        for (const auto & predicate : rf_filters)
             descriptions.emplace_back(RuntimeFilterUtils::extractDescription(predicate).value());
 
-        auto it = std::max_element(descriptions.begin(), descriptions.end(),
-                                   [](const auto & lhs, const auto & rhs) {
-            return lhs.filter_factor < rhs.filter_factor;
+        if (descriptions.empty())
+            return ;
+
+        std::sort(descriptions.begin(), descriptions.end(), [](const auto & lhs, const auto & rhs) {
+            return lhs.filter_factor > rhs.filter_factor;
         });
 
-        for (size_t i = 0; i < filters.first.size(); ++i)
+        const auto & query_id = build_settings.distributed_settings.query_id;
+        const auto & setting = build_settings.context->getSettingsRef();
+        bool enable_2stags_prewhere = setting.enable_two_stages_prewhere;
+        size_t wait_ms = use_expand_pipe ? 0 : setting.wait_runtime_filter_timeout;
+        bool enable_bf_in_prewhere = setting.enable_rewrite_bf_into_prewhere;
+        bool enable_range_cover = setting.enable_range_cover;
+        double adjust_gap = setting.adjust_range_set_filter_rate;
+        std::vector<ASTPtr> rf_predicates(descriptions.size());
+        std::vector<ASTPtr> rf_only_predicates(descriptions.size());
+        std::vector<ASTPtr> rf_range_or_in_predicates(descriptions.size());
+        std::vector<bool> is_range_or_sets(descriptions.size(), false);
+
+        size_t the_prewhere = 0;
+        bool no_check = false; /// use the highest range or set filter
+        Stopwatch watch;
+
+        for (size_t i = 0; i < descriptions.size(); ++i)
         {
-            if (ASTEquality::compareTree(descriptions[i].expr, it->expr) && storage->supportsPrewhere())
-            {
-                prewhere_predicates.emplace_back(filters.first[i]);
+            bool is_range_or_set = false;
+            bool has_bf = false;
+            auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForTableScan(descriptions[i], query_id, wait_ms, enable_bf_in_prewhere,
+                                                                                       enable_range_cover, is_range_or_set, has_bf);
+            if (runtime_filters.empty())
                 continue;
+            is_range_or_sets[i] = is_range_or_set;
+
+            if (enable_2stags_prewhere) 
+            {
+                if (has_bf)
+                    rf_only_predicates[i] = runtime_filters.back();
+            }
+            if (is_range_or_set) {
+                if (has_bf) {
+                    std::vector<ASTPtr> cur_rf_range_or_in_predicates = runtime_filters;
+                    cur_rf_range_or_in_predicates.pop_back();
+                    rf_range_or_in_predicates[i] = PredicateUtils::combineConjuncts(cur_rf_range_or_in_predicates);
+                } else {
+                    rf_range_or_in_predicates[i] = PredicateUtils::combineConjuncts(runtime_filters);
+                }
             }
 
-            where_predicates.emplace_back(filters.first[i]);
+            rf_predicates[i] = PredicateUtils::combineConjuncts(runtime_filters);
+            /// Bound the wait time
+            if (wait_ms && watch.elapsedMilliseconds() > wait_ms)
+            {
+                if (the_prewhere == i)
+                {
+                    LOG_DEBUG(log, "rewrite runtime filter time out for prewhere, ignore it: {}", descriptions[i].id);
+                    the_prewhere ++;
+                }
+                wait_ms = 0;
+            }
+
+            if (!no_check && the_prewhere != i && is_range_or_set && the_prewhere < descriptions.size())
+            {
+                /// take the first range filter as prewhere
+                if ((descriptions[i].filter_factor + adjust_gap) > descriptions[the_prewhere].filter_factor)
+                {
+                    the_prewhere = i;
+                    no_check = true;
+                }
+            }
+
+            /// If not enable bloom filter in prewhere, need bypass it
+            if (!enable_bf_in_prewhere && the_prewhere == i && !is_range_or_set)
+            {
+                the_prewhere ++;
+            }
         }
 
-        if (auto prewhere = query->getPrewhere())
-            prewhere_predicates.emplace_back(prewhere);
-
-        if (!prewhere_predicates.empty())
+        for (size_t i = 0; i < descriptions.size(); ++i)
         {
-            auto prewhere = PredicateUtils::combineConjuncts(prewhere_predicates);
-            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query prewhere: {}", prewhere->getColumnName());
-            query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(prewhere));
+            if (!rf_predicates[i])
+                continue;
+
+            if (i == the_prewhere && storage->supportsPrewhere() && (enable_bf_in_prewhere || enable_2stags_prewhere)) // TODO use rf_preds or rf_only_pred?
+            {
+                if (rf_only_predicates[i])
+                    tmp_prewhere_predicates.emplace_back(rf_only_predicates[i]); // TODO range pred derived from RF need not push into prewhere 
+                else {
+                    tmp_prewhere_predicates.emplace_back(rf_predicates[i]);
+                }
+                // continue; /// TODO: non-in pred can be push into whre
+
+            }
+            else if (is_range_or_sets[i] && storage->supportsPrewhere())
+            {
+                tmp_prewhere_predicates.emplace_back(rf_range_or_in_predicates[i]);
+            }
+            else
+            {
+                where_predicates.emplace_back(rf_predicates[i]);
+            }
+
         }
+
+        for (size_t i = 0; i < descriptions.size(); ++i)
+        {
+            if (!rf_only_predicates[i])
+                continue;
+
+            if (i != the_prewhere)
+            {
+                tmp_prewhere_predicates.emplace_back(rf_only_predicates[i]);
+                continue;
+            }
+        }
+
+        prewhere_predicates.insert(prewhere_predicates.end(), tmp_prewhere_predicates.begin(), tmp_prewhere_predicates.end());
+        auto prewhere_dicates = PredicateUtils::combineConjuncts(prewhere_predicates);
+        if (!PredicateUtils::isTruePredicate(prewhere_dicates))
+            query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(prewhere_dicates));
         else
-        {
-            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query prewhere: nullptr");
             query->setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
-        }
 
-        if (!where_predicates.empty())
-        {
-            auto where = PredicateUtils::combineConjuncts(where_predicates);
-            LOG_DEBUG(log, "after rewrite runtime filter into praewhere, query where: {}", where->getColumnName());
-            query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));
-        }
+        auto where_dicates = PredicateUtils::combineConjuncts(where_predicates);
+        if (!PredicateUtils::isTruePredicate(where_dicates))
+            query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_dicates));
         else
-        {
-            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query where: nullptr");
             query->setExpression(ASTSelectQuery::Expression::WHERE, nullptr);
-        }
 
-        return true;
+        LOG_DEBUG(log, "rewrite runtime filter done, cost:{} ms, query:{}", watch.elapsedMilliseconds(), queryToString(*query));
     }
-    return false;
 }
 
 void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
 {
     auto * query = query_info.query->as<ASTSelectQuery>();
     bool use_expand_pipe = build_context.is_expand;
-    if (!build_context.is_expand && query->getWhere()
+    if (!build_context.is_expand && (query->getWhere() || query->getPrewhere())
         && build_context.context->getSettingsRef().enable_runtime_filter_pipeline_poll)
     {
-        auto && ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getWhere());
+        std::vector<RuntimeFilterId> ids;
+        if (query->getWhere())
+        {
+            auto where_ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getWhere());
+            ids.insert(ids.end(), where_ids.begin(), where_ids.end());
+        }
+        if (query->getPrewhere())
+        {
+            auto prewhere_ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getPrewhere());
+            ids.insert(ids.end(), prewhere_ids.begin(), prewhere_ids.end());
+        }
+        
         if (!ids.empty())
         {
             Pipe pipe(std::make_shared<MergeTreeSelectPrepareProcessor>(
@@ -1036,29 +1135,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();
-    bool need_rw = rewriteDynamicFilterIntoPrewhere(query);
-    if (need_rw)
-    {
-        const auto & setting = build_context.context->getSettingsRef();
-        size_t wait_ms = use_expand_pipe ? 0 : setting.wait_runtime_filter_timeout;
-        if (auto where = query->getWhere())
-            query->setExpression(
-                ASTSelectQuery::Expression::WHERE,
-                rewriteRuntimeFilter(
-                    where, build_context.distributed_settings.query_id, wait_ms, false, false, setting.enable_range_cover));
-
-        if (auto prewhere = query->getPrewhere())
-            query->setExpression(
-                ASTSelectQuery::Expression::PREWHERE,
-                rewriteRuntimeFilter(
-                    prewhere,
-                    build_context.distributed_settings.query_id,
-                    wait_ms,
-                    true,
-                    setting.runtime_filter_rewrite_bloom_filter_into_prewhere,
-                    setting.enable_range_cover));
-        LOG_DEBUG(log, "init pipeline stage wait runtime filter cost {} ms", stage_watch.elapsedMillisecondsAsDouble());
-    }
+    /// Rewrite runtime filter
+    rewriteDynamicFilter(query, build_context, use_expand_pipe);
 
     // todo support _shard_num rewrite
     // if ()
@@ -1647,34 +1725,6 @@ bool TableScanStep::setLimit(size_t limit, const ContextMutablePtr & context)
 size_t TableScanStep::getMaxBlockSize() const
 {
     return max_block_size;
-}
-
-ASTPtr TableScanStep::rewriteRuntimeFilter(
-    const ASTPtr & filter, const String & query_id, size_t wait_ms, bool is_prewhere, bool enable_bf, bool range_cover)
-{
-    if (!filter)
-        return nullptr;
-
-    Stopwatch timer{CLOCK_MONOTONIC_COARSE};
-    timer.start();
-
-    auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
-    if (filters.first.empty())
-        return filter;
-
-    LOG_DEBUG(log, "runtime filter {} before rewrite: {}", is_prewhere ? "prewhere" : "where", filter->getColumnName());
-
-    std::vector<ConstASTPtr> predicates = std::move(filters.second);
-    for (auto & runtime_filter : filters.first)
-    {
-        auto description = RuntimeFilterUtils::extractDescription(runtime_filter).value();
-        auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForTableScan(description, query_id, wait_ms, enable_bf, range_cover);
-        predicates.insert(predicates.end(), runtime_filters.begin(), runtime_filters.end());
-    }
-
-    auto res = PredicateUtils::combineConjuncts(predicates);
-    LOG_DEBUG(log, "runtime filter {} after rewrite: {}. with {} ms", is_prewhere ? "prewhere" : "where", res->getColumnName(), timer.elapsedMilliseconds());
-    return res;
 }
 
 void TableScanStep::aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context, const String & pipeline_name)

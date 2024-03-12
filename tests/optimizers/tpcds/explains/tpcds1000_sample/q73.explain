@@ -18,12 +18,12 @@ Projection Est. 5158588 rows
             └─ Filter Est. 5137399 rows
                │     Condition: (`expr#count()` >= 1) AND (`expr#count()` <= 5)
                └─ MergingAggregated Est. 5708222 rows
-                  └─ Repartition Exchange Est. 5708223 rows
+                  └─ Repartition Exchange Est. 5708222 rows
                      │     Partition by: {ss_customer_sk}
-                     └─ Aggregating Est. 5708223 rows
+                     └─ Aggregating Est. 5708222 rows
                         │     Group by: {ss_ticket_number, ss_customer_sk}
                         │     Aggregates: expr#count():=AggNull(count)()
-                        └─ Inner Join Est. 5708223 rows
+                        └─ Inner Join Est. 5708222 rows
                            │     Condition: ss_store_sk == s_store_sk
                            │     Runtime Filters Builder: {s_store_sk}
                            ├─ Inner Join Est. 24442904 rows

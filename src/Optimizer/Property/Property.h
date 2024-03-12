@@ -37,6 +37,7 @@ class Property;
 using PropertySet = std::vector<Property>;
 using PropertySets = std::vector<PropertySet>;
 using SymbolEquivalences = Equivalences<String>;
+using SymbolEquivalencesPtr = std::shared_ptr<SymbolEquivalences>;
 
 class Constants;
 
@@ -455,6 +456,13 @@ struct CTEDescriptionHash
 struct TableLayoutHash
 {
     size_t operator()(const TableLayout & layout) const { return layout.hash(); }
+};
+
+struct PlanPropEquivalences
+{
+    PlanNodePtr plan;
+    Property property;
+    SymbolEquivalencesPtr equivalences;
 };
 
 }

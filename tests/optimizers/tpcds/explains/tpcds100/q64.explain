@@ -8,11 +8,10 @@ Projection Est. 13742937 rows
          └─ Inner Join Est. 13742937 rows
             │     Condition: i_item_sk_2 == i_item_sk_1, s_store_name_2 == s_store_name_1, s_zip_2 == s_zip_1
             │     Filter: `expr#count()_2` <= `expr#count()_1`
-            │     Runtime Filters Builder: {i_item_sk_1,s_store_name_1,s_zip_1}
             ├─ Repartition Exchange Est. 37411 rows
             │  │     Partition by: {i_item_sk_2, s_store_name_2, s_zip_2}
             │  └─ Filter Est. 67248 rows
-            │     │     Condition: d_year_6 = 2000 Runtime Filters: {i_item_sk_2, s_store_name_2, s_zip_2}
+            │     │     Condition: d_year_6 = 2000
             │     └─ Buffer Est. 74721 rows
             │        └─ CTERef[0] Est. 74721 rows
             └─ Repartition Exchange Est. 37309 rows
@@ -25,13 +24,13 @@ CTEDef [0]
    Projection Est. 74721 rows
    │     Expressions: [ca_city, ca_city_1, ca_street_name, ca_street_name_1, ca_street_number, ca_street_number_1, ca_zip, ca_zip_1, d_year, expr#count(), expr#sum(ss_coupon_amt), expr#sum(ss_list_price), expr#sum(ss_wholesale_cost), i_item_sk, i_product_name, s_store_name, s_zip]
    └─ MergingAggregated Est. 74721 rows
-      └─ Repartition Exchange Est. 75184 rows
+      └─ Repartition Exchange Est. 74721 rows
          │     Partition by: {i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
-         └─ Aggregating Est. 75184 rows
+         └─ Aggregating Est. 74721 rows
             │     Group by: {i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
             │     Group by keys not hashed: {i_product_name}
             │     Aggregates: expr#count():=AggNull(count)(), expr#sum(ss_wholesale_cost):=AggNull(sum)(ss_wholesale_cost), expr#sum(ss_list_price):=AggNull(sum)(ss_list_price), expr#sum(ss_coupon_amt):=AggNull(sum)(ss_coupon_amt)
-            └─ Inner Join Est. 75184 rows
+            └─ Inner Join Est. 74721 rows
                │     Condition: ca_address_sk_1 == c_current_addr_sk
                │     Runtime Filters Builder: {c_current_addr_sk}
                ├─ Repartition Exchange Est. 1000000 rows
@@ -70,7 +69,7 @@ CTEDef [0]
                            │  │     │     │     Condition: c_current_hdemo_sk == hd_demo_sk_1
                            │  │     │     ├─ Repartition Exchange Est. 74984 rows
                            │  │     │     │  │     Partition by: {c_current_hdemo_sk}
-                           │  │     │     │  └─ Inner Join Est. 74917 rows
+                           │  │     │     │  └─ Inner Join Est. 74984 rows
                            │  │     │     │     │     Condition: c_customer_sk == ss_customer_sk
                            │  │     │     │     │     Runtime Filters Builder: {ss_customer_sk}
                            │  │     │     │     ├─ Repartition Exchange Est. 2000000 rows
@@ -117,7 +116,7 @@ CTEDef [0]
                            │  │     │     │                 │  │           │     Runtime Filters Builder: {d_date_sk}
                            │  │     │     │                 │  │           ├─ Inner Join Est. 178444 rows
                            │  │     │     │                 │  │           │  │     Condition: ss_item_sk == cs_item_sk, ss_ticket_number == sr_ticket_number
-                           │  │     │     │                 │  │           │  │     Runtime Filters Builder: {sr_ticket_number}
+                           │  │     │     │                 │  │           │  │     Runtime Filters Builder: {cs_item_sk,sr_ticket_number}
                            │  │     │     │                 │  │           │  ├─ Filter Est. 275042936 rows
                            │  │     │     │                 │  │           │  │  │     Condition: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
                            │  │     │     │                 │  │           │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
@@ -201,5 +200,5 @@ CTEDef [0]
                            └─ Broadcast Exchange Est. 20 rows
                               └─ TableScan tpcds100.income_band Est. 20 rows
                                        Outputs: ib_income_band_sk_1:=ib_income_band_sk
-note: Runtime Filter is applied for 15 times.
+note: Runtime Filter is applied for 12 times.
 note: CTE(Common Table Expression) is applied for 2 times.

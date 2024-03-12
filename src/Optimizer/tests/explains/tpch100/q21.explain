@@ -1,0 +1,74 @@
+Projection Est. 100 rows
+│     Expressions: [s_name], numwait:=`expr#count()`
+└─ Limit Est. 100 rows
+   │     Limit: 100
+   └─ Sorting Est. 100 rows
+      │     Order by: {expr#count() desc nulls_last, s_name asc}
+      │     Limit: 100
+      └─ Gather Exchange Est. 249347 rows
+         └─ Sorting Est. 100 rows
+            │     Order by: {expr#count() desc nulls_last, s_name asc}
+            │     Limit: 100
+            └─ MergingAggregated Est. 249347 rows
+               └─ Repartition Exchange Est. 249347 rows
+                  │     Partition by: {s_name}
+                  └─ Aggregating Est. 249347 rows
+                     │     Group by: {s_name}
+                     │     Aggregates: expr#count():=count()
+                     └─ Right Anti (PARALLEL_HASH) Join Est. 1753733 rows
+                        │     Condition: l_orderkey_2 == l_orderkey
+                        │     Filter: l_suppkey_2 != l_suppkey
+                        ├─ Bucket Repatition Exchange Est. 150009475 rows
+                        │  │     Partition by: {l_orderkey_2}
+                        │  └─ Projection Est. 150009475 rows
+                        │     │     Expressions: [l_orderkey_2, l_suppkey_2]
+                        │     └─ Filter Est. 150009475 rows
+                        │        │     Condition: l_receiptdate_2 > l_commitdate_2 Runtime Filters: {l_orderkey_2}
+                        │        └─ TableScan tpch100.lineitem Est. 600037902 rows
+                        │                 Where: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey}
+                        │                 Outputs: l_commitdate_2:=l_commitdate, l_orderkey_2:=l_orderkey, l_receiptdate_2:=l_receiptdate, l_suppkey_2:=l_suppkey
+                        └─ Bucket Repatition Exchange Est. 2922889 rows
+                           │     Partition by: {l_orderkey}
+                           └─ Right Semi (PARALLEL_HASH) Join Est. 2922889 rows
+                              │     Condition: l_orderkey_1 == l_orderkey
+                              │     Filter: l_suppkey_1 != l_suppkey
+                              │     Runtime Filters Builder: {l_orderkey}
+                              ├─ Filter Est. 600037902 rows
+                              │  │     Condition: Runtime Filters: {l_orderkey_1}
+                              │  └─ TableScan tpch100.lineitem Est. 600037902 rows
+                              │           Where: Runtime Filters: {l_orderkey}
+                              │           Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
+                              └─ Inner (PARALLEL_HASH) Join Est. 2922889 rows
+                                 │     Condition: o_orderkey == l_orderkey
+                                 │     Runtime Filters Builder: {l_orderkey}
+                                 ├─ Filter Est. 73067626 rows
+                                 │  │     Condition: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
+                                 │  └─ TableScan tpch100.orders Est. 150000000 rows
+                                 │           Where: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
+                                 │           Outputs: [o_orderkey, o_orderstatus]
+                                 └─ Inner Join Est. 6000379 rows
+                                    │     Condition: l_suppkey == s_suppkey
+                                    │     Runtime Filters Builder: {s_suppkey}
+                                    ├─ Filter Est. 150009475 rows
+                                    │  │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                                    │  └─ TableScan tpch100.lineitem Est. 600037902 rows
+                                    │           Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                                    │           Outputs: [l_commitdate, l_orderkey, l_receiptdate, l_suppkey]
+                                    └─ Broadcast Exchange Est. 40000 rows
+                                       └─ Inner Join Est. 40000 rows
+                                          │     Condition: s_nationkey == n_nationkey
+                                          │     Runtime Filters Builder: {n_nationkey}
+                                          ├─ Filter Est. 1000000 rows
+                                          │  │     Condition: Runtime Filters: {s_nationkey}
+                                          │  └─ TableScan tpch100.supplier Est. 1000000 rows
+                                          │           Where: Runtime Filters: {s_nationkey}
+                                          │           Outputs: [s_name, s_nationkey, s_suppkey]
+                                          └─ Broadcast Exchange Est. 1 rows
+                                             └─ Projection Est. 1 rows
+                                                │     Expressions: [n_nationkey]
+                                                └─ Filter Est. 1 rows
+                                                   │     Condition: n_name = 'SAUDI ARABIA'
+                                                   └─ TableScan tpch100.nation Est. 25 rows
+                                                            Where: n_name = 'SAUDI ARABIA'
+                                                            Outputs: [n_name, n_nationkey]
+note: Runtime Filter is applied for 5 times.

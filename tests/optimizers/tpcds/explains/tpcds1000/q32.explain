@@ -13,6 +13,7 @@ Projection Est. 1 rows
                ├─ Inner Join Est. 441593 rows
                │  │     Condition: cs_item_sk == cs_item_sk_1
                │  │     Filter: cs_ext_discount_amt > ('1.3' * `expr#avg(cs_ext_discount_amt)`)
+               │  │     Runtime Filters Builder: {cs_item_sk_1}
                │  ├─ Filter Est. 1439980416 rows
                │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows

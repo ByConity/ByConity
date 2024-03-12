@@ -48,7 +48,10 @@ public:
         std::atomic<size_t> finished{0};
     };
 
+    struct EventFdStruct { int event_fd;};
+
     using FinishCounterPtr = std::shared_ptr<FinishCounter>;
+    using FinishPipePtr = std::shared_ptr<std::vector<EventFdStruct>>;
 
     JoiningTransform(
         Block input_header,
@@ -57,7 +60,11 @@ public:
         bool on_totals_ = false,
         bool default_totals_ = false,
         bool join_parallel_left_right_ = true,
-        FinishCounterPtr finish_counter_ = nullptr);
+        FinishCounterPtr finish_counter_ = nullptr,
+        size_t total_size_ = 0,
+        size_t index_ = 0,
+        FinishPipePtr finish_pipe_ = nullptr);
+    ~JoiningTransform() override;
 
     String getName() const override { return "JoiningTransform"; }
 
@@ -65,6 +72,7 @@ public:
 
     Status prepare() override;
     void work() override;
+    int schedule() override { return (*finish_pipe)[index].event_fd; }
 
 protected:
     void transform(Chunk & chunk);
@@ -92,8 +100,12 @@ private:
     ExtraBlockPtr not_processed;
 
     FinishCounterPtr finish_counter;
+    bool finish_counter_finish = false;
     BlockInputStreamPtr non_joined_stream;
     size_t max_block_size;
+    size_t total_size = 0;
+    size_t index = 0;
+    FinishPipePtr finish_pipe;
 
     Block readExecute(Chunk & chunk);
 };

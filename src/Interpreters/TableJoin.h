@@ -270,13 +270,15 @@ public:
 
     String renamedRightColumnName(const String & name) const;
 
-    void fixRFParallel(size_t parallel) {runtimeFilterConsumer->fixParallel(parallel);}
+    void serialize(WriteBuffer & buf) const;
+    void deserializeImpl(ReadBuffer & buf, ContextPtr context);
+    static std::shared_ptr<TableJoin> deserialize(ReadBuffer & buf, ContextPtr context);
 
     std::shared_ptr<RuntimeFilterConsumer> getRuntimeFilterConsumer() const { return runtimeFilterConsumer; }
     size_t getBloomBuildThreshold() const { return runtime_filter_bloom_build_threshold;}
     size_t getInBuildThreshold() const { return runtime_filter_in_build_threshold;}
 
-    void setRuntimeFilterConsumer(std::shared_ptr<RuntimeFilterConsumer> && filterConsumer) { runtimeFilterConsumer = std::move(filterConsumer); }
+    void setRuntimeFilterConsumer(const std::shared_ptr<RuntimeFilterConsumer> &filterConsumer) { runtimeFilterConsumer = filterConsumer; }
 };
 
 }

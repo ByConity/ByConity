@@ -13,7 +13,7 @@ Projection Est. 684049 rows
                   │     Aggregates: expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST)):=AggNull(sum)(expr#minus(LO_REVENUE, LO_SUPPLYCOST))
                   └─ Projection Est. 4121935 rows
                      │     Expressions: [P_BRAND, S_CITY], expr#minus(LO_REVENUE, LO_SUPPLYCOST):=LO_REVENUE - LO_SUPPLYCOST, expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner (PARALLEL_HASH) Join Est. 6000975 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 4121935 rows
                         │     Condition: LO_CUSTKEY == C_CUSTKEY
                         │     Runtime Filters Builder: {C_CUSTKEY}
                         ├─ Repartition Exchange Est. 13676691 rows

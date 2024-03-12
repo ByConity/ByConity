@@ -9,7 +9,7 @@ Projection Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_last_name ASC NULLS LAST, ss_ticket_number ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 802340 rows
+            └─ Inner Join Est. 798038 rows
                │     Condition: ca_address_sk_1 == c_current_addr_sk
                │     Filter: ca_city_1 != ca_city
                ├─ Repartition Exchange Est. 1000000 rows
@@ -30,10 +30,10 @@ Projection Est. 100 rows
                      │              Outputs: [c_customer_sk, c_current_addr_sk, c_first_name, c_last_name]
                      └─ Repartition Exchange Est. 795203 rows
                         │     Partition by: {ss_customer_sk}
-                        └─ Aggregating Est. 763629 rows
+                        └─ Aggregating Est. 795203 rows
                            │     Group by: {ss_ticket_number, ss_customer_sk, ss_addr_sk, ca_city}
                            │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(ss_ext_list_price):=AggNull(sum)(ss_ext_list_price), expr#sum(ss_ext_tax):=AggNull(sum)(ss_ext_tax)
-                           └─ Inner Join Est. 763629 rows
+                           └─ Inner Join Est. 795203 rows
                               │     Condition: ca_address_sk == ss_addr_sk
                               ├─ Repartition Exchange Est. 1000000 rows
                               │  │     Partition by: {ca_address_sk}

@@ -23,7 +23,7 @@ Projection Est. 100 rows
                               │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
                               ├─ Repartition Exchange Est. 18532406607 rows
                               │  │     Partition by: {cs_item_sk, cs_order_number}
-                              │  └─ Inner Join Est. 3125419194 rows
+                              │  └─ Inner Join Est. 18532406607 rows
                               │     │     Condition: cs_ship_date_sk == d_date_sk_2
                               │     │     Filter: d_date_1 > (d_date + toIntervalDay(5))
                               │     ├─ Inner Join Est. 3125419194 rows

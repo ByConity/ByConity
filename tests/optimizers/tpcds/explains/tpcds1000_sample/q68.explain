@@ -22,7 +22,7 @@ Projection Est. 100 rows
                │              Outputs: ca_address_sk_1:=ca_address_sk, ca_city_1:=ca_city
                └─ Repartition Exchange Est. 1983932 rows
                   │     Partition by: {c_current_addr_sk}
-                  └─ Inner (PARALLEL_HASH) Join Est. 2002867 rows
+                  └─ Inner (PARALLEL_HASH) Join Est. 1983932 rows
                      │     Condition: c_customer_sk == ss_customer_sk
                      │     Runtime Filters Builder: {ss_customer_sk}
                      ├─ Repartition Exchange Est. 12000000 rows

@@ -189,7 +189,7 @@ public:
       * Use only after all calls to joinBlock was done.
       * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size) const override;
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size, size_t total_size, size_t index) const override;
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const final;
@@ -379,15 +379,20 @@ public:
     bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
 
     bool isEqualNull(const String& name) const;
-    void tryBuildRuntimeFilters(size_t total_rows) const override;
-    void bypassRuntimeFilters(BypassType type) const;
+    void tryBuildRuntimeFilters() const override;
+    void bypassRuntimeFilters(BypassType type, size_t total_size) const;
     const Block & savedBlockSample() const { return data->sample_block; }
     void buildBloomFilterRF(
-        const RuntimeFilterBuildInfos & rf_info, const String & name, size_t ht_size, RuntimeFilterConsumer * rf_consumer) const;
-    void buildValueSetRF(const RuntimeFilterBuildInfos & rf_info, const String & name, RuntimeFilterConsumer * rf_consumer) const;
+        const RuntimeFilterBuildInfos & rf_info, const String & name, size_t ht_size, const std::vector<const BlocksList *> & blocks,
+        RuntimeFilterConsumer * rf_consumer) const;
+    void buildValueSetRF(const RuntimeFilterBuildInfos & rf_info, const String & name, const std::vector<const BlocksList *> & blocks,
+                         RuntimeFilterConsumer * rf_consumer) const;
+    void buildAllRF(size_t total_size, const std::vector<const BlocksList *> & all_blocks, RuntimeFilterConsumer * rf_consumer) const;
 
 private:
     friend class NonJoinedBlockInputStream;
+    friend class ConcurrentNotJoinedBlockInputStream;
+    friend class ConcurrentHashJoin;
     friend class JoinSource;
 
     std::shared_ptr<TableJoin> table_join;

@@ -14,6 +14,7 @@
 #include <Common/LinkedHashMap.h>
 #include <common/logger_useful.h>
 #include "Protos/EnumMacros.h"
+#include <bthread/shared_mutex.h>
 
 namespace DB
 {
@@ -29,16 +30,18 @@ namespace Protos
 ENUM_WITH_PROTO_CONVERTER(
     RuntimeFilterDistribution, // enum name
     Protos::RuntimeFilterDistribution, // proto enum message
-    (Local),
-    (Distributed));
+    (LOCAL),
+    (DISTRIBUTED),
+    (UNKNOWN));
 
 enum class BypassType : UInt8
 {
     NO_BYPASS = 0,   /// Normal case
-    BYPASS_EMPTY_HT, /// Empty right table, which can short circuit the right table scan
+    BYPASS_EMPTY_HT, /// Empty right table, which can short circuit the left table scan
     BYPASS_LARGE_HT, /// Too large to build runtime filter, same as the runtime filter abort
 };
 
+String distributionToString(RuntimeFilterDistribution distribution);
 String bypassTypeToString(BypassType type);
 
 struct InternalDynamicData
@@ -61,7 +64,6 @@ struct RuntimeFilterBuildInfos
 
     void toProto(Protos::RuntimeFilterBuildInfos & proto) const;
     static RuntimeFilterBuildInfos fromProto(const Protos::RuntimeFilterBuildInfos & proto);
-
     RuntimeFilterBuildInfos(RuntimeFilterId id_, RuntimeFilterDistribution distribution_) : id(id_), distribution(distribution_) { }
 };
 
@@ -71,8 +73,8 @@ struct RuntimeFilterVal
     bool is_bf;
     BloomFilterWithRangePtr bloom_filter;
     ValueSetWithRangePtr values_set; // hash default 1024
-    void deserialize(ReadBuffer & istr);
-    void serialize(WriteBuffer & ostr) const;
+    void deserialize(ReadBuffer & buf);
+    void serialize(WriteBuffer & buf) const;
     String dump() const;
 };
 
@@ -91,9 +93,13 @@ struct RuntimeFilterData
 
 struct DynamicData
 {
+    DynamicData() :bf_mutex(std::make_shared<bthread::SharedMutex>()) {
+    }
     BypassType bypass = BypassType::NO_BYPASS;
     bool is_local = false;
     std::variant<RuntimeFilterVal, InternalDynamicData> data;
+    std::shared_ptr<bthread::SharedMutex> bf_mutex;
+    BloomFilterWithRangePtr bf;
     String dump()
     {
         if (bypass == BypassType::BYPASS_LARGE_HT)
@@ -125,17 +131,17 @@ using RuntimeFilterBuilderPtr = std::shared_ptr<RuntimeFilterBuilder>;
 class RuntimeFilterBuilder
 {
 public:
-    explicit RuntimeFilterBuilder(ContextPtr context, const LinkedHashMap<String, RuntimeFilterBuildInfos> & runtime_filters_);
+    explicit RuntimeFilterBuilder(const Settings & settings, const LinkedHashMap<String, RuntimeFilterBuildInfos> & runtime_filters_);
 
     UInt32 getId() const { return builder_id; }
 
     const LinkedHashMap<String, RuntimeFilterBuildInfos> & getRuntimeFilters() const { return runtime_filters; }
     bool isLocal(const String & name) {
-        return runtime_filters.at(name).distribution == RuntimeFilterDistribution::Local;
+        return runtime_filters.at(name).distribution == RuntimeFilterDistribution::LOCAL;
     }
 
-    RuntimeFilterData merge(std::vector<RuntimeFilterData> & data_sets) const;
-    std::unordered_map<RuntimeFilterId, InternalDynamicData> extractValues(RuntimeFilterData && data) const;
+    RuntimeFilterData merge(std::map<UInt32, RuntimeFilterData> && data_sets) const;
+    std::unordered_map<RuntimeFilterId, InternalDynamicData> extractDistributedValues(RuntimeFilterData && data) const;
 
 private:
     /**

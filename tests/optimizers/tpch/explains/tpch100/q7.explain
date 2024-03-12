@@ -13,13 +13,13 @@ Projection Est. 2368 rows
                   │     Aggregates: expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
                   └─ Projection Est. 1165131 rows
                      │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
-                     └─ Inner (PARALLEL_HASH) Join Est. 12000000 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 1165131 rows
                         │     Condition: l_orderkey == o_orderkey
                         │     Filter: ((n_name = 'GERMANY') OR (n_name_1 = 'GERMANY')) AND ((n_name_1 = 'FRANCE') OR (n_name = 'FRANCE'))
                         │     Runtime Filters Builder: {o_orderkey}
                         ├─ Repartition Exchange Est. 14564138 rows
                         │  │     Partition by: {l_orderkey}
-                        │  └─ Inner Join Est. 48003093 rows
+                        │  └─ Inner Join Est. 14564138 rows
                         │     │     Condition: l_suppkey == s_suppkey
                         │     │     Runtime Filters Builder: {s_suppkey}
                         │     ├─ Filter Est. 182051733 rows
@@ -44,7 +44,7 @@ Projection Est. 2368 rows
                         │                          Outputs: [n_nationkey, n_name]
                         └─ Repartition Exchange Est. 12000000 rows
                            │     Partition by: {o_orderkey}
-                           └─ Inner Join Est. 18053418 rows
+                           └─ Inner Join Est. 12000000 rows
                               │     Condition: o_custkey == c_custkey
                               │     Runtime Filters Builder: {c_custkey}
                               ├─ Repartition Exchange Est. 150000000 rows

@@ -49,11 +49,13 @@ public:
     bool alwaysReturnsEmptySet() const override;
     bool supportParallelJoin() const override { return true; }
 
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size) const override;
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size, size_t, size_t) const override;
 
-    void tryBuildRuntimeFilters(size_t total_rows) const override;
+    void tryBuildRuntimeFilters() const override;
+    static UInt32 toPowerOfTwo(UInt32 x);
 
 private:
+    friend class ConcurrentNotJoinedBlockInputStream;
     struct InternalHashJoin
     {
         std::mutex mutex;

@@ -8,11 +8,10 @@ Projection
          └─ Inner Join
             │     Condition: i_item_sk_2 == i_item_sk_1, s_store_name_2 == s_store_name_1, s_zip_2 == s_zip_1
             │     Filter: `expr#count()_2` <= `expr#count()_1`
-            │     Runtime Filters Builder: {i_item_sk_1,s_store_name_1,s_zip_1}
             ├─ Repartition Exchange
             │  │     Partition by: {i_item_sk_2, s_store_name_2, s_zip_2}
             │  └─ Filter
-            │     │     Condition: d_year_6 = 2000 Runtime Filters: {i_item_sk_2, s_store_name_2, s_zip_2}
+            │     │     Condition: d_year_6 = 2000
             │     └─ Buffer
             │        └─ CTERef[0]
             └─ Repartition Exchange
@@ -113,7 +112,7 @@ CTEDef [0]
                            │  │     │     │              │  │        │     Runtime Filters Builder: {d_date_sk}
                            │  │     │     │              │  │        ├─ Inner Join
                            │  │     │     │              │  │        │  │     Condition: ss_item_sk == cs_item_sk, ss_ticket_number == sr_ticket_number
-                           │  │     │     │              │  │        │  │     Runtime Filters Builder: {sr_ticket_number}
+                           │  │     │     │              │  │        │  │     Runtime Filters Builder: {cs_item_sk,sr_ticket_number}
                            │  │     │     │              │  │        │  ├─ Filter
                            │  │     │     │              │  │        │  │  │     Condition: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
                            │  │     │     │              │  │        │  │  └─ TableScan tpcds1000.store_sales
@@ -195,5 +194,5 @@ CTEDef [0]
                            └─ Broadcast Exchange
                               └─ TableScan tpcds1000.income_band
                                        Outputs: ib_income_band_sk_1:=ib_income_band_sk
-note: Runtime Filter is applied for 15 times.
+note: Runtime Filter is applied for 12 times.
 note: CTE(Common Table Expression) is applied for 2 times.
