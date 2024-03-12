@@ -673,7 +673,7 @@ protected:
             //         makeASTIdentifier(missing_table_column.first));
 
             // 5-3. check select columns (contains aggregates)
-            NameSet required_columns_set;
+            NameOrderedSet required_columns_set;
             Assignments assignments;
             NameToType name_to_type;
             bool enforce_agg_node = false;
@@ -1747,6 +1747,9 @@ std::vector<MaterializedViewStructurePtr> MaterializedViewRewriter::getRelatedMa
         if (auto structure = cache.getMaterializedViewStructure(view, context, true, result.local_table_to_distributed_table))
             materialized_views.push_back(*structure);
     }
+    std::sort(materialized_views.begin(), materialized_views.end(), [&](const auto & left, const auto & right) {
+        return left->view_storage_id < right->view_storage_id;
+    });
     return materialized_views;
 }
 }
