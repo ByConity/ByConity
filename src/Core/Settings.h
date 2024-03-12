@@ -1856,6 +1856,7 @@ enum PreloadLevelSettings : UInt64
     M(String, use_snapshot, "", "If not empty, specify the name of the snapshot to use for query", 0) \
     M(Seconds, snapshot_clean_interval, 300, "How often to remove ttl expired snapshots", 0) \
     /* Outfile related Settings */ \
+    M(UInt64, split_file_size_in_mb, 0, "Threshold to split the out data in 'INTO OUTFILE' clause", 0) \
     M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
     M(UInt64, fuzzy_max_files, 100, "The max number of files when insert with fuzzy names.", 0) \

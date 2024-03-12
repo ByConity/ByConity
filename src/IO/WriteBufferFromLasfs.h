@@ -60,6 +60,15 @@ public:
     //do sync() if file is open
     ~WriteBufferFromLasfs() override;
 
+    WriteBuffer * inplaceReconstruct(const String & out_path, [[maybe_unused]] std::unique_ptr<WriteBuffer> nested) override
+    {
+        std::map<std::string, std::string> settings_tmp = std::move(this->settings);
+        const Poco::URI out_uri(out_path);
+        // Call the destructor explicitly but does not free memory
+        this->~WriteBufferFromLasfs();
+        new (this) WriteBufferFromLasfs(settings_tmp, "lasfs:/" + out_uri.getHost() + out_uri.getPath());
+        return this;
+    }
 protected:
     void finalizeImpl() override;
 };

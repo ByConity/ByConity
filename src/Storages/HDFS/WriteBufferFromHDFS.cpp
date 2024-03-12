@@ -172,9 +172,11 @@ WriteBufferFromHDFS::WriteBufferFromHDFS(
 
 
 WriteBufferFromHDFS::WriteBufferFromHDFS(
-    const std::string & hdfs_name_, const HDFSConnectionParams & hdfs_params, const size_t buf_size_, int flag, bool overwrite_current_file)
+    const std::string & hdfs_name_, const HDFSConnectionParams & hdfs_params_, const size_t buf_size_, int flag, bool overwrite_current_file_)
     : WriteBufferFromFileBase(buf_size_, nullptr, 0)
-    , impl(std::make_unique<WriteBufferFromHDFSImpl>(hdfs_name_, hdfs_params, flag, overwrite_current_file))
+    , hdfs_params(hdfs_params_)
+    , skip_file_exist_check(overwrite_current_file_)
+    , impl(std::make_unique<WriteBufferFromHDFSImpl>(hdfs_name_, hdfs_params, flag, overwrite_current_file_))
     , hdfs_name(hdfs_name_)
 {
 }
