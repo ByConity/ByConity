@@ -4253,9 +4253,14 @@ BlockOutputStreamPtr Context::getOutputStream(const String & name, WriteBuffer &
     return FormatFactory::instance().getOutputStream(name, buf, sample, shared_from_this());
 }
 
-OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const
+OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample, bool out_to_directory) const
 {
-    return FormatFactory::instance().getOutputFormatParallelIfPossible(name, buf, sample, shared_from_this());
+    return FormatFactory::instance().getOutputFormatParallelIfPossible(name, buf, sample, shared_from_this(), out_to_directory);
+}
+
+OutputFormatPtr Context::getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const
+{
+    return FormatFactory::instance().getOutputFormat(name, buf, sample, shared_from_this());
 }
 
 
