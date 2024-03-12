@@ -791,11 +791,6 @@ protected:
                 it_stats = materialized_views_stats.emplace(target_storage_id.getFullTableName(), stats).first;
             }
 
-            auto storage = DatabaseCatalog::instance().getTable(target_storage_id, context);
-            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
-            const auto & ordered_columns = metadata_snapshot->sorting_key.column_names;
-            bool contains_ordered_columns = !ordered_columns.empty() && columns.count(ordered_columns.front());
-
             NamesWithAliases table_columns_with_aliases;
             if (required_columns_set.empty()) {
                 required_columns_set.emplace(*view_outputs.begin());
@@ -809,6 +804,22 @@ protected:
                     continue; // bail out
                 }
                 table_columns_with_aliases.emplace_back(it->second, column);
+            }
+
+            auto storage = DatabaseCatalog::instance().getTable(target_storage_id, context);
+            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
+            const auto & ordered_columns = metadata_snapshot->sorting_key.column_names;
+            bool contains_ordered_columns = false;
+            if (!ordered_columns.empty())
+            {
+                for (const auto & column_with_alias : table_columns_with_aliases)
+                {
+                    if (ordered_columns[0] == column_with_alias.first && columns.count(column_with_alias.second))
+                    {
+                        contains_ordered_columns = true;
+                        break;
+                    }
+                }
             }
 
             // 8. other query info
