@@ -212,7 +212,7 @@ int DaemonManager::main(const std::vector<std::string> &)
     DB::registerServiceDiscovery();
     registerDaemonJobs();
 
-    const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+    const char * consul_http_host = getConsulIPFromEnv();
     const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
     if (consul_http_host != nullptr && consul_http_port != nullptr)
         brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
