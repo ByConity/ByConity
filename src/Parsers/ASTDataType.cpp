@@ -19,7 +19,7 @@ ASTPtr ASTDataType::clone() const
 
 void ASTDataType::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    if (settings.dialect_type == DialectType::ANSI)
+    if (settings.dialect_type != DialectType::CLICKHOUSE)
     {
         data_type->formatImpl(settings, state, frame);
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "")

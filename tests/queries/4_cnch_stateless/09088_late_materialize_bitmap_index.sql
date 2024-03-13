@@ -82,8 +82,8 @@ select count() from test_bitmap_index where (arraySetCheck(int_vid, 1) and array
 
 select 'ad mocked';
 set max_bytes_to_read = 25;
-select id, multiIf(arraySetCheck(int_vid,1),'duck', arraySetCheck(int_vid,2),'boat', NULL) as name, count() from test_bitmap_index where arraySetCheck(int_vid, (1,2)) group by id, name order by id, name;
-select id, multiIf(arraySetCheck(int_vid,1),'duck', arraySetCheck(int_vid,2),'boat', NULL) as name, count() from test_bitmap_index where arraySetCheck(int_vid, (1,2)) and id > 1 group by id, name order by id, name;
+select id, multiIf(arraySetCheck(int_vid,1),'duck', arraySetCheck(int_vid,2),'boat', NULL) as name, count() from test_bitmap_index where arraySetCheck(int_vid, (1,2)) group by id, name order by id, name settings enable_optimizer=0; -- when enable_optimizer=1 this case is not stable
+select id, multiIf(arraySetCheck(int_vid,1),'duck', arraySetCheck(int_vid,2),'boat', NULL) as name, count() from test_bitmap_index where arraySetCheck(int_vid, (1,2)) and id > 1 group by id, name order by id, name settings enable_optimizer=0;
 set max_bytes_to_read = 0;
 select * from test_bitmap_index where arraySetCheck(int_vid, (1,3,5)) order by id;
 

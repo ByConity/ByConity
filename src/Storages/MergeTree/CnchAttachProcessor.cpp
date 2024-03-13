@@ -1496,7 +1496,7 @@ void CnchAttachProcessor::genPartsDeleteMark(PartsWithHistory & parts_to_write)
 {
     injectFailure(AttachFailurePoint::GEN_DELETE_MARK_FAIL);
 
-    auto parts_to_drop = target_tbl.selectPartsByPartitionCommand(query_ctx, command);
+    auto parts_to_drop = target_tbl.selectPartsByPartitionCommand(query_ctx, command).first;
     if (!parts_to_drop.empty())
     {
         if (command.part)

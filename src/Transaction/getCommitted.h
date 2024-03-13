@@ -59,11 +59,12 @@ bool isCommitted(const T & element, std::unordered_map<UInt64, TransactionRecord
 /// and remove intermediate state elements if its corresponding transaction is running.
 /// The elements with commit time larger than ts will be ignored.
 template <typename T, typename Operation, bool test_end_ts>
-void getImpl(std::vector<T> & elements, const TxnTimestamp & ts, Catalog::Catalog * catalog)
+TransactionRecords getImpl(std::vector<T> & elements, const TxnTimestamp & ts, Catalog::Catalog * catalog, TransactionRecords * input_records)
 {
     std::unordered_map<UInt64, TransactionRecordLite> transactions; // cache for fetched transactions
+    std::unordered_set<UInt64> unfinished_transactions; // record for unfinished transactions
     std::set<TxnTimestamp> txn_ids;
-    for (const auto & element: elements)
+    for (const auto & element : elements)
     {
         UInt64 commit_time = Operation::getCommitTime(element);
         UInt64 txn_id = Operation::getTxnID(element);
@@ -78,18 +79,29 @@ void getImpl(std::vector<T> & elements, const TxnTimestamp & ts, Catalog::Catalo
             txn_ids.insert(txn_id);
         }
     }
-    // get txn records status in batch
-    auto records = catalog->getTransactionRecords(std::vector<TxnTimestamp>(txn_ids.begin(), txn_ids.end()), 100000);
+
+    TransactionRecords records;
+    if (input_records)
+        records = *input_records;
+    else
+    {
+        // get txn records status in batch
+        records = catalog->getTransactionRecords(std::vector<TxnTimestamp>(txn_ids.begin(), txn_ids.end()), 100000);
+    }
+
     for (const auto & record : records)
     {
         if (record.status() == CnchTransactionStatus::Finished)
         {
             transactions[record.txnID()] = {record.commitTs(), record.status()};
         }
+        else if (input_records)
+            unfinished_transactions.emplace(record.txnID());
     }
 
+    /// We need to ignore those elements whose have been set commit time already but status of the txn is unfinished in order to make sure the data consistency.
     std::erase_if(elements, [&](const T & element) {
-        bool is_uncommitted = !isCommitted<T, Operation>(element, transactions)
+        bool is_uncommitted = unfinished_transactions.count(Operation::getTxnID(element)) || !isCommitted<T, Operation>(element, transactions)
             || transactions[Operation::getTxnID(element)].commit_ts > ts;
         if constexpr (test_end_ts)
             return is_uncommitted || (Operation::getEndTime(element) && Operation::getEndTime(element) <= ts);
@@ -97,6 +109,8 @@ void getImpl(std::vector<T> & elements, const TxnTimestamp & ts, Catalog::Catalo
             return is_uncommitted;
 
     });
+
+    return records;
 }
 
 
