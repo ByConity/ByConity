@@ -484,6 +484,7 @@ QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr contex
     }
 
     LOG_TRACE(log, "tealimit rewrited query with optimizer: {}", postQuery.str());
+    context->applySettingsChanges({SettingChange("dialect_type", "CLICKHOUSE")});
 
     // evaluate the internal SQL and get the result
     return executeQuery(postQuery.str(), context->getQueryContext(), true).pipeline;
