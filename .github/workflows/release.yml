@@ -31,7 +31,7 @@ jobs:
           docker container create --name ${DUMMY_CONTAINER} -v ${SRC_VOL}:/build hello-world
           docker cp ./ByConity/. ${DUMMY_CONTAINER}:/build/
           docker rm ${DUMMY_CONTAINER}
-      - name: Build All Bianries.
+      - name: Build All Binaries.
         run: |
           ./ByConity/docker/packager/packager --output-dir /output --package-type deb --ccache_dir=${HOME}/.ccache_for_docker --additional-pkgs --version ${{ github.ref_name }} --build-type release --dind-mode
       - name: Copy Binaries out.
@@ -40,7 +40,7 @@ jobs:
           docker cp ${DUMMY_CONTAINER}:/output/. release-binary/output/
           docker rm ${DUMMY_CONTAINER}
           ls -al release-binary/output/
-          echo "BIN_DIR=${PWD}/release-binary/output"
+          echo "BIN_DIR=${PWD}/release-binary/output" >> $GITHUB_ENV
       - name: Build Docker.
         run: |
           cd ByConity/docker/debian/release
@@ -52,6 +52,18 @@ jobs:
         #   with:
         #     username: ${{ secrets.DOCKERHUB_USERNAME }}
         #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+        # - name: Push Dockers.
+        #   run: |
+        #     docker push byconity/byconity:${{ github.ref_name }}
+        #     # TODO: Tag as stable then push.
+        # - name: Setup Python.
+        #   uses: actions/setup-python@v4
+        #     with:
+        #       python-version: '3.11'
+        #       cache: 'pip' 
+        # - name: Install Python Dependencies.
+        #   run: |
+        #     pip install 
         # - name: Upload binaries to release
         #   uses: svenstaro/upload-release-action@v2
         #   with:

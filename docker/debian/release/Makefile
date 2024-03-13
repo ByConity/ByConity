@@ -1,5 +1,5 @@
 BYCONITY_SOURCE=$(realpath ../../..)
-BIN_DIR = ${BIN_DIR}
+BINARY_DIR = ${BIN_DIR}
 BUILD_TYPE ?= "Release"
 CMAKE_FLAGS ?= ""
 TAG ?= "latest"
@@ -24,7 +24,7 @@ image:
 	DOCKER_BUILDKIT=1 docker build -t byconity/byconity:${TAG} .
 
 image-github:
-	cp -r ${BIN_DIR}/clickhouse* .
+	cp -r ${BINARY_DIR}/clickhouse* .
 	DOCKER_BUILDKIT=1 docker build -t byconity/byconity:${TAG} .
 
 release:
