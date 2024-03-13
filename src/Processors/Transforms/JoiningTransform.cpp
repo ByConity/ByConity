@@ -3,6 +3,8 @@
 #include <Interpreters/join_common.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <thread>
+#include <chrono>
 
 namespace DB
 {
@@ -10,6 +12,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int CANNOT_READ_FROM_SOCKET;
 }
 
 Block JoiningTransform::transformHeader(Block header, const JoinPtr & join)
@@ -27,7 +30,10 @@ JoiningTransform::JoiningTransform(
     bool on_totals_,
     bool default_totals_,
     bool join_parallel_left_right_,
-    FinishCounterPtr finish_counter_)
+    FinishCounterPtr finish_counter_,
+    size_t total_size_,
+    size_t index_,
+    FinishPipePtr finish_pipe_)
     : IProcessor({input_header}, {transformHeader(input_header, join_)})
     , join(std::move(join_))
     , on_totals(on_totals_)
@@ -35,6 +41,9 @@ JoiningTransform::JoiningTransform(
     , join_parallel_left_right(join_parallel_left_right_)
     , finish_counter(std::move(finish_counter_))
     , max_block_size(max_block_size_)
+    , total_size(total_size_)
+    , index(index_)
+    , finish_pipe(std::move(finish_pipe_))
 {
     if (!join->isFilled())
         inputs.emplace_back(Block(), this);
@@ -98,7 +107,11 @@ IProcessor::Status JoiningTransform::prepare()
     if (input.isFinished())
     {
         if (process_non_joined)
+        {
+            if (non_joined_stream && !finish_counter_finish && join->getType() == JoinType::PARALLEL_HASH)
+                return Status::Async;
             return Status::Ready;
+        }
 
         output.finish();
         on_finish_output.finish();
@@ -128,18 +141,58 @@ void JoiningTransform::work()
     {
         if (!non_joined_stream)
         {
+            if (join->getType() == JoinType::PARALLEL_HASH)
+            {
+                if (!finish_counter)
+                {
+                    process_non_joined = false;
+                    return;
+                }
+                if (finish_counter->isLast())
+                {
+                    for (size_t i = 0; i < total_size; i++)
+                    {
+                        /// Send something to pipe to wake worker.
+                        uint64_t buf = 1;
+                        while (-1 == write((*finish_pipe)[i].event_fd, &buf, sizeof(buf)))
+                        {
+                            if (errno == EAGAIN)
+                                break;
+
+                            if (errno != EINTR)
+                                throwFromErrno("Cannot write to pipe", ErrorCodes::CANNOT_READ_FROM_SOCKET);
+                        }
+                    }
+                    finish_counter_finish = true;
+                }
+                non_joined_stream = join->createStreamWithNonJoinedRows(outputs.front().getHeader(), max_block_size, total_size, index);
+                if (!non_joined_stream)
+                {
+                    process_non_joined = false;
+                }
+                return;
+            }
             if (!finish_counter || !finish_counter->isLast())
             {
                 process_non_joined = false;
                 return;
             }
 
-            non_joined_stream = join->createStreamWithNonJoinedRows(outputs.front().getHeader(), max_block_size);
+            non_joined_stream = join->createStreamWithNonJoinedRows(outputs.front().getHeader(), max_block_size, 1, 0);
             if (!non_joined_stream)
             {
                 process_non_joined = false;
                 return;
             }
+        }
+
+        if (!finish_counter_finish && !finish_counter->isFinished())
+        {
+            return;
+        }
+        else
+        {
+            finish_counter_finish = true;
         }
 
         auto block = non_joined_stream->read();
@@ -242,9 +295,15 @@ Block JoiningTransform::readExecute(Chunk & chunk)
     return res;
 }
 
-FillingRightJoinSideTransform::FillingRightJoinSideTransform(Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_)
-    : IProcessor({input_header}, {Block()})
-    , join(std::move(join_)), finish_counter(std::move(finish_counter_))
+JoiningTransform::~JoiningTransform()
+{
+    if (finish_pipe && finish_pipe->size() == total_size && (*finish_pipe)[index].event_fd != -1)
+        close((*finish_pipe)[index].event_fd);
+}
+
+FillingRightJoinSideTransform::FillingRightJoinSideTransform(
+    Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_)
+    : IProcessor({input_header}, {Block()}), join(std::move(join_)), finish_counter(std::move(finish_counter_))
 {}
 
 InputPort * FillingRightJoinSideTransform::addTotalsPort()

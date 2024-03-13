@@ -260,6 +260,9 @@ ColumnPtr IExecutableFunction::defaultImplementationForNothing(
 ColumnPtr IExecutableFunction::executeWithoutLowCardinalityColumns(
     const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count, bool dry_run) const
 {
+    if (isPreviledgedFunction())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Tenant cannot execute this function {} for security reason.", getName());
+
     if (auto res = defaultImplementationForConstantArguments(args, result_type, input_rows_count, dry_run))
         return res;
 

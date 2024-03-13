@@ -15,7 +15,7 @@ Projection Est. 1 rows
                   │     Runtime Filters Builder: {ws_order_number}
                   ├─ Aggregating Est. 42258802 rows
                   │  │     Group by: {wr_order_number}
-                  │  └─ Inner (PARALLEL_HASH) Join Est. 10355302016 rows
+                  │  └─ Inner (PARALLEL_HASH) Join Est. 10387701680 rows
                   │     │     Condition: wr_order_number == ws_order_number_5
                   │     │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
                   │     ├─ Inner (PARALLEL_HASH) Join Est. 863369119 rows

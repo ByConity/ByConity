@@ -279,6 +279,7 @@ using TransactionCnchPtr = std::shared_ptr<ICnchTransaction>;
 class QueueManager;
 using QueueManagerPtr = std::shared_ptr<QueueManager>;
 
+class AsyncQueryManager;
 using AsyncQueryManagerPtr = std::shared_ptr<AsyncQueryManager>;
 
 class VirtualWarehousePool;
@@ -952,7 +953,8 @@ public:
     BlockOutputStreamPtr getOutputStreamParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const;
     BlockOutputStreamPtr getOutputStream(const String & name, WriteBuffer & buf, const Block & sample) const;
 
-    OutputFormatPtr getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const;
+    OutputFormatPtr getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample, bool out_to_directory) const;
+    OutputFormatPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const;
 
     InterserverIOHandler & getInterserverIOHandler();
 
@@ -1338,6 +1340,10 @@ public:
     ApplicationType getApplicationType() const;
     void setApplicationType(ApplicationType type);
 
+    bool getIsRestrictSettingsToWhitelist() const;
+    void setIsRestrictSettingsToWhitelist(bool is_restrict);
+    void addRestrictSettingsToWhitelist(const std::vector<String>& name) const;
+
     /// Sets default_profile and system_profile, must be called once during the initialization
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
@@ -1465,6 +1471,11 @@ public:
     void setTenantId(const String & id)
     {
         tenant_id = id;
+    }
+
+    bool shouldBlockPrivilegedOperations() const
+    {
+        return getSettingsRef().block_privileged_operations && !getTenantId().empty();
     }
 
     const String & getCurrentCatalog() const

@@ -663,7 +663,7 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
     {
         watch.restart();
         /// TODO: handle zombie intermediate bitmaps
-        DeleteBitmapMetaPtrVector all_bitmaps = catalog->getDeleteBitmapsInPartitions(istorage, {partition_id}, gc_timestamp);
+        DeleteBitmapMetaPtrVector all_bitmaps = catalog->getDeleteBitmapsInPartitionsFromMetastore(istorage, {partition_id}, gc_timestamp);
         DeleteBitmapMetaPtrVector bitmaps_to_gc;
         CnchPartsHelper::calcBitmapsForGC(all_bitmaps, &bitmaps_to_gc, nullptr);
         LOG_DEBUG(

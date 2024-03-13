@@ -18,7 +18,7 @@ Projection Est. 70158 rows
                         │     Runtime Filters Builder: {P_PARTKEY}
                         ├─ Repartition Exchange Est. 361618391 rows
                         │  │     Partition by: {LO_PARTKEY}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 361618390 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 361618391 rows
                         │     │     Condition: LO_CUSTKEY == C_CUSTKEY
                         │     │     Runtime Filters Builder: {C_CUSTKEY}
                         │     ├─ Repartition Exchange Est. 1199859470 rows

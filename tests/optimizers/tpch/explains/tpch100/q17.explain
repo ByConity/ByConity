@@ -7,9 +7,10 @@ Projection Est. 1 rows
          └─ Aggregating Est. 1 rows
             │     Group by: {}
             │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
-            └─ Inner Join Est. 605236 rows
+            └─ Inner Join Est. 601371 rows
                │     Condition: l_partkey == l_partkey_1
                │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)`)
+               │     Runtime Filters Builder: {l_partkey_1}
                ├─ Filter Est. 600037902 rows
                │  │     Condition: Runtime Filters: {l_partkey}
                │  └─ TableScan tpch100.lineitem Est. 600037902 rows

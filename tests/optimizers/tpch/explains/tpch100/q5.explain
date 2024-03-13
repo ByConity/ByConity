@@ -17,7 +17,7 @@ Projection Est. 25 rows
                         │     Condition: c_nationkey == s_nationkey, l_suppkey == s_suppkey
                         ├─ Repartition Exchange Est. 17999481 rows
                         │  │     Partition by: {c_nationkey, l_suppkey}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 17999480 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 17999481 rows
                         │     │     Condition: l_orderkey == o_orderkey
                         │     │     Runtime Filters Builder: {o_orderkey}
                         │     ├─ Repartition Exchange Est. 600037902 rows
@@ -29,7 +29,7 @@ Projection Est. 25 rows
                         │     │              Outputs: [l_orderkey, l_suppkey, l_extendedprice, l_discount]
                         │     └─ Repartition Exchange Est. 4552186 rows
                         │        │     Partition by: {o_orderkey}
-                        │        └─ Inner (PARALLEL_HASH) Join Est. 22760932 rows
+                        │        └─ Inner (PARALLEL_HASH) Join Est. 4552186 rows
                         │           │     Condition: o_custkey == c_custkey
                         │           │     Runtime Filters Builder: {c_custkey}
                         │           ├─ Repartition Exchange Est. 22760932 rows

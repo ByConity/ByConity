@@ -14,7 +14,7 @@ Projection Est. 1 rows
             │     └─ Aggregating Est. 1 rows
             │        │     Group by: {}
             │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-            │        └─ Inner Join Est. 235495 rows
+            │        └─ Inner Join Est. 101804 rows
             │           │     Condition: ca_address_sk == c_current_addr_sk
             │           │     Runtime Filters Builder: {c_current_addr_sk}
             │           ├─ Repartition Exchange Est. 376093 rows
@@ -84,14 +84,14 @@ Projection Est. 1 rows
                      └─ Aggregating Est. 1 rows
                         │     Group by: {}
                         │     Aggregates: expr#sum(ss_ext_sales_price)_1:=AggNull(sum)(ss_ext_sales_price_1)
-                        └─ Inner Join Est. 376093 rows
+                        └─ Inner Join Est. 198836 rows
                            │     Condition: ss_store_sk_1 == s_store_sk_1
-                           ├─ Inner Join Est. 376093 rows
+                           ├─ Inner Join Est. 198836 rows
                            │  │     Condition: c_current_addr_sk_1 == ca_address_sk_1
                            │  │     Runtime Filters Builder: {ca_address_sk_1}
                            │  ├─ Repartition Exchange Est. 458320 rows
                            │  │  │     Partition by: {c_current_addr_sk_1}
-                           │  │  └─ Inner Join Est. 459953 rows
+                           │  │  └─ Inner Join Est. 458320 rows
                            │  │     │     Condition: c_customer_sk_1 == ss_customer_sk_1
                            │  │     │     Runtime Filters Builder: {ss_customer_sk_1}
                            │  │     ├─ Repartition Exchange Est. 2000000 rows

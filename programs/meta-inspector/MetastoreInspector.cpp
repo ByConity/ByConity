@@ -140,6 +140,8 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
         std::cout << formatDataModel<DB::Protos::DataModelTable>(metadata) << std::endl;
     else if (key.starts_with("PT_"))
         std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
+    else if (key.starts_with("DLB_"))
+        std::cout << formatDataModel<DB::Protos::DataModelDeleteBitmap>(metadata) << std::endl;
     else if (key.starts_with("TR_"))
         std::cout << formatDataModel<DB::Protos::DataModelTransactionRecord>(metadata) << std::endl;
     else if (key.ends_with("-election"))

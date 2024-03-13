@@ -46,6 +46,7 @@ public:
     std::shared_ptr<MergeTreePartition> partition_ptr;
     std::string partition_id;
     std::atomic<UInt32> cache_status = CacheStatus::UINIT;
+    std::atomic<UInt32> delete_bitmap_cache_status = CacheStatus::UINIT;
     std::shared_ptr<PartitionMetrics> metrics_ptr;
 
     inline PartitionLockHolder readLock() const

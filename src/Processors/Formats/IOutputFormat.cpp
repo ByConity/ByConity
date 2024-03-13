@@ -105,11 +105,15 @@ void IOutputFormat::work()
 
     switch (current_block_kind)
     {
-        case Main:
+        case Main: {
             result_rows += current_chunk.getNumRows();
-            result_bytes += current_chunk.allocatedBytes();
+            auto bytes = current_chunk.allocatedBytes();
+            result_bytes += bytes;
             consume(std::move(current_chunk));
+
+            processMultiOutFileIfNeeded(bytes);
             break;
+        }
         case Totals:
             if (auto totals = prepareTotals(std::move(current_chunk)))
                 consumeTotals(std::move(totals));
@@ -132,10 +136,38 @@ void IOutputFormat::flush()
 
 void IOutputFormat::write(const Block & block)
 {
+    auto bytes = block.allocatedBytes();
     consume(Chunk(block.getColumns(), block.rows()));
+
+    processMultiOutFileIfNeeded(bytes);
 
     if (auto_flush)
         flush();
+}
+
+void IOutputFormat::setOutFileTarget(OutfileTargetPtr outfile_target_ptr)
+{
+    assert(outfile_target_ptr);
+    outfile_target = outfile_target_ptr;
+}
+
+void IOutputFormat::processMultiOutFileIfNeeded(size_t bytes)
+{
+    if (!outfile_target || !outfile_target->outToMultiFile())
+        return;
+
+    outfile_target->accumulateBytes(bytes);
+
+    if (outfile_target->needSplit())
+    {
+        outfile_target->flushFile();
+        outfile_target->updateOutPathIfNeeded();
+
+        /// for OutputFormat implementation like 'Parquet', there is a inner file descriptor,
+        /// when out is reset, release the file descriptor either
+        customReleaseBuffer();
+        out.swap(*outfile_target->updateBuffer());
+    }
 }
 
 }

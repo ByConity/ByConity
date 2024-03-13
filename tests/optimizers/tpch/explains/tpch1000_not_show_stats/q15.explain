@@ -19,8 +19,9 @@ Projection
                   │     Runtime Filters Builder: {expr#max(total_revenue)}
                   ├─ Filter
                   │  │     Condition: Runtime Filters: {`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1`}
-                  │  └─ Buffer
-                  │     └─ CTERef[0]
+                  │  └─ Local Exchange
+                  │     └─ Buffer
+                  │        └─ CTERef[0]
                   └─ Broadcast Exchange
                      └─ MergingAggregated
                         └─ Gather Exchange

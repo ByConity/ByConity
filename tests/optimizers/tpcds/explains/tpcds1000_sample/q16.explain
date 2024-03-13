@@ -51,7 +51,7 @@ Projection Est. 1 rows
                                     └─ AssignUniqueId Est. 101003 rows
                                        └─ Repartition Exchange Est. 101003 rows
                                           │     Partition by: {cs_order_number}
-                                          └─ Inner Join Est. 297813 rows
+                                          └─ Inner Join Est. 101003 rows
                                              │     Condition: cs_ship_addr_sk == ca_address_sk
                                              │     Runtime Filters Builder: {ca_address_sk}
                                              ├─ Repartition Exchange Est. 2062805 rows

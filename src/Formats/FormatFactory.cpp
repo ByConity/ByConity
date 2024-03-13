@@ -335,6 +335,7 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
     WriteBuffer & buf,
     const Block & sample,
     ContextPtr context,
+    bool out_to_directory,
     WriteCallback callback,
     const std::optional<FormatSettings> & _format_settings) const
 {
@@ -346,7 +347,8 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
 
     const Settings & settings = context->getSettingsRef();
 
-    if (settings.output_format_parallel_formatting && getCreators(name).supports_parallel_formatting
+    if (!out_to_directory && settings.output_format_parallel_formatting
+        && getCreators(name).supports_parallel_formatting
         && !settings.output_format_json_array_of_rows)
     {
         auto formatter_creator = [output_getter, sample, callback, format_settings]

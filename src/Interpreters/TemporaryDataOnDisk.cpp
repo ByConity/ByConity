@@ -46,18 +46,6 @@ void TemporaryDataOnDiskScope::deltaAllocAndCheck(ssize_t compressed_delta, ssiz
     stat.uncompressed_size += uncompressed_delta;
 }
 
-/*
-TemporaryFileStream & TemporaryDataOnDisk::createStream(const Block & header, size_t max_file_size)
-{
-    if (file_cache)
-        return createStreamToCacheFile(header, max_file_size);
-    else if (volume)
-        return *createStreamPtrToRegularFile(header, max_file_size);
-
-    throw Exception(ErrorCodes::LOGICAL_ERROR, "TemporaryDataOnDiskScope has no cache and no volume");
-}
-*/
-
 TemporaryFileStream & TemporaryDataOnDisk::createStreamToCacheFile(const Block & header, size_t max_file_size)
 {
     if (!file_cache)

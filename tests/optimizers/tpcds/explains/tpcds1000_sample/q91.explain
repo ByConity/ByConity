@@ -11,16 +11,16 @@ Projection Est. 32406 rows
                └─ Aggregating Est. 32406 rows
                   │     Group by: {cc_call_center_id, cc_name, cc_manager, cd_marital_status, cd_education_status}
                   │     Aggregates: expr#sum(cr_net_loss):=AggNull(sum)(cr_net_loss)
-                  └─ Inner Join Est. 55508 rows
+                  └─ Inner Join Est. 55736 rows
                      │     Condition: cr_call_center_sk == cc_call_center_sk
                      ├─ Inner Join Est. 55508 rows
                      │  │     Condition: c_current_hdemo_sk == hd_demo_sk
                      │  ├─ Repartition Exchange Est. 62899 rows
                      │  │  │     Partition by: {c_current_hdemo_sk}
-                     │  │  └─ Inner Join Est. 10042 rows
+                     │  │  └─ Inner Join Est. 62899 rows
                      │  │     │     Condition: cr_returned_date_sk == d_date_sk
                      │  │     │     Runtime Filters Builder: {d_date_sk}
-                     │  │     ├─ Inner Join Est. 728567 rows
+                     │  │     ├─ Inner Join Est. 573425 rows
                      │  │     │  │     Condition: cr_returning_customer_sk == c_customer_sk
                      │  │     │  │     Runtime Filters Builder: {c_customer_sk}
                      │  │     │  ├─ Filter Est. 143996756 rows
@@ -29,7 +29,7 @@ Projection Est. 32406 rows
                      │  │     │  │           Where: Runtime Filters: {cr_returned_date_sk, cr_returning_customer_sk}
                      │  │     │  │           Outputs: [cr_returned_date_sk, cr_returning_customer_sk, cr_call_center_sk, cr_net_loss]
                      │  │     │  └─ Broadcast Exchange Est. 59903 rows
-                     │  │     │     └─ Inner Join Est. 380296 rows
+                     │  │     │     └─ Inner Join Est. 59903 rows
                      │  │     │        │     Condition: ca_address_sk == c_current_addr_sk
                      │  │     │        │     Runtime Filters Builder: {c_current_addr_sk}
                      │  │     │        ├─ Repartition Exchange Est. 672604 rows

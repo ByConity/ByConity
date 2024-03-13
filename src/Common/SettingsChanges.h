@@ -72,6 +72,8 @@ public:
     void deserialize(ReadBuffer & buf);
     void toProto(Protos::SettingsChanges & proto) const;
     void fillFromProto(const Protos::SettingsChanges & proto);
+
+    static std::unordered_set<String> WHITELIST_SETTINGS;
 };
 
 }

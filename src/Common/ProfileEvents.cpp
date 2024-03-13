@@ -534,6 +534,8 @@
     M(GetStagedPartsFailed, "") \
     M(GetDeleteBitmapsInPartitionsSuccess, "") \
     M(GetDeleteBitmapsInPartitionsFailed, "") \
+    M(GetDeleteBitmapsFromCacheInPartitionsSuccess, "") \
+    M(GetDeleteBitmapsFromCacheInPartitionsFailed, "") \
     M(GetDeleteBitmapByKeysSuccess, "") \
     M(GetDeleteBitmapByKeysFailed, "") \
     M(AddDeleteBitmapsSuccess, "") \
@@ -816,6 +818,10 @@
     M(DropMaskingPoliciesFailed, "") \
     M(IsHostServerSuccess, "") \
     M(IsHostServerFailed, "") \
+    M(CnchDataPartCacheHits, "")\
+    M(CnchDataPartCacheMisses, "")\
+    M(CnchDataDeleteBitmapCacheHits, "")\
+    M(CnchDataDeleteBitmapCacheMisses, "")\
     M(CnchReadSizeFromDiskCache, "") \
     M(CnchReadSizeFromRemote, "") \
     M(CnchReadDataMicroSeconds,"") \

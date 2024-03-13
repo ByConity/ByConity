@@ -16,10 +16,11 @@
 #pragma once
 
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/RuntimeFilter/ConcurrentHashMap.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
 #include <bthread/condition_variable.h>
-#include <bthread/mutex.h>
+#include <Common/Exception.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -43,7 +44,7 @@ public:
     {
     }
 
-    size_t add(RuntimeFilterData data, const String & address);
+    size_t add(RuntimeFilterData data, UInt32 parallel_id);
 
     size_t getParallelSize() const { return parallel_size; }
 
@@ -51,9 +52,7 @@ public:
 
 private:
     bthread::Mutex mutex;
-    std::vector<RuntimeFilterData> rf_data;
-
-    std::unordered_set<String> merged_address_set;
+    std::map<UInt32, RuntimeFilterData> rf_data;
 
     RuntimeFilterBuilderPtr builder;
     const size_t parallel_size;
@@ -73,7 +72,13 @@ public:
 
     RuntimeFilterCollectionPtr getCollection(size_t build_id) const { return collections.at(build_id); }
 
-    const std::unordered_set<size_t> & getExecuteSegmentIds(RuntimeFilterId id) const { return execute_segment_ids.at(id); }
+    const std::unordered_set<size_t> & getExecuteSegmentIds(RuntimeFilterId id) const
+    {
+        auto it = execute_segment_ids.find(id);
+        if (it == execute_segment_ids.end())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "id not found: {}", id);
+        return it->second;
+    }
 
 private:
     const std::unordered_map<RuntimeFilterBuilderId, RuntimeFilterCollectionPtr> collections;
@@ -84,7 +89,7 @@ class DynamicValue
 {
 public:
     DynamicValue() = default;
-    const DynamicData & get(size_t timeout_ms);
+    DynamicData & get(size_t timeout_ms);
     void set(DynamicData&& value, UInt32 ref);
     bool isReady();
     UInt32 unref() { return --ref_count; }

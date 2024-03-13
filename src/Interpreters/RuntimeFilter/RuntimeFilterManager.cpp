@@ -22,6 +22,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/TableScanStep.h>
+#include "common/logger_useful.h"
 
 namespace DB
 {
@@ -53,7 +54,7 @@ namespace
                     for (const auto & runtime_filter : join_step.getRuntimeFilterBuilders())
                     {
                         runtime_filter_builds.emplace(runtime_filter.second.id, std::make_pair(plan_segment, &node));
-                        if (runtime_filter.second.distribution == RuntimeFilterDistribution::Distributed)
+                        if (runtime_filter.second.distribution == RuntimeFilterDistribution::DISTRIBUTED)
                             remote_runtime_filter_builds.emplace(runtime_filter.second.id);
                         else
                             local_runtime_filter_builds.emplace(runtime_filter.second.id);
@@ -92,18 +93,29 @@ namespace
     };
 }
 
-size_t RuntimeFilterCollection::add(RuntimeFilterData data, const String & address)
+size_t RuntimeFilterCollection::add(RuntimeFilterData data, UInt32 parallel_id)
 {
     std::lock_guard guard(mutex);
-    rf_data.emplace_back(std::move(data));
-    merged_address_set.emplace(address);
-    return merged_address_set.size();
+    /// Shouldn't have this shard_num before, ignore the redundant
+    if (!rf_data.contains(parallel_id))
+    {
+        rf_data[parallel_id] = std::move(data);
+    }
+    else
+    {
+         LOG_WARNING(
+            &Poco::Logger::get("RuntimeFilterCollection"),
+            "build rf receive duplicate id:{} will cause rf timeout", parallel_id);
+    }
+
+    return rf_data.size();
 }
 
 
 std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterCollection::finalize()
 {
-    return builder->extractValues(builder->merge(rf_data));
+    std::lock_guard guard(mutex);
+    return builder->extractDistributedValues(builder->merge(std::move(rf_data)));
 }
 
 RuntimeFilterManager & RuntimeFilterManager::getInstance()
@@ -116,6 +128,9 @@ void RuntimeFilterManager::registerQuery(const String & query_id, PlanSegmentTre
 {
     RuntimeFilterCollector collector;
     collector.visit(*plan_segment_tree.getRoot());
+
+    if (collector.runtime_filter_builds.empty())
+        return;
 
     // register remote runtime filters in probe plan segment for resource release
     for (const auto & [id, plan_segments] : collector.runtime_filter_probes) {
@@ -141,8 +156,29 @@ void RuntimeFilterManager::registerQuery(const String & query_id, PlanSegmentTre
         builders.emplace(builder->getId(), std::make_shared<RuntimeFilterCollection>(builder, plan_segment->getParallelSize()));
         for (const auto * probe_plan_segment : collector.runtime_filter_probes[id])
             targets[id].emplace(probe_plan_segment->getPlanSegmentId());
-
     }
+
+    if (log->debug())
+    {
+        std::stringstream ss;
+        ss << "register runtime filter:\n";
+        ss << "  locale runtime filter: ";
+        for (const auto & id : collector.local_runtime_filter_builds)
+            ss << id << ", ";
+        ss << "\n";
+        ss << "  remote runtime filter:\n";
+        for (const auto & item : targets)
+        {
+            ss << "    id:" << item.first << " , target segment id: ";
+            for (const auto & id : item.second)
+            {
+                ss << id << ", ";
+            }
+            ss << "\n";
+        }
+        LOG_DEBUG(log, ss.str());
+    }
+
     auto runtime_filter_collection_context = std::make_shared<RuntimeFilterCollectionContext>(std::move(builders), std::move(targets));
     runtime_filter_collection_contexts.put(query_id, runtime_filter_collection_context);
 }
@@ -195,7 +231,7 @@ String RuntimeFilterManager::makeKey(const String & query_id, RuntimeFilterId fi
     return query_id + "_" + std::to_string(filter_id);
 }
 
-const DynamicData & DynamicValue::get(size_t timeout_ms)
+DynamicData & DynamicValue::get(size_t timeout_ms)
 {
     if (timeout_ms == 0 || ready)
     {

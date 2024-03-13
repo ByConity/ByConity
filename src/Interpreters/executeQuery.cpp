@@ -1960,8 +1960,8 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
         OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
 
         const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
-        OutfileTargetPtr outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
-        std::shared_ptr<WriteBuffer> out_buf = outfile_target->getOutfileBuffer(context);
+        OutfileTargetPtr outfile_target = std::make_shared<OutfileTarget>(context, out_path, format_name, compression_method_str, compression_level);
+        std::shared_ptr<WriteBuffer> out_buf = outfile_target->getOutfileBuffer();
 
         auto & pipeline = streams.pipeline;
 
@@ -1980,8 +1980,8 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
                 pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
 
                 OutputFormatPtr out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                    format_name, *out_buf, pipeline.getHeader(), context, {});
-                out->setBuffer(out_buf);
+                    format_name, *out_buf, pipeline.getHeader(), context, outfile_target->outToMultiFile(), {});
+                out->setOutFileTarget(outfile_target);
 
                 out->setAutoFlush();
                 /// Save previous progress callback if any.
@@ -2008,7 +2008,7 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
         }
 
         if (outfile_target)
-            outfile_target->flushFile(context);
+            outfile_target->flushFile();
     }
     catch (...)
     {
@@ -2185,11 +2185,10 @@ void executeQuery(
                 String compression_method_str;
                 UInt64 compression_level = 1;
                 OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
-                outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
-                auto out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
+                outfile_target = std::make_shared<OutfileTarget>(context, out_path, format_name, compression_method_str, compression_level);
+                auto out_buf = outfile_target->getOutfileBuffer(allow_into_outfile);
                 out = FormatFactory::instance().getOutputStreamParallelIfPossible(
                     format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings);
-                out->setBuffer(out_buf);
             } else {
                 out = FormatFactory::instance().getOutputStreamParallelIfPossible(
                     format_name, ostr, streams.in->getHeader(), context, {}, output_format_settings);
@@ -2214,7 +2213,7 @@ void executeQuery(
                 *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
 
             if (outfile_target)
-                outfile_target->flushFile(context);
+                outfile_target->flushFile();
         }
         else if (pipeline.initialized())
         {
@@ -2232,8 +2231,8 @@ void executeQuery(
                 String compression_method_str;
                 UInt64 compression_level = 1;
                 OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
-                outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
-                out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
+                outfile_target = std::make_shared<OutfileTarget>(context, out_path, format_name, compression_method_str, compression_level);
+                out_buf = outfile_target->getOutfileBuffer(allow_into_outfile);
             }
 
             if (!pipeline.isCompleted())
@@ -2243,11 +2242,12 @@ void executeQuery(
                 OutputFormatPtr out;
                 if (out_buf) {
                     out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                        format_name, *out_buf, pipeline.getHeader(), context, {}, output_format_settings);
-                    out->setBuffer(out_buf);
+                        format_name, *out_buf, pipeline.getHeader(), context, outfile_target->outToMultiFile(), {}, output_format_settings);
+                    // used to ensure out buffer's life cycle is as long as this class
+                    out->setOutFileTarget(outfile_target);
                 } else {
                     out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                        format_name, ostr, pipeline.getHeader(), context, {}, output_format_settings);
+                        format_name, ostr, pipeline.getHeader(), context, false, {}, output_format_settings);
                 }
                 out->setAutoFlush();
 
@@ -2278,7 +2278,7 @@ void executeQuery(
             }
 
             if (outfile_target)
-                outfile_target->flushFile(context);
+                outfile_target->flushFile();
         }
     }
     catch (...)
@@ -2398,7 +2398,7 @@ void executeHttpQueryInAsyncMode(
             Block res;
             res.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
 
-            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr1, res, c, {}, f);
+            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr1, res, c, false, {}, f);
 
             out->write(res);
             out->flush();
@@ -2479,7 +2479,7 @@ void executeHttpQueryInAsyncMode(
                         pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
 
                         auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, f);
+                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, false, {}, f);
 
                         pipeline.setOutputFormat(std::move(out));
                     }

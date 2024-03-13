@@ -176,6 +176,8 @@ namespace ProfileEvents
     extern const Event GetStagedPartsFailed;
     extern const Event GetDeleteBitmapsInPartitionsSuccess;
     extern const Event GetDeleteBitmapsInPartitionsFailed;
+    extern const Event GetDeleteBitmapsFromCacheInPartitionsSuccess;
+    extern const Event GetDeleteBitmapsFromCacheInPartitionsFailed;
     extern const Event GetDeleteBitmapByKeysSuccess;
     extern const Event GetDeleteBitmapByKeysFailed;
     extern const Event AddDeleteBitmapsSuccess;
@@ -984,7 +986,7 @@ namespace Catalog
 
                     if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                     {
-                        cache_manager->invalidPartCache(storage->getStorageUUID());
+                        cache_manager->invalidPartAndDeleteBitmapCache(storage->getStorageUUID());
                         cache_manager->removeStorageCache(db, name);
                     }
                 }
@@ -1103,7 +1105,7 @@ namespace Catalog
                     if (server_vw_changed)
                     {
                         /// Invalidate part cache since this server is no longer table's host server
-                        cache_manager->invalidPartCache(storage->getStorageUUID());
+                        cache_manager->invalidPartAndDeleteBitmapCache(storage->getStorageUUID());
                         cache_manager->removeStorageCache(storage->getDatabaseName(), storage->getTableName());
                     }
                     else if (is_local_server)
@@ -1605,9 +1607,18 @@ namespace Catalog
                         res = context.getPartCacheManager()->getOrSetServerDataPartsInPartitions(
                             *storage,
                             partitions,
-                            [&](const Strings & required_partitions, const Strings & full_partitions) {
+                            [&](const Strings & required_partitions, const Strings & full_partitions) -> DataModelPartWrapperVector {
                                 miss_cache = true;
-                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0}, /*from_trash=*/ false);
+                                DataModelPartWithNameVector fetched = getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0}, /*from_trash=*/ false);
+                                DataModelPartWrapperVector ret;
+                                ret.reserve(fetched.size());
+
+                                const auto & merge_tree = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+                                for (const auto & part : fetched)
+                                {
+                                    ret.push_back(createPartWrapperFromModel(merge_tree, std::move(*(part->model)), std::move(part->name)));
+                                }
+                                return ret;
                             },
                             ts.toUInt64(),
                             host_port.topology_version);
@@ -1666,6 +1677,99 @@ namespace Catalog
             ProfileEvents::GetServerDataPartsInPartitionsFailed);
         if (source.starts_with("KV"))
             std::sort(res.begin(), res.end(), CnchPartsHelper::PartComparator<ServerDataPartPtr>{});
+        return res;
+    }
+
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitions(
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
+    {
+        DeleteBitmapMetaPtrVector res;
+        String source;
+        runWithMetricSupport(
+            [&] {
+                Stopwatch watch;
+                auto fall_back = [&]() {
+                    Strings all_partitions = getPartitionIDsFromMetastore(storage);
+                    return getDeleteBitmapsInPartitionsImpl(storage, partitions, all_partitions, ts);
+                };
+
+                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
+                {
+                    return;
+                }
+                if (partitions.empty())
+                {
+                    return;
+                }
+                auto host_port
+                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
+                auto host_with_rpc = host_port.getRPCAddress();
+
+                if (host_port.empty())
+                {
+                    /// if host not found, fall back to fetch part from metastore.
+                    LOG_DEBUG(log, "Fall back to get from metastore because no available server found in current topology.");
+                    res = fall_back();
+                    source = "KV(target server not found)";
+                }
+                else if (
+                    context.getServerType() == ServerType::cnch_server
+                    && isLocalServer(host_with_rpc, std::to_string(context.getRPCPort())))
+                {
+                    bool can_use_cache = canUseCache(storage, session_context);
+                    can_use_cache &= !context.getConfigRef().getBool("disable_delete_bitmap_cache", false);
+
+                    if (!can_use_cache)
+                    {
+                        res = fall_back();
+                        source = "KV(can not laverage cache)";
+                    }
+                    else
+                    {
+                        source = "DeleteBitmapCache";
+                        std::atomic_bool miss_cache{false};
+                        res = context.getPartCacheManager()->getOrSetDeleteBitmapInPartitions(
+                            *storage,
+                            partitions,
+                            [&](const Strings & required_partitions, const Strings & full_partitions) -> DeleteBitmapMetaPtrVector {
+                                miss_cache = true;
+                                return getDeleteBitmapsInPartitionsImpl(storage, required_partitions, full_partitions, TxnTimestamp::maxTS());
+                            },
+                            ts.toUInt64(),
+                            host_port.topology_version);
+                        if (miss_cache)
+                            source = "KV(miss cache)";
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        res = context.getCnchServerClientPool().get(host_with_rpc)->fetchDeleteBitmaps(host_with_rpc, storage, partitions, ts);
+                        source = "TargetServer(" + host_with_rpc + ")";
+                    }
+                    catch (...)
+                    {
+                        LOG_DEBUG(log, "Fall back to get from metastore because fail to fetch delete bitmaps from remote server.");
+                        res = fall_back();
+                        source = "KV(cannot reach target server)";
+                    }
+                }
+
+                /// filter out invisible bitmaps (uncommitted or invisible to current txn)
+                getVisibleBitmaps(res, ts, this);
+                LOG_DEBUG(
+                    log,
+                    "Elapsed {}ms to get {} delete bitmaps in {} partitions for table : {} , source : {}, ts : {}"
+                    ,watch.elapsedMilliseconds()
+                    ,res.size()
+                    ,partitions.size()
+                    ,storage->getStorageID().getNameForLogs()
+                    ,source
+                    ,ts.toString());
+            },
+            ProfileEvents::GetDeleteBitmapsFromCacheInPartitionsSuccess,
+            ProfileEvents::GetDeleteBitmapsFromCacheInPartitionsFailed);
         return res;
     }
 
@@ -1939,8 +2043,19 @@ namespace Catalog
 
                 /// insert new added parts into cache manager
                 if (context.getPartCacheManager())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*storage, commit_parts.parts(),
-                    is_merged_parts, false, PairInt64{0, 0}); // Not be used anymore. Its ok set empty cache version
+                {
+                    context.getPartCacheManager()->insertDataPartsIntoCache(
+                        *storage,
+                        commit_parts.parts(),
+                        is_merged_parts,
+                        false,
+                        PairInt64{0, 0}); // Not be used anymore. Its ok set empty cache version
+
+                    if (!delete_bitmaps.empty())
+                    {
+                        context.getPartCacheManager()->insertDeleteBitmapsIntoCache(*storage, delete_bitmaps, PairInt64{0, 0}, commit_parts);
+                    }
+                }
             },
             ProfileEvents::FinishCommitSuccess,
             ProfileEvents::FinishCommitFailed);
@@ -2813,11 +2928,12 @@ namespace Catalog
 
                 LOG_DEBUG(
                     log,
-                    "Start write {} parts and {} delete_bitmaps and {} staged parts to kvstore for txn {}"
-                    ,commit_data.data_parts.size()
-                    ,commit_data.delete_bitmaps.size()
-                    ,commit_data.staged_parts.size()
-                    ,txnID);
+                    "Start write {} parts and {} delete_bitmaps and {} staged parts to kvstore for txn {}, table: {}",
+                    commit_data.data_parts.size(),
+                    commit_data.delete_bitmaps.size(),
+                    commit_data.staged_parts.size(),
+                    txnID,
+                    UUIDHelpers::UUIDToString(table->getStorageUUID()));
 
                 const auto host_port
                     = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), false);
@@ -2904,13 +3020,24 @@ namespace Catalog
                     std::vector<String>(staged_part_models.parts().size()));
                 LOG_DEBUG(
                     log,
-                    "Finish write parts to kvstore for txn {}, elapsed {}ms, start write part cache."
-                    ,txnID
-                    ,watch.elapsedMilliseconds());
+                    "Finish write parts ({}) and delete bitmaps ({}) to kvstore for txn {}, elapsed {}ms, start write cache.",
+                    part_models.parts().size(),
+                    commit_data.delete_bitmaps.size(),
+                    txnID,
+                    watch.elapsedMilliseconds());
 
                 /// insert new added parts into cache manager
-                if (context.getPartCacheManager() && !part_models.parts().empty())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), is_merged_parts, false, host_port.topology_version);
+                if (context.getPartCacheManager())
+                {
+                    if (!part_models.parts().empty())
+                        context.getPartCacheManager()->insertDataPartsIntoCache(
+                            *table, part_models.parts(), is_merged_parts, false, host_port.topology_version);
+                    if (!commit_data.delete_bitmaps.empty())
+                    {
+                        context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
+                            *table, commit_data.delete_bitmaps, host_port.topology_version, part_models, &staged_part_models);
+                    }
+                }
 
                 LOG_DEBUG(log, "Finish write part for txn {}, elapsed {} ms.", txnID, watch.elapsedMilliseconds());
             },
@@ -3080,8 +3207,17 @@ namespace Catalog
                     ,txn_id
                     ,watch.elapsedMilliseconds());
 
-                if (context.getPartCacheManager() && !part_models.parts().empty())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), false, true, host_port.topology_version);
+                if (context.getPartCacheManager())
+                {
+                    if (!part_models.parts().empty())
+                        context.getPartCacheManager()->insertDataPartsIntoCache(
+                            *table, part_models.parts(), false, true, host_port.topology_version);
+                    if (!commit_data.delete_bitmaps.empty())
+                    {
+                        context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
+                            *table, commit_data.delete_bitmaps, host_port.topology_version, part_models, &staged_part_models);
+                    }
+                }
                 LOG_DEBUG(log, "Finish set commit time for txn {}, elapsed {} ms.", txn_id, watch.elapsedMilliseconds());
             },
             ProfileEvents::SetCommitTimeSuccess,
@@ -3135,43 +3271,63 @@ namespace Catalog
                 if (drop_keys.size() > max_drop_size_one_batch)
                 {
                     size_t batch_count{0};
-                    while (batch_count + max_drop_size_one_batch < drop_keys.size())
+                    const size_t mark1 = commit_data.data_parts.size();
+                    const size_t mark2 = mark1 + commit_data.delete_bitmaps.size();
+
+                    while(batch_count < drop_keys.size())
                     {
-                        meta_proxy->multiDrop(
-                            Strings{drop_keys.begin() + batch_count, drop_keys.begin() + batch_count + max_drop_size_one_batch});
+                        meta_proxy->multiDrop(Strings{
+                            drop_keys.begin() + batch_count,
+                            drop_keys.begin() + std::min(batch_count + max_drop_size_one_batch, drop_keys.size())});
                         /// clear part cache immediately after drop from metastore
                         if (need_invalid_cache)
                         {
-                            if (batch_count + max_drop_size_one_batch < commit_data.data_parts.size())
+                            size_t batch_count_end = batch_count + max_drop_size_one_batch;
+
+                            // │  parts  │  delete bitmaps  │  staged parts  │
+                            // ▼         ▼                  ▼                ▼
+                            // └─────────────────────────────────────────────┘
+
+                            /// For parts.
                             {
-                                context.getPartCacheManager()->invalidPartCache(
-                                    storage->getStorageID().uuid,
-                                    DataPartsVector{
-                                        commit_data.data_parts.begin() + batch_count,
-                                        commit_data.data_parts.begin() + batch_count + max_drop_size_one_batch});
+                                const size_t left_bound = batch_count;
+                                const size_t right_bound = std::min(batch_count_end, mark1);
+
+                                if (left_bound < right_bound)
+                                {
+                                    context.getPartCacheManager()->invalidPartCache(
+                                        storage->getStorageID().uuid,
+                                        DataPartsVector{
+                                            commit_data.data_parts.begin() + left_bound, commit_data.data_parts.begin() + right_bound});
+                                }
                             }
-                            else if (batch_count < commit_data.data_parts.size())
+
+                            /// For delete bitmaps.
                             {
-                                context.getPartCacheManager()->invalidPartCache(
-                                    storage->getStorageID().uuid,
-                                    DataPartsVector{commit_data.data_parts.begin() + batch_count, commit_data.data_parts.end()});
+                                size_t left_bound = std::max(batch_count, mark1);
+                                size_t right_bound = std::min(batch_count_end, mark2);
+
+                                if (left_bound < right_bound)
+                                {
+                                    context.getPartCacheManager()->invalidDeleteBitmapCache(
+                                        storage->getStorageID().uuid,
+                                        DeleteBitmapMetaPtrVector{
+                                            commit_data.delete_bitmaps.begin() + left_bound - mark1,
+                                            commit_data.delete_bitmaps.begin() + right_bound - mark1});
+                                }
                             }
                         }
                         batch_count += max_drop_size_one_batch;
-                    }
-                    meta_proxy->multiDrop(Strings{drop_keys.begin() + batch_count, drop_keys.end()});
-                    if (need_invalid_cache && batch_count < commit_data.data_parts.size())
-                    {
-                        context.getPartCacheManager()->invalidPartCache(
-                            storage->getStorageID().uuid,
-                            DataPartsVector{commit_data.data_parts.begin() + batch_count, commit_data.data_parts.end()});
                     }
                 }
                 else
                 {
                     meta_proxy->multiDrop(drop_keys);
                     if (need_invalid_cache)
+                    {
                         context.getPartCacheManager()->invalidPartCache(storage->getStorageID().uuid, commit_data.data_parts);
+                        context.getPartCacheManager()->invalidDeleteBitmapCache(storage->getStorageID().uuid, commit_data.delete_bitmaps);
+                    }
                 }
 
                 LOG_INFO(
@@ -3997,7 +4153,7 @@ namespace Catalog
                 if (!table_uuid.empty() && context.getPartCacheManager())
                 {
                     UUID uuid = UUID(stringToUUID(table_uuid));
-                    context.getPartCacheManager()->invalidPartCache(uuid);
+                    context.getPartCacheManager()->invalidPartAndDeleteBitmapCache(uuid);
                 }
             },
             ProfileEvents::ClearTableMetaForGCSuccess,
@@ -4071,7 +4227,7 @@ namespace Catalog
                 if (context.getPartCacheManager())
                 {
                     auto cache_manager = context.getPartCacheManager();
-                    cache_manager->invalidPartCache(storage->getStorageID().uuid);
+                    cache_manager->invalidPartAndDeleteBitmapCache(storage->getStorageID().uuid);
                 }
 
                 LOG_INFO(log, "Finish clear all data parts for table : {}.{}", storage->getDatabaseName(), storage->getTableName());
@@ -4213,7 +4369,10 @@ namespace Catalog
         meta_proxy->getMetastore()->adaptiveBatchWrite(batch_writes);
 
         if (need_invalid_cache)
+        {
             context.getPartCacheManager()->invalidPartCache(table->getStorageUUID(), items.data_parts);
+            context.getPartCacheManager()->invalidDeleteBitmapCache(table->getStorageUUID(), items.delete_bitmaps);
+        }
 
         LOG_INFO(
             log,
@@ -5227,10 +5386,12 @@ namespace Catalog
         return res;
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    DeleteBitmapMetaPtrVector
+    Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
         return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false);
     }
+
 
     DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
@@ -5916,8 +6077,15 @@ namespace Catalog
             max_drop_size_one_batch);
 
         if (context.getPartCacheManager())
-            context.getPartCacheManager()->insertDataPartsIntoCache(*to_tbl,
-                commit_parts.parts(), false, false, target_host.topology_version);
+        {
+            context.getPartCacheManager()->insertDataPartsIntoCache(
+                *to_tbl, commit_parts.parts(), false, false, target_host.topology_version);
+            if (!bitmaps.empty())
+            {
+                context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
+                    *to_tbl, bitmaps, target_host.topology_version, commit_parts, &commit_staged_parts);
+            }
+        }
     }
 
     void Catalog::detachAttachedParts(
@@ -5986,11 +6154,17 @@ namespace Catalog
             }
         }
 
-        std::vector<String> attached_part_names;
+        std::vector<String> attached_part_names, attached_bitmap_names;
         attached_part_names.reserve(attached_parts.size());
         for (const auto & part : attached_parts)
         {
             attached_part_names.push_back(part->info.getPartName());
+        }
+
+        attached_bitmap_names.reserve(attached_bitmaps.size());
+        for (const auto & bitmap : attached_bitmaps)
+        {
+            attached_bitmap_names.push_back(dataModelName(*bitmap->getModel()));
         }
 
         std::vector<String> attached_staged_part_names;
@@ -6017,8 +6191,8 @@ namespace Catalog
             if (std::shared_ptr<MergeTreeMetaBase> storage = std::dynamic_pointer_cast<MergeTreeMetaBase>(from_tbl);
                 storage != nullptr)
             {
-                context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(),
-                    attached_part_names, storage->format_version);
+                context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(), attached_part_names, storage->format_version);
+                context.getPartCacheManager()->invalidDeleteBitmapCache(from_tbl->getStorageUUID(), attached_bitmap_names);
             }
             else
             {
@@ -6100,8 +6274,11 @@ namespace Catalog
         }
 
         if (context.getPartCacheManager())
-            context.getPartCacheManager()->insertDataPartsIntoCache(*tbl,
-                attached_parts.parts(), false, false, target_host.topology_version);
+        {
+            context.getPartCacheManager()->insertDataPartsIntoCache(
+                *tbl, attached_parts.parts(), false, false, target_host.topology_version);
+            /// No need change delete bitmap cache since we have only removed bitmaps in detach folder.
+        }
     }
 
     void Catalog::detachAttachedPartsRaw(
@@ -6170,8 +6347,8 @@ namespace Catalog
 
         if (context.getPartCacheManager())
         {
-            context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(),
-                attached_part_names, format_version);
+            context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(), attached_part_names, format_version);
+            context.getPartCacheManager()->invalidDeleteBitmapCache(from_tbl->getStorageUUID(), attached_bitmap_names);
         }
     }
 
@@ -6730,6 +6907,26 @@ namespace Catalog
             return mgr->getLastModificationTimeHints(table);
 
         return ret;
+    }
+
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsImpl(
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts)
+    {
+        const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+        auto create_func = [&](const String &, const String & meta) -> DeleteBitmapMetaPtr {
+            DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
+            model_ptr->ParseFromString(meta);
+            if (ts.toUInt64() && model_ptr->has_commit_time() && TxnTimestamp{model_ptr->commit_time()} > ts)
+                return nullptr;
+            return std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr);
+        };
+
+        String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+        String meta_prefix = MetastoreProxy::deleteBitmapPrefix(name_space, uuid);
+
+        DeleteBitmapMetaPtrVector res
+            = getDataModelsByPartitions<DeleteBitmapMetaPtr>(storage, meta_prefix, required_partitions, full_partitions, create_func, ts);
+        return res;
     }
 }
 }

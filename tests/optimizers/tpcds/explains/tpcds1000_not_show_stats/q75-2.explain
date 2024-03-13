@@ -14,11 +14,10 @@ Projection
                └─ Inner Join
                   │     Condition: i_brand_id_4 == i_brand_id_5, i_category_id_4 == i_category_id_5, i_class_id_4 == i_class_id_5, i_manufact_id_4 == i_manufact_id_5
                   │     Filter: (`expr#sum(sales_cnt)_1` / `expr#sum(sales_cnt)_2`) < 0.9
-                  │     Runtime Filters Builder: {i_brand_id_5,i_category_id_5,i_class_id_5,i_manufact_id_5}
                   ├─ Repartition Exchange
                   │  │     Partition by: {i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4}
                   │  └─ Filter
-                  │     │     Condition: d_year_4 = 2002 Runtime Filters: {i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4}
+                  │     │     Condition: d_year_4 = 2002
                   │     └─ Buffer
                   │        └─ CTERef[0]
                   └─ Repartition Exchange
@@ -153,5 +152,5 @@ CTEDef [0]
                               └─ TableScan tpcds1000.date_dim
                                        Where: d_year IN (2001, 2002)
                                        Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
-note: Runtime Filter is applied for 15 times.
+note: Runtime Filter is applied for 11 times.
 note: CTE(Common Table Expression) is applied for 2 times.

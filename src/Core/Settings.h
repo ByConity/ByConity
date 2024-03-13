@@ -1784,33 +1784,39 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_force_remote_mode, false, "Force exchange data transfer through network", 0) \
     M(Bool, exchange_enable_force_keep_order, false, "Force exchange keep data order", 0) \
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
-    M(UInt64, distributed_query_wait_exception_ms, 1000, "Wait final planSegment exception from segmentScheduler.", 0) \
+    M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
+    M(UInt64, distributed_query_wait_exception_ms, 1000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
     \
     /** Runtime Filter settings */ \
-    M(UInt64, wait_runtime_filter_timeout, 500, "Execute filter wait for runtime filter timeout ms", 0) \
+    M(UInt64, wait_runtime_filter_timeout, 1000, "Execute filter wait for runtime filter timeout ms", 0) \
     M(Bool, enable_runtime_filter, true, "Whether enable runtime filter for join", 0) \
     M(Bool, enable_runtime_filter_cost, false, "Whether enable runtime filter cost", 0) \
     M(Bool, enable_local_runtime_filter, true, "Whether enable runtime filter in local mode", 0) \
     M(UInt64, runtime_filter_min_filter_rows, 10000, "Set minimum row to enable runtime filter", 0) \
     M(Float, runtime_filter_min_filter_factor, 0.4, "Set minimum filter factor to enable runtime filter", 0) \
+    M(Float, runtime_filter_min_filter_factor_for_non_table_scan, 0.9, "Set minimum filter factor to enable runtime filter if runtime filter can not pushdown", 0) \
     M(Bool, enable_range_cover, true, "Whether use range rather than bloom or values set for runtime filter", 0) \
-    M(Bool, runtime_filter_rewrite_bloom_filter_into_prewhere, true, "Whether enable pushdown runtime filter to prewhere for join", 0) \
+    M(Bool, enable_rewrite_bf_into_prewhere, true, "Whether enable pushdown runtime filter to prewhere for join", 0) \
     M(UInt64, runtime_filter_bloom_build_threshold, 2048000, "The threshold of right table to build bloom filter", 0) \
     M(UInt64, runtime_filter_in_build_threshold, 1024, "The threshold of right table to build value set filter", 0) \
     M(Bool, enable_runtime_filter_pipeline_poll, true, "No additional segment needed for the left side during broadcast join, polling time bounded", 0) \
-    M(UInt64, grf_ndv_enlarge_size, 8, "The times to enlarge the grf ndv, optimal value is the number workers ", 0) \
+    M(Float, adjust_range_set_filter_rate, 0.1, "If the prewhere is not range or set, adjust use this value as priority to bloom filter ", 0) \
+    M(UInt64, shuffle_aware_ndv_threshold, 0, "Threshold to to use shuffle-aware grf or to use pre enlarge ndv, 0 disable shuffle-aware grf", 0) \
+    M(String, runtime_filter_black_list, "", "Runtime filter ids need be blocked", 0) \
     \
     /** ip2geo settings */ \
-    M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0) \
-    M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0) \
-    M(Bool, ip2geo_update_from_hdfs, 0, "Whether to update db file from hdfs", 0) \
-    M(String, ipv4_file, "ipv4_pro", "IPDB file for ipv4", 0) \
-    M(String, ipv6_file, "ipv6_pro", "IPDB file for ipv6", 0) \
-    M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0) \
-    M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0) \
-    M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0) \
-\
+    M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0)\
+    M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0)\
+    M(Bool, ip2geo_update_from_hdfs, 0, "Whether to update db file from hdfs", 0)\
+    M(String, ipv4_file, "ipv4_pro", "IPDB file for ipv4", 0)\
+    M(String, ipv6_file, "ipv6_pro", "IPDB file for ipv6", 0)\
+    M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0)\
+    M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0)\
+    M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0)\
+    \
+    /** gateway simplication settings*/ \
+    M(Bool, block_privileged_operations, 0, "Whether to disable tenant to access specific functions or not", 0)\
     /** Sample setttings */ \
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
@@ -1854,6 +1860,7 @@ enum PreloadLevelSettings : UInt64
     M(String, use_snapshot, "", "If not empty, specify the name of the snapshot to use for query", 0) \
     M(Seconds, snapshot_clean_interval, 300, "How often to remove ttl expired snapshots", 0) \
     /* Outfile related Settings */ \
+    M(UInt64, split_file_size_in_mb, 0, "Threshold to split the out data in 'INTO OUTFILE' clause", 0) \
     M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
     M(UInt64, fuzzy_max_files, 100, "The max number of files when insert with fuzzy names.", 0) \
@@ -2110,7 +2117,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_metric, true, "whether enable exchange metric collection", 0) \
     M(UInt64, exchange_local_no_repartition_extra_threads, 32, "Extra threads for pipeline which reading data from LOCAL_NO_NEED_REPARTITION exchange", 0) \
     M(UInt64, filtered_ratio_to_use_skip_read, 0, "Ratio of origin rows to filtered rows when using skip reading, 0 means disable", 0) \
-    \
+    M(Bool, enable_two_stages_prewhere, false, "Whether enable 2 stages prewhere.", 0) \
+
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

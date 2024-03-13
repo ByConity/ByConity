@@ -27,7 +27,7 @@ Projection Est. 100 rows
                      │              │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(coalesce(sr_return_amt, 0)):=AggNull(sum)(expr#coalesce(sr_return_amt, 0)), expr#sum(minus(ss_net_profit, coalesce(sr_net_loss, 0))):=AggNull(sum)(expr#minus(ss_net_profit, coalesce(sr_net_loss, 0)))
                      │              └─ Projection Est. 2903532 rows
                      │                 │     Expressions: [s_store_id, ss_ext_sales_price], expr#coalesce(sr_return_amt, 0):=coalesce(sr_return_amt, 0), expr#minus(ss_net_profit, coalesce(sr_net_loss, 0)):=ss_net_profit - coalesce(sr_net_loss, 0)
-                     │                 └─ Right (PARALLEL_HASH) Join Est. 4077812 rows
+                     │                 └─ Right (PARALLEL_HASH) Join Est. 2903532 rows
                      │                    │     Condition: sr_item_sk == ss_item_sk, sr_ticket_number == ss_ticket_number
                      │                    │     Runtime Filters Builder: {ss_item_sk,ss_ticket_number}
                      │                    ├─ Repartition Exchange Est. 287999764 rows
@@ -88,7 +88,7 @@ Projection Est. 100 rows
                      │              │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price), expr#sum(coalesce(cr_return_amount, 0)):=AggNull(sum)(expr#coalesce(cr_return_amount, 0)), expr#sum(minus(cs_net_profit, coalesce(cr_net_loss, 0))):=AggNull(sum)(expr#minus(cs_net_profit, coalesce(cr_net_loss, 0)))
                      │              └─ Projection Est. 1201995 rows
                      │                 │     Expressions: [cp_catalog_page_id, cs_ext_sales_price], expr#coalesce(cr_return_amount, 0):=coalesce(cr_return_amount, 0), expr#minus(cs_net_profit, coalesce(cr_net_loss, 0)):=cs_net_profit - coalesce(cr_net_loss, 0)
-                     │                 └─ Right Join Est. 1829322 rows
+                     │                 └─ Right Join Est. 1201995 rows
                      │                    │     Condition: cr_item_sk == cs_item_sk, cr_order_number == cs_order_number
                      │                    │     Runtime Filters Builder: {cs_item_sk,cs_order_number}
                      │                    ├─ Repartition Exchange Est. 143996756 rows
@@ -152,7 +152,7 @@ Projection Est. 100 rows
                                     │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price), expr#sum(coalesce(wr_return_amt, 0)):=AggNull(sum)(expr#coalesce(wr_return_amt, 0)), expr#sum(minus(ws_net_profit, coalesce(wr_net_loss, 0))):=AggNull(sum)(expr#minus(ws_net_profit, coalesce(wr_net_loss, 0)))
                                     └─ Projection Est. 725819 rows
                                        │     Expressions: [web_site_id, ws_ext_sales_price], expr#coalesce(wr_return_amt, 0):=coalesce(wr_return_amt, 0), expr#minus(ws_net_profit, coalesce(wr_net_loss, 0)):=ws_net_profit - coalesce(wr_net_loss, 0)
-                                       └─ Right Join Est. 1031251 rows
+                                       └─ Right Join Est. 725819 rows
                                           │     Condition: wr_item_sk == ws_item_sk, wr_order_number == ws_order_number
                                           │     Runtime Filters Builder: {ws_item_sk,ws_order_number}
                                           ├─ Repartition Exchange Est. 71997522 rows

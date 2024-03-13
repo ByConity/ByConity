@@ -72,8 +72,8 @@ void LockContext::unlock(LockRequest * request)
         decConflictedModeCount(request->getMode());
         request->setLockResult(LockStatus::LOCK_INIT, waitingList.end());
     }
-    else
-        throw Exception("Unlock the lock with undefined status " + toString(to_underlying(status)), ErrorCodes::LOGICAL_ERROR);
+
+    /// ignore other cases;
 }
 
 std::vector<TxnTimestamp> LockContext::getGrantedTxnList() const
@@ -175,7 +175,7 @@ bool LockContext::lockedBySameTxn(const TxnTimestamp & txn_id)
 
 LockStatus LockManager::lock(LockRequest * request, const Context & context)
 {
-    LOG_DEBUG(log, "lock request: " + request->toDebugString());
+    LOG_TRACE(log, "lock request: " + request->toDebugString());
 
     auto level = to_underlying(request->getLevel());
     std::vector<TxnTimestamp> current_granted_txns;
@@ -210,7 +210,7 @@ LockStatus LockManager::lock(LockRequest * request, const Context & context)
 
 void LockManager::unlock(LockRequest * request)
 {
-    LOG_DEBUG(log, "unlock request: " + request->toDebugString());
+    LOG_TRACE(log, "unlock request: " + request->toDebugString());
     auto level = to_underlying(request->getLevel());
     LockMapStripe & stripe = lock_maps[level].getStripe(request->getEntity());
     {
@@ -228,7 +228,7 @@ void LockManager::unlock(LockRequest * request)
 
 void LockManager::lock(const LockInfoPtr & info, const Context & context)
 {
-    LOG_DEBUG(log, "try lock: " + info->toDebugString());
+    LOG_TRACE(log, "try lock: " + info->toDebugString());
     assert(info->lock_id != 0);
     // register transaction in LockManager
     UInt64 txn_id = UInt64(info->txn_id);
@@ -273,7 +273,7 @@ void LockManager::lock(const LockInfoPtr & info, const Context & context)
 
 void LockManager::unlock(const LockInfoPtr & info)
 {
-    LOG_DEBUG(log, "unlock: " + info->toDebugString());
+    LOG_TRACE(log, "unlock: " + info->toDebugString());
 
     const UInt64 txn_id = info->txn_id.toUInt64();
     const LockID lock_id = info->lock_id;

@@ -21,15 +21,16 @@ Projection
                         │  │     Condition: cs_item_sk == i_item_sk
                         │  ├─ Inner (PARALLEL_HASH) Join
                         │  │  │     Condition: cs_bill_customer_sk == sr_customer_sk, cs_item_sk == sr_item_sk
+                        │  │  │     Runtime Filters Builder: {sr_customer_sk}
                         │  │  ├─ Repartition Exchange
                         │  │  │  │     Partition by: {cs_item_sk}
                         │  │  │  └─ Inner Join
                         │  │  │     │     Condition: cs_sold_date_sk == d_date_sk_2
                         │  │  │     │     Runtime Filters Builder: {d_date_sk_2}
                         │  │  │     ├─ Filter
-                        │  │  │     │  │     Condition: Runtime Filters: {cs_sold_date_sk}
+                        │  │  │     │  │     Condition: Runtime Filters: {cs_bill_customer_sk, cs_sold_date_sk}
                         │  │  │     │  └─ TableScan tpcds1000.catalog_sales
-                        │  │  │     │           Where: Runtime Filters: {cs_sold_date_sk}
+                        │  │  │     │           Where: Runtime Filters: {cs_bill_customer_sk, cs_sold_date_sk}
                         │  │  │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk, cs_net_profit]
                         │  │  │     └─ Broadcast Exchange
                         │  │  │        └─ Filter
@@ -79,4 +80,4 @@ Projection
                         └─ Broadcast Exchange
                            └─ TableScan tpcds1000.store
                                     Outputs: [s_store_sk, s_store_id, s_store_name]
-note: Runtime Filter is applied for 4 times.
+note: Runtime Filter is applied for 5 times.

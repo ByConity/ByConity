@@ -243,6 +243,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_DATABASE;
     extern const int UNKNOWN_CATALOG;
     extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_SETTING;
     extern const int TABLE_ALREADY_EXISTS;
     extern const int THERE_IS_NO_SESSION;
     extern const int THERE_IS_NO_QUERY;
@@ -453,6 +454,7 @@ struct ContextSharedPart
     std::map<String, UInt16> server_ports;
 
     bool shutdown_called = false;
+    bool restrict_tenanted_users_to_whitelist_settings = false;
 
     Stopwatch uptime_watch;
 
@@ -2142,6 +2144,19 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
             }
         }
     };
+
+    // NOTE: tenanted users connect to server using tenant id given in connection info.
+    // allow only whitelisted settings for tenanted users
+    if (this->getIsRestrictSettingsToWhitelist() && !this->getTenantId().empty())
+    {
+        for (const auto & change : changes)
+        {
+            if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
+                throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name + 
+                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    " in configuration");
+        }
+    }
 
     find_dialect_type_if_any(changes);
 
@@ -4238,9 +4253,14 @@ BlockOutputStreamPtr Context::getOutputStream(const String & name, WriteBuffer &
     return FormatFactory::instance().getOutputStream(name, buf, sample, shared_from_this());
 }
 
-OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const
+OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample, bool out_to_directory) const
 {
-    return FormatFactory::instance().getOutputFormatParallelIfPossible(name, buf, sample, shared_from_this());
+    return FormatFactory::instance().getOutputFormatParallelIfPossible(name, buf, sample, shared_from_this(), out_to_directory);
+}
+
+OutputFormatPtr Context::getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const
+{
+    return FormatFactory::instance().getOutputFormat(name, buf, sample, shared_from_this());
 }
 
 
@@ -4293,6 +4313,23 @@ void Context::setApplicationType(ApplicationType type)
 {
     /// Lock isn't required, you should set it at start
     shared->application_type = type;
+}
+
+bool Context::getIsRestrictSettingsToWhitelist() const
+{
+    return shared->restrict_tenanted_users_to_whitelist_settings;
+}
+
+void Context::setIsRestrictSettingsToWhitelist(bool is_restrict)
+{
+    /// Lock isn't required, you should set it at start
+    shared->restrict_tenanted_users_to_whitelist_settings = is_restrict;
+}
+
+void Context::addRestrictSettingsToWhitelist(const std::vector<String>& setting_names) const
+{
+    for (auto & name : setting_names)
+        SettingsChanges::WHITELIST_SETTINGS.emplace(name);
 }
 
 void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
@@ -4989,7 +5026,7 @@ void Context::setPartCacheManager()
     if (shared->cache_manager)
         throw Exception("Part cache manager has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->cache_manager = std::make_shared<PartCacheManager>(shared_from_this());
+    shared->cache_manager = std::make_shared<PartCacheManager>(shared_from_this(), total_memory_tracker.getHardLimit());
 }
 
 PartCacheManagerPtr Context::getPartCacheManager() const
