@@ -1587,6 +1587,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_remove_unused_cte, true, "Whether enable remove unused cte", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
+    M(Bool, enable_filter_window_to_sorting_limit, true, "Filter window to sorting limit", 0) \
     M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
     M(Bool, optimizer_index_projection_support, true, "Use indexprojection in optimizer mode", 0) \
     M(Bool, enable_setoperation_to_agg, true, "Whether enable rewrite set operation to aggregation", 0)                                            \

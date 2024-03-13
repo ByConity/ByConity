@@ -81,6 +81,7 @@ public:
 
     std::set<StorageID> allocateLocalTable(ContextPtr context);
     PlanNodeIdAllocatorPtr & getIdAllocator() { return id_allocator; }
+    void createIdAllocator() { id_allocator = std::make_shared<PlanNodeIdAllocator>(); }
     void update(PlanNodePtr plan) { plan_node = std::move(plan); }
 
     void unitePlans(QueryPlanStepPtr step, std::vector<QueryPlanPtr> plans);
