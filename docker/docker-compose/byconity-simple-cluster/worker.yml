@@ -188,3 +188,5 @@ query_log:
   flush_interval_milliseconds: 15000
   partition_by: event_date
 cnch_config: "/config/cnch-config.yml"
+additional_services:
+  FullTextSearch: true

@@ -1041,6 +1041,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #if USE_JEMALLOC
             JeprofControl::instance().loadFromConfig(*config);
 #endif
+            global_context->updateAdditionalServices(*config);
             if (global_context->getServerType() == ServerType::cnch_server)
             {
                 global_context->updateQueueManagerConfig();
