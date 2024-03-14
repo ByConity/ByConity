@@ -11,7 +11,8 @@
 #include <Storages/MaterializedView/ApplyPartitionFilterVisitor.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include <Storages/SelectQueryDescription.h>
-
+#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/Hive/HivePartition.h>
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Databases/DatabasesCommon.h>
@@ -445,10 +446,15 @@ PartMapRelations PartitionTransformer::transform(
     if (ver_partitions.empty())
         return PartMapRelations();
     StoragePtr depend_base_table = depend_base_tables[base_table_id]->storage;
-    auto & target_meta_base = dynamic_cast<MergeTreeMetaBase &>(*target_table);
-    auto & source_meta_base = dynamic_cast<MergeTreeMetaBase &>(*depend_base_table);
-    size_t filter_pos = depend_base_tables[base_table_id]->filter_pos;
+    auto * target_meta_base = dynamic_cast<MergeTreeMetaBase *>(target_table.get());
+    auto * source_meta_base = dynamic_cast<MergeTreeMetaBase *>(depend_base_table.get());
+    auto * source_hive_table = dynamic_cast<StorageCnchHive *>(depend_base_table.get());
+    if (!source_meta_base && !source_hive_table)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported base table type, source tables only support MergeTree and Hive table");
+    if (!target_meta_base)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported target table type, target table only support MergeTree");
 
+    size_t filter_pos = depend_base_tables[base_table_id]->filter_pos;
     /// function: extract merge partition from block
     auto extract_merge_partition = [&](const Block & input_block) -> std::vector<std::shared_ptr<MergeTreePartition>> {
         std::vector<std::shared_ptr<MergeTreePartition>> partition_infos;
@@ -479,25 +485,47 @@ PartMapRelations PartitionTransformer::transform(
 
     /// deserialize merge tree partition
     FormatSettings format_settings;
-    std::vector<std::shared_ptr<MergeTreePartition>> source_partition_infos;
+    std::vector<std::shared_ptr<MergeTreePartition>> source_merge_tree_partition_infos;
+    std::vector<std::shared_ptr<HivePartition>> source_hive_partition_infos;
     for (const auto & add_partition : ver_partitions)
     {
         StorageID storage_id = RPCHelpers::createStorageID(add_partition->storage_id());
         if (storage_id != depend_base_table->getStorageID())
             continue;
         ReadBufferFromOwnString read_buffer(add_partition->partition());
-        auto part_info = std::make_shared<MergeTreePartition>();
-        part_info->load(source_meta_base, read_buffer);
-        source_partition_infos.emplace_back(part_info);
+        if (source_meta_base)
+        {
+            auto part_info = std::make_shared<MergeTreePartition>();
+            part_info->load(*source_meta_base, read_buffer);
+            source_merge_tree_partition_infos.emplace_back(part_info);
+        }
+        else if (source_hive_table)
+        {
+            auto part_info = std::make_shared<HivePartition>();
+            part_info->loadFromBinary(read_buffer, source_hive_table->getInMemoryMetadataPtr()->getPartitionKey());
+            source_hive_partition_infos.emplace_back(part_info);
+        }
     }
 
     /// construct expression input block
     MutableColumns columns = block.mutateColumns();
-    for (size_t i = 0; i < columns.size(); ++i)
+    if (source_meta_base)
     {
-        auto & part_column = columns[i];
-        for (const auto & info : source_partition_infos)
-            part_column->insert(info->value[i]);
+        for (size_t i = 0; i < columns.size(); ++i)
+        {
+            auto & part_column = columns[i];
+            for (const auto & info : source_merge_tree_partition_infos)
+                part_column->insert(info->value[i]);
+        }
+    }
+    else if (source_hive_table)
+    {
+        for (size_t i = 0; i < columns.size(); ++i)
+        {
+            auto & part_column = columns[i];
+            for (const auto & info : source_hive_partition_infos)
+                part_column->insert(info->value[i]);
+        }
     }
     block.setColumns(std::move(columns));
 
@@ -526,8 +554,11 @@ PartMapRelations PartitionTransformer::transform(
             continue;
         WriteBufferFromOwnString target_write_buffer;
         WriteBufferFromOwnString source_write_buffer;
-        target_partition_infos[i]->serializeText(target_meta_base, target_write_buffer, format_settings);
-        source_partition_infos[i]->serializeText(source_meta_base, source_write_buffer, format_settings);
+        target_partition_infos[i]->serializeText(*target_meta_base, target_write_buffer, format_settings);
+        if (source_meta_base)
+            source_merge_tree_partition_infos[i]->serializeText(*source_meta_base, source_write_buffer, format_settings);
+        else if (source_hive_table)
+            source_hive_partition_infos[i]->serializeText(source_hive_table->getInMemoryMetadataPtr()->getPartitionKey(), source_write_buffer, format_settings);
         String target_str = target_write_buffer.str();
         String source_str = source_write_buffer.str();
         target_to_source_map[target_str].insert(source_str);
@@ -551,12 +582,22 @@ VersionPartPtr PartitionTransformer::convert(const StoragePtr & storage, const P
 String PartitionTransformer::parsePartitionKey(const StoragePtr & storage, String partition_key_binary)
 {
     FormatSettings format_settings;
-    auto & meta_base = dynamic_cast<MergeTreeMetaBase &>(*(storage));
-    ReadBufferFromOwnString read_buffer(partition_key_binary);
-    auto part_info = std::make_shared<MergeTreePartition>();
-    part_info->load(meta_base, read_buffer);
     WriteBufferFromOwnString write_buffer;
-    part_info->serializeText(meta_base, write_buffer, format_settings);
+    if (auto * meta_base = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
+    {
+        ReadBufferFromOwnString read_buffer(partition_key_binary);
+        auto part_info = std::make_shared<MergeTreePartition>();
+        part_info->load(*meta_base, read_buffer);
+        part_info->serializeText(*meta_base, write_buffer, format_settings);
+    }
+    else if (auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get()))
+    {
+        ReadBufferFromString read_buffer(partition_key_binary);
+        StorageMetadataPtr metadata_snapshot = cnch_hive->getInMemoryMetadataPtr();
+        auto part_info = std::make_shared<HivePartition>();
+        part_info->loadFromBinary(read_buffer, metadata_snapshot->getPartitionKey());
+        part_info->serializeText(metadata_snapshot->getPartitionKey(), write_buffer, format_settings);
+    }
     return write_buffer.str();
 }
 
