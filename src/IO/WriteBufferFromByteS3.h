@@ -66,16 +66,17 @@ private:
 public:
     // For default settings in 16M segment, max part is about 156G
     explicit WriteBufferFromByteS3(
-        const std::shared_ptr<Aws::S3::S3Client>& client_,
-        const String& bucket_,
-        const String& key_,
+        const std::shared_ptr<Aws::S3::S3Client> & client_,
+        const String & bucket_,
+        const String & key_,
         UInt64 max_single_put_threshold_ = 16 * 1024 * 1024,
         UInt64 min_segment_size_ = 16 * 1024 * 1024,
         std::optional<std::map<String, String>> object_metadata_ = std::nullopt,
         size_t buf_size_ = DBMS_DEFAULT_BUFFER_SIZE,
         bool allow_overwrite_ = false,
-        char* mem_ = nullptr,
-        size_t alignment_ = 0);
+        char * mem_ = nullptr,
+        size_t alignment_ = 0,
+        bool for_disk_s3 = false);
 
     ~WriteBufferFromByteS3() override;
 

@@ -140,7 +140,7 @@ private:
 DiskByteS3::DiskByteS3(const String& name_, const String& root_prefix_, const String& bucket_,
     const std::shared_ptr<Aws::S3::S3Client>& client_):
         disk_id(next_disk_id.fetch_add(1)), name(name_), root_prefix(root_prefix_),
-        s3_util(client_, bucket_), reader_opts(std::make_shared<S3RemoteFSReaderOpts>(client_, bucket_)),
+        s3_util(client_, bucket_, true), reader_opts(std::make_shared<S3RemoteFSReaderOpts>(client_, bucket_)),
         reserved_bytes(0), reservation_count(0)
 {
 }
@@ -207,29 +207,30 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
     }
     else
     {
+        ReadSettings modified_settings{settings};
+        modified_settings.for_disk_s3 = true;
         if (settings.remote_fs_prefetch)
         {
             auto impl = std::make_unique<ReadBufferFromS3>(s3_util.getClient(),
-                s3_util.getBucket(), object_key, settings, 3, false, /* use_external_buffer */true);
+                s3_util.getBucket(), object_key, modified_settings, 3, false, /* use_external_buffer */true);
 
             auto global_context = Context::getGlobalContextInstance();
             auto reader = global_context->getThreadPoolReader();
-            return std::make_unique<AsynchronousBoundedReadBuffer>(std::move(impl), *reader, settings);
+            return std::make_unique<AsynchronousBoundedReadBuffer>(std::move(impl), *reader, modified_settings);
         }
         else
         {
             return std::make_unique<ReadBufferFromS3>(s3_util.getClient(),
-                s3_util.getBucket(), object_key, settings, 3, false);
+                s3_util.getBucket(), object_key, modified_settings, 3, false);
         }
     }
 }
 
-std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String& path,
-    const WriteSettings& settings)
+std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String & path, const WriteSettings & settings)
 {
     return std::make_unique<WriteBufferFromByteS3>(s3_util.getClient(), s3_util.getBucket(),
         std::filesystem::path(root_prefix) / path, 16 * 1024 * 1024,
-        16 * 1024 * 1024, settings.file_meta, settings.buffer_size, false);
+        16 * 1024 * 1024, settings.file_meta, settings.buffer_size, false, nullptr, 0, true);
 }
 
 void DiskByteS3::removeFile(const String& path)

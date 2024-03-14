@@ -17,7 +17,6 @@
 #include <chrono>
 #include <memory>
 #include <thread>
-#include <aws/s3/model/GetObjectRequest.h>
 #include <Core/Types.h>
 #include <IO/S3Common.h>
 #include <Common/ProfileEvents.h>
