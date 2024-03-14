@@ -100,7 +100,7 @@ TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segment
 
     for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
     {
-        if (auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
+        if (const auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
             iter != selector_info.source_addresses.end())
         {
             plan_segment_input->insertSourceAddresses(iter->second.addresses);
@@ -221,35 +221,18 @@ void Scheduler::prepareFinalTask()
     LOG_DEBUG(log, "Set address {} for final segment", final_address_info.toString());
     final_segment->setCoordinatorAddress(final_address_info);
 
-    NodeSelectorResult selector_info;
-    if (query_context->getSettingsRef().bsp_mode)
-    {
-        bool is_source = dag_graph_ptr->sources.find(dag_graph_ptr->final) != dag_graph_ptr->sources.end();
-        auto selector_result = node_selector_result.emplace(dag_graph_ptr->final, node_selector.select(final_segment, is_source));
-        selector_info = selector_result.first->second;
-    }
-
     for (auto & plan_segment_input : final_segment->getPlanSegmentInputs())
     {
         // segment has more than one input which one is table
         if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
             continue;
-        if (query_context->getSettingsRef().bsp_mode)
-        {
-            if (auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
-                iter != selector_info.source_addresses.end())
-                plan_segment_input->insertSourceAddresses(iter->second.addresses);
-        }
-        else
-        {
-            auto address_it = dag_graph_ptr->id_to_address.find(plan_segment_input->getPlanSegmentId());
-            if (address_it == dag_graph_ptr->id_to_address.end())
-                throw Exception(
-                    "Logical error: address of segment " + std::to_string(plan_segment_input->getPlanSegmentId()) + " not found",
-                    ErrorCodes::LOGICAL_ERROR);
-            if (plan_segment_input->getSourceAddresses().empty())
-                plan_segment_input->insertSourceAddresses(address_it->second);
-        }
+        auto address_it = dag_graph_ptr->id_to_address.find(plan_segment_input->getPlanSegmentId());
+        if (address_it == dag_graph_ptr->id_to_address.end())
+            throw Exception(
+                "Logical error: address of segment " + std::to_string(plan_segment_input->getPlanSegmentId()) + " not found",
+                ErrorCodes::LOGICAL_ERROR);
+        if (plan_segment_input->getSourceAddresses().empty())
+            plan_segment_input->insertSourceAddresses(address_it->second);
     }
     dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start = true;
 }
