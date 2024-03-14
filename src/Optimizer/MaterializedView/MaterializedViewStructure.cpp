@@ -165,14 +165,17 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
     std::unordered_set<String> output_columns;
 
     auto table_columns = target_table->getInMemoryMetadataPtr()->getColumns().getAllPhysical();
-    if (table_columns.size() != root->getCurrentDataStream().header.columns())
+    // clickhouse supports materialized view has more columns than query
+    if (table_columns.size() < root->getCurrentDataStream().header.columns())
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "size of materialized view physical columns is inconsistent with select outputs for " + target_storage_id.getFullTableName());
+            "size of materialized view physical columns is less than than select outputs for " + target_storage_id.getFullTableName());
 
     size_t index = 0;
     for (auto & table_column : table_columns)
     {
+        if (index >= root->getCurrentDataStream().header.columns())
+            break;
         const auto & query_column = root->getCurrentDataStream().header.getByPosition(index++);
         if (!removeNullable(removeLowCardinality(query_column.type))->equals(*removeNullable(removeLowCardinality(table_column.type))))
             throw Exception(ErrorCodes::LOGICAL_ERROR, 
