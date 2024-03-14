@@ -87,14 +87,22 @@ bool canBecomeNullable(const DataTypePtr & type)
 /// Note: LowCardinality(T) transformed to LowCardinality(Nullable(T))
 DataTypePtr convertTypeToNullable(const DataTypePtr & type)
 {
+    if (isNullable(type))
+        return type;
+
     if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
     {
         const auto & dict_type = low_cardinality_type->getDictionaryType();
         if (dict_type->canBeInsideNullable())
             return std::make_shared<DataTypeLowCardinality>(makeNullable(dict_type));
     }
-    return makeNullable(type);
+
+    if (type->canBeInsideNullable())
+        return makeNullable(type);
+
+    return type;
 }
+
 
 DataTypePtr tryConvertTypeToNullable(const DataTypePtr & type)
 {
