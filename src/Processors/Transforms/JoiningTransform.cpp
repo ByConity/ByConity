@@ -53,6 +53,8 @@ JoiningTransform::JoiningTransform(
 {
     if (!join->isFilled())
         inputs.emplace_back(Block(), this);
+    if (dynamic_cast<ConcurrentHashJoin *>(join.get()))
+        is_concurrent_hash = true;
 }
 
 IProcessor::Status JoiningTransform::prepare()
@@ -123,8 +125,7 @@ IProcessor::Status JoiningTransform::prepare()
     auto & input = inputs.front();
     if (input.isFinished())
     {
-        auto * concurrent_hash_join = dynamic_cast<ConcurrentHashJoin*>(join.get());
-        if (!input_finish && concurrent_hash_join)
+        if (!input_finish && is_concurrent_hash)
         {
             input_finish = true;
             return Status::Ready;
@@ -309,8 +310,8 @@ Block JoiningTransform::readExecute(Chunk & chunk)
 
         if (res)
         {
-            if (auto * concurrent_hash_join = dynamic_cast<ConcurrentHashJoin*>(join.get()))
-                concurrent_hash_join->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
+            if (is_concurrent_hash)
+                static_cast<ConcurrentHashJoin *>(join.get())->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
             else
                 join->joinBlock(res, not_processed);
         }
@@ -325,16 +326,16 @@ Block JoiningTransform::readExecute(Chunk & chunk)
                 res.insert(side_block->getByPosition(i));
 
         not_processed.reset();
-        if (auto * concurrent_hash_join = dynamic_cast<ConcurrentHashJoin*>(join.get()))
-            concurrent_hash_join->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
+        if (is_concurrent_hash)
+            static_cast<ConcurrentHashJoin *>(join.get())->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
         else
             join->joinBlock(res, not_processed);
     }
     else
     {
         res = std::move(not_processed->block);
-        if (auto * concurrent_hash_join = dynamic_cast<ConcurrentHashJoin*>(join.get()))
-            concurrent_hash_join->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
+        if (is_concurrent_hash)
+            static_cast<ConcurrentHashJoin *>(join.get())->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
         else
             join->joinBlock(res, not_processed);
     }
@@ -351,7 +352,10 @@ JoiningTransform::~JoiningTransform()
 FillingRightJoinSideTransform::FillingRightJoinSideTransform(
     Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_)
     : IProcessor({input_header}, {Block()}), join(std::move(join_)), finish_counter(std::move(finish_counter_))
-{}
+{
+    if (dynamic_cast<ConcurrentHashJoin *>(join.get()))
+        is_current_hash_join = true;
+}
 
 InputPort * FillingRightJoinSideTransform::addTotalsPort()
 {
@@ -420,8 +424,7 @@ IProcessor::Status FillingRightJoinSideTransform::prepare()
         return Status::Ready;
     }
 
-    auto * concurrent_hash_join = dynamic_cast<ConcurrentHashJoin*>(join.get());
-    if (!input_finish && concurrent_hash_join)
+    if (!input_finish && is_current_hash_join)
     {
         input_finish = true;
         return Status::Ready;
@@ -451,19 +454,20 @@ void FillingRightJoinSideTransform::work()
 
         if (for_totals)
             join->setTotals(block);
-        else if (auto * concurrent_hash_join = dynamic_cast<ConcurrentHashJoin*>(join.get()))
+        else if (is_current_hash_join)
+        {
+            auto * concurrent_hash_join = static_cast<ConcurrentHashJoin *>(join.get());
             stop_reading = !concurrent_hash_join->addJoinedBlock(block, &dispatched_columns_cache, true);
+        }
         else
             stop_reading = !join->addJoinedBlock(block);
 
         set_totals = for_totals;
     }
-    else
+    else if (is_current_hash_join)
     {
-        if (auto * concurrent_hash_join = dynamic_cast<ConcurrentHashJoin*>(join.get()))
-        {
-            concurrent_hash_join->addJoinedBlock({}, &dispatched_columns_cache, true);
-        }
+        auto * concurrent_hash_join = static_cast<ConcurrentHashJoin *>(join.get());
+        concurrent_hash_join->addJoinedBlock({}, &dispatched_columns_cache, true);
     }
 }
 

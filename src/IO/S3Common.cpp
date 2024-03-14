@@ -65,11 +65,22 @@ namespace ProfileEvents
     extern const Event S3ResetSessions;
     extern const Event S3PreservedSessions;
 
+    extern const Event S3DeleteObjects;
+    extern const Event S3ListObjects;
+    extern const Event S3HeadObject;
     extern const Event S3CreateMultipartUpload;
     extern const Event S3CompleteMultipartUpload;
     extern const Event S3AbortMultipartUpload;
     extern const Event S3UploadPart;
     extern const Event S3PutObject;
+    extern const Event S3GetObject;
+
+    extern const Event DiskS3HeadObject;
+    extern const Event DiskS3CreateMultipartUpload;
+    extern const Event DiskS3AbortMultipartUpload;
+    extern const Event DiskS3CompleteMultipartUpload;
+    extern const Event DiskS3UploadPart;
+    extern const Event DiskS3PutObject;
 }
 
 namespace
@@ -575,6 +586,9 @@ namespace S3
         request.SetBucket(bucket);
         request.SetKey(key);
 
+        ProfileEvents::increment(ProfileEvents::S3HeadObject);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3HeadObject);
         Aws::S3::Model::HeadObjectOutcome outcome = client->HeadObject(request);
 
         if (outcome.IsSuccess())
@@ -630,6 +644,7 @@ namespace S3
         req.SetRange(range);
         req.SetResponseStreamFactory(AwsWriteableStreamFactory(buffer.begin(), size));
 
+        ProfileEvents::increment(ProfileEvents::S3GetObject);
         Aws::S3::Model::GetObjectOutcome outcome = client->GetObject(req);
 
         if (outcome.IsSuccess())
@@ -673,6 +688,7 @@ namespace S3
 
     S3Util::S3ListResult S3Util::listObjectsWithPrefix(const String & prefix, const std::optional<String> & token, int limit) const
     {
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
         Aws::S3::Model::ListObjectsV2Request request;
         request.SetBucket(bucket);
         request.SetMaxKeys(limit);
@@ -710,7 +726,9 @@ namespace S3
         const std::optional<std::map<String, String>> & meta,
         const std::optional<std::map<String, String>> & tags) const
     {
-        ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload, 1);
+        ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3CreateMultipartUpload);
         Aws::S3::Model::CreateMultipartUploadRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -732,20 +750,24 @@ namespace S3
         return outcome.GetResult().GetUploadId();
     }
 
-    void S3Util::completeMultipartUpload(const String & key, const String & upload_id, const std::vector<String> & etags) const
+    void S3Util::completeMultipartUpload(
+        const String & key,
+        const String & upload_id,
+        const std::vector<String> & etags) const
     {
         if (etags.empty())
         {
             throw Exception("Trying to complete a multiupload without any part in it", ErrorCodes::LOGICAL_ERROR);
         }
 
-        ProfileEvents::increment(ProfileEvents::S3CompleteMultipartUpload, 1);
-
         Aws::S3::Model::CompleteMultipartUploadRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
         req.SetUploadId(upload_id);
 
+        ProfileEvents::increment(ProfileEvents::S3CompleteMultipartUpload);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3CompleteMultipartUpload);
         Aws::S3::Model::CompletedMultipartUpload multipart_upload;
         for (size_t i = 0; i < etags.size(); ++i)
         {
@@ -766,13 +788,14 @@ namespace S3
 
     void S3Util::abortMultipartUpload(const String & key, const String & upload_id) const
     {
-        ProfileEvents::increment(ProfileEvents::S3AbortMultipartUpload, 1);
-
         Aws::S3::Model::AbortMultipartUploadRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
         req.SetUploadId(upload_id);
 
+        ProfileEvents::increment(ProfileEvents::S3AbortMultipartUpload);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3AbortMultipartUpload);
         auto outcome = client->AbortMultipartUpload(req);
 
         if (!outcome.IsSuccess())
@@ -789,8 +812,9 @@ namespace S3
         size_t size,
         const std::shared_ptr<Aws::StringStream> & stream) const
     {
-        ProfileEvents::increment(ProfileEvents::S3UploadPart, 1);
-
+        ProfileEvents::increment(ProfileEvents::S3UploadPart);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3UploadPart);
         Aws::S3::Model::UploadPartRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -816,8 +840,6 @@ namespace S3
         const std::optional<std::map<String, String>> & metadata,
         const std::optional<std::map<String, String>> & tags) const
     {
-        ProfileEvents::increment(ProfileEvents::S3PutObject, 1);
-
         Aws::S3::Model::PutObjectRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -832,6 +854,9 @@ namespace S3
             req.SetTagging(urlEncodeMap(tags.value()));
         }
 
+        ProfileEvents::increment(ProfileEvents::S3PutObject);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3PutObject);
         auto outcome = client->PutObject(req);
 
         if (!outcome.IsSuccess())
@@ -883,6 +908,7 @@ namespace S3
         delete_objs.SetObjects(obj_ids);
         delete_objs.SetQuiet(true);
 
+        ProfileEvents::increment(ProfileEvents::S3DeleteObjects);
         Aws::S3::Model::DeleteObjectsRequest request;
         request.SetBucket(bucket);
         request.SetDelete(delete_objs);
@@ -969,6 +995,7 @@ namespace S3
         request.SetBucket(bucket);
         request.SetKey(key);
 
+        ProfileEvents::increment(ProfileEvents::S3HeadObject);
         Aws::S3::Model::HeadObjectOutcome outcome = client->HeadObject(request);
         if (outcome.IsSuccess())
         {
@@ -987,6 +1014,7 @@ namespace S3
         req.SetKey(key);
         req.SetRange("bytes=0-1");
 
+        ProfileEvents::increment(ProfileEvents::S3GetObject);
         Aws::S3::Model::GetObjectOutcome outcome = client->GetObject(req);
 
         if (outcome.IsSuccess())
