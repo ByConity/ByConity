@@ -1718,6 +1718,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
     M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(Bool, enable_wait_cancel_rpc, false, "Whether wait rpcs of cancel worker to finish", 0) \
+    M(UInt64, parallel_join_rows_batch_threshold, 4096, "Rows that concurrent hash join wait data reach, then to build hashtable or join block", 0) \
+    M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
     M(Bool, enable_shuffle_with_order, false, "Whether enable keep data order when shuffle", 0) \

@@ -162,7 +162,8 @@ JoinPtr JoinStep::makeJoin(
             LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use ConcurrentHashJoin");
             if (consumer)
                 consumer->fixParallel(ConcurrentHashJoin::toPowerOfTwo(std::min<size_t>(num_streams, 256)));
-            return std::make_shared<ConcurrentHashJoin>(table_join, num_streams, r_sample_block);
+            return std::make_shared<ConcurrentHashJoin>(table_join, num_streams, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
+
         }
         else if (join_algorithm == JoinAlgorithm::GRACE_HASH && distribution_type == DistributionType::REPARTITION)
         {
