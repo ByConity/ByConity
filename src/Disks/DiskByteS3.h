@@ -61,6 +61,10 @@ public:
 
     virtual bool exists(const String & path) const override;
 
+    // This function calls HeadObject, instead of the poorly performing ListObjects used in exists()
+    // If you want to check if a file exists, we strongly suggest using this function
+    virtual bool fileExists(const String & file_path) const override;
+
     virtual bool isFile(const String & ) const override { throw Exception("isFile is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
     virtual bool isDirectory(const String & ) const override { throw Exception("isDirecotry is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }

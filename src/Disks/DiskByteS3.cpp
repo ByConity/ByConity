@@ -163,6 +163,11 @@ bool DiskByteS3::exists(const String& path) const
     return !res.object_names.empty();
 }
 
+bool DiskByteS3::fileExists(const String & file_path) const
+{
+    return s3_util.exists(std::filesystem::path(root_prefix) / file_path);
+}
+
 size_t DiskByteS3::getFileSize(const String& path) const
 {
     return s3_util.getObjectSize(std::filesystem::path(root_prefix) / path);

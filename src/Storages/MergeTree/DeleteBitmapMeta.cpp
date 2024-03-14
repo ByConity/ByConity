@@ -238,13 +238,8 @@ void DeleteBitmapMeta::removeFile()
     {
         String rel_file_path = path.value();
         DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        if (likely(disk->exists(rel_file_path)))
-        {
-            disk->removeFile(rel_file_path);
-            LOG_TRACE(storage.getLogger(), "Removed delete bitmap file {}", rel_file_path);
-        }
-        else
-            LOG_WARNING(storage.getLogger(), "Trying to remove file {}, but it doest exist.", rel_file_path);
+        LOG_TRACE(storage.getLogger(), "Remove delete bitmap file {} if exists", rel_file_path);
+        disk->removeFileIfExists(rel_file_path);
     }
 }
 
