@@ -677,6 +677,7 @@ void CnchServerServiceImpl::fetchPartitions(
                 column_names.push_back(name);
             SelectQueryInfo query_info;
             auto session_context = Context::createCopy(gc);
+            session_context->setCurrentDatabase(request->database());
             auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(session_context, storage, request->predicate(), query_info);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);

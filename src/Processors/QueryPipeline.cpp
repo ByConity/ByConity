@@ -47,6 +47,7 @@
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <Common/CurrentThread.h>
 #include <Common/typeid_cast.h>
+#include <Interpreters/ConcurrentHashJoin.h>
 
 #include <sys/eventfd.h>
 

@@ -10,6 +10,8 @@
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/IJoin.h>
 #include <Common/Stopwatch.h>
+#include <Processors/Exchange/RepartitionTransform.h>
+#include <Processors/Transforms/JoiningTransform.h>
 
 namespace DB
 {
@@ -32,11 +34,20 @@ class ConcurrentHashJoin : public IJoin
 {
 
 public:
-    explicit ConcurrentHashJoin(std::shared_ptr<TableJoin> table_join_, size_t slots_, const Block & right_sample_block, bool any_take_last_row_ = false);
+    explicit ConcurrentHashJoin(
+        std::shared_ptr<TableJoin> table_join_,
+        size_t slots_,
+        size_t parallel_join_rows_batch_threshold_,
+        const Block & right_sample_block_,
+        bool any_take_last_row_ = false
+    );
     ~ConcurrentHashJoin() override = default;
 
     bool addJoinedBlock(const Block & block, bool check_limits) override;
     void joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_processed) override;
+
+    bool addJoinedBlock(const Block & block, DispatchedColumnsCache *dispatched_columns_cache, bool check_limits);
+    void joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_processed, DispatchedColumnsCache *dispatched_columns_cache, BlocksPtr & dispatched_blocks);
 
     JoinType getType() const override { return JoinType::PARALLEL_HASH; }
     const TableJoin & getTableJoin() const override { return *table_join; }
@@ -64,15 +75,29 @@ private:
 
     std::shared_ptr<TableJoin> table_join;
     size_t slots;
+    size_t parallel_join_rows_batch_threshold;
     Block right_sample_block;
     std::vector<std::shared_ptr<InternalHashJoin>> hash_joins;
+    std::atomic<size_t> hash_join_inserter_left {0};
+
+    std::vector<std::mutex> hash_joins_input_queue_lock;
+    std::vector<std::queue<BlockPtr>> hash_joins_input_queue;
+
+    std::mutex hash_joins_task_queue_lock;
+    std::queue<size_t> hash_joins_build_task;
+    std::vector<bool> hash_joins_task_in_queue;
 
     std::mutex totals_mutex;
     Block totals;
 
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
-    Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
-
+    void dispatchBlock(const Strings & key_columns_names, const Block & from_block, std::vector<MutableColumns> & result, Block & block_head);
+    void selectDispatchBlock(
+        const Strings & key_columns_names,
+        const Block & from_block,
+        IColumn::Selector & res_selector,
+        RepartitionTransform::PartitionStartPoints & res_selector_points
+    );
 };
 
 }

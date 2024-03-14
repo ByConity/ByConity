@@ -5,6 +5,13 @@
 namespace DB
 {
 
+struct DispatchedColumnsCache
+{
+    Block block_head;
+    std::vector<MutableColumns> columns_cache;
+    bool finished = false;
+};
+
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
 
@@ -66,7 +73,13 @@ public:
         FinishPipePtr finish_pipe_ = nullptr);
     ~JoiningTransform() override;
 
-    String getName() const override { return "JoiningTransform"; }
+    String getName() const override
+    {
+        if (is_concurrent_hash)
+            return "JoiningTransformConcur";
+        else
+            return "JoiningTransform";
+    }
 
     static Block transformHeader(Block header, const JoinPtr & join);
 
@@ -107,6 +120,12 @@ private:
     size_t index = 0;
     FinishPipePtr finish_pipe;
 
+    bool input_finish = false;
+    DispatchedColumnsCache dispatched_columns_cache;
+    BlocksPtr dispatched_blocks;
+    bool is_concurrent_hash = false;
+
+
     Block readExecute(Chunk & chunk);
 };
 
@@ -117,7 +136,13 @@ class FillingRightJoinSideTransform : public IProcessor
 {
 public:
     FillingRightJoinSideTransform(Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_ = nullptr);
-    String getName() const override { return "FillingRightJoinSide"; }
+    String getName() const override
+    {
+        if (is_current_hash_join)
+            return "FillingRightJoinSideConcur";
+        else
+            return "FillingRightJoinSide";
+    }
 
     InputPort * addTotalsPort();
 
@@ -132,6 +157,10 @@ private:
     bool for_totals = false;
     bool set_totals = false;
     bool build_rf = false; // after output finish, let's start build rf
+
+    bool input_finish = false;
+    DispatchedColumnsCache dispatched_columns_cache;
+    bool is_current_hash_join = false;
 };
 
 class DelayedBlocksTask : public ChunkInfo

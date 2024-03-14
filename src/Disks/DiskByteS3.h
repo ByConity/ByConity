@@ -93,11 +93,11 @@ public:
 
     virtual std::unique_ptr<ReadBufferFromFileBase> readFile(
         const String & path,
-        const ReadSettings& settings) const override;
+        const ReadSettings & settings) const override;
 
     virtual std::unique_ptr<WriteBufferFromFileBase> writeFile(
         const String & path,
-        const WriteSettings& settings) override;
+        const WriteSettings & settings) override;
 
     virtual void removeFile(const String & path) override;
 
@@ -123,9 +123,9 @@ public:
     virtual String getTableRelativePathOnDisk(const String &) override {return "";}
 
     // Non virtual functions
-    const String& getS3Bucket() const { return s3_util.getBucket(); }
+    const String & getS3Bucket() const { return s3_util.getBucket(); }
     std::shared_ptr<Aws::S3::S3Client> getS3Client() const { return s3_util.getClient(); }
-    const S3::S3Util& getS3Util() const { return s3_util; }
+    const S3::S3Util & getS3Util() const { return s3_util; }
 
 private:
     bool tryReserve(UInt64 bytes);
