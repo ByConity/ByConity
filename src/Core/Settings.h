@@ -1907,6 +1907,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, async_mv_refresh_task_submit_to_bg_thread, true, "submit async mv refresh task to bg thread.", 0) \
     M(Bool, async_mv_refresh_task_bsp_mode, true, "whether to execute async mv refresh task in bsp mode.", 0) \
     M(UInt64, max_server_refresh_materialized_view_task_num, 10, "refresh materialized async max thread num in server.", 0) \
+    M(Bool, enable_async_mv_debug, false, "whether show async debug information", 0) \
     \
 
 
