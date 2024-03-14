@@ -175,7 +175,7 @@ StorageMaterializedView::StorageMaterializedView(
 }
 
 void StorageMaterializedView::syncBaseTablePartitions(
-    PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context)
+    PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context, bool for_rewrite)
 {
     if (!partition_transformer)
         return;
@@ -261,6 +261,17 @@ void StorageMaterializedView::syncBaseTablePartitions(
                     LOG_TRACE(log,"add partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, current_part.partition_id()),
                             std::to_string(current_part.last_modification_time()));
 // #endif
+                }
+
+                bool zero_in_current = (current_part.last_modification_time() == 0);
+
+                if (for_rewrite && zero_in_current)
+                {
+                    partition_diff->add_partitions.emplace_back(PartitionTransformer::convert(storage, current_part));
+                    updated_storage_set.insert(storage->getStorageID());
+// #ifndef NDEBUG
+                    LOG_TRACE(log,"add partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, current_part.partition_id()),
+                            std::to_string(current_part.last_modification_time()));
                 }
             }
 
@@ -1557,14 +1568,14 @@ void StorageMaterializedView::validateMv(ContextMutablePtr local_context)
 }
 
 void StorageMaterializedView::validateAndSyncBaseTablePartitions(
-    PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context)
+    PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context, bool for_rewrite)
 {
     if (partition_transformer == nullptr)
         return;
 
     partition_transformer->validate(local_context);
 
-    syncBaseTablePartitions(partition_diff, latest_versioned_partitions, local_context);
+    syncBaseTablePartitions(partition_diff, latest_versioned_partitions, local_context, for_rewrite);
 
     if (partition_diff->add_partitions.empty() && partition_diff->drop_partitions.empty())
     {

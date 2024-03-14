@@ -82,7 +82,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<PredicatePushdown>(),
 
         // normalize plan after predicate push down
-        std::make_shared<ColumnPruning>(),
+        std::make_shared<ColumnPruning>(false, true),
         std::make_shared<RemoveRedundantDistinct>(),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
@@ -188,7 +188,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<PredicatePushdown>(true),
 
         // predicate push down may convert outer-join to inner-join, make sure data type is correct.
-        std::make_shared<ColumnPruning>(),
+        std::make_shared<ColumnPruning>(false, true),
         std::make_shared<RemoveRedundantDistinct>(),
         std::make_shared<UnifyNullableType>(),
 

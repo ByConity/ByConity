@@ -144,8 +144,8 @@ QueryPlanPtr PlanCacheManager::getPlanFromCache(UInt128 query_hash, ContextMutab
             }
         }
 
-        auto node_id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id+1);
-        return  std::make_unique<QueryPlan>(root, cte_info, node_id_allocator);
+        context->createPlanNodeIdAllocator(max_id+1);
+        return  std::make_unique<QueryPlan>(root, cte_info, context->getPlanNodeIdAllocator());
     }
     catch (...)
     {
