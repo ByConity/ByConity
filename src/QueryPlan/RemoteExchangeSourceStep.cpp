@@ -198,7 +198,11 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 {
                     UInt32 partition_id = partition_id_start + i;
                     ExchangeDataKeyPtr data_key = context->getSettingsRef().bsp_mode
-                        ? std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index)
+                        ? ((exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                            || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                               ? std::make_shared<ExchangeDataKey>(
+                                   current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id)
+                               : std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index))
                         : std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
                     bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
                     BroadcastReceiverPtr receiver = createReceiver(
@@ -266,7 +270,11 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 {
                     size_t partition_id = partition_id_start + i;
                     ExchangeDataKeyPtr data_key = context->getSettingsRef().bsp_mode
-                        ? std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index)
+                        ? ((exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                            || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                               ? std::make_shared<ExchangeDataKey>(
+                                   current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id)
+                               : std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index))
                         : std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
                     bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
                     BroadcastReceiverPtr receiver = createReceiver(
