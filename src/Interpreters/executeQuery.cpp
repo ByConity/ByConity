@@ -192,6 +192,16 @@ namespace ErrorCodes
     extern const int CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
     extern const int CNCH_QUEUE_QUERY_FAILURE;
     extern const int UNKNOWN_EXCEPTION;
+    extern const int TIMEOUT_EXCEEDED;
+    extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
+    extern const int SOCKET_TIMEOUT;
+    extern const int TOO_MANY_PARTS;
+    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
+    extern const int TOO_MANY_PLAN_SEGMENTS;
+    extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
+    extern const int MEMORY_LIMIT_EXCEEDED;
+    extern const int BRPC_EXCEPTION;
+    extern const int TOO_SLOW;
 }
 
 void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr & ast, bool & use_backup_vw)
@@ -1171,7 +1181,18 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (typeid_cast<const InterpreterSelectQueryUseOptimizer *>(&*interpreter))
                 {
-                    static std::unordered_set<int> no_fallback_error_codes = {135, 159, 202, 209, 252, 394, 2010, 2012, 2013, 1159, 241};
+                    static std::unordered_set<int> no_fallback_error_codes = {
+                        ErrorCodes::TIMEOUT_EXCEEDED,
+                        ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES,
+                        ErrorCodes::SOCKET_TIMEOUT, 
+                        ErrorCodes::TOO_MANY_PARTS,
+                        ErrorCodes::QUERY_WAS_CANCELLED,
+                        ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION,
+                        ErrorCodes::TOO_MANY_PLAN_SEGMENTS,
+                        ErrorCodes::QUERY_CPU_TIMEOUT_EXCEEDED,
+                        ErrorCodes::MEMORY_LIMIT_EXCEEDED,
+                        ErrorCodes::BRPC_EXCEPTION,
+                        ErrorCodes::TOO_SLOW};
                     // fallback to simple query process
                     if (context->getSettingsRef().enable_optimizer_fallback && !no_fallback_error_codes.contains(getCurrentExceptionCode()))
                     {

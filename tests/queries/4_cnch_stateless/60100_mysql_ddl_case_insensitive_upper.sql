@@ -1,8 +1,8 @@
 -- Upper case
 CREATE DATABASE IF NOT EXISTS TEST_UPPERCASE;
 use TEST_UPPERCASE;
-set text_case_option='UPPERCASE';
 set dialect_type='MYSQL';
+set text_case_option='UPPERCASE';
 DROP TABLE IF EXISTS test_CASE0;
 DROP TABLE IF EXISTS test_CASE1;
 DROP TABLE IF EXISTS test_CASE2;

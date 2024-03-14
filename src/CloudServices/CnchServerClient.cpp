@@ -23,8 +23,8 @@
 #include <Storages/StorageCloudMergeTree.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Protos/auto_statistics.pb.h>
-#include "common/types.h"
-#include "Storages/MergeTree/MarkRange.h"
+#include <common/types.h>
+#include <Storages/MergeTree/MarkRange.h>
 
 
 namespace DB

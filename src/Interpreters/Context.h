@@ -47,6 +47,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Common/AdditionalServices.h>
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
@@ -665,6 +666,11 @@ public:
 
     void setReadyForQuery();
     bool isReadyForQuery() const;
+
+    /// Additional Services
+    void updateAdditionalServices(const Poco::Util::AbstractConfiguration & config);
+    bool mustEnableAdditionalService(AdditionalService::Value, bool need_throw = false) const;
+    bool mustEnableAdditionalService(const IStorage & storage) const;
 
     /// HDFS user
     void setHdfsUser(const String & name);
@@ -1399,7 +1405,7 @@ public:
 
     PlanNodeIdAllocatorPtr & getPlanNodeIdAllocator() { return id_allocator; }
     UInt32 nextNodeId() { return id_allocator->nextId(); }
-    void createPlanNodeIdAllocator();
+    void createPlanNodeIdAllocator(int max_id = 1);
 
     int step_id = 2000;
     int getStepId() const { return step_id; }

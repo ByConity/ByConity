@@ -583,7 +583,12 @@ void CnchServerServiceImpl::fetchDataParts(
                 partition_list.emplace_back(partition);
 
             auto parts = gc->getCnchCatalog()->getServerDataPartsInPartitions(
-                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr);
+                storage,
+                partition_list,
+                TxnTimestamp{request->timestamp()},
+                nullptr,
+                /*visibility=*/Catalog::VisibilityLevel::All,
+                /*execute_filter=*/false);
             auto & mutable_parts = *response->mutable_parts();
             for (const auto & part : parts)
                 *mutable_parts.Add() = part->part_model();
@@ -627,7 +632,7 @@ void CnchServerServiceImpl::fetchDeleteBitmaps(
                 partition_list.emplace_back(partition);
 
             auto bitmaps = gc->getCnchCatalog()->getDeleteBitmapsInPartitions(
-                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr);
+                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, /*execute_filter=*/false);
             auto & mutable_parts = *response->mutable_delete_bitmaps();
             for (const auto & bitmap : bitmaps)
                 *mutable_parts.Add() = *bitmap->getModel();

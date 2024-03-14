@@ -17,10 +17,14 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/convertFieldToType.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/join_common.h>
 #include <Optimizer/Correlation.h>
 #include <Optimizer/ExpressionDeterminism.h>
+#include <Optimizer/ExpressionInterpreter.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
@@ -45,7 +49,11 @@ namespace DB
 void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ColumnPruningVisitor visitor{
-        context, plan.getCTEInfo(), plan.getPlanNode(), distinct_to_aggregate && context->getSettingsRef().enable_distinct_to_aggregate};
+        context,
+        plan.getCTEInfo(),
+        plan.getPlanNode(),
+        distinct_to_aggregate && context->getSettingsRef().enable_distinct_to_aggregate,
+        filter_window_to_sort_limit && context->getSettingsRef().enable_filter_window_to_sorting_limit};
     NameSet require;
     for (const auto & item : plan.getPlanNode()->getStep()->getOutputStream().header)
         require.insert(item.name);
@@ -345,6 +353,9 @@ PlanNodePtr ColumnPruningVisitor::visitFilterNode(FilterNode & node, NameSet & r
     auto expr_step = std::make_shared<FilterStep>(child->getStep()->getOutputStream(), step->getFilter(), remove);
     PlanNodes children{child};
     auto expr_node = FilterNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
+    if (remove && filter_window_to_sort_limit)
+        return convertFilterWindowToSortingLimit(expr_node, require, context);
+
     return expr_node;
 }
 
@@ -1133,7 +1144,7 @@ PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node, Con
 
     return node;
 }
-/*
+
 PlanNodePtr ColumnPruningVisitor::convertFilterWindowToSortingLimit(PlanNodePtr node, NameSet & require, ContextMutablePtr & context)
 {
     const auto & filter_step = dynamic_cast<FilterStep &>(*node->getStep());
@@ -1190,7 +1201,7 @@ PlanNodePtr ColumnPruningVisitor::convertFilterWindowToSortingLimit(PlanNodePtr 
             return prepared_param->name;
 
         auto rhs = interpreter.evaluateConstantExpression(func->arguments->children[1]);
-        if (!rhs || !isNativeInteger(rhs->first))
+        if (!rhs || !isNativeInteger(rhs->first) || !isUnsignedInteger(rhs->first))
             return std::nullopt;
 
         auto uint_val = convertFieldToType(rhs->second, DataTypeUInt64());
@@ -1241,5 +1252,5 @@ PlanNodePtr ColumnPruningVisitor::convertFilterWindowToSortingLimit(PlanNodePtr 
 
     return new_filter_node;
 }
-*/
+
 }

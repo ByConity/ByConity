@@ -164,7 +164,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize
 
         auto cache_result = prepared_stat_manager->getPlanFromCache(execute_query->name, context);
         query_plan = std::move(cache_result.plan);
-        GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3997_get_prepared_plan");
+        GraphvizPrinter::printLogicalPlan(*query_plan, context, "3997_get_prepared_plan");
         PreparedParameterBindings parameter_bindings;
         const auto * settings = execute_query->getValues()->as<const ASTSetQuery>();
         for (const auto & change : settings->changes)
@@ -175,7 +175,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize
         }
         PreparedStatementContext prepare_context{std::move(parameter_bindings), context};
         query_plan->prepare(prepare_context);
-        GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3998_prepare_query_plan");
+        GraphvizPrinter::printLogicalPlan(*query_plan, context, "3998_prepare_query_plan");
     }
     else
     {
@@ -198,7 +198,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize
             if (query_plan)
             {
                 LOG_INFO(log, "hit plan cache");
-                GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3996_get_plan_from_cache");
+                GraphvizPrinter::printLogicalPlan(*query_plan, context, "3996_get_plan_from_cache");
             }
             else if (context->getSettingsRef().force_plan_cache)
                 throw Exception(ErrorCodes::PLAN_CACHE_NOT_USED, "plan cache not used");
@@ -207,7 +207,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize
         if (!query_plan || context->getSettingsRef().iterative_optimizer_timeout == 999999)
         {
             buildQueryPlan(query_plan, analysis, skip_optimize);
-            GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3997_build_plan_from_query");
+            GraphvizPrinter::printLogicalPlan(*query_plan, context, "3997_build_plan_from_query");
             fillContextQueryAccessInfo(context, analysis);
             if (enable_plan_cache && query_hash && query_plan)
             {
@@ -219,13 +219,13 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize
         if (!auto_prepared_params.empty())
         {
             query_plan->prepare(PreparedStatementContext{auto_prepared_params, context});
-            GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3998_auto_prepare_query_plan");
+            GraphvizPrinter::printLogicalPlan(*query_plan, context, "3998_auto_prepare_query_plan");
         }
     }
 
     if (query_plan->getPlanNodeRoot())
         block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
-    GraphvizPrinter::printLogicalPlan(*query_plan->getPlanNode(), context, "3999_final_plan");
+    GraphvizPrinter::printLogicalPlan(*query_plan, context, "3999_final_plan");
     query_plan->addInterpreterContext(context);
     LOG_DEBUG(log, "join order {}", JoinOrderUtils::getJoinOrder(*query_plan));
     return query_plan;
@@ -484,6 +484,7 @@ QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr contex
     }
 
     LOG_TRACE(log, "tealimit rewrited query with optimizer: {}", postQuery.str());
+    context->applySettingsChanges({SettingChange("dialect_type", "CLICKHOUSE")});
 
     // evaluate the internal SQL and get the result
     return executeQuery(postQuery.str(), context->getQueryContext(), true).pipeline;

@@ -203,12 +203,14 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
     QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}, .id = node->id};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
 
+    if (!plan_segment_context.context->getPlanNodeIdAllocator())
+        throw Exception("Can't get PlanNodeIdAllocator", ErrorCodes::LOGICAL_ERROR);
+
     // add projection to rename symbol
     QueryPlan::Node projection_node{
         .step = step->toProjectionStep(),
         .children = {plan_segment_context.query_plan.getLastNode()},
-        .id
-        = plan_segment_context.context->getPlanNodeIdAllocator() ? plan_segment_context.context->getPlanNodeIdAllocator()->nextId() : 1};
+        .id = plan_segment_context.context->getPlanNodeIdAllocator()->nextId()};
     plan_segment_context.query_plan.addNode(std::move(projection_node));
 
     return plan_segment_context.query_plan.getLastNode();

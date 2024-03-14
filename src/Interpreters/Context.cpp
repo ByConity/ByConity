@@ -322,6 +322,7 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
+    AdditionalServices additional_services;
 
     VETosConnectionParams vetos_connection_params;
     OSSConnectionParams oss_connection_params;
@@ -1421,6 +1422,24 @@ std::unique_ptr<GSSAcceptorContext> Context::makeGSSAcceptorContext() const
 {
     auto lock = getLock();
     return std::make_unique<GSSAcceptorContext>(shared->access_control_manager.getExternalAuthenticators().getKerberosParams());
+}
+
+bool Context::mustEnableAdditionalService(AdditionalService::Value svc, bool need_throw) const
+{
+    if (need_throw)
+    {
+         shared->additional_services.throwIfDisabled(svc);
+         return true;
+    }
+    else
+    {
+         return shared->additional_services.enabled(svc);
+    }
+}
+
+void Context::updateAdditionalServices(const Poco::Util::AbstractConfiguration & config)
+{
+    shared->additional_services.parseAdditionalServicesFromConfig(config);
 }
 
 void Context::setUsersConfig(const ConfigurationPtr & config)
@@ -5687,9 +5706,9 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
     }
 }
 
-void Context::createPlanNodeIdAllocator()
+void Context::createPlanNodeIdAllocator(int max_id)
 {
-    id_allocator = std::make_shared<PlanNodeIdAllocator>();
+    id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id);
 }
 
 void Context::createSymbolAllocator()

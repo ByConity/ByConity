@@ -1,6 +1,5 @@
 -- lower case
 use test;
-set text_case_option='LOWERCASE';
 set dialect_type='MYSQL';
 set enable_optimizer=1;
 DROP TABLE IF EXISTS test_CASE0;
