@@ -5,6 +5,13 @@
 namespace DB
 {
 
+struct DispatchedColumnsCache
+{
+    Block block_head;
+    std::vector<MutableColumns> columns_cache;
+    bool finished = false;
+};
+
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
 
@@ -107,6 +114,10 @@ private:
     size_t index = 0;
     FinishPipePtr finish_pipe;
 
+    bool input_finish = false;
+    DispatchedColumnsCache dispatched_columns_cache;
+    BlocksPtr dispatched_blocks;
+
     Block readExecute(Chunk & chunk);
 };
 
@@ -132,6 +143,9 @@ private:
     bool for_totals = false;
     bool set_totals = false;
     bool build_rf = false; // after output finish, let's start build rf
+
+    bool input_finish = false;
+    DispatchedColumnsCache dispatched_columns_cache;
 };
 
 class DelayedBlocksTask : public ChunkInfo

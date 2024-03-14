@@ -1303,7 +1303,7 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
         if (analyzed_join->allowParallelHashJoin())
         {
             LOG_TRACE(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "will use ConcurrentHashJoin");
-            return std::make_shared<ConcurrentHashJoin>(analyzed_join, context->getSettings().max_threads, r_sample_block);
+            return std::make_shared<ConcurrentHashJoin>(analyzed_join, context->getSettings().max_threads, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
         }
         return std::make_shared<HashJoin>(analyzed_join, r_sample_block);
     }
