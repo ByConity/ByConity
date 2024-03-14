@@ -73,7 +73,13 @@ public:
         FinishPipePtr finish_pipe_ = nullptr);
     ~JoiningTransform() override;
 
-    String getName() const override { return "JoiningTransform"; }
+    String getName() const override
+    {
+        if (is_concurrent_hash)
+            return "JoiningTransformConcur";
+        else
+            return "JoiningTransform";
+    }
 
     static Block transformHeader(Block header, const JoinPtr & join);
 
@@ -117,6 +123,8 @@ private:
     bool input_finish = false;
     DispatchedColumnsCache dispatched_columns_cache;
     BlocksPtr dispatched_blocks;
+    bool is_concurrent_hash = false;
+
 
     Block readExecute(Chunk & chunk);
 };
@@ -128,7 +136,13 @@ class FillingRightJoinSideTransform : public IProcessor
 {
 public:
     FillingRightJoinSideTransform(Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_ = nullptr);
-    String getName() const override { return "FillingRightJoinSide"; }
+    String getName() const override
+    {
+        if (is_current_hash_join)
+            return "FillingRightJoinSideConcur";
+        else
+            return "FillingRightJoinSide";
+    }
 
     InputPort * addTotalsPort();
 
@@ -146,6 +160,7 @@ private:
 
     bool input_finish = false;
     DispatchedColumnsCache dispatched_columns_cache;
+    bool is_current_hash_join = false;
 };
 
 class DelayedBlocksTask : public ChunkInfo
