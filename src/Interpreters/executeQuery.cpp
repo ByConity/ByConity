@@ -1164,7 +1164,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 else
                 {
                     InterpreterSelectQueryUseOptimizer * optimizer_interpret = typeid_cast<InterpreterSelectQueryUseOptimizer *>(&*interpreter);
-                    if (optimizer_interpret && !optimizer_interpret->isCreatePreparedStatement())
+                    if (optimizer_interpret && !optimizer_interpret->isCreatePreparedStatement() && query_cache_context.can_use_query_cache)
                     {
                         res = optimizer_interpret->readFromQueryCache(context, query_cache_context);
                         if (query_cache_context.query_cache_usage != QueryCache::Usage::Read)
