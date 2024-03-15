@@ -579,7 +579,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
                 if (column_type->isNullable())
                     throw Exception("Can't use [NOT] NULL modifier with Nullable type", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
                 if (*col_decl.null_modifier)
-                    column_type = makeNullable(column_type);
+                    column_type = JoinCommon::convertTypeToNullable(column_type);
             }
             else if (make_columns_nullable)
             {
