@@ -48,6 +48,9 @@ public:
     /// Get query profile info.
     BlockStreamProfileInfo & getProfileInfo();
 
+    /// Get PipelineExecutor.
+    PipelineExecutorPtr getPipelineExecutor() { return executor; }
+
 private:
     std::atomic_bool has_data_flag = false;
     QueryPipeline & pipeline;
