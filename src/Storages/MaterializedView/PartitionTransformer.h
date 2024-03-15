@@ -7,6 +7,8 @@
 
 namespace DB
 {
+struct MaterializedViewStructure;
+using MaterializedViewStructurePtr = std::shared_ptr<MaterializedViewStructure>;
 
 using VersionPart = Protos::VersionedPartition;
 using VersionPartPtr = std::shared_ptr<VersionPart>;
@@ -68,6 +70,7 @@ public:
         : mv_query(mv_query_), target_table_id(target_id), log(&Poco::Logger::get("PartitionTransformer")) {}
 
     void validate(ContextMutablePtr local_context);
+    void validate(ContextMutablePtr local_context, MaterializedViewStructurePtr structure);
     std::unordered_set<StorageID> & getNonDependBaseTables() { return non_depend_base_tables; }
     std::unordered_map<StorageID, BaseTableInfoPtr> & getDependBaseTables() { return depend_base_tables; }
     std::unordered_set<StoragePtr> & getBaseTables() { return base_tables; }

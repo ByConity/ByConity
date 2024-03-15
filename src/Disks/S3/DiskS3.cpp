@@ -51,7 +51,6 @@
 
 #include <aws/s3/model/CopyObjectRequest.h> // Y_IGNORE
 #include <aws/s3/model/DeleteObjectsRequest.h> // Y_IGNORE
-#include <aws/s3/model/GetObjectRequest.h> // Y_IGNORE
 #include <aws/s3/model/ListObjectsV2Request.h> // Y_IGNORE
 #include <aws/s3/model/HeadObjectRequest.h> // Y_IGNORE
 #include <aws/s3/model/CreateMultipartUploadRequest.h> // Y_IGNORE
@@ -59,6 +58,26 @@
 #include <aws/s3/model/UploadPartCopyRequest.h> // Y_IGNORE
 #include <aws/s3/model/AbortMultipartUploadRequest.h> // Y_IGNORE
 
+namespace ProfileEvents
+{
+    extern const Event S3DeleteObjects;
+    extern const Event S3CopyObject;
+    extern const Event S3HeadObject;
+    extern const Event S3ListObjects;
+    extern const Event S3CreateMultipartUpload;
+    extern const Event S3UploadPartCopy;
+    extern const Event S3AbortMultipartUpload;
+    extern const Event S3CompleteMultipartUpload;
+
+    extern const Event DiskS3DeleteObjects;
+    extern const Event DiskS3CopyObject;
+    extern const Event DiskS3HeadObject;
+    extern const Event DiskS3ListObjects;
+    extern const Event DiskS3CreateMultipartUpload;
+    extern const Event DiskS3UploadPartCopy;
+    extern const Event DiskS3AbortMultipartUpload;
+    extern const Event DiskS3CompleteMultipartUpload;
+}
 
 namespace DB
 {
@@ -218,6 +237,8 @@ void DiskS3::removeFromRemoteFS(RemoteFSPathKeeperPtr fs_paths_keeper)
             Aws::S3::Model::Delete delkeys;
             delkeys.SetObjects(chunk);
             /// TODO: Make operation idempotent. Do not throw exception if key is already deleted.
+            ProfileEvents::increment(ProfileEvents::S3DeleteObjects);
+            ProfileEvents::increment(ProfileEvents::DiskS3DeleteObjects);
             Aws::S3::Model::DeleteObjectsRequest request;
             request.SetBucket(bucket);
             request.SetDelete(delkeys);
@@ -520,6 +541,9 @@ void DiskS3::migrateToRestorableSchema()
 bool DiskS3::checkObjectExists(const String & source_bucket, const String & prefix) const
 {
     auto settings = current_settings.get();
+
+    ProfileEvents::increment(ProfileEvents::S3ListObjects);
+    ProfileEvents::increment(ProfileEvents::DiskS3ListObjects);
     Aws::S3::Model::ListObjectsV2Request request;
     request.SetBucket(source_bucket);
     request.SetPrefix(prefix);
@@ -536,6 +560,8 @@ bool DiskS3::checkUniqueId(const String & id) const
     auto settings = current_settings.get();
     /// Check that we have right s3 and have access rights
     /// Actually interprets id as s3 object name and checks if it exists
+    ProfileEvents::increment(ProfileEvents::S3ListObjects);
+    ProfileEvents::increment(ProfileEvents::DiskS3ListObjects);
     Aws::S3::Model::ListObjectsV2Request request;
     request.SetBucket(bucket);
     request.SetPrefix(id);
@@ -556,6 +582,8 @@ Aws::S3::Model::HeadObjectResult DiskS3::headObject(const String & source_bucket
     request.SetBucket(source_bucket);
     request.SetKey(key);
 
+    ProfileEvents::increment(ProfileEvents::S3HeadObject);
+    ProfileEvents::increment(ProfileEvents::DiskS3HeadObject);
     auto outcome = settings->client->HeadObject(request);
     throwIfError(outcome);
 
@@ -565,6 +593,8 @@ Aws::S3::Model::HeadObjectResult DiskS3::headObject(const String & source_bucket
 void DiskS3::listObjects(const String & source_bucket, const String & source_path, std::function<bool(const Aws::S3::Model::ListObjectsV2Result &)> callback) const
 {
     auto settings = current_settings.get();
+    ProfileEvents::increment(ProfileEvents::S3ListObjects);
+    ProfileEvents::increment(ProfileEvents::DiskS3ListObjects);
     Aws::S3::Model::ListObjectsV2Request request;
     request.SetBucket(source_bucket);
     request.SetPrefix(source_path);
@@ -599,6 +629,10 @@ void DiskS3::copyObjectImpl(const String & src_bucket, const String & src_key, c
     std::optional<std::reference_wrapper<const ObjectMetadata>> metadata) const
 {
     auto settings = current_settings.get();
+
+    ProfileEvents::increment(ProfileEvents::S3CopyObject);
+    ProfileEvents::increment(ProfileEvents::DiskS3CopyObject);
+
     Aws::S3::Model::CopyObjectRequest request;
     request.SetCopySource(src_bucket + "/" + src_key);
     request.SetBucket(dst_bucket);
@@ -637,6 +671,8 @@ void DiskS3::copyObjectMultipartImpl(const String & src_bucket, const String & s
     String multipart_upload_id;
 
     {
+        ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload);
+        ProfileEvents::increment(ProfileEvents::DiskS3CreateMultipartUpload);
         Aws::S3::Model::CreateMultipartUploadRequest request;
         request.SetBucket(dst_bucket);
         request.SetKey(dst_key);
@@ -655,6 +691,8 @@ void DiskS3::copyObjectMultipartImpl(const String & src_bucket, const String & s
     size_t upload_part_size = settings->s3_min_upload_part_size;
     for (size_t position = 0, part_number = 1; position < size; ++part_number, position += upload_part_size)
     {
+        ProfileEvents::increment(ProfileEvents::S3UploadPartCopy);
+        ProfileEvents::increment(ProfileEvents::DiskS3UploadPartCopy);
         Aws::S3::Model::UploadPartCopyRequest part_request;
         part_request.SetCopySource(src_bucket + "/" + src_key);
         part_request.SetBucket(dst_bucket);
@@ -666,6 +704,8 @@ void DiskS3::copyObjectMultipartImpl(const String & src_bucket, const String & s
         auto outcome = settings->client->UploadPartCopy(part_request);
         if (!outcome.IsSuccess())
         {
+            ProfileEvents::increment(ProfileEvents::S3AbortMultipartUpload);
+            ProfileEvents::increment(ProfileEvents::DiskS3AbortMultipartUpload);
             Aws::S3::Model::AbortMultipartUploadRequest abort_request;
             abort_request.SetBucket(dst_bucket);
             abort_request.SetKey(dst_key);
@@ -694,6 +734,8 @@ void DiskS3::copyObjectMultipartImpl(const String & src_bucket, const String & s
 
         req.SetMultipartUpload(multipart_upload);
 
+        ProfileEvents::increment(ProfileEvents::S3CompleteMultipartUpload);
+        ProfileEvents::increment(ProfileEvents::DiskS3CompleteMultipartUpload);
         auto outcome = settings->client->CompleteMultipartUpload(req);
 
         throwIfError(outcome);

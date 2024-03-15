@@ -51,7 +51,6 @@
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
-#include <aws/s3/model/CopyObjectRequest.h>
 #include <aws/s3/model/DeleteObjectsRequest.h>
 
 #include <Common/parseGlobs.h>
@@ -66,6 +65,11 @@
 
 namespace fs = std::filesystem;
 
+namespace ProfileEvents
+{
+    extern const Event S3DeleteObjects;
+    extern const Event S3ListObjects;
+}
 namespace DB
 {
 namespace ErrorCodes
@@ -132,6 +136,7 @@ private:
     {
         buffer.clear();
 
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
         outcome = client.ListObjectsV2(request);
         if (!outcome.IsSuccess())
             throw Exception(ErrorCodes::S3_ERROR, "Could not list objects in bucket {} with prefix {}, S3 exception: {}, message: {}",
@@ -473,6 +478,7 @@ void StorageS3::truncate(const ASTPtr & /* query */, const StorageMetadataPtr &,
     Aws::S3::Model::Delete delkeys;
     delkeys.AddObjects(std::move(obj));
 
+    ProfileEvents::increment(ProfileEvents::S3DeleteObjects);
     Aws::S3::Model::DeleteObjectsRequest request;
     request.SetBucket(client_auth.uri.bucket);
     request.SetDelete(delkeys);

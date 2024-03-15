@@ -203,9 +203,24 @@ DataTypes getColumnsType(ArgType argType, const Type & arguments)
                 if (left->equals(*right)) break;
                 else if ((isDateOrDate32(left) || isDateTime(left) || isDateTime64(left) || isTime(left))
                         || (isDateOrDate32(right) || isDateTime(right) || isDateTime64(right) || isTime(right)))
+                {
                     expectedTypes = {std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale), std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale)};
-                else
+                }
+                else if (isNumber(left) || isNumber(right))
+                {
                     expectedTypes = {std::make_shared<DataTypeFloat64>(), std::make_shared<DataTypeFloat64>()};
+                }
+                else
+                {
+                    auto common_type = getLeastSupertype(DataTypes{left, right});
+                    if (isFloat(common_type))
+                        common_type = std::make_shared<DataTypeFloat64>();
+                    else if (isSignedInteger(common_type))
+                        common_type = std::make_shared<DataTypeInt64>();
+                    else if (isUnsignedInteger(common_type))
+                        common_type = std::make_shared<DataTypeUInt64>();
+                    expectedTypes = { common_type, common_type };
+                }
             }
             break;
         case ArgType::DATE_NUM_STR:
