@@ -12,11 +12,13 @@ public:
 
     /**
      * Applies this visitor to document and mutates its state
+     * @param iterator object iterator
      */
     virtual VisitorStatus visit(ObjectIterator & iterator) = 0;
 
     /**
      * Applies this visitor to document, but does not mutate state
+     * @param iterator object iterator
      */
     virtual VisitorStatus apply(ObjectIterator & iterator) = 0;
 
