@@ -873,7 +873,7 @@ inline void writeTimeText(Decimal64 time, UInt32 scale, WriteBuffer & buf)
         components.whole = -components.whole;
     }
 
-    memcpy(buf.position(), &digits100[(components.whole/3600) * 2], 2);
+    memcpy(buf.position(), &digits100[(components.whole/3600) % 100 * 2], 2);
     buf.position() += 2;
     *buf.position() = time_delimeter;
     ++buf.position();
