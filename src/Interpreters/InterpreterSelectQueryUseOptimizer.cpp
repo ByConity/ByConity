@@ -494,15 +494,16 @@ BlockIO InterpreterSelectQueryUseOptimizer::readFromQueryCache(ContextPtr local_
 {
     auto query_cache = local_context->getQueryCache();
     const Settings & settings = local_context->getSettingsRef();
+
+    if (!query_cache_context.can_use_query_cache || !settings.enable_reads_from_query_cache || !query_cache)
+        return BlockIO{};
+
     auto query = query_ptr->clone();
     std::optional<std::set<StorageID>> used_storage_ids = getUsedStorageIds();
     TxnTimestamp & source_update_time_for_query_cache = query_cache_context.source_update_time_for_query_cache;
     query_cache_context.query_executed_by_optimizer = true;
 
-    if (query_cache_context.can_use_query_cache
-        && settings.enable_reads_from_query_cache
-        && (used_storage_ids.has_value())
-        && (used_storage_ids->size()))
+    if (used_storage_ids.has_value() && !used_storage_ids->empty())
     {
         const std::set<StorageID> storage_ids = used_storage_ids.value();
         logUsedStorageIDs(log, storage_ids);
