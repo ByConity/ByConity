@@ -88,7 +88,7 @@ PropertySets DeterminerVisitor::visitFinishSortingStep(const FinishSortingStep &
 
 PropertySets DeterminerVisitor::visitProjectionStep(const ProjectionStep & step, DeterminerContext & ctx)
 {
-    if (step.isFinalProject() && (ctx.getRequired().getNodePartitioning().getComponent() != Partitioning::Component::WORKER || ctx.getContext().getSettingsRef().bsp_mode))
+    if (step.isFinalProject() && (ctx.getRequired().getNodePartitioning().getComponent() != Partitioning::Component::WORKER))
         return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
     auto assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
