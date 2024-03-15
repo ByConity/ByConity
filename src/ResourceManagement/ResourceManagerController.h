@@ -71,7 +71,6 @@ public:
 
     WorkerGroupPtr createWorkerGroup(
         const std::string & group_id,
-        bool if_not_exists,
         const std::string & vw_name,
         const WorkerGroupData & data,
         std::lock_guard<bthread::Mutex> * vw_lock = nullptr,
