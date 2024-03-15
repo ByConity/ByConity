@@ -94,9 +94,11 @@ AlterCommand::RemoveProperty removePropertyFromString(const String & property)
 
 }
 
-std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_ast)
+std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_ast, ContextPtr context)
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+
+    bool make_columns_nullable = context ? context->getSettingsRef().data_type_default_nullable : false;
 
     if (command_ast->type == ASTAlterCommand::ADD_COLUMN)
     {
@@ -110,8 +112,8 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         if (ast_col_decl.type)
         {
             command.data_type = data_type_factory.get(ast_col_decl.type, ast_col_decl.flags);
-            if (ast_col_decl.null_modifier && *ast_col_decl.null_modifier)
-                command.data_type = makeNullable(command.data_type);
+            if ((ast_col_decl.null_modifier && *ast_col_decl.null_modifier) || (!ast_col_decl.null_modifier && make_columns_nullable))
+                command.data_type = JoinCommon::convertTypeToNullable(command.data_type);
         }
         if (ast_col_decl.default_expression)
         {
@@ -175,8 +177,8 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         if (ast_col_decl.type)
         {
             command.data_type = data_type_factory.get(ast_col_decl.type, ast_col_decl.flags);
-            if (ast_col_decl.null_modifier && *ast_col_decl.null_modifier)
-                command.data_type = makeNullable(command.data_type);
+            if ((ast_col_decl.null_modifier && *ast_col_decl.null_modifier) || (!ast_col_decl.null_modifier && make_columns_nullable))
+                command.data_type = JoinCommon::convertTypeToNullable(command.data_type);
         }
 
         if (ast_col_decl.default_expression)

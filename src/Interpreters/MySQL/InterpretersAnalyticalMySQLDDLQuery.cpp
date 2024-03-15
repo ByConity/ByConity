@@ -445,7 +445,7 @@ void InterpreterAlterAnalyticalMySQLImpl::validate(const TQuery & query, Context
     for (const auto & ast : query.command_list->getChildren())
     {
         auto * command_ast = ast->as<ASTAlterCommand>();
-        if (auto command = AlterCommand::parse(command_ast))
+        if (auto command = AlterCommand::parse(command_ast, context))
         {
             if (command->type == AlterCommand::MODIFY_COLUMN)
                 validateAlterColumnType(*command, metadata);
