@@ -201,7 +201,7 @@ struct AlterCommand
     /// What to remove from column (or TTL)
     RemoveProperty to_remove = RemoveProperty::NO_PROPERTY;
 
-    static std::optional<AlterCommand> parse(const ASTAlterCommand * command);
+    static std::optional<AlterCommand> parse(const ASTAlterCommand * command, ContextPtr context);
 
     void apply(StorageInMemoryMetadata & metadata, ContextPtr context) const;
 
