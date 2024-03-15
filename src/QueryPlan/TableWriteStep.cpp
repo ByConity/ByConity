@@ -118,6 +118,7 @@ BlockOutputStreams TableWriteStep::createOutputStream(
         }
 
         auto out_wrapper = std::make_shared<CountingBlockOutputStream>(out);
+        out_wrapper->setProcessListElement(settings.context->getProcessListElement());
         out_streams.emplace_back(std::move(out_wrapper));
     }
 
