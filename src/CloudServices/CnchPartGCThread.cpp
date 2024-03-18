@@ -236,7 +236,7 @@ Strings CnchPartGCThread::selectPartitions(const StoragePtr & storage)
     return {res.begin(), res.end()};
 }
 
-void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const ServerDataPartsVector & parts, bool is_staged, String log_type, size_t pool_size, size_t batch_size)
+void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const ServerDataPartsVector & parts, bool is_staged, String log_type, size_t pool_size, size_t batch_size, bool is_zombie_with_staging_txn_id)
 {
     auto local_context = getContext();
 
@@ -265,7 +265,7 @@ void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const Server
 
             try
             {
-                catalog->moveDataItemsToTrash(storage, items);
+                catalog->moveDataItemsToTrash(storage, items, /*skip_part_cache*/false, is_zombie_with_staging_txn_id);
                 num_moved.fetch_add(is_staged ? items.staged_parts.size() : items.data_parts.size());
                 ServerPartLog::addRemoveParts(local_context, storage_id, parts, is_staged);
             }
@@ -529,7 +529,7 @@ size_t CnchPartGCThread::doPhaseTwoGC(const StoragePtr & istorage, StorageCnchMe
     return ntotal;
 }
 
-ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp)
+std::pair<ServerDataPartsVector, ServerDataPartsVector> CnchPartGCThread::processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp)
 {
     ServerDataPartsVector intermediate_parts;
     std::set<TxnTimestamp> txn_ids;
@@ -575,7 +575,9 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
         return {};
 
     // now collect zombie intermediate parts to remove and put back visible intermediate parts for further processing
-    ServerDataPartsVector zombie_intermediate_parts;
+    // zombie part with staging_txn_id needs special handling, please refer to: https://bytedance.larkoffice.com/docx/InHmdbM97oh1oMxEwVVcMbTinXg
+    ServerDataPartsVector zombie_intermediate_parts_with_staging_txn_id;
+    ServerDataPartsVector zombie_intermediate_parts_non_staging;
     for (const auto & part : intermediate_parts)
     {
         auto txn_id = part->txnID();
@@ -584,11 +586,16 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
             continue;
 
         if (!transactions[txn_id])
-            zombie_intermediate_parts.push_back(part);
+        {
+            if (part->hasStagingTxnID())
+                zombie_intermediate_parts_with_staging_txn_id.push_back(part);
+            else
+                zombie_intermediate_parts_non_staging.push_back(part);
+        }
         else if (transactions[txn_id] <= gc_timestamp)
             parts.push_back(part);
     }
-    return zombie_intermediate_parts;
+    return {zombie_intermediate_parts_with_staging_txn_id, zombie_intermediate_parts_non_staging};
 }
 
 void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
@@ -603,11 +610,17 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
     watch.restart();
 
     // Get zombie parts to remove and filter out invisible intermediate parts.
-    auto intermediate_parts_to_remove = processIntermediateParts(all_parts, gc_timestamp);
-    if (!intermediate_parts_to_remove.empty())
+    auto [intermediate_parts_with_staging_txn_id_to_remove, intermediate_parts_non_staging_to_remove] = processIntermediateParts(all_parts, gc_timestamp);
+    if (!intermediate_parts_with_staging_txn_id_to_remove.empty())
     {
-        LOG_TRACE(log, "Get {} intermediate parts to remove for {} ", intermediate_parts_to_remove.size(), partition_id);
-        movePartsToTrash(istorage, intermediate_parts_to_remove, /*is_staged*/ false, "intermediate parts",
+        LOG_TRACE(log, "Get {} intermediate parts(with_staging_txn_id) to remove for {} ", intermediate_parts_with_staging_txn_id_to_remove.size(), partition_id);
+        movePartsToTrash(istorage, intermediate_parts_with_staging_txn_id_to_remove, /*is_staged*/ false, "intermediate parts(with_staging_txn_id)",
+            storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size, /*is_zombie_with_staging_txn_id*/ true);
+    }
+    if (!intermediate_parts_non_staging_to_remove.empty())
+    {
+        LOG_TRACE(log, "Get {} intermediate parts(non_staging) to remove for {} ", intermediate_parts_non_staging_to_remove.size(), partition_id);
+        movePartsToTrash(istorage, intermediate_parts_non_staging_to_remove, /*is_staged*/ false, "intermediate parts(non_staging)",
             storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size);
     }
 

@@ -4445,7 +4445,7 @@ namespace Catalog
         return res;
     }
 
-    void Catalog::moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, const bool skip_part_cache)
+    void Catalog::moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, const bool skip_part_cache, bool is_zombie_with_staging_txn_id)
     {
         if (items.empty())
             return;
@@ -4475,9 +4475,10 @@ namespace Catalog
         for (const auto & part : items.data_parts)
         {
             batch_writes.AddDelete(part_meta_prefix + part->info().getPartName());
-            batch_writes.AddPut(
-                {MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()),
-                part->part_model_wrapper->part_model->SerializeAsString()});
+            if (!is_zombie_with_staging_txn_id)
+                batch_writes.AddPut(
+                    {MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()),
+                    part->part_model_wrapper->part_model->SerializeAsString()});
             LOG_DEBUG(
                 log,
                 "Will move part of table {} to trash: {} [{} - {}) {}",
@@ -4537,7 +4538,10 @@ namespace Catalog
 
         /// Update trash items metrics.
         if (auto mgr = context.getPartCacheManager())
-            mgr->updateTrashItemsMetrics(table->getStorageUUID(), items);
+        {
+            if (!is_zombie_with_staging_txn_id)
+                mgr->updateTrashItemsMetrics(table->getStorageUUID(), items);
+        }
     }
 
     void Catalog::clearTrashItems(const StoragePtr & table, const TrashItems & items)

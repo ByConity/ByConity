@@ -68,9 +68,6 @@ struct ParserSettingsImpl
 {
     mutable bool parse_literal_as_decimal;
 
-    /// parse outer join with using
-    bool parse_outer_join_with_using;
-
     /// determine if apply the rewritings for adaptive type cast
     mutable bool apply_adaptive_type_cast;
 
@@ -97,7 +94,6 @@ struct ParserSettings
 {
     const static inline ParserSettingsImpl CLICKHOUSE{
         .parse_literal_as_decimal = false,
-        .parse_outer_join_with_using = true,
         .apply_adaptive_type_cast = false,
         .explicit_null_modifiers = false,
         .parse_mysql_ddl = false
@@ -105,7 +101,6 @@ struct ParserSettings
 
     const static inline ParserSettingsImpl MYSQL{
         .parse_literal_as_decimal = true,
-        .parse_outer_join_with_using = false,
         .apply_adaptive_type_cast = false,
         .explicit_null_modifiers = true,
         .parse_mysql_ddl = true
@@ -113,7 +108,6 @@ struct ParserSettings
 
     const static inline ParserSettingsImpl ANSI{
         .parse_literal_as_decimal = true,
-        .parse_outer_join_with_using = false,
         .apply_adaptive_type_cast = false,
         .explicit_null_modifiers = true,
         .parse_mysql_ddl = false

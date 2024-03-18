@@ -134,7 +134,9 @@ JoinPtr JoinStep::makeJoin(
     }
 
     bool allow_merge_join = table_join->allowMergeJoin();
-
+    bool allow_grace_hash_join = true;
+    if (context->getSettingsRef().use_grace_hash_only_repartition && distribution_type != DistributionType::REPARTITION)
+        allow_grace_hash_join = false;
     /// HashJoin with Dictionary optimisation
     auto l_sample_block = input_streams[0].header;
     auto r_sample_block = input_streams[1].header;
@@ -165,7 +167,7 @@ JoinPtr JoinStep::makeJoin(
             return std::make_shared<ConcurrentHashJoin>(table_join, num_streams, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
 
         }
-        else if (join_algorithm == JoinAlgorithm::GRACE_HASH && distribution_type == DistributionType::REPARTITION)
+        else if (join_algorithm == JoinAlgorithm::GRACE_HASH && allow_grace_hash_join)
         {
             table_join->join_algorithm = JoinAlgorithm::GRACE_HASH;
             // todo aron let optimizer decide this(parallel)
@@ -175,8 +177,8 @@ JoinPtr JoinStep::makeJoin(
         return std::make_shared<HashJoin>(table_join, r_sample_block);
     }
     else if (table_join->forceMergeJoin() || (table_join->preferMergeJoin() && allow_merge_join))
-        return std::make_shared<MergeJoin>(table_join, r_sample_block);
-    else if ((table_join->forceGraceHashLoopJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH) && distribution_type == DistributionType::REPARTITION)
+        return {std::make_shared<MergeJoin>(table_join, r_sample_block)};
+    else if ((table_join->forceGraceHashLoopJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH) && allow_grace_hash_join)
     {
         auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
         return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel);
