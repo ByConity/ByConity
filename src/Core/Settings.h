@@ -403,37 +403,15 @@ enum PreloadLevelSettings : UInt64
       "Whether to enalbe aggregation finished in worker side, to avoid merge aggregation states in coordinator", \
       0) \
     M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
-    M(Bool, \
-      optimize_skip_unused_shards, \
-      true, \
-      "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", \
-      0) \
-    M(Bool, \
-      optimize_skip_unused_shards_rewrite_in, \
-      true, \
-      "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", \
-      0) \
-    M(Bool, \
-      allow_nondeterministic_optimize_skip_unused_shards, \
-      false, \
-      "Allow non-deterministic functions (includes dictGet) in sharding_key for optimize_skip_unused_shards", \
-      0) \
-    M(UInt64, \
-      force_optimize_skip_unused_shards, \
-      0, \
-      "Throw an exception if unused shards cannot be skipped (1 - throw only if the table has the sharding key, 2 - always throw.", \
-      0) \
-    M(UInt64, \
-      optimize_skip_unused_shards_nesting, \
-      0, \
-      "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", \
-      0) \
-    M(UInt64, \
-      force_optimize_skip_unused_shards_nesting, \
-      0, \
-      "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", \
-      0) \
-\
+    M(Bool, optimize_skip_unused_shards, false, "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", 0) \
+    M(Bool, optimize_skip_unused_shards_rewrite_in, true, "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", 0) \
+    M(Bool, allow_nondeterministic_optimize_skip_unused_shards, false, "Allow non-deterministic functions (includes dictGet) in sharding_key for optimize_skip_unused_shards", 0) \
+    M(UInt64, force_optimize_skip_unused_shards, 0, "Throw an exception if unused shards cannot be skipped (1 - throw only if the table has the sharding key, 2 - always throw.", 0) \
+    M(UInt64, optimize_skip_unused_shards_nesting, 0, "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
+    M(UInt64, force_optimize_skip_unused_shards_nesting, 0, "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
+    \
+    M(Bool, use_sync_pipeline_executor, false, "Whether to use sync pipeline executor", 0) \
+    \
     M(Bool, input_format_parallel_parsing, true, "Enable parallel parsing for some data formats.", 0) \
     M(UInt64, \
       min_chunk_bytes_for_parallel_parsing, \
@@ -1899,7 +1877,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, true, "Whether to compute locality preferences for reduce tasks", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
-    M(UInt64, bsp_max_retry_num, 0, "max retry number for a query in bsp mode",0) \
+    M(UInt64, bsp_max_retry_num, 5, "max retry number for a query in bsp mode",0) \
     /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \

@@ -79,7 +79,6 @@ WindowStep::WindowStep(
     : ITransformingStep(input_stream_, addWindowFunctionResultColumns(input_stream_.header, window_functions_), getTraits())
     , window_description(window_description_)
     , window_functions(window_functions_)
-    , input_header(input_stream_.header)
     , need_sort(need_sort_)
     , prefix_description(prefix_description_)
 {
@@ -105,7 +104,7 @@ void WindowStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPip
 
         // finish sorting
 
-        DataStream input_stream{input_header};
+        DataStream input_stream = input_streams[0];
         if (!prefix_description.empty() && !enable_windows_parallel)
         {
             bool need_finish_sorting = (prefix_description.size() < window_description.full_sort_description.size());
@@ -161,7 +160,7 @@ void WindowStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPip
 
     pipeline.addSimpleTransform([&](const Block & /*header*/) {
         return std::make_shared<WindowTransform>(
-            input_header, output_stream->header, window_description, window_functions, s.actions_settings.dialect_type);
+            input_streams[0].header, output_stream->header, window_description, window_functions, s.actions_settings.dialect_type);
     });
 
     assertBlocksHaveEqualStructure(
