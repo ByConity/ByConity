@@ -360,7 +360,7 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
                 String err_status_summary;
                 for (auto & err : err_status)
                     err_status_summary += (fmt::format("[code:{} msg:{} name:{}]", err.second.code, err.second.message, err.first) + ",");
-                res.message = fmt::format("{} received subreiver error, summary: ", getName(), err_status_summary);
+                res.message = fmt::format("{} received subreceiver error, summary: ", getName(), err_status_summary);
             }
             return res;
         }
