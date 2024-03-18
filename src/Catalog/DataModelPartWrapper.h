@@ -105,6 +105,7 @@ public:
     const Protos::DataModelPart & part_model() const;
     const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & minmax_idx() const;
     UInt64 txnID() const;
+    bool hasStagingTxnID() const;
 
     const MergeTreePartInfo & info() const;
     const String & name() const;

@@ -53,7 +53,7 @@ private:
 
     void doPhaseOneGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions);
     void doPhaseOnePartitionGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp);
-    void movePartsToTrash(const StoragePtr & storage, const ServerDataPartsVector & parts, bool is_staged, String log_type, size_t pool_size, size_t batch_size);
+    void movePartsToTrash(const StoragePtr & storage, const ServerDataPartsVector & parts, bool is_staged, String log_type, size_t pool_size, size_t batch_size, bool is_zombie_with_staging_txn_id = false);
     void moveDeleteBitmapsToTrash(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps, size_t pool_size, size_t batch_size);
     void clearOldInsertionLabels(const StoragePtr & istorage, StorageCnchMergeTree & storage);
 
@@ -71,7 +71,7 @@ private:
 
     static void tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts);
 
-    ServerDataPartsVector processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp);
+    std::pair<ServerDataPartsVector, ServerDataPartsVector> processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp);
 
     // void updatePartCache(const String & partition_id, Int64 part_num) override
     // {
