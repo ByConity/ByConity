@@ -43,7 +43,6 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
-
 namespace DB
 {
 void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
@@ -52,9 +51,9 @@ void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
         context,
         plan.getCTEInfo(),
         plan.getPlanNode(),
-        add_projection && context->getSettingsRef().enable_add_projection_to_pruning,
-        distinct_to_aggregate && context->getSettingsRef().enable_distinct_to_aggregate,
-        filter_window_to_sort_limit && context->getSettingsRef().enable_filter_window_to_sorting_limit};
+        false,
+        false,
+        false};
     NameSet require;
     for (const auto & item : plan.getPlanNode()->getStep()->getOutputStream().header)
         require.insert(item.name);
@@ -63,59 +62,55 @@ void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
     plan.update(result);
 }
 
-String ColumnPruning::selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage)
+void AddProjectionPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    /// You need to read at least one column to find the number of rows.
-    /// We will find a column with minimum <compressed_size, type_size, uncompressed_size>.
-    /// Because it is the column that is cheapest to read.
-    struct ColumnSizeTuple
-    {
-        size_t compressed_size;
-        size_t type_size;
-        size_t uncompressed_size;
-        String name;
+    ColumnPruningVisitor visitor{
+        context,
+        plan.getCTEInfo(),
+        plan.getPlanNode(),
+        true,
+        false,
+        false};
+    NameSet require;
+    for (const auto & item : plan.getPlanNode()->getStep()->getOutputStream().header)
+        require.insert(item.name);
+    ColumnPruningContext column_pruning_context{.name_set = require};
+    auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, column_pruning_context);
+    plan.update(result);
+}
 
-        bool operator<(const ColumnSizeTuple & that) const
-        {
-            return std::tie(compressed_size, type_size, uncompressed_size)
-                < std::tie(that.compressed_size, that.type_size, that.uncompressed_size);
-        }
-    };
+void DistinctToAggregatePruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+{
+    ColumnPruningVisitor visitor{
+        context,
+        plan.getCTEInfo(),
+        plan.getPlanNode(),
+        false,
+        true,
+        false};
+    NameSet require;
+    for (const auto & item : plan.getPlanNode()->getStep()->getOutputStream().header)
+        require.insert(item.name);
+    ColumnPruningContext column_pruning_context{.name_set = require};
+    auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, column_pruning_context);
+    plan.update(result);
+}
 
-    std::vector<ColumnSizeTuple> columns;
-    if (storage)
-    {
-        auto column_sizes = storage->getColumnSizes();
-        for (auto & source_column : source_columns)
-        {
-            auto c = column_sizes.find(source_column.name);
-            if (c == column_sizes.end())
-                continue;
-            size_t type_size = source_column.type->haveMaximumSizeOfValue() ? source_column.type->getMaximumSizeOfValueInMemory() : 100;
-            columns.emplace_back(ColumnSizeTuple{c->second.data_compressed, type_size, c->second.data_uncompressed, source_column.name});
-        }
-    }
-
-    if (!columns.empty())
-        return std::min_element(columns.begin(), columns.end())->name;
-    else if (!source_columns.empty())
-    {
-        if (storage)
-        {
-            // DO NOT choose Virtuals column, when try get smallest column.
-            for (const auto & column : storage->getVirtuals())
-            {
-                source_columns.remove(column);
-            }
-        }
-        /// If we have no information about columns sizes, choose a column of minimum size of its data type.
-        return ExpressionActions::getSmallestColumn(source_columns);
-    }
-    else
-    {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "unexpected branch of selectColumnWithMinSize");
-        __builtin_unreachable();
-    }
+void WindowToSortPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+{
+    ColumnPruningVisitor visitor{
+        context,
+        plan.getCTEInfo(),
+        plan.getPlanNode(),
+        false,
+        false,
+        true};
+    NameSet require;
+    for (const auto & item : plan.getPlanNode()->getStep()->getOutputStream().header)
+        require.insert(item.name);
+    ColumnPruningContext column_pruning_context{.name_set = require};
+    auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, column_pruning_context);
+    plan.update(result);
 }
 
 template <bool require_all>
@@ -535,7 +530,7 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, Colum
             candidate_columns = columns_desc.getAllPhysical();
         }
 
-        auto min_size_column = ColumnPruning::selectColumnWithMinSize(std::move(candidate_columns), storage);
+        auto min_size_column = selectColumnWithMinSize(std::move(candidate_columns), storage);
         column_names.emplace_back(
             min_size_column,
             column_to_alias.contains(min_size_column) ? column_to_alias[min_size_column]
@@ -1363,6 +1358,61 @@ PlanNodePtr ColumnPruningVisitor::convertFilterWindowToSortingLimit(PlanNodePtr 
         = FilterNode::createPlanNode(context->nextNodeId(), std::move(new_filter_step), {child_node}, node->getStatistics());
 
     return new_filter_node;
+}
+
+String ColumnPruningVisitor::selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage)
+{
+    /// You need to read at least one column to find the number of rows.
+    /// We will find a column with minimum <compressed_size, type_size, uncompressed_size>.
+    /// Because it is the column that is cheapest to read.
+    struct ColumnSizeTuple
+    {
+        size_t compressed_size;
+        size_t type_size;
+        size_t uncompressed_size;
+        String name;
+
+        bool operator<(const ColumnSizeTuple & that) const
+        {
+            return std::tie(compressed_size, type_size, uncompressed_size)
+                < std::tie(that.compressed_size, that.type_size, that.uncompressed_size);
+        }
+    };
+
+    std::vector<ColumnSizeTuple> columns;
+    if (storage)
+    {
+        auto column_sizes = storage->getColumnSizes();
+        for (auto & source_column : source_columns)
+        {
+            auto c = column_sizes.find(source_column.name);
+            if (c == column_sizes.end())
+                continue;
+            size_t type_size = source_column.type->haveMaximumSizeOfValue() ? source_column.type->getMaximumSizeOfValueInMemory() : 100;
+            columns.emplace_back(ColumnSizeTuple{c->second.data_compressed, type_size, c->second.data_uncompressed, source_column.name});
+        }
+    }
+
+    if (!columns.empty())
+        return std::min_element(columns.begin(), columns.end())->name;
+    else if (!source_columns.empty())
+    {
+        if (storage)
+        {
+            // DO NOT choose Virtuals column, when try get smallest column.
+            for (const auto & column : storage->getVirtuals())
+            {
+                source_columns.remove(column);
+            }
+        }
+        /// If we have no information about columns sizes, choose a column of minimum size of its data type.
+        return ExpressionActions::getSmallestColumn(source_columns);
+    }
+    else
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "unexpected branch of selectColumnWithMinSize");
+        __builtin_unreachable();
+    }
 }
 
 }

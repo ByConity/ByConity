@@ -957,7 +957,7 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
             name_to_index_map.emplace(table_scope->at(i).getOriginColumnName(), i);
         }
 
-        auto column_name = ColumnPruning::selectColumnWithMinSize(std::move(source_columns), storage);
+        auto column_name = ColumnPruningVisitor::selectColumnWithMinSize(std::move(source_columns), storage);
         auto column_symbol = context->getSymbolAllocator()->newSymbol(column_name);
         columns_with_aliases.emplace_back(column_name, column_symbol);
         field_symbols[name_to_index_map.at(column_name)] = FieldSymbolInfo(column_symbol);

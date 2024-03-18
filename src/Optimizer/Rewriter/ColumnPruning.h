@@ -24,22 +24,44 @@ namespace DB
 class ColumnPruning : public Rewriter
 {
 public:
-    explicit ColumnPruning(
-        bool add_projection_ = false,
-        bool distinct_to_aggregate_ = false,
-        bool filter_window_to_sort_limit_ = false) 
-        : add_projection(add_projection_)
-        , distinct_to_aggregate(distinct_to_aggregate_)
-        , filter_window_to_sort_limit(filter_window_to_sort_limit_) { }
+    explicit ColumnPruning() = default;
     String name() const override { return "ColumnPruning"; }
-    static String selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage);
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_column_pruning; }
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
-    bool add_projection;
-    bool distinct_to_aggregate;
-    bool filter_window_to_sort_limit;
+};
+
+class AddProjectionPruning : public Rewriter
+{
+public:
+    explicit AddProjectionPruning() = default;
+    String name() const override { return "AddProjectionPruning"; }
+
+private:
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_add_projection_to_pruning; }
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+};
+class DistinctToAggregatePruning : public Rewriter
+{
+public:
+    explicit DistinctToAggregatePruning() = default;
+    String name() const override { return "DistinctToAggregatePruning"; }
+
+private:
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_distinct_to_aggregate; }
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+};
+
+class WindowToSortPruning : public Rewriter
+{
+public:
+    WindowToSortPruning() = default;
+    String name() const override { return "WindowToSortPruning"; }
+
+private:
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_filter_window_to_sorting_limit; }
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 
 struct ColumnPruningContext
@@ -65,6 +87,7 @@ public:
         , filter_window_to_sort_limit(filter_window_to_sort_limit_)
     {
     }
+    static String selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage);
 
 private:
 
@@ -84,6 +107,7 @@ private:
     ContextMutablePtr context;
     CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, ColumnPruningContext> cte_require_columns{};
+
     bool add_projection;
     bool distinct_to_aggregate;
     bool filter_window_to_sort_limit;
