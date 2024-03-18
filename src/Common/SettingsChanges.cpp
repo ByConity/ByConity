@@ -543,7 +543,6 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "use_uncompressed_cache",
         "virtual_part_size",
         "virtual_warehouse",
-        "virtual_warehouse_write",
         "vw"
     };
 
