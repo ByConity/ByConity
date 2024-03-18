@@ -7,9 +7,13 @@ namespace DB
 
 REGISTER_FUNCTION(SQLJSON)
 {
-    factory.registerFunction<FunctionSQLJSON<NameJSONExists, JSONExistsImpl>>();
-    factory.registerFunction<FunctionSQLJSON<NameJSONQuery, JSONQueryImpl>>();
-    factory.registerFunction<FunctionSQLJSON<NameJSONValue, JSONValueImpl>>();
+    factory.registerFunction<FunctionSQLJSON<NameSQLJSONExists, SQLJSONExistsImpl>>();
+    factory.registerFunction<FunctionSQLJSON<NameSQLJSONQuery, SQLJSONQueryImpl>>();
+    factory.registerFunction<FunctionSQLJSON<NameSQLJSONValue, SQLJSONValueImpl>>();
+    factory.registerFunction<FunctionSQLJSON<NameSQLJSONLength, SQLJSONLengthImpl>>();
+    factory.registerFunction<FunctionSQLJSONContains<NameSQLJSONContains>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionSQLJSONContainsPath<NameSQLJSONContainsPath>>(FunctionFactory::CaseInsensitive);
+
 }
 
 }

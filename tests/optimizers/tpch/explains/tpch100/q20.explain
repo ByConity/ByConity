@@ -5,12 +5,12 @@ Projection Est. 50022 rows
    └─ Gather Exchange Est. 50022 rows
       └─ Sorting Est. 50022 rows
          │     Order by: {s_name ASC NULLS LAST}
-         └─ Inner Join Est. 49973 rows
+         └─ Inner Join Est. 50022 rows
             │     Condition: ps_suppkey == s_suppkey
             │     Runtime Filters Builder: {s_suppkey}
             ├─ Aggregating Est. 40000 rows
             │  │     Group by: {ps_suppkey}
-            │  └─ Inner (PARALLEL_HASH) Join Est. 2575968 rows
+            │  └─ Inner (PARALLEL_HASH) Join Est. 95257462 rows
             │     │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
             │     │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)`)
             │     │     Runtime Filters Builder: {p_partkey,ps_suppkey}

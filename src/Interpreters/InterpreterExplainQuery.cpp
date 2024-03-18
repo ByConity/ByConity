@@ -689,8 +689,8 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
     }
 
     InterpreterSelectQueryUseOptimizer interpreter(explain.getExplainedQuery(), context, SelectQueryOptions());
-    auto query_plan = interpreter.buildQueryPlan();
-    if (explain.getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan || explain.getKind() == ASTExplainQuery::ExplainKind::QueryPlan)
+    auto query_plan = interpreter.getQueryPlan();
+    if (explain.getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan || explain.getKind() == ASTExplainQuery::ExplainKind::QueryPlan )
     {
         explainPlanWithOptimizer(explain, *query_plan, buffer, context, single_line);
     }

@@ -2,6 +2,7 @@
 
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
+#include <Common/SettingsChanges.h>
 
 
 namespace DB
@@ -24,6 +25,12 @@ public:
       * It is used for interpretation of SETTINGS clause in SELECT query.
       */
     void executeForCurrentContext();
+
+    /// To apply SETTINGS clauses from query as early as possible
+    static void applySettingsFromQuery(const ASTPtr & ast, ContextMutablePtr context);
+
+    /// To extract SETTINGS clauses from query
+    static SettingsChanges extractSettingsFromQuery(const ASTPtr & ast, ContextMutablePtr context);
 
 private:
     ASTPtr query_ptr;

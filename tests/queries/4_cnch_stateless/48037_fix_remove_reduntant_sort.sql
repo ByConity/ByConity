@@ -11,4 +11,6 @@ SELECT count(*) FROM (
     date_time WITH fill FROM toDateTime('2022-01-01 10:00:10') TO toDateTime('2022-01-01 10:00:20') STEP 3
 ) format Null;
 
+select * from database_214.fill order by val limit 1 format Null;
+
 drop table if exists database_214;

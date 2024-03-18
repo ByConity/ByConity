@@ -79,6 +79,7 @@ public:
     void serialize(WriteBuffer & buf) const override;
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
+    static std::shared_ptr<ASTFunction> makeASTFunctionWithVectorArgs(const String & name, std::vector<ASTPtr> && args);
 
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

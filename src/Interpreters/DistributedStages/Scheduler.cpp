@@ -1,6 +1,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -38,8 +39,13 @@ bool Scheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
 
 void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
 {
-    const auto & selector_info = node_selector_result[task.task_id];
-    const auto & worker_node = selector_info.worker_nodes[idx];
+    WorkerNode worker_node;
+    NodeSelectorResult selector_info;
+    {
+        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+        selector_info = node_selector_result[task.task_id];
+        worker_node = selector_info.worker_nodes[idx];
+    }
     PlanSegmentExecutionInfo execution_info = generateExecutionInfo(task.task_id, idx);
     std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
     {
@@ -80,8 +86,12 @@ TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segment
 {
     TaskResult res;
     sendResources(plan_segment_ptr);
-    auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.is_source));
-    auto & selector_info = selector_result.first->second;
+    NodeSelectorResult selector_info;
+    {
+        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+        auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.is_source));
+        selector_info = selector_result.first->second;
+    }
     prepareTask(plan_segment_ptr, selector_info.worker_nodes.size());
     dag_graph_ptr->scheduled_segments.emplace(task.task_id);
     dag_graph_ptr->segment_parallel_size_map[task.task_id] = selector_info.worker_nodes.size();
@@ -90,7 +100,7 @@ TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segment
 
     for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
     {
-        if (auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
+        if (const auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
             iter != selector_info.source_addresses.end())
         {
             plan_segment_input->insertSourceAddresses(iter->second.addresses);

@@ -1,0 +1,21 @@
+prep1
+Projection
+│     Expressions: count():=`expr#count()`
+└─ Aggregating
+   │     Group by: {}
+   │     Aggregates: expr#count():=AggNull(count)()
+   └─ Filter
+      │     Condition: number < [x:UInt32]
+      └─ Limit
+         │     Limit: 10
+         └─ TableScan system.numbers
+                  Limit: 10
+                  Outputs: [number]
+CREATE PREPARED STATEMENT IF NOT EXISTS prep1 AS SELECT count() FROM (SELECT number FROM system.numbers LIMIT 10) WHERE number < [x:UInt32]
+1
+5
+222222
+333333
+444444
+prep3
+prep2

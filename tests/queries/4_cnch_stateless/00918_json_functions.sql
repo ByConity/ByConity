@@ -160,6 +160,11 @@ SELECT JSONExtractRaw('{}');
 SELECT JSONExtractRaw('{"abc":"\\n\\u0000"}', 'abc');
 SELECT JSONExtractRaw('{"abc":"\\u263a"}', 'abc');
 
+
+SELECT '--JSONUnquote--';
+SELECT JSONUnquote('"abc"');
+SELECT JSONUnquote('"\\t\\u0032"');
+
 SELECT '--const/non-const mixed--';
 SELECT JSONExtractString('["a", "b", "c", "d", "e"]', idx) FROM (SELECT arrayJoin([1,2,3,4,5]) AS idx);
 SELECT JSONExtractString(json, 's') FROM (SELECT arrayJoin(['{"s":"u"}', '{"s":"v"}']) AS json);

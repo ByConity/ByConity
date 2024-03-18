@@ -243,5 +243,6 @@ private:
 
 ColumnPtr makeNullable(const ColumnPtr & column);
 ColumnPtr makeNullableOrLowCardinalityNullable(const ColumnPtr & column);
+ColumnPtr recursiveAssumeNotNullable(const ColumnPtr & column);
 
 }

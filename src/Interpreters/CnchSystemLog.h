@@ -19,6 +19,7 @@
 #include <Interpreters/KafkaLog.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/MaterializedMySQLLog.h>
+#include <Storages/MaterializedView/ViewRefreshTaskLog.h>
 
 
 namespace DB
@@ -34,6 +35,7 @@ constexpr auto CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME = "query_worker_m
 constexpr auto CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME = "cnch_kafka_log";
 constexpr auto CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME = "cnch_query_log";
 constexpr auto CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME = "cnch_materialized_mysql_log";
+constexpr auto CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME = "cnch_view_refresh_task_log";
 
 static inline bool isQueryMetricsTable(const String & database, const String & table)
 {
@@ -82,6 +84,12 @@ public:
         return cnch_query_log;
     }
 
+    std::shared_ptr<ViewRefreshTaskLog> getViewRefreshTaskLog() const
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        return cnch_view_refresh_task_log;
+    }
+
     void shutdown();
 
 private:
@@ -90,6 +98,7 @@ private:
     std::shared_ptr<QueryMetricLog> query_metrics;                /// Used to log query metrics.
     std::shared_ptr<QueryWorkerMetricLog> query_worker_metrics;   /// Used to log query worker metrics.
     std::shared_ptr<CnchQueryLog> cnch_query_log;
+    std::shared_ptr<ViewRefreshTaskLog> cnch_view_refresh_task_log;
 
     int init_time_in_worker{};
     int init_time_in_server{};
@@ -123,6 +132,7 @@ constexpr auto QUERY_WORKER_METRICS_CONFIG_PREFIX = "query_worker_metrics";
 constexpr auto CNCH_KAFKA_LOG_CONFIG_PREFIX = "cnch_kafka_log";
 constexpr auto CNCH_QUERY_LOG_CONFIG_PREFIX = "cnch_query_log";
 constexpr auto CNCH_MATERIALIZED_MYSQL_LOG_CONFIG_PREFIX = "cnch_materialized_mysql_log";
+constexpr auto CNCH_VIEW_REFRESH_TASK_PREFIX = "cnch_view_refresh_task_log";
 
 /// Instead of typedef - to allow forward declaration.
 class CloudKafkaLog : public CnchSystemLog<KafkaLogElement>

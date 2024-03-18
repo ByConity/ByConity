@@ -35,6 +35,7 @@ namespace Protos
 }
 
 struct KeyDescription;
+struct FormatSettings;
 
 struct HivePartition
 {
@@ -45,16 +46,19 @@ struct HivePartition
     /// deserialize from hive partition value
     void load(const Apache::Hadoop::Hive::Partition & apache_partition, const KeyDescription & description);
     void load(const String & partition_id_, const KeyDescription & description);
+    void load(ReadBuffer & buf, const KeyDescription & description);
+    void loadFromBinary(ReadBuffer & buf, const KeyDescription & description);
 
     /// non partition case
     void load(const Apache::Hadoop::Hive::StorageDescriptor & sd);
 
+    void store(WriteBuffer & buf, const KeyDescription & description) const;
+
+    void serializeText(const KeyDescription & description, WriteBuffer & out, const FormatSettings & format_settings) const;
+
     /// just for listing
     String file_format;
     String location;
-
-private:
-    void load(ReadBuffer & buf, const KeyDescription & description);
 };
 
 using HivePartitionPtr = std::shared_ptr<HivePartition>;

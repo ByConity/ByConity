@@ -403,37 +403,15 @@ enum PreloadLevelSettings : UInt64
       "Whether to enalbe aggregation finished in worker side, to avoid merge aggregation states in coordinator", \
       0) \
     M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
-    M(Bool, \
-      optimize_skip_unused_shards, \
-      true, \
-      "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", \
-      0) \
-    M(Bool, \
-      optimize_skip_unused_shards_rewrite_in, \
-      true, \
-      "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", \
-      0) \
-    M(Bool, \
-      allow_nondeterministic_optimize_skip_unused_shards, \
-      false, \
-      "Allow non-deterministic functions (includes dictGet) in sharding_key for optimize_skip_unused_shards", \
-      0) \
-    M(UInt64, \
-      force_optimize_skip_unused_shards, \
-      0, \
-      "Throw an exception if unused shards cannot be skipped (1 - throw only if the table has the sharding key, 2 - always throw.", \
-      0) \
-    M(UInt64, \
-      optimize_skip_unused_shards_nesting, \
-      0, \
-      "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", \
-      0) \
-    M(UInt64, \
-      force_optimize_skip_unused_shards_nesting, \
-      0, \
-      "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", \
-      0) \
-\
+    M(Bool, optimize_skip_unused_shards, false, "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", 0) \
+    M(Bool, optimize_skip_unused_shards_rewrite_in, true, "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", 0) \
+    M(Bool, allow_nondeterministic_optimize_skip_unused_shards, false, "Allow non-deterministic functions (includes dictGet) in sharding_key for optimize_skip_unused_shards", 0) \
+    M(UInt64, force_optimize_skip_unused_shards, 0, "Throw an exception if unused shards cannot be skipped (1 - throw only if the table has the sharding key, 2 - always throw.", 0) \
+    M(UInt64, optimize_skip_unused_shards_nesting, 0, "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
+    M(UInt64, force_optimize_skip_unused_shards_nesting, 0, "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
+    \
+    M(Bool, use_sync_pipeline_executor, false, "Whether to use sync pipeline executor", 0) \
+    \
     M(Bool, input_format_parallel_parsing, true, "Enable parallel parsing for some data formats.", 0) \
     M(UInt64, \
       min_chunk_bytes_for_parallel_parsing, \
@@ -1533,6 +1511,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(UInt64, plan_optimizer_rule_warning_time, 1000, "Send warning if a optimize rule optimize time exceed timeout", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
+    M(Bool, force_plan_cache, false, "Force to use plan cache", 0) \
     M(UInt64, max_plannode_count, 200, "The max plannode count", 0) \
     M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
     M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \
@@ -1548,6 +1527,7 @@ enum PreloadLevelSettings : UInt64
     /** */ \
     M(Bool, late_materialize_aggressive_push_down, false, "When table use early materialize strategy, this setting enable aggressively moving predicates to read chain w/o considering other factor like columns size or number of columns in the query", 0) \
     /** Optimizer relative settings, Plan build and RBO */ \
+    M(Bool, enable_auto_prepared_statement, false, "Whether to enable automatic prepared statement", 0) \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
     M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
     M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
@@ -1581,10 +1561,12 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_unwrap_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
+    M(Bool, enable_shuffle_before_state_func, true, "Whether shuffle when agg func is state func.", 0) \
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
     M(Bool, enable_remove_unused_cte, true, "Whether enable remove unused cte", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
+    M(Bool, enable_filter_window_to_sorting_limit, true, "Filter window to sorting limit", 0) \
     M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
     M(Bool, optimizer_index_projection_support, true, "Use indexprojection in optimizer mode", 0) \
     M(Bool, enable_setoperation_to_agg, true, "Whether enable rewrite set operation to aggregation", 0)                                            \
@@ -1665,6 +1647,7 @@ enum PreloadLevelSettings : UInt64
     M(Float, multi_agg_keys_correlated_coefficient, 0.9, "Coefficient about multi agg keys, the smaller the value, the smaller the estimated agg cardnlity, do nothing when equals 1.0", 0) \
     M(Bool, enable_common_expression_sharing, true, "Whether to share common expression between steps", 0) \
     M(Bool, enable_common_expression_sharing_for_prewhere, true, "Whether to share common expression between steps and PREWHERE", 0) \
+    M(Bool, enable_unalias_symbol_references, true, "Whether to enable unalias symbol references", 0) \
     M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
@@ -1714,6 +1697,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
     M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(Bool, enable_wait_cancel_rpc, false, "Whether wait rpcs of cancel worker to finish", 0) \
+    M(UInt64, parallel_join_rows_batch_threshold, 4096, "Rows that concurrent hash join wait data reach, then to build hashtable or join block", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
     M(Bool, enable_shuffle_with_order, false, "Whether enable keep data order when shuffle", 0) \
@@ -1734,12 +1718,14 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(Bool, enable_windows_parallel, false, "Whether run windows in parallel", 0) \
     M(Bool, enable_materialized_view_rewrite, true, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_sync_materialized_view_rewrite, true, "Whether enable materialized view based rewriter for sync materialized view", 0) \
+    M(Bool, enforce_materialized_view_rewrite, false, "Whether throw exception if materialized view is not applied", 0) \
     M(String, enable_push_partial_block_list, "", "Aggregate names who can push partial agg, split by ',' => axxx,bxxx,cxxx", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
-    M(Bool, enable_materialized_view_rewrite_match_range_filter, false, "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", 0) \
+    M(Bool, enable_materialized_view_join_rewriting, true, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
+    M(Bool, enable_materialized_view_union_rewriting, true, "Whether enable materialized view based rewriter for query using union", 0) \
     M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
     M(UInt64, max_plan_segment_num, 500, "maximum plan segments allowed, 0 means no restriction", 0)\
@@ -1780,33 +1766,39 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_force_remote_mode, false, "Force exchange data transfer through network", 0) \
     M(Bool, exchange_enable_force_keep_order, false, "Force exchange keep data order", 0) \
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
-    M(UInt64, distributed_query_wait_exception_ms, 1000, "Wait final planSegment exception from segmentScheduler.", 0) \
+    M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
+    M(UInt64, distributed_query_wait_exception_ms, 1000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
     \
     /** Runtime Filter settings */ \
-    M(UInt64, wait_runtime_filter_timeout, 500, "Execute filter wait for runtime filter timeout ms", 0) \
+    M(UInt64, wait_runtime_filter_timeout, 1000, "Execute filter wait for runtime filter timeout ms", 0) \
     M(Bool, enable_runtime_filter, true, "Whether enable runtime filter for join", 0) \
     M(Bool, enable_runtime_filter_cost, false, "Whether enable runtime filter cost", 0) \
     M(Bool, enable_local_runtime_filter, true, "Whether enable runtime filter in local mode", 0) \
     M(UInt64, runtime_filter_min_filter_rows, 10000, "Set minimum row to enable runtime filter", 0) \
     M(Float, runtime_filter_min_filter_factor, 0.4, "Set minimum filter factor to enable runtime filter", 0) \
+    M(Float, runtime_filter_min_filter_factor_for_non_table_scan, 0.9, "Set minimum filter factor to enable runtime filter if runtime filter can not pushdown", 0) \
     M(Bool, enable_range_cover, true, "Whether use range rather than bloom or values set for runtime filter", 0) \
-    M(Bool, runtime_filter_rewrite_bloom_filter_into_prewhere, true, "Whether enable pushdown runtime filter to prewhere for join", 0) \
+    M(Bool, enable_rewrite_bf_into_prewhere, true, "Whether enable pushdown runtime filter to prewhere for join", 0) \
     M(UInt64, runtime_filter_bloom_build_threshold, 2048000, "The threshold of right table to build bloom filter", 0) \
     M(UInt64, runtime_filter_in_build_threshold, 1024, "The threshold of right table to build value set filter", 0) \
     M(Bool, enable_runtime_filter_pipeline_poll, true, "No additional segment needed for the left side during broadcast join, polling time bounded", 0) \
-    M(UInt64, grf_ndv_enlarge_size, 8, "The times to enlarge the grf ndv, optimal value is the number workers ", 0) \
+    M(Float, adjust_range_set_filter_rate, 0.1, "If the prewhere is not range or set, adjust use this value as priority to bloom filter ", 0) \
+    M(UInt64, shuffle_aware_ndv_threshold, 0, "Threshold to to use shuffle-aware grf or to use pre enlarge ndv, 0 disable shuffle-aware grf", 0) \
+    M(String, runtime_filter_black_list, "", "Runtime filter ids need be blocked", 0) \
     \
     /** ip2geo settings */ \
-    M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0) \
-    M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0) \
-    M(Bool, ip2geo_update_from_hdfs, 0, "Whether to update db file from hdfs", 0) \
-    M(String, ipv4_file, "ipv4_pro", "IPDB file for ipv4", 0) \
-    M(String, ipv6_file, "ipv6_pro", "IPDB file for ipv6", 0) \
-    M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0) \
-    M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0) \
-    M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0) \
-\
+    M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0)\
+    M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0)\
+    M(Bool, ip2geo_update_from_hdfs, 0, "Whether to update db file from hdfs", 0)\
+    M(String, ipv4_file, "ipv4_pro", "IPDB file for ipv4", 0)\
+    M(String, ipv6_file, "ipv6_pro", "IPDB file for ipv6", 0)\
+    M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0)\
+    M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0)\
+    M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0)\
+    \
+    /** gateway simplication settings*/ \
+    M(Bool, block_privileged_operations, 0, "Whether to disable tenant to access specific functions or not", 0)\
     /** Sample setttings */ \
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
@@ -1829,11 +1821,11 @@ enum PreloadLevelSettings : UInt64
     \
     M(UInt64, \
       table_partition_metrics_recalculate_recently_used_threshold, \
-      6, \
+      1, \
       "Recalculate partitions/tables that `last_update_time > last_snapshot_time`, in hours.", 0) \
     M(UInt64, \
       table_partition_metrics_recalculate_not_recently_used_threshold, \
-      3, \
+      1, \
       "Recalculate partitions/tables that not recently updated, in days.", 0) \
     M(UInt64, table_partition_metrics_snapshot_threshold, 1, "Snapshot partition/tables that get recently updated, in hours", 0) \
     /* Transaction and catalog */ \
@@ -1850,8 +1842,10 @@ enum PreloadLevelSettings : UInt64
     M(String, use_snapshot, "", "If not empty, specify the name of the snapshot to use for query", 0) \
     M(Seconds, snapshot_clean_interval, 300, "How often to remove ttl expired snapshots", 0) \
     /* Outfile related Settings */ \
+    M(UInt64, split_file_size_in_mb, 0, "Threshold to split the out data in 'INTO OUTFILE' clause", 0) \
     M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
+    M(UInt64, fuzzy_max_files, 100, "The max number of files when insert with fuzzy names.", 0) \
     /** OSS related settings */ \
     M(String, oss_access_key, "", "The access_key set by user when accessing oss.", 0) \
     M(String, oss_secret_key, "", "The secret_key set by user when accessing oss.", 0) \
@@ -1883,6 +1877,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, true, "Whether to compute locality preferences for reduce tasks", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
+    M(UInt64, bsp_max_retry_num, 5, "max retry number for a query in bsp mode",0) \
     /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
@@ -1892,6 +1887,16 @@ enum PreloadLevelSettings : UInt64
     /** for inverted index*/ \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
     M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
+    /** materialized view async refresh related settings */ \
+    M(Bool, enable_mv_async_insert_overwrite, false, "whether async refresh use insert overwrite instead of drop partition and insert select mode", 0) \
+    M(Bool, enable_non_partitioned_base_refresh_throw_exception, false, "Whether when async refresh non-partitioned base table, throw exception", 0) \
+    M(Bool, async_mv_refresh_offload_mode, false, "offload async mv refresh task to worker.", 0) \
+    M(Bool, async_mv_refresh_task_submit_to_bg_thread, true, "submit async mv refresh task to bg thread.", 0) \
+    M(Bool, async_mv_refresh_task_bsp_mode, true, "whether to execute async mv refresh task in bsp mode.", 0) \
+    M(UInt64, max_server_refresh_materialized_view_task_num, 10, "refresh materialized async max thread num in server.", 0) \
+    M(Bool, enable_async_mv_debug, false, "whether show async debug information", 0) \
+    \
+
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -1908,22 +1913,10 @@ enum PreloadLevelSettings : UInt64
     M(Bool, output_format_csv_crlf_end_of_line, false, "If it is set true, end of line in CSV format will be \\r\\n instead of \\n.", 0) \
     M(Bool, input_format_csv_unquoted_null_literal_as_null, false, "Consider unquoted NULL literal as \\N", 0) \
     M(Bool, input_format_csv_enum_as_number, false, "Treat inserted enum values in CSV formats as enum indices \\N", 0) \
-    M(Bool, \
-      input_format_csv_arrays_as_nested_csv, \
-      false, \
-      R"(When reading Array from CSV, expect that its elements were serialized in nested CSV and then put into string. Example: "[""Hello"", ""world"", ""42"""" TV""]". Braces around array can be omitted.)", \
-      0) \
-    M(Bool, \
-      input_format_skip_unknown_fields, \
-      false, \
-      "Skip columns with unknown names from input data (it works for JSONEachRow, CSVWithNames, TSVWithNames and TSKV formats).", \
-      0) \
-    M(Bool, \
-      input_format_with_names_use_header, \
-      true, \
-      "For TSVWithNames and CSVWithNames input formats this controls whether format parser is to assume that column data appear in the " \
-      "input exactly as they are specified in the header.", \
-      0) \
+    M(Bool, input_format_csv_arrays_as_nested_csv, false, R"(When reading Array from CSV, expect that its elements were serialized in nested CSV and then put into string. Example: "[""Hello"", ""world"", ""42"""" TV""]". Braces around array can be omitted.)", 0) \
+    M(Bool, input_format_json_read_objects_as_strings, false, "Allow to parse JSON objects as strings in JSON input formats; Do NOT set it true by default as it breaks the logic of parsing JSON", 0) \
+    M(Bool, input_format_skip_unknown_fields, false, "Skip columns with unknown names from input data (it works for JSONEachRow, CSVWithNames, TSVWithNames and TSKV formats).", 0) \
+    M(Bool, input_format_with_names_use_header, true, "For TSVWithNames and CSVWithNames input formats this controls whether format parser is to assume that column data appear in the input exactly as they are specified in the header.", 0) \
     M(Bool, input_format_import_nested_json, false, "Map nested JSON data to nested tables (it works for JSONEachRow format).", 0) \
     M(Bool, \
       input_format_defaults_for_omitted_fields, \
@@ -2095,6 +2088,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_metric, true, "whether enable exchange metric collection", 0) \
     M(UInt64, exchange_local_no_repartition_extra_threads, 32, "Extra threads for pipeline which reading data from LOCAL_NO_NEED_REPARTITION exchange", 0) \
     M(UInt64, filtered_ratio_to_use_skip_read, 0, "Ratio of origin rows to filtered rows when using skip reading, 0 means disable", 0) \
+    M(Bool, enable_two_stages_prewhere, false, "Whether enable 2 stages prewhere.", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

@@ -19,6 +19,8 @@
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Catalog/StringHelper.h>
 #include <Protos/data_models.pb.h>
+#include <Protos/data_models_mv.pb.h>
+
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 // #include <Transaction/ICnchTransaction.h>
 #include <sstream>
@@ -77,6 +79,7 @@ namespace DB::Catalog
 #define UNDO_BUFFER_PREFIX "UB_"
 #define KV_LOCK_PREFIX "LK_"
 #define VIEW_DEPENDENCY_PREFIX "VD_"
+#define MAT_VIEW_BASETABLES_PREFIX "MVB_"
 #define SYNC_LIST_PREFIX "SL_"
 #define KAFKA_OFFSETS_PREFIX "KO_"
 #define KAFKA_TRANSACTION_PREFIX "KT_"
@@ -98,6 +101,7 @@ namespace DB::Catalog
 #define CONSUMER_BG_JOB_STATUS "CONSUMER_BGJS_"
 #define DEDUPWORKER_BG_JOB_STATUS "DEDUPWORKER_BGJS_"
 #define OBJECT_SCHEMA_ASSEMBLE_BG_JOB_STATUS "OBJECT_SCHEMA_ASSEMBLE_BGJS_"
+#define REFRESH_VIEW_JOB_STATUS "REFRESH_VIEW_BGJS_"
 #define PREALLOCATE_VW "PVW_"
 #define DICTIONARY_STORE_PREFIX "DIC_"
 #define RESOURCE_GROUP_PREFIX "RG_"
@@ -417,6 +421,16 @@ public:
         return viewDependencyPrefix(name_space, dependency) + uuid;
     }
 
+    static std::string matViewBaseTablesPrefix(const std::string & name_space, const std::string & mv_uuid)
+    {
+        return escapeString(name_space) + '_' + MAT_VIEW_BASETABLES_PREFIX + mv_uuid + '_';
+    }
+
+    static std::string matViewBaseTablesKey(const std::string & name_space, const std::string & mv_uuid, const std::string & base_uuid, const std::string & partition_id)
+    {
+        return matViewBaseTablesPrefix(name_space, mv_uuid) + base_uuid + '_' + partition_id;
+    }
+
     static std::string tableUUIDUniqueKey(const std::string & name_space, const std::string & uuid)
     {
         return escapeString(name_space) + '_' + TABLE_UUID_UNIQUE_PREFIX + uuid;
@@ -585,6 +599,16 @@ public:
     static std::string allMmysqlBGJobStatusKeyPrefix(const std::string & name_space)
     {
         return escapeString(name_space) + '_' + MATERIALIZEDMYSQL_BG_JOB_STATUS;
+    }
+
+    static std::string refreshViewBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allRefreshViewJobStatusKeyPrefix(name_space) + uuid;
+    }
+
+    static std::string allRefreshViewJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + REFRESH_VIEW_JOB_STATUS;
     }
 
     static std::string mmysqlBGJobStatusKey(const std::string & name_space, const std::string & uuid)
@@ -918,6 +942,11 @@ public:
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getAllTablesId(const String & name_space, const String & db = "");
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesIdByPrefix(const String & name_space, const String & prefix = "");
     Strings getAllDependence(const String & name_space, const String & uuid);
+    std::vector<std::shared_ptr<Protos::VersionedPartitions>> getMvBaseTables(const String & name_space, const String & uuid);
+    BatchCommitRequest constructMvMetaRequests(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions,std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions);
+    void updateMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+    void dropMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+
     IMetaStore::IteratorPtr getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTrashTableID(const String & name_space);
     std::shared_ptr<Protos::TableIdentifier> getTrashTableID(const String & name_space, const String & database, const String & table, const UInt64 & ts);
@@ -934,8 +963,13 @@ public:
     void prepareAddDataParts(const String & name_space, const String & table_uuid, const Strings & current_partitions,
                              const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, BatchCommitRequest & batch_write,
                              const std::vector<String> & expected_parts, bool update_sync_list = false);
-    void prepareAddStagedParts(const String & name_space, const String & table_uuid, const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
-                               BatchCommitRequest & batch_write, const std::vector<String> & expected_staged_parts);
+    void prepareAddStagedParts(
+        const String & name_space,
+        const String & table_uuid,
+        const Strings & current_partitions,
+        const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
+        BatchCommitRequest & batch_write,
+        const std::vector<String> & expected_staged_parts);
 
     /// mvcc version drop part
     void dropDataPart(const String & name_space, const String & table_uuid, const String & part_name, const String & part_info);
@@ -1152,6 +1186,8 @@ public:
         const String & range_end,
         bool include_start = true,
         bool include_end = false);
+
+    String getByKey(const String & key);
 
     /**
      * @brief Get all items in the trash state. This is a GC related function.

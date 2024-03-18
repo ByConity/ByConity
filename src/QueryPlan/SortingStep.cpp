@@ -22,12 +22,14 @@
 #include <Processors/Transforms/MergeSortingTransform.h>
 #include <Processors/Transforms/PartialSortingTransform.h>
 #include <QueryPlan/SortingStep.h>
+#include <Protos/PreparedStatementHelper.h>
 #include <Common/JSONBuilder.h>
 #include "QueryPlan/PlanSerDerHelper.h"
 
 namespace DB
 {
-static ITransformingStep::Traits getTraits(size_t limit, bool is_final_sorting = false)
+
+static ITransformingStep::Traits getTraits(const SizeOrVariable & limit, bool is_final_sorting = false)
 {
     return ITransformingStep::Traits{
         {
@@ -37,12 +39,16 @@ static ITransformingStep::Traits getTraits(size_t limit, bool is_final_sorting =
             .preserves_sorting = false,
         },
         {
-            .preserves_number_of_rows = limit == 0,
+            .preserves_number_of_rows = std::holds_alternative<UInt64>(limit) && std::get<UInt64>(limit) == 0,
         }};
 }
 
 SortingStep::SortingStep(
-    const DataStream & input_stream_, SortDescription result_description_, UInt64 limit_, Stage stage_, SortDescription prefix_description_)
+    const DataStream & input_stream_,
+    SortDescription result_description_,
+    SizeOrVariable limit_,
+    Stage stage_,
+    SortDescription prefix_description_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_, stage_ != Stage::PARTIAL))
     , result_description(result_description_)
     , limit(limit_)
@@ -63,7 +69,7 @@ void SortingStep::setInputStreams(const DataStreams & input_streams_)
 
 void SortingStep::updateLimit(size_t limit_)
 {
-    if (limit_ && (limit == 0 || limit_ < limit))
+    if (limit_ && !hasPreparedParam() && (getLimitValue() == 0 || limit_ < getLimitValue()))
     {
         limit = limit_;
         transform_traits.preserves_number_of_rows = false;
@@ -85,7 +91,7 @@ void SortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPi
             bool need_finish_sorting = (prefix_description.size() < result_description.size());
             if (pipeline.getNumStreams() > 1)
             {
-                UInt64 limit_for_merging = (need_finish_sorting ? 0 : limit);
+                UInt64 limit_for_merging = (need_finish_sorting ? 0 : getLimitValue());
                 auto transform = std::make_shared<MergingSortedTransform>(
                     pipeline.getHeader(), pipeline.getNumStreams(), prefix_description, local_settings.max_block_size, limit_for_merging);
 
@@ -98,24 +104,23 @@ void SortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPi
                     if (stream_type != QueryPipeline::StreamType::Main)
                         return nullptr;
 
-                    return std::make_shared<PartialSortingTransform>(header, result_description, limit);
+                    return std::make_shared<PartialSortingTransform>(header, result_description, getLimitValue());
                 });
 
                 /// NOTE limits are not applied to the size of temporary sets in FinishSortingTransform
                 pipeline.addSimpleTransform([&](const Block & header) -> ProcessorPtr {
                     return std::make_shared<FinishSortingTransform>(
-                        header, prefix_description, result_description, local_settings.max_block_size, limit);
+                        header, prefix_description, result_description, local_settings.max_block_size, getLimitValue());
                 });
             }
             return;
         }
 
-
         pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
             if (stream_type != QueryPipeline::StreamType::Main)
                 return nullptr;
 
-            return std::make_shared<PartialSortingTransform>(header, desc_copy, limit);
+            return std::make_shared<PartialSortingTransform>(header, desc_copy, getLimitValue());
         });
 
         StreamLocalLimits limits;
@@ -138,7 +143,7 @@ void SortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPi
                 header,
                 result_description,
                 local_settings.max_block_size,
-                limit,
+                getLimitValue(),
                 local_settings.max_bytes_before_remerge_sort / pipeline.getNumStreams(),
                 local_settings.remerge_sort_lowered_memory_bytes_ratio,
                 local_settings.max_bytes_before_external_sort,
@@ -151,7 +156,7 @@ void SortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPi
     if (pipeline.getNumStreams() > 1)
     {
         auto transform = std::make_shared<MergingSortedTransform>(
-            pipeline.getHeader(), pipeline.getNumStreams(), desc_copy, local_settings.max_block_size, limit);
+            pipeline.getHeader(), pipeline.getNumStreams(), desc_copy, local_settings.max_block_size, getLimitValue());
 
         pipeline.addTransform(std::move(transform));
     }
@@ -164,16 +169,28 @@ void SortingStep::describeActions(FormatSettings & settings) const
     dumpSortDescription(result_description, input_streams.front().header, settings.out);
     settings.out << '\n';
 
-    if (limit)
-        settings.out << prefix << "Limit " << limit << '\n';
+    std::visit(
+        overloaded{
+            [&](const UInt64 & x) {
+                if (x)
+                    settings.out << prefix << "Limit " << x << '\n';
+            },
+            [&](const String & x) { settings.out << prefix << "Limit " << x << '\n'; }},
+        limit);
 }
 
 void SortingStep::describeActions(JSONBuilder::JSONMap & map) const
 {
     map.add("Sort Description", explainSortDescription(result_description, input_streams.front().header));
 
-    if (limit)
-        map.add("Limit", limit);
+    std::visit(
+        overloaded{
+            [&](const UInt64 & x) {
+                if (x)
+                    map.add("Limit", x);
+            },
+            [&](const String & x) { map.add("Limit", x); }},
+        limit);
 }
 
 std::shared_ptr<SortingStep> SortingStep::fromProto(const Protos::SortingStep & proto, ContextPtr)
@@ -192,6 +209,7 @@ std::shared_ptr<SortingStep> SortingStep::fromProto(const Protos::SortingStep & 
         stage = StageConverter::fromProto(proto.stage());
 
     auto limit = proto.limit();
+    auto limit_or_var = getSizeOrVariableFromProto(proto.limit_or_var());
     SortDescription prefix_description;
     for (const auto & proto_element : proto.prefix_description())
     {
@@ -199,7 +217,7 @@ std::shared_ptr<SortingStep> SortingStep::fromProto(const Protos::SortingStep & 
         element.fillFromProto(proto_element);
         prefix_description.emplace_back(std::move(element));
     }
-    auto step = std::make_shared<SortingStep>(base_input_stream, result_description, limit, stage, prefix_description);
+    auto step = std::make_shared<SortingStep>(base_input_stream, result_description, limit_or_var ? *limit_or_var : limit, stage, prefix_description);
     step->setStepDescription(step_description);
     return step;
 }
@@ -209,7 +227,8 @@ void SortingStep::toProto(Protos::SortingStep & proto, bool) const
     ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
     for (const auto & element : result_description)
         element.toProto(*proto.add_result_description());
-    proto.set_limit(limit);
+    proto.set_limit(0);
+    setSizeOrVariableToProto(limit, *proto.mutable_limit_or_var());
     proto.set_partial(false);
     proto.set_stage(StageConverter::toProto(stage));
     for (const auto & element : prefix_description)
@@ -221,4 +240,8 @@ std::shared_ptr<IQueryPlanStep> SortingStep::copy(ContextPtr) const
     return std::make_shared<SortingStep>(input_streams[0], result_description, limit, stage, prefix_description);
 }
 
+void SortingStep::prepare(const PreparedStatementContext & prepared_context)
+{
+    prepared_context.prepare(limit);
+}
 }

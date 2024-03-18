@@ -42,6 +42,9 @@ namespace DB
   * Insert the result of the SELECT or WATCH query.
   * INSERT INTO [db.]table (c1, c2, c3) SELECT | WATCH  ...
   * INSERT INTO [db.]table SELECT | WATCH ...
+  * 
+  * Insert overwrite table of partition, when there is no parition list , overwrite all partition
+  * INSERT OVERWRITE [db.]table [PARTITION (p1,p2...)] SELECT 
   */
 class ParserInsertQuery : public IParserDialectBase
 {

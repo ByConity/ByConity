@@ -44,6 +44,8 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/StorageSnapshot.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Transaction/TransactionCommon.h>
 #include <Core/Types.h>
 // #include <Access/MaskingPolicyDataModel.h>
 // #include <Access/MaskingPolicyCommon.h>
@@ -67,6 +69,7 @@
 #include <Storages/PartCacheManager.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDictionary.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/getCommitted.h>
 #include <brpc/server.h>
@@ -175,6 +178,8 @@ namespace ProfileEvents
     extern const Event GetStagedPartsFailed;
     extern const Event GetDeleteBitmapsInPartitionsSuccess;
     extern const Event GetDeleteBitmapsInPartitionsFailed;
+    extern const Event GetDeleteBitmapsFromCacheInPartitionsSuccess;
+    extern const Event GetDeleteBitmapsFromCacheInPartitionsFailed;
     extern const Event GetDeleteBitmapByKeysSuccess;
     extern const Event GetDeleteBitmapByKeysFailed;
     extern const Event AddDeleteBitmapsSuccess;
@@ -466,6 +471,12 @@ namespace ProfileEvents
     extern const Event PutAccessEntityFailed;
     extern const Event DropAccessEntitySuccess;
     extern const Event DropAccessEntityFailed;
+    extern const Event GetByKeySuccess;
+    extern const Event GetByKeyFailed;
+    extern const Event GetMvBaseTableIDSuccess;
+    extern const Event GetMvBaseTableIDFailed;
+    extern const Event UpdateMvMetaIDSuccess;
+    extern const Event UpdateMvMetaIDFailed;
 }
 
 namespace DB
@@ -513,7 +524,7 @@ namespace Catalog
                 /// and re-open again frequently. This will cause a lot of TIME-WAIT connections and may lead to unexpected exceptions.
                 brpc::FLAGS_defer_close_second = 30;
 
-                const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+                const char * consul_http_host = getConsulIPFromEnv();
                 const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
                 if (consul_http_host != nullptr && consul_http_port != nullptr)
                 {
@@ -977,7 +988,7 @@ namespace Catalog
 
                     if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                     {
-                        cache_manager->invalidPartCache(storage->getStorageUUID());
+                        cache_manager->invalidPartAndDeleteBitmapCache(storage->getStorageUUID());
                         cache_manager->removeStorageCache(db, name);
                     }
                 }
@@ -1096,7 +1107,7 @@ namespace Catalog
                     if (server_vw_changed)
                     {
                         /// Invalidate part cache since this server is no longer table's host server
-                        cache_manager->invalidPartCache(storage->getStorageUUID());
+                        cache_manager->invalidPartAndDeleteBitmapCache(storage->getStorageUUID());
                         cache_manager->removeStorageCache(storage->getDatabaseName(), storage->getTableName());
                     }
                     else if (is_local_server)
@@ -1483,7 +1494,42 @@ namespace Catalog
         return CnchPartsHelper::toMergeTreeDataPartsCNCHVector(createPartVectorFromServerParts(*storage, staged_server_parts));
     }
 
-    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    ServerDataPartsWithDBM Catalog::getStagedServerDataPartsWithDBM(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    {
+        ServerDataPartsWithDBM res;
+        res.first = getStagedServerDataParts(table, ts, partitions, /*execute_filter=*/false);
+        res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+
+        if (ts)
+        {
+            LOG_DEBUG(
+                log,
+                "{} Start handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas is {}, timestamp: {}",
+                table->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+
+            /// Make sure they use the same records of transactions list.
+            auto txn_records = getTransactionRecords(res.first, res.second);
+            getVisibleServerDataParts(res.first, ts, this, &txn_records);
+            getVisibleBitmaps(res.second, ts, this, &txn_records);
+
+            LOG_DEBUG(
+                log,
+                "{} Finish handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas of {}, timestamp: {}",
+                table->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+        }
+
+        return res;
+    }
+
+    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions, bool execute_filter)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1534,9 +1580,9 @@ namespace Catalog
                     res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(*storage, std::move(*model))));
                 }
 
-                if (ts)
+                if (ts && execute_filter)
                 {
-                    getVisibleServerDataParts(res, ts, this);
+                    getVisibleServerDataParts(res, ts, this, nullptr);
                 }
             },
             ProfileEvents::GetStagedPartsSuccess,
@@ -1544,8 +1590,56 @@ namespace Catalog
         return res;
     }
 
-    DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
+    DB::ServerDataPartsWithDBM Catalog::getServerDataPartsInPartitionsWithDBM(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
+    {
+        ServerDataPartsWithDBM res;
+        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, visibility, /*execute_filter=*/false);
+        res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+
+        /// Make sure they use the same records of transactions list.
+        if (ts && visibility != VisibilityLevel::All)
+        {
+            LOG_DEBUG(
+                log,
+                "{} Start handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas is {}, timestamp: {}",
+                storage->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+
+             auto txn_records = getTransactionRecords(res.first, res.second);
+            if (visibility == VisibilityLevel::Visible)
+            {
+                getVisibleServerDataParts(res.first, ts, this, &txn_records);
+                getVisibleBitmaps(res.second, ts, this, &txn_records);
+            }
+            else
+            {
+                getCommittedServerDataParts(res.first, ts, this, &txn_records);
+                getCommittedBitmaps(res.second, ts, this, &txn_records);
+            }
+
+            LOG_DEBUG(
+                log,
+                "{} Finish handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas of {}, timestamp: {}",
+                storage->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+        }
+        return res;
+    }
+
+    DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        VisibilityLevel visibility,
+        bool execute_filter)
     {
         ServerDataPartsVector res;
         String source;
@@ -1598,9 +1692,18 @@ namespace Catalog
                         res = context.getPartCacheManager()->getOrSetServerDataPartsInPartitions(
                             *storage,
                             partitions,
-                            [&](const Strings & required_partitions, const Strings & full_partitions) {
+                            [&](const Strings & required_partitions, const Strings & full_partitions) -> DataModelPartWrapperVector {
                                 miss_cache = true;
-                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0}, /*from_trash=*/ false);
+                                DataModelPartWithNameVector fetched = getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0}, /*from_trash=*/ false);
+                                DataModelPartWrapperVector ret;
+                                ret.reserve(fetched.size());
+
+                                const auto & merge_tree = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+                                for (const auto & part : fetched)
+                                {
+                                    ret.push_back(createPartWrapperFromModel(merge_tree, std::move(*(part->model)), std::move(part->name)));
+                                }
+                                return ret;
                             },
                             ts.toUInt64(),
                             host_port.topology_version);
@@ -1623,7 +1726,7 @@ namespace Catalog
                     }
                 }
 
-                if (ts && visibility != VisibilityLevel::All)
+                if (execute_filter && ts && visibility != VisibilityLevel::All)
                 {
                     LOG_TRACE(
                         log,
@@ -1633,9 +1736,9 @@ namespace Catalog
                         ,ts.toString());
 
                     if (visibility == VisibilityLevel::Visible)
-                        getVisibleServerDataParts(res, ts, this);
+                        getVisibleServerDataParts(res, ts, this, nullptr);
                     else
-                        getCommittedServerDataParts(res, ts, this);
+                        getCommittedServerDataParts(res, ts, this, nullptr);
 
                     LOG_TRACE(
                         log,
@@ -1662,7 +1765,138 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitions(
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        bool execute_filter)
+    {
+        DeleteBitmapMetaPtrVector res;
+        String source;
+        runWithMetricSupport(
+            [&] {
+                Stopwatch watch;
+                auto fall_back = [&]() {
+                    Strings all_partitions = getPartitionIDsFromMetastore(storage);
+                    return getDeleteBitmapsInPartitionsImpl(storage, partitions, all_partitions, ts);
+                };
+
+                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
+                {
+                    return;
+                }
+                if (partitions.empty())
+                {
+                    return;
+                }
+                auto host_port
+                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
+                auto host_with_rpc = host_port.getRPCAddress();
+
+                if (host_port.empty())
+                {
+                    /// if host not found, fall back to fetch part from metastore.
+                    LOG_DEBUG(log, "Fall back to get from metastore because no available server found in current topology.");
+                    res = fall_back();
+                    source = "KV(target server not found)";
+                }
+                else if (
+                    context.getServerType() == ServerType::cnch_server
+                    && isLocalServer(host_with_rpc, std::to_string(context.getRPCPort())))
+                {
+                    bool can_use_cache = canUseCache(storage, session_context);
+                    can_use_cache &= !context.getConfigRef().getBool("disable_delete_bitmap_cache", false);
+
+                    if (!can_use_cache)
+                    {
+                        res = fall_back();
+                        source = "KV(can not laverage cache)";
+                    }
+                    else
+                    {
+                        source = "DeleteBitmapCache";
+                        std::atomic_bool miss_cache{false};
+                        res = context.getPartCacheManager()->getOrSetDeleteBitmapInPartitions(
+                            *storage,
+                            partitions,
+                            [&](const Strings & required_partitions, const Strings & full_partitions) -> DeleteBitmapMetaPtrVector {
+                                miss_cache = true;
+                                return getDeleteBitmapsInPartitionsImpl(storage, required_partitions, full_partitions, TxnTimestamp::maxTS());
+                            },
+                            ts.toUInt64(),
+                            host_port.topology_version);
+                        if (miss_cache)
+                            source = "KV(miss cache)";
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        res = context.getCnchServerClientPool().get(host_with_rpc)->fetchDeleteBitmaps(host_with_rpc, storage, partitions, ts);
+                        source = "TargetServer(" + host_with_rpc + ")";
+                    }
+                    catch (...)
+                    {
+                        LOG_DEBUG(log, "Fall back to get from metastore because fail to fetch delete bitmaps from remote server.");
+                        res = fall_back();
+                        source = "KV(cannot reach target server)";
+                    }
+                }
+
+                /// filter out invisible bitmaps (uncommitted or invisible to current txn)
+                if (execute_filter)
+                    getVisibleBitmaps(res, ts, this, nullptr);
+                LOG_DEBUG(
+                    log,
+                    "Elapsed {}ms to get {} delete bitmaps in {} partitions for table : {} , source : {}, ts : {}"
+                    ,watch.elapsedMilliseconds()
+                    ,res.size()
+                    ,partitions.size()
+                    ,storage->getStorageID().getNameForLogs()
+                    ,source
+                    ,ts.toString());
+            },
+            ProfileEvents::GetDeleteBitmapsFromCacheInPartitionsSuccess,
+            ProfileEvents::GetDeleteBitmapsFromCacheInPartitionsFailed);
+        return res;
+    }
+
+    ServerDataPartsWithDBM Catalog::getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    {
+        ServerDataPartsWithDBM res;
+        res.first = getTrashedPartsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+        res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+        if (ts)
+        {
+            LOG_DEBUG(
+                log,
+                "{} Start handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas is {}, timestamp: {}",
+                storage->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+
+            /// Make sure they use the same records of transactions list.
+            auto txn_records = getTransactionRecords(res.first, res.second);
+            getVisibleServerDataParts(res.first, ts, this, &txn_records);
+            getVisibleBitmaps(res.second, ts, this, &txn_records);
+
+            LOG_DEBUG(
+                log,
+                "{} Finish handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas of {}, timestamp: {}",
+                storage->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+        }
+        return res;
+    }
+
+    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1683,8 +1917,8 @@ namespace Catalog
                 size_t size_before = res.size();
 
                 // TODO: should we remove the visibility check logic for trashed parts?
-                if (ts)
-                    getVisibleServerDataParts(res, ts, this);
+                if (ts && execute_filter)
+                    getVisibleServerDataParts(res, ts, this, nullptr);
 
                 LOG_DEBUG(
                     log,
@@ -1932,8 +2166,19 @@ namespace Catalog
 
                 /// insert new added parts into cache manager
                 if (context.getPartCacheManager())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*storage, commit_parts.parts(),
-                    is_merged_parts, false, PairInt64{0, 0}); // Not be used anymore. Its ok set empty cache version
+                {
+                    context.getPartCacheManager()->insertDataPartsIntoCache(
+                        *storage,
+                        commit_parts.parts(),
+                        is_merged_parts,
+                        false,
+                        PairInt64{0, 0}); // Not be used anymore. Its ok set empty cache version
+
+                    if (!delete_bitmaps.empty())
+                    {
+                        context.getPartCacheManager()->insertDeleteBitmapsIntoCache(*storage, delete_bitmaps, PairInt64{0, 0}, commit_parts);
+                    }
+                }
             },
             ProfileEvents::FinishCommitSuccess,
             ProfileEvents::FinishCommitFailed);
@@ -2123,8 +2368,17 @@ namespace Catalog
         }
         meta_proxy->prepareAddDeleteBitmaps(
             name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), delete_bitmaps, batch_writes, expected_bitmaps);
-        meta_proxy->prepareAddStagedParts(
-            name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), staged_parts, batch_writes, expected_staged_parts);
+        if (!staged_parts.empty())
+        {
+            Strings current_partitions = getPartitionIDs(storage, nullptr);
+            meta_proxy->prepareAddStagedParts(
+                name_space,
+                UUIDHelpers::UUIDToString(storage->getStorageID().uuid),
+                current_partitions,
+                staged_parts,
+                batch_writes,
+                expected_staged_parts);
+        }
 
         if (batch_writes.isEmpty())
         {
@@ -2146,7 +2400,6 @@ namespace Catalog
                 ", total: " + toString(resp.puts.size()), ErrorCodes::CATALOG_COMMIT_PART_ERROR);
         }
     }
-
 
     void Catalog::dropAllPart(const StoragePtr & storage, const TxnTimestamp & txnID, const TxnTimestamp & ts)
     {
@@ -2806,11 +3059,12 @@ namespace Catalog
 
                 LOG_DEBUG(
                     log,
-                    "Start write {} parts and {} delete_bitmaps and {} staged parts to kvstore for txn {}"
-                    ,commit_data.data_parts.size()
-                    ,commit_data.delete_bitmaps.size()
-                    ,commit_data.staged_parts.size()
-                    ,txnID);
+                    "Start write {} parts and {} delete_bitmaps and {} staged parts to kvstore for txn {}, table: {}",
+                    commit_data.data_parts.size(),
+                    commit_data.delete_bitmaps.size(),
+                    commit_data.staged_parts.size(),
+                    txnID,
+                    UUIDHelpers::UUIDToString(table->getStorageUUID()));
 
                 const auto host_port
                     = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), false);
@@ -2897,13 +3151,24 @@ namespace Catalog
                     std::vector<String>(staged_part_models.parts().size()));
                 LOG_DEBUG(
                     log,
-                    "Finish write parts to kvstore for txn {}, elapsed {}ms, start write part cache."
-                    ,txnID
-                    ,watch.elapsedMilliseconds());
+                    "Finish write parts ({}) and delete bitmaps ({}) to kvstore for txn {}, elapsed {}ms, start write cache.",
+                    part_models.parts().size(),
+                    commit_data.delete_bitmaps.size(),
+                    txnID,
+                    watch.elapsedMilliseconds());
 
                 /// insert new added parts into cache manager
-                if (context.getPartCacheManager() && !part_models.parts().empty())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), is_merged_parts, false, host_port.topology_version);
+                if (context.getPartCacheManager())
+                {
+                    if (!part_models.parts().empty())
+                        context.getPartCacheManager()->insertDataPartsIntoCache(
+                            *table, part_models.parts(), is_merged_parts, false, host_port.topology_version);
+                    if (!commit_data.delete_bitmaps.empty())
+                    {
+                        context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
+                            *table, commit_data.delete_bitmaps, host_port.topology_version, part_models, &staged_part_models);
+                    }
+                }
 
                 LOG_DEBUG(log, "Finish write part for txn {}, elapsed {} ms.", txnID, watch.elapsedMilliseconds());
             },
@@ -3073,8 +3338,17 @@ namespace Catalog
                     ,txn_id
                     ,watch.elapsedMilliseconds());
 
-                if (context.getPartCacheManager() && !part_models.parts().empty())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), false, true, host_port.topology_version);
+                if (context.getPartCacheManager())
+                {
+                    if (!part_models.parts().empty())
+                        context.getPartCacheManager()->insertDataPartsIntoCache(
+                            *table, part_models.parts(), false, true, host_port.topology_version);
+                    if (!commit_data.delete_bitmaps.empty())
+                    {
+                        context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
+                            *table, commit_data.delete_bitmaps, host_port.topology_version, part_models, &staged_part_models);
+                    }
+                }
                 LOG_DEBUG(log, "Finish set commit time for txn {}, elapsed {} ms.", txn_id, watch.elapsedMilliseconds());
             },
             ProfileEvents::SetCommitTimeSuccess,
@@ -3128,43 +3402,63 @@ namespace Catalog
                 if (drop_keys.size() > max_drop_size_one_batch)
                 {
                     size_t batch_count{0};
-                    while (batch_count + max_drop_size_one_batch < drop_keys.size())
+                    const size_t mark1 = commit_data.data_parts.size();
+                    const size_t mark2 = mark1 + commit_data.delete_bitmaps.size();
+
+                    while(batch_count < drop_keys.size())
                     {
-                        meta_proxy->multiDrop(
-                            Strings{drop_keys.begin() + batch_count, drop_keys.begin() + batch_count + max_drop_size_one_batch});
+                        meta_proxy->multiDrop(Strings{
+                            drop_keys.begin() + batch_count,
+                            drop_keys.begin() + std::min(batch_count + max_drop_size_one_batch, drop_keys.size())});
                         /// clear part cache immediately after drop from metastore
                         if (need_invalid_cache)
                         {
-                            if (batch_count + max_drop_size_one_batch < commit_data.data_parts.size())
+                            size_t batch_count_end = batch_count + max_drop_size_one_batch;
+
+                            // │  parts  │  delete bitmaps  │  staged parts  │
+                            // ▼         ▼                  ▼                ▼
+                            // └─────────────────────────────────────────────┘
+
+                            /// For parts.
                             {
-                                context.getPartCacheManager()->invalidPartCache(
-                                    storage->getStorageID().uuid,
-                                    DataPartsVector{
-                                        commit_data.data_parts.begin() + batch_count,
-                                        commit_data.data_parts.begin() + batch_count + max_drop_size_one_batch});
+                                const size_t left_bound = batch_count;
+                                const size_t right_bound = std::min(batch_count_end, mark1);
+
+                                if (left_bound < right_bound)
+                                {
+                                    context.getPartCacheManager()->invalidPartCache(
+                                        storage->getStorageID().uuid,
+                                        DataPartsVector{
+                                            commit_data.data_parts.begin() + left_bound, commit_data.data_parts.begin() + right_bound});
+                                }
                             }
-                            else if (batch_count < commit_data.data_parts.size())
+
+                            /// For delete bitmaps.
                             {
-                                context.getPartCacheManager()->invalidPartCache(
-                                    storage->getStorageID().uuid,
-                                    DataPartsVector{commit_data.data_parts.begin() + batch_count, commit_data.data_parts.end()});
+                                size_t left_bound = std::max(batch_count, mark1);
+                                size_t right_bound = std::min(batch_count_end, mark2);
+
+                                if (left_bound < right_bound)
+                                {
+                                    context.getPartCacheManager()->invalidDeleteBitmapCache(
+                                        storage->getStorageID().uuid,
+                                        DeleteBitmapMetaPtrVector{
+                                            commit_data.delete_bitmaps.begin() + left_bound - mark1,
+                                            commit_data.delete_bitmaps.begin() + right_bound - mark1});
+                                }
                             }
                         }
                         batch_count += max_drop_size_one_batch;
-                    }
-                    meta_proxy->multiDrop(Strings{drop_keys.begin() + batch_count, drop_keys.end()});
-                    if (need_invalid_cache && batch_count < commit_data.data_parts.size())
-                    {
-                        context.getPartCacheManager()->invalidPartCache(
-                            storage->getStorageID().uuid,
-                            DataPartsVector{commit_data.data_parts.begin() + batch_count, commit_data.data_parts.end()});
                     }
                 }
                 else
                 {
                     meta_proxy->multiDrop(drop_keys);
                     if (need_invalid_cache)
+                    {
                         context.getPartCacheManager()->invalidPartCache(storage->getStorageID().uuid, commit_data.data_parts);
+                        context.getPartCacheManager()->invalidDeleteBitmapCache(storage->getStorageID().uuid, commit_data.delete_bitmaps);
+                    }
                 }
 
                 LOG_INFO(
@@ -3403,6 +3697,28 @@ namespace Catalog
             ProfileEvents::GetTransactionRecordsTxnIdsSuccess,
             ProfileEvents::GetTransactionRecordsTxnIdsFailed);
         return records;
+    }
+
+    TransactionRecords Catalog::getTransactionRecords(const ServerDataPartsVector & parts, const DeleteBitmapMetaPtrVector & bitmaps)
+    {
+        std::set<TxnTimestamp> txn_ids;
+        for (const auto & part : parts)
+        {
+            UInt64 commit_time = detail::ServerDataPartOperation::getCommitTime(part);
+            UInt64 txn_id = detail::ServerDataPartOperation::getTxnID(part);
+
+            if (commit_time == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+                txn_ids.insert(txn_id);
+        }
+        for (const auto & bitmap: bitmaps)
+        {
+            UInt64 commit_time = detail::BitmapOperation::getCommitTime(bitmap);
+            UInt64 txn_id = detail::BitmapOperation::getTxnID(bitmap);
+
+            if (commit_time == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+                txn_ids.insert(txn_id);
+        }
+        return getTransactionRecords(std::vector<TxnTimestamp>(txn_ids.begin(), txn_ids.end()), 100000);
     }
 
     std::vector<TransactionRecord> Catalog::getTransactionRecordsForGC(size_t max_result_number)
@@ -3990,7 +4306,7 @@ namespace Catalog
                 if (!table_uuid.empty() && context.getPartCacheManager())
                 {
                     UUID uuid = UUID(stringToUUID(table_uuid));
-                    context.getPartCacheManager()->invalidPartCache(uuid);
+                    context.getPartCacheManager()->invalidPartAndDeleteBitmapCache(uuid);
                 }
             },
             ProfileEvents::ClearTableMetaForGCSuccess,
@@ -4064,7 +4380,7 @@ namespace Catalog
                 if (context.getPartCacheManager())
                 {
                     auto cache_manager = context.getPartCacheManager();
-                    cache_manager->invalidPartCache(storage->getStorageID().uuid);
+                    cache_manager->invalidPartAndDeleteBitmapCache(storage->getStorageID().uuid);
                 }
 
                 LOG_INFO(log, "Finish clear all data parts for table : {}.{}", storage->getDatabaseName(), storage->getTableName());
@@ -4206,7 +4522,10 @@ namespace Catalog
         meta_proxy->getMetastore()->adaptiveBatchWrite(batch_writes);
 
         if (need_invalid_cache)
+        {
             context.getPartCacheManager()->invalidPartCache(table->getStorageUUID(), items.data_parts);
+            context.getPartCacheManager()->invalidDeleteBitmapCache(table->getStorageUUID(), items.delete_bitmaps);
+        }
 
         LOG_INFO(
             log,
@@ -4574,21 +4893,34 @@ namespace Catalog
         const String & table_uuid, const String & partition_id, size_t max_commit_time, std::function<bool()> need_abort)
 
     {
-        auto calculate_metrics_by_partition = [&](std::unordered_map<String, Protos::DataModelPart> & parts) {
+        auto calculate_metrics_by_partition = [&](ServerDataPartsVector & parts) {
             PartitionMetricsStorePtr res = std::make_shared<PartitionMetrics::PartitionMetricsStore>();
 
-            for (auto & [part_name, part] : parts)
+            for (auto & part : parts)
             {
                 if (unlikely(need_abort()))
                 {
                     LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
                     break;
                 }
-                /// for those block only has deleted part, just ignore them because the covered part may be already removed by GC
-                if (part.deleted())
-                    continue;
 
-                res->update(part);
+                /// For those blocks only have deleted part, just ignore them because the covered part may be already removed by GC.
+                /// But we should still calculate it's `last_modification_time`.
+                res->updateLastModificationTime(part->part_model());
+            }
+
+            std::sort(parts.begin(), parts.end(), CnchPartsHelper::PartComparator<ServerDataPartPtr>{});
+            auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, false);
+
+            for (auto & part : visible_parts)
+            {
+                if (unlikely(need_abort()))
+                {
+                    LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
+                    break;
+                }
+
+                res->update(part->part_model());
             }
 
             return res;
@@ -4605,10 +4937,11 @@ namespace Catalog
 
                 /// Get latest table version.
                 StoragePtr storage = getTableByUUID(context, table_uuid, max_commit_time);
+                const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
 
                 IMetaStore::IteratorPtr it = meta_proxy->getPartsInRange(name_space, table_uuid, partition_id);
 
-                std::unordered_map<String, Protos::DataModelPart> block_name_to_part;
+                ServerDataPartsVector parts;
                 while (it->next())
                 {
                     if (unlikely(need_abort()))
@@ -4619,11 +4952,6 @@ namespace Catalog
                     Protos::DataModelPart part_model;
                     part_model.ParseFromString(it->value());
 
-                    auto part_info = createPartInfoFromModel(part_model.part_info());
-                    /// skip partial part.
-                    if (part_info->hint_mutation)
-                        continue;
-
                     /// Skip the Uncommitted parts or the parts that
                     /// cannot be seen by the time `max_commit_time`.
                     if (part_model.commit_time() == 0 || part_model.commit_time() > max_commit_time)
@@ -4632,19 +4960,12 @@ namespace Catalog
                         continue;
                     }
 
-                    String block_name = part_info->getBlockName();
-                    auto it = block_name_to_part.find(block_name);
-                    /// When there are parts with same block ID, it means the part has been marked as deleted (Remember, we have filter out partial part).
-                    /// So we can safely remove them from container since we don't need count in those parts.
-                    if (it != block_name_to_part.end())
-                        block_name_to_part.erase(it);
-                    else
-                        block_name_to_part.emplace(block_name, part_model);
+                    parts.emplace_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(merge_tree_storage, std::move(part_model))));
                 }
 
-                if (!block_name_to_part.empty())
+                if (!parts.empty())
                 {
-                    ret = *calculate_metrics_by_partition(block_name_to_part);
+                    ret = *calculate_metrics_by_partition(parts);
                 }
             },
             ProfileEvents::GetPartitionMetricsFromMetastoreSuccess,
@@ -4689,6 +5010,38 @@ namespace Catalog
             ProfileEvents::GetTopologiesFailed);
         return res;
     }
+
+    std::vector<std::shared_ptr<Protos::VersionedPartitions>> Catalog::getMvBaseTables(const String & uuid)
+    {
+        std::vector<std::shared_ptr<Protos::VersionedPartitions>> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getMvBaseTables(name_space, uuid); },
+            ProfileEvents::GetMvBaseTableIDSuccess,
+            ProfileEvents::GetMvBaseTableIDFailed);
+        return res;
+    }
+
+    BatchCommitRequest Catalog::constructMvMetaRequests(const String & uuid,
+        std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions)
+    {
+        return meta_proxy->constructMvMetaRequests(name_space, uuid, add_partitions, drop_partitions);
+    }
+
+    void Catalog::updateMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->updateMvMeta(name_space, uuid, versioned_partitions); },
+            ProfileEvents::UpdateMvMetaIDSuccess,
+            ProfileEvents::UpdateMvMetaIDFailed);
+    }
+    void Catalog::dropMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->dropMvMeta(name_space, uuid, versioned_partitions); },
+            ProfileEvents::UpdateMvMetaIDSuccess,
+            ProfileEvents::UpdateMvMetaIDFailed);
+    }
+
 
     std::vector<UInt64> Catalog::getTrashDBVersions(const String & database)
     {
@@ -5186,18 +5539,18 @@ namespace Catalog
         return res;
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false, execute_filter);
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true, execute_filter);
     }
 
     DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash)
+    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash, bool execute_filter)
     {
         DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
@@ -5226,8 +5579,11 @@ namespace Catalog
                     create_func,
                     ts);
 
-                /// filter out invisible bitmaps (uncommitted or invisible to current txn)
-                getVisibleBitmaps(res, ts, this);
+                if (execute_filter)
+                {
+                    /// filter out invisible bitmaps (uncommitted or invisible to current txn)
+                    getVisibleBitmaps(res, ts, this, nullptr);
+                }
             },
             ProfileEvents::GetDeleteBitmapsInPartitionsSuccess,
             ProfileEvents::GetDeleteBitmapsInPartitionsFailed);
@@ -5875,8 +6231,15 @@ namespace Catalog
             max_drop_size_one_batch);
 
         if (context.getPartCacheManager())
-            context.getPartCacheManager()->insertDataPartsIntoCache(*to_tbl,
-                commit_parts.parts(), false, false, target_host.topology_version);
+        {
+            context.getPartCacheManager()->insertDataPartsIntoCache(
+                *to_tbl, commit_parts.parts(), false, false, target_host.topology_version);
+            if (!bitmaps.empty())
+            {
+                context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
+                    *to_tbl, bitmaps, target_host.topology_version, commit_parts, &commit_staged_parts);
+            }
+        }
     }
 
     void Catalog::detachAttachedParts(
@@ -5945,11 +6308,17 @@ namespace Catalog
             }
         }
 
-        std::vector<String> attached_part_names;
+        std::vector<String> attached_part_names, attached_bitmap_names;
         attached_part_names.reserve(attached_parts.size());
         for (const auto & part : attached_parts)
         {
             attached_part_names.push_back(part->info.getPartName());
+        }
+
+        attached_bitmap_names.reserve(attached_bitmaps.size());
+        for (const auto & bitmap : attached_bitmaps)
+        {
+            attached_bitmap_names.push_back(dataModelName(*bitmap->getModel()));
         }
 
         std::vector<String> attached_staged_part_names;
@@ -5976,8 +6345,8 @@ namespace Catalog
             if (std::shared_ptr<MergeTreeMetaBase> storage = std::dynamic_pointer_cast<MergeTreeMetaBase>(from_tbl);
                 storage != nullptr)
             {
-                context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(),
-                    attached_part_names, storage->format_version);
+                context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(), attached_part_names, storage->format_version);
+                context.getPartCacheManager()->invalidDeleteBitmapCache(from_tbl->getStorageUUID(), attached_bitmap_names);
             }
             else
             {
@@ -6059,8 +6428,11 @@ namespace Catalog
         }
 
         if (context.getPartCacheManager())
-            context.getPartCacheManager()->insertDataPartsIntoCache(*tbl,
-                attached_parts.parts(), false, false, target_host.topology_version);
+        {
+            context.getPartCacheManager()->insertDataPartsIntoCache(
+                *tbl, attached_parts.parts(), false, false, target_host.topology_version);
+            /// No need change delete bitmap cache since we have only removed bitmaps in detach folder.
+        }
     }
 
     void Catalog::detachAttachedPartsRaw(
@@ -6129,8 +6501,8 @@ namespace Catalog
 
         if (context.getPartCacheManager())
         {
-            context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(),
-                attached_part_names, format_version);
+            context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(), attached_part_names, format_version);
+            context.getPartCacheManager()->invalidDeleteBitmapCache(from_tbl->getStorageUUID(), attached_bitmap_names);
         }
     }
 
@@ -6631,6 +7003,84 @@ namespace Catalog
     void Catalog::saveTableTrashItemsMetricsToMetastore(const String & table_uuid, const Protos::TableTrashItemsMetricsSnapshot & snapshot)
     {
         meta_proxy->updateTableTrashItemsSnapshot(name_space, table_uuid, snapshot.SerializeAsString());
+    }
+
+    String Catalog::getDictionaryBucketUpdateTimeKey(const StorageID & storage_id, Int64 bucket_number) const
+    {
+        return MetastoreProxy::dictionaryBucketUpdateTimeKey(name_space, toString(storage_id.uuid), bucket_number);
+    }
+
+    String Catalog::getByKey(const String & key)
+    {
+        String res;
+        runWithMetricSupport([&] { res = meta_proxy->getByKey(key); }, ProfileEvents::GetByKeySuccess, ProfileEvents::GetByKeyFailed);
+        return res;
+    }
+    std::vector<Protos::LastModificationTimeHint> Catalog::getLastModificationTimeHints(const ConstStoragePtr & table)
+    {
+        if (!table)
+        {
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, "Receive an empty table.");
+        }
+
+        /// if storage is hive, las, hudi, use hive meta store client to get partition last updated time (no cache)
+        if (auto * cnch_hive = const_cast<StorageCnchHive *>(dynamic_cast<const StorageCnchHive *>(table.get())))
+        {
+            StorageMetadataPtr metadata_snapshot = cnch_hive->getInMemoryMetadataPtr();
+            std::vector<std::pair<String, UInt64>> partition_modified_times
+                = cnch_hive->getPartitionLastModificationTime(metadata_snapshot);
+            std::vector<Protos::LastModificationTimeHint> result;
+            for ( const auto & part_modify_time : partition_modified_times)
+            {
+                Protos::LastModificationTimeHint hint = Protos::LastModificationTimeHint{};
+                hint.set_partition_id(part_modify_time.first);
+                hint.set_last_modification_time(part_modify_time.second);
+                result.push_back(std::move(hint));
+            }
+            return result;
+        }
+        const auto host_port = context.getCnchTopologyMaster()->getTargetServer(
+            UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), true);
+
+        if (!host_port.empty() && !isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort())))
+        {
+            try
+            {
+                auto ret = context.getCnchServerClientPool().get(host_port)->getLastModificationTimeHints(table->getStorageID());
+                return ret;
+            }
+            catch (...)
+            {
+                tryLogCurrentException(&Poco::Logger::get("Catalog::getLastModificationTimeHints"));
+            }
+        }
+
+        std::vector<Protos::LastModificationTimeHint> ret;
+
+        if (auto mgr = context.getPartCacheManager())
+            return mgr->getLastModificationTimeHints(table);
+
+        return ret;
+    }
+
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsImpl(
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts)
+    {
+        const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+        auto create_func = [&](const String &, const String & meta) -> DeleteBitmapMetaPtr {
+            DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
+            model_ptr->ParseFromString(meta);
+            if (ts.toUInt64() && model_ptr->has_commit_time() && TxnTimestamp{model_ptr->commit_time()} > ts)
+                return nullptr;
+            return std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr);
+        };
+
+        String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+        String meta_prefix = MetastoreProxy::deleteBitmapPrefix(name_space, uuid);
+
+        DeleteBitmapMetaPtrVector res
+            = getDataModelsByPartitions<DeleteBitmapMetaPtr>(storage, meta_prefix, required_partitions, full_partitions, create_func, ts);
+        return res;
     }
 }
 }

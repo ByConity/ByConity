@@ -227,7 +227,7 @@ QueryPlanStepPtr createMergeSortingStep()
 QueryPlanStepPtr createLimitStep()
 {
     DataStream stream = createDataStream();
-    return std::make_unique<LimitStep>(stream, 0, 0);
+    return std::make_unique<LimitStep>(stream, UInt64(0), UInt64(0));
 }
 
 QueryPlanStepPtr createLimitByStep()

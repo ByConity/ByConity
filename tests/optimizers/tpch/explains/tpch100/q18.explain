@@ -9,10 +9,10 @@ Projection Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 100
-            └─ Aggregating Est. 600328669 rows
+            └─ Aggregating Est. 593104506 rows
                │     Group by: {c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
-               └─ Inner (PARALLEL_HASH) Join Est. 600328669 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 593104506 rows
                   │     Condition: l_orderkey == l_orderkey_1
                   ├─ Repartition Exchange Est. 600037902 rows
                   │  │     Partition by: {l_orderkey}

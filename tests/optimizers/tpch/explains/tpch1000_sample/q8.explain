@@ -17,8 +17,9 @@ Projection Est. 729 rows
                         │     Expressions: [expr#multiply(l_extendedprice, minus(1, l_discount))], expr#multiIf(equals(nation, 'BRAZIL'), volume, 0):=multiIf(n_name = 'BRAZIL', `expr#multiply(l_extendedprice, minus(1, l_discount))`, 0), expr#toYear(o_orderdate):=toYear(o_orderdate)
                         └─ Projection Est. 12984583 rows
                            │     Expressions: [n_name, o_orderdate], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                           └─ Inner (PARALLEL_HASH) Join Est. 64922919 rows
+                           └─ Inner (PARALLEL_HASH) Join Est. 12984583 rows
                               │     Condition: l_suppkey == s_suppkey
+                              │     Runtime Filters Builder: {s_suppkey}
                               ├─ Repartition Exchange Est. 64922919 rows
                               │  │     Partition by: {l_suppkey}
                               │  └─ Inner (PARALLEL_HASH) Join Est. 64922919 rows
@@ -44,9 +45,9 @@ Projection Est. 729 rows
                               │     │           ├─ Repartition Exchange Est. 5999989709 rows
                               │     │           │  │     Partition by: {l_partkey}
                               │     │           │  └─ Filter Est. 5999989709 rows
-                              │     │           │     │     Condition: Runtime Filters: {l_partkey}
+                              │     │           │     │     Condition: Runtime Filters: {l_partkey, l_suppkey}
                               │     │           │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
-                              │     │           │              Where: Runtime Filters: {l_partkey}
+                              │     │           │              Where: Runtime Filters: {l_partkey, l_suppkey}
                               │     │           │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
                               │     │           └─ Repartition Exchange Est. 1331944 rows
                               │     │              │     Partition by: {p_partkey}
@@ -88,4 +89,4 @@ Projection Est. 729 rows
                                     └─ Broadcast Exchange Est. 25 rows
                                        └─ TableScan tpch1000_sample.nation Est. 25 rows
                                                 Outputs: [n_name], n_nationkey_1:=n_nationkey
-note: Runtime Filter is applied for 4 times.
+note: Runtime Filter is applied for 5 times.

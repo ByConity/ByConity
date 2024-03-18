@@ -216,14 +216,14 @@ void ResourceManagerClient::getAllVirtualWarehouses(std::vector<VirtualWarehouse
 }
 
 void ResourceManagerClient::createWorkerGroup(
-    [[maybe_unused]] const String & worker_group_id, bool if_not_exists, const String & vw_name, const WorkerGroupData & worker_group_data)
+    [[maybe_unused]] const String & worker_group_id, const String & vw_name, const WorkerGroupData & worker_group_data)
 {
     brpc::Controller cntl;
     Protos::CreateWorkerGroupReq request;
     Protos::CreateWorkerGroupResp response;
-    auto rpc_func = [this, &cntl, &request, &response, &vw_name, &worker_group_data, if_not_exists](std::unique_ptr<Stub> & stub_)
+    auto rpc_func = [this, &cntl, &request, &response, &vw_name, &worker_group_data](std::unique_ptr<Stub> & stub_)
 	{
-        request.set_if_not_exists(if_not_exists);
+        request.set_if_not_exists(false);
         worker_group_data.fillProto(*request.mutable_worker_group_data(), false, false);
         request.set_vw_name(vw_name);
 

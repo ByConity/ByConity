@@ -35,6 +35,7 @@
 #include <DataTypes/ObjectUtils.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/CnchRefreshMaterializedViewThread.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/DedupWorkerStatus.h>
@@ -339,6 +340,7 @@ void CnchServerServiceImpl::commitTransaction(
             }
         });
 }
+
 void CnchServerServiceImpl::precommitTransaction(
     google::protobuf::RpcController * /*cntl*/,
     const Protos::PrecommitTransactionReq * request,
@@ -581,10 +583,59 @@ void CnchServerServiceImpl::fetchDataParts(
                 partition_list.emplace_back(partition);
 
             auto parts = gc->getCnchCatalog()->getServerDataPartsInPartitions(
-                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr);
+                storage,
+                partition_list,
+                TxnTimestamp{request->timestamp()},
+                nullptr,
+                /*visibility=*/Catalog::VisibilityLevel::All,
+                /*execute_filter=*/false);
             auto & mutable_parts = *response->mutable_parts();
             for (const auto & part : parts)
                 *mutable_parts.Add() = part->part_model();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::fetchDeleteBitmaps(
+    ::google::protobuf::RpcController *,
+    const ::DB::Protos::FetchDeleteBitmapsReq * request,
+    ::DB::Protos::FetchDeleteBitmapsResp * response,
+    ::google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            StoragePtr storage
+                = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(), TxnTimestamp{request->table_commit_time()});
+
+            auto calculated_host
+                = gc->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true).getRPCAddress();
+            if (request->remote_host() != calculated_host)
+                throw Exception(
+                    "Fetch parts failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()
+                        + ", calculated_host: " + calculated_host,
+                    ErrorCodes::LOGICAL_ERROR);
+
+            if (!isLocalServer(calculated_host, std::to_string(gc->getRPCPort())))
+                throw Exception(
+                    "Fetch parts failed because calculated host (" + calculated_host + ") is not remote server.",
+                    ErrorCodes::LOGICAL_ERROR);
+
+            Strings partition_list;
+            for (const auto & partition : request->partitions())
+                partition_list.emplace_back(partition);
+
+            auto bitmaps = gc->getCnchCatalog()->getDeleteBitmapsInPartitions(
+                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, /*execute_filter=*/false);
+            auto & mutable_parts = *response->mutable_delete_bitmaps();
+            for (const auto & bitmap : bitmaps)
+                *mutable_parts.Add() = *bitmap->getModel();
         }
         catch (...)
         {
@@ -626,6 +677,7 @@ void CnchServerServiceImpl::fetchPartitions(
                 column_names.push_back(name);
             SelectQueryInfo query_info;
             auto session_context = Context::createCopy(gc);
+            session_context->setCurrentDatabase(request->database());
             auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(session_context, storage, request->predicate(), query_info);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
@@ -1561,6 +1613,29 @@ void CnchServerServiceImpl::reportSyncFailedForSyncThread(
 }
 #endif
 
+void CnchServerServiceImpl::handleRefreshTaskOnFinish(
+    google::protobuf::RpcController *,
+    const Protos::handleRefreshTaskOnFinishReq * request,
+    Protos::handleRefreshTaskOnFinishResp * response,
+    google::protobuf::Closure *done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto storage_id = RPCHelpers::createStorageID(request->mv_storage_id());
+        auto bg_thread = getContext()->getCnchBGThread(CnchBGThreadType::CnchRefreshMaterializedView, storage_id);
+
+        auto * mv_refresh_thread = dynamic_cast<CnchRefreshMaterializedViewThread *>(bg_thread.get());
+        mv_refresh_thread->handleRefreshTaskOnFinish(request->task_id(), request->txn_id());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
 void CnchServerServiceImpl::executeOptimize(
     google::protobuf::RpcController *,
     const Protos::ExecuteOptimizeQueryReq * request,
@@ -1571,7 +1646,7 @@ void CnchServerServiceImpl::executeOptimize(
         done,
         response,
         [request = request, response = response, done = done, global_context = getContext(), log = log] {
-            
+
             brpc::ClosureGuard done_guard(done);
             try
             {
@@ -1630,6 +1705,32 @@ void CnchServerServiceImpl::forceRecalculateMetrics(
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
         RPCHelpers::handleException(response->mutable_exception());
     }
+}
+
+void CnchServerServiceImpl::getLastModificationTimeHints(
+    google::protobuf::RpcController *,
+    const Protos::getLastModificationTimeHintsReq * request,
+    Protos::getLastModificationTimeHintsResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+
+            auto istorage = gc->getCnchCatalog()->getTable(*gc, storage_id.database_name, storage_id.table_name);
+
+            std::vector<Protos::LastModificationTimeHint> hints = gc->getCnchCatalog()->getLastModificationTimeHints(istorage);
+
+            *response->mutable_last_modification_time_hints() = {hints.begin(), hints.end()};
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
 }
 
 void CnchServerServiceImpl::notifyAccessEntityChange(

@@ -349,7 +349,7 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
 static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
 {
     auto range = PlanNodeCardinality::extractCardinality(*node);
-    return range.upperBound > limit.getLimit() + limit.getOffset();
+    return !limit.hasPreparedParam() && range.upperBound > limit.getLimitValue() + limit.getOffsetValue();
 }
 
 PatternPtr PushPartialLimitThroughExchange::getPattern() const
@@ -372,8 +372,8 @@ TransformResult PushPartialLimitThroughExchange::transformImpl(PlanNodePtr node,
         {
             auto partial_limit = std::make_unique<LimitStep>(
                 exchange_child->getStep()->getOutputStream(),
-                step->getLimit() + step->getOffset(),
-                0,
+                step->getLimitValue() + step->getOffsetValue(),
+                size_t{0},
                 false,
                 false,
                 step->getSortDescription(),

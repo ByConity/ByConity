@@ -83,7 +83,7 @@ std::shared_ptr<ProjectionStep> ProjectionStep::fromProto(const Protos::Projecti
 
 std::shared_ptr<IQueryPlanStep> ProjectionStep::copy(ContextPtr) const
 {
-    return std::make_shared<ProjectionStep>(input_streams[0], assignments, name_to_type, final_project, index_project, hints);
+    return std::make_shared<ProjectionStep>(input_streams[0], assignments.copy(), name_to_type, final_project, index_project, hints);
 }
 
 ActionsDAGPtr ProjectionStep::createActions(ContextPtr context) const
@@ -112,4 +112,9 @@ ActionsDAGPtr ProjectionStep::createActions(const Assignments & assignments, con
     return createExpressionActions(context, source, output, expr_list);
 }
 
+void ProjectionStep::prepare(const PreparedStatementContext & prepared_context)
+{
+    for (auto & assign : assignments)
+        prepared_context.prepare(assign.second);
+}
 }

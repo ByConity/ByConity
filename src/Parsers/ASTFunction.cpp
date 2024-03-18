@@ -660,6 +660,17 @@ ASTPtr ASTFunction::deserialize(ReadBuffer & buf)
     return function;
 }
 
+std::shared_ptr<ASTFunction> ASTFunction::makeASTFunctionWithVectorArgs(const DB::String &name, std::vector<ASTPtr> &&args)
+{
+    auto function = std::make_shared<ASTFunction>();
+    function->name = name;
+    function->arguments = std::make_shared<ASTExpressionList>();
+    function->children.push_back(function->arguments);
+    function->arguments->children = std::move(args);
+
+    return function;
+}
+
 String getFunctionName(const IAST * ast)
 {
     String res;

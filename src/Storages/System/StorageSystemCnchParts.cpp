@@ -77,6 +77,7 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
         /// useful for getting raw value for debug
         {"commit_ts", std::make_shared<DataTypeUInt64>()},
         {"end_ts", std::make_shared<DataTypeUInt64>()},
+        {"last_modification_time", std::make_shared<DataTypeDateTime>()},
     };
 }
 
@@ -245,6 +246,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 res_columns[col_num++]->insert(curr_part->get_uuid());
                 res_columns[col_num++]->insert(curr_part->getCommitTime());
                 res_columns[col_num++]->insert(curr_part->getEndTime());
+                res_columns[col_num++]->insert(TxnTimestamp(curr_part->getLastModificationTime()).toSecond());
 
                 if (type == PartType::VisiblePart)
                     type = PartType::InvisiblePart;

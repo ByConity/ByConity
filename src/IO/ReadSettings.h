@@ -112,6 +112,8 @@ struct ReadSettings
     size_t parquet_decode_threads = 48;
 
     size_t filtered_ratio_to_use_skip_read = 0;
+    /// Monitoring
+    bool for_disk_s3 = false; // to choose which profile events should be incremented
 };
 
 }

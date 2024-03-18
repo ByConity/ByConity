@@ -201,6 +201,7 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     table_definition_hash = storage.getTableHashForClusterBy();
     columns_commit_time = local_part.columns_commit_time;
     mutation_commit_time = local_part.mutation_commit_time;
+    last_modification_time = local_part.last_modification_time;
     min_unique_key = local_part.min_unique_key;
     max_unique_key = local_part.max_unique_key;
     /// TODO:
@@ -628,8 +629,6 @@ MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFoo
 {
     const String data_file_path = fs::path(getFullRelativePath()) / DATA_FILE;
     size_t data_file_size = volume->getDisk()->getFileSize(data_file_path);
-    if (!volume->getDisk()->exists(data_file_path))
-        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No data file of part {} under path {}", name, data_file_path);
 
     auto data_file = openForReading(volume->getDisk(), data_file_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
 
@@ -1135,11 +1134,11 @@ void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
     try
     {
         disk->removeFile(path_on_disk / "data");
-        disk->removeDirectory(path_on_disk);
+        if (disk->getType() != DiskType::Type::ByteS3) disk->removeDirectory(path_on_disk);
     }
     catch (...)
     {
-        if (!disk->exists(path_on_disk)) {
+        if (!disk->fileExists(path_on_disk / "data")) {
             /// Early exit if the part has already been deleted.
             LOG_TRACE(storage.log, "the Part {} has already been removed.", fullPath(disk, path_on_disk));
             return;
@@ -1216,7 +1215,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     }
 
     String part_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    if (!volume->getDisk()->exists(part_path))
+    if (!volume->getDisk()->fileExists(part_path))
     {
         LOG_WARNING(storage.log, "Can't find {} when preload level: {} before caching", full_path + DATA_FILE, preload_level);
         return;
@@ -1311,14 +1310,6 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     }
 
     pool.scheduleOrThrowOnError([this, part_path, full_path, level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
-        if (!volume->getDisk()->exists(part_path))
-        {
-            LOG_WARNING(storage.log, "Can't find {} when preload level: {} on caching", full_path + DATA_FILE, level);
-            if (cb)
-                cb("Can't find part file!", 0);
-            return;
-        }
-
         String last_exception{};
         int real_cache_segments_count = 0;
 

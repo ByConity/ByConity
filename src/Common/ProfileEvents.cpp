@@ -332,11 +332,29 @@
     M(S3WriteRequestsThrottling, "Number of 429 and 503 errors in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(S3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to S3 storage.") \
 \
+    M(S3DeleteObjects, "Number of S3 API DeleteObject(s) calls.") \
+    M(S3CopyObject, "Number of S3 API CopyObject calls.") \
+    M(S3ListObjects, "Number of S3 API ListObjects calls.") \
+    M(S3HeadObject,  "Number of S3 API HeadObject calls.") \
     M(S3CreateMultipartUpload, "Number of S3 API CreateMultipartUpload calls.") \
+    M(S3UploadPartCopy, "Number of S3 API UploadPartCopy calls.") \
     M(S3UploadPart, "Number of S3 API UploadPart calls.") \
     M(S3AbortMultipartUpload, "Number of S3 API AbortMultipartUpload calls.") \
     M(S3CompleteMultipartUpload, "Number of S3 API CompleteMultipartUpload calls.") \
     M(S3PutObject, "Number of S3 API PutObject calls.") \
+    M(S3GetObject, "Number of S3 API GetObject calls.") \
+\
+    M(DiskS3DeleteObjects, "Number of DiskS3 API DeleteObject(s) calls.") \
+    M(DiskS3CopyObject, "Number of DiskS3 API CopyObject calls.") \
+    M(DiskS3ListObjects, "Number of DiskS3 API ListObjects calls.") \
+    M(DiskS3HeadObject,  "Number of DiskS3 API HeadObject calls.") \
+    M(DiskS3CreateMultipartUpload, "Number of DiskS3 API CreateMultipartUpload calls.") \
+    M(DiskS3UploadPartCopy, "Number of DiskS3 API UploadPartCopy calls.") \
+    M(DiskS3UploadPart, "Number of DiskS3 API UploadPart calls.") \
+    M(DiskS3AbortMultipartUpload, "Number of DiskS3 API AbortMultipartUpload calls.") \
+    M(DiskS3CompleteMultipartUpload, "Number of DiskS3 API CompleteMultipartUpload calls.") \
+    M(DiskS3PutObject, "Number of DiskS3 API PutObject calls.") \
+    M(DiskS3GetObject, "Number of DiskS3 API GetObject calls.") \
 \
     M(QueryMemoryLimitExceeded, "Number of times when memory limit exceeded for query.") \
     M(MarkBitmapIndexReadMicroseconds, "Total time spent in reading mark bitmap index.") \
@@ -534,6 +552,8 @@
     M(GetStagedPartsFailed, "") \
     M(GetDeleteBitmapsInPartitionsSuccess, "") \
     M(GetDeleteBitmapsInPartitionsFailed, "") \
+    M(GetDeleteBitmapsFromCacheInPartitionsSuccess, "") \
+    M(GetDeleteBitmapsFromCacheInPartitionsFailed, "") \
     M(GetDeleteBitmapByKeysSuccess, "") \
     M(GetDeleteBitmapByKeysFailed, "") \
     M(AddDeleteBitmapsSuccess, "") \
@@ -816,6 +836,10 @@
     M(DropMaskingPoliciesFailed, "") \
     M(IsHostServerSuccess, "") \
     M(IsHostServerFailed, "") \
+    M(CnchDataPartCacheHits, "")\
+    M(CnchDataPartCacheMisses, "")\
+    M(CnchDataDeleteBitmapCacheHits, "")\
+    M(CnchDataDeleteBitmapCacheMisses, "")\
     M(CnchReadSizeFromDiskCache, "") \
     M(CnchReadSizeFromRemote, "") \
     M(CnchReadDataMicroSeconds,"") \
@@ -1012,12 +1036,15 @@
     M(GinIndexCacheHit, "Cache hit of gin index") \
     M(GinIndexCacheMiss, "Cache miss of gin index") \
     M(PostingReadBytes, "Readed postings list size in bytes") \
-\
     M(QueryRewriterTime, "Total elapsed time spent on QueryRewriter in milliseconds") \
     M(QueryAnalyzerTime, "Total elapsed time spent on QueryAnalyzer in milliseconds") \
     M(QueryPlannerTime, "Total elapsed time spent on QueryPlanner in milliseconds") \
     M(QueryOptimizerTime, "Total elapsed time spent on QueryOptimizer in milliseconds") \
-    M(PlanSegmentSplitterTime, "Total elapsed time spent on PlanSegmentSplitter in milliseconds")
+    M(PlanSegmentSplitterTime, "Total elapsed time spent on PlanSegmentSplitter in milliseconds") \
+    M(GetMvBaseTableIDSuccess, "") \
+    M(GetMvBaseTableIDFailed, "") \
+    M(UpdateMvMetaIDSuccess, "") \
+    M(UpdateMvMetaIDFailed, "")
 
 namespace ProfileEvents
 {

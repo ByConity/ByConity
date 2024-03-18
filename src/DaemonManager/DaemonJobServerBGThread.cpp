@@ -21,6 +21,7 @@
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
+#include <Storages/StorageMaterializedView.h>
 #include <CloudServices/CnchServerClientPool.h>
 #include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -1018,7 +1019,7 @@ void DaemonJobForMergeMutate::executeOptimize(const StorageID & storage_id, cons
 
     auto info = bg_ptr->getBGJobInfo();
 
-    if (info.status != CnchBGThreadStatus::Running)
+    if (info.status != CnchBGThreadStatus::Running && info.status != CnchBGThreadStatus::Stopped)
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
@@ -1142,6 +1143,11 @@ bool isCnchUniqueTableAndNeedDedup(const StorageTrait & storage_trait, const Sto
     return storage_trait.isCnchUniqueAndNeedDedup();
 }
 
+bool isCnchRefreshMaterializedView(const StorageTrait & storage_trait, const StorageID &, const ContextPtr & )
+{
+    return storage_trait.isCnchRefreshMaterializedView();
+}
+
 void registerServerBGThreads(DaemonFactory & factory)
 {
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::PartGC, isCnchMergeTree>>("PART_GC");
@@ -1151,6 +1157,7 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::DedupWorker, isCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::ObjectSchemaAssemble, isCnchMergeTree>>("OBJECT_SCHEMA_ASSEMBLE");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::MaterializedMySQL, isMaterializedMySQL>>("MATERIALIZED_MYSQL");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::CnchRefreshMaterializedView, isCnchRefreshMaterializedView>>("CNCH_REFRESH_MATERIALIZED_VIEW");
 }
 
 void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
@@ -1211,13 +1218,15 @@ void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
 
 StorageTrait::StorageTrait(StorageTrait::Param param)
 {
-    std::bitset<3> bs;
+    std::bitset<4> bs;
     if (param.is_cnch_merge_tree)
         bs.set(0);
     if (param.is_cnch_kafka)
         bs.set(1);
     if (param.is_cnch_unique)
         bs.set(2);
+    if (param.is_cnch_refresh_materialized_view)
+        bs.set(3);
 
     data = bs;
 }
@@ -1228,7 +1237,8 @@ StorageTrait constructStorageTrait(StoragePtr storage)
         return StorageTrait{StorageTrait::Param {
                 .is_cnch_merge_tree = false,
                 .is_cnch_kafka = true,
-                .is_cnch_unique = false
+                .is_cnch_unique = false,
+                .is_cnch_refresh_materialized_view = false
             }};
 
     StorageCnchMergeTree * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
@@ -1239,7 +1249,8 @@ StorageTrait constructStorageTrait(StoragePtr storage)
             return StorageTrait{StorageTrait::Param {
                     .is_cnch_merge_tree = true,
                     .is_cnch_kafka = false,
-                    .is_cnch_unique = true
+                    .is_cnch_unique = true,
+                    .is_cnch_refresh_materialized_view = false
                 }};
         }
         else
@@ -1247,7 +1258,22 @@ StorageTrait constructStorageTrait(StoragePtr storage)
             return StorageTrait{StorageTrait::Param {
                     .is_cnch_merge_tree = true,
                     .is_cnch_kafka = false,
-                    .is_cnch_unique = false
+                    .is_cnch_unique = false,
+                    .is_cnch_refresh_materialized_view = false
+                }};
+        }
+    }
+
+    StorageMaterializedView * materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get());
+    if (materialized_view)
+    {
+        if (materialized_view->async())
+        {
+            return StorageTrait{StorageTrait::Param {
+                    .is_cnch_merge_tree = false,
+                    .is_cnch_kafka = false,
+                    .is_cnch_unique = false,
+                    .is_cnch_refresh_materialized_view = true
                 }};
         }
     }
@@ -1255,7 +1281,8 @@ StorageTrait constructStorageTrait(StoragePtr storage)
     return StorageTrait{StorageTrait::Param {
             .is_cnch_merge_tree = false,
             .is_cnch_kafka = false,
-            .is_cnch_unique = false
+            .is_cnch_unique = false,
+            .is_cnch_refresh_materialized_view = false
         }};
 }
 
@@ -1270,7 +1297,8 @@ StorageTrait constructStorageTrait(ContextMutablePtr context, const String & db,
         return StorageTrait{StorageTrait::Param {
                 .is_cnch_merge_tree = false,
                 .is_cnch_kafka = false,
-                .is_cnch_unique = false
+                .is_cnch_unique = false,
+                .is_cnch_refresh_materialized_view = false
             }};
 
     StoragePtr storage_ptr = Catalog::CatalogFactory::getTableByDefinition(

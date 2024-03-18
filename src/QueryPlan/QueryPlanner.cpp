@@ -34,6 +34,7 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/AggregatingStep.h>
@@ -103,6 +104,12 @@ public:
     RelationPlan visitASTSelectQuery(ASTPtr & node, const Void &) override;
     RelationPlan visitASTSubquery(ASTPtr & node, const Void &) override;
     RelationPlan visitASTExplainQuery(ASTPtr & node, const Void &) override;
+    RelationPlan visitASTCreatePreparedStatementQuery(ASTPtr & node, const Void &) override
+    {
+        auto & prepare = node->as<ASTCreatePreparedStatementQuery &>();
+        auto query = prepare.getQuery();
+        return process(query);
+    }
 
     RelationPlan process(ASTPtr & node) { return ASTVisitorUtil::accept(node, *this, {}); }
 
@@ -287,7 +294,7 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
     auto select_plan = process(insert_query.select);
     select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context));
 
-    auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns);
+    auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns, node);
 
     auto insert_node = select_plan.getRoot()->addStep(
         context->nextNodeId(),
@@ -302,7 +309,7 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
 
     auto return_node = PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol),
+        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol, node),
         {insert_node});
 
     PRINT_PLAN(return_node, plan_insert);

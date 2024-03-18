@@ -618,6 +618,16 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY SETTING " << (settings.hilite ? hilite_none : "");
         settings_changes->formatImpl(settings, state, frame);
     }
+    else if (type == ASTAlterCommand::RENAME_TABLE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "RENAME " << (settings.hilite ? hilite_none : "");
+        rename_table_to->formatImpl(settings, state, frame);
+    }
+    // else if (type == ASTAlterCommand::PARTITION_BY)
+    // {
+    //     settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "PARTITION BY" << (settings.hilite ? hilite_none : "");
+    //     partition_by->formatImpl(settings, state, frame);
+    // }
     else
         throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 }

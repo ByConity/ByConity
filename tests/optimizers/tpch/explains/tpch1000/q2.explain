@@ -9,7 +9,7 @@ Projection Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, p_partkey ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner (PARALLEL_HASH) Join Est. 2877201 rows
+            └─ Inner (PARALLEL_HASH) Join Est. 2301760 rows
                │     Condition: p_partkey == ps_partkey
                │     Runtime Filters Builder: {ps_partkey}
                ├─ Repartition Exchange Est. 3596502 rows
@@ -21,7 +21,7 @@ Projection Est. 100 rows
                │              Outputs: [p_partkey, p_mfgr, p_type, p_size]
                └─ Repartition Exchange Est. 2877201 rows
                   │     Partition by: {ps_partkey}
-                  └─ Inner Join Est. 2301760 rows
+                  └─ Inner Join Est. 2877201 rows
                      │     Condition: ps_suppkey == s_suppkey
                      │     Runtime Filters Builder: {s_suppkey}
                      ├─ Repartition Exchange Est. 11508806 rows
@@ -44,7 +44,7 @@ Projection Est. 100 rows
                      │              │     Aggregates: expr#min(ps_supplycost):=AggNull(minIf)(ps_supplycost_1,build_side_non_null_symbol)
                      │              └─ Projection Est. 3596502 rows
                      │                 │     Expressions: [ps_partkey_1, ps_supplycost_1], build_side_non_null_symbol:=1
-                     │                 └─ Inner Join Est. 2877200 rows
+                     │                 └─ Inner Join Est. 3596502 rows
                      │                    │     Condition: ps_suppkey_1 == s_suppkey_1
                      │                    │     Runtime Filters Builder: {s_suppkey_1}
                      │                    ├─ Repartition Exchange Est. 14386008 rows

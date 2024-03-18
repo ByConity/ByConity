@@ -235,7 +235,7 @@ bool Group::setExpressionCost(const WinnerPtr & expr, const Property & property)
         return true;
     }
 
-    if (it->second->getCost() > expr->getCost() + 1e-2)
+    if (it->second->getCost() > expr->getCost() + 1e-5)
     {
         // this is lower cost
         lowest_cost_expressions[property] = expr;

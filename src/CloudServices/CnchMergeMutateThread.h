@@ -230,6 +230,17 @@ private:
     std::mutex currently_synchronous_tasks_mutex;
     NameSet currently_synchronous_tasks;
 
+    /// There are some other operations may be conflict with merge. 
+    /// 1. DROP PARTITION - get the current max block id and generate a DropRange part. 
+    ///    Need to cancel merge tasks before getting data parts.
+    /// 2. INGEST PARTITION - generate new content based on current source parts.
+    ///    Need to cancel merge tasks and suspend the merge process before INGEST PARTITION finish.
+    /// 3. INSERT OVERWRITE - need to generate a DropRange part to invalid old parts.
+    /// When finishing task, the task record is removed from task_records first. And then do commit_parts.
+    /// It means we can't cancel the commit phase once the task is removed from task_records. So we must wait those committing tasks finish.
+    std::mutex committing_tasks_mutex;
+    NameSet committing_tasks;
+
     std::mutex task_records_mutex;
     std::unordered_map<String, TaskRecordPtr> task_records;
 

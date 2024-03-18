@@ -1352,10 +1352,8 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     {
         details << "Runtime Filters \\n";
         for (const auto & runtime_filter : step.getRuntimeFilterBuilders())
-            details << runtime_filter.first << ": "
-                << runtime_filter.second.id << " "
-                << (runtime_filter.second.distribution == RuntimeFilterDistribution::Distributed ? "Distributed " : "Local ")
-                <<"\\n";
+            details << runtime_filter.first << ": " << runtime_filter.second.id << " "
+                    << distributionToString(runtime_filter.second.distribution) << "\\n";
         details << "|";
     }
 
@@ -1816,15 +1814,19 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
 
     if (step.getQueryInfo().input_order_info)
     {
-        const auto & prefix_descs = step.getQueryInfo().input_order_info->order_key_prefix_descr;
+        const auto & input_order_info = step.getQueryInfo().input_order_info;
+        details << "Input Order Info: \\n";
+        const auto & prefix_descs = input_order_info->order_key_prefix_descr;
         if (!prefix_descs.empty())
         {
-            details << "prefix desc";
+            details << "prefix desc:  \\n";
             for (const auto & desc : prefix_descs)
             {
                 details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
             }
         }
+        details << "direction: " << input_order_info->direction << "\\n";
+
         details << "|";
     }
 
@@ -1963,11 +1965,8 @@ String StepPrinter::printValuesStep(const ValuesStep & step)
 String StepPrinter::printLimitStep(const LimitStep & step)
 {
     std::stringstream details;
-    auto limit = step.getLimit();
-    auto offset = step.getOffset();
-    details << "Limit:" << limit << "|";
-    details << "Offset:" << offset;
-    details << "|";
+    std::visit([&](const auto & v) { details << "Limit:" << v << "|"; }, step.getLimit());
+    std::visit([&](const auto & v) { details << "Offset:" << v << "|"; }, step.getOffset());
     details << "Output\\n";
     for (const auto & column : step.getOutputStream().header)
     {
@@ -2054,7 +2053,7 @@ String StepPrinter::printSortingStep(const SortingStep & step)
         }
     }
     details << "|";
-    details << "Limit: " << step.getLimit();
+    details << "Limit: " << step.getLimitValue();
     if (step.getStage() == SortingStep::Stage::FULL)
     {
         details << "|";
@@ -3549,6 +3548,15 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
         out << "<TR><TD COLSPAN=\"3\">" << dynamic_cast<const FilterStep *>(head_step)->getFilterColumnName() << "</TD></TR>";
     }
 
+    // if (group.getEquivalences())
+    // {
+    //     out << R"(<TR><TD COLSPAN="3">Equivalences:<BR/>)";
+    //     auto map = group.getEquivalences()->representMap();
+    //     for (const auto & item : map)
+    //         out << item.first << ":=" << item.second << "<BR/>";
+    //     out << "</TD></TR>";
+    // }
+
     if (group.isJoinRoot())
     {
         out << "<TR><TD COLSPAN=\"3\">JoinRoot</TD></TR>";
@@ -3613,25 +3621,31 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
     // winners
 
     auto partition_str = [&](const Partitioning & partitioning) {
+        auto component_str = " ANY";
+        if (partitioning.getComponent() == Partitioning::Component::COORDINATOR)
+            component_str = " COORDINATOR";
+        else if (partitioning.getComponent() == Partitioning::Component::WORKER)
+            component_str = " WORKER";
+
         if (partitioning.getPartitioningHandle() == Partitioning::Handle::SINGLE)
-            return String("SINGLE");
+            return String("SINGLE") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_BROADCAST)
-            return String("BROADCAST");
+            return String("BROADCAST") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
-            return String("ARBITRARY");
+            return String("ARBITRARY") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE)
-            return String("BUCKET_TABLE");
+            return String("BUCKET_TABLE") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_ARBITRARY)
-            return String("FIXED_ARBITRARY");
+            return String("FIXED_ARBITRARY") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_HASH)
         {
             if (partitioning.getPartitioningColumns().empty())
             {
-                return String("[]");
+                return String("FIXED_HASH[]") + component_str;
             }
             else
             {
-                auto result = String("[")
+                auto result = String("FIXED_HASH[")
                     + std::accumulate(
                                   std::next(partitioning.getPartitioningColumns().begin()),
                                   partitioning.getPartitioningColumns().end(),
@@ -3646,11 +3660,11 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
                 {
                     result += " handle";
                 }
-                return result;
+                return result + component_str;
             }
         }
         else
-            return String("UNKNOWN");
+            return String("UNKNOWN") + component_str;
     };
     auto property_str = [&](const Property & property) {
         std::stringstream ss;
@@ -3708,7 +3722,7 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
             out << "\n";
 
             out << join(
-                winner->getRequireChildren(), [&](const auto & item) { return property_str(item); }, ", ", "child: ")
+                winner->getRequireChildren(), [&](const auto & item) { return property_str(item); }, ", ", "child required: ")
                 << "\n";
             if (is_winner)
                 out << "</B>";

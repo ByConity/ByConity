@@ -1,0 +1,50 @@
+----- Single partition insert overwrite select
+1	1
+2	4
+----- Single partition insert overwrite values
+1	1
+2	6
+----- Multiple partitions insert overwrite select
+1	1
+2	2
+1	11
+2	22
+----- Non-exist partition insert overwrite select
+1	1
+2	2
+1	11
+2	22
+3	33
+----- Single partition insert overwrite select with illegal partition
+1	1
+2	4
+----- Single partition insert overwrite values
+1	1
+2	6
+----- Multiple partitions insert overwrite select with illegal partition
+1	1
+2	2
+3	6
+----- Multiple partitions insert overwrite select with illegal partition
+1	1
+3	3
+2	4
+----- Insert overwrite whole table select
+1	1
+2	2
+3	6
+4	8
+----- Insert overwrite whole table values
+1	11
+2	22
+----- Multiple partition by columns insert overwrite select with illegal partition
+1	1	1
+2	2	2
+----- Multiple partition by columns insert overwrite select with illegal partition for unique table
+1	1	1
+2	2	2
+----- Multiple partition by columns insert overwrite select with illegal partition and specified columns
+1	1	1	0
+2	2	4	4
+----- Multiple partition by columns insert overwrite select with materialized view rewrite
+1	2024-03-08 11:00:00	2024-03-08

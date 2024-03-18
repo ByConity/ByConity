@@ -19,6 +19,7 @@ Projection
                            │     Expressions: [n_name, o_orderdate], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
                            └─ Inner (PARALLEL_HASH) Join
                               │     Condition: l_suppkey == s_suppkey
+                              │     Runtime Filters Builder: {s_suppkey}
                               ├─ Repartition Exchange
                               │  │     Partition by: {l_suppkey}
                               │  └─ Inner (PARALLEL_HASH) Join
@@ -44,9 +45,9 @@ Projection
                               │     │           ├─ Repartition Exchange
                               │     │           │  │     Partition by: {l_partkey}
                               │     │           │  └─ Filter
-                              │     │           │     │     Condition: Runtime Filters: {l_partkey}
+                              │     │           │     │     Condition: Runtime Filters: {l_partkey, l_suppkey}
                               │     │           │     └─ TableScan tpch1000.lineitem
-                              │     │           │              Where: Runtime Filters: {l_partkey}
+                              │     │           │              Where: Runtime Filters: {l_partkey, l_suppkey}
                               │     │           │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
                               │     │           └─ Repartition Exchange
                               │     │              │     Partition by: {p_partkey}
@@ -88,4 +89,4 @@ Projection
                                     └─ Broadcast Exchange
                                        └─ TableScan tpch1000.nation
                                                 Outputs: [n_name], n_nationkey_1:=n_nationkey
-note: Runtime Filter is applied for 4 times.
+note: Runtime Filter is applied for 5 times.

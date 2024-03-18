@@ -87,6 +87,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.import_nested_json = settings.input_format_import_nested_json;
     format_settings.input_allow_errors_num = settings.input_format_allow_errors_num;
     format_settings.input_allow_errors_ratio = settings.input_format_allow_errors_ratio;
+    format_settings.json.read_objects_as_strings = settings.input_format_json_read_objects_as_strings;
     format_settings.json.array_of_rows = settings.output_format_json_array_of_rows;
     format_settings.json.escape_forward_slashes = settings.output_format_json_escape_forward_slashes;
     format_settings.json.named_tuples_as_objects = settings.output_format_json_named_tuples_as_objects;
@@ -335,6 +336,7 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
     WriteBuffer & buf,
     const Block & sample,
     ContextPtr context,
+    bool out_to_directory,
     WriteCallback callback,
     const std::optional<FormatSettings> & _format_settings) const
 {
@@ -346,7 +348,8 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
 
     const Settings & settings = context->getSettingsRef();
 
-    if (settings.output_format_parallel_formatting && getCreators(name).supports_parallel_formatting
+    if (!out_to_directory && settings.output_format_parallel_formatting
+        && getCreators(name).supports_parallel_formatting
         && !settings.output_format_json_array_of_rows)
     {
         auto formatter_creator = [output_getter, sample, callback, format_settings]

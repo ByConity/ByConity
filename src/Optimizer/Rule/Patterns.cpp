@@ -7,7 +7,7 @@ namespace DB::Patterns
 PatternBuilder topN()
 {
     auto result = typeOf(IQueryPlanStep::Type::Sorting);
-    result.matchingStep<SortingStep>([&](const SortingStep & s) { return s.getLimit() != 0; });
+    result.matchingStep<SortingStep>([&](const SortingStep & s) { return !s.hasPreparedParam() && s.getLimitValue() != 0; });
     return result;
 }
 PatternBuilder & PatternBuilder::capturedAs(const Capture & capture)

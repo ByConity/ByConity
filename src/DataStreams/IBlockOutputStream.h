@@ -65,14 +65,8 @@ public:
       */
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
-    void setBuffer(std::shared_ptr<WriteBuffer> buffer) {
-        this->buffer_ = buffer;
-    }
-
 private:
     std::vector<TableLockHolder> table_locks;
-    // Used to ensure buffer's life cycle is as long as this class
-    std::shared_ptr<WriteBuffer> buffer_;
 };
 
 }

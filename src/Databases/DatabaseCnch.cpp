@@ -20,6 +20,7 @@
 #include <Catalog/CatalogFactory.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
@@ -47,35 +48,36 @@ namespace ErrorCodes
 
 namespace
 {
-    String getObjectDefinitionFromCreateQueryForCnch(const ASTPtr & query)
-    {
-        ASTPtr query_clone = query->clone();
-        auto & create = query_clone->as<ASTCreateQuery &>();
 
-        /// We remove everything that is not needed for ATTACH from the query.
-        create.attach = false;
-        create.as_database.clear();
-        create.as_table.clear();
-        create.if_not_exists = false;
-        create.is_populate = false;
-        create.replace_view = false;
-        create.replace_table = false;
-        create.create_or_replace = false;
+String getObjectDefinitionFromCreateQueryForCnch(const ASTPtr & query)
+{
+    ASTPtr query_clone = query->clone();
+    auto & create = query_clone->as<ASTCreateQuery &>();
 
-        /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
-        if (!create.isView() && !create.is_materialized_view)
-            create.select = nullptr;
+    /// We remove everything that is not needed for ATTACH from the query.
+    create.attach = false;
+    create.as_database.clear();
+    create.as_table.clear();
+    create.if_not_exists = false;
+    create.is_populate = false;
+    create.replace_view = false;
+    create.replace_table = false;
+    create.create_or_replace = false;
 
-        create.format = nullptr;
-        create.out_file = nullptr;
+    /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
+    if (!create.isView() && !create.is_materialized_view)
+        create.select = nullptr;
 
-        WriteBufferFromOwnString statement_buf;
-        formatAST(create, statement_buf, false);
-        writeChar('\n', statement_buf);
-        return statement_buf.str();
-    }
+    create.format = nullptr;
+    create.out_file = nullptr;
 
-void checkCreateIsAllowedInCnch(const ASTPtr & query)
+    WriteBufferFromOwnString statement_buf;
+    formatAST(create, statement_buf, false);
+    writeChar('\n', statement_buf);
+    return statement_buf.str();
+}
+
+void checkCreateIsAllowedInCnch(ContextPtr local_context, const ASTPtr & query)
 {
     auto * create_query = query->as<ASTCreateQuery>();
     if (!create_query)
@@ -96,6 +98,22 @@ void checkCreateIsAllowedInCnch(const ASTPtr & query)
 
     if (!std::any_of(allowed_engine.begin(), allowed_engine.end(), [&](auto & engine) { return startsWith(create_query->storage->engine->name, engine); }))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only support creating Cnch/MySQL tables");
+
+    if (auto * settings = create_query->storage->settings)
+    {
+        for (const auto & change : settings->changes)
+        {
+            if (change.name.find("cnch_vw") == 0)
+            {
+                auto vw_name = change.value.get<String>();
+                if (vw_name == "vw_default" || vw_name == "vw_write")
+                    continue;
+
+                /// Will throw VIRTUAL_WAREHOUSE_NOT_FOUND if vw not found.
+                local_context->getVirtualWarehousePool().get(vw_name);
+            }
+        }
+    }
 }
 
 }
@@ -154,8 +172,8 @@ public:
     }
 };
 
-// The ligth weight iterator only contains informations about tables StorageID. It is used when no need to
-// contruct storage object.
+// The lightweight iterator only contains informations about tables StorageID. It is used when no need to
+// construct storage object.
 using TablesID = std::vector<Protos::TableIdentifier>;
 class CnchDatabaseTablesLightWeightIterator final : public IDatabaseTablesIterator
 {
@@ -208,7 +226,7 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    checkCreateIsAllowedInCnch(query);
+    checkCreateIsAllowedInCnch(local_context, query);
 
     bool attach = query->as<ASTCreateQuery&>().attach;
     String statement = getObjectDefinitionFromCreateQueryForCnch(query);

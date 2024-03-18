@@ -74,6 +74,7 @@
 #include <common/scope_guard.h>
 
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <Processors/Executors/PullingPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
 
 #include "AsyncQueryManager.h"
@@ -107,6 +108,29 @@ namespace ErrorCodes
     extern const int QUERY_WAS_CANCELLED;
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int TIMEOUT_EXCEEDED;
+}
+
+namespace
+{
+    struct AsyncTrait
+    {
+        using Executor = PullingAsyncPipelineExecutor;
+
+        static bool pull(Executor & executor, Block & block, uint64_t ms)
+        {
+            return executor.pull(block, ms);
+        }
+    };
+
+    struct SyncTrait
+    {
+        using Executor = PullingPipelineExecutor;
+
+        static bool pull(Executor & executor, Block & block, uint64_t /*ms*/)
+        {
+            return executor.pull(block);
+        }
+    };
 }
 
 TCPHandler::TCPHandler(
@@ -507,7 +531,10 @@ void TCPHandler::runImpl()
                     executor->execute(state.io.pipeline.getNumThreads());
                 }
                 else if (state.io.pipeline.initialized()) /// `SELECT` in both server and worker sides or `INSERT SELECT` in write worker
-                    processOrdinaryQueryWithProcessors();
+                    if (query_context->getSettingsRef().use_sync_pipeline_executor)
+                        processOrdinaryQueryWithProcessors<SyncTrait>();
+                    else
+                        processOrdinaryQueryWithProcessors<AsyncTrait>();
                 else if (state.io.in) /// `INSERT INFILE` in worker side
                     processOrdinaryQuery();
 
@@ -840,7 +867,7 @@ void TCPHandler::processOrdinaryQuery()
     sendProgress();
 }
 
-
+template <typename Trait>
 void TCPHandler::processOrdinaryQueryWithProcessors()
 {
     auto & pipeline = state.io.pipeline;
@@ -857,11 +884,11 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
     }
 
     {
-        PullingAsyncPipelineExecutor executor(pipeline);
+        typename Trait::Executor executor(pipeline);
         CurrentMetrics::Increment query_thread_metric_increment{CurrentMetrics::QueryThread};
 
         Block block;
-        while (executor.pull(block, query_context->getSettingsRef().interactive_delay / 1000))
+        while (Trait::pull(executor, block, query_context->getSettingsRef().interactive_delay / 1000))
         {
             std::lock_guard lock(task_callback_mutex);
 

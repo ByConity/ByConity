@@ -1797,6 +1797,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
 
     if (dynamic_cast<const MergeTreeIndexInverted *>(&*index_helper) != nullptr)
     {
+        context->mustEnableAdditionalService(AdditionalService::FullTextSearch, true);
         std::unique_ptr<IGinDataPartHelper> gin_part_helper = nullptr;
         if (part->getType() == IMergeTreeDataPart::Type::CNCH)
         {
@@ -1811,6 +1812,11 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     }
 
     const auto * gin_filter_condition = dynamic_cast<const MergeTreeConditionInverted *>(&*condition);
+
+    if (gin_filter_condition != nullptr)
+    {
+        context->mustEnableAdditionalService(AdditionalService::FullTextSearch, true);
+    }
 
     for (const auto & range : ranges)
     {

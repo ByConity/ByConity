@@ -61,6 +61,10 @@ public:
 
     virtual bool exists(const String & path) const override;
 
+    // This function calls HeadObject, instead of the poorly performing ListObjects used in exists()
+    // If you want to check if a file exists, we strongly suggest using this function
+    virtual bool fileExists(const String & file_path) const override;
+
     virtual bool isFile(const String & ) const override { throw Exception("isFile is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
     virtual bool isDirectory(const String & ) const override { throw Exception("isDirecotry is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
@@ -89,11 +93,11 @@ public:
 
     virtual std::unique_ptr<ReadBufferFromFileBase> readFile(
         const String & path,
-        const ReadSettings& settings) const override;
+        const ReadSettings & settings) const override;
 
     virtual std::unique_ptr<WriteBufferFromFileBase> writeFile(
         const String & path,
-        const WriteSettings& settings) override;
+        const WriteSettings & settings) override;
 
     virtual void removeFile(const String & path) override;
 
@@ -119,9 +123,9 @@ public:
     virtual String getTableRelativePathOnDisk(const String &) override {return "";}
 
     // Non virtual functions
-    const String& getS3Bucket() const { return s3_util.getBucket(); }
+    const String & getS3Bucket() const { return s3_util.getBucket(); }
     std::shared_ptr<Aws::S3::S3Client> getS3Client() const { return s3_util.getClient(); }
-    const S3::S3Util& getS3Util() const { return s3_util; }
+    const S3::S3Util & getS3Util() const { return s3_util; }
 
 private:
     bool tryReserve(UInt64 bytes);

@@ -140,6 +140,8 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
         std::cout << formatDataModel<DB::Protos::DataModelTable>(metadata) << std::endl;
     else if (key.starts_with("PT_"))
         std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
+    else if (key.starts_with("DLB_"))
+        std::cout << formatDataModel<DB::Protos::DataModelDeleteBitmap>(metadata) << std::endl;
     else if (key.starts_with("TR_"))
         std::cout << formatDataModel<DB::Protos::DataModelTransactionRecord>(metadata) << std::endl;
     else if (key.ends_with("-election"))
@@ -314,7 +316,7 @@ private:
     void initializeMetastore()
     {
         MetastoreConfig catalog_conf(config(), CATALOG_SERVICE_CONFIGURE);
-        const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+        const char * consul_http_host = getConsulIPFromEnv();
         const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
         if (consul_http_host != nullptr && consul_http_port != nullptr)
             brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);

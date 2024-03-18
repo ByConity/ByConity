@@ -61,7 +61,7 @@ public:
     void dropVirtualWarehouse(const std::string & vw_name, const bool if_exists);
     void getAllVirtualWarehouses(std::vector<VirtualWarehouseData> & vw_data_list);
 
-    void createWorkerGroup(const String & group_id, bool if_not_exists, const String & vw_name, const WorkerGroupData & group_data);
+    void createWorkerGroup(const String & group_id, const String & vw_name, const WorkerGroupData & group_data);
     void dropWorkerGroup(const String & group_id, bool if_exists);
     std::vector<WorkerGroupData> getAllWorkerGroups(bool with_metrics = false);
 

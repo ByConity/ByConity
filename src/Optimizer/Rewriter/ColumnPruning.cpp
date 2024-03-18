@@ -17,10 +17,14 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/convertFieldToType.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/join_common.h>
 #include <Optimizer/Correlation.h>
 #include <Optimizer/ExpressionDeterminism.h>
+#include <Optimizer/ExpressionInterpreter.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
@@ -45,7 +49,11 @@ namespace DB
 void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ColumnPruningVisitor visitor{
-        context, plan.getCTEInfo(), plan.getPlanNode(), distinct_to_aggregate && context->getSettingsRef().enable_distinct_to_aggregate};
+        context,
+        plan.getCTEInfo(),
+        plan.getPlanNode(),
+        distinct_to_aggregate && context->getSettingsRef().enable_distinct_to_aggregate,
+        filter_window_to_sort_limit && context->getSettingsRef().enable_filter_window_to_sorting_limit};
     NameSet require;
     for (const auto & item : plan.getPlanNode()->getStep()->getOutputStream().header)
         require.insert(item.name);
@@ -345,6 +353,9 @@ PlanNodePtr ColumnPruningVisitor::visitFilterNode(FilterNode & node, NameSet & r
     auto expr_step = std::make_shared<FilterStep>(child->getStep()->getOutputStream(), step->getFilter(), remove);
     PlanNodes children{child};
     auto expr_node = FilterNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
+    if (remove && filter_window_to_sort_limit)
+        return convertFilterWindowToSortingLimit(expr_node, require, context);
+
     return expr_node;
 }
 
@@ -1132,6 +1143,114 @@ PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node, Con
     }
 
     return node;
+}
+
+PlanNodePtr ColumnPruningVisitor::convertFilterWindowToSortingLimit(PlanNodePtr node, NameSet & require, ContextMutablePtr & context)
+{
+    const auto & filter_step = dynamic_cast<FilterStep &>(*node->getStep());
+    auto * window_node = dynamic_cast<WindowNode *>(node->getChildren()[0].get());
+    if (!window_node)
+        return node;
+
+    const auto & window_step = dynamic_cast<WindowStep &>(*window_node->getStep());
+    const auto & window_desc = window_step.getWindow();
+    if (window_desc.order_by.empty() || !window_desc.partition_by.empty() || window_desc.window_functions.size() != 1)
+        return node;
+
+    String column_name = window_desc.window_functions[0].column_name;
+    if (require.contains(column_name))
+        return node;
+
+    if (window_desc.frame.begin_type != WindowFrame::BoundaryType::Unbounded
+        || (window_desc.frame.end_type != WindowFrame::BoundaryType::Current
+            && window_desc.frame.end_type != WindowFrame::BoundaryType::Unbounded))
+        return node;
+
+    auto window_func_name = window_desc.window_functions[0].aggregate_function->getName();
+    if (window_func_name != "row_number")
+        return node;
+
+    const auto & filter = filter_step.getFilter();
+    auto symbols = SymbolsExtractor::extractVector(filter);
+    if (std::count(symbols.begin(), symbols.end(), column_name) != 1)
+        return node;
+
+    PlanNodePtr window_child = window_node->getChildren()[0];
+    auto interpreter = ExpressionInterpreter::basicInterpreter(filter_step.getInputStreams()[0].header.getNamesToTypes(), context);
+
+    auto conjuncts = PredicateUtils::extractConjuncts(filter);
+    std::vector<ConstASTPtr> new_conjuncts;
+    SizeOrVariable limit;
+
+    String func_name;
+
+    auto get_limit_field = [&](const ConstASTPtr & conjunct) -> std::optional<SizeOrVariable> {
+        func_name = "";
+
+        const auto * func = conjunct->as<ASTFunction>();
+        if (!func || func->arguments->children.size() != 2 || !(func->name == "less" || func->name == "lessOrEquals"))
+            return std::nullopt;
+
+        func_name = func->name;
+
+        const auto * column = func->arguments->children[0]->as<ASTIdentifier>();
+        if (!column || column_name != column->name())
+            return std::nullopt;
+
+        if (const auto * prepared_param = func->arguments->children[1]->as<ASTPreparedParameter>())
+            return prepared_param->name;
+
+        auto rhs = interpreter.evaluateConstantExpression(func->arguments->children[1]);
+        if (!rhs || !isNativeInteger(rhs->first) || !isUnsignedInteger(rhs->first))
+            return std::nullopt;
+
+        auto uint_val = convertFieldToType(rhs->second, DataTypeUInt64());
+        return uint_val.safeGet<UInt64>();
+    };
+
+    for (const ConstASTPtr & conjunct : conjuncts)
+    {
+        auto field = get_limit_field(conjunct);
+        if (!field.has_value() || func_name.empty())
+        {
+            new_conjuncts.emplace_back(conjunct);
+            continue;
+        }
+
+        limit = *field;
+    }
+
+    if (new_conjuncts.size() == conjuncts.size())
+        return node;
+
+    if (func_name == "less")
+    {
+        if (std::holds_alternative<size_t>(limit))
+            limit = std::get<size_t>(limit) - 1;
+        else
+            return node;
+    }
+
+    auto sorting_step = std::make_shared<SortingStep>(
+        window_node->getChildren()[0]->getStep()->getOutputStream(),
+        window_desc.order_by,
+        limit,
+        SortingStep::Stage::FULL,
+        SortDescription{});
+    auto child_node =  SortingNode::createPlanNode(context->nextNodeId(), std::move(sorting_step), PlanNodes{window_node->getChildren()}, node->getStatistics());
+
+    UInt64 offset = 0;
+    auto limit_step = std::make_shared<LimitStep>(child_node->getStep()->getOutputStream(), limit, offset);
+    child_node = LimitNode::createPlanNode(context->nextNodeId(), std::move(limit_step), PlanNodes{child_node}, node->getStatistics());
+
+    if (new_conjuncts.empty())
+        return child_node;
+
+    auto new_filter = PredicateUtils::combineConjuncts(new_conjuncts);
+    auto new_filter_step = std::make_shared<FilterStep>(child_node->getStep()->getOutputStream(), new_filter);
+    auto new_filter_node = FilterNode::createPlanNode(context->nextNodeId(), std::move(new_filter_step), {child_node}, node->getStatistics());
+
+    return new_filter_node;
 }
 
 }

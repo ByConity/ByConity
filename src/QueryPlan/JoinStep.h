@@ -53,7 +53,7 @@ public:
     JoinStep(
         DataStreams input_streams_,
         DataStream output_stream_,
-        ASTTableJoin::Kind kind,
+        ASTTableJoin::Kind kind_,
         ASTTableJoin::Strictness strictness_,
         size_t max_streams_ = 1,
         bool keep_left_read_in_order_ = false,
@@ -65,7 +65,7 @@ public:
         ASOF::Inequality asof_inequality_ = ASOF::Inequality::GreaterOrEquals,
         DistributionType distribution_type_ = DistributionType::UNKNOWN,
         JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO,
-        bool magic_set_ = false,
+        bool is_magic_ = false,
         bool is_ordered_ = false,
         bool simple_reordered_ = false,
         LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders = {},
@@ -102,6 +102,8 @@ public:
     void setDistributionType(DistributionType distribution_type_) { distribution_type = distribution_type_; }
 
     bool isCrossJoin() const { return kind == ASTTableJoin::Kind::Cross || (kind == ASTTableJoin::Kind::Inner && left_keys.empty()); }
+
+    bool isInnerJoin() const {return kind == ASTTableJoin::Kind::Inner; }
 
     bool isOuterJoin() const
     {

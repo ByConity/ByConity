@@ -51,9 +51,14 @@
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 
+#include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -62,6 +67,7 @@
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/ParserQuery.h>
+#include <Parsers/parseDatabaseAndTableName.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryNormalization.h>
 #include <Parsers/queryToString.h>
@@ -186,6 +192,16 @@ namespace ErrorCodes
     extern const int CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
     extern const int CNCH_QUEUE_QUERY_FAILURE;
     extern const int UNKNOWN_EXCEPTION;
+    extern const int TIMEOUT_EXCEEDED;
+    extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
+    extern const int SOCKET_TIMEOUT;
+    extern const int TOO_MANY_PARTS;
+    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
+    extern const int TOO_MANY_PLAN_SEGMENTS;
+    extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
+    extern const int MEMORY_LIMIT_EXCEEDED;
+    extern const int BRPC_EXCEPTION;
+    extern const int TOO_SLOW;
 }
 
 void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr & ast, bool & use_backup_vw)
@@ -874,21 +890,21 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
             parser.setContext(context.get());
 
-        /// TODO Parser should fail early when max_query_size limit is reached.
-        ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
-        if (settings.use_sql_binding && !internal)
-        {
-            try
+            /// TODO Parser should fail early when max_query_size limit is reached.
+            ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+            if (settings.use_sql_binding && !internal)
             {
-                ASTPtr binding_ast = SQLBindingUtils::getASTFromBindings(begin, end, ast, context);
-                if (binding_ast)
-                    ast = binding_ast;
+                try
+                {
+                    ASTPtr binding_ast = SQLBindingUtils::getASTFromBindings(begin, end, ast, context);
+                    if (binding_ast)
+                        ast = binding_ast;
+                }
+                catch (...)
+                {
+                    tryLogWarningCurrentException(&Poco::Logger::get("SQL Binding"), "SQL binding match error.");
+                }
             }
-            catch (...)
-            {
-                tryLogWarningCurrentException(&Poco::Logger::get("SQL Binding"), "SQL binding match error.");
-            }
-        }
         }
         else
         {
@@ -928,7 +944,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
         if (input_ast == nullptr)
-            interpretSettings(ast, context);
+            InterpreterSetQuery::applySettingsFromQuery(ast, context);
 
         if (context->getServerType() == ServerType::cnch_server && context->hasQueryContext())
         {
@@ -938,22 +954,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 IdentifierNameNormalizer().visit<false>(ast.get());
         }
 
-        if (auto * explain_select_query = ast->as<ASTExplainQuery>())
-        {
-            const auto * select_with_union_query = explain_select_query->getExplainedQuery()->as<ASTSelectWithUnionQuery>();
-            if (select_with_union_query && !select_with_union_query->list_of_selects->children.empty())
-            {
-                const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
-                if (last_select && last_select->settings())
-                    InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
-            }
-            else
-            {
-                auto * insert_query = explain_select_query->getExplainedQuery()->as<ASTInsertQuery>();
-                if (insert_query && insert_query->settings_ast)
-                    InterpreterSetQuery(insert_query->settings_ast, context).executeForCurrentContext();
-            }
-        }
+        /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
+        /// to allow settings to take effect.
 
         if (const auto * query_with_table_output = dynamic_cast<const ASTQueryWithTableAndOutput *>(ast.get()))
         {
@@ -961,10 +963,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             query_table = query_with_table_output->table;
         }
 
-        auto * insert_query = ast->as<ASTInsertQuery>();
-
         context->setQueryExpirationTimeStamp();
-
+        auto * insert_query = ast->as<ASTInsertQuery>();
         if (insert_query && insert_query->data)
         {
             query_end = insert_query->data;
@@ -1164,7 +1164,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 else
                 {
                     InterpreterSelectQueryUseOptimizer * optimizer_interpret = typeid_cast<InterpreterSelectQueryUseOptimizer *>(&*interpreter);
-                    if (optimizer_interpret)
+                    if (optimizer_interpret && !optimizer_interpret->isCreatePreparedStatement() && query_cache_context.can_use_query_cache)
                     {
                         res = optimizer_interpret->readFromQueryCache(context, query_cache_context);
                         if (query_cache_context.query_cache_usage != QueryCache::Usage::Read)
@@ -1176,9 +1176,23 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
             catch (...)
             {
+                if (ast->as<ASTExecutePreparedStatementQuery>() || ast->as<ASTCreatePreparedStatementQuery>())
+                    throw;
+
                 if (typeid_cast<const InterpreterSelectQueryUseOptimizer *>(&*interpreter))
                 {
-                    static std::unordered_set<int> no_fallback_error_codes = {159, 202, 209, 252, 394, 2010, 2012, 2013, 1159, 241};
+                    static std::unordered_set<int> no_fallback_error_codes = {
+                        ErrorCodes::TIMEOUT_EXCEEDED,
+                        ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES,
+                        ErrorCodes::SOCKET_TIMEOUT, 
+                        ErrorCodes::TOO_MANY_PARTS,
+                        ErrorCodes::QUERY_WAS_CANCELLED,
+                        ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION,
+                        ErrorCodes::TOO_MANY_PLAN_SEGMENTS,
+                        ErrorCodes::QUERY_CPU_TIMEOUT_EXCEEDED,
+                        ErrorCodes::MEMORY_LIMIT_EXCEEDED,
+                        ErrorCodes::BRPC_EXCEPTION,
+                        ErrorCodes::TOO_SLOW};
                     // fallback to simple query process
                     if (context->getSettingsRef().enable_optimizer_fallback && !no_fallback_error_codes.contains(getCurrentExceptionCode()))
                     {
@@ -1497,7 +1511,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (element.max_thread_io_profile_counters)
                 {
                     auto max_io_ms = element.max_thread_io_profile_counters->getIOReadTime(element.query_settings->remote_filesystem_read_prefetch) / 1000;
-                    auto io_ms = max_io_ms < element.query_duration_ms ? max_io_ms : 0; 
+                    auto io_ms = max_io_ms < element.query_duration_ms ? max_io_ms : 0;
                     if (is_unlimited_query)
                     {
                         HistogramMetrics::increment(
@@ -1721,7 +1735,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         if (elem.max_thread_io_profile_counters)
                         {
                             auto max_io_ms = elem.max_thread_io_profile_counters->getIOReadTime(elem.query_settings->remote_filesystem_read_prefetch) / 1000;
-                            auto io_ms = max_io_ms < elem.query_duration_ms ? max_io_ms : 0; 
+                            auto io_ms = max_io_ms < elem.query_duration_ms ? max_io_ms : 0;
                             if (process_list_elem->isUnlimitedQuery())
                             {
                                 HistogramMetrics::increment(
@@ -1967,8 +1981,8 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
         OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
 
         const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
-        OutfileTargetPtr outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
-        std::shared_ptr<WriteBuffer> out_buf = outfile_target->getOutfileBuffer(context);
+        OutfileTargetPtr outfile_target = std::make_shared<OutfileTarget>(context, out_path, format_name, compression_method_str, compression_level);
+        std::shared_ptr<WriteBuffer> out_buf = outfile_target->getOutfileBuffer();
 
         auto & pipeline = streams.pipeline;
 
@@ -1987,8 +2001,8 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
                 pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
 
                 OutputFormatPtr out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                    format_name, *out_buf, pipeline.getHeader(), context, {});
-                out->setBuffer(out_buf);
+                    format_name, *out_buf, pipeline.getHeader(), context, outfile_target->outToMultiFile(), {});
+                out->setOutFileTarget(outfile_target);
 
                 out->setAutoFlush();
                 /// Save previous progress callback if any.
@@ -2015,7 +2029,7 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
         }
 
         if (outfile_target)
-            outfile_target->flushFile(context);
+            outfile_target->flushFile();
     }
     catch (...)
     {
@@ -2192,11 +2206,10 @@ void executeQuery(
                 String compression_method_str;
                 UInt64 compression_level = 1;
                 OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
-                outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
-                auto out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
+                outfile_target = std::make_shared<OutfileTarget>(context, out_path, format_name, compression_method_str, compression_level);
+                auto out_buf = outfile_target->getOutfileBuffer(allow_into_outfile);
                 out = FormatFactory::instance().getOutputStreamParallelIfPossible(
                     format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings);
-                out->setBuffer(out_buf);
             } else {
                 out = FormatFactory::instance().getOutputStreamParallelIfPossible(
                     format_name, ostr, streams.in->getHeader(), context, {}, output_format_settings);
@@ -2221,7 +2234,7 @@ void executeQuery(
                 *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
 
             if (outfile_target)
-                outfile_target->flushFile(context);
+                outfile_target->flushFile();
         }
         else if (pipeline.initialized())
         {
@@ -2239,8 +2252,8 @@ void executeQuery(
                 String compression_method_str;
                 UInt64 compression_level = 1;
                 OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
-                outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
-                out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
+                outfile_target = std::make_shared<OutfileTarget>(context, out_path, format_name, compression_method_str, compression_level);
+                out_buf = outfile_target->getOutfileBuffer(allow_into_outfile);
             }
 
             if (!pipeline.isCompleted())
@@ -2250,11 +2263,12 @@ void executeQuery(
                 OutputFormatPtr out;
                 if (out_buf) {
                     out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                        format_name, *out_buf, pipeline.getHeader(), context, {}, output_format_settings);
-                    out->setBuffer(out_buf);
+                        format_name, *out_buf, pipeline.getHeader(), context, outfile_target->outToMultiFile(), {}, output_format_settings);
+                    // used to ensure out buffer's life cycle is as long as this class
+                    out->setOutFileTarget(outfile_target);
                 } else {
                     out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                        format_name, ostr, pipeline.getHeader(), context, {}, output_format_settings);
+                        format_name, ostr, pipeline.getHeader(), context, false, {}, output_format_settings);
                 }
                 out->setAutoFlush();
 
@@ -2285,7 +2299,7 @@ void executeQuery(
             }
 
             if (outfile_target)
-                outfile_target->flushFile(context);
+                outfile_target->flushFile();
         }
     }
     catch (...)
@@ -2405,7 +2419,7 @@ void executeHttpQueryInAsyncMode(
             Block res;
             res.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
 
-            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr1, res, c, {}, f);
+            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr1, res, c, false, {}, f);
 
             out->write(res);
             out->flush();
@@ -2486,7 +2500,7 @@ void executeHttpQueryInAsyncMode(
                         pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
 
                         auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, f);
+                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, false, {}, f);
 
                         pipeline.setOutputFormat(std::move(out));
                     }

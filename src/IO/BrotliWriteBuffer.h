@@ -20,11 +20,22 @@ public:
 
     void finalize() override { finish(); }
 
+    WriteBuffer * inplaceReconstruct([[maybe_unused]] const String & out_path, std::unique_ptr<WriteBuffer> nested) override
+    {
+        int level = this->compression_level;
+        // Call the destructor explicitly but does not free memory
+        this->~BrotliWriteBuffer();
+        new (this) BrotliWriteBuffer(std::move(nested), level);
+        return this;
+    }
+
 private:
     void nextImpl() override;
 
     void finish();
     void finishImpl();
+
+    int compression_level;
 
     class BrotliStateWrapper;
     std::unique_ptr<BrotliStateWrapper> brotli;

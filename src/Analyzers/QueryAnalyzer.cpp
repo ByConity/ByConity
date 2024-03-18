@@ -13,8 +13,6 @@
  * limitations under the License.
  */
 
-#include <sstream>
-#include <unordered_map>
 #include <Analyzers/ExprAnalyzer.h>
 #include <Analyzers/ExpressionVisitor.h>
 #include <Analyzers/QueryAnalyzer.h>
@@ -38,6 +36,7 @@
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTFieldReference.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -45,8 +44,10 @@
 #include <Parsers/queryToString.h>
 #include <QueryPlan/Void.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMemory.h>
+
 #if USE_HIVE
 #    include <Storages/Hive/StorageCnchHive.h>
 #endif
@@ -99,6 +100,14 @@ public:
     Void visitASTSelectQuery(ASTPtr & node, const Void &) override;
     Void visitASTSubquery(ASTPtr & node, const Void &) override;
     Void visitASTExplainQuery(ASTPtr & node, const Void &) override;
+    Void visitASTCreatePreparedStatementQuery(ASTPtr & node, const Void &) override
+    {
+        auto & prepare = node->as<ASTCreatePreparedStatementQuery &>();
+        auto query = prepare.getQuery();
+        process(query);
+        analysis.setOutputDescription(*node, analysis.getOutputDescription(*query));
+        return {};
+    }
 
     QueryAnalyzerVisitor(ContextPtr context_, Analysis & analysis_, ScopePtr outer_query_scope_)
         : context(std::move(context_))

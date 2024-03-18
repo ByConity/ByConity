@@ -47,6 +47,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Common/AdditionalServices.h>
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
@@ -150,9 +151,11 @@ class ZooKeeperLog;
 class QueryMetricLog;
 class QueryWorkerMetricLog;
 class CnchQueryLog;
+class ViewRefreshTaskLog;
 class AutoStatsTaskLog;
 struct QueryMetricElement;
 struct QueryWorkerMetricElement;
+struct ViewRefreshTaskLogElement;
 using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
 using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 struct ProcessorProfileLogElement;
@@ -277,6 +280,7 @@ using TransactionCnchPtr = std::shared_ptr<ICnchTransaction>;
 class QueueManager;
 using QueueManagerPtr = std::shared_ptr<QueueManager>;
 
+class AsyncQueryManager;
 using AsyncQueryManagerPtr = std::shared_ptr<AsyncQueryManager>;
 
 class VirtualWarehousePool;
@@ -356,6 +360,7 @@ using ExcludedRules = std::unordered_set<UInt32>;
 using ExcludedRulesMap = std::unordered_map<PlanNodeId, ExcludedRules>;
 
 class PlanCacheManager;
+class PreparedStatementManager;
 
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
@@ -662,6 +667,11 @@ public:
     void setReadyForQuery();
     bool isReadyForQuery() const;
 
+    /// Additional Services
+    void updateAdditionalServices(const Poco::Util::AbstractConfiguration & config);
+    bool mustEnableAdditionalService(AdditionalService::Value, bool need_throw = false) const;
+    bool mustEnableAdditionalService(const IStorage & storage) const;
+
     /// HDFS user
     void setHdfsUser(const String & name);
     String getHdfsUser() const;
@@ -949,7 +959,8 @@ public:
     BlockOutputStreamPtr getOutputStreamParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const;
     BlockOutputStreamPtr getOutputStream(const String & name, WriteBuffer & buf, const Block & sample) const;
 
-    OutputFormatPtr getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const;
+    OutputFormatPtr getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample, bool out_to_directory) const;
+    OutputFormatPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const;
 
     InterserverIOHandler & getInterserverIOHandler();
 
@@ -1273,10 +1284,12 @@ public:
     void initializeCnchSystemLogs();
     std::shared_ptr<QueryMetricLog> getQueryMetricsLog() const;
     void insertQueryMetricsElement(const QueryMetricElement & element); /// Add the metrics element to the background thread for flushing
+    void insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element) const;
     std::shared_ptr<QueryWorkerMetricLog> getQueryWorkerMetricsLog() const;
     void insertQueryWorkerMetricsElement(
         const QueryWorkerMetricElement & element); /// Add the metrics element to the background thread for flushing
     std::shared_ptr<CnchQueryLog> getCnchQueryLog() const;
+    std::shared_ptr<ViewRefreshTaskLog> getViewRefreshTaskLog() const;
 
     const MergeTreeSettings & getMergeTreeSettings(bool skip_unknown_settings = false) const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
@@ -1333,6 +1346,10 @@ public:
     ApplicationType getApplicationType() const;
     void setApplicationType(ApplicationType type);
 
+    bool getIsRestrictSettingsToWhitelist() const;
+    void setIsRestrictSettingsToWhitelist(bool is_restrict);
+    void addRestrictSettingsToWhitelist(const std::vector<String>& name) const;
+
     /// Sets default_profile and system_profile, must be called once during the initialization
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
@@ -1388,7 +1405,7 @@ public:
 
     PlanNodeIdAllocatorPtr & getPlanNodeIdAllocator() { return id_allocator; }
     UInt32 nextNodeId() { return id_allocator->nextId(); }
-    void createPlanNodeIdAllocator();
+    void createPlanNodeIdAllocator(int max_id = 1);
 
     int step_id = 2000;
     int getStepId() const { return step_id; }
@@ -1460,6 +1477,11 @@ public:
     void setTenantId(const String & id)
     {
         tenant_id = id;
+    }
+
+    bool shouldBlockPrivilegedOperations() const
+    {
+        return getSettingsRef().block_privileged_operations && !getTenantId().empty();
     }
 
     const String & getCurrentCatalog() const
@@ -1626,6 +1648,9 @@ public:
     void setQueryExpirationTimeStamp();
 
     AsynchronousReaderPtr getThreadPoolReader() const;
+
+    void setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager);
+    PreparedStatementManager * getPreparedStatementManager();
 
 private:
     String tenant_id;

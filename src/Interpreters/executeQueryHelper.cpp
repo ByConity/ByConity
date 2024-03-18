@@ -40,6 +40,12 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
         table = alter->table;
         is_alter_database = (alter->alter_object == ASTAlterQuery::AlterObjectType::DATABASE);
     }
+    else if (const auto * alter_mysql = ast->as<ASTAlterAnalyticalMySQLQuery>())
+    {
+        database = alter_mysql->database;
+        table = alter_mysql->table;
+        is_alter_database = (alter_mysql->alter_object == ASTAlterQuery::AlterObjectType::DATABASE);
+    }
     else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
     {
         if (!context->getSettingsRef().enable_select_query_forwarding)

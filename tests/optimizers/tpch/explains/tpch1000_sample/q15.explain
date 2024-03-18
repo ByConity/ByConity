@@ -19,8 +19,9 @@ Projection Est. 1 rows
                   │     Runtime Filters Builder: {expr#max(total_revenue)}
                   ├─ Filter Est. 379969 rows
                   │  │     Condition: Runtime Filters: {`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1`}
-                  │  └─ Buffer Est. 379969 rows
-                  │     └─ CTERef[0] Est. 379969 rows
+                  │  └─ Local Exchange Est. 379969 rows
+                  │     └─ Buffer Est. 379969 rows
+                  │        └─ CTERef[0] Est. 379969 rows
                   └─ Broadcast Exchange Est. 1 rows
                      └─ MergingAggregated Est. 1 rows
                         └─ Gather Exchange Est. 1 rows

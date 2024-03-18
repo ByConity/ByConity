@@ -20,7 +20,7 @@
 
 namespace DB
 {
-std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
+std::vector<std::string> SymbolsExtractor::extractVector(ConstASTPtr node)
 {
     SymbolVisitor visitor;
     SymbolVisitorContext context;
@@ -31,6 +31,12 @@ std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
     }
 
     return std::move(context.result);
+}
+
+std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
+{
+    auto result = extractVector(node);
+    return std::set(result.begin(), result.end());
 }
 
 std::set<std::string> SymbolsExtractor::extract(PlanNodePtr & node)
@@ -51,7 +57,7 @@ std::set<std::string> SymbolsExtractor::extract(std::vector<ConstASTPtr> & nodes
     {
         ASTVisitorUtil::accept(node, visitor, context);
     }
-    return std::move(context.result);
+    return std::set(context.result.begin(), context.result.end());
 }
 
 Void SymbolVisitor::visitNode(const ConstASTPtr & node, SymbolVisitorContext & context)
@@ -68,7 +74,7 @@ Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, SymbolVisitorCo
     const auto & identifier = node->as<ASTIdentifier &>();
     if (!context.exclude_symbols.count(identifier.name()))
     {
-        context.result.insert(identifier.name());
+        context.result.emplace_back(identifier.name());
     }
     return Void{};
 }

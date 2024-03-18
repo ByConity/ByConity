@@ -10,12 +10,12 @@ Projection Est. 100 rows
             │     Order by: {i_item_id ASC NULLS LAST, i_item_desc ASC NULLS LAST, s_store_id ASC NULLS LAST, s_store_name ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 196753454 rows
-               └─ Repartition Exchange Est. 196099814 rows
+               └─ Repartition Exchange Est. 196753454 rows
                   │     Partition by: {i_item_id, i_item_desc, s_store_id, s_store_name}
-                  └─ Aggregating Est. 196099814 rows
+                  └─ Aggregating Est. 196753454 rows
                      │     Group by: {i_item_id, i_item_desc, s_store_id, s_store_name}
                      │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity), expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity), expr#sum(cs_quantity):=AggNull(sum)(cs_quantity)
-                     └─ Inner Join Est. 196099814 rows
+                     └─ Inner Join Est. 196753454 rows
                         │     Condition: cs_sold_date_sk == d_date_sk_2
                         │     Runtime Filters Builder: {d_date_sk_2}
                         ├─ Inner (PARALLEL_HASH) Join Est. 329404629 rows

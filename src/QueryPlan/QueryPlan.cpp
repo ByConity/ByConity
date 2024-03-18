@@ -1015,4 +1015,13 @@ QueryPlanPtr QueryPlan::copy(ContextMutablePtr context)
         copy_cte_info.add(cte_id, copyPlanNode(cte_def, context));
     return std::make_unique<QueryPlan>(copy_plan_node, copy_cte_info, context->getPlanNodeIdAllocator());
 }
+
+void QueryPlan::prepare(const PreparedStatementContext & prepared_context)
+{
+    if (plan_node)
+        plan_node->prepare(prepared_context);
+
+    for (const auto & [cte_id, cte_def] : cte_info.getCTEs())
+        cte_def->prepare(prepared_context);
+}
 }

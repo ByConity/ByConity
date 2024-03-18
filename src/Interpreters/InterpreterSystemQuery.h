@@ -93,7 +93,7 @@ private:
 
     void dumpCnchServerStatus();
 
-    void dropCnchPartCache();
+    void dropCnchMetaCache(bool skip_part_cache = false, bool skip_delete_bitmap_cache = false);
 
     void dropChecksumsCache(const StorageID & table_id) const;
 
@@ -120,6 +120,9 @@ private:
 
     /// a command to test MemoryLock
     void lockMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
+
+    /// drop materialized view previous meta
+    void dropMvMeta(ASTSystemQuery & query);
 };
 
 

@@ -117,6 +117,7 @@
 #include "Storages/SelectQueryInfo.h"
 #include <sstream>
 
+#include <Optimizer/PredicateUtils.h>
 
 namespace DB
 {
@@ -186,7 +187,8 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     table_expr->children.push_back(table_expr->database_and_table_name);
 
     /// Using separate expression analyzer to prevent any possible alias injection
-    auto syntax_result = TreeRewriter(context).analyzeSelect(query_ast, TreeRewriterResult({}, storage, storage_snapshot));
+    auto syntax_result = TreeRewriter(context).analyzeSelect(
+        query_ast, TreeRewriterResult({}, storage, storage_snapshot, !options.without_extended_objects));
     SelectQueryExpressionAnalyzer analyzer(query_ast, syntax_result, context, metadata_snapshot);
     actions = analyzer.simpleSelectActions();
 
@@ -538,6 +540,14 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             query.setExpression(
                 ASTSelectQuery::Expression::WHERE, makeASTFunction("and", query.where()->clone(), p->clone()));
         }
+
+        // TODO: Yuanning RuntimeFilter
+        // extract runtime_filters as 2nd-stage of prewhere
+        // if (context->getSettingsRef().enable_two_stages_prewhere && query.prewhere()) {
+        //     auto [tmp_runtime_filters, first_stage_filters] = RuntimeFilterUtils::extractExecutableRuntimeFiltersForTwoStagesPrewhere(query.prewhere());
+        //     query.setExpression(ASTSelectQuery::Expression::PREWHERE, first_stage_filters.empty()? nullptr: PredicateUtils::combineConjuncts(first_stage_filters));
+        //     this->runtime_filters = tmp_runtime_filters;
+        // }
 
         query_analyzer = std::make_unique<SelectQueryExpressionAnalyzer>(
             query_ptr,
@@ -2723,7 +2733,7 @@ void InterpreterSelectQuery::executeWindow(QueryPlan & query_plan)
                 query_plan.getCurrentDataStream(),
                 w.full_sort_description,
                 settings.max_block_size,
-                0 /* LIMIT */,
+                size_t{0} /* LIMIT */,
                 settings.max_bytes_before_remerge_sort,
                 settings.remerge_sort_lowered_memory_bytes_ratio,
                 settings.max_bytes_before_external_sort,

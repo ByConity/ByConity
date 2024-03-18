@@ -53,7 +53,7 @@ JoinPtr JoinStep::makeJoin(
     const auto & settings = context->getSettingsRef();
     auto table_join = std::make_shared<TableJoin>(settings, context->getTemporaryVolume());
     if (consumer)
-        table_join->setRuntimeFilterConsumer(std::move(consumer));
+        table_join->setRuntimeFilterConsumer(consumer);
 
     if (kind != ASTTableJoin::Kind::Inner && kind != ASTTableJoin::Kind::Cross)
         table_join->setInequalCondition(filter_action, filter_column_name);
@@ -146,8 +146,24 @@ JoinPtr JoinStep::makeJoin(
     {
         if (table_join->allowParallelHashJoin() && join_algorithm == JoinAlgorithm::PARALLEL_HASH)
         {
+            // TODO: Yuanning RuntimeFilter, compare with CE code when fix
+            // if (enable_parallel_hash_join)
+            // {
+            //     LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use parallel Hash Join");
+            //     std::vector<JoinPtr> res;
+            //     res.reserve(num_streams);
+            //     for (size_t i = 0; i < num_streams; ++i)
+            //         res.emplace_back(std::make_shared<HashJoin>(table_join, r_sample_block));
+
+            //     if (consumer)
+            //         consumer->fixParallel(num_streams);
+            //     return res;
+            // }
             LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use ConcurrentHashJoin");
-            return std::make_shared<ConcurrentHashJoin>(table_join, context->getSettings().max_threads, r_sample_block);
+            if (consumer)
+                consumer->fixParallel(ConcurrentHashJoin::toPowerOfTwo(std::min<size_t>(num_streams, 256)));
+            return std::make_shared<ConcurrentHashJoin>(table_join, num_streams, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
+
         }
         else if (join_algorithm == JoinAlgorithm::GRACE_HASH && distribution_type == DistributionType::REPARTITION)
         {
@@ -265,14 +281,14 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         if (!runtime_filter_builders.empty() && settings.distributed_settings.is_distributed)
         {
             auto builder = createRuntimeFilterBuilder(settings.context);
+            
             std::shared_ptr<RuntimeFilterConsumer> consumer = std::make_shared<RuntimeFilterConsumer>(
                 builder,
                 settings.context->getInitialQueryId(),
-                runtime_filter_builders.size(),
+                1, /// for normal HashJoin only one right table, parallel or concurrent hash join will change it to num_streams
                 settings.distributed_settings.parallel_size,
-                settings.context->getSettingsRef().grf_ndv_enlarge_size,
                 settings.distributed_settings.coordinator_address,
-                settings.distributed_settings.current_address);
+                settings.context->getPlanSegmentInstanceId().parallel_id); // TODO: Yuanning RuntimeFilter, parallel_id
 
             join = makeJoin(settings.context, std::move(consumer), pipelines[0]->getNumStreams(), filter_action, filter->getColumnName());
             need_build_runtime_filter = true;
@@ -539,7 +555,7 @@ std::shared_ptr<IQueryPlanStep> JoinStep::copy(ContextPtr) const
 
 RuntimeFilterBuilderPtr JoinStep::createRuntimeFilterBuilder(ContextPtr context) const
 {
-    return std::make_shared<RuntimeFilterBuilder>(context, runtime_filter_builders);
+    return std::make_shared<RuntimeFilterBuilder>(context->getSettingsRef(), runtime_filter_builders);
 }
 
 bool JoinStep::mustReplicate() const

@@ -544,13 +544,14 @@ void OptimizeInput::execute()
             GroupExprPtr remote_exchange;
             GroupExprPtr local_exchange;
             Property actual = output_prop;
-            if (!is_preferred
-                && !PropertyMatcher::matchNodePartitioning(
-                    *context->getOptimizerContext().getContext(),
-                    require.getNodePartitioningRef(),
-                    output_prop.getNodePartitioning(),
-                    *equivalences,
-                    constants))
+
+            bool node_partition_matched = PropertyMatcher::matchNodePartitioning(
+                *context->getOptimizerContext().getContext(),
+                require.getNodePartitioningRef(),
+                output_prop.getNodePartitioning(),
+                *equivalences,
+                constants);
+            if (!is_preferred && !node_partition_matched)
             {
                 // add remote exchange
                 remote_exchange
@@ -564,6 +565,11 @@ void OptimizeInput::execute()
                                       *context->getOptimizerContext().getContext(),
                                       context->getOptimizerContext().getWorkerSize())
                                       .getCost();
+            }
+            else if (is_preferred && !node_partition_matched)
+            {
+                // winner perfer node partition matched
+                cur_total_cost += 0.1;
             }
 
             if (!is_preferred

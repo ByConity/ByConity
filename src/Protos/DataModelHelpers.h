@@ -263,9 +263,9 @@ inline DeleteBitmapMetaPtr createFromModel(const MergeTreeMetaBase & storage, co
 void fillLockInfoModel(const LockInfo & lock_info, Protos::DataModelLockInfo & model);
 LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model);
 
-DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, Protos::DataModelPart && part_model, String && part_name = "");
+DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart && part_model, const String && part_name = "");
 
-DataModelPartWrapperPtr createPartWrapperFromModelBasic(Protos::DataModelPart && part_model, String && part_name = "");
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart && part_model, const String && part_name = "");
 
 ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage, const IMergeTreeDataPartPtr & part);
 

@@ -56,6 +56,7 @@
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
@@ -574,6 +575,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setServerType(config().getString("cnch_type", "standalone"));
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->setIsRestrictSettingsToWhitelist(config().getBool("restrict_tenanted_users_to_whitelist_settings", false));
+    if (global_context->getIsRestrictSettingsToWhitelist())
+    {
+        auto setting_names = getMultipleValuesFromConfig(config(), "tenant_whitelist_settings", "name");
+        global_context->addRestrictSettingsToWhitelist(setting_names);
+    }
 
     global_context->initCnchConfig(config());
     global_context->initRootConfig(config());
@@ -1040,6 +1047,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #if USE_JEMALLOC
             JeprofControl::instance().loadFromConfig(*config);
 #endif
+            global_context->updateAdditionalServices(*config);
             if (global_context->getServerType() == ServerType::cnch_server)
             {
                 global_context->updateQueueManagerConfig();
@@ -1833,6 +1841,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Statistics::CacheManager::initialize(global_context);
             BindingCacheManager::initializeGlobalBinding(global_context);
             PlanCacheManager::initialize(global_context);
+            PreparedStatementManager::initialize(global_context);
             Statistics::AutoStats::AutoStatisticsManager::initialize(global_context, global_context->getConfigRef());
         }
 

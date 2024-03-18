@@ -26,7 +26,7 @@ Projection Est. 400000 rows
             │                    Outputs: [n_nationkey, n_name]
             └─ Aggregating Est. 399343 rows
                │     Group by: {ps_suppkey}
-               └─ Inner (PARALLEL_HASH) Join Est. 25766329 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 954450048 rows
                   │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
                   │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)`)
                   │     Runtime Filters Builder: {p_partkey,ps_suppkey}

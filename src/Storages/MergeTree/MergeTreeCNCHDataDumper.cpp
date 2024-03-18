@@ -192,10 +192,29 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     }
     new_part->fromLocalPart(*local_part);
     String new_part_rel_path = new_part->getFullRelativePath();
-    if (disk->exists(new_part_rel_path))
+    switch(disk->getType())
     {
-        LOG_WARNING(log, "Removing old temporary directory  {}", disk->getPath() + new_part_rel_path);
-        disk->removeRecursive(new_part_rel_path);
+        case DiskType::Type::ByteHDFS: {
+            if (disk->exists(new_part_rel_path))
+            {
+                LOG_WARNING(log, "Removing old temporary directory  {}", disk->getPath() + new_part_rel_path);
+                disk->removeRecursive(new_part_rel_path);
+            }
+            break;
+        }
+        case DiskType::Type::ByteS3: {
+            // for DiskByteS3, we need to avoid using exists() and removeRecursive() for better performance
+            // since there is only one file "data" in each part, we use fileExists() and removeFile() instead
+            String new_part_rel_file_path = fs::path(new_part_rel_path) / "data";
+            if (disk->fileExists(new_part_rel_file_path))
+            {
+                LOG_WARNING(log, "Removing old temporary file  {}", disk->getPath() + new_part_rel_file_path);
+                disk->removeFile(new_part_rel_file_path);
+            }
+            break;
+        }
+        default:
+            throw Exception("Unsupported disk type when dump part to remote", ErrorCodes::LOGICAL_ERROR);
     }
     disk->createDirectories(new_part_rel_path);
 
@@ -309,7 +328,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
                 String file_rel_path = local_part->getFullRelativePath() + file.first;
                 String file_full_path = local_part->getFullPath() + file.first;
-                if (!local_part_disk->exists(file_rel_path))
+                if (!local_part_disk->fileExists(file_rel_path))
                     throw Exception("Fail to dump local file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
 
                 ReadBufferFromFile from(file_full_path);
@@ -355,7 +374,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         String index_file_full_path = local_part->getFullPath() + "primary.idx";
         size_t index_size = 0;
         uint128 index_hash;
-        if (local_part_disk->exists(index_file_rel_path))
+        if (local_part_disk->fileExists(index_file_rel_path))
         {
             ReadBufferFromFile from(index_file_full_path);
             copyData(from, *data_out);
@@ -413,7 +432,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             uki_checksum.file_offset = meta_info_offset + meta_info_size;
             String file_rel_path = local_part->getFullRelativePath() + "unique_key.idx";
             String file_full_path = local_part->getFullPath() + "unique_key.idx";
-            if (!local_part_disk->exists(file_rel_path))
+            if (!local_part_disk->fileExists(file_rel_path))
                 throw Exception("unique_key.idx not found in part " + part_name + ", table " + data.getStorageID().getNameForLogs(),
                                 ErrorCodes::FILE_DOESNT_EXIST);
             ReadBufferFromFile from(file_full_path);
@@ -544,7 +563,7 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
 
                 String file_rel_path = projection_part->getFullRelativePath() + file.first;
                 String file_full_path = projection_part->getFullPath() + file.first;
-                if (!proj_part_disk->exists(file_rel_path))
+                if (!proj_part_disk->fileExists(file_rel_path))
                     throw Exception("Fail to dump projection file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
 
                 ReadBufferFromFile from(file_full_path);
@@ -566,7 +585,7 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
         String index_file_full_path = projection_part->getFullPath() + "primary.idx";
         size_t index_size = 0;
         uint128 index_hash;
-        if (proj_part_disk->exists(index_file_rel_path))
+        if (proj_part_disk->fileExists(index_file_rel_path))
         {
             ReadBufferFromFile from(index_file_full_path);
             copyData(from, *out);
