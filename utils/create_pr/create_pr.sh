@@ -1,5 +1,5 @@
 #!/bin/bash
-source ./proc_title.sh
+source $(dirname "$0")/proc_title.sh
 
 if [ -z "$1" ]; then
     BRANCH=$(git branch --show-current)
