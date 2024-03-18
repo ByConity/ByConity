@@ -75,6 +75,7 @@ namespace ErrorCodes
     extern const int EXPECTED_ALL_OR_ANY;
     extern const int INVALID_LIMIT_EXPRESSION;
     extern const int BAD_ARGUMENTS;
+    extern const int SYNTAX_ERROR;
 }
 
 #define PRINT_PLAN(plan, NAME) \
@@ -613,6 +614,13 @@ void QueryPlannerVisitor::planCrossJoin(ASTTableJoin & table_join, PlanBuilder &
 
 void QueryPlannerVisitor::planJoinUsing(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder)
 {
+    if (use_ansi_semantic && table_join.kind != ASTTableJoin::Kind::Inner)
+    {
+        throw Exception(
+            "USING is banned for outer joins in ANSI mode, to avoid unexpected different behaviour with CLICKHOUSE",
+            ErrorCodes::SYNTAX_ERROR);
+    }
+
     auto & join_analysis = analysis.getJoinUsingAnalysis(table_join);
 
     // 1. prepare join keys
