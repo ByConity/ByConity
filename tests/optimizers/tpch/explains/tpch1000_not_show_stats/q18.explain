@@ -38,16 +38,18 @@ Projection
                      │        │     Partition by: {c_custkey}
                      │        └─ TableScan tpch1000.customer
                      │                 Outputs: [c_custkey, c_name]
-                     └─ Filter
-                        │     Condition: `expr#sum(l_quantity)` > 300.
-                        └─ MergingAggregated
-                           └─ Repartition Exchange
-                              │     Partition by: {l_orderkey_1}
-                              └─ Aggregating
-                                 │     Group by: {l_orderkey_1}
-                                 │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
-                                 └─ Filter
-                                    │     Condition: isNotNull(l_orderkey_1)
-                                    └─ TableScan tpch1000.lineitem
-                                             Where: isNotNull(l_orderkey)
-                                             Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
+                     └─ Projection
+                        │     Expressions: [l_orderkey_1]
+                        └─ Filter
+                           │     Condition: `expr#sum(l_quantity)` > 300.
+                           └─ MergingAggregated
+                              └─ Repartition Exchange
+                                 │     Partition by: {l_orderkey_1}
+                                 └─ Aggregating
+                                    │     Group by: {l_orderkey_1}
+                                    │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
+                                    └─ Filter
+                                       │     Condition: isNotNull(l_orderkey_1)
+                                       └─ TableScan tpch1000.lineitem
+                                                Where: isNotNull(l_orderkey)
+                                                Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity

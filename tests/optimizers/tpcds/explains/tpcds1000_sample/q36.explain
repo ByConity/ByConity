@@ -38,17 +38,21 @@ Projection Est. 100 rows
                                     │     │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                                     │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_ext_sales_price, ss_net_profit]
                                     │     │  └─ Broadcast Exchange Est. 41 rows
-                                    │     │     └─ Filter Est. 41 rows
-                                    │     │        │     Condition: s_state = 'TN'
-                                    │     │        └─ TableScan tpcds1000_sample.store Est. 1002 rows
-                                    │     │                 Where: s_state = 'TN'
-                                    │     │                 Outputs: [s_store_sk, s_state]
+                                    │     │     └─ Projection Est. 41 rows
+                                    │     │        │     Expressions: [s_store_sk]
+                                    │     │        └─ Filter Est. 41 rows
+                                    │     │           │     Condition: s_state = 'TN'
+                                    │     │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
+                                    │     │                    Where: s_state = 'TN'
+                                    │     │                    Outputs: [s_store_sk, s_state]
                                     │     └─ Broadcast Exchange Est. 365 rows
-                                    │        └─ Filter Est. 365 rows
-                                    │           │     Condition: d_year = 2001
-                                    │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                    │                    Where: d_year = 2001
-                                    │                    Outputs: [d_date_sk, d_year]
+                                    │        └─ Projection Est. 365 rows
+                                    │           │     Expressions: [d_date_sk]
+                                    │           └─ Filter Est. 365 rows
+                                    │              │     Condition: d_year = 2001
+                                    │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                    │                       Where: d_year = 2001
+                                    │                       Outputs: [d_date_sk, d_year]
                                     └─ Repartition Exchange Est. 300000 rows
                                        │     Partition by: {i_item_sk}
                                        └─ TableScan tpcds1000_sample.item Est. 300000 rows

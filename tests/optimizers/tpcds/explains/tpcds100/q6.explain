@@ -81,11 +81,13 @@ Projection Est. 46 rows
                            │                                         │     Partition by: {d_month_seq_1}
                            │                                         └─ Aggregating Est. 1 rows
                            │                                            │     Group by: {d_month_seq_1}
-                           │                                            └─ Filter Est. 30 rows
-                           │                                               │     Condition: (d_year = 2001) AND (d_moy = 1)
-                           │                                               └─ TableScan tpcds100.date_dim Est. 73049 rows
-                           │                                                        Where: (d_year = 2001) AND (d_moy = 1)
-                           │                                                        Outputs: [d_year, d_moy], d_month_seq_1:=d_month_seq
+                           │                                            └─ Projection Est. 30 rows
+                           │                                               │     Expressions: [d_month_seq_1]
+                           │                                               └─ Filter Est. 30 rows
+                           │                                                  │     Condition: (d_year = 2001) AND (d_moy = 1)
+                           │                                                  └─ TableScan tpcds100.date_dim Est. 73049 rows
+                           │                                                           Where: (d_year = 2001) AND (d_moy = 1)
+                           │                                                           Outputs: [d_year, d_moy], d_month_seq_1:=d_month_seq
                            └─ Broadcast Exchange Est. 11 rows
                               └─ MergingAggregated Est. 11 rows
                                  └─ Repartition Exchange Est. 11 rows

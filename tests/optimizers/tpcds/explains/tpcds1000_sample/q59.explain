@@ -70,11 +70,13 @@ Projection Est. 100 rows
                   │        │                 Outputs: s_store_sk_1:=s_store_sk, s_store_id_1:=s_store_id
                   │        └─ Repartition Exchange Est. 334 rows
                   │           │     Partition by: {d_week_seq_4}
-                  │           └─ Filter Est. 334 rows
-                  │              │     Condition: (d_month_seq_1 >= 1224) AND (d_month_seq_1 <= 1235)
-                  │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                  │                       Where: (d_month_seq >= 1224) AND (d_month_seq <= 1235)
-                  │                       Outputs: d_month_seq_1:=d_month_seq, d_week_seq_4:=d_week_seq
+                  │           └─ Projection Est. 334 rows
+                  │              │     Expressions: [d_week_seq_4]
+                  │              └─ Filter Est. 334 rows
+                  │                 │     Condition: (d_month_seq_1 >= 1224) AND (d_month_seq_1 <= 1235)
+                  │                 └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                  │                          Where: (d_month_seq >= 1224) AND (d_month_seq <= 1235)
+                  │                          Outputs: d_month_seq_1:=d_month_seq, d_week_seq_4:=d_week_seq
                   └─ Inner Join Est. 150449 rows
                      │     Condition: d_week_seq_1 == d_week_seq_2
                      │     Runtime Filters Builder: {d_week_seq_2}
@@ -128,10 +130,12 @@ Projection Est. 100 rows
                      │                 Outputs: [s_store_sk, s_store_id, s_store_name]
                      └─ Repartition Exchange Est. 333 rows
                         │     Partition by: {d_week_seq_2}
-                        └─ Filter Est. 333 rows
-                           │     Condition: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
-                           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                    Where: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
-                                    Outputs: [d_month_seq], d_week_seq_2:=d_week_seq
+                        └─ Projection Est. 333 rows
+                           │     Expressions: [d_week_seq_2]
+                           └─ Filter Est. 333 rows
+                              │     Condition: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
+                              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                       Where: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
+                                       Outputs: [d_month_seq], d_week_seq_2:=d_week_seq
 note: Magic Set is applied for 2 parts.
 note: Runtime Filter is applied for 8 times.

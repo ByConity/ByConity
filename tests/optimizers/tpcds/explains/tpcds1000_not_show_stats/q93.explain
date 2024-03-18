@@ -38,9 +38,11 @@ Projection
                                  │           Where: Runtime Filters: {sr_reason_sk}
                                  │           Outputs: [sr_item_sk, sr_reason_sk, sr_ticket_number, sr_return_quantity]
                                  └─ Broadcast Exchange
-                                    └─ Filter
-                                       │     Condition: r_reason_desc = 'reason 28'
-                                       └─ TableScan tpcds1000.reason
-                                                Where: r_reason_desc = 'reason 28'
-                                                Outputs: [r_reason_sk, r_reason_desc]
+                                    └─ Projection
+                                       │     Expressions: [r_reason_sk]
+                                       └─ Filter
+                                          │     Condition: r_reason_desc = 'reason 28'
+                                          └─ TableScan tpcds1000.reason
+                                                   Where: r_reason_desc = 'reason 28'
+                                                   Outputs: [r_reason_sk, r_reason_desc]
 note: Runtime Filter is applied for 2 times.

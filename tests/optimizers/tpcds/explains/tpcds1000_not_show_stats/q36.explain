@@ -38,17 +38,21 @@ Projection
                                     │     │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                                     │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_ext_sales_price, ss_net_profit]
                                     │     │  └─ Broadcast Exchange
-                                    │     │     └─ Filter
-                                    │     │        │     Condition: s_state = 'TN'
-                                    │     │        └─ TableScan tpcds1000.store
-                                    │     │                 Where: s_state = 'TN'
-                                    │     │                 Outputs: [s_store_sk, s_state]
+                                    │     │     └─ Projection
+                                    │     │        │     Expressions: [s_store_sk]
+                                    │     │        └─ Filter
+                                    │     │           │     Condition: s_state = 'TN'
+                                    │     │           └─ TableScan tpcds1000.store
+                                    │     │                    Where: s_state = 'TN'
+                                    │     │                    Outputs: [s_store_sk, s_state]
                                     │     └─ Broadcast Exchange
-                                    │        └─ Filter
-                                    │           │     Condition: d_year = 2001
-                                    │           └─ TableScan tpcds1000.date_dim
-                                    │                    Where: d_year = 2001
-                                    │                    Outputs: [d_date_sk, d_year]
+                                    │        └─ Projection
+                                    │           │     Expressions: [d_date_sk]
+                                    │           └─ Filter
+                                    │              │     Condition: d_year = 2001
+                                    │              └─ TableScan tpcds1000.date_dim
+                                    │                       Where: d_year = 2001
+                                    │                       Outputs: [d_date_sk, d_year]
                                     └─ Repartition Exchange
                                        │     Partition by: {i_item_sk}
                                        └─ TableScan tpcds1000.item

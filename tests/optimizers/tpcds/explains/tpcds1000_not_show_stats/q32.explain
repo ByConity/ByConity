@@ -25,11 +25,13 @@ Projection
                │        │     Runtime Filters Builder: {cs_item_sk_1}
                │        ├─ Repartition Exchange
                │        │  │     Partition by: {i_item_sk}
-               │        │  └─ Filter
-               │        │     │     Condition: i_manufact_id = 977 Runtime Filters: {i_item_sk}
-               │        │     └─ TableScan tpcds1000.item
-               │        │              Where: i_manufact_id = 977 Runtime Filters: {i_item_sk}
-               │        │              Outputs: [i_item_sk, i_manufact_id]
+               │        │  └─ Projection
+               │        │     │     Expressions: [i_item_sk]
+               │        │     └─ Filter
+               │        │        │     Condition: i_manufact_id = 977 Runtime Filters: {i_item_sk}
+               │        │        └─ TableScan tpcds1000.item
+               │        │                 Where: i_manufact_id = 977 Runtime Filters: {i_item_sk}
+               │        │                 Outputs: [i_item_sk, i_manufact_id]
                │        └─ MergingAggregated
                │           └─ Repartition Exchange
                │              │     Partition by: {cs_item_sk_1}
@@ -63,16 +65,20 @@ Projection
                │                       │                             Where: i_manufact_id = 977
                │                       │                             Outputs: [i_item_sk, i_manufact_id]
                │                       └─ Broadcast Exchange
-               │                          └─ Filter
-               │                             │     Condition: (d_date_1 >= cast(10983, 'Date')) AND (d_date_1 <= cast(11073, 'Date'))
-               │                             └─ TableScan tpcds1000.date_dim
-               │                                      Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-               │                                      Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date
+               │                          └─ Projection
+               │                             │     Expressions: [d_date_sk_1]
+               │                             └─ Filter
+               │                                │     Condition: (d_date_1 >= cast(10983, 'Date')) AND (d_date_1 <= cast(11073, 'Date'))
+               │                                └─ TableScan tpcds1000.date_dim
+               │                                         Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
+               │                                         Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date
                └─ Broadcast Exchange
-                  └─ Filter
-                     │     Condition: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-                     └─ TableScan tpcds1000.date_dim
-                              Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-                              Outputs: [d_date_sk, d_date]
+                  └─ Projection
+                     │     Expressions: [d_date_sk]
+                     └─ Filter
+                        │     Condition: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
+                        └─ TableScan tpcds1000.date_dim
+                                 Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
+                                 Outputs: [d_date_sk, d_date]
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 5 times.

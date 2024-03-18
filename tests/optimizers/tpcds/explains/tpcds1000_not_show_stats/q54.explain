@@ -88,17 +88,21 @@ Projection
                                        │                             │  │              Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
                                        │                             │  │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_bill_customer_sk]
                                        │                             │  └─ Broadcast Exchange
-                                       │                             │     └─ Filter
-                                       │                             │        │     Condition: (i_class = 'maternity') AND (i_category = 'Women')
-                                       │                             │        └─ TableScan tpcds1000.item
-                                       │                             │                 Where: (i_class = 'maternity') AND (i_category = 'Women')
-                                       │                             │                 Outputs: [i_item_sk, i_class, i_category]
+                                       │                             │     └─ Projection
+                                       │                             │        │     Expressions: [i_item_sk]
+                                       │                             │        └─ Filter
+                                       │                             │           │     Condition: (i_class = 'maternity') AND (i_category = 'Women')
+                                       │                             │           └─ TableScan tpcds1000.item
+                                       │                             │                    Where: (i_class = 'maternity') AND (i_category = 'Women')
+                                       │                             │                    Outputs: [i_item_sk, i_class, i_category]
                                        │                             └─ Broadcast Exchange
-                                       │                                └─ Filter
-                                       │                                   │     Condition: (d_year = 1998) AND (d_moy = 12)
-                                       │                                   └─ TableScan tpcds1000.date_dim
-                                       │                                            Where: (d_year = 1998) AND (d_moy = 12)
-                                       │                                            Outputs: [d_date_sk, d_year, d_moy]
+                                       │                                └─ Projection
+                                       │                                   │     Expressions: [d_date_sk]
+                                       │                                   └─ Filter
+                                       │                                      │     Condition: (d_year = 1998) AND (d_moy = 12)
+                                       │                                      └─ TableScan tpcds1000.date_dim
+                                       │                                               Where: (d_year = 1998) AND (d_moy = 12)
+                                       │                                               Outputs: [d_date_sk, d_year, d_moy]
                                        └─ Repartition Exchange
                                           │     Partition by: {d_date_sk_1}
                                           └─ Inner Join

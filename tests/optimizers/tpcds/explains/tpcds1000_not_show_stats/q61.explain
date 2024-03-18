@@ -48,36 +48,46 @@ Projection
             │           │           │  │  │  │           Where: Runtime Filters: {ss_item_sk, ss_promo_sk, ss_sold_date_sk}
             │           │           │  │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_promo_sk, ss_ext_sales_price]
             │           │           │  │  │  └─ Broadcast Exchange
-            │           │           │  │  │     └─ Filter
-            │           │           │  │  │        │     Condition: (d_year = 1998) AND (d_moy = 11)
-            │           │           │  │  │        └─ TableScan tpcds1000.date_dim
-            │           │           │  │  │                 Where: (d_year = 1998) AND (d_moy = 11)
-            │           │           │  │  │                 Outputs: [d_date_sk, d_year, d_moy]
+            │           │           │  │  │     └─ Projection
+            │           │           │  │  │        │     Expressions: [d_date_sk]
+            │           │           │  │  │        └─ Filter
+            │           │           │  │  │           │     Condition: (d_year = 1998) AND (d_moy = 11)
+            │           │           │  │  │           └─ TableScan tpcds1000.date_dim
+            │           │           │  │  │                    Where: (d_year = 1998) AND (d_moy = 11)
+            │           │           │  │  │                    Outputs: [d_date_sk, d_year, d_moy]
             │           │           │  │  └─ Broadcast Exchange
-            │           │           │  │     └─ Filter
-            │           │           │  │        │     Condition: i_category = 'Jewelry'
-            │           │           │  │        └─ TableScan tpcds1000.item
-            │           │           │  │                 Where: i_category = 'Jewelry'
-            │           │           │  │                 Outputs: [i_item_sk, i_category]
+            │           │           │  │     └─ Projection
+            │           │           │  │        │     Expressions: [i_item_sk]
+            │           │           │  │        └─ Filter
+            │           │           │  │           │     Condition: i_category = 'Jewelry'
+            │           │           │  │           └─ TableScan tpcds1000.item
+            │           │           │  │                    Where: i_category = 'Jewelry'
+            │           │           │  │                    Outputs: [i_item_sk, i_category]
             │           │           │  └─ Broadcast Exchange
-            │           │           │     └─ Filter
-            │           │           │        │     Condition: (p_channel_dmail = 'Y') OR (p_channel_email = 'Y') OR (p_channel_tv = 'Y')
-            │           │           │        └─ TableScan tpcds1000.promotion
-            │           │           │                 Where: (p_channel_dmail = 'Y') OR (p_channel_email = 'Y') OR (p_channel_tv = 'Y')
-            │           │           │                 Outputs: [p_promo_sk, p_channel_dmail, p_channel_email, p_channel_tv]
+            │           │           │     └─ Projection
+            │           │           │        │     Expressions: [p_promo_sk]
+            │           │           │        └─ Filter
+            │           │           │           │     Condition: (p_channel_dmail = 'Y') OR (p_channel_email = 'Y') OR (p_channel_tv = 'Y')
+            │           │           │           └─ TableScan tpcds1000.promotion
+            │           │           │                    Where: (p_channel_dmail = 'Y') OR (p_channel_email = 'Y') OR (p_channel_tv = 'Y')
+            │           │           │                    Outputs: [p_promo_sk, p_channel_dmail, p_channel_email, p_channel_tv]
             │           │           └─ Broadcast Exchange
-            │           │              └─ Filter
-            │           │                 │     Condition: s_gmt_offset = -5.
-            │           │                 └─ TableScan tpcds1000.store
-            │           │                          Where: s_gmt_offset = -5.
-            │           │                          Outputs: [s_store_sk, s_gmt_offset]
+            │           │              └─ Projection
+            │           │                 │     Expressions: [s_store_sk]
+            │           │                 └─ Filter
+            │           │                    │     Condition: s_gmt_offset = -5.
+            │           │                    └─ TableScan tpcds1000.store
+            │           │                             Where: s_gmt_offset = -5.
+            │           │                             Outputs: [s_store_sk, s_gmt_offset]
             │           └─ Repartition Exchange
             │              │     Partition by: {ca_address_sk}
-            │              └─ Filter
-            │                 │     Condition: ca_gmt_offset = -5.
-            │                 └─ TableScan tpcds1000.customer_address
-            │                          Where: ca_gmt_offset = -5.
-            │                          Outputs: [ca_address_sk, ca_gmt_offset]
+            │              └─ Projection
+            │                 │     Expressions: [ca_address_sk]
+            │                 └─ Filter
+            │                    │     Condition: ca_gmt_offset = -5.
+            │                    └─ TableScan tpcds1000.customer_address
+            │                             Where: ca_gmt_offset = -5.
+            │                             Outputs: [ca_address_sk, ca_gmt_offset]
             └─ Broadcast Exchange
                └─ MergingAggregated
                   └─ Gather Exchange
@@ -115,28 +125,36 @@ Projection
                            │  │           │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                            │  │           │  │           Outputs: ss_sold_date_sk_1:=ss_sold_date_sk, ss_item_sk_1:=ss_item_sk, ss_customer_sk_1:=ss_customer_sk, ss_store_sk_1:=ss_store_sk, ss_ext_sales_price_1:=ss_ext_sales_price
                            │  │           │  └─ Broadcast Exchange
-                           │  │           │     └─ Filter
-                           │  │           │        │     Condition: (d_year_1 = 1998) AND (d_moy_1 = 11)
-                           │  │           │        └─ TableScan tpcds1000.date_dim
-                           │  │           │                 Where: (d_year = 1998) AND (d_moy = 11)
-                           │  │           │                 Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
+                           │  │           │     └─ Projection
+                           │  │           │        │     Expressions: [d_date_sk_1]
+                           │  │           │        └─ Filter
+                           │  │           │           │     Condition: (d_year_1 = 1998) AND (d_moy_1 = 11)
+                           │  │           │           └─ TableScan tpcds1000.date_dim
+                           │  │           │                    Where: (d_year = 1998) AND (d_moy = 11)
+                           │  │           │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                            │  │           └─ Broadcast Exchange
-                           │  │              └─ Filter
-                           │  │                 │     Condition: i_category_1 = 'Jewelry'
-                           │  │                 └─ TableScan tpcds1000.item
-                           │  │                          Where: i_category = 'Jewelry'
-                           │  │                          Outputs: i_item_sk_1:=i_item_sk, i_category_1:=i_category
+                           │  │              └─ Projection
+                           │  │                 │     Expressions: [i_item_sk_1]
+                           │  │                 └─ Filter
+                           │  │                    │     Condition: i_category_1 = 'Jewelry'
+                           │  │                    └─ TableScan tpcds1000.item
+                           │  │                             Where: i_category = 'Jewelry'
+                           │  │                             Outputs: i_item_sk_1:=i_item_sk, i_category_1:=i_category
                            │  └─ Repartition Exchange
                            │     │     Partition by: {ca_address_sk_1}
-                           │     └─ Filter
-                           │        │     Condition: ca_gmt_offset_1 = -5.
-                           │        └─ TableScan tpcds1000.customer_address
-                           │                 Where: ca_gmt_offset = -5.
-                           │                 Outputs: ca_address_sk_1:=ca_address_sk, ca_gmt_offset_1:=ca_gmt_offset
+                           │     └─ Projection
+                           │        │     Expressions: [ca_address_sk_1]
+                           │        └─ Filter
+                           │           │     Condition: ca_gmt_offset_1 = -5.
+                           │           └─ TableScan tpcds1000.customer_address
+                           │                    Where: ca_gmt_offset = -5.
+                           │                    Outputs: ca_address_sk_1:=ca_address_sk, ca_gmt_offset_1:=ca_gmt_offset
                            └─ Broadcast Exchange
-                              └─ Filter
-                                 │     Condition: s_gmt_offset_1 = -5.
-                                 └─ TableScan tpcds1000.store
-                                          Where: s_gmt_offset = -5.
-                                          Outputs: s_store_sk_1:=s_store_sk, s_gmt_offset_1:=s_gmt_offset
+                              └─ Projection
+                                 │     Expressions: [s_store_sk_1]
+                                 └─ Filter
+                                    │     Condition: s_gmt_offset_1 = -5.
+                                    └─ TableScan tpcds1000.store
+                                             Where: s_gmt_offset = -5.
+                                             Outputs: s_store_sk_1:=s_store_sk, s_gmt_offset_1:=s_gmt_offset
 note: Runtime Filter is applied for 9 times.

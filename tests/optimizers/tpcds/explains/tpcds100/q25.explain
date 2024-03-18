@@ -33,11 +33,13 @@ Projection Est. 100 rows
                         │  │  │     │           Where: Runtime Filters: {cs_bill_customer_sk, cs_sold_date_sk}
                         │  │  │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk, cs_net_profit]
                         │  │  │     └─ Broadcast Exchange Est. 213 rows
-                        │  │  │        └─ Filter Est. 213 rows
-                        │  │  │           │     Condition: (d_year_2 = 2001) AND (d_moy_2 >= 4) AND (d_moy_2 <= 10)
-                        │  │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                        │  │  │                    Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 10)
-                        │  │  │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
+                        │  │  │        └─ Projection Est. 213 rows
+                        │  │  │           │     Expressions: [d_date_sk_2]
+                        │  │  │           └─ Filter Est. 213 rows
+                        │  │  │              │     Condition: (d_year_2 = 2001) AND (d_moy_2 >= 4) AND (d_moy_2 <= 10)
+                        │  │  │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                        │  │  │                       Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 10)
+                        │  │  │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
                         │  │  └─ Inner (PARALLEL_HASH) Join Est. 373831 rows
                         │  │     │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                         │  │     │     Runtime Filters Builder: {sr_ticket_number}
@@ -52,11 +54,13 @@ Projection Est. 100 rows
                         │  │     │     │           Where: Runtime Filters: {ss_sold_date_sk, ss_ticket_number}
                         │  │     │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_net_profit]
                         │  │     │     └─ Broadcast Exchange Est. 29 rows
-                        │  │     │        └─ Filter Est. 29 rows
-                        │  │     │           │     Condition: (d_moy = 4) AND (d_year = 2001)
-                        │  │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                        │  │     │                    Where: (d_moy = 4) AND (d_year = 2001)
-                        │  │     │                    Outputs: [d_date_sk, d_year, d_moy]
+                        │  │     │        └─ Projection Est. 29 rows
+                        │  │     │           │     Expressions: [d_date_sk]
+                        │  │     │           └─ Filter Est. 29 rows
+                        │  │     │              │     Condition: (d_moy = 4) AND (d_year = 2001)
+                        │  │     │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                        │  │     │                       Where: (d_moy = 4) AND (d_year = 2001)
+                        │  │     │                       Outputs: [d_date_sk, d_year, d_moy]
                         │  │     └─ Repartition Exchange Est. 3062082 rows
                         │  │        │     Partition by: {sr_item_sk}
                         │  │        └─ Inner Join Est. 3062082 rows
@@ -68,11 +72,13 @@ Projection Est. 100 rows
                         │  │           │           Where: Runtime Filters: {sr_returned_date_sk}
                         │  │           │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number, sr_net_loss]
                         │  │           └─ Broadcast Exchange Est. 213 rows
-                        │  │              └─ Filter Est. 213 rows
-                        │  │                 │     Condition: (d_year_1 = 2001) AND (d_moy_1 >= 4) AND (d_moy_1 <= 10)
-                        │  │                 └─ TableScan tpcds100.date_dim Est. 73049 rows
-                        │  │                          Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 10)
-                        │  │                          Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
+                        │  │              └─ Projection Est. 213 rows
+                        │  │                 │     Expressions: [d_date_sk_1]
+                        │  │                 └─ Filter Est. 213 rows
+                        │  │                    │     Condition: (d_year_1 = 2001) AND (d_moy_1 >= 4) AND (d_moy_1 <= 10)
+                        │  │                    └─ TableScan tpcds100.date_dim Est. 73049 rows
+                        │  │                             Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 10)
+                        │  │                             Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                         │  └─ Repartition Exchange Est. 204000 rows
                         │     │     Partition by: {i_item_sk}
                         │     └─ TableScan tpcds100.item Est. 204000 rows

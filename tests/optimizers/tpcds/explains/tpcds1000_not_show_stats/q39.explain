@@ -38,11 +38,13 @@ CTEDef [0]
             │     │              Where: isNotNull(inv_item_sk) Runtime Filters: {inv_date_sk}
             │     │              Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
             │     └─ Broadcast Exchange
-            │        └─ Filter
-            │           │     Condition: (d_year = 2001) AND (d_moy IN (1, 2))
-            │           └─ TableScan tpcds1000.date_dim
-            │                    Where: (d_year = 2001) AND (d_moy IN (1, 2))
-            │                    Outputs: [d_date_sk, d_year, d_moy]
+            │        └─ Projection
+            │           │     Expressions: [d_date_sk, d_moy]
+            │           └─ Filter
+            │              │     Condition: (d_year = 2001) AND (d_moy IN (1, 2))
+            │              └─ TableScan tpcds1000.date_dim
+            │                       Where: (d_year = 2001) AND (d_moy IN (1, 2))
+            │                       Outputs: [d_date_sk, d_year, d_moy]
             └─ Repartition Exchange
                │     Partition by: {w_warehouse_sk}
                └─ TableScan tpcds1000.warehouse
@@ -78,11 +80,13 @@ Projection
             │           │     │           Where: isNotNull(inv_item_sk) Runtime Filters: {inv_date_sk}
             │           │     │           Outputs: inv_date_sk_4:=inv_date_sk, inv_item_sk_4:=inv_item_sk, inv_warehouse_sk_6:=inv_warehouse_sk, inv_quantity_on_hand_4:=inv_quantity_on_hand
             │           │     └─ Broadcast Exchange
-            │           │        └─ Filter
-            │           │           │     Condition: (d_year_4 = 2001) AND (d_moy_8 = 1)
-            │           │           └─ TableScan tpcds1000.date_dim
-            │           │                    Where: (d_year = 2001) AND (d_moy = 1)
-            │           │                    Outputs: d_date_sk_4:=d_date_sk, d_year_4:=d_year, d_moy_8:=d_moy
+            │           │        └─ Projection
+            │           │           │     Expressions: [d_date_sk_4, d_moy_8]
+            │           │           └─ Filter
+            │           │              │     Condition: (d_year_4 = 2001) AND (d_moy_8 = 1)
+            │           │              └─ TableScan tpcds1000.date_dim
+            │           │                       Where: (d_year = 2001) AND (d_moy = 1)
+            │           │                       Outputs: d_date_sk_4:=d_date_sk, d_year_4:=d_year, d_moy_8:=d_moy
             │           └─ Repartition Exchange
             │              │     Partition by: {w_warehouse_sk_8}
             │              └─ TableScan tpcds1000.warehouse
@@ -107,11 +111,13 @@ Projection
                         │     │           Where: isNotNull(inv_item_sk) Runtime Filters: {inv_date_sk}
                         │     │           Outputs: inv_date_sk_5:=inv_date_sk, inv_item_sk_5:=inv_item_sk, inv_warehouse_sk_8:=inv_warehouse_sk, inv_quantity_on_hand_5:=inv_quantity_on_hand
                         │     └─ Broadcast Exchange
-                        │        └─ Filter
-                        │           │     Condition: (d_year_5 = 2001) AND (d_moy_9 = 2)
-                        │           └─ TableScan tpcds1000.date_dim
-                        │                    Where: (d_year = 2001) AND (d_moy = 2)
-                        │                    Outputs: d_date_sk_5:=d_date_sk, d_year_5:=d_year, d_moy_9:=d_moy
+                        │        └─ Projection
+                        │           │     Expressions: [d_date_sk_5, d_moy_9]
+                        │           └─ Filter
+                        │              │     Condition: (d_year_5 = 2001) AND (d_moy_9 = 2)
+                        │              └─ TableScan tpcds1000.date_dim
+                        │                       Where: (d_year = 2001) AND (d_moy = 2)
+                        │                       Outputs: d_date_sk_5:=d_date_sk, d_year_5:=d_year, d_moy_9:=d_moy
                         └─ Repartition Exchange
                            │     Partition by: {w_warehouse_sk_9}
                            └─ TableScan tpcds1000.warehouse

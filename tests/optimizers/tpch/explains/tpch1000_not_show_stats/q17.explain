@@ -22,11 +22,13 @@ Projection
                   │     Runtime Filters Builder: {l_partkey_1}
                   ├─ Repartition Exchange
                   │  │     Partition by: {p_partkey}
-                  │  └─ Filter
-                  │     │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
-                  │     └─ TableScan tpch1000.part
-                  │              Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
-                  │              Outputs: [p_partkey, p_brand, p_container]
+                  │  └─ Projection
+                  │     │     Expressions: [p_partkey]
+                  │     └─ Filter
+                  │        │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
+                  │        └─ TableScan tpch1000.part
+                  │                 Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
+                  │                 Outputs: [p_partkey, p_brand, p_container]
                   └─ Aggregating
                      │     Group by: {l_partkey_1}
                      │     Aggregates: expr#avg(l_quantity):=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)

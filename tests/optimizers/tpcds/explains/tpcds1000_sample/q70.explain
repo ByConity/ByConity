@@ -33,11 +33,13 @@ Projection Est. 100 rows
                                     │  │           Where: Runtime Filters: {ss_sold_date_sk}
                                     │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_net_profit]
                                     │  └─ Broadcast Exchange Est. 335 rows
-                                    │     └─ Filter Est. 335 rows
-                                    │        │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                    │        └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                    │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                    │                 Outputs: [d_date_sk, d_month_seq]
+                                    │     └─ Projection Est. 335 rows
+                                    │        │     Expressions: [d_date_sk]
+                                    │        └─ Filter Est. 335 rows
+                                    │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                    │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                    │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                    │                    Outputs: [d_date_sk, d_month_seq]
                                     └─ Broadcast Exchange Est. 865 rows
                                        └─ Inner Join Est. 865 rows
                                           │     Condition: s_state == s_state_1
@@ -72,11 +74,13 @@ Projection Est. 100 rows
                                                                   │  │           Where: Runtime Filters: {ss_sold_date_sk}
                                                                   │  │           Outputs: ss_sold_date_sk_1:=ss_sold_date_sk, ss_store_sk_1:=ss_store_sk, ss_net_profit_1:=ss_net_profit
                                                                   │  └─ Broadcast Exchange Est. 335 rows
-                                                                  │     └─ Filter Est. 335 rows
-                                                                  │        │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
-                                                                  │        └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                                                  │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                                                  │                 Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
+                                                                  │     └─ Projection Est. 335 rows
+                                                                  │        │     Expressions: [d_date_sk_1]
+                                                                  │        └─ Filter Est. 335 rows
+                                                                  │           │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
+                                                                  │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                                                  │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                                                  │                    Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
                                                                   └─ Broadcast Exchange Est. 1002 rows
                                                                      └─ Filter Est. 1002 rows
                                                                         │     Condition: isNotNull(s_state_1)

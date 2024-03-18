@@ -30,16 +30,20 @@ Projection Est. 48721 rows
                         │     │              Outputs: [LO_CUSTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                         │     └─ Repartition Exchange Est. 400039 rows
                         │        │     Partition by: {S_SUPPKEY}
-                        │        └─ Filter Est. 400039 rows
-                        │           │     Condition: S_REGION = 'ASIA'
-                        │           └─ TableScan ssb1000.supplier Est. 2000000 rows
-                        │                    Where: S_REGION = 'ASIA'
-                        │                    Outputs: [S_SUPPKEY, S_NATION, S_REGION]
+                        │        └─ Projection Est. 400039 rows
+                        │           │     Expressions: [S_NATION, S_SUPPKEY]
+                        │           └─ Filter Est. 400039 rows
+                        │              │     Condition: S_REGION = 'ASIA'
+                        │              └─ TableScan ssb1000.supplier Est. 2000000 rows
+                        │                       Where: S_REGION = 'ASIA'
+                        │                       Outputs: [S_SUPPKEY, S_NATION, S_REGION]
                         └─ Repartition Exchange Est. 6002311 rows
                            │     Partition by: {C_CUSTKEY}
-                           └─ Filter Est. 6002311 rows
-                              │     Condition: C_REGION = 'ASIA'
-                              └─ TableScan ssb1000.customer Est. 30000000 rows
-                                       Where: C_REGION = 'ASIA'
-                                       Outputs: [C_CUSTKEY, C_NATION, C_REGION]
+                           └─ Projection Est. 6002311 rows
+                              │     Expressions: [C_CUSTKEY, C_NATION]
+                              └─ Filter Est. 6002311 rows
+                                 │     Condition: C_REGION = 'ASIA'
+                                 └─ TableScan ssb1000.customer Est. 30000000 rows
+                                          Where: C_REGION = 'ASIA'
+                                          Outputs: [C_CUSTKEY, C_NATION, C_REGION]
 note: Runtime Filter is applied for 2 times.

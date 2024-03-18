@@ -113,11 +113,13 @@ CTEDef [0]
                            │  │     │     │              │  │        ├─ Inner Join
                            │  │     │     │              │  │        │  │     Condition: ss_item_sk == cs_item_sk, ss_ticket_number == sr_ticket_number
                            │  │     │     │              │  │        │  │     Runtime Filters Builder: {cs_item_sk,sr_ticket_number}
-                           │  │     │     │              │  │        │  ├─ Filter
-                           │  │     │     │              │  │        │  │  │     Condition: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
-                           │  │     │     │              │  │        │  │  └─ TableScan tpcds1000.store_sales
-                           │  │     │     │              │  │        │  │           Where: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
-                           │  │     │     │              │  │        │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_cdemo_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_promo_sk, ss_ticket_number, ss_wholesale_cost, ss_list_price, ss_coupon_amt]
+                           │  │     │     │              │  │        │  ├─ Projection
+                           │  │     │     │              │  │        │  │  │     Expressions: [ss_addr_sk, ss_cdemo_sk, ss_coupon_amt, ss_customer_sk, ss_hdemo_sk, ss_item_sk, ss_list_price, ss_sold_date_sk, ss_store_sk, ss_ticket_number, ss_wholesale_cost]
+                           │  │     │     │              │  │        │  │  └─ Filter
+                           │  │     │     │              │  │        │  │     │     Condition: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                           │  │     │     │              │  │        │  │     └─ TableScan tpcds1000.store_sales
+                           │  │     │     │              │  │        │  │              Where: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                           │  │     │     │              │  │        │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_cdemo_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_promo_sk, ss_ticket_number, ss_wholesale_cost, ss_list_price, ss_coupon_amt]
                            │  │     │     │              │  │        │  └─ Broadcast Exchange
                            │  │     │     │              │  │        │     └─ Inner Join
                            │  │     │     │              │  │        │        │     Condition: sr_item_sk == cs_item_sk
@@ -131,40 +133,44 @@ CTEDef [0]
                            │  │     │     │              │  │        │           └─ Inner Join
                            │  │     │     │              │  │        │              │     Condition: cs_item_sk == i_item_sk
                            │  │     │     │              │  │        │              │     Runtime Filters Builder: {i_item_sk}
-                           │  │     │     │              │  │        │              ├─ Filter
-                           │  │     │     │              │  │        │              │  │     Condition: `expr#sum(cs_ext_list_price)` > (2 * `expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))`)
-                           │  │     │     │              │  │        │              │  └─ MergingAggregated
-                           │  │     │     │              │  │        │              │     └─ Repartition Exchange
-                           │  │     │     │              │  │        │              │        │     Partition by: {cs_item_sk}
-                           │  │     │     │              │  │        │              │        └─ Aggregating
-                           │  │     │     │              │  │        │              │           │     Group by: {cs_item_sk}
-                           │  │     │     │              │  │        │              │           │     Aggregates: expr#sum(cs_ext_list_price):=AggNull(sum)(cs_ext_list_price), expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit)):=AggNull(sum)(expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))
-                           │  │     │     │              │  │        │              │           └─ Projection
-                           │  │     │     │              │  │        │              │              │     Expressions: [cs_ext_list_price, cs_item_sk], expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit):=(cr_refunded_cash + cr_reversed_charge) + cr_store_credit
-                           │  │     │     │              │  │        │              │              └─ Inner (PARALLEL_HASH) Join
-                           │  │     │     │              │  │        │              │                 │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                           │  │     │     │              │  │        │              │                 │     Runtime Filters Builder: {cr_order_number}
-                           │  │     │     │              │  │        │              │                 ├─ Repartition Exchange
-                           │  │     │     │              │  │        │              │                 │  │     Partition by: {cs_item_sk, cs_order_number}
-                           │  │     │     │              │  │        │              │                 │  └─ Filter
-                           │  │     │     │              │  │        │              │                 │     │     Condition: Runtime Filters: {cs_item_sk, cs_order_number}
-                           │  │     │     │              │  │        │              │                 │     └─ TableScan tpcds1000.catalog_sales
-                           │  │     │     │              │  │        │              │                 │              Where: Runtime Filters: {cs_item_sk, cs_order_number}
-                           │  │     │     │              │  │        │              │                 │              Outputs: [cs_item_sk, cs_order_number, cs_ext_list_price]
-                           │  │     │     │              │  │        │              │                 └─ Repartition Exchange
-                           │  │     │     │              │  │        │              │                    │     Partition by: {cr_item_sk, cr_order_number}
-                           │  │     │     │              │  │        │              │                    └─ Filter
-                           │  │     │     │              │  │        │              │                       │     Condition: Runtime Filters: {cr_item_sk}
-                           │  │     │     │              │  │        │              │                       └─ TableScan tpcds1000.catalog_returns
-                           │  │     │     │              │  │        │              │                                Where: Runtime Filters: {cr_item_sk}
-                           │  │     │     │              │  │        │              │                                Outputs: [cr_item_sk, cr_order_number, cr_refunded_cash, cr_reversed_charge, cr_store_credit]
+                           │  │     │     │              │  │        │              ├─ Projection
+                           │  │     │     │              │  │        │              │  │     Expressions: [cs_item_sk]
+                           │  │     │     │              │  │        │              │  └─ Filter
+                           │  │     │     │              │  │        │              │     │     Condition: `expr#sum(cs_ext_list_price)` > (2 * `expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))`)
+                           │  │     │     │              │  │        │              │     └─ MergingAggregated
+                           │  │     │     │              │  │        │              │        └─ Repartition Exchange
+                           │  │     │     │              │  │        │              │           │     Partition by: {cs_item_sk}
+                           │  │     │     │              │  │        │              │           └─ Aggregating
+                           │  │     │     │              │  │        │              │              │     Group by: {cs_item_sk}
+                           │  │     │     │              │  │        │              │              │     Aggregates: expr#sum(cs_ext_list_price):=AggNull(sum)(cs_ext_list_price), expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit)):=AggNull(sum)(expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))
+                           │  │     │     │              │  │        │              │              └─ Projection
+                           │  │     │     │              │  │        │              │                 │     Expressions: [cs_ext_list_price, cs_item_sk], expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit):=(cr_refunded_cash + cr_reversed_charge) + cr_store_credit
+                           │  │     │     │              │  │        │              │                 └─ Inner (PARALLEL_HASH) Join
+                           │  │     │     │              │  │        │              │                    │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
+                           │  │     │     │              │  │        │              │                    │     Runtime Filters Builder: {cr_order_number}
+                           │  │     │     │              │  │        │              │                    ├─ Repartition Exchange
+                           │  │     │     │              │  │        │              │                    │  │     Partition by: {cs_item_sk, cs_order_number}
+                           │  │     │     │              │  │        │              │                    │  └─ Filter
+                           │  │     │     │              │  │        │              │                    │     │     Condition: Runtime Filters: {cs_item_sk, cs_order_number}
+                           │  │     │     │              │  │        │              │                    │     └─ TableScan tpcds1000.catalog_sales
+                           │  │     │     │              │  │        │              │                    │              Where: Runtime Filters: {cs_item_sk, cs_order_number}
+                           │  │     │     │              │  │        │              │                    │              Outputs: [cs_item_sk, cs_order_number, cs_ext_list_price]
+                           │  │     │     │              │  │        │              │                    └─ Repartition Exchange
+                           │  │     │     │              │  │        │              │                       │     Partition by: {cr_item_sk, cr_order_number}
+                           │  │     │     │              │  │        │              │                       └─ Filter
+                           │  │     │     │              │  │        │              │                          │     Condition: Runtime Filters: {cr_item_sk}
+                           │  │     │     │              │  │        │              │                          └─ TableScan tpcds1000.catalog_returns
+                           │  │     │     │              │  │        │              │                                   Where: Runtime Filters: {cr_item_sk}
+                           │  │     │     │              │  │        │              │                                   Outputs: [cr_item_sk, cr_order_number, cr_refunded_cash, cr_reversed_charge, cr_store_credit]
                            │  │     │     │              │  │        │              └─ Repartition Exchange
                            │  │     │     │              │  │        │                 │     Partition by: {i_item_sk}
-                           │  │     │     │              │  │        │                 └─ Filter
-                           │  │     │     │              │  │        │                    │     Condition: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
-                           │  │     │     │              │  │        │                    └─ TableScan tpcds1000.item
-                           │  │     │     │              │  │        │                             Where: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
-                           │  │     │     │              │  │        │                             Outputs: [i_item_sk, i_current_price, i_color, i_product_name]
+                           │  │     │     │              │  │        │                 └─ Projection
+                           │  │     │     │              │  │        │                    │     Expressions: [i_item_sk, i_product_name]
+                           │  │     │     │              │  │        │                    └─ Filter
+                           │  │     │     │              │  │        │                       │     Condition: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
+                           │  │     │     │              │  │        │                       └─ TableScan tpcds1000.item
+                           │  │     │     │              │  │        │                                Where: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
+                           │  │     │     │              │  │        │                                Outputs: [i_item_sk, i_current_price, i_color, i_product_name]
                            │  │     │     │              │  │        └─ Broadcast Exchange
                            │  │     │     │              │  │           └─ Filter
                            │  │     │     │              │  │              │     Condition: d_year IN (1999, 2000)
@@ -172,11 +178,13 @@ CTEDef [0]
                            │  │     │     │              │  │                       Where: d_year IN (1999, 2000)
                            │  │     │     │              │  │                       Outputs: [d_date_sk, d_year]
                            │  │     │     │              │  └─ Broadcast Exchange
-                           │  │     │     │              │     └─ Filter
-                           │  │     │     │              │        │     Condition: isNotNull(hd_income_band_sk)
-                           │  │     │     │              │        └─ TableScan tpcds1000.household_demographics
-                           │  │     │     │              │                 Where: isNotNull(hd_income_band_sk)
-                           │  │     │     │              │                 Outputs: [hd_demo_sk, hd_income_band_sk]
+                           │  │     │     │              │     └─ Projection
+                           │  │     │     │              │        │     Expressions: [hd_demo_sk]
+                           │  │     │     │              │        └─ Filter
+                           │  │     │     │              │           │     Condition: isNotNull(hd_income_band_sk)
+                           │  │     │     │              │           └─ TableScan tpcds1000.household_demographics
+                           │  │     │     │              │                    Where: isNotNull(hd_income_band_sk)
+                           │  │     │     │              │                    Outputs: [hd_demo_sk, hd_income_band_sk]
                            │  │     │     │              └─ Broadcast Exchange
                            │  │     │     │                 └─ TableScan tpcds1000.store
                            │  │     │     │                          Outputs: [s_store_sk, s_store_name, s_zip]
