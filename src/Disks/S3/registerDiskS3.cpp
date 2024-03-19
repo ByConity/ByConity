@@ -61,7 +61,7 @@ void checkWriteAccess(IDisk & disk)
 
 void checkReadAccess(const String & disk_name, IDisk & disk)
 {
-    auto file = disk.readFile("test_acl", {.buffer_size = DBMS_DEFAULT_BUFFER_SIZE});
+    auto file = disk.readFile("test_acl", ReadSettings().initializeReadSettings(4));
     String buf(4, '0');
     file->readStrict(buf.data(), 4);
     if (buf != "test")

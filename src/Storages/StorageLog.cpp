@@ -44,6 +44,7 @@
 
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
+#include "IO/ReadSettings.h"
 #include "StorageLogSettings.h"
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/Pipe.h>
@@ -113,7 +114,7 @@ private:
     struct Stream
     {
         Stream(const DiskPtr & disk, const String & data_path, size_t offset, size_t max_read_buffer_size_)
-            : plain(disk->readFile(data_path, {.buffer_size = std::min(max_read_buffer_size_, disk->getFileSize(data_path))}))
+            : plain(disk->readFile(data_path, ReadSettings().initializeReadSettings(std::min(max_read_buffer_size_, disk->getFileSize(data_path)))))
             , compressed(*plain)
         {
             if (offset)
@@ -580,7 +581,7 @@ void StorageLog::loadMarks(std::chrono::seconds lock_timeout)
         for (auto & file : files_by_index)
             file->second.marks.reserve(marks_count);
 
-        std::unique_ptr<ReadBuffer> marks_rb = disk->readFile(marks_file_path, {.buffer_size = 32768});
+        std::unique_ptr<ReadBuffer> marks_rb = disk->readFile(marks_file_path, ReadSettings().initializeReadSettings(32768));
         while (!marks_rb->eof())
         {
             for (auto & file : files_by_index)
