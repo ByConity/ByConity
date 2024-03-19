@@ -34,11 +34,13 @@ Projection Est. 100 rows
                                  │     │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                                  │     │           Outputs: [cs_sold_date_sk, cs_item_sk, cs_ext_sales_price]
                                  │     └─ Broadcast Exchange Est. 29 rows
-                                 │        └─ Filter Est. 29 rows
-                                 │           │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                 │                    Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │                    Outputs: [d_date_sk, d_date]
+                                 │        └─ Projection Est. 29 rows
+                                 │           │     Expressions: [d_date_sk]
+                                 │           └─ Filter Est. 29 rows
+                                 │              │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                 │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                 │                       Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                 │                       Outputs: [d_date_sk, d_date]
                                  └─ Repartition Exchange Est. 61207 rows
                                     │     Partition by: {i_item_sk}
                                     └─ Filter Est. 61207 rows

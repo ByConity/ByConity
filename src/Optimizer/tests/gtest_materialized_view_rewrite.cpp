@@ -135,6 +135,16 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView4)
    * expression column. */
 TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView5)
 {
+    String result = "Gather Exchange\n"
+                    "└─ Projection\n"
+                    "   │     Expressions: [name], e:=ee\n"
+                    "   └─ Projection\n"
+                    "      │     Expressions: [ee, name]\n"
+                    "      └─ Filter\n"
+                    "         │     Condition: x = 2\n"
+                    "         └─ TableScan test_mview.MV0_MV_DATA\n"
+                    "                  Where: x = 2\n"
+                    "                  Outputs: [x, ee, name]\n";
     sql("select deptno - 10 as x, empid + 1 as ee, name from emps",
         "select name, empid + 1 as e from emps where deptno - 10 = 2")
         .checkingThatResultContains("Where: x = 2")

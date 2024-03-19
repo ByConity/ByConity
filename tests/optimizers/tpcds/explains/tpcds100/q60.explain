@@ -37,11 +37,13 @@ Projection Est. 100 rows
                   │           │     │  │           Where: Runtime Filters: {ss_addr_sk, ss_item_sk, ss_sold_date_sk}
                   │           │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_addr_sk, ss_ext_sales_price]
                   │           │     │  └─ Broadcast Exchange Est. 29 rows
-                  │           │     │     └─ Filter Est. 29 rows
-                  │           │     │        │     Condition: (d_year = 1998) AND (d_moy = 9)
-                  │           │     │        └─ TableScan tpcds100.date_dim Est. 73049 rows
-                  │           │     │                 Where: (d_year = 1998) AND (d_moy = 9)
-                  │           │     │                 Outputs: [d_date_sk, d_year, d_moy]
+                  │           │     │     └─ Projection Est. 29 rows
+                  │           │     │        │     Expressions: [d_date_sk]
+                  │           │     │        └─ Filter Est. 29 rows
+                  │           │     │           │     Condition: (d_year = 1998) AND (d_moy = 9)
+                  │           │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+                  │           │     │                    Where: (d_year = 1998) AND (d_moy = 9)
+                  │           │     │                    Outputs: [d_date_sk, d_year, d_moy]
                   │           │     └─ Broadcast Exchange Est. 40768 rows
                   │           │        └─ Inner Join Est. 40768 rows
                   │           │           │     Condition: i_item_id == i_item_id_1
@@ -67,11 +69,13 @@ Projection Est. 100 rows
                   │           │                                   Outputs: [i_category], i_item_id_1:=i_item_id
                   │           └─ Repartition Exchange Est. 376093 rows
                   │              │     Partition by: {ca_address_sk}
-                  │              └─ Filter Est. 376093 rows
-                  │                 │     Condition: ca_gmt_offset = -5.
-                  │                 └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                  │                          Where: ca_gmt_offset = -5.
-                  │                          Outputs: [ca_address_sk, ca_gmt_offset]
+                  │              └─ Projection Est. 376093 rows
+                  │                 │     Expressions: [ca_address_sk]
+                  │                 └─ Filter Est. 376093 rows
+                  │                    │     Condition: ca_gmt_offset = -5.
+                  │                    └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                  │                             Where: ca_gmt_offset = -5.
+                  │                             Outputs: [ca_address_sk, ca_gmt_offset]
                   ├─ MergingAggregated Est. 102098 rows
                   │  └─ Repartition Exchange Est. 102098 rows
                   │     │     Partition by: {i_item_id_2}
@@ -97,11 +101,13 @@ Projection Est. 100 rows
                   │           │     │     │           Where: Runtime Filters: {cs_bill_addr_sk, cs_item_sk, cs_sold_date_sk}
                   │           │     │     │           Outputs: [cs_sold_date_sk, cs_bill_addr_sk, cs_item_sk, cs_ext_sales_price]
                   │           │     │     └─ Broadcast Exchange Est. 29 rows
-                  │           │     │        └─ Filter Est. 29 rows
-                  │           │     │           │     Condition: (d_moy_1 = 9) AND (d_year_1 = 1998)
-                  │           │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                  │           │     │                    Where: (d_moy = 9) AND (d_year = 1998)
-                  │           │     │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
+                  │           │     │        └─ Projection Est. 29 rows
+                  │           │     │           │     Expressions: [d_date_sk_1]
+                  │           │     │           └─ Filter Est. 29 rows
+                  │           │     │              │     Condition: (d_moy_1 = 9) AND (d_year_1 = 1998)
+                  │           │     │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                  │           │     │                       Where: (d_moy = 9) AND (d_year = 1998)
+                  │           │     │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                   │           │     └─ Repartition Exchange Est. 40768 rows
                   │           │        │     Partition by: {i_item_sk_1}
                   │           │        └─ Inner Join Est. 40768 rows
@@ -128,11 +134,13 @@ Projection Est. 100 rows
                   │           │                                   Outputs: i_item_id_3:=i_item_id, i_category_1:=i_category
                   │           └─ Repartition Exchange Est. 376093 rows
                   │              │     Partition by: {ca_address_sk_1}
-                  │              └─ Filter Est. 376093 rows
-                  │                 │     Condition: ca_gmt_offset_1 = -5.
-                  │                 └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                  │                          Where: ca_gmt_offset = -5.
-                  │                          Outputs: ca_address_sk_1:=ca_address_sk, ca_gmt_offset_1:=ca_gmt_offset
+                  │              └─ Projection Est. 376093 rows
+                  │                 │     Expressions: [ca_address_sk_1]
+                  │                 └─ Filter Est. 376093 rows
+                  │                    │     Condition: ca_gmt_offset_1 = -5.
+                  │                    └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                  │                             Where: ca_gmt_offset = -5.
+                  │                             Outputs: ca_address_sk_1:=ca_address_sk, ca_gmt_offset_1:=ca_gmt_offset
                   └─ MergingAggregated Est. 86139 rows
                      └─ Repartition Exchange Est. 86139 rows
                         │     Partition by: {i_item_id_4}
@@ -144,11 +152,13 @@ Projection Est. 100 rows
                               │     Runtime Filters Builder: {ws_bill_addr_sk}
                               ├─ Repartition Exchange Est. 376093 rows
                               │  │     Partition by: {ca_address_sk_2}
-                              │  └─ Filter Est. 376093 rows
-                              │     │     Condition: ca_gmt_offset_2 = -5. Runtime Filters: {ca_address_sk_2}
-                              │     └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                              │              Where: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
-                              │              Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
+                              │  └─ Projection Est. 376093 rows
+                              │     │     Expressions: [ca_address_sk_2]
+                              │     └─ Filter Est. 376093 rows
+                              │        │     Condition: ca_gmt_offset_2 = -5. Runtime Filters: {ca_address_sk_2}
+                              │        └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                              │                 Where: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
+                              │                 Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
                               └─ Repartition Exchange Est. 228901 rows
                                  │     Partition by: {ws_bill_addr_sk}
                                  └─ Inner Join Est. 228901 rows
@@ -165,11 +175,13 @@ Projection Est. 100 rows
                                     │     │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
                                     │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_bill_addr_sk, ws_ext_sales_price]
                                     │     └─ Broadcast Exchange Est. 29 rows
-                                    │        └─ Filter Est. 29 rows
-                                    │           │     Condition: (d_moy_2 = 9) AND (d_year_2 = 1998)
-                                    │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                    │                    Where: (d_moy = 9) AND (d_year = 1998)
-                                    │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
+                                    │        └─ Projection Est. 29 rows
+                                    │           │     Expressions: [d_date_sk_2]
+                                    │           └─ Filter Est. 29 rows
+                                    │              │     Condition: (d_moy_2 = 9) AND (d_year_2 = 1998)
+                                    │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                    │                       Where: (d_moy = 9) AND (d_year = 1998)
+                                    │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
                                     └─ Repartition Exchange Est. 40768 rows
                                        │     Partition by: {i_item_sk_2}
                                        └─ Inner Join Est. 40768 rows

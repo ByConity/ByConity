@@ -56,11 +56,13 @@ Projection Est. 100 rows
                         │     │     │  │     │           Where: Runtime Filters: {ss_sold_date_sk}
                         │     │     │  │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_quantity]
                         │     │     │  │     └─ Broadcast Exchange Est. 29 rows
-                        │     │     │  │        └─ Filter Est. 29 rows
-                        │     │     │  │           │     Condition: (d_moy = 9) AND (d_year = 1999)
-                        │     │     │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                        │     │     │  │                    Where: (d_moy = 9) AND (d_year = 1999)
-                        │     │     │  │                    Outputs: [d_date_sk, d_year, d_moy]
+                        │     │     │  │        └─ Projection Est. 29 rows
+                        │     │     │  │           │     Expressions: [d_date_sk]
+                        │     │     │  │           └─ Filter Est. 29 rows
+                        │     │     │  │              │     Condition: (d_moy = 9) AND (d_year = 1999)
+                        │     │     │  │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                        │     │     │  │                       Where: (d_moy = 9) AND (d_year = 1999)
+                        │     │     │  │                       Outputs: [d_date_sk, d_year, d_moy]
                         │     │     │  └─ Repartition Exchange Est. 204000 rows
                         │     │     │     │     Partition by: {i_item_sk}
                         │     │     │     └─ TableScan tpcds100.item Est. 204000 rows
@@ -69,15 +71,19 @@ Projection Est. 100 rows
                         │     │        └─ TableScan tpcds100.store Est. 402 rows
                         │     │                 Outputs: [s_store_sk, s_store_id, s_store_name]
                         │     └─ Broadcast Exchange Est. 121 rows
-                        │        └─ Filter Est. 121 rows
-                        │           │     Condition: (d_year_1 = 1999) AND (d_moy_1 >= 9) AND (d_moy_1 <= 12)
-                        │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                        │                    Where: (d_year = 1999) AND (d_moy >= 9) AND (d_moy <= 12)
-                        │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
+                        │        └─ Projection Est. 121 rows
+                        │           │     Expressions: [d_date_sk_1]
+                        │           └─ Filter Est. 121 rows
+                        │              │     Condition: (d_year_1 = 1999) AND (d_moy_1 >= 9) AND (d_moy_1 <= 12)
+                        │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                        │                       Where: (d_year = 1999) AND (d_moy >= 9) AND (d_moy <= 12)
+                        │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                         └─ Broadcast Exchange Est. 1096 rows
-                           └─ Filter Est. 1096 rows
-                              │     Condition: d_year_2 IN (1999, 2000, 2001)
-                              └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                       Where: d_year IN (1999, 2000, 2001)
-                                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                           └─ Projection Est. 1096 rows
+                              │     Expressions: [d_date_sk_2]
+                              └─ Filter Est. 1096 rows
+                                 │     Condition: d_year_2 IN (1999, 2000, 2001)
+                                 └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                          Where: d_year IN (1999, 2000, 2001)
+                                          Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
 note: Runtime Filter is applied for 5 times.

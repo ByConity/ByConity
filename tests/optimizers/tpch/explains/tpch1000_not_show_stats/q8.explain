@@ -51,11 +51,13 @@ Projection
                               │     │           │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
                               │     │           └─ Repartition Exchange
                               │     │              │     Partition by: {p_partkey}
-                              │     │              └─ Filter
-                              │     │                 │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
-                              │     │                 └─ TableScan tpch1000.part
-                              │     │                          Where: p_type = 'ECONOMY ANODIZED STEEL'
-                              │     │                          Outputs: [p_partkey, p_type]
+                              │     │              └─ Projection
+                              │     │                 │     Expressions: [p_partkey]
+                              │     │                 └─ Filter
+                              │     │                    │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
+                              │     │                    └─ TableScan tpch1000.part
+                              │     │                             Where: p_type = 'ECONOMY ANODIZED STEEL'
+                              │     │                             Outputs: [p_partkey, p_type]
                               │     └─ Repartition Exchange
                               │        │     Partition by: {c_custkey}
                               │        └─ Inner Join
@@ -75,11 +77,13 @@ Projection
                               │                 │           Outputs: [n_nationkey, n_regionkey]
                               │                 └─ Repartition Exchange
                               │                    │     Partition by: {r_regionkey}
-                              │                    └─ Filter
-                              │                       │     Condition: r_name = 'AMERICA'
-                              │                       └─ TableScan tpch1000.region
-                              │                                Where: r_name = 'AMERICA'
-                              │                                Outputs: [r_regionkey, r_name]
+                              │                    └─ Projection
+                              │                       │     Expressions: [r_regionkey]
+                              │                       └─ Filter
+                              │                          │     Condition: r_name = 'AMERICA'
+                              │                          └─ TableScan tpch1000.region
+                              │                                   Where: r_name = 'AMERICA'
+                              │                                   Outputs: [r_regionkey, r_name]
                               └─ Repartition Exchange
                                  │     Partition by: {s_suppkey}
                                  └─ Inner Join

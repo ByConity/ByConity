@@ -19,11 +19,13 @@ Projection
             │     │           Where: isNotNull(s_suppkey) Runtime Filters: {s_nationkey, s_suppkey}
             │     │           Outputs: [s_suppkey, s_name, s_address, s_nationkey]
             │     └─ Broadcast Exchange
-            │        └─ Filter
-            │           │     Condition: n_name = 'CANADA'
-            │           └─ TableScan tpch1000.nation
-            │                    Where: n_name = 'CANADA'
-            │                    Outputs: [n_nationkey, n_name]
+            │        └─ Projection
+            │           │     Expressions: [n_nationkey]
+            │           └─ Filter
+            │              │     Condition: n_name = 'CANADA'
+            │              └─ TableScan tpch1000.nation
+            │                       Where: n_name = 'CANADA'
+            │                       Outputs: [n_nationkey, n_name]
             └─ Aggregating
                │     Group by: {ps_suppkey}
                └─ Inner (PARALLEL_HASH) Join
@@ -40,11 +42,13 @@ Projection
                   │        │     Runtime Filters Builder: {s_suppkey_1}
                   │        ├─ Repartition Exchange
                   │        │  │     Partition by: {l_suppkey}
-                  │        │  └─ Filter
-                  │        │     │     Condition: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND isNotNull(l_partkey) AND isNotNull(l_suppkey) Runtime Filters: {l_partkey, l_suppkey}
-                  │        │     └─ TableScan tpch1000.lineitem
-                  │        │              Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND isNotNull(l_partkey) AND isNotNull(l_suppkey) Runtime Filters: {l_partkey, l_suppkey}
-                  │        │              Outputs: [l_partkey, l_suppkey, l_quantity, l_shipdate]
+                  │        │  └─ Projection
+                  │        │     │     Expressions: [l_partkey, l_quantity, l_suppkey]
+                  │        │     └─ Filter
+                  │        │        │     Condition: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND isNotNull(l_partkey) AND isNotNull(l_suppkey) Runtime Filters: {l_partkey, l_suppkey}
+                  │        │        └─ TableScan tpch1000.lineitem
+                  │        │                 Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND isNotNull(l_partkey) AND isNotNull(l_suppkey) Runtime Filters: {l_partkey, l_suppkey}
+                  │        │                 Outputs: [l_partkey, l_suppkey, l_quantity, l_shipdate]
                   │        └─ MergingAggregated
                   │           └─ Repartition Exchange
                   │              │     Partition by: {s_suppkey_1}
@@ -61,11 +65,13 @@ Projection
                   │                       │           Where: isNotNull(s_suppkey) Runtime Filters: {s_nationkey, s_suppkey}
                   │                       │           Outputs: [s_suppkey, s_nationkey]
                   │                       └─ Broadcast Exchange
-                  │                          └─ Filter
-                  │                             │     Condition: n_name = 'CANADA'
-                  │                             └─ TableScan tpch1000.nation
-                  │                                      Where: n_name = 'CANADA'
-                  │                                      Outputs: [n_nationkey, n_name]
+                  │                          └─ Projection
+                  │                             │     Expressions: [n_nationkey]
+                  │                             └─ Filter
+                  │                                │     Condition: n_name = 'CANADA'
+                  │                                └─ TableScan tpch1000.nation
+                  │                                         Where: n_name = 'CANADA'
+                  │                                         Outputs: [n_nationkey, n_name]
                   └─ Repartition Exchange
                      │     Partition by: {ps_suppkey}
                      └─ Inner (PARALLEL_HASH) Join
@@ -111,10 +117,12 @@ Projection
                                              │           Where: isNotNull(s_suppkey) Runtime Filters: {s_nationkey}
                                              │           Outputs: [s_suppkey, s_nationkey]
                                              └─ Broadcast Exchange
-                                                └─ Filter
-                                                   │     Condition: n_name = 'CANADA'
-                                                   └─ TableScan tpch1000.nation
-                                                            Where: n_name = 'CANADA'
-                                                            Outputs: [n_nationkey, n_name]
+                                                └─ Projection
+                                                   │     Expressions: [n_nationkey]
+                                                   └─ Filter
+                                                      │     Condition: n_name = 'CANADA'
+                                                      └─ TableScan tpch1000.nation
+                                                               Where: n_name = 'CANADA'
+                                                               Outputs: [n_nationkey, n_name]
 note: Magic Set is applied for 2 parts.
 note: Runtime Filter is applied for 10 times.

@@ -30,11 +30,13 @@ Projection
                         │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
                         │     │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_net_profit]
                         │     │  └─ Broadcast Exchange
-                        │     │     └─ Filter
-                        │     │        │     Condition: (d_year = 1998) AND (d_qoy = 2)
-                        │     │        └─ TableScan tpcds1000.date_dim
-                        │     │                 Where: (d_year = 1998) AND (d_qoy = 2)
-                        │     │                 Outputs: [d_date_sk, d_year, d_qoy]
+                        │     │     └─ Projection
+                        │     │        │     Expressions: [d_date_sk]
+                        │     │        └─ Filter
+                        │     │           │     Condition: (d_year = 1998) AND (d_qoy = 2)
+                        │     │           └─ TableScan tpcds1000.date_dim
+                        │     │                    Where: (d_year = 1998) AND (d_qoy = 2)
+                        │     │                    Outputs: [d_date_sk, d_year, d_qoy]
                         │     └─ Broadcast Exchange
                         │        └─ TableScan tpcds1000.store
                         │                 Outputs: [s_store_sk, s_store_name, s_zip]
@@ -83,9 +85,11 @@ Projection
                                                                │              Outputs: [ca_address_sk], ca_zip_1:=ca_zip
                                                                └─ Repartition Exchange
                                                                   │     Partition by: {c_current_addr_sk}
-                                                                  └─ Filter
-                                                                     │     Condition: c_preferred_cust_flag = 'Y'
-                                                                     └─ TableScan tpcds1000.customer
-                                                                              Where: c_preferred_cust_flag = 'Y'
-                                                                              Outputs: [c_current_addr_sk, c_preferred_cust_flag]
+                                                                  └─ Projection
+                                                                     │     Expressions: [c_current_addr_sk]
+                                                                     └─ Filter
+                                                                        │     Condition: c_preferred_cust_flag = 'Y'
+                                                                        └─ TableScan tpcds1000.customer
+                                                                                 Where: c_preferred_cust_flag = 'Y'
+                                                                                 Outputs: [c_current_addr_sk, c_preferred_cust_flag]
 note: Runtime Filter is applied for 2 times.

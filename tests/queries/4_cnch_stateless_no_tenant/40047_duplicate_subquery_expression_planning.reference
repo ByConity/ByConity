@@ -156,11 +156,13 @@ Projection Est. ? rows
          │              └─ Aggregating Est. ? rows
          │                 │     Group by: {}
          │                 │     Aggregates: expr#max(c):=AggNull(max)(c)
-         │                 └─ Filter Est. ? rows
-         │                    │     Condition: c = a_1
-         │                    └─ TableScan test.t40047_y Est. ? rows
-         │                             Where: c = a
-         │                             Outputs: [c], a_1:=a
+         │                 └─ Projection Est. ? rows
+         │                    │     Expressions: [c]
+         │                    └─ Filter Est. ? rows
+         │                       │     Condition: c = a_1
+         │                       └─ TableScan test.t40047_y Est. ? rows
+         │                                Where: c = a
+         │                                Outputs: [c], a_1:=a
          └─ Broadcast Exchange Est. ? rows
             └─ MergingAggregated Est. ? rows
                └─ Repartition Exchange Est. ? rows

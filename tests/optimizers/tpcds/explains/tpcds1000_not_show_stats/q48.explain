@@ -18,26 +18,32 @@ Projection
             │     │  └─ Inner Join
             │     │     │     Condition: ss_sold_date_sk == d_date_sk
             │     │     │     Runtime Filters Builder: {d_date_sk}
-            │     │     ├─ Filter
-            │     │     │  │     Condition: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
-            │     │     │  └─ TableScan tpcds1000.store_sales
-            │     │     │           Where: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
-            │     │     │           Outputs: [ss_sold_date_sk, ss_cdemo_sk, ss_addr_sk, ss_store_sk, ss_quantity, ss_sales_price, ss_net_profit]
+            │     │     ├─ Projection
+            │     │     │  │     Expressions: [ss_addr_sk, ss_cdemo_sk, ss_net_profit, ss_quantity, ss_sales_price, ss_sold_date_sk]
+            │     │     │  └─ Filter
+            │     │     │     │     Condition: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
+            │     │     │     └─ TableScan tpcds1000.store_sales
+            │     │     │              Where: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
+            │     │     │              Outputs: [ss_sold_date_sk, ss_cdemo_sk, ss_addr_sk, ss_store_sk, ss_quantity, ss_sales_price, ss_net_profit]
             │     │     └─ Broadcast Exchange
-            │     │        └─ Filter
-            │     │           │     Condition: d_year = 2000
-            │     │           └─ TableScan tpcds1000.date_dim
-            │     │                    Where: d_year = 2000
-            │     │                    Outputs: [d_date_sk, d_year]
+            │     │        └─ Projection
+            │     │           │     Expressions: [d_date_sk]
+            │     │           └─ Filter
+            │     │              │     Condition: d_year = 2000
+            │     │              └─ TableScan tpcds1000.date_dim
+            │     │                       Where: d_year = 2000
+            │     │                       Outputs: [d_date_sk, d_year]
             │     └─ Repartition Exchange
             │        │     Partition by: {cd_demo_sk}
             │        └─ TableScan tpcds1000.customer_demographics
             │                 Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
             └─ Repartition Exchange
                │     Partition by: {ca_address_sk}
-               └─ Filter
-                  │     Condition: ca_country = 'United States'
-                  └─ TableScan tpcds1000.customer_address
-                           Where: ca_country = 'United States'
-                           Outputs: [ca_address_sk, ca_state, ca_country]
+               └─ Projection
+                  │     Expressions: [ca_address_sk, ca_state]
+                  └─ Filter
+                     │     Condition: ca_country = 'United States'
+                     └─ TableScan tpcds1000.customer_address
+                              Where: ca_country = 'United States'
+                              Outputs: [ca_address_sk, ca_state, ca_country]
 note: Runtime Filter is applied for 1 times.

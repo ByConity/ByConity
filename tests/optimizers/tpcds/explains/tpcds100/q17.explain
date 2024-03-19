@@ -34,11 +34,13 @@ Projection Est. 100 rows
                            │  │  │     │           Where: Runtime Filters: {cs_sold_date_sk}
                            │  │  │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk, cs_quantity]
                            │  │  │     └─ Broadcast Exchange Est. 274 rows
-                           │  │  │        └─ Filter Est. 274 rows
-                           │  │  │           │     Condition: d_quarter_name_2 IN ('2001Q1', '2001Q2', '2001Q3')
-                           │  │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                           │  │  │                    Where: d_quarter_name IN ('2001Q1', '2001Q2', '2001Q3')
-                           │  │  │                    Outputs: d_date_sk_2:=d_date_sk, d_quarter_name_2:=d_quarter_name
+                           │  │  │        └─ Projection Est. 274 rows
+                           │  │  │           │     Expressions: [d_date_sk_2]
+                           │  │  │           └─ Filter Est. 274 rows
+                           │  │  │              │     Condition: d_quarter_name_2 IN ('2001Q1', '2001Q2', '2001Q3')
+                           │  │  │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                           │  │  │                       Where: d_quarter_name IN ('2001Q1', '2001Q2', '2001Q3')
+                           │  │  │                       Outputs: d_date_sk_2:=d_date_sk, d_quarter_name_2:=d_quarter_name
                            │  │  └─ Inner (PARALLEL_HASH) Join Est. 1503495 rows
                            │  │     │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │  │     │     Runtime Filters Builder: {sr_ticket_number}
@@ -53,11 +55,13 @@ Projection Est. 100 rows
                            │  │     │     │           Where: Runtime Filters: {ss_sold_date_sk, ss_ticket_number}
                            │  │     │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_quantity]
                            │  │     │     └─ Broadcast Exchange Est. 91 rows
-                           │  │     │        └─ Filter Est. 91 rows
-                           │  │     │           │     Condition: d_quarter_name = '2001Q1'
-                           │  │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                           │  │     │                    Where: d_quarter_name = '2001Q1'
-                           │  │     │                    Outputs: [d_date_sk, d_quarter_name]
+                           │  │     │        └─ Projection Est. 91 rows
+                           │  │     │           │     Expressions: [d_date_sk]
+                           │  │     │           └─ Filter Est. 91 rows
+                           │  │     │              │     Condition: d_quarter_name = '2001Q1'
+                           │  │     │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                           │  │     │                       Where: d_quarter_name = '2001Q1'
+                           │  │     │                       Outputs: [d_date_sk, d_quarter_name]
                            │  │     └─ Repartition Exchange Est. 3924641 rows
                            │  │        │     Partition by: {sr_item_sk}
                            │  │        └─ Inner Join Est. 3924641 rows
@@ -69,11 +73,13 @@ Projection Est. 100 rows
                            │  │           │           Where: Runtime Filters: {sr_returned_date_sk}
                            │  │           │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number, sr_return_quantity]
                            │  │           └─ Broadcast Exchange Est. 274 rows
-                           │  │              └─ Filter Est. 274 rows
-                           │  │                 │     Condition: d_quarter_name_1 IN ('2001Q1', '2001Q2', '2001Q3')
-                           │  │                 └─ TableScan tpcds100.date_dim Est. 73049 rows
-                           │  │                          Where: d_quarter_name IN ('2001Q1', '2001Q2', '2001Q3')
-                           │  │                          Outputs: d_date_sk_1:=d_date_sk, d_quarter_name_1:=d_quarter_name
+                           │  │              └─ Projection Est. 274 rows
+                           │  │                 │     Expressions: [d_date_sk_1]
+                           │  │                 └─ Filter Est. 274 rows
+                           │  │                    │     Condition: d_quarter_name_1 IN ('2001Q1', '2001Q2', '2001Q3')
+                           │  │                    └─ TableScan tpcds100.date_dim Est. 73049 rows
+                           │  │                             Where: d_quarter_name IN ('2001Q1', '2001Q2', '2001Q3')
+                           │  │                             Outputs: d_date_sk_1:=d_date_sk, d_quarter_name_1:=d_quarter_name
                            │  └─ Repartition Exchange Est. 204000 rows
                            │     │     Partition by: {i_item_sk}
                            │     └─ TableScan tpcds100.item Est. 204000 rows

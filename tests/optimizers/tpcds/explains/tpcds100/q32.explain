@@ -25,11 +25,13 @@ Projection Est. 1 rows
                │        │     Runtime Filters Builder: {cs_item_sk_1}
                │        ├─ Repartition Exchange Est. 61 rows
                │        │  │     Partition by: {i_item_sk}
-               │        │  └─ Filter Est. 61 rows
-               │        │     │     Condition: i_manufact_id = 977 Runtime Filters: {i_item_sk}
-               │        │     └─ TableScan tpcds100.item Est. 204000 rows
-               │        │              Where: i_manufact_id = 977 Runtime Filters: {i_item_sk}
-               │        │              Outputs: [i_item_sk, i_manufact_id]
+               │        │  └─ Projection Est. 61 rows
+               │        │     │     Expressions: [i_item_sk]
+               │        │     └─ Filter Est. 61 rows
+               │        │        │     Condition: i_manufact_id = 977 Runtime Filters: {i_item_sk}
+               │        │        └─ TableScan tpcds100.item Est. 204000 rows
+               │        │                 Where: i_manufact_id = 977 Runtime Filters: {i_item_sk}
+               │        │                 Outputs: [i_item_sk, i_manufact_id]
                │        └─ MergingAggregated Est. 61 rows
                │           └─ Repartition Exchange Est. 61 rows
                │              │     Partition by: {cs_item_sk_1}
@@ -63,16 +65,20 @@ Projection Est. 1 rows
                │                       │                             Where: i_manufact_id = 977
                │                       │                             Outputs: [i_item_sk, i_manufact_id]
                │                       └─ Broadcast Exchange Est. 89 rows
-               │                          └─ Filter Est. 89 rows
-               │                             │     Condition: (d_date_1 >= cast(10983, 'Date')) AND (d_date_1 <= cast(11073, 'Date'))
-               │                             └─ TableScan tpcds100.date_dim Est. 73049 rows
-               │                                      Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-               │                                      Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date
+               │                          └─ Projection Est. 89 rows
+               │                             │     Expressions: [d_date_sk_1]
+               │                             └─ Filter Est. 89 rows
+               │                                │     Condition: (d_date_1 >= cast(10983, 'Date')) AND (d_date_1 <= cast(11073, 'Date'))
+               │                                └─ TableScan tpcds100.date_dim Est. 73049 rows
+               │                                         Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
+               │                                         Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date
                └─ Broadcast Exchange Est. 89 rows
-                  └─ Filter Est. 89 rows
-                     │     Condition: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-                     └─ TableScan tpcds100.date_dim Est. 73049 rows
-                              Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-                              Outputs: [d_date_sk, d_date]
+                  └─ Projection Est. 89 rows
+                     │     Expressions: [d_date_sk]
+                     └─ Filter Est. 89 rows
+                        │     Condition: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
+                        └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                 Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
+                                 Outputs: [d_date_sk, d_date]
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 5 times.

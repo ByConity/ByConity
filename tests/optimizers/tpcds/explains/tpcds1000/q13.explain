@@ -20,17 +20,21 @@ Projection Est. 1 rows
             │     │     ├─ Inner Join Est. 575374370 rows
             │     │     │  │     Condition: ss_sold_date_sk == d_date_sk
             │     │     │  │     Runtime Filters Builder: {d_date_sk}
-            │     │     │  ├─ Filter Est. 2750415949 rows
-            │     │     │  │  │     Condition: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
-            │     │     │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-            │     │     │  │           Where: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
-            │     │     │  │           Outputs: [ss_sold_date_sk, ss_cdemo_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_quantity, ss_sales_price, ss_ext_sales_price, ss_ext_wholesale_cost, ss_net_profit]
+            │     │     │  ├─ Projection Est. 2750415949 rows
+            │     │     │  │  │     Expressions: [ss_addr_sk, ss_cdemo_sk, ss_ext_sales_price, ss_ext_wholesale_cost, ss_hdemo_sk, ss_net_profit, ss_quantity, ss_sales_price, ss_sold_date_sk]
+            │     │     │  │  └─ Filter Est. 2750415949 rows
+            │     │     │  │     │     Condition: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
+            │     │     │  │     └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+            │     │     │  │              Where: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
+            │     │     │  │              Outputs: [ss_sold_date_sk, ss_cdemo_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_quantity, ss_sales_price, ss_ext_sales_price, ss_ext_wholesale_cost, ss_net_profit]
             │     │     │  └─ Broadcast Exchange Est. 365 rows
-            │     │     │     └─ Filter Est. 365 rows
-            │     │     │        │     Condition: d_year = 2001
-            │     │     │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-            │     │     │                 Where: d_year = 2001
-            │     │     │                 Outputs: [d_date_sk, d_year]
+            │     │     │     └─ Projection Est. 365 rows
+            │     │     │        │     Expressions: [d_date_sk]
+            │     │     │        └─ Filter Est. 365 rows
+            │     │     │           │     Condition: d_year = 2001
+            │     │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+            │     │     │                    Where: d_year = 2001
+            │     │     │                    Outputs: [d_date_sk, d_year]
             │     │     └─ Broadcast Exchange Est. 7200 rows
             │     │        └─ TableScan tpcds1000.household_demographics Est. 7200 rows
             │     │                 Outputs: [hd_demo_sk, hd_dep_count]
@@ -40,9 +44,11 @@ Projection Est. 1 rows
             │                 Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
             └─ Repartition Exchange Est. 6000000 rows
                │     Partition by: {ca_address_sk}
-               └─ Filter Est. 6000000 rows
-                  │     Condition: ca_country = 'United States'
-                  └─ TableScan tpcds1000.customer_address Est. 6000000 rows
-                           Where: ca_country = 'United States'
-                           Outputs: [ca_address_sk, ca_state, ca_country]
+               └─ Projection Est. 6000000 rows
+                  │     Expressions: [ca_address_sk, ca_state]
+                  └─ Filter Est. 6000000 rows
+                     │     Condition: ca_country = 'United States'
+                     └─ TableScan tpcds1000.customer_address Est. 6000000 rows
+                              Where: ca_country = 'United States'
+                              Outputs: [ca_address_sk, ca_state, ca_country]
 note: Runtime Filter is applied for 1 times.

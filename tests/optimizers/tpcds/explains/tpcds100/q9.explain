@@ -28,11 +28,13 @@ Projection Est. 1 rows
       │  │        │     └─ Aggregating Est. 1 rows
       │  │        │        │     Group by: {}
       │  │        │        │     Aggregates: expr#avg(ss_net_paid)_3:=AggNull(avg)(ss_net_paid_3)
-      │  │        │        └─ Filter Est. 57597247 rows
-      │  │        │           │     Condition: (ss_quantity_11 >= 61) AND (ss_quantity_11 <= 80)
-      │  │        │           └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │  │        │                    Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
-      │  │        │                    Outputs: ss_quantity_11:=ss_quantity, ss_net_paid_3:=ss_net_paid
+      │  │        │        └─ Projection Est. 57597247 rows
+      │  │        │           │     Expressions: [ss_net_paid_3]
+      │  │        │           └─ Filter Est. 57597247 rows
+      │  │        │              │     Condition: (ss_quantity_11 >= 61) AND (ss_quantity_11 <= 80)
+      │  │        │              └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │  │        │                       Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
+      │  │        │                       Outputs: ss_quantity_11:=ss_quantity, ss_net_paid_3:=ss_net_paid
       │  │        └─ Broadcast Exchange Est. 1 rows
       │  │           └─ Inner Join Est. 1 rows
       │  │              │     Condition: 
@@ -41,11 +43,13 @@ Projection Est. 1 rows
       │  │              │     └─ Aggregating Est. 1 rows
       │  │              │        │     Group by: {}
       │  │              │        │     Aggregates: expr#avg(ss_ext_discount_amt)_3:=AggNull(avg)(ss_ext_discount_amt_3)
-      │  │              │        └─ Filter Est. 57597247 rows
-      │  │              │           │     Condition: (ss_quantity_10 >= 61) AND (ss_quantity_10 <= 80)
-      │  │              │           └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │  │              │                    Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
-      │  │              │                    Outputs: ss_quantity_10:=ss_quantity, ss_ext_discount_amt_3:=ss_ext_discount_amt
+      │  │              │        └─ Projection Est. 57597247 rows
+      │  │              │           │     Expressions: [ss_ext_discount_amt_3]
+      │  │              │           └─ Filter Est. 57597247 rows
+      │  │              │              │     Condition: (ss_quantity_10 >= 61) AND (ss_quantity_10 <= 80)
+      │  │              │              └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │  │              │                       Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
+      │  │              │                       Outputs: ss_quantity_10:=ss_quantity, ss_ext_discount_amt_3:=ss_ext_discount_amt
       │  │              └─ Broadcast Exchange Est. 1 rows
       │  │                 └─ Inner Join Est. 1 rows
       │  │                    │     Condition: 
@@ -69,11 +73,13 @@ Projection Est. 1 rows
       │  │                          │     └─ Aggregating Est. 1 rows
       │  │                          │        │     Group by: {}
       │  │                          │        │     Aggregates: expr#avg(ss_net_paid)_2:=AggNull(avg)(ss_net_paid_2)
-      │  │                          │        └─ Filter Est. 57614692 rows
-      │  │                          │           │     Condition: (ss_quantity_8 >= 41) AND (ss_quantity_8 <= 60)
-      │  │                          │           └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │  │                          │                    Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
-      │  │                          │                    Outputs: ss_quantity_8:=ss_quantity, ss_net_paid_2:=ss_net_paid
+      │  │                          │        └─ Projection Est. 57614692 rows
+      │  │                          │           │     Expressions: [ss_net_paid_2]
+      │  │                          │           └─ Filter Est. 57614692 rows
+      │  │                          │              │     Condition: (ss_quantity_8 >= 41) AND (ss_quantity_8 <= 60)
+      │  │                          │              └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │  │                          │                       Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
+      │  │                          │                       Outputs: ss_quantity_8:=ss_quantity, ss_net_paid_2:=ss_net_paid
       │  │                          └─ Broadcast Exchange Est. 1 rows
       │  │                             └─ Inner Join Est. 1 rows
       │  │                                │     Condition: 
@@ -82,11 +88,13 @@ Projection Est. 1 rows
       │  │                                │     └─ Aggregating Est. 1 rows
       │  │                                │        │     Group by: {}
       │  │                                │        │     Aggregates: expr#avg(ss_ext_discount_amt)_2:=AggNull(avg)(ss_ext_discount_amt_2)
-      │  │                                │        └─ Filter Est. 57614692 rows
-      │  │                                │           │     Condition: (ss_quantity_7 >= 41) AND (ss_quantity_7 <= 60)
-      │  │                                │           └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │  │                                │                    Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
-      │  │                                │                    Outputs: ss_quantity_7:=ss_quantity, ss_ext_discount_amt_2:=ss_ext_discount_amt
+      │  │                                │        └─ Projection Est. 57614692 rows
+      │  │                                │           │     Expressions: [ss_ext_discount_amt_2]
+      │  │                                │           └─ Filter Est. 57614692 rows
+      │  │                                │              │     Condition: (ss_quantity_7 >= 41) AND (ss_quantity_7 <= 60)
+      │  │                                │              └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │  │                                │                       Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
+      │  │                                │                       Outputs: ss_quantity_7:=ss_quantity, ss_ext_discount_amt_2:=ss_ext_discount_amt
       │  │                                └─ Broadcast Exchange Est. 1 rows
       │  │                                   └─ Inner Join Est. 1 rows
       │  │                                      │     Condition: 
@@ -110,11 +118,13 @@ Projection Est. 1 rows
       │  │                                            │     └─ Aggregating Est. 1 rows
       │  │                                            │        │     Group by: {}
       │  │                                            │        │     Aggregates: expr#avg(ss_net_paid)_1:=AggNull(avg)(ss_net_paid_1)
-      │  │                                            │        └─ Filter Est. 57597293 rows
-      │  │                                            │           │     Condition: (ss_quantity_5 >= 21) AND (ss_quantity_5 <= 40)
-      │  │                                            │           └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │  │                                            │                    Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
-      │  │                                            │                    Outputs: ss_quantity_5:=ss_quantity, ss_net_paid_1:=ss_net_paid
+      │  │                                            │        └─ Projection Est. 57597293 rows
+      │  │                                            │           │     Expressions: [ss_net_paid_1]
+      │  │                                            │           └─ Filter Est. 57597293 rows
+      │  │                                            │              │     Condition: (ss_quantity_5 >= 21) AND (ss_quantity_5 <= 40)
+      │  │                                            │              └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │  │                                            │                       Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
+      │  │                                            │                       Outputs: ss_quantity_5:=ss_quantity, ss_net_paid_1:=ss_net_paid
       │  │                                            └─ Broadcast Exchange Est. 1 rows
       │  │                                               └─ Inner Join Est. 1 rows
       │  │                                                  │     Condition: 
@@ -123,11 +133,13 @@ Projection Est. 1 rows
       │  │                                                  │     └─ Aggregating Est. 1 rows
       │  │                                                  │        │     Group by: {}
       │  │                                                  │        │     Aggregates: expr#avg(ss_ext_discount_amt)_1:=AggNull(avg)(ss_ext_discount_amt_1)
-      │  │                                                  │        └─ Filter Est. 57597293 rows
-      │  │                                                  │           │     Condition: (ss_quantity_4 >= 21) AND (ss_quantity_4 <= 40)
-      │  │                                                  │           └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │  │                                                  │                    Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
-      │  │                                                  │                    Outputs: ss_quantity_4:=ss_quantity, ss_ext_discount_amt_1:=ss_ext_discount_amt
+      │  │                                                  │        └─ Projection Est. 57597293 rows
+      │  │                                                  │           │     Expressions: [ss_ext_discount_amt_1]
+      │  │                                                  │           └─ Filter Est. 57597293 rows
+      │  │                                                  │              │     Condition: (ss_quantity_4 >= 21) AND (ss_quantity_4 <= 40)
+      │  │                                                  │              └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │  │                                                  │                       Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
+      │  │                                                  │                       Outputs: ss_quantity_4:=ss_quantity, ss_ext_discount_amt_1:=ss_ext_discount_amt
       │  │                                                  └─ Broadcast Exchange Est. 1 rows
       │  │                                                     └─ Inner Join Est. 1 rows
       │  │                                                        │     Condition: 
@@ -151,11 +163,13 @@ Projection Est. 1 rows
       │  │                                                              │     └─ Aggregating Est. 1 rows
       │  │                                                              │        │     Group by: {}
       │  │                                                              │        │     Aggregates: expr#avg(ss_net_paid):=AggNull(avg)(ss_net_paid)
-      │  │                                                              │        └─ Filter Est. 57596411 rows
-      │  │                                                              │           │     Condition: (ss_quantity_2 >= 1) AND (ss_quantity_2 <= 20)
-      │  │                                                              │           └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │  │                                                              │                    Where: (ss_quantity >= 1) AND (ss_quantity <= 20)
-      │  │                                                              │                    Outputs: [ss_net_paid], ss_quantity_2:=ss_quantity
+      │  │                                                              │        └─ Projection Est. 57596411 rows
+      │  │                                                              │           │     Expressions: [ss_net_paid]
+      │  │                                                              │           └─ Filter Est. 57596411 rows
+      │  │                                                              │              │     Condition: (ss_quantity_2 >= 1) AND (ss_quantity_2 <= 20)
+      │  │                                                              │              └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │  │                                                              │                       Where: (ss_quantity >= 1) AND (ss_quantity <= 20)
+      │  │                                                              │                       Outputs: [ss_net_paid], ss_quantity_2:=ss_quantity
       │  │                                                              └─ Broadcast Exchange Est. 1 rows
       │  │                                                                 └─ Inner Join Est. 1 rows
       │  │                                                                    │     Condition: 
@@ -164,11 +178,13 @@ Projection Est. 1 rows
       │  │                                                                    │     └─ Aggregating Est. 1 rows
       │  │                                                                    │        │     Group by: {}
       │  │                                                                    │        │     Aggregates: expr#avg(ss_ext_discount_amt):=AggNull(avg)(ss_ext_discount_amt)
-      │  │                                                                    │        └─ Filter Est. 57596411 rows
-      │  │                                                                    │           │     Condition: (ss_quantity_1 >= 1) AND (ss_quantity_1 <= 20)
-      │  │                                                                    │           └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │  │                                                                    │                    Where: (ss_quantity >= 1) AND (ss_quantity <= 20)
-      │  │                                                                    │                    Outputs: [ss_ext_discount_amt], ss_quantity_1:=ss_quantity
+      │  │                                                                    │        └─ Projection Est. 57596411 rows
+      │  │                                                                    │           │     Expressions: [ss_ext_discount_amt]
+      │  │                                                                    │           └─ Filter Est. 57596411 rows
+      │  │                                                                    │              │     Condition: (ss_quantity_1 >= 1) AND (ss_quantity_1 <= 20)
+      │  │                                                                    │              └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │  │                                                                    │                       Where: (ss_quantity >= 1) AND (ss_quantity <= 20)
+      │  │                                                                    │                       Outputs: [ss_ext_discount_amt], ss_quantity_1:=ss_quantity
       │  │                                                                    └─ Broadcast Exchange Est. 1 rows
       │  │                                                                       └─ Inner Join Est. 1 rows
       │  │                                                                          │     Condition: 
@@ -196,19 +212,23 @@ Projection Est. 1 rows
       │           └─ Aggregating Est. 1 rows
       │              │     Group by: {}
       │              │     Aggregates: expr#avg(ss_ext_discount_amt)_4:=AggNull(avg)(ss_ext_discount_amt_4)
-      │              └─ Filter Est. 57591378 rows
-      │                 │     Condition: (ss_quantity_13 >= 81) AND (ss_quantity_13 <= 100)
-      │                 └─ TableScan tpcds100.store_sales Est. 287997024 rows
-      │                          Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
-      │                          Outputs: ss_quantity_13:=ss_quantity, ss_ext_discount_amt_4:=ss_ext_discount_amt
+      │              └─ Projection Est. 57591378 rows
+      │                 │     Expressions: [ss_ext_discount_amt_4]
+      │                 └─ Filter Est. 57591378 rows
+      │                    │     Condition: (ss_quantity_13 >= 81) AND (ss_quantity_13 <= 100)
+      │                    └─ TableScan tpcds100.store_sales Est. 287997024 rows
+      │                             Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
+      │                             Outputs: ss_quantity_13:=ss_quantity, ss_ext_discount_amt_4:=ss_ext_discount_amt
       └─ Broadcast Exchange Est. 1 rows
          └─ MergingAggregated Est. 1 rows
             └─ Gather Exchange Est. 1 rows
                └─ Aggregating Est. 1 rows
                   │     Group by: {}
                   │     Aggregates: expr#avg(ss_net_paid)_4:=AggNull(avg)(ss_net_paid_4)
-                  └─ Filter Est. 57591378 rows
-                     │     Condition: (ss_quantity_14 >= 81) AND (ss_quantity_14 <= 100)
-                     └─ TableScan tpcds100.store_sales Est. 287997024 rows
-                              Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
-                              Outputs: ss_quantity_14:=ss_quantity, ss_net_paid_4:=ss_net_paid
+                  └─ Projection Est. 57591378 rows
+                     │     Expressions: [ss_net_paid_4]
+                     └─ Filter Est. 57591378 rows
+                        │     Condition: (ss_quantity_14 >= 81) AND (ss_quantity_14 <= 100)
+                        └─ TableScan tpcds100.store_sales Est. 287997024 rows
+                                 Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
+                                 Outputs: ss_quantity_14:=ss_quantity, ss_net_paid_4:=ss_net_paid

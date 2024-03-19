@@ -16,44 +16,56 @@ Projection Est. 237879 rows
                │  │  │     Condition: ca_county_7 == ca_county_6
                │  │  ├─ Repartition Exchange Est. 1673 rows
                │  │  │  │     Partition by: {ca_county_7}
-               │  │  │  └─ Filter Est. 4485 rows
-               │  │  │     │     Condition: (d_year_7 = 2000) AND (d_qoy_7 = 3)
-               │  │  │     └─ Buffer Est. 4984 rows
-               │  │  │        └─ CTERef[1] Est. 4984 rows
+               │  │  │  └─ Projection Est. 4485 rows
+               │  │  │     │     Expressions: [ca_county_7, expr#sum(ws_ext_sales_price)_3]
+               │  │  │     └─ Filter Est. 4485 rows
+               │  │  │        │     Condition: (d_year_7 = 2000) AND (d_qoy_7 = 3)
+               │  │  │        └─ Buffer Est. 4984 rows
+               │  │  │           └─ CTERef[1] Est. 4984 rows
                │  │  └─ Repartition Exchange Est. 1655 rows
                │  │     │     Partition by: {ca_county_6}
-               │  │     └─ Filter Est. 4485 rows
-               │  │        │     Condition: (d_qoy_6 = 2) AND (d_year_6 = 2000)
-               │  │        └─ Buffer Est. 4984 rows
-               │  │           └─ CTERef[1] Est. 4984 rows
+               │  │     └─ Projection Est. 4485 rows
+               │  │        │     Expressions: [ca_county_6, expr#sum(ws_ext_sales_price)_2]
+               │  │        └─ Filter Est. 4485 rows
+               │  │           │     Condition: (d_qoy_6 = 2) AND (d_year_6 = 2000)
+               │  │           └─ Buffer Est. 4984 rows
+               │  │              └─ CTERef[1] Est. 4984 rows
                │  └─ Repartition Exchange Est. 1655 rows
                │     │     Partition by: {ca_county_5}
-               │     └─ Filter Est. 4485 rows
-               │        │     Condition: (d_qoy_5 = 1) AND (d_year_5 = 2000)
-               │        └─ Buffer Est. 4984 rows
-               │           └─ CTERef[1] Est. 4984 rows
+               │     └─ Projection Est. 4485 rows
+               │        │     Expressions: [ca_county_5, expr#sum(ws_ext_sales_price)_1]
+               │        └─ Filter Est. 4485 rows
+               │           │     Condition: (d_qoy_5 = 1) AND (d_year_5 = 2000)
+               │           └─ Buffer Est. 4984 rows
+               │              └─ CTERef[1] Est. 4984 rows
                └─ Inner Join Est. 12075 rows
                   │     Condition: ca_county_2 == ca_county_1
                   ├─ Inner Join Est. 4473 rows
                   │  │     Condition: ca_county_3 == ca_county_2
                   │  ├─ Repartition Exchange Est. 1673 rows
                   │  │  │     Partition by: {ca_county_3}
-                  │  │  └─ Filter Est. 4485 rows
-                  │  │     │     Condition: (d_qoy_3 = 3) AND (d_year_3 = 2000)
-                  │  │     └─ Buffer Est. 4984 rows
-                  │  │        └─ CTERef[0] Est. 4984 rows
+                  │  │  └─ Projection Est. 4485 rows
+                  │  │     │     Expressions: [ca_county_3, expr#sum(ss_ext_sales_price)_3]
+                  │  │     └─ Filter Est. 4485 rows
+                  │  │        │     Condition: (d_qoy_3 = 3) AND (d_year_3 = 2000)
+                  │  │        └─ Buffer Est. 4984 rows
+                  │  │           └─ CTERef[0] Est. 4984 rows
                   │  └─ Repartition Exchange Est. 1655 rows
                   │     │     Partition by: {ca_county_2}
-                  │     └─ Filter Est. 4485 rows
-                  │        │     Condition: (d_year_2 = 2000) AND (d_qoy_2 = 2)
-                  │        └─ Buffer Est. 4984 rows
-                  │           └─ CTERef[0] Est. 4984 rows
+                  │     └─ Projection Est. 4485 rows
+                  │        │     Expressions: [ca_county_2, expr#sum(ss_ext_sales_price)_2]
+                  │        └─ Filter Est. 4485 rows
+                  │           │     Condition: (d_year_2 = 2000) AND (d_qoy_2 = 2)
+                  │           └─ Buffer Est. 4984 rows
+                  │              └─ CTERef[0] Est. 4984 rows
                   └─ Repartition Exchange Est. 1655 rows
                      │     Partition by: {ca_county_1}
-                     └─ Filter Est. 4485 rows
-                        │     Condition: (d_year_1 = 2000) AND (d_qoy_1 = 1)
-                        └─ Buffer Est. 4984 rows
-                           └─ CTERef[0] Est. 4984 rows
+                     └─ Projection Est. 4485 rows
+                        │     Expressions: [ca_county_1, d_year_1, expr#sum(ss_ext_sales_price)_1]
+                        └─ Filter Est. 4485 rows
+                           │     Condition: (d_year_1 = 2000) AND (d_qoy_1 = 1)
+                           └─ Buffer Est. 4984 rows
+                              └─ CTERef[0] Est. 4984 rows
 CTEDef [1]
    MergingAggregated Est. 4984 rows
    └─ Repartition Exchange Est. 4984 rows
