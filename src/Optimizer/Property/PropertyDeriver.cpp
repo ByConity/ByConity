@@ -31,6 +31,8 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <Poco/StringTokenizer.h>
+#include <Optimizer/ExpressionUtils.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 
 namespace DB
 {
@@ -78,7 +80,7 @@ Property PropertyDeriver::deriveProperty(QueryPlanStepPtr step, PropertySet & in
     return result;
 }
 
-static String getClusterByHint(const StoragePtr & storage) 
+static String getClusterByHint(const StoragePtr & storage)
 {
     if (auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
         return merge_tree->getSettings()->cluster_by_hint.toString();
@@ -102,20 +104,23 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Cont
     auto metadata = storage->getInMemoryMetadataPtr();
     Names cluster_by;
     UInt64 buckets = 0;
-    if (auto cluster_by_hint = getClusterByHint(storage); !cluster_by_hint.empty())
-    {
-        Poco::StringTokenizer tokenizer(cluster_by_hint, ",", 0x11);
-        for (const auto & cluster_by_column : tokenizer)
-            cluster_by.push_back(cluster_by_column);
-        buckets = 0;
-    }
-    else if (storage->isBucketTable())
+    if (storage->isBucketTable())
     {
         bool clustered;
         context->getCnchCatalog()->getTableClusterStatus(storage->getStorageUUID(), clustered);
         if (clustered)
         {
-            cluster_by = metadata->cluster_by_key.column_names;
+            if (auto cluster_by_hint = getClusterByHint(storage); !cluster_by_hint.empty())
+            {
+                Poco::StringTokenizer tokenizer(cluster_by_hint, ",", 0x11);
+                for (const auto & cluster_by_column : tokenizer)
+                    cluster_by.push_back(cluster_by_column);
+                buckets = 0;
+            }
+            else
+            {
+                cluster_by = metadata->cluster_by_key.column_names;
+            }
             buckets = metadata->getBucketNumberFromClusterByKey();
         }
     }
@@ -132,7 +137,7 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Cont
                 }
 #endif
         return Property{
-            Partitioning{Partitioning::Handle::BUCKET_TABLE, cluster_by, true, buckets, true, Partitioning::Component::ANY},
+            Partitioning{Partitioning::Handle::BUCKET_TABLE, cluster_by, true, buckets, true, Partitioning::Component::ANY, false, satisfyBucketWorkerRelation(storage, *context)},
             Partitioning{},
             sorting};
     }
@@ -425,13 +430,25 @@ Property DeriverVisitor::visitUnionStep(const UnionStep & step, DeriverContext &
         const Names & keys = first_child_property.getNodePartitioning().getPartitioningColumns();
         Names output_keys;
         bool match = true;
-        for (const auto & transformed : transformed_children_prop)
+        bool satisfy_worker = true;
+        bool bucket_size_match = true;
+        for (auto & transformed : transformed_children_prop)
         {
+            if (transformed.getNodePartitioning().getBuckets() != first_child_property.getNodePartitioning().getBuckets())
+            {
+                bucket_size_match = false;
+            }
+            transformed.getNodePartitioningRef().setBuckets(0);
             if (!(transformed.getNodePartitioning() == transformed_children_prop[0].getNodePartitioning()))
             {
                 match = false;
-                break;
             }
+            satisfy_worker &= transformed.getNodePartitioning().isSatisfyWorker();
+        }
+
+        if (!satisfy_worker)
+        {
+            match &= bucket_size_match;
         }
 
         if (match && keys.size() == transformed_children_prop[0].getNodePartitioning().getPartitioningColumns().size())
@@ -447,7 +464,9 @@ Property DeriverVisitor::visitUnionStep(const UnionStep & step, DeriverContext &
                     true,
                     first_child_property.getNodePartitioning().getBuckets(),
                     first_child_property.getNodePartitioning().isEnforceRoundRobin(),
-                    first_child_property.getNodePartitioning().getComponent()},
+                    first_child_property.getNodePartitioning().getComponent(),
+                    false,
+                    satisfy_worker},
                 Partitioning{Partitioning::Handle::SINGLE}};
         }
         else
@@ -458,7 +477,9 @@ Property DeriverVisitor::visitUnionStep(const UnionStep & step, DeriverContext &
                 true,
                 first_child_property.getNodePartitioning().getBuckets(),
                 first_child_property.getNodePartitioning().isEnforceRoundRobin(),
-                first_child_property.getNodePartitioning().getComponent()}};
+                first_child_property.getNodePartitioning().getComponent(),
+                false,
+                satisfy_worker}};
         }
     }
     return Property{};

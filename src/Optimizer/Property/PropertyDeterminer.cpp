@@ -150,7 +150,7 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
         set.emplace_back(right);
         return {set};
     }
-
+    
     std::vector<std::tuple<String, String>> join_key_pairs;
     for (size_t i = 0; i < left_keys.size(); ++i)
     {
