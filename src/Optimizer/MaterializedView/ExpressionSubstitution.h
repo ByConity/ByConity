@@ -76,7 +76,5 @@ namespace MaterializedView
 
     AggregateDefaultValueProvider
     getAggregateDefaultValueProvider(const std::shared_ptr<const AggregatingStep> & query_step, ContextMutablePtr context);
-
-    std::unordered_map<UInt32, ASTs> splitPredicatesByTable(const std::vector<ConstASTPtr> & predicates, const SymbolTransformMap & transform_map);
 }
 }

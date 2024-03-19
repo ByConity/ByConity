@@ -1,30 +1,30 @@
 Projection
-│     Expressions: a:=a_4, b:=b_4, sum(c):=`expr#sumMerge(expr#sumState(c))_2`
+│     Expressions: a:=a_2, b:=b_2, sum(c):=`expr#sumMerge(expr#sumState(c))_2`
 └─ Gather Exchange
    └─ MergingAggregated
       └─ Repartition Exchange
-         │     Partition by: {b_4, a_4}
+         │     Partition by: {b_2, a_2}
          └─ Aggregating
-            │     Group by: {b_4, a_4}
-            │     Aggregates: expr#sumMerge(expr#sumState(c))_2:=AggNull(sumMerge)(expr#sumState(c)_3)
+            │     Group by: {b_2, a_2}
+            │     Aggregates: expr#sumMerge(expr#sumState(c))_2:=AggNull(sumMerge)(expr#sumState(c)_1)
             └─ Filter
-               │     Condition: a_4 = 1
+               │     Condition: a_2 = 1
                └─ TableScan test.t40056_target1
                         Where: a = 1
-                        Outputs: a_4:=a, b_4:=b, expr#sumState(c)_3:=sum_c
+                        Outputs: a_2:=a, b_2:=b, expr#sumState(c)_1:=sum_c
 note: Materialized Views is applied for 1 times: test.t40056_mv1.
 Projection
-│     Expressions: a:=a_4, b:=b_4, sum(c):=`expr#sumMerge(expr#sumState(c)_1)_2`
+│     Expressions: a:=a_2, b:=b_2, sum(c):=`expr#sumMerge(expr#sumState(c))_2`
 └─ Gather Exchange
    └─ MergingAggregated
       └─ Repartition Exchange
-         │     Partition by: {b_4, a_4}
+         │     Partition by: {b_2, a_2}
          └─ Aggregating
-            │     Group by: {b_4, a_4}
-            │     Aggregates: expr#sumMerge(expr#sumState(c)_1)_2:=AggNull(sumMerge)(expr#sumState(c)_3)
+            │     Group by: {b_2, a_2}
+            │     Aggregates: expr#sumMerge(expr#sumState(c))_2:=AggNull(sumMerge)(expr#sumState(c)_1)
             └─ Filter
-               │     Condition: b_4 = 1
+               │     Condition: b_2 = 1
                └─ TableScan test.t40056_target2
                         Where: b = 1
-                        Outputs: a_4:=a, b_4:=b, expr#sumState(c)_3:=sum_c
+                        Outputs: a_2:=a, b_2:=b, expr#sumState(c)_1:=sum_c
 note: Materialized Views is applied for 1 times: test.t40056_mv2.
