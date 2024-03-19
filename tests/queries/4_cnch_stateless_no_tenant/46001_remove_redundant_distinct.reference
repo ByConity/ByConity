@@ -7,8 +7,10 @@ Projection Est. ? rows
          │     Partition by: {id_2}
          └─ Union Est. ? rows
             │     OutputToInputs: id_2 = [id,id_1]
-            ├─ TableScan test_distinct.unique_1 Est. ? rows
-            │        Outputs: [id]
+            ├─ Aggregating Est. ? rows
+            │  │     Group by: {id}
+            │  └─ TableScan test_distinct.unique_1 Est. ? rows
+            │           Outputs: [id]
             └─ Aggregating Est. ? rows
                │     Group by: {id_1}
                └─ MergingAggregated Est. ? rows
@@ -27,10 +29,14 @@ Projection Est. ? rows
          │     Partition by: {id_1}
          └─ Union Est. ? rows
             │     OutputToInputs: id_1 = [id,id3]
-            ├─ TableScan test_distinct.unique_1 Est. ? rows
-            │        Outputs: [id]
-            └─ TableScan test_distinct.unique_3 Est. ? rows
-                     Outputs: [id3]
+            ├─ Aggregating Est. ? rows
+            │  │     Group by: {id}
+            │  └─ TableScan test_distinct.unique_1 Est. ? rows
+            │           Outputs: [id]
+            └─ Aggregating Est. ? rows
+               │     Group by: {id3}
+               └─ TableScan test_distinct.unique_3 Est. ? rows
+                        Outputs: [id3]
 ---------test inner join1
 Projection Est. ? rows
 │     Expressions: [id]

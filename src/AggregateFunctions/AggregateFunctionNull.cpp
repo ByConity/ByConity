@@ -1,3 +1,4 @@
+#include <string>
 #include <DataTypes/DataTypeNullable.h>
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <AggregateFunctions/AggregateFunctionNothing.h>
@@ -5,6 +6,7 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <AggregateFunctions/IAggregateFunctionMySql.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -89,6 +91,13 @@ public:
         }
 
         bool return_type_is_nullable = !properties.returns_default_when_only_null && nested_function->getReturnType()->canBeInsideNullable();
+
+        ContextPtr query_context;
+        if (CurrentThread::isInitialized())
+            query_context = CurrentThread::get().getQueryContext();
+        if (query_context && !query_context->getSettingsRef().group_array_can_return_nullable)
+            return_type_is_nullable &= nested_function->returnTypeCanBeNullable();
+
         bool serialize_flag = return_type_is_nullable || properties.returns_default_when_only_null;
 
         if (arguments.size() == 1)

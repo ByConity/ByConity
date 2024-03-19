@@ -167,7 +167,8 @@ StorageMaterializedView::StorageMaterializedView(
     /// check async refreh task partition mapping function
     if (refresh_schedule.async())
     {
-        partition_transformer = std::make_shared<PartitionTransformer>(select.inner_query->clone(), target_table_id);
+        partition_transformer
+            = std::make_shared<PartitionTransformer>(select.inner_query->clone(), target_table_id, refresh_schedule.async());
 
         // auto query_context = Context::createCopy(getContext());
         // partition_transformer->validate(query_context);

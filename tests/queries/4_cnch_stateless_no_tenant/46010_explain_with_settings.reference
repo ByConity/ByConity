@@ -6,8 +6,10 @@ Projection Est. ? rows
          │     Partition by: {id_2}
          └─ Union Est. ? rows
             │     OutputToInputs: id_2 = [id,id_1]
-            ├─ TableScan test_distinct.unique_1 Est. ? rows
-            │        Outputs: [id]
+            ├─ Aggregating Est. ? rows
+            │  │     Group by: {id}
+            │  └─ TableScan test_distinct.unique_1 Est. ? rows
+            │           Outputs: [id]
             └─ Aggregating Est. ? rows
                │     Group by: {id_1}
                └─ MergingAggregated Est. ? rows

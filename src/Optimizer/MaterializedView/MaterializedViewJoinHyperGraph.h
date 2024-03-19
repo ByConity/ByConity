@@ -65,7 +65,7 @@ public:
     static JoinHyperGraph build(
         const PlanNodePtr & plan,
         const SymbolTransformMap & symbol_transform_map,
-        ContextMutablePtr & context,
+        ContextPtr context,
         std::unordered_set<IQueryPlanStep::Type> skip_nodes = {});
 
     JoinHyperGraph(
@@ -130,7 +130,7 @@ struct JoinHyperGraphContext
     std::unordered_map<PlanNodeId, size_t> plan_id_to_index;
     std::unordered_map<PlanNodePtr, size_t> plan_node_to_index;
 
-    const ContextMutablePtr context;
+    const ContextPtr context;
     const SymbolTransformMap & symbol_transform_map;
     const std::unordered_set<IQueryPlanStep::Type> & skip_nodes;
 };

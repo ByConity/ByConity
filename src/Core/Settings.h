@@ -758,6 +758,7 @@ enum PreloadLevelSettings : UInt64
     M(OverflowMode, read_overflow_mode_local, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
     \
     /** Just for compatible, maybe removed or implemented later */ \
+    M(Bool, group_array_can_return_nullable, true, "Force return type of groupArray is nullable.", 0) \
     M(Bool, allow_experimental_multiple_joins_emulation, true, "Emulate multiple joins using subselects", 0) \
     M(Bool, allow_experimental_data_skipping_indices, true, "Emulate data skipping indices", 0) \
     M(Bool, enable_predicate_pushdown, false, "Where to push down predicate", 0) \
