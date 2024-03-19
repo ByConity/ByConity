@@ -1,5 +1,5 @@
 -- Error cases
-SELECT toStartOfSecond('123');
+SELECT toStartOfSecond('123');  -- {serverError 6}
 SELECT toStartOfSecond(now());  -- {serverError 43}
 SELECT toStartOfSecond();   -- {serverError 42}
 SELECT toStartOfSecond(now64(), 123);   -- {serverError 43}

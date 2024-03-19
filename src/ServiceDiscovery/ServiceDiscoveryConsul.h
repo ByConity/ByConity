@@ -24,6 +24,13 @@
 namespace DB
 {
 
+enum class ConsulAddrType
+{
+    IPV4,
+    IPV6,
+    DUAL
+};
+
 class ServiceDiscoveryConsul : public IServiceDiscovery
 {
 public:
@@ -48,7 +55,6 @@ private:
     Poco::Logger * log = &Poco::Logger::get("ServiceDiscoveryConsul");
 
     ServiceDiscoveryCache<Endpoint> cache;
-
     bool passCheckCluster(const Endpoint & e);
     bool passCheckVwName(const Endpoint & e, const String & vw_name);
 

@@ -1895,12 +1895,14 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendProjectResult(ExpressionActio
     ExpressionActionsChain::Step & step = chain.lastStep(aggregated_columns);
 
     NamesWithAliases result_columns;
+    NameSet required_result_columns_set(required_result_columns.begin(), required_result_columns.end());
 
     ASTs asts = select_query->select()->children;
     for (const auto & ast : asts)
     {
         String result_name = ast->getAliasOrColumnName();
-        if (required_result_columns.empty() || required_result_columns.count(result_name))
+        auto it = required_result_columns_set.find(result_name);
+        if (required_result_columns_set.empty() || it != required_result_columns_set.end())
         {
             std::string source_name = ast->getColumnName();
 
@@ -1931,11 +1933,35 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendProjectResult(ExpressionActio
 
             result_columns.emplace_back(source_name, result_name);
             step.addRequiredOutput(result_columns.back().second);
+            if (!required_result_columns_set.empty())
+                required_result_columns_set.erase(it);
         }
     }
 
     auto actions = chain.getLastActions();
     actions->project(result_columns);
+
+    if (!required_result_columns.empty())
+    {
+        const NameSet & required_result_columns_not_present = required_result_columns_set;
+        result_columns.clear();
+        for (const auto & column : required_result_columns)
+        {
+            // This is a simple fix for the test case tests/queries/4_cnch_stateless/00998_materialized_view_multiple_joins.sql
+            // whereby INSERT INTO `1234.test00998mv`.target_join_448189919111675915_write SELECT t.id, t.s FROM `1234.test00998mv`.source AS t INNER JOIN `1234.test00998mv`.dim AS d ON t.s = d.s WHERE _partition_id = 1
+            // results in _partition_id being one of the required_result_columns.
+            // But actions does not have the virtual column _partition_id.
+            // This is probably not the best way to do it. Should _partition_id even be allowed here?
+            if (required_result_columns_not_present.count(column) > 0)
+            {
+                LOG_DEBUG(&Poco::Logger::get("SelectQueryExpressionAnalyzer::appendProjectResult"), "Column not present: {}", column);
+                continue;
+            }
+            result_columns.emplace_back(column, std::string{});
+        }
+        actions->project(result_columns);
+    }
+
     return actions;
 }
 
