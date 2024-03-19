@@ -31,6 +31,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Processors/Pipe.h>
@@ -303,6 +304,22 @@ UInt64 IStorage::getPartColumnsCommitTime(const NamesAndTypesList &search_part_c
             return ts;
     }
     return most_recend_quilified;
+}
+
+ASTPtr IStorage::applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const
+{
+    // only set query.where()
+    auto * select_query = query_info.getSelectQuery();
+
+    if (!PredicateUtils::isTruePredicate(query_filter))
+    {
+        if (auto where = select_query->where())
+            select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(ASTs{query_filter, where}));
+        else
+            select_query->setExpression(ASTSelectQuery::Expression::WHERE, ASTPtr{query_filter});
+    }
+
+    return query_filter;
 }
 
 std::string PrewhereInfo::dump() const

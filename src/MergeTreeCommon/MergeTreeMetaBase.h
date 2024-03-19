@@ -426,6 +426,8 @@ public:
     /// The same as above but does not hold vector of data parts.
     virtual StorageSnapshotPtr getStorageSnapshotWithoutParts(const StorageMetadataPtr & metadata_snapshot) const;
 
+    ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const override;
+
 protected:
     friend class IMergeTreeDataPart;
     friend class MergeTreeDataPartCNCH;

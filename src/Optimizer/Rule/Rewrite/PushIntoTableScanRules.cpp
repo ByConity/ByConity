@@ -15,7 +15,6 @@
 
 #include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
 
-#include <Interpreters/pushFilterIntoStorage.h>
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Patterns.h>
@@ -128,9 +127,7 @@ ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr q
 
     // push filter into storage
     if (!PredicateUtils::isTruePredicate(push_filter))
-    {
-        push_filter = pushFilterIntoStorage(push_filter, table_step.getStorage(), table_step.getQueryInfo(), storage_statistics, table_step.getOutputStream().getNamesAndTypes(), context);
-    }
+        push_filter = table_step.getStorage()->applyFilter(push_filter, table_step.getQueryInfo(), context, storage_statistics);
 
     // construnct the remaing filter
     auto mapper = SymbolMapper::simpleMapper(column_to_alias);

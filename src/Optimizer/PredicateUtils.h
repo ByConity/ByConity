@@ -118,6 +118,9 @@ public:
     static std::pair<std::vector<std::pair<ConstASTPtr, ConstASTPtr>>, std::vector<ConstASTPtr>>
     extractEqualPredicates(const std::vector<ConstASTPtr> & predicates);
 
+    // Set Operation
+    static void subtract(ASTs & left, const ASTs & right);
+
 private:
     static String flip(const String & fun_name);
     template <typename T, enable_if_ast<T> = true>

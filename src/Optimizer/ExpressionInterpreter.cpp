@@ -50,7 +50,7 @@ using InterpretResult = ExpressionInterpreter::InterpretResult;
 using InterpretIMResult = ExpressionInterpreter::InterpretIMResult;
 using InterpretIMResults = ExpressionInterpreter::InterpretIMResults;
 
-static ASTPtr makeFunction(const String & name, const InterpretIMResults & arguments, const ContextMutablePtr & context)
+static ASTPtr makeFunction(const String & name, const InterpretIMResults & arguments, const ContextPtr & context)
 {
     ASTs argument_asts;
     std::transform(arguments.begin(), arguments.end(), std::back_inserter(argument_asts),
@@ -141,7 +141,7 @@ struct LogicalFunctionRewriter
         const ASTPtr & node,
         InterpretIMResults argument_results,
         InterpretIMResult & rewrite_result,
-        const ContextMutablePtr & context)
+        const ContextPtr & context)
     {
         if (function.name != FunctionName::name)
             return false;
@@ -298,7 +298,7 @@ bool simplifyMultiIf(
     const ASTPtr &,
     const InterpretIMResults & argument_results,
     InterpretIMResult & simplify_result,
-    const ContextMutablePtr & context)
+    const ContextPtr & context)
 {
     if (function.name != "multiIf" || argument_results.size() < 3 || argument_results.size() % 2 == 0)
         return false;
@@ -349,11 +349,11 @@ bool simplifyMultiIf(
 }
 }
 
-ExpressionInterpreter::ExpressionInterpreter(InterpretSetting setting_, ContextMutablePtr context_)
+ExpressionInterpreter::ExpressionInterpreter(InterpretSetting setting_, ContextPtr context_)
     : context(std::move(context_)), setting(std::move(setting_)), type_analyzer(TypeAnalyzer::create(context, setting.identifier_types))
 {}
 
-ExpressionInterpreter ExpressionInterpreter::basicInterpreter(ExpressionInterpreter::IdentifierTypes types, ContextMutablePtr context)
+ExpressionInterpreter ExpressionInterpreter::basicInterpreter(ExpressionInterpreter::IdentifierTypes types, ContextPtr context)
 {
     ExpressionInterpreter::InterpretSetting setting
         {
@@ -362,7 +362,7 @@ ExpressionInterpreter ExpressionInterpreter::basicInterpreter(ExpressionInterpre
     return {std::move(setting), std::move(context)};
 }
 
-ExpressionInterpreter ExpressionInterpreter::optimizedInterpreter(ExpressionInterpreter::IdentifierTypes types, ExpressionInterpreter::IdentifierValues values, ContextMutablePtr context)
+ExpressionInterpreter ExpressionInterpreter::optimizedInterpreter(ExpressionInterpreter::IdentifierTypes types, ExpressionInterpreter::IdentifierValues values, ContextPtr context)
 {
     ExpressionInterpreter::InterpretSetting setting
         {
@@ -410,7 +410,7 @@ InterpretResult ExpressionInterpreter::evaluate(const ConstASTPtr & expression) 
         return {im_result.type, im_result.getField()};
 }
 
-ASTPtr InterpretResult::convertToAST(const ContextMutablePtr & ctx) const
+ASTPtr InterpretResult::convertToAST(const ContextPtr & ctx) const
 {
     if (isAST())
         return ast;
@@ -469,7 +469,7 @@ bool InterpretIMResult::isSuitablyRepresentedByValue() const
     return true;
 }
 
-ASTPtr InterpretIMResult::convertToAST(const ContextMutablePtr & ctx) const
+ASTPtr InterpretIMResult::convertToAST(const ContextPtr & ctx) const
 {
     assert(ast != nullptr);
 
