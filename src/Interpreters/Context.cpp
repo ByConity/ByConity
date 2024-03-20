@@ -5844,11 +5844,13 @@ AsynchronousReaderPtr Context::getThreadPoolReader() const
 {
     auto lock = getLock();
 
-    const Poco::Util::AbstractConfiguration & config = getConfigRef();
-    auto pool_size = config.getUInt(".threadpool_remote_fs_reader_pool_size", 250);
-    auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
     if (!shared->asynchronous_remote_fs_reader)
+    {
+        const Poco::Util::AbstractConfiguration & config = getConfigRef();
+        auto pool_size = config.getUInt(".threadpool_remote_fs_reader_pool_size", 250);
+        auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
         shared->asynchronous_remote_fs_reader = std::make_shared<ThreadPoolRemoteFSReader>(pool_size, queue_size);
+    }
 
     return shared->asynchronous_remote_fs_reader;
 }

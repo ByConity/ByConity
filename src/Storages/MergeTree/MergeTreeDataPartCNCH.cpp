@@ -47,6 +47,11 @@ namespace ProfileEvents
     extern const Event LoadPrimaryIndexMicroseconds;
     extern const Event PrimaryIndexDiskCacheHits;
     extern const Event PrimaryIndexDiskCacheMisses;
+
+    extern const Event LoadDataPartFooter;
+    extern const Event LoadChecksums;
+    extern const Event LoadRemoteChecksums;
+    extern const Event LoadChecksumsMicroseconds;
 }
 
 namespace DB
@@ -627,17 +632,22 @@ ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getDeleteBitmap(bool allow_null)
 
 MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFooter() const
 {
+    ProfileEvents::increment(ProfileEvents::LoadDataPartFooter);
     const String data_file_path = fs::path(getFullRelativePath()) / DATA_FILE;
     size_t data_file_size = volume->getDisk()->getFileSize(data_file_path);
 
     auto data_file = openForReading(volume->getDisk(), data_file_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
 
     if (!parent_part)
+    {
+        data_file->setReadUntilPosition(data_file_size);
         data_file->seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+    }
     else
     {
         // for projection part
         auto [projection_offset, projection_size] = getFileOffsetAndSize(*parent_part, name + ".proj");
+        data_file->setReadUntilPosition(projection_offset + projection_size);
         data_file->seek(projection_offset + projection_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
     }
 
@@ -759,6 +769,8 @@ IMergeTreeDataPart::IndexPtr MergeTreeDataPartCNCH::loadIndexFromStorage() const
 
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_unused]] bool require)
 {
+    ProfileEvents::increment(ProfileEvents::LoadChecksums);
+    ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::LoadChecksumsMicroseconds);
     ChecksumsPtr checksums = std::make_shared<Checksums>();
     checksums->storage_type = StorageType::ByteHDFS;
     if ((!parent_part && deleted) || (parent_part && parent_part->deleted))
@@ -798,6 +810,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(bool follow_part_chain)
 {
+    ProfileEvents::increment(ProfileEvents::LoadRemoteChecksums);
     ChecksumsPtr checksums = std::make_shared<Checksums>();
     checksums->storage_type = StorageType::ByteHDFS;
     if ((!parent_part && deleted) || (parent_part && parent_part->deleted))
