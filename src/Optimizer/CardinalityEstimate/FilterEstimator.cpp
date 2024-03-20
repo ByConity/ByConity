@@ -23,7 +23,7 @@
 namespace DB
 {
 PlanNodeStatisticsPtr FilterEstimator::estimate(
-    PlanNodeStatisticsPtr & opt_child_stats, const FilterStep & step, ContextMutablePtr & context, bool is_on_base_table)
+    PlanNodeStatisticsPtr & opt_child_stats, const FilterStep & step, ContextPtr context, bool is_on_base_table)
 {
     if (!opt_child_stats)
     {
@@ -109,7 +109,7 @@ std::optional<Field> castStringType(SymbolStatistics & symbol_statistics, Field 
 }
 
 double FilterEstimator::estimateFilterSelectivity(
-    PlanNodeStatisticsPtr & child_stats, const ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context)
+    PlanNodeStatisticsPtr & child_stats, const ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextPtr context)
 {
     NameToType name_to_type;
     for (const auto & item : column_types)

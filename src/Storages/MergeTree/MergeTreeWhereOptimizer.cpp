@@ -708,6 +708,10 @@ bool MergeTreeWhereOptimizer::cannotBeMoved(const ASTPtr & ptr, bool is_final) c
         /// indexHint is a special function that it does not make sense to transfer to PREWHERE
         if ("indexHint" == function_ptr->name)
             return true;
+        
+        // These functions can cause performance degradation
+        if ("match" == function_ptr->name || "get_json_object" == function_ptr->name)
+            return true;
     }
     else if (auto opt_name = IdentifierSemantic::getColumnName(ptr))
     {

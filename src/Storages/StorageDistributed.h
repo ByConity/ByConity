@@ -149,6 +149,8 @@ public:
     ActionLock getActionLock(StorageActionBlockType type) override;
 
     NamesAndTypesList getVirtuals() const override;
+    
+    ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const override;
 
     /// Used by InterpreterInsertQuery
     std::string getRemoteDatabaseName() const { return remote_database; }

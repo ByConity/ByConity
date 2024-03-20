@@ -26,7 +26,7 @@ using FilterEstimateResults = std::vector<FilterEstimateResult>;
 
 struct FilterEstimatorContext
 {
-    ContextMutablePtr & context;
+    ContextPtr context;
     const ExpressionInterpreter & interpreter;
     std::optional<Field> calculateConstantExpression(const ConstASTPtr & node)
     {
@@ -53,10 +53,10 @@ public:
      * @return PlanNodeStatisticsPtr When there is no statistics collected, it returns None.
      */
     static PlanNodeStatisticsPtr
-    estimate(PlanNodeStatisticsPtr & child_stats, const FilterStep & step, ContextMutablePtr & context, bool is_on_base_table = true);
+    estimate(PlanNodeStatisticsPtr & child_stats, const FilterStep & step, ContextPtr context, bool is_on_base_table = true);
 
     static double estimateFilterSelectivity(
-        PlanNodeStatisticsPtr & child_stats, const ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context);
+        PlanNodeStatisticsPtr & child_stats, const ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextPtr context);
 
 private:
     /**

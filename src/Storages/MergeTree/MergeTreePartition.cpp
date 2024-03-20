@@ -32,6 +32,7 @@
 #include <Common/FieldVisitorHash.h>
 #include <Common/typeid_cast.h>
 #include <Common/hex.h>
+#include "IO/ReadSettings.h"
 #include <Core/Block.h>
 
 
@@ -261,7 +262,7 @@ namespace
 
 static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path)
 {
-    return disk->readFile(path, {.buffer_size = std::min(size_t(DBMS_DEFAULT_BUFFER_SIZE), disk->getFileSize(path))});
+    return disk->readFile(path, ReadSettings().initializeReadSettings(disk->getFileSize(path)));
 }
 
 String MergeTreePartition::getID(const MergeTreeMetaBase & storage) const

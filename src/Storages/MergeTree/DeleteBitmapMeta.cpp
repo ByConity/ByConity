@@ -288,7 +288,7 @@ void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataMo
             DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
             String rel_path = std::filesystem::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*meta);
             ReadSettings read_settings = storage.getContext()->getReadSettings();
-            read_settings.buffer_size = meta->file_size();
+            read_settings.adjustBufferSize(meta->file_size());
             std::unique_ptr<ReadBufferFromFileBase> in = disk->readFile(rel_path, read_settings);
             in->readStrict(buf.data(), meta->file_size());
 

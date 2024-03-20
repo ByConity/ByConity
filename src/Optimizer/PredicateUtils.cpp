@@ -699,6 +699,12 @@ PredicateUtils::extractEqualPredicates(const std::vector<ConstASTPtr> & predicat
     return {equal_predicates, other_predicates};
 }
 
+void PredicateUtils::subtract(ASTs & left, const ASTs & right)
+{
+    EqualityASTSet set{right.begin(), right.end()};
+    left.erase(std::remove_if(left.begin(), left.end(), [&](const auto & ast) -> bool { return set.count(ast); }), left.end());
+}
+
 template ASTPtr PredicateUtils::combineConjuncts<true, ASTPtr>(const std::vector<ASTPtr> & predicates);
 template ASTPtr PredicateUtils::combineConjuncts<false, ASTPtr>(const std::vector<ASTPtr> & predicates);
 template ASTPtr PredicateUtils::combineConjuncts<true, ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
