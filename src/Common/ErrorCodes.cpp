@@ -910,6 +910,7 @@
     M(11013, GLUE_CATALOG_RPC_ERROR) \
 \
     M(12000, INCORRECT_UDF_FUNCTION_NAME)\
+    M(13000, CONCURRENT_RBAC_UPDATE) \
     M(4041, UNKNOWN_BINDING) \
     M(4042, PREPARED_STATEMENT_NOT_EXISTS) \
     M(4043, PREPARED_STATEMENT_ALREADY_EXISTS) \
@@ -925,7 +926,7 @@ namespace ErrorCodes
     APPLY_FOR_ERROR_CODES(M)
 #undef M
 
-    constexpr ErrorCode END = 12000;
+    constexpr ErrorCode END = 13000;
     ErrorPairHolder values[END + 1]{};
 
     struct ErrorCodesNames

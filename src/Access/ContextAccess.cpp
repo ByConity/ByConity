@@ -218,19 +218,29 @@ ContextAccess::ContextAccess(const AccessControlManager & manager_, const Params
     : manager(&manager_)
     , params(params_)
 {
+}
+
+void ContextAccess::initialize()
+{
+    if (!params.user_id)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "No user in current context, it's a bug");
+
     std::lock_guard lock{mutex};
 
     subscription_for_user_change = manager->subscribeForChanges(
-        *params.user_id, [this](const UUID &, const AccessEntityPtr & entity)
-    {
-        UserPtr changed_user = entity ? typeid_cast<UserPtr>(entity) : nullptr;
-        std::lock_guard lock2{mutex};
-        setUser(changed_user);
-    });
+        *params.user_id,
+        [weak_ptr = weak_from_this()](const UUID &, const AccessEntityPtr & entity)
+        {
+            auto ptr = weak_ptr.lock();
+            if (!ptr)
+                return;
+            UserPtr changed_user = entity ? typeid_cast<UserPtr>(entity) : nullptr;
+            std::lock_guard lock2{ptr->mutex};
+            ptr->setUser(changed_user);
+        });
 
     setUser(manager->read<User>(*params.user_id));
 }
-
 
 void ContextAccess::setUser(const UserPtr & user_) const
 {

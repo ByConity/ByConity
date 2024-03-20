@@ -580,8 +580,6 @@ struct ContextSharedPart
 
             global_binding_cache_manager.reset();
 
-            access_control_manager.stopBgJobForKVStorage();
-
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
