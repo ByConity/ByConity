@@ -31,6 +31,7 @@
 #include <Parsers/ASTWindowDefinition.h>
 #include <Storages/IStorage_fwd.h>
 #include <Common/LinkedHashSet.h>
+#include <common/logger_useful.h>
 
 #include <utility>
 #include <vector>
@@ -230,6 +231,7 @@ using ListMultimap = std::unordered_map<Key, std::vector<Val>>;
 struct Analysis
 {
     ScopeFactory scope_factory;
+    Poco::Logger * logger = &Poco::Logger::get("Analysis");
 
     /// Scopes
     // Regular scopes in an ASTSelectQuery, kept by below convention:

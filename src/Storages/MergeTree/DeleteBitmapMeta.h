@@ -28,6 +28,7 @@ namespace DB
 {
 class MergeTreeMetaBase;
 
+using DataModelDeleteBitmap = Protos::DataModelDeleteBitmap;
 using DataModelDeleteBitmapPtr = std::shared_ptr<Protos::DataModelDeleteBitmap>;
 using DataModelDeleteBitmapPtrVector = std::vector<std::shared_ptr<Protos::DataModelDeleteBitmap>>;
 

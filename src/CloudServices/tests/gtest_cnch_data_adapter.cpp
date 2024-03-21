@@ -43,9 +43,9 @@ createPart()
     return part_model;
 }
 
-Protos::DataModelDeleteBitmap createDeleteBitmap() {
+Protos::DataModelDeleteBitmap createDeleteBitmap(String partition_id = "my-partition-id") {
     Protos::DataModelDeleteBitmap bitmap;
-    bitmap.set_partition_id("my-partition-id");
+    bitmap.set_partition_id(partition_id);
     bitmap.set_part_min_block(123);
     bitmap.set_part_max_block(321);
     bitmap.set_reserved(111);
@@ -113,7 +113,17 @@ TEST_F(CnchDataAdapterTest, DeleteBitmapsAdapter)
         EXPECT_EQ(adapter.getName(), "my-partition-id_123_321_111_1_9999");
         EXPECT_EQ(adapter.getPartitionId(), "my-partition-id");
         EXPECT_EQ(adapter.getCommitTime(), 3123);
+        EXPECT_EQ(adapter.getData(), data->getModel());
         EXPECT_EQ(adapter.toData(), data);
+    }
+
+    {
+        DeleteBitmapAdapter adapter(merge_tree, data->getModel());
+        EXPECT_EQ(adapter.getName(), "my-partition-id_123_321_111_1_9999");
+        EXPECT_EQ(adapter.getPartitionId(), "my-partition-id");
+        EXPECT_EQ(adapter.getCommitTime(), 3123);
+        EXPECT_EQ(adapter.getData(), data->getModel());
+        EXPECT_TRUE(adapter.toData()->sameBlock(*data));
     }
 
     {

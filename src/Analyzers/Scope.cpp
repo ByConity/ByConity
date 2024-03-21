@@ -122,6 +122,15 @@ NameSet Scope::getNamesSet() const
     return columns;
 }
 
+String Scope::toString() const
+{
+    String str;
+    for (const auto & field : field_descriptions)
+        str += "(prefix: " + field.prefix.toString() + ", name: " + field.name + ", type: " + field.type->getName() + "), ";
+
+    return str;
+}
+
 ScopePtr ScopeFactory::createScope(Scope::ScopeType type, ScopePtr parent, bool query_boundary, FieldDescriptions field_descriptions)
 {
     scopes.emplace_back(type, parent, query_boundary, std::move(field_descriptions));

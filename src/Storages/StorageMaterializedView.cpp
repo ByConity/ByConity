@@ -101,6 +101,7 @@ StorageMaterializedView::StorageMaterializedView(
     : IStorage(table_id_)
     , WithMutableContext(local_context->getGlobalContext())
     , refresh_schedule(query.refresh_strategy)
+    , cache(MaterializedViewVersionedPartCache::getInstance())
     , log(&Poco::Logger::get("StorageMaterializedView"))
 {
     StorageInMemoryMetadata storage_metadata;
@@ -166,12 +167,28 @@ StorageMaterializedView::StorageMaterializedView(
 
     /// check async refreh task partition mapping function
     if (refresh_schedule.async())
-    {
-        partition_transformer
-            = std::make_shared<PartitionTransformer>(select.inner_query->clone(), target_table_id, refresh_schedule.async());
+        partition_transformer = std::make_shared<PartitionTransformer>(select.inner_query->clone(), target_table_id, refresh_schedule.async());
+}
 
-        // auto query_context = Context::createCopy(getContext());
-        // partition_transformer->validate(query_context);
+VersionPartContainerPtrs StorageMaterializedView::getPreviousPartitions(ContextMutablePtr local_context)
+{
+    String mv_uuid = UUIDHelpers::UUIDToString(this->getStorageUUID());
+
+    if (local_context->getSettingsRef().async_mv_enable_mv_meta_cache)
+    {
+        String mv_meta_version = local_context->getCnchCatalog()->getMvMetaVersion(mv_uuid);
+        auto entry_ptr = cache.getOrSet(mv_uuid, mv_meta_version, [&mv_uuid, &mv_meta_version, &local_context](){
+            using Entry = MaterializedViewVersionedPartCache::Entry;
+            return std::make_shared<Entry>(mv_meta_version,
+                local_context->getCnchCatalog()->getMvBaseTables(mv_uuid));
+        });
+
+        LOG_TRACE(log, "mv getPreviousPartitions hits cache-{}", entry_ptr.second);
+        return entry_ptr.first->kv_cache;
+    }
+    else
+    {
+        return local_context->getCnchCatalog()->getMvBaseTables(mv_uuid);
     }
 }
 
@@ -184,7 +201,7 @@ void StorageMaterializedView::syncBaseTablePartitions(
     bool for_rewrite)
 {
     /// get all based table version partitions according to mv storage uuid
-    VersionPartContainerPtrs previous_partitions = local_context->getCnchCatalog()->getMvBaseTables(UUIDHelpers::UUIDToString(this->getStorageUUID()));
+    VersionPartContainerPtrs previous_partitions = getPreviousPartitions(local_context);
     std::unordered_set<StorageID> updated_storage_set;
     for (const auto & storage : base_tables)
     {
@@ -356,16 +373,7 @@ AsyncRefreshParamPtrs StorageMaterializedView::getAsyncRefreshParams(ContextMuta
         /// 1. partition validate for debug
         partition_transformer->validate(local_context);
 
-        /// 2. if always non partition refresh return refresh all target parameter
-        if (partition_transformer->alwaysNonPartitionRefresh())
-        {
-            LOG_DEBUG(log, "refresh materialized view always non partition refresh, generate refresh all target parameter");
-            PartMapRelations map_relations;
-            PartitionDiffPtr part_diff = std::make_shared<PartitionDiff>();
-            return partition_transformer->constructRefreshParams(map_relations, part_diff, true, false, local_context);
-        }
-
-        /// 3. get snapshot of based tables partition version and calculate partition diff
+        /// 2. get snapshot of based tables partition version and calculate partition diff
         PartitionDiffPtr partition_diff = std::make_shared<PartitionDiff>();
         VersionPartContainerPtrs latest_versioned_partitions;
         syncBaseTablePartitions(
@@ -384,7 +392,7 @@ AsyncRefreshParamPtrs StorageMaterializedView::getAsyncRefreshParams(ContextMuta
             return refersh_params;
         }
 
-        /// 4. execute partition mapping
+        /// 3. execute partition mapping function to get target -> source partition mapping
         if (partition_diff->paritition_based_refresh)
         {
             /// based on partition diff calucate target -> srouce parts
@@ -429,7 +437,7 @@ AsyncRefreshParamPtrs StorageMaterializedView::getAsyncRefreshParams(ContextMuta
             refersh_params = partition_transformer->constructRefreshParams(
                 overwrite_part_map, partition_diff, combine_params, partition_diff->paritition_based_refresh, local_context);
         }
-        else
+        else /// refresh all partitions
         {
             PartMapRelations target_part_map;
             target_part_map["refresh_all"] = {};
@@ -623,11 +631,11 @@ void StorageMaterializedView::executeByDropInsert(AsyncRefreshParamPtr param, Co
     }
     auto mv_commit_func = [param = param, this](ContextPtr context) {
         return context->getCnchCatalog()->constructMvMetaRequests(
-            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions);
+            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions, toString(context->getTimestamp()));
     };
     auto mv_abort_func = [param = param, this](ContextPtr context) {
         return context->getCnchCatalog()->constructMvMetaRequests(
-            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions);
+            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions, toString(context->getTimestamp()));
     };
     explicit_txn->addCommitAbortFunc(mv_commit_func, mv_abort_func);
 
@@ -661,11 +669,11 @@ void StorageMaterializedView::executeByInsertOverwrite(AsyncRefreshParamPtr para
     /// Add commit and abort function for mv meta
     auto mv_commit_func = [param = param, this](ContextPtr context) {
         return context->getCnchCatalog()->constructMvMetaRequests(
-            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions);
+            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions, toString(context->getTimestamp()));
     };
     auto mv_abort_func = [param = param, this](ContextPtr context) {
         return context->getCnchCatalog()->constructMvMetaRequests(
-            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions);
+            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions, toString(context->getTimestamp()));
     };
     insert_overwrite_context->getCurrentTransaction()->addCommitAbortFunc(mv_commit_func, mv_abort_func);
 
@@ -1584,7 +1592,7 @@ void StorageMaterializedView::refreshLocalImpl(const ASTPtr & partition, Context
     }
 }
 
-void StorageMaterializedView::validateMv(ContextMutablePtr local_context)
+void StorageMaterializedView::validatePartitionBased(ContextMutablePtr local_context)
 {
     if (partition_transformer == nullptr)
         return;

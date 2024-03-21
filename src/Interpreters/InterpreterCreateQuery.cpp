@@ -54,6 +54,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/StorageMaterializedView.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/executeDDLQueryOnCluster.h>
@@ -1558,6 +1559,11 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     try
     {
         res->checkColumnsValidity(properties.columns);
+        if (auto * view = dynamic_cast<StorageMaterializedView *>(res.get()))
+        {
+            if (view->async())
+                view->validatePartitionBased(getContext());
+        }
     }
     catch (...)
     {

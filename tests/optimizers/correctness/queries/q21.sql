@@ -1,15 +1,15 @@
-set enable_push_partial_agg=0;
+set enable_push_partial_agg=1;
 select
     count()
 from
 (
-    select /*+enable_push_partial_agg*/
+    select /*+disable_push_partial_agg*/
         sum(a)
     from q17_t3
     group by a
 );
 
-select /*+enable_push_partial_agg*/
+select /*+disable_push_partial_agg*/
     count()
 from
 (

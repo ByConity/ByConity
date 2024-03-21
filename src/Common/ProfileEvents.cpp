@@ -1050,6 +1050,8 @@
     M(PlanSegmentSplitterTime, "Total elapsed time spent on PlanSegmentSplitter in milliseconds") \
     M(GetMvBaseTableIDSuccess, "") \
     M(GetMvBaseTableIDFailed, "") \
+    M(GetMvBaseTableVersionSuccess, "") \
+    M(GetMvBaseTableVersionFailed, "") \
     M(UpdateMvMetaIDSuccess, "") \
     M(UpdateMvMetaIDFailed, "")
 
