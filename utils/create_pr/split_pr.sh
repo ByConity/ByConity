@@ -20,7 +20,7 @@ do
     ((index++)) # increase the index
     git push -u -f ${REMOTE} ${SUB_BRANCH}
     RAW_TITLE=$(git log refs/heads/$SUB_BRANCH^! | tail -n +4 | grep -v "Merge .* into " |sed '/^[[:space:]]*$/d' | grep -v "See merge request"| grep -v "#")
-    TITLE=$(echo $RAW_TITLE| sed -E -e 's/^(feat|fix|build|ci|docs|perf|refactor|style|test)(\((clickhousech|optimizer)+@m-[1-9][0-9]+\))*:+(.+)$/\1:\4/')
+    TITLE=$(echo $RAW_TITLE| sed -E -e 's/^(feat|fix|build|ci|docs|perf|refactor|style|test)(\((clickhousech|optimizer|byconity)+@m-[1-9][0-9]+\))*:+(.+)$/\1:\4/')
 
     echo "create pr with title: ${TITLE}"
     gh pr create --base master --head $SUB_BRANCH --title "$TITLE" --body "$TITLE" && ALL_SUB_BRANCHES="${ALL_SUB_BRANCHES} ${SUB_BRANCH}"
