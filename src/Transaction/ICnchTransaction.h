@@ -221,6 +221,9 @@ protected:
     void assertLockAcquired() const;
     void setLockHolder(std::shared_ptr<CnchLockHolder> p) { lock_holder = p; }
 
+    /// Clean CurrentlyMergingPartsTagger for merge txn after the txn finished.
+    void tryCleanMergeTagger();
+
     /// Transaction still needs global context because the query context will expired after query is finished, but
     /// the transaction still running even query is finished.
     ContextPtr global_context;
@@ -240,6 +243,7 @@ protected:
     std::weak_ptr<CnchLockHolder> lock_holder;
 
     std::vector<TransFunction> extern_commit_functions;
+
 
 private:
     String creator;

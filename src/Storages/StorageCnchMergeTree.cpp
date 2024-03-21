@@ -2580,7 +2580,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
 {
     if (!command.part)
     {
-        /// 1. aquire partition lock
+        /// 1. acquire partition lock
         auto cur_txn = local_context->getCurrentTransaction();
         TxnTimestamp txn_id = cur_txn->getTransactionID();
         LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
