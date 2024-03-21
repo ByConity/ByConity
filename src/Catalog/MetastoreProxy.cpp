@@ -307,12 +307,14 @@ std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> Metastore
         keys.push_back(tableUUIDMappingKey(name_space, pair.first, pair.second));
     }
 
-    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> res(new std::vector<std::shared_ptr<Protos::TableIdentifier>>());
+    auto res = std::make_shared<std::vector<std::shared_ptr<Protos::TableIdentifier>>>(std::vector<std::shared_ptr<Protos::TableIdentifier>>{});
 
     auto values = metastore_ptr->multiGet(keys);
     for (const auto & value : values)
     {
-        res->emplace_back(new Protos::TableIdentifier);
+        if (value.first.empty())
+            continue;
+        res->emplace_back(std::make_shared<Protos::TableIdentifier>());
         res->back()->ParseFromString(std::move(value.first));
     }
 
