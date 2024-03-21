@@ -5073,6 +5073,13 @@ namespace Catalog
             ProfileEvents::UpdateMvMetaIDFailed);
     }
 
+    void Catalog::cleanMvMeta(const String & uuid)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->cleanMvMeta(name_space, uuid); },
+            ProfileEvents::UpdateMvMetaIDSuccess,
+            ProfileEvents::UpdateMvMetaIDFailed);
+    }
 
     std::vector<UInt64> Catalog::getTrashDBVersions(const String & database)
     {

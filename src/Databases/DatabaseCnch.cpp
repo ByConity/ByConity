@@ -27,7 +27,6 @@
 #include <Parsers/parseQuery.h>
 #include <Transaction/Actions/DDLCreateAction.h>
 #include <Transaction/Actions/DDLDropAction.h>
-#include <Transaction/Actions/DDLRenameAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -35,6 +34,8 @@
 #include <Common/Status.h>
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
+#include <Transaction/Actions/DDLRenameAction.h>
+#include <Storages/StorageMaterializedView.h>
 
 namespace DB
 {
@@ -279,6 +280,14 @@ void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name
     auto drop_action = txn->createAction<DDLDropAction>(std::move(params));
     txn->appendAction(std::move(drop_action));
     txn->commitV1();
+
+    // commitV1 should throw exception if commit failed
+    if (auto * mv = dynamic_cast<StorageMaterializedView *>(storage.get()))
+    {
+        if (mv->async())
+            local_context->getCnchCatalog()->cleanMvMeta(UUIDHelpers::UUIDToString(mv->getStorageID().uuid));
+    }
+
     if (is_dictionary)
         local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
 

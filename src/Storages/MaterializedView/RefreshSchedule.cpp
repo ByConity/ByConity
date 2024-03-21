@@ -28,6 +28,7 @@ RefreshSchedule::RefreshSchedule(const ASTRefreshStrategy * strategy)
         if (strategy->start)
         {
             String time_start_string = strategy->start->value.safeGet<String>();
+            start_time_string = time_start_string;
             std::smatch match;
             std::regex pattern(R"((\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}))");
             if (!std::regex_match(time_start_string, match, pattern))
@@ -72,6 +73,11 @@ UInt64 RefreshSchedule::prescribeNextElaps() const
     auto next_time_seconds = std::chrono::duration_cast<std::chrono::seconds>(next_time.time_since_epoch());
 
     return next_time_seconds.count() - now_time_seconds.count();
+}
+
+String RefreshSchedule::getStartTime() const
+{
+    return start_time_string;
 }
 
 std::chrono::sys_seconds RefreshSchedule::prescribeNext(std::chrono::system_clock::time_point last_prescribed, std::chrono::system_clock::time_point now) const
