@@ -1903,9 +1903,26 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_async_mv_debug, false, "whether show async debug information", 0) \
     \
 
-
 // End of COMMON_SETTINGS
-// Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
+// Please add settings related to formats into the FORMAT_FACTORY_SETTINGS and move obsolete settings to OBSOLETE_SETTINGS.
+
+#define MAKE_OBSOLETE(M, TYPE, NAME, DEFAULT) \
+    M(TYPE, NAME, DEFAULT, "Obsolete setting, does nothing.", BaseSettingsHelpers::Flags::OBSOLETE)
+
+#define OBSOLETE_SETTINGS(M) \
+    /** Obsolete settings that do nothing now but left for compatibility reasons. Remove them or implement them when you have free time. */ \
+    MAKE_OBSOLETE(M, Bool, enable_hybrid_allocation, false) \
+    MAKE_OBSOLETE(M, Bool, make_partition_by_todate_monotonic, false) \
+    MAKE_OBSOLETE(M, Bool, enable_query_cache, false) \
+    MAKE_OBSOLETE(M, Bool, enable_parallel_input_generator, false) \
+    MAKE_OBSOLETE(M, Bool, enable_prune_source_plan_segment, true) \
+    MAKE_OBSOLETE(M, Bool, exchange_enable_metric, true) \
+    MAKE_OBSOLETE(M, UInt64, cnch_offloading_mode, 0) \
+    MAKE_OBSOLETE(M, UInt64, distributed_query_max_threads, 0) \
+    MAKE_OBSOLETE(M, UInt64, exchange_local_no_repartition_extra_threads, 32) \
+    MAKE_OBSOLETE(M, UInt64, filtered_ratio_to_use_skip_read, 0) \
+    MAKE_OBSOLETE(M, Bool, enable_two_stages_prewhere, false) \
+    /** End of OBSOLETE_SETTINGS */ \
 
 #define FORMAT_FACTORY_SETTINGS(M) \
     M(Char, \
@@ -2090,22 +2107,15 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cnch_engine_conversion, false, "Whether to converse MergeTree engine to CnchMergeTree engine", 0) \
     /** End of BitEngine related settings */ \
     \
-    /** Just for compatible, totally the same with settings above */ \
-    M(UInt64, cnch_offloading_mode, 0, "Offloading mode, 0: disable offloading, 1: offloading for simple queries, 2: offloading for queries without JOIN/IN, 3: offloading for all queries.", 0) \
-    M(UInt64, distributed_query_max_threads, 0, "The maximum number of threads to execute the plan semgent. By default, it is equals to max_threads", 0) \
-    M(Bool, enable_parallel_input_generator, false, "Whether enable generate parallel inputs", 0) \
-    M(Bool, enable_prune_source_plan_segment, true, "Whether enable prune source plan segment", 0) \
-    M(Bool, exchange_enable_metric, true, "whether enable exchange metric collection", 0) \
-    M(UInt64, exchange_local_no_repartition_extra_threads, 32, "Extra threads for pipeline which reading data from LOCAL_NO_NEED_REPARTITION exchange", 0) \
-    M(UInt64, filtered_ratio_to_use_skip_read, 0, "Ratio of origin rows to filtered rows when using skip reading, 0 means disable", 0) \
-    M(Bool, enable_two_stages_prewhere, false, "Whether enable 2 stages prewhere.", 0) \
-
 
 // End of FORMAT_FACTORY_SETTINGS
-// Please add settings non-related to formats into the COMMON_SETTINGS above.
 
-#define LIST_OF_SETTINGS(M) \
-    COMMON_SETTINGS(M) \
+// Please add settings non-related to formats into the COMMON_SETTINGS above.
+// Please add settings for compatible into OBSOLETE_SETTINGS above. And add FORMAT_FACTORY_OBSOLETE_SETTINGS if you needed.
+
+#define LIST_OF_SETTINGS(M)    \
+    COMMON_SETTINGS(M)         \
+    OBSOLETE_SETTINGS(M)       \
     FORMAT_FACTORY_SETTINGS(M)
 
 DECLARE_SETTINGS_TRAITS_ALLOW_CUSTOM_SETTINGS(SettingsTraits, LIST_OF_SETTINGS)
