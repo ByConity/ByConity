@@ -69,6 +69,7 @@ StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
             {"cluster_key", std::make_shared<DataTypeString>()},
             {"split_number", std::make_shared<DataTypeInt64>()},
             {"with_range", std::make_shared<DataTypeUInt8>()},
+            {"table_definition_hash", std::make_shared<DataTypeString>()},
             {"engine", std::make_shared<DataTypeString>()},
         }));
     setInMemoryMetadata(storage_metadata);
@@ -89,6 +90,7 @@ static std::unordered_set<std::string> columns_require_storage =
 {
     "dependencies_database",
     "dependencies_table",
+    "table_definition_hash",
     "engine"
 };
 
@@ -401,6 +403,14 @@ Pipe StorageSystemCnchTables::read(
         }
         else
             src_index += 7;
+
+        if (columns_mask[src_index++])
+        {
+            if (storage && storage->isBucketTable())
+                res_columns[col_num++]->insert(storage->getTableHashForClusterBy().toString());
+            else
+                res_columns[col_num++]->insertDefault();
+        }
 
         if (columns_mask[src_index++])
         {
