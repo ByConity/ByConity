@@ -1137,11 +1137,8 @@ void MergeTreeDataPartCNCH::updateCommitTimeForProjection()
         throw Exception("Parent part cannot be empty. It's bug.", ErrorCodes::LOGICAL_ERROR);
 }
 
-void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
+void MergeTreeDataPartCNCH::removeImpl(bool /*keep_shared_data*/) const
 {
-    for (const auto & [_, projection_part] : projection_parts)
-        projection_part->projectionRemove(relative_path, keep_shared_data);
-
     auto disk = volume->getDisk();
     auto path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path;
     try
@@ -1163,27 +1160,6 @@ void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
             fullPath(disk, path_on_disk),
             getCurrentExceptionMessage(false));
         disk->removeRecursive(path_on_disk);
-    }
-}
-
-void MergeTreeDataPartCNCH::projectionRemove(const String & parent_to, bool) const
-{
-    auto projection_path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path / parent_to;
-    auto disk = volume->getDisk();
-    try
-    {
-        disk->removeFile(projection_path_on_disk / "data");
-        disk->removeDirectory(projection_path_on_disk);
-    }
-    catch (...)
-    {
-        /// Recursive directory removal does many excessive "stat" syscalls under the hood.
-        LOG_INFO(
-            storage.log,
-            "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}",
-            fullPath(disk, projection_path_on_disk),
-            getCurrentExceptionMessage(false));
-        disk->removeRecursive(projection_path_on_disk);
     }
 }
 
