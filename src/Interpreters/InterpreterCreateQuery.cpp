@@ -1125,6 +1125,9 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     // Make sure names in foreign key exist.
     if (create.columns_list && create.columns_list->foreign_keys)
     {
+        // When the reference column does not exist, foreign keys are still created
+        bool force_create_foreign_key = getContext()->getSettingsRef().force_create_foreign_key;
+
         if (create.database.empty())
             create.database = getContext()->getCurrentDatabase();
 
@@ -1157,20 +1160,25 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                     used_fk_names.insert(foreign_key.fk_name);
                 else
                     throw Exception("FOREIGN KEY constraint name duplicated with " + foreign_key.fk_name, ErrorCodes::ILLEGAL_COLUMN);
-
-                auto ref_storage_ptr = DatabaseCatalog::instance().tryGetTable({create.database, foreign_key.ref_table_name}, getContext());
-                if (!ref_storage_ptr)
-                    throw Exception("FOREIGN KEY references unknown table " + foreign_key.ref_table_name, ErrorCodes::UNKNOWN_TABLE);
-
+ 
+                
                 auto check_res = contains_columns(foreign_key.column_names->as<ASTExpressionList &>(), columns);
-                auto ref_check_res = contains_columns(
-                    foreign_key.ref_column_names->as<ASTExpressionList &>(),
-                    ref_storage_ptr->getInMemoryMetadataPtr()->getColumns().getAll().getNames());
-
                 if (!check_res.empty())
-                    throw Exception("FOREIGN KEY references unknown column " + check_res, ErrorCodes::ILLEGAL_COLUMN);
-                if (!ref_check_res.empty())
-                    throw Exception("FOREIGN KEY references unknown column " + ref_check_res, ErrorCodes::ILLEGAL_COLUMN);
+                    throw Exception("FOREIGN KEY references unknown self column " + check_res, ErrorCodes::ILLEGAL_COLUMN);
+
+                if (!force_create_foreign_key)
+                {
+                    auto ref_storage_ptr = DatabaseCatalog::instance().tryGetTable({create.database, foreign_key.ref_table_name}, getContext());
+                    if (!ref_storage_ptr)
+                        throw Exception("FOREIGN KEY references unknown table " + foreign_key.ref_table_name, ErrorCodes::UNKNOWN_TABLE);
+
+                    auto ref_check_res = contains_columns(
+                        foreign_key.ref_column_names->as<ASTExpressionList &>(),
+                        ref_storage_ptr->getInMemoryMetadataPtr()->getColumns().getAll().getNames());
+
+                    if (!ref_check_res.empty())
+                        throw Exception("FOREIGN KEY references unknown column " + ref_check_res, ErrorCodes::ILLEGAL_COLUMN);
+                }
             }
         }
     }

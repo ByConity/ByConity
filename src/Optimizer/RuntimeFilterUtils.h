@@ -43,6 +43,7 @@ public:
     static std::pair<std::vector<ConstASTPtr>, std::vector<ConstASTPtr>> extractExecutableRuntimeFiltersAndPush1stRf(const ConstASTPtr & conjuncts);
     static std::pair<std::vector<ConstASTPtr>, std::vector<ConstASTPtr>> extractExecutableRuntimeFilters(const ConstASTPtr & conjuncts);
     static bool isInternalRuntimeFilter(const ConstASTPtr & expr);
+    static bool isInternalRuntimeFilter(const ASTFunction & function);
     static bool isExecutableRuntimeFilter(const ConstASTPtr & expr);
 
     static double estimateSelectivity(

@@ -34,18 +34,18 @@ namespace DB
 {
 class ReadBuffer;
 class WriteBuffer;
+class MPPQueryCoordinator;
+using MPPQueryCoordinatorPtr = std::shared_ptr<MPPQueryCoordinator>;
 
 
 /// Parse and execute a query.
 void executeQuery(
-    ReadBuffer & istr, /// Where to read query from (and data for INSERT, if present).
-    WriteBuffer & ostr, /// Where to write query output to.
-    bool allow_into_outfile, /// If true and the query contains INTO OUTFILE section, redirect output to that file.
-    ContextMutablePtr context, /// DB, tables, data types, storage engines, functions, aggregate functions...
-    std::function<void(const String &, const String &, const String &, const String &)>
-        set_result_details, /// If a non-empty callback is passed, it will be called with the query id, the content-type, the format, and the timezone.
-    const std::optional<FormatSettings> & output_format_settings
-    = std::nullopt, /// Format settings for output format, will be calculated from the context if not set.
+    ReadBuffer & istr,                  /// Where to read query from (and data for INSERT, if present).
+    WriteBuffer & ostr,                 /// Where to write query output to.
+    bool allow_into_outfile,            /// If true and the query contains INTO OUTFILE section, redirect output to that file.
+    ContextMutablePtr context,                 /// DB, tables, data types, storage engines, functions, aggregate functions...
+    std::function<void(const String &, const String &, const String &, const String &, MPPQueryCoordinatorPtr)> set_result_details, /// If a non-empty callback is passed, it will be called with the query id, the content-type, the format, and the timezone.
+    const std::optional<FormatSettings> & output_format_settings = std::nullopt, /// Format settings for output format, will be calculated from the context if not set.
     bool internal = false /// If a query is a internal which cannot be inserted into processlist.
 );
 
@@ -111,7 +111,7 @@ void executeHttpQueryInAsyncMode(
     ReadBuffer * istr,
     bool has_query_tail,
     const std::optional<FormatSettings> & f,
-    std::function<void(const String &, const String &, const String &, const String &)> set_result_details);
+    std::function<void(const String &, const String &, const String &, const String &, MPPQueryCoordinatorPtr)> set_result_details);
 
 void updateAsyncQueryStatus(
     ContextMutablePtr context,

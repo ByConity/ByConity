@@ -125,6 +125,13 @@ public:
         ::DB::Protos::ReportProcessorProfileMetricResponse * /*response*/,
         ::google::protobuf::Closure * done) override;
 
+    void sendProgress(
+        ::google::protobuf::RpcController * /*controller*/,
+        const ::DB::Protos::SendProgressRequest * request,
+        ::DB::Protos::SendProgressResponse * response,
+        ::google::protobuf::Closure * done) override;
+
+
 private:
     ContextMutablePtr context;
     std::unique_ptr<ResourceMonitorTimer> report_metrics_timer;

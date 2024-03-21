@@ -116,7 +116,7 @@ private:
     MergeTreeReaderSettings settings;
     UncompressedCache* uncompressed_cache;
     ReadBufferFromFileBase::ProfileCallback profile_callback;
-    ProgressCallback internal_progress_callback;
+    ProgressCallback progress_callback;
     clockid_t clock_type;
 
     size_t total_segment_count;

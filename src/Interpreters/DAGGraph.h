@@ -42,8 +42,9 @@ struct DAGGraph
 
     PlanSegment * getPlanSegmentPtr(size_t id);
 
+    /// all segments containing only table scan
     Source sources;
-    /// all segments contain at least table scan
+    /// all segments containing at least one table scan
     Source any_tables;
     size_t final = std::numeric_limits<size_t>::max();
     std::set<size_t> scheduled_segments;
