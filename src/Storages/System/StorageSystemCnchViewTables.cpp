@@ -216,7 +216,7 @@ Pipe StorageSystemCnchViewTables::read(
             if (refresh_schedule.async())
             {
                 ContextMutablePtr query_context = Context::createCopy(context);
-                mv->validateMv(query_context);
+                mv->validatePartitionBased(query_context);
                 auto table_ids = mv->getDependBaseTables();
                 for (auto & table_id : table_ids)
                 {

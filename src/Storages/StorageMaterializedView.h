@@ -130,7 +130,7 @@ public:
 
     /// get async refrsh params
     AsyncRefreshParamPtrs getAsyncRefreshParams(ContextMutablePtr local_context, bool combine_params);
-    void validateMv(ContextMutablePtr local_context);
+    void validatePartitionBased(ContextMutablePtr local_context);
     
     void validateAndSyncBaseTablePartitions(
         PartitionDiffPtr & partition_diff,
