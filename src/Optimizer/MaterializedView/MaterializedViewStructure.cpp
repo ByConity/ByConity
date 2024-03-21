@@ -34,7 +34,7 @@
 #include <QueryPlan/QueryPlanner.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <Common/Exception.h>
-#include "Core/Field.h"
+#include <Core/Field.h>
 
 #include <unordered_map>
 
@@ -179,9 +179,15 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
             break;
         const auto & query_column = root->getCurrentDataStream().header.getByPosition(index++);
         if (!removeNullable(removeLowCardinality(query_column.type))->equals(*removeNullable(removeLowCardinality(table_column.type))))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, 
-                "materialized view physical columns type is inconsistent with select outputs for column " + table_column.name + " in "
-                    + target_storage_id.getFullTableName());
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "materialized view query output type is inconsistent with target table columns type: {} (type: {}) in query, "
+                "{}(type: {}) in {}",
+                query_column.name,
+                query_column.type->getName(),
+                table_column.name,
+                table_column.type->getName(),
+                target_storage_id.getFullTableName());
 
         auto query_column_name = output_columns_to_query_columns_map.at(query_column.name);
         output_columns.emplace(query_column_name);

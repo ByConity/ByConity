@@ -190,6 +190,7 @@ public:
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    void setOutputStream(DataStream output_stream_);
     // TODO(gouguilin): protobuf serde
 
     const LinkedHashMap<String, RuntimeFilterBuildInfos> & getRuntimeFilterBuilders() const { return runtime_filter_builders; }
