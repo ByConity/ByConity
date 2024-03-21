@@ -85,6 +85,7 @@ PartCacheManager::PartCacheManager(ContextMutablePtr context_, const size_t memo
         size_of_cached_delete_bitmaps = std::max(size_of_cached_parts, static_cast<size_t>(memory_limit * 0.02 / 200));
     }
     size_t size_of_cached_storage = getContext()->getConfigRef().getUInt("cnch_max_cached_storage", 10000);
+    size_t data_cache_min_lifetime = getContext()->getConfigRef().getUInt("data_cache_min_lifetime", 1800);
     LOG_DEBUG(
         &Poco::Logger::get("PartCacheManager"),
         "Memory limit is {} bytes, Part cache size is {},  delete bitmap size is {}, storage cache size is {} (in unit).",
@@ -92,9 +93,9 @@ PartCacheManager::PartCacheManager(ContextMutablePtr context_, const size_t memo
         size_of_cached_parts,
         size_of_cached_delete_bitmaps,
         size_of_cached_storage);
-    part_cache_ptr = std::make_shared<CnchDataPartCache>(size_of_cached_parts);
+    part_cache_ptr = std::make_shared<CnchDataPartCache>(size_of_cached_parts, std::chrono::seconds(data_cache_min_lifetime));
     storageCachePtr = std::make_shared<CnchStorageCache>(size_of_cached_storage);
-    delete_bitmap_cache_ptr = std::make_shared<CnchDeleteBitmapCache>(size_of_cached_delete_bitmaps);
+    delete_bitmap_cache_ptr = std::make_shared<CnchDeleteBitmapCache>(size_of_cached_delete_bitmaps, std::chrono::seconds(data_cache_min_lifetime));
     meta_lock_cleaner = getContext()->getSchedulePool().createTask("MetaLockCleaner", [this]() {
         try
         {

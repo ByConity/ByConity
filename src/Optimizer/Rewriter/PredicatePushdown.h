@@ -21,6 +21,8 @@
 #include <QueryPlan/PlanVisitor.h>
 #include "QueryPlan/CTEInfo.h"
 
+#include <common/logger_useful.h>
+
 namespace DB
 {
 class PredicatePushdown : public Rewriter
@@ -92,6 +94,7 @@ private:
     CTEInfo & cte_info;
     const std::unordered_map<CTEId, UInt64> & cte_reference_counts;
     std::unordered_map<CTEId, std::vector<std::pair<const CTERefStep *, ConstASTPtr>>> cte_predicates{};
+    Poco::Logger * logger = &Poco::Logger::get("PredicateVisitor");
 
     PlanNodePtr process(PlanNodeBase &, PredicateContext &);
     PlanNodePtr processChild(PlanNodeBase &, PredicateContext &);
