@@ -605,15 +605,6 @@ void QueryPipeline::setProcessListElement(QueryStatus * elem)
     }
 }
 
-void QueryPipeline::setInternalProgressCallback(const ProgressCallback & callback)
-{
-    for (auto & processor : pipe.processors)
-    {
-        if (auto * source = dynamic_cast<ISourceWithProgress *>(processor.get()))
-            source->setInternalProgressCallback(callback);
-    }
-}
-
 void QueryPipeline::initRowsBeforeLimit()
 {
     RowsBeforeLimitCounterPtr rows_before_limit_at_least;

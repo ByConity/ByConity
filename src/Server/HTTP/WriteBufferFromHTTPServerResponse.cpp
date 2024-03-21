@@ -87,6 +87,9 @@ void WriteBufferFromHTTPServerResponse::finishSendHeaders()
 
 void WriteBufferFromHTTPServerResponse::nextImpl()
 {
+    /// make sure progress summary is correct in header
+    if (coordinator)
+        coordinator->waitUntilAllPostProcessingRPCReceived();
     {
         std::lock_guard lock(mutex);
 

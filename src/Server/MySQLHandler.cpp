@@ -533,7 +533,7 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
         format_settings.mysql_wire.sequence_id = &sequence_id;
         format_settings.mysql_wire.binary_protocol = binary_protocol;
 
-        auto set_result_details = [&with_output](const String &, const String &, const String &, const String &)
+        auto set_result_details = [&with_output](const String &, const String &, const String &, const String &, MPPQueryCoordinatorPtr)
         {
             with_output = true;
         };

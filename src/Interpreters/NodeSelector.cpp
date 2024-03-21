@@ -201,11 +201,6 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
                 ErrorCodes::LOGICAL_ERROR);
         for (const auto & [parallel_index, addr] : address_it->second)
         {
-            LOG_INFO(
-                &Poco::Logger::get("debug"),
-                "LocalityNodeSelector::select local addr:{} parallel_index:{}",
-                addr.toString(),
-                parallel_index);
             result.worker_nodes.emplace_back(addr);
         }
         return result;
@@ -227,19 +222,11 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
              plan_segment_ptr->getParallelSize(),
              query_context->getSettingsRef().bsp_shuffle_reduce_locality_fraction))
     {
-        LOG_INFO(
-            &Poco::Logger::get("debug"), "LocalityNodeSelector::select addr:{} local_addr:{}", addr.toString(), local_address.toString());
         if (addr == local_address)
             return result;
         // TODO(WangTao): fill worker id.
         result.worker_nodes.emplace_back(addr);
     }
-    LOG_INFO(
-        &Poco::Logger::get("debug"),
-        "LocalityNodeSelector::select query_id:{} segment_id:{} worker_nodes.size():{}",
-        plan_segment_ptr->getQueryId(),
-        plan_segment_ptr->getPlanSegmentId(),
-        result.worker_nodes.size());
 
     return result;
 }

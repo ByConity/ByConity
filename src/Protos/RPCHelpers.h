@@ -20,8 +20,9 @@
 #include <set>
 
 #include <Core/UUID.h>
-#include <Common/ThreadPool.h>
+#include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
+#include <Common/ThreadPool.h>
 // #include <Bytepond/core/mapping/BpQueryKey.h>
 // #include <Bytepond/core/storage/BlockHdfsStorageManager.h>
 #include <Interpreters/StorageID.h>
@@ -31,6 +32,7 @@
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
+#include <Poco/Logger.h>
 
 namespace google::protobuf
 {
@@ -163,6 +165,21 @@ namespace DB::RPCHelpers
         catch (...)
         {
             handler->setException(std::current_exception());
+        }
+    }
+
+    template <typename Resp>
+    void onAsyncCallDoneAssertController(Resp * response, brpc::Controller * cntl, Poco::Logger * logger, String message)
+    {
+        try
+        {
+            std::unique_ptr<Resp> response_guard(response);
+            std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+            RPCHelpers::assertController(*cntl);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, message);
         }
     }
 

@@ -14,6 +14,7 @@ namespace Protos
 struct RuntimeSegmentsMetrics
 {
     UInt64 cpu_micros;
+    Protos::Progress final_progress;
 
     RuntimeSegmentsMetrics() : cpu_micros(0)
     {
@@ -22,11 +23,16 @@ struct RuntimeSegmentsMetrics
     explicit RuntimeSegmentsMetrics(const Protos::RuntimeSegmentsMetrics & metrics_)
     {
         cpu_micros = metrics_.cpu_micros();
+        if (metrics_.has_progress())
+        {
+            final_progress = metrics_.progress();
+        }
     }
 
     void setProtos(Protos::RuntimeSegmentsMetrics & metrics_) const
     {
         metrics_.set_cpu_micros(cpu_micros);
+        *metrics_.mutable_progress() = final_progress;
     }
 };
 

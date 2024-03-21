@@ -134,6 +134,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_distributed_connections, 1024, "The maximum number of connections for distributed processing of one query (should be greater than max_threads).", 0) \
     M(UInt64, max_query_size, DBMS_DEFAULT_MAX_QUERY_SIZE, "Which part of the query can be read into RAM for parsing (the remaining data for INSERT, if any, is read later)", 0) \
     M(UInt64, interactive_delay, 100000, "The interval in microseconds to check if the request is cancelled, and to send progress info.", 0) \
+    M(UInt64, interactive_delay_optimizer_mode, 0, "The interval(in optimizer mode) in microseconds to check if the request is cancelled, and to send progress info.", 0) \
     M(Seconds, connect_timeout, DBMS_DEFAULT_CONNECT_TIMEOUT_SEC, "Connection timeout if there are no replicas.", 0) \
     M(Milliseconds, \
       connect_timeout_with_failover_ms, \
@@ -1764,9 +1765,11 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, exchange_enable_keep_order_parallel_shuffle, false, "Whether enable parallel shuffle when exchange need keep order", 0) \
     M(Bool, exchange_enable_force_remote_mode, false, "Force exchange data transfer through network", 0) \
+    M(Bool, enable_wait_for_post_processing, false, "Whether a query needs to wait for post processing rpcs done before end", 0) \
     M(Bool, exchange_enable_force_keep_order, false, "Force exchange keep data order", 0) \
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
+    M(UInt64, wait_for_post_processing_timeout_ms, 1000, "Timeout for waiting post processing rpc from workers.", 0) \
     M(UInt64, distributed_query_wait_exception_ms, 1000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
     \
