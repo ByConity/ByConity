@@ -1875,8 +1875,7 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
-    M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
-    M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
+    M(MaxThreads, max_download_threads, 4, "The maximum number of threads to download data (e.g. for URL engine).", 0) \
     /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, true, "Whether to compute locality preferences for reduce tasks", 0) \
@@ -1980,13 +1979,17 @@ enum PreloadLevelSettings : UInt64
     M(Bool, output_format_parquet_string_as_string, false, "Use Parquet String type instead of Binary for String columns.", 0) \
     M(Bool, output_format_parquet_fixed_string_as_fixed_byte_array, true, "Use Parquet FIXED_LENGTH_BYTE_ARRAY type instead of Binary for FixedString columns.", 0) \
     M(Bool, input_format_parquet_case_insensitive_column_matching, false, "Ignore case when matching Parquet columns with CH columns.", 0) \
+    M(Bool, input_format_parquet_preserve_order, false, "Avoid reordering rows when reading from Parquet files. Usually makes it much slower.", 0) \
+    M(Bool, input_format_parquet_filter_push_down, true, "When reading Parquet files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
+    M(UInt64, input_format_parquet_max_block_size, 8192, "Max block size for parquet reader.", 0) \
+    M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
+    M(Bool, input_format_parquet_import_nested, false, "Allow to insert array of structs into Nested table in Parquet input format.", 0) \
+    M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
+    M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
     M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
     M(Bool, input_format_arrow_import_nested, false, "Allow to insert array of structs into Nested table in Arrow input format.", 0) \
     M(Bool, input_format_orc_import_nested, false, "Allow to insert array of structs into Nested table in ORC input format.", 0) \
-    M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
-    M(Bool, input_format_parquet_import_nested, false, "Allow to insert array of structs into Nested table in Parquet input format.", 0) \
     M(Bool, input_format_arrow_allow_missing_columns, false, "Allow missing columns while reading Arrow input formats", 0) \
-    M(UInt64, input_format_parquet_max_block_size, 8192, "Max block size for parquet reader.", 0) \
     M(String, output_format_avro_codec, "", "Compression codec used for output. Possible values: 'null', 'deflate', 'snappy'.", 0) \
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \

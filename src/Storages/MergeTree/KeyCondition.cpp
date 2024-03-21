@@ -674,7 +674,7 @@ Block KeyCondition::getBlockWithConstants(
         { DataTypeUInt8().createColumnConstWithDefaultValue(1), std::make_shared<DataTypeUInt8>(), "_dummy" }
     };
 
-   
+
     auto actions = ExpressionAnalyzer(query, syntax_analyzer_result, context).getConstActionsDAG();
     for (const auto & action_node : actions->getOutputs())
     {
@@ -1440,12 +1440,15 @@ static void castValueToType(const DataTypePtr & desired_type, Field & src_value,
     {
         src_value = convertFieldToType(src_value, *desired_type, src_type.get());
     }
-    catch (...)
+    catch (Exception & e)
     {
         throw Exception("Key expression contains comparison between inconvertible types: " +
             desired_type->getName() + " and " + src_type->getName() +
-            " inside " + queryToString(node),
+            " inside " + queryToString(node) + ". Error message : " + e.what(),
             ErrorCodes::BAD_TYPE_OF_FIELD);
+    }
+    catch (...) {
+        throw;
     }
 }
 

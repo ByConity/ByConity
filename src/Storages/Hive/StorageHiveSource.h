@@ -60,7 +60,7 @@ public:
 
     using AllocatorPtr = std::shared_ptr<Allocator>;
 
-    StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_);
+    StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_, const std::shared_ptr<SelectQueryInfo> & query_info_);
     ~StorageHiveSource() override;
 
     Chunk generate() override;
@@ -78,7 +78,6 @@ private:
     std::shared_ptr<IHiveFile::ReadParams> read_params;
     std::unique_ptr<QueryPipeline> pipeline;
     std::unique_ptr<PullingPipelineExecutor> reader;
-
     Poco::Logger * log {&Poco::Logger::get("StorageHiveSource")};
 };
 

@@ -164,8 +164,9 @@ void HiveORCFile::openFile() const
         return;
 
     auto seekable_buffer = readFile(ReadSettings{});
+    std::atomic_int stopped = false;
     THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
-        asArrowFile(*seekable_buffer, file_size),
+        asArrowFile(*seekable_buffer, FormatSettings{}, stopped, "ORC", ORC_MAGIC_BYTES, /* avoid_buffering */ true),
         arrow::default_memory_pool())
     .Value(&file_reader));
     buf = std::move(seekable_buffer);
@@ -204,8 +205,9 @@ SourcePtr HiveORCFile::getReader(const Block & block, const std::shared_ptr<IHiv
         params->read_buf = readFile(params->read_settings);
 
     std::unique_ptr<arrow::adapters::orc::ORCFileReader> reader;
+    std::atomic_int stopped = false;
     THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
-        asArrowFile(*params->read_buf, file_size),
+        asArrowFile(*params->read_buf, params->format_settings, stopped, "ORC", ORC_MAGIC_BYTES, /* avoid_buffering */ true),
         arrow::default_memory_pool())
     .Value(&reader));
 

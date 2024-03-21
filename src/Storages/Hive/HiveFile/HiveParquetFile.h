@@ -46,25 +46,5 @@ private:
     mutable std::mutex mutex;
 };
 
-class ParquetSliceSource : public ISource
-{
-public:
-    ParquetSliceSource(
-        std::unique_ptr<parquet::arrow::FileReader> reader_,
-        std::vector<int> column_indices_,
-        std::shared_ptr<IHiveFile::ReadParams> read_params_,
-        std::shared_ptr<ArrowColumnToCHColumn> arrow_column_to_ch_column_);
-
-    ~ParquetSliceSource() override;
-    String getName() const override { return "ParquetSliceSource"; }
-    Chunk generate() override;
-
-private:
-    std::unique_ptr<parquet::arrow::FileReader> reader;
-    std::vector<int> column_indices;
-    std::shared_ptr<IHiveFile::ReadParams> read_params;
-    std::shared_ptr<ArrowColumnToCHColumn> arrow_column_to_ch_column;
-};
-
 }
 #endif

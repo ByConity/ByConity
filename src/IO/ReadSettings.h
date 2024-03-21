@@ -106,7 +106,6 @@ struct ReadSettings
     size_t remote_read_min_bytes_for_seek = 3 * DBMS_DEFAULT_BUFFER_SIZE;
     DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
 
-    bool parquet_parallel_read = false;
     size_t parquet_decode_threads = 48;
 
     size_t filtered_ratio_to_use_skip_read = 0;
