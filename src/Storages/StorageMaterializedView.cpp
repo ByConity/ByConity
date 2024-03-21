@@ -101,6 +101,7 @@ StorageMaterializedView::StorageMaterializedView(
     : IStorage(table_id_)
     , WithMutableContext(local_context->getGlobalContext())
     , refresh_schedule(query.refresh_strategy)
+    , cache(MaterializedViewVersionedPartCache::getInstance())
     , log(&Poco::Logger::get("StorageMaterializedView"))
 {
     StorageInMemoryMetadata storage_metadata;
@@ -169,6 +170,28 @@ StorageMaterializedView::StorageMaterializedView(
         partition_transformer = std::make_shared<PartitionTransformer>(select.inner_query->clone(), target_table_id, refresh_schedule.async());
 }
 
+VersionPartContainerPtrs StorageMaterializedView::getPreviousPartitions(ContextMutablePtr local_context)
+{
+    String mv_uuid = UUIDHelpers::UUIDToString(this->getStorageUUID());
+
+    if (local_context->getSettingsRef().async_mv_enable_mv_meta_cache)
+    {
+        String mv_meta_version = local_context->getCnchCatalog()->getMvMetaVersion(mv_uuid);
+        auto entry_ptr = cache.getOrSet(mv_uuid, mv_meta_version, [&mv_uuid, &mv_meta_version, &local_context](){
+            using Entry = MaterializedViewVersionedPartCache::Entry;
+            return std::make_shared<Entry>(mv_meta_version,
+                local_context->getCnchCatalog()->getMvBaseTables(mv_uuid));
+        });
+
+        LOG_TRACE(log, "mv getPreviousPartitions hits cache-{}", entry_ptr.second);
+        return entry_ptr.first->kv_cache;
+    }
+    else
+    {
+        return local_context->getCnchCatalog()->getMvBaseTables(mv_uuid);
+    }
+}
+
 void StorageMaterializedView::syncBaseTablePartitions(
     PartitionDiffPtr & partition_diff,
     VersionPartContainerPtrs & latest_versioned_partitions,
@@ -178,7 +201,7 @@ void StorageMaterializedView::syncBaseTablePartitions(
     bool for_rewrite)
 {
     /// get all based table version partitions according to mv storage uuid
-    VersionPartContainerPtrs previous_partitions = local_context->getCnchCatalog()->getMvBaseTables(UUIDHelpers::UUIDToString(this->getStorageUUID()));
+    VersionPartContainerPtrs previous_partitions = getPreviousPartitions(local_context);
     std::unordered_set<StorageID> updated_storage_set;
     for (const auto & storage : base_tables)
     {
@@ -608,11 +631,11 @@ void StorageMaterializedView::executeByDropInsert(AsyncRefreshParamPtr param, Co
     }
     auto mv_commit_func = [param = param, this](ContextPtr context) {
         return context->getCnchCatalog()->constructMvMetaRequests(
-            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions);
+            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions, toString(context->getTimestamp()));
     };
     auto mv_abort_func = [param = param, this](ContextPtr context) {
         return context->getCnchCatalog()->constructMvMetaRequests(
-            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions);
+            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions, toString(context->getTimestamp()));
     };
     explicit_txn->addCommitAbortFunc(mv_commit_func, mv_abort_func);
 
@@ -646,11 +669,11 @@ void StorageMaterializedView::executeByInsertOverwrite(AsyncRefreshParamPtr para
     /// Add commit and abort function for mv meta
     auto mv_commit_func = [param = param, this](ContextPtr context) {
         return context->getCnchCatalog()->constructMvMetaRequests(
-            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions);
+            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions, toString(context->getTimestamp()));
     };
     auto mv_abort_func = [param = param, this](ContextPtr context) {
         return context->getCnchCatalog()->constructMvMetaRequests(
-            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions);
+            UUIDHelpers::UUIDToString(this->getStorageUUID()), param->part_diff->add_partitions, param->part_diff->drop_partitions, toString(context->getTimestamp()));
     };
     insert_overwrite_context->getCurrentTransaction()->addCommitAbortFunc(mv_commit_func, mv_abort_func);
 
