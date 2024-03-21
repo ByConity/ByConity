@@ -2,6 +2,7 @@
 
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/SeekableReadBuffer.h>
+#include <IO/WithFileSize.h>
 #include <common/time.h>
 
 #include <functional>
@@ -17,7 +18,7 @@ class Context;
 /// Most used types have shorter names
 using ContextPtr = std::shared_ptr<const Context>;
 
-class ReadBufferFromFileBase : public BufferWithOwnMemory<SeekableReadBuffer>
+class ReadBufferFromFileBase : public BufferWithOwnMemory<SeekableReadBuffer>, public WithFileSize
 {
 public:
     ReadBufferFromFileBase();
@@ -25,7 +26,7 @@ public:
     ~ReadBufferFromFileBase() override;
     virtual std::string getFileName() const = 0;
 
-    virtual size_t getFileSize();
+    virtual size_t getFileSize() override;
 
     /// It is possible to get information about the time of each reading.
     struct ProfileInfo

@@ -5,12 +5,14 @@
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/misc.h>
-#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTAsterisk.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTWithElement.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -42,6 +44,8 @@ void ApplyPartitionFilterVisitor::visit(ASTPtr & ast, const Data & data)
             visit(*node_func, data);
         else if (auto * node_table = ast->as<ASTTableExpression>())
             visit(*node_table, data);
+        // else if (auto * identifier = ast->as<ASTIdentifier>())
+            // visit(*identifier, data);
     }
 }
 
@@ -141,4 +145,18 @@ ASTPtr ApplyPartitionFilterVisitor::constructSubquery(const ASTPtr & table_ident
         subquery->setAlias(alias);
     return subquery;
 }
+
+// void ApplyPartitionFilterVisitor::visit(ASTIdentifier & identifier, const Data & data)
+// {
+//     if (identifier.nameParts().size() == 3)
+//     {
+//         auto table_expression = std::make_shared<ASTTableIdentifier>(identifier.nameParts()[0], identifier.nameParts()[1]);
+//         auto storage_id = DatabaseAndTableWithAlias(table_expression, data.context->getCurrentDatabase()).getStorageID();
+//         if (storage_id == data.target_storage_id)
+//         {
+//              std::vector<String> name_parts{identifier.nameParts().end() - 2, identifier.nameParts().end()};
+//              identifier = ASTIdentifier{std::move(name_parts)};
+//         }
+//     }
+// }
 }

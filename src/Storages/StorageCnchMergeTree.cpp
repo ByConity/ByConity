@@ -3157,8 +3157,8 @@ StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & sourc
                 "table_definition hash [{}]",
                 src_data->getDatabaseName(),
                 src_data->getTableName(),
-                src_data->getTableHashForClusterBy(),
-                getTableHashForClusterBy()));
+                src_data->getTableHashForClusterBy().toString(),
+                getTableHashForClusterBy().toString()));
         throw Exception(
             "Source table is not a bucket table or has a different CLUSTER BY definition from the target table. ",
             ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);

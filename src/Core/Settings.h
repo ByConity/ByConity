@@ -1628,6 +1628,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_simplify_predicate_rewrite, true, "Whether to enable SimplifyPredicateRewrite rule", 0) \
     M(Bool, enable_simplify_join_filter_rewrite, true, "Whether to enable SimplifyJoinFilterRewrite rule", 0) \
     M(Bool, enable_simplify_expression_rewrite, true, "Whether to enable SimplifyExpressionRewrite rule", 0) \
+    M(Bool, enable_simplify_predicate_in_projection, false, "Whether to rewrite predicate in projection", 0) \
+    M(Bool, enable_simplify_assume_not_null, false, "Whether to remove redundant assumeNotNull --temporary settings", 0) \
     M(Bool, enable_remove_redundant, true, "Whether to enable RemoveRedundant rules", 0) \
     M(Bool, enable_push_projection, true, "Whether to enable PushProjection rules", 0) \
     M(Bool, enable_push_partial_agg_through_exchange, true, "Whether to enable PushPartialAggThroughExchange rules", 0) \
@@ -1718,6 +1720,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(Bool, enable_windows_parallel, false, "Whether run windows in parallel", 0) \
+    M(Bool, enable_view_based_query_rewrite, false, "Whether enable materialized view based rewriter for query, compatible for  enable_materialized_view_rewrite", 0) \
     M(Bool, enable_materialized_view_rewrite, true, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_sync_materialized_view_rewrite, true, "Whether enable materialized view based rewriter for sync materialized view", 0) \
     M(Bool, enforce_materialized_view_rewrite, false, "Whether throw exception if materialized view is not applied", 0) \
@@ -1875,8 +1878,7 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
-    M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
-    M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
+    M(MaxThreads, max_download_threads, 4, "The maximum number of threads to download data (e.g. for URL engine).", 0) \
     /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, true, "Whether to compute locality preferences for reduce tasks", 0) \
@@ -1901,9 +1903,26 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_async_mv_debug, false, "whether show async debug information", 0) \
     \
 
-
 // End of COMMON_SETTINGS
-// Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
+// Please add settings related to formats into the FORMAT_FACTORY_SETTINGS and move obsolete settings to OBSOLETE_SETTINGS.
+
+#define MAKE_OBSOLETE(M, TYPE, NAME, DEFAULT) \
+    M(TYPE, NAME, DEFAULT, "Obsolete setting, does nothing.", BaseSettingsHelpers::Flags::OBSOLETE)
+
+#define OBSOLETE_SETTINGS(M) \
+    /** Obsolete settings that do nothing now but left for compatibility reasons. Remove them or implement them when you have free time. */ \
+    MAKE_OBSOLETE(M, Bool, enable_hybrid_allocation, false) \
+    MAKE_OBSOLETE(M, Bool, make_partition_by_todate_monotonic, false) \
+    MAKE_OBSOLETE(M, Bool, enable_query_cache, false) \
+    MAKE_OBSOLETE(M, Bool, enable_parallel_input_generator, false) \
+    MAKE_OBSOLETE(M, Bool, enable_prune_source_plan_segment, true) \
+    MAKE_OBSOLETE(M, Bool, exchange_enable_metric, true) \
+    MAKE_OBSOLETE(M, UInt64, cnch_offloading_mode, 0) \
+    MAKE_OBSOLETE(M, UInt64, distributed_query_max_threads, 0) \
+    MAKE_OBSOLETE(M, UInt64, exchange_local_no_repartition_extra_threads, 32) \
+    MAKE_OBSOLETE(M, UInt64, filtered_ratio_to_use_skip_read, 0) \
+    MAKE_OBSOLETE(M, Bool, enable_two_stages_prewhere, false) \
+    /** End of OBSOLETE_SETTINGS */ \
 
 #define FORMAT_FACTORY_SETTINGS(M) \
     M(Char, \
@@ -1980,13 +1999,17 @@ enum PreloadLevelSettings : UInt64
     M(Bool, output_format_parquet_string_as_string, false, "Use Parquet String type instead of Binary for String columns.", 0) \
     M(Bool, output_format_parquet_fixed_string_as_fixed_byte_array, true, "Use Parquet FIXED_LENGTH_BYTE_ARRAY type instead of Binary for FixedString columns.", 0) \
     M(Bool, input_format_parquet_case_insensitive_column_matching, false, "Ignore case when matching Parquet columns with CH columns.", 0) \
+    M(Bool, input_format_parquet_preserve_order, false, "Avoid reordering rows when reading from Parquet files. Usually makes it much slower.", 0) \
+    M(Bool, input_format_parquet_filter_push_down, true, "When reading Parquet files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
+    M(UInt64, input_format_parquet_max_block_size, 8192, "Max block size for parquet reader.", 0) \
+    M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
+    M(Bool, input_format_parquet_import_nested, false, "Allow to insert array of structs into Nested table in Parquet input format.", 0) \
+    M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
+    M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
     M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
     M(Bool, input_format_arrow_import_nested, false, "Allow to insert array of structs into Nested table in Arrow input format.", 0) \
     M(Bool, input_format_orc_import_nested, false, "Allow to insert array of structs into Nested table in ORC input format.", 0) \
-    M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
-    M(Bool, input_format_parquet_import_nested, false, "Allow to insert array of structs into Nested table in Parquet input format.", 0) \
     M(Bool, input_format_arrow_allow_missing_columns, false, "Allow missing columns while reading Arrow input formats", 0) \
-    M(UInt64, input_format_parquet_max_block_size, 8192, "Max block size for parquet reader.", 0) \
     M(String, output_format_avro_codec, "", "Compression codec used for output. Possible values: 'null', 'deflate', 'snappy'.", 0) \
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
@@ -2084,22 +2107,15 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cnch_engine_conversion, false, "Whether to converse MergeTree engine to CnchMergeTree engine", 0) \
     /** End of BitEngine related settings */ \
     \
-    /** Just for compatible, totally the same with settings above */ \
-    M(UInt64, cnch_offloading_mode, 0, "Offloading mode, 0: disable offloading, 1: offloading for simple queries, 2: offloading for queries without JOIN/IN, 3: offloading for all queries.", 0) \
-    M(UInt64, distributed_query_max_threads, 0, "The maximum number of threads to execute the plan semgent. By default, it is equals to max_threads", 0) \
-    M(Bool, enable_parallel_input_generator, false, "Whether enable generate parallel inputs", 0) \
-    M(Bool, enable_prune_source_plan_segment, true, "Whether enable prune source plan segment", 0) \
-    M(Bool, exchange_enable_metric, true, "whether enable exchange metric collection", 0) \
-    M(UInt64, exchange_local_no_repartition_extra_threads, 32, "Extra threads for pipeline which reading data from LOCAL_NO_NEED_REPARTITION exchange", 0) \
-    M(UInt64, filtered_ratio_to_use_skip_read, 0, "Ratio of origin rows to filtered rows when using skip reading, 0 means disable", 0) \
-    M(Bool, enable_two_stages_prewhere, false, "Whether enable 2 stages prewhere.", 0) \
-
 
 // End of FORMAT_FACTORY_SETTINGS
-// Please add settings non-related to formats into the COMMON_SETTINGS above.
 
-#define LIST_OF_SETTINGS(M) \
-    COMMON_SETTINGS(M) \
+// Please add settings non-related to formats into the COMMON_SETTINGS above.
+// Please add settings for compatible into OBSOLETE_SETTINGS above. And add FORMAT_FACTORY_OBSOLETE_SETTINGS if you needed.
+
+#define LIST_OF_SETTINGS(M)    \
+    COMMON_SETTINGS(M)         \
+    OBSOLETE_SETTINGS(M)       \
     FORMAT_FACTORY_SETTINGS(M)
 
 DECLARE_SETTINGS_TRAITS_ALLOW_CUSTOM_SETTINGS(SettingsTraits, LIST_OF_SETTINGS)

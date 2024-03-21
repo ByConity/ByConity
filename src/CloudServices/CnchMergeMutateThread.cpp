@@ -1340,9 +1340,10 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
             else if (mutation_command.predicate)
             {
                 ServerDataPartsVector parts_to_recluster;
+                auto table_definition_hash = storage.getTableHashForClusterBy();
                 for (const auto & part : visible_parts)
                 {
-                    if (part->part_model().table_definition_hash() != storage.getTableHashForClusterBy())
+                    if (!table_definition_hash.match(part->part_model().table_definition_hash()))
                         parts_to_recluster.push_back(part);
                 }
 

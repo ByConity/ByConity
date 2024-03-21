@@ -170,7 +170,8 @@ private:
     void executeByInsertOverwrite(AsyncRefreshParamPtr param, ContextMutablePtr local_context);
 
     void insertRefreshTaskLog(AsyncRefreshParamPtr param, RefreshViewTaskStatus status,
-          bool is_insert_overwrite, std::chrono::time_point<std::chrono::system_clock> start_time, ContextMutablePtr local_context);
+                            bool is_insert_overwrite, std::chrono::time_point<std::chrono::system_clock> start_time,
+                            ContextMutablePtr local_context, String exception = {});
 
     /// Will be initialized in constructor
     StorageID target_table_id = StorageID::createEmpty();

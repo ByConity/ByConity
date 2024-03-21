@@ -19,6 +19,8 @@
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/RowExistsColumnInfo.h>
+#include <Common/SipHash.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -1677,7 +1679,7 @@ bool MergeTreeMetaBase::mayBenefitFromIndexForIn(
     }
 }
 
-UInt64 MergeTreeMetaBase::getTableHashForClusterBy() const
+TableDefinitionHash MergeTreeMetaBase::getTableHashForClusterBy() const
 {
     const auto & metadata = getInMemoryMetadata();
     const auto & partition_by_ast = metadata.getPartitionKeyAST();
@@ -1691,10 +1693,12 @@ UInt64 MergeTreeMetaBase::getTableHashForClusterBy() const
 
     cluster_definition.erase(remove(cluster_definition.begin(), cluster_definition.end(), '\''), cluster_definition.end());
 
-    std::hash<String> hasher;
-    auto cluster_definition_hash = hasher(cluster_definition);
+    UInt64 determin_hash = sipHash64(cluster_definition);
 
-    return cluster_definition_hash;
+    UInt64 v1_hash = compatibility::v1::hash(cluster_definition);
+    UInt64 v2_hash = compatibility::v2::hash(cluster_definition);
+
+    return {determin_hash, v1_hash, v2_hash};
 
 }
 

@@ -21,14 +21,15 @@
 
 #pragma once
 
-#include <arrow/type.h>
 #include "config_formats.h"
 #if USE_PARQUET
 
-
 #include <Common/ThreadPool.h>
-#include <Processors/Formats/IInputFormat.h>
 #include <Formats/FormatSettings.h>
+#include <Processors/Formats/IInputFormat.h>
+#include <Storages/MergeTree/KeyCondition.h>
+
+#include <arrow/type.h>
 
 namespace parquet { class FileMetaData; }
 namespace parquet::arrow { class FileReader; }
@@ -77,6 +78,8 @@ public:
         size_t max_decoding_threads,
         size_t min_bytes_for_seek);
     ~ParquetBlockInputFormat() override;
+
+    void setQueryInfo(const SelectQueryInfo & query_info, ContextPtr context) override;
 
     void resetParser() override;
 
@@ -265,7 +268,7 @@ private:
     };
 
     const FormatSettings format_settings;
-    const std::unordered_set<int> & skip_row_groups;
+    std::unordered_set<int> skip_row_groups;
     size_t max_decoding_threads;
     size_t min_bytes_for_seek;
     const size_t max_pending_chunks_per_row_group = 2;
@@ -276,6 +279,9 @@ private:
     std::shared_ptr<parquet::FileMetaData> metadata;
     // indices of columns to read from Parquet file
     std::vector<int> column_indices;
+
+    /// Pushed-down filter that we'll use to skip row groups.
+    std::optional<KeyCondition> key_condition;
 
     // Window of active row groups:
     //
@@ -305,6 +311,8 @@ private:
     std::exception_ptr background_exception = nullptr;
     std::atomic<int> is_stopped{0};
     bool is_initialized = false;
+
+    Poco::Logger * log {&Poco::Logger::get("ParquetBlockInputFormat")};
 };
 
 }

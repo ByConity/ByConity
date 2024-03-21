@@ -203,7 +203,7 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     has_bitmap = local_part.has_bitmap.load();
     deleted = local_part.deleted;
     bucket_number = local_part.bucket_number;
-    table_definition_hash = storage.getTableHashForClusterBy();
+    table_definition_hash = storage.getTableHashForClusterBy().getDeterminHash();
     columns_commit_time = local_part.columns_commit_time;
     mutation_commit_time = local_part.mutation_commit_time;
     last_modification_time = local_part.last_modification_time;

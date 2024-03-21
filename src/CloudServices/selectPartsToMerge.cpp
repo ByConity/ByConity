@@ -265,7 +265,7 @@ void groupPartsByBucketNumber(const MergeTreeMetaBase & data, std::unordered_map
     for (const auto & part : data_parts)
     {
         /// Can only merge those already been clustered parts.
-        if (part->part_model().table_definition_hash() != table_definition_hash)
+        if (!table_definition_hash.match(part->part_model().table_definition_hash()))
             continue;
         if (auto it = grouped_buckets.find(part->part_model().bucket_number()); it != grouped_buckets.end())
             it->second.push_back(part);

@@ -802,8 +802,7 @@ ReadSettings Context::getReadSettings() const
     res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
     res.disk_cache_mode = settings.disk_cache_mode;
     res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
-    res.parquet_parallel_read= settings.parquet_parallel_read;
-    res.parquet_decode_threads = settings.max_download_thread;
+    res.parquet_decode_threads = settings.max_download_threads;
     res.filtered_ratio_to_use_skip_read = settings.filtered_ratio_to_use_skip_read;
     return res;
 }
@@ -2171,7 +2170,7 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
         for (const auto & change : changes)
         {
             if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
-                throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name + 
+                throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
                     "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
         }

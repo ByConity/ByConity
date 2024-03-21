@@ -222,6 +222,7 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
             if (QueryUseOptimizerChecker::check(ast, context)
                 && trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Read))
                 return true;
+
             if (trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Write))
                 return true;
         }
@@ -284,12 +285,13 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
         }
         else if (auto * refresh_mv = ast->as<ASTRefreshQuery>())
         {
-            auto storage = database_catalog.tryGetTable(StorageID(refresh_mv->database, refresh_mv->table), context);
+            auto database = refresh_mv->database.empty() ? context->getCurrentDatabase() : refresh_mv->database;
+            auto storage = database_catalog.tryGetTable(StorageID(database, refresh_mv->table), context);
             auto * view_table = dynamic_cast<StorageMaterializedView *>(storage.get());
             if (!view_table)
                 break;
 
-            if (trySetVirtualWarehouseFromTable(refresh_mv->database, refresh_mv->table, context))
+            if (trySetVirtualWarehouseFromTable(database, refresh_mv->table, context))
                 return true;
         }
 
@@ -403,12 +405,13 @@ static String tryGetVirtualWarehouseNameFromAST(const ASTPtr & ast, ContextMutab
         }
         else if (auto * refresh_mv = ast->as<ASTRefreshQuery>())
         {
-            auto storage = database_catalog.tryGetTable(StorageID(refresh_mv->database, refresh_mv->table), context);
+            auto database = refresh_mv->database.empty() ? context->getCurrentDatabase() : refresh_mv->database;
+            auto storage = database_catalog.tryGetTable(StorageID(database, refresh_mv->table), context);
             auto * view_table = dynamic_cast<StorageMaterializedView *>(storage.get());
             if (!view_table)
                 break;
 
-            return tryGetVirtualWarehouseNameFromTable(refresh_mv->database, refresh_mv->table, context);
+            return tryGetVirtualWarehouseNameFromTable(database, refresh_mv->table, context);
         }
 
     } while (false);

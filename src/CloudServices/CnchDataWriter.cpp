@@ -537,18 +537,18 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
                     // NOTE: set allow_attach_parts_with_different_table_definition_hash to false and
                     // skip_table_definition_hash_check to true if you want to force set part's TDH to table's TDH
                     if (context->getSettings().skip_table_definition_hash_check)
-                        part->table_definition_hash = table_definition_hash;
+                        part->table_definition_hash = table_definition_hash.getDeterminHash();
 
                     if (context->getSettings().allow_attach_parts_with_different_table_definition_hash && !storage_ptr->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey())
                         continue;
 
                     if (!part->deleted &&
-                        (part->bucket_number < 0 || table_definition_hash != part->table_definition_hash))
+                        (part->bucket_number < 0 || !table_definition_hash.match(part->table_definition_hash)))
                     {
                         throw Exception(
                             "Part " + part->name + " is not clustered or it has different table definition with storage. Part bucket number : "
                             + std::to_string(part->bucket_number) + ", part table_definition_hash : [" + std::to_string(part->table_definition_hash)
-                            + "], table's table_definition_hash : [" + std::to_string(table_definition_hash) + "]",
+                            + "], table's table_definition_hash : [" + table_definition_hash.toString() + "]",
                             ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
                     }
                 }

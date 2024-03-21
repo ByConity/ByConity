@@ -1,0 +1,21 @@
+Projection
+│     Expressions: assumeNotNull(a):=assumeNotNull(a), assumeNotNull(b):=assumeNotNull(b)
+└─ Gather Exchange
+   └─ Filter
+      │     Condition: (a = \'aaa\') AND (assumeNotNull(b) = \'bbb\')
+      └─ TableScan test.test_48043
+               Where: (a = \'aaa\') AND (assumeNotNull(b) = \'bbb\')
+               Outputs: [a, b]
+Projection
+│     Expressions: assumeNotNull(a):=a, assumeNotNull(b):=assumeNotNull(b)
+└─ Gather Exchange
+   └─ TableScan test.test_48043
+            Outputs: [a, b]
+Projection
+│     Expressions: [a, b]
+└─ Gather Exchange
+   └─ Filter
+      │     Condition: (assumeNotNull(a) = \'aaa\') AND (assumeNotNull(b) = \'bbb\')
+      └─ TableScan test.test_48043
+               Where: (assumeNotNull(a) = \'aaa\') AND (assumeNotNull(b) = \'bbb\')
+               Outputs: [a, b]

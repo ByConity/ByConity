@@ -111,7 +111,7 @@ Block StorageHiveSource::BlockInfo::getHeader() const
     return sample_block;
 }
 
-StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_)
+StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_, const std::shared_ptr<SelectQueryInfo> &query_info_)
     : SourceWithProgress(info_->getHeader()), WithContext(context_), block_info(info_), allocator(allocator_)
 {
     FormatSettings format_settings = getFormatSettings(context_);
@@ -125,6 +125,7 @@ StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, Al
             .format_settings = std::move(format_settings),
             .context = context_,
             .read_settings = context_->getReadSettings(),
+            .query_info = query_info_
         });
 }
 

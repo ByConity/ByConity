@@ -7,6 +7,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/executeQuery.h>
 
 #include <Storages/MaterializedView/ApplyPartitionFilterVisitor.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
@@ -15,6 +16,7 @@
 #include <Storages/Hive/HivePartition.h>
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
+#include <Analyzers/QueryRewriter.h>
 #include <Databases/DatabasesCommon.h>
 
 #include <Optimizer/MaterializedView/ExpressionSubstitution.h>
@@ -124,7 +126,9 @@ void PartitionTransformer::validate(ContextMutablePtr local_context)
 {
     if (validated)
         return;
-
+    LOG_DEBUG(log, "PartitionTransformer::validate mv_query: {} ", queryToString(mv_query));
+    interpretSettings(mv_query, local_context);
+    CurrentThread::get().pushTenantId(local_context->getSettingsRef().tenant_id);
     MaterializedViewStructurePtr structure
         = MaterializedViewStructure::buildFrom(target_table_id, target_table_id, mv_query->clone(), async_materialized_view, local_context);
     validate(local_context, structure);
@@ -272,9 +276,18 @@ void PartitionTransformer::validate(ContextMutablePtr local_context, Materialize
     validated = true;
 }
 
+static void updateVitrualWarehouseSetting(const StoragePtr & target_table, ContextMutablePtr local_context)
+{
+    String vw_name;
+    auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(target_table.get());
+    if (merge_tree && merge_tree->getSettings()->has("cnch_vw_write"))
+        local_context->setSetting("virtual_warehouse",  merge_tree->getSettings()->getString("cnch_vw_write"));
+} 
+
 AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
     PartMapRelations & part_map, PartitionDiffPtr & part_diff, bool combine_params, bool partition_refresh, ContextMutablePtr local_context)
 {
+    updateVitrualWarehouseSetting(target_table, local_context);
     AsyncRefreshParamPtrs params;
     if (!partition_refresh)
     {
@@ -286,6 +299,7 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
         insert_query->table_id = target_table_id;
         insert_query->select = query;
         insert_query->children.push_back(insert_query->select);
+    
         if (local_context->getSettingsRef().enable_mv_async_insert_overwrite)
         {
             auto target_current_parts = local_context->getCnchCatalog()->getLastModificationTimeHints(target_table);
@@ -338,7 +352,7 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
             AsyncRefreshParamPtr refresh_param = std::make_shared<AsyncRefreshParam>();
             const auto & settings = local_context->getSettingsRef();
             auto query = mv_query->clone();
-            auto & select_query = query->as<ASTSelectQuery &>();
+            QueryRewriter{}.rewrite(query, local_context, false);
             bool cascading = local_context->getSettingsRef().cascading_refresh_materialized_view;
             bool insert_overwrite = local_context->getSettingsRef().enable_mv_async_insert_overwrite;
           
@@ -358,12 +372,13 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
                     ParserExpression parser(ParserSettings::CLICKHOUSE);
                     ASTPtr partition_predicate_ast
                         = parseQuery(parser, in_expresion_str, settings.max_query_size, settings.max_parser_depth);
-                    ApplyPartitionFilterVisitor::visit(select_query, part_diff->depend_storage_id, partition_predicate_ast, local_context);
+                    ApplyPartitionFilterVisitor::visit(query, part_diff->depend_storage_id, partition_predicate_ast, local_context);
+                    LOG_DEBUG(log, "ApplyPartitionFilterVisitor rewrite: {}", queryToString(query));
                 }
 
                 auto insert_query = std::make_shared<ASTInsertQuery>();
                 insert_query->table_id = target_table_id;
-                insert_query->select = select_query.clone();
+                insert_query->select = query->clone();
                 insert_query->is_overwrite = true;
                 insert_query->overwrite_partition = partition_overwrite_ast;
                 insert_query->children.push_back(insert_query->select);
@@ -382,11 +397,12 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
                     ASTPtr partition_predicate_ast = parseQuery(parser, in_expresion_str, settings.max_query_size, settings.max_parser_depth);
 
                     /// partition predicate condition
-                    ApplyPartitionFilterVisitor::visit(select_query, part_diff->depend_storage_id, partition_predicate_ast, local_context);
+                    ApplyPartitionFilterVisitor::visit(query, part_diff->depend_storage_id, partition_predicate_ast, local_context);
+                    LOG_DEBUG(log, "ApplyPartitionFilterVisitor rewriet: {}", queryToString(query));
 
                     auto insert_query = std::make_shared<ASTInsertQuery>();
                     insert_query->table_id = target_table_id;
-                    insert_query->select = select_query.clone();
+                    insert_query->select = query->clone();
                     insert_query->children.push_back(insert_query->select);
                     refresh_param->insert_select_query = queryToString(insert_query);
                 }
