@@ -226,7 +226,7 @@ public:
     const DataStreams & getInputStreams() const { return input_streams; }
     virtual void setInputStreams(const DataStreams & input_streams_) = 0;
 
-    void addHints(SqlHints & sql_hints, ContextMutablePtr & context);
+    void addHints(SqlHints & sql_hints, ContextMutablePtr & context, bool check_type = false);
 
     const PlanHints & getHints() const
     {

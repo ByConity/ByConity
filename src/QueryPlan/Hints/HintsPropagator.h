@@ -39,7 +39,6 @@ private:
     void visitPlanNode(PlanNodeBase & node, HintsVisitorContext &) override;
     void visitFilterNode(FilterNode & node, HintsVisitorContext & hints_context) override;
     void visitCTERefNode(CTERefNode & node, HintsVisitorContext &) override;
-    void visitAggregatingNode(AggregatingNode & node, HintsVisitorContext &) override;
 
 
     void attachPlanHints(PlanNodeBase & node, HintOptions & hint_options);

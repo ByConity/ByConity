@@ -11,10 +11,11 @@ class PlanNodeBase;
 class IPlanHint;
 using PlanHintPtr = std::shared_ptr<IPlanHint>;
 
+class IQueryPlanStep;
+
 struct HintOptions
 {
     Strings table_name_list = {};
-    Strings func_names = {};
 };
 
 enum class HintCategory
@@ -34,6 +35,7 @@ public:
     virtual String getName() const = 0;
     virtual HintCategory getType() const = 0;
     virtual Strings getOptions() const = 0;
+    virtual bool checkStepType(const IQueryPlanStep &) const { return false; }
 
     // Whether a plan hint can attach to a plan node(e.g. a join strategy hint cannot attach to any kind of nodes except JoinNode).
     // This method will be invoked in hint propagation, which happens just after an AST is converted to a QueryPlan.
