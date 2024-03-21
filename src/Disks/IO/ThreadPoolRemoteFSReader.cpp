@@ -21,6 +21,7 @@ namespace ProfileEvents
     extern const Event ThreadPoolReaderTaskMicroseconds;
     extern const Event ThreadPoolReaderReadBytes;
     extern const Event ThreadPoolReaderSubmit;
+    extern const Event ThreadPoolReaderScheduleMicroseconds;
 }
 
 namespace CurrentMetrics
@@ -71,13 +72,13 @@ ThreadPoolRemoteFSReader::ThreadPoolRemoteFSReader(size_t pool_size, size_t queu
 
 std::future<IAsynchronousReader::Result> ThreadPoolRemoteFSReader::submit(Request request)
 {
-    ProfileEventTimeIncrement<Microseconds> elapsed(ProfileEvents::ThreadPoolReaderSubmit);
-    auto thread_group = CurrentThread::getGroup();
+    ProfileEvents::increment(ProfileEvents::ThreadPoolReaderSubmit);
+    auto watch = std::make_unique<Stopwatch>(CLOCK_REALTIME);
     return scheduleFromThreadPool<Result>(
-        [request, thread_group]() -> Result {
+        [request, submit_watch = std::move(watch)]() -> Result {
             setThreadName("RemoteReadThr");
-            if (thread_group)
-                CurrentThread::attachToIfDetached(thread_group);
+            submit_watch->stop();
+            ProfileEvents::increment(ProfileEvents::ThreadPoolReaderScheduleMicroseconds, submit_watch->elapsedMicroseconds());
             CurrentMetrics::Increment metric_increment{CurrentMetrics::RemoteRead};
 
             auto * remote_fs_fd = assert_cast<RemoteFSFileDescriptor *>(request.descriptor.get());
@@ -85,14 +86,14 @@ std::future<IAsynchronousReader::Result> ThreadPoolRemoteFSReader::submit(Reques
             std::optional<AsyncReadIncrement> increment
                 = async_read_counters ? std::optional<AsyncReadIncrement>(async_read_counters) : std::nullopt;
 
-            auto watch = std::make_unique<Stopwatch>(CLOCK_REALTIME);
+            auto exec_watch = std::make_unique<Stopwatch>(CLOCK_REALTIME);
             Result result = remote_fs_fd->readInto(request.buf, request.size, request.offset, request.ignore);
-            watch->stop();
+            exec_watch->stop();
 
-            ProfileEvents::increment(ProfileEvents::ThreadPoolReaderTaskMicroseconds, watch->elapsedMicroseconds());
+            ProfileEvents::increment(ProfileEvents::ThreadPoolReaderTaskMicroseconds, exec_watch->elapsedMicroseconds());
             ProfileEvents::increment(ProfileEvents::ThreadPoolReaderReadBytes, result.size);
 
-            return Result{.size = result.size, .offset = result.offset, .execution_watch = std::move(watch)};
+            return Result{.size = result.size, .offset = result.offset, .execution_watch = std::move(exec_watch)};
         },
         *pool,
         "VFSRead",

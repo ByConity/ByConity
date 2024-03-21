@@ -467,7 +467,11 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreams(
     {
         /// Reduce the number of num_streams if the data is small.
         if (info.sum_marks < num_streams * info.min_marks_for_concurrent_read && parts_with_ranges.size() < num_streams)
+        {
             num_streams = std::max((info.sum_marks + info.min_marks_for_concurrent_read - 1) / info.min_marks_for_concurrent_read, parts_with_ranges.size());
+            LOG_TRACE(&Poco::Logger::get("ReadFromMergeTree"),
+                "Shrink the number of streams from {} to {} since data is small.", requested_num_streams, num_streams);
+        }
     }
 
     return read(std::move(parts_with_ranges), column_names, ReadType::Default,

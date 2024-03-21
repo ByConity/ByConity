@@ -1011,6 +1011,6 @@ void remove_not_exist_items(std::vector<T> & items_to_write, std::vector<size_t>
 }
 
 using CatalogPtr = std::shared_ptr<Catalog>;
-void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & tenanted_name, const UUID & uuid, Poco::Logger * log);
+void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & tenanted_name, const UUID & uuid);
 void fillUUIDForDictionary(DB::Protos::DataModelDictionary &);
 }
