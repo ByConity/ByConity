@@ -347,6 +347,23 @@ bool simplifyMultiIf(
     simplify_result = {function_base->getResultType(), makeFunction(function.name, new_argument_results, context)};
     return true;
 }
+
+bool simplifyAssumeNotNull(
+    const ASTFunction & function,
+    const ASTPtr &,
+    const InterpretIMResults & argument_results,
+    InterpretIMResult & simplify_result,
+    const ContextPtr & context)
+{
+    if (!context->getSettingsRef().enable_simplify_assume_not_null || function.name != "assumeNotNull" || argument_results.size() != 1)
+        return false;
+
+    if (isNullableOrLowCardinalityNullable(argument_results[0].type))
+        return false;
+
+    simplify_result = argument_results[0];
+    return true;
+}
 }
 
 ExpressionInterpreter::ExpressionInterpreter(InterpretSetting setting_, ContextPtr context_)
@@ -628,7 +645,8 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
             || simplifyNullPrediction(function, simplified_node, argument_results, simplify_result)
             || simplifyTrivialEquals(function, simplified_node, argument_results, simplify_result)
             || simplifyIf(function, simplified_node, argument_results, simplify_result, reevaluate)
-            || simplifyMultiIf(function, simplified_node, argument_results, simplify_result, context);
+            || simplifyMultiIf(function, simplified_node, argument_results, simplify_result, context)
+            || simplifyAssumeNotNull(function, simplified_node, argument_results, simplify_result, context);
     }
 
     if (!simplified)
