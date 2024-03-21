@@ -58,8 +58,9 @@ const DateLUTImpl & extractTimeZoneFromFunctionArguments(const ColumnsWithTypeAn
     if (arguments.size() == time_zone_arg_num + 1)
     {
         std::string time_zone = extractTimeZoneNameFromColumn(*arguments[time_zone_arg_num].column);
-        if (time_zone.empty())
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Provided time zone must be non-empty and be a valid time zone");
+        // For compatibility with cnch 1.x, remove the empty timezone check
+        // if (time_zone.empty())
+        //     throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Provided time zone must be non-empty and be a valid time zone");
         return DateLUT::instance(time_zone);
     }
     else
