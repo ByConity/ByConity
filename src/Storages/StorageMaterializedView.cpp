@@ -183,7 +183,7 @@ VersionPartContainerPtrs StorageMaterializedView::getPreviousPartitions(ContextM
                 local_context->getCnchCatalog()->getMvBaseTables(mv_uuid));
         });
 
-        LOG_TRACE(log, "mv getPreviousPartitions hits cache-{}", entry_ptr.second);
+        LOG_TRACE(log, "mv getPreviousPartitions hits cache-{}, current cache weight-{} bytes", entry_ptr.second, cache.weight());
         return entry_ptr.first->kv_cache;
     }
     else
