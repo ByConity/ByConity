@@ -36,10 +36,6 @@ static void checkDedupScope(const DedupScope & scope, const MergeTreeMetaBase & 
 std::vector<LockInfoPtr>
 getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTreeMetaBase & storage, UInt64 timeout_ms)
 {
-    /// Attention: must make sure that storage has right UUID, it's important.
-    if (storage.getStorageUUID() == UUIDHelpers::Nil)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unique table {} doesn't have UUID, it's a bug!", storage.getStorageID().getNameForLogs());
-
     checkDedupScope(scope, storage);
 
     std::vector<LockInfoPtr> res;
@@ -47,12 +43,13 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
     {
         if (scope.isBucketLock())
         {
-            for (auto & bucket : scope.getBuckets())
+            for (const auto & bucket : scope.getBuckets())
             {
                 auto lock_info = std::make_shared<LockInfo>(txn_id);
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
-                lock_info->setUUID(storage.getStorageUUID());
+                /// TODO: (lta, zuochuang.zema) use a separated prefix.
+                lock_info->setUUIDAndPrefix(storage.getCnchStorageUUID());
                 lock_info->setBucket(bucket);
                 res.push_back(std::move(lock_info));
             }
@@ -62,7 +59,7 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
             auto lock_info = std::make_shared<LockInfo>(txn_id);
             lock_info->setMode(LockMode::X);
             lock_info->setTimeout(timeout_ms);
-            lock_info->setUUID(storage.getStorageUUID());
+            lock_info->setUUIDAndPrefix(storage.getCnchStorageUUID());
             res.push_back(std::move(lock_info));
         }
     }
@@ -70,12 +67,12 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
     {
         if (scope.isBucketLock())
         {
-            for (auto & bucket_with_partition : scope.getBucketWithPartitionSet())
+            for (const auto & bucket_with_partition : scope.getBucketWithPartitionSet())
             {
                 auto lock_info = std::make_shared<LockInfo>(txn_id);
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
-                lock_info->setUUID(storage.getStorageUUID());
+                lock_info->setUUIDAndPrefix(storage.getCnchStorageUUID());
                 lock_info->setPartition(bucket_with_partition.first);
                 lock_info->setBucket(bucket_with_partition.second);
                 res.push_back(std::move(lock_info));
@@ -83,12 +80,12 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
         }
         else
         {
-            for (auto & partition : scope.getPartitions())
+            for (const auto & partition : scope.getPartitions())
             {
                 auto lock_info = std::make_shared<LockInfo>(txn_id);
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
-                lock_info->setUUID(storage.getStorageUUID());
+                lock_info->setUUIDAndPrefix(storage.getCnchStorageUUID());
                 lock_info->setPartition(partition);
                 res.push_back(std::move(lock_info));
             }
@@ -182,7 +179,7 @@ getDedupScope(MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVe
         auto table_definition_hash = storage.getTableHashForClusterBy();
         /// Check whether all parts has same table_definition_hash.
         auto it = std::find_if(preload_parts.begin(), preload_parts.end(), [&](const auto & part) {
-            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+            return part->bucket_number == -1 || !table_definition_hash.match(part->table_definition_hash);
         });
         return it == preload_parts.end();
     };
@@ -232,7 +229,7 @@ bool checkBucketParts(
     auto table_definition_hash = storage.getTableHashForClusterBy();
     auto checkIfBucketPartValid = [&table_definition_hash](const MergeTreeDataPartsCNCHVector & parts) -> bool {
         auto it = std::find_if(parts.begin(), parts.end(), [&](const auto & part) {
-            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+            return part->bucket_number == -1 || !table_definition_hash.match(part->table_definition_hash);
         });
         return it == parts.end();
     };

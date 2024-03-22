@@ -177,6 +177,8 @@ ASTPtr ASTColumns::clone() const
         res->set(res->projections, projections->clone());
     if (primary_key)
         res->set(res->primary_key, primary_key->clone());
+    if (mysql_indices)
+        res->set(res->mysql_indices, mysql_indices->clone());
 
     return res;
 }
@@ -245,6 +247,15 @@ void ASTColumns::formatImpl(const FormatSettings & s, FormatState & state, Forma
             auto elem = std::make_shared<ASTColumnsElement>();
             elem->prefix = "CONSTRAINT";
             elem->set(elem->elem, unique_key->clone());
+            list.children.push_back(elem);
+        }
+    }
+    if (mysql_indices)
+    {
+        for (const auto & mysql_index : mysql_indices->children)
+        {
+            auto elem = std::make_shared<ASTColumnsElement>();
+            elem->set(elem->elem, mysql_index->clone());
             list.children.push_back(elem);
         }
     }
@@ -498,6 +509,12 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     if (is_populate)
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " POPULATE" << (settings.hilite ? hilite_none : "");
+
+    if (refresh_strategy)
+    {
+        settings.ostr << settings.nl_or_ws;
+        refresh_strategy->formatImpl(settings, state, frame);
+    }
 
     if (select)
     {

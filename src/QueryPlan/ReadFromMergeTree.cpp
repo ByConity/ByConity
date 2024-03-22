@@ -469,7 +469,11 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreams(
     {
         /// Reduce the number of num_streams if the data is small.
         if (info.sum_marks < num_streams * info.min_marks_for_concurrent_read && parts_with_ranges.size() < num_streams)
+        {
             num_streams = std::max((info.sum_marks + info.min_marks_for_concurrent_read - 1) / info.min_marks_for_concurrent_read, parts_with_ranges.size());
+            LOG_TRACE(&Poco::Logger::get("ReadFromMergeTree"),
+                "Shrink the number of streams from {} to {} since data is small.", requested_num_streams, num_streams);
+        }
     }
 
     return read(std::move(parts_with_ranges), column_names, ReadType::Default,
@@ -1105,7 +1109,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     {
         if (query_info.partition_filter)
         {
-            /// If partition filter exist reconstruct query info 
+            /// If partition filter exist reconstruct query info
             SelectQueryOptions options;
             auto mutable_context = Context::createCopy(context);
             ASTPtr copy_select = query_info.query->clone();
@@ -1141,7 +1145,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
                 combine_conjuncts.emplace_back(copy_select_query.getPrewhere());
             if (copy_select_query.getWhere())
                 combine_conjuncts.emplace_back(copy_select_query.getWhere());
-            copy_select_query.setExpression(ASTSelectQuery::Expression::WHERE, 
+            copy_select_query.setExpression(ASTSelectQuery::Expression::WHERE,
                PredicateUtils::combineConjuncts<true, ASTPtr>(combine_conjuncts));
             copy_select_query.setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
             /**
@@ -1153,12 +1157,12 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
             interpreter->execute();
             LOG_TRACE(&Poco::Logger::get("ReadFromMergeTree::selectRangesToRead"), "Construct partition filter query {}", queryToString(copy_select));
-           
+
             MergeTreeDataSelectExecutor::filterPartsByPartition(
-                parts, 
-                part_values, 
-                metadata_snapshot_base, 
-                data, 
+                parts,
+                part_values,
+                metadata_snapshot_base,
+                data,
                 interpreter->getQueryInfo(),
                 context,
                 max_block_numbers_to_read.get(),
@@ -1168,10 +1172,10 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
         else
         {
             MergeTreeDataSelectExecutor::filterPartsByPartition(
-                parts, 
-                part_values, 
-                metadata_snapshot_base, 
-                data, 
+                parts,
+                part_values,
+                metadata_snapshot_base,
+                data,
                 query_info,
                 context,
                 max_block_numbers_to_read.get(),
@@ -1225,7 +1229,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     }
 
     for (const auto & index_stat : result.index_stats)
-        LOG_DEBUG(log, "selectRangesToRead index stat : type-{}, name-{}, description-{}, condition-{}, used_keys-{}, num_parts_after-{}, num_granules_after-{}", 
+        LOG_DEBUG(log, "selectRangesToRead index stat : type-{}, name-{}, description-{}, condition-{}, used_keys-{}, num_parts_after-{}, num_granules_after-{}",
                         indexTypeToString(index_stat.type),
                         index_stat.name,
                         index_stat.description,

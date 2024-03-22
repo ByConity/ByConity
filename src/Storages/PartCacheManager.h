@@ -22,8 +22,10 @@
 #include <Interpreters/Context_fwd.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Protos/DataModelHelpers.h>
+#include <Storages/CnchDataPartCache.h>
 #include <Storages/CnchPartitionInfo.h>
 #include <Storages/CnchTablePartitionMetricsHelper.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/TableMetaEntry.h>
 #include <Common/CurrentThread.h>
@@ -33,21 +35,23 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int UNKNOWN_STORAGE;
+}
 
-class CnchDataPartCache;
-using CnchDataPartCachePtr = std::shared_ptr<CnchDataPartCache>;
 class CnchServerTopology;
 
 class CnchStorageCache;
 using CnchStorageCachePtr = std::shared_ptr<CnchStorageCache>;
 
-class PartCacheManager: WithMutableContext
+class PartCacheManager : WithMutableContext
 {
 public:
     using DataPartPtr = std::shared_ptr<const MergeTreeDataPartCNCH>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    explicit PartCacheManager(ContextMutablePtr context_, bool dummy_mode = false);
+    explicit PartCacheManager(ContextMutablePtr context_, size_t memory_limit = 0, bool dummy_mode = false);
     ~PartCacheManager();
 
     TableMetaEntryPtr getTableMeta(const UUID & uuid);
@@ -99,46 +103,72 @@ public:
      */
     bool forceRecalculate(StoragePtr table);
 
-    bool getPartitionList(const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const PairInt64 & topology_version);
+    std::vector<Protos::LastModificationTimeHint>
+    getLastModificationTimeHints(const ConstStoragePtr & storage, bool allow_regression = false);
+    bool getPartitionList(
+        const IStorage & table, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const PairInt64 & topology_version);
 
     bool getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids, const PairInt64 & topology_version);
 
-    void invalidPartCache(const UUID & uuid);
-
     void invalidCacheWithNewTopology(const CnchServerTopology & topology);
 
-    void invalidPartCacheWithoutLock(const UUID & uuid, std::unique_lock<std::mutex> & lock);
-
-    void invalidPartCache(const UUID & uuid, const TableMetaEntryPtr & meta_ptr, const std::unordered_map<String, Strings> & partition_to_parts);
-
-    void invalidPartCache(const UUID & uuid, const DataPartsVector & parts);
 
     /**
      * @brief Evict all parts specified.
      */
-    void invalidPartCache(const UUID & uuid, const ServerDataPartsVector & parts);
+    void invalidPartAndDeleteBitmapCache(const UUID & uuid, bool skip_part_cache = false, bool skip_delete_bitmap_cache = false);
 
+    void invalidPartCache(const UUID & uuid, const DataPartsVector & parts);
+    void invalidPartCache(const UUID & uuid, const ServerDataPartsVector & parts);
+    void invalidPartCache(const UUID & uuid, const IMergeTreeDataPartsVector & parts);
     void invalidPartCache(const UUID & uuid, const Strings & part_names, MergeTreeDataFormatVersion version);
 
+    void invalidDeleteBitmapCache(const UUID & uuid, const Strings & delete_bitmap_names);
+    void invalidDeleteBitmapCache(const UUID & uuid, const DeleteBitmapMetaPtrVector & parts);
+    void invalidDeleteBitmapCache(const UUID & uuid)
+    {
+        std::unique_lock<std::mutex> lock(cache_mutex);
+        delete_bitmap_cache_ptr->dropCache(uuid);
+    }
+
+    // void invalidPartCache(const UUID & uuid, const Strings & part_names, MergeTreeDataFormatVersion version);
     void insertDataPartsIntoCache(
         const IStorage & table,
         const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model,
-        const bool is_merged_parts,
-        const bool should_update_metrics,
+        bool is_merged_parts,
+        bool should_update_metrics,
         const PairInt64 & topology_version);
+
+    void insertDeleteBitmapsIntoCache(
+        const IStorage & table,
+        const DeleteBitmapMetaPtrVector & delete_bitmaps,
+        const PairInt64 & topology_version,
+        const Protos::DataModelPartVector & helper_parts,
+        const Protos::DataModelPartVector * helper_staged_parts = nullptr);
 
     /// Get count and weight in Part cache
     std::pair<UInt64, UInt64> dumpPartCache();
+    std::pair<UInt64, UInt64> dumpDeleteBitmapCache();
     std::pair<UInt64, UInt64> dumpStorageCache();
 
-    std::unordered_map<String, std::pair<size_t, size_t>> getTableCacheInfo();
+    std::unordered_map<String, std::pair<size_t, size_t>> getTablePartCacheInfo();
+    std::unordered_map<String, std::pair<size_t, size_t>> getTableDeleteBitmapCacheInfo();
 
-    using LoadPartsFunc = std::function<DataModelPartWithNameVector(const Strings&, const Strings&)>;
+
+    using LoadPartsFunc = std::function<DataModelPartWrapperVector(const Strings &, const Strings &)>;
+    using LoadDeleteBitmapsFunc = std::function<DataModelDeleteBitmapPtrVector(const Strings &, const Strings &)>;
 
     ServerDataPartsVector getOrSetServerDataPartsInPartitions(
         const IStorage & table,
         const Strings & partitions,
         LoadPartsFunc && load_func,
+        const UInt64 & ts,
+        const PairInt64 & topology_version);
+
+    DeleteBitmapMetaPtrVector getOrSetDeleteBitmapInPartitions(
+        const IStorage & table,
+        const Strings & partitions,
+        LoadDeleteBitmapsFunc && load_func,
         const UInt64 & ts,
         const PairInt64 & topology_version);
 
@@ -150,7 +180,7 @@ public:
 
     StoragePtr getStorageFromCache(const UUID & uuid, const PairInt64 & topology_version);
 
-    void insertStorageCache(const StorageID & storage_id, const StoragePtr storage, const UInt64 commit_ts, const PairInt64 & topology_version);
+    void insertStorageCache(const StorageID & storage_id, StoragePtr storage, UInt64 commit_ts, const PairInt64 & topology_version);
 
     void removeStorageCache(const String & database, const String & table = "");
 
@@ -165,6 +195,7 @@ private:
     bool dummy_mode;
     mutable std::mutex cache_mutex;
     CnchDataPartCachePtr part_cache_ptr;
+    CnchDeleteBitmapCachePtr delete_bitmap_cache_ptr;
     std::unordered_map<UUID, TableMetaEntryPtr> active_tables;
     CnchStorageCachePtr storageCachePtr;
 
@@ -174,7 +205,7 @@ private:
     /// A cache for the NHUT which has been written to bytekv. Do not need to update NHUT each time when non-host server commit parts
     /// bacause tso has 3 seconds interval. We just cache the latest updated NHUT and only write to metastore if current ts is
     /// different from it.
-    std::unordered_map<UUID, UInt64> cached_nhut_for_update {};
+    std::unordered_map<UUID, UInt64> cached_nhut_for_update{};
     std::mutex cached_nhut_mutex;
 
     /// We manage the table meta locks here to make sure each table has only one meta lock no matter how many different table meta entry it has.
@@ -191,18 +222,87 @@ private:
     // load tables belongs to current server according to the topology. The task is performed asynchronously.
     void loadActiveTables();
 
+    template <typename T>
+    using Vec = std::vector<std::shared_ptr<T>>;
+
+    template <
+        typename CachePtr,
+        typename RetValue,
+        typename CacheValueMap,
+        typename FetchedValue,
+        typename Adapter,
+        typename LoadFunc,
+        typename RetValueVec>
+    RetValueVec getOrSetDataInPartitions(
+        const IStorage & table, const Strings & partitions, LoadFunc && load_func, const UInt64 & ts, const PairInt64 & topology_version);
+
     // we supply two implementation for getting parts. Normally, we just use getPartsInternal. If the table parts number is huge we can
     // fetch parts sequentially for each partition by using getPartsByPartition.
-    ServerDataPartsVector getServerPartsInternal(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
-        const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
-    ServerDataPartsVector getServerPartsByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
-        const Strings & partitions, LoadPartsFunc & load_func, const UInt64 & ts);
-    //DataModelPartWrapperVector getPartsModelByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
-    //    const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
+    template <
+        typename CachePtr,
+        typename RetValue,
+        typename CacheValueMap,
+        typename FetchedValue,
+        typename Adapter,
+        typename LoadFunc,
+        typename RetValueVec>
+    RetValueVec getDataInternal(
+        const MergeTreeMetaBase & storage,
+        const TableMetaEntryPtr & meta_ptr,
+        const Strings & partitions,
+        const Strings & all_existing_partitions,
+        LoadFunc & load_func,
+        const UInt64 & ts);
+
+    inline static bool isVisible(const DB::DataModelPartWrapperPtr & part_wrapper_ptr, const UInt64 & ts);
+    inline static bool isVisible(const ServerDataPartPtr & data_part, const UInt64 & ts);
+    inline static bool isVisible(const DB::DeleteBitmapMetaPtr & bitmap, const UInt64 & ts);
+    inline static bool isVisible(const DB::DataModelDeleteBitmapPtr & bitmap, const UInt64 & ts);
+
+    template <
+        typename CachePtr,
+        typename RetValue,
+        typename CacheValueMap,
+        typename FetchedValue,
+        typename Adapter,
+        typename LoadFunc,
+        typename RetValueVec>
+    RetValueVec getDataByPartition(
+        const MergeTreeMetaBase & storage,
+        const TableMetaEntryPtr & meta_ptr,
+        const Strings & partitions,
+        LoadFunc & load_func,
+        const UInt64 & ts);
 
     void checkTimeLimit(Stopwatch & watch);
 
     size_t getMaxThreads() const;
+
+    void invalidPartCacheWithoutLock(const UUID & uuid, std::unique_lock<std::mutex> & lock, bool skip_part_cache = false, bool skip_delete_bitmap_cache = false);
+
+    template <typename DataCachePtr>
+    void invalidDataCache(
+        const UUID & uuid,
+        const TableMetaEntryPtr & meta_ptr,
+        const std::unordered_map<String, Strings> & partition_to_data_list,
+        DataCachePtr cache_ptr);
+
+    template <typename Ds, typename Adapter>
+    void invalidDataCache(const UUID & uuid, const Ds & xs);
+
+    template <typename Adapter, typename... Args>
+    void invalidDataCache(const UUID & uuid, const Strings & data_names, Args... args);
+
+    template <typename Adapter, typename InputValueVec, typename ValueVec, typename CachePtr, typename CacheValueMap, typename GetKeyFunc>
+    void insertDataIntoCache(
+        const IStorage & table,
+        const InputValueVec & parts_model,
+        bool is_merged_parts,
+        bool should_update_metrics,
+        const PairInt64 & topology_version,
+        CachePtr cache_ptr,
+        GetKeyFunc func,
+        const std::unordered_map<String, String> * extra_partition_info);
 };
 
 using PartCacheManagerPtr = std::shared_ptr<PartCacheManager>;

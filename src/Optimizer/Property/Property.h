@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <Analyzers/ASTEquals.h>
 #include <Analyzers/QualifiedColumnName.h>
 #include <Core/Names.h>
@@ -37,10 +38,12 @@ class Property;
 using PropertySet = std::vector<Property>;
 using PropertySets = std::vector<PropertySet>;
 using SymbolEquivalences = Equivalences<String>;
+using SymbolEquivalencesPtr = std::shared_ptr<SymbolEquivalences>;
 
 class Constants;
 
 using CTEId = UInt32;
+class Context;
 
 /**
  * A partition operation divides a relation into disjoint subsets, called partitions.
@@ -59,6 +62,8 @@ public:
         (FIXED_ARBITRARY, 3),
         (FIXED_BROADCAST, 4),
         (SCALED_WRITER, 5),
+        // Corresponding to this sharding key definition syntax: bucket(column_name, buckets),
+        // only the BUCKET_TABLE type can use BUCKET_REPARTITION.
         (BUCKET_TABLE, 6),
         (ARBITRARY, 7),
         (FIXED_PASSTHROUGH, 8),
@@ -81,7 +86,8 @@ public:
         UInt64 buckets_ = 0,
         bool enforce_round_robin_ = true,
         Component component_ = Component::ANY,
-        bool exactly_match_ = false)
+        bool exactly_match_ = false,
+        bool satisfy_worker_ = false)
         : handle(handle_)
         , columns(std::move(columns_))
         , require_handle(require_handle_)
@@ -89,28 +95,34 @@ public:
         , enforce_round_robin(enforce_round_robin_)
         , component(component_)
         , exactly_match(exactly_match_)
+        , satisfy_worker(satisfy_worker_)
     {
     }
-    bool operator==(const Partitioning & other) const;
-
     void setHandle(Handle handle_) { handle = handle_; }
-    enum Handle getPartitioningHandle() const { return handle; }
-    const Names & getPartitioningColumns() const { return columns; }
-    void setPartitioningColumns(Names columns_)
+    enum Handle getHandle() const { return handle; }
+    const Names & getColumns() const { return columns; }
+    void setColumns(Names columns_)
     {
         columns = std::move(columns_);
     }
     UInt64 getBuckets() const { return buckets; }
+    void setBuckets(UInt64 buckets_) { buckets = buckets_; }
     bool isEnforceRoundRobin() const { return enforce_round_robin; }
     void setEnforceRoundRobin(bool enforce_round_robin_) { enforce_round_robin = enforce_round_robin_; }
     bool isRequireHandle() const { return require_handle; }
     void setRequireHandle(bool require_handle_) { require_handle = require_handle_; }
     Component getComponent() const { return component; }
     void setComponent(Component component_) { component = component_; }
+    bool isExactlyMatch() const { return exactly_match; }
 
-    bool isExactlyMatch() const
+    bool isSatisfyWorker() const
     {
-        return exactly_match;
+        return satisfy_worker;
+    }
+
+    void setSatisfyWorker(bool satisfy_worker_)
+    {
+        this->satisfy_worker = satisfy_worker_;
     }
 
     Partitioning translate(const std::unordered_map<String, String> & identities) const;
@@ -118,7 +130,15 @@ public:
     bool satisfy(const Partitioning &, const Constants & constants) const;
     bool isPartitionOn(const Partitioning &, const Constants & constants) const;
 
+    bool isPreferred() const { return preferred; }
+    void setPreferred(bool preferred_) { preferred = preferred_; }
+
     size_t hash() const;
+    bool operator==(const Partitioning & other) const
+    {
+        return preferred == other.preferred && handle == other.handle && columns == other.columns && require_handle == other.require_handle && buckets == other.buckets
+            && enforce_round_robin == other.enforce_round_robin;
+    }
     String toString() const;
 
     void toProto(Protos::Partitioning & proto) const;
@@ -132,6 +152,8 @@ private:
     bool enforce_round_robin;
     Component component;
     bool exactly_match;
+    bool satisfy_worker;
+    bool preferred = false;
 };
 
 ENUM_WITH_PROTO_CONVERTER(
@@ -212,8 +234,6 @@ public:
                 break;
             }
         }
-
-
         return SortColumnDescription{name, direction, nulls_direction};
     }
 
@@ -265,12 +285,16 @@ private:
 class CTEDescription
 {
 public:
-    explicit CTEDescription()
-        : CTEDescription(Partitioning(Partitioning::Handle::ARBITRARY), false)
+    CTEDescription() : CTEDescription(false, Partitioning::Handle::ARBITRARY)
     {
     }
 
-    explicit CTEDescription(const Property &);
+    static CTEDescription inlined();
+    static CTEDescription arbitrary()
+    {
+        return CTEDescription{};
+    }
+    static CTEDescription from(const Property &);
 
     bool operator==(const CTEDescription & other) const;
     size_t hash() const;
@@ -279,60 +303,35 @@ public:
     CTEDescription translate(const std::unordered_map<String, String> & identities) const;
     const Partitioning & getNodePartitioning() const { return node_partitioning; }
     Partitioning & getNodePartitioningRef() { return node_partitioning; }
-    bool isPreferred() const { return preferred; }
+    bool isInlined() const { return is_inlined; }
+    bool isShared() const { return !is_inlined; }
+    bool isArbitrary() const { return !is_inlined && node_partitioning.getHandle() == Partitioning::Handle::ARBITRARY; }
 
     static Property createCTEDefGlobalProperty(const Property & property, CTEId cte_id);
     static Property
     createCTEDefLocalProperty(const Property & property, CTEId cte_id, const std::unordered_map<String, String> & identities_mapping);
 
 private:
-    explicit CTEDescription(Partitioning node_partitioning_, bool preferred_) : node_partitioning(std::move(node_partitioning_)), preferred(preferred_)
+    explicit CTEDescription(bool is_inlined_, Partitioning node_partitioning_)
+        : is_inlined(is_inlined_), node_partitioning(std::move(node_partitioning_))
     {
     }
-    
+
+    // cte is inlined.
+    bool is_inlined;
     // Description of the partitioning of the data across nodes
     Partitioning node_partitioning;
-
-    // Description whether the property is required or preferred.
-    bool preferred;
 };
 
-class CTEDescriptions
+class CTEDescriptions : public std::map<CTEId, CTEDescription>
 {
 public:
     size_t hash() const;
     CTEDescriptions translate(const std::unordered_map<String, String> & identities) const;
     String toString() const;
 
-    bool contains(CTEId cte_id) const { return explored.contains(cte_id); }
-
-    bool isShared(CTEId cte_id) const { return cte_descriptions.contains(cte_id); }
-    const CTEDescription & getSharedDescription(CTEId cte_id) const { return cte_descriptions.at(cte_id); }
-
     void filter(const std::unordered_set<CTEId> & allowed);
-    void registerCTE(const std::set<CTEId> & cte_ids) { explored.insert(cte_ids.begin(), cte_ids.end()); }
-    void addSharedDescription(CTEId cte_id, const CTEDescription & cte_description)
-    {
-        cte_descriptions.emplace(cte_id, cte_description);
-        explored.emplace(cte_id);
-    }
-    bool empty() const { return explored.empty(); }
-    void erase(CTEId cte_id)
-    {
-        cte_descriptions.erase(cte_id);
-        explored.erase(cte_id);
-    }
-
-    bool operator==(const CTEDescriptions & rhs) const;
-
-private:
-    std::map<CTEId, CTEDescription> cte_descriptions;
-
-    /**
-     * if cte_id is in explored and not exists in cte_descriptions, it means cte is inlined.
-     */
-    std::set<CTEId> explored;
-};
+    };
 
 struct WorkloadTablePartitioning
 {
@@ -368,7 +367,6 @@ public:
     {
     }
 
-    bool isPreferred() const { return preferred; }
     const Partitioning & getNodePartitioning() const { return node_partitioning; }
     Partitioning & getNodePartitioningRef() { return node_partitioning; }
     const Partitioning & getStreamPartitioning() const { return stream_partitioning; }
@@ -378,9 +376,26 @@ public:
     bool isEnforceNotMatch() const { return enforce_not_match; }
     const TableLayout & getTableLayout() const { return table_layout; }
 
-    void setPreferred(bool preferred_) { preferred = preferred_; }
+    void setPreferred(bool preferred_)
+    {
+        node_partitioning.setPreferred(preferred_);
+        stream_partitioning.setPreferred(preferred_);
+    }
+
     void setNodePartitioning(Partitioning node_partitioning_) { node_partitioning = std::move(node_partitioning_); }
+    Property withNodePartitioning(Partitioning node_partitioning_) const
+    {
+        Property result = *this;
+        result.setNodePartitioning(node_partitioning_);
+        return result;
+    }
     void setStreamPartitioning(Partitioning stream_partitioning_) { stream_partitioning = std::move(stream_partitioning_); }
+    Property withStreamPartitioning(Partitioning stream_partitioning_) const
+    {
+        Property result = *this;
+        result.setStreamPartitioning(stream_partitioning_);
+        return result;
+    }
     void setCTEDescriptions(CTEDescriptions descriptions) { cte_descriptions = std::move(descriptions); }
     void setSorting(Sorting sorting_) { sorting = std::move(sorting_); }
     void setEnforceNotMatch(bool enforce_not_match_) { enforce_not_match = enforce_not_match_; }
@@ -392,12 +407,13 @@ public:
         result.setCTEDescriptions(cte_descriptions);
         return result;
     }
+
     Property translate(const std::unordered_map<String, String> & identities) const;
     Property normalize(const SymbolEquivalences & symbol_equivalences) const;
 
     bool operator==(const Property & other) const
     {
-        return preferred == other.preferred && node_partitioning == other.node_partitioning
+        return node_partitioning == other.node_partitioning
             && stream_partitioning == other.stream_partitioning && sorting == other.sorting && cte_descriptions == other.cte_descriptions
             && table_layout == other.table_layout;
     }
@@ -408,8 +424,7 @@ public:
     String toString() const;
 
 private:
-    // Description whether the property is required or preferred.
-    bool preferred = false;
+    
     // Description of the partitioning of the data across nodes
     Partitioning node_partitioning;
     // Description of the partitioning of the data across streams
@@ -455,6 +470,19 @@ struct CTEDescriptionHash
 struct TableLayoutHash
 {
     size_t operator()(const TableLayout & layout) const { return layout.hash(); }
+};
+
+struct PlanAndProp
+{
+    PlanNodePtr plan;
+    Property property;
+};
+
+struct PlanPropEquivalences
+{
+    PlanNodePtr plan;
+    Property property;
+    SymbolEquivalencesPtr equivalences;
 };
 
 }

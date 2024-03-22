@@ -13,20 +13,25 @@
  * limitations under the License.
  */
 
+#include <mutex>
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <Interpreters/PartLog.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/TreeRewriter.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
+#include <Parsers/ASTPartition.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationType.h>
-
+#include <iostream>
 namespace DB
 {
 namespace ErrorCodes
@@ -42,7 +47,8 @@ CloudMergeTreeBlockOutputStream::CloudMergeTreeBlockOutputStream(
     MergeTreeMetaBase & storage_,
     StorageMetadataPtr metadata_snapshot_,
     ContextPtr context_,
-    bool to_staging_area_)
+    bool to_staging_area_,
+    ASTPtr overwrite_partition_)
     : storage(storage_)
     , log(storage.getLogger())
     , metadata_snapshot(std::move(metadata_snapshot_))
@@ -50,9 +56,29 @@ CloudMergeTreeBlockOutputStream::CloudMergeTreeBlockOutputStream(
     , to_staging_area(to_staging_area_)
     , writer(storage, IStorage::StorageLocation::AUXILITY)
     , cnch_writer(storage, context, ManipulationType::Insert)
+    , overwrite_partition(overwrite_partition_)
 {
     if (!metadata_snapshot->hasUniqueKey() && to_staging_area)
         throw Exception("Table doesn't have UNIQUE KEY specified, can't write to staging area", ErrorCodes::LOGICAL_ERROR);
+
+    initOverwritePartitionPruner();
+}
+
+void CloudMergeTreeBlockOutputStream::initOverwritePartitionPruner()
+{
+    if (!overwrite_partition)
+        return;
+
+    if (auto * partition_list = typeid_cast<ASTExpressionList *>(overwrite_partition.get()))
+    {
+        /// Get overwrite partition ids from query
+        for (const auto & partition : partition_list->children)
+            overwrite_partition_ids.insert(storage.getPartitionIDFromQuery(partition, context));
+    }
+    else
+    {
+        overwrite_partition_ids.insert(storage.getPartitionIDFromQuery(overwrite_partition, context));
+    }
 }
 
 Block CloudMergeTreeBlockOutputStream::getHeader() const
@@ -124,15 +150,43 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     else
         part_blocks = writer.splitBlockIntoParts(block, settings.max_partitions_per_insert_block, metadata_snapshot, context);
 
+    std::mutex parts_mutex;
     IMutableMergeTreeDataPartsVector parts;
-    LOG_DEBUG(storage.getLogger(), "size of part_blocks {}", part_blocks.size());
+    size_t rows_size = 0;
+    LOG_DEBUG(storage.getLogger(), "Size of blocks is {} after split by partition", part_blocks.size());
 
     const auto & txn = context->getCurrentTransaction();
     auto primary_txn_id = txn->getPrimaryTransactionID();
 
-    // Get all blocks of partition by expression
-    for (auto & block_with_partition : part_blocks)
-    {
+    auto processBlockWithBucket = [&](BlockWithPartition & bucketed_block_with_partition) {
+        Stopwatch watch;
+        auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
+
+        MergeTreeMutableDataPartPtr temp_part
+            = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
+
+        if (txn->isSecondary())
+            temp_part->secondary_txn_id = txn->getTransactionID();
+        if (part_log)
+            part_log->addNewPart(context, temp_part, watch.elapsed());
+        LOG_DEBUG(
+            storage.getLogger(),
+            "Write part {}, {} rows, elapsed {} ms",
+            temp_part->name,
+            bucketed_block_with_partition.block.rows(),
+            watch.elapsedMilliseconds());
+
+        std::lock_guard parts_lock(parts_mutex);
+        parts.push_back(std::move(temp_part));
+        rows_size += bucketed_block_with_partition.block.rows();
+    };
+
+    size_t thread_num = storage.getSettings()->cnch_write_part_threads;
+    bool use_thread_pool = thread_num > 1;
+    ThreadPool write_pool(thread_num);
+    Stopwatch write_pool_watch;
+    auto thread_group = CurrentThread::getGroup();
+    auto processBlockWithPartition = [&](BlockWithPartition & block_with_partition) {
         Row original_partition{block_with_partition.partition};
 
         /// We need to dedup in block before split block by cluster key when unique table supports cluster key because cluster key may be different with unique key. Otherwise, we will lost the insert order.
@@ -146,30 +200,67 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
 
         auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(
             block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
-        LOG_TRACE(storage.getLogger(), "size of bucketed_part_blocks {}", bucketed_part_blocks.size());
+        LOG_TRACE(storage.getLogger(), "Size of blocks is {} after split by bucket", bucketed_part_blocks.size());
 
         for (auto & bucketed_block_with_partition : bucketed_part_blocks)
         {
-            Stopwatch watch;
             bucketed_block_with_partition.partition = Row(original_partition);
+            if (use_thread_pool)
+                write_pool.scheduleOrThrowOnError([&, bucketed_block = std::move(bucketed_block_with_partition), thread_group]() mutable {
+                    SCOPE_EXIT({
+                        if (thread_group)
+                            CurrentThread::detachQueryIfNotDetached();
+                    });
+                    if (thread_group)
+                        CurrentThread::attachToIfDetached(thread_group);
+                    setThreadName("WritePart");
 
-            auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
-
-            MergeTreeMutableDataPartPtr temp_part
-                = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
-
-            if (txn->isSecondary())
-                temp_part->secondary_txn_id = txn->getTransactionID();
-            if (part_log)
-                part_log->addNewPart(context, temp_part, watch.elapsed());
-            LOG_DEBUG(
-                storage.getLogger(),
-                "Write part {}, {} rows, elapsed {} ms",
-                temp_part->name,
-                bucketed_block_with_partition.block.rows(),
-                watch.elapsedMilliseconds());
-            parts.push_back(std::move(temp_part));
+                    processBlockWithBucket(bucketed_block);
+                });
+            else
+                processBlockWithBucket(bucketed_block_with_partition);
         }
+    };
+
+    // Get all blocks of partition by expression
+    for (auto & block_with_partition : part_blocks)
+    {
+        if (overwrite_partition)
+        {
+            auto partition_id = MergeTreePartition{block_with_partition.partition}.getID(storage);
+            if (!overwrite_partition_ids.count(partition_id))
+            {
+                LOG_DEBUG(storage.getLogger(), "Ignore part block due to not match overwrite partition for partition id: {}", partition_id);
+                continue;
+            }
+        }
+
+        if (use_thread_pool)
+            write_pool.scheduleOrThrowOnError([&, block_data = std::move(block_with_partition), thread_group]() mutable {
+                SCOPE_EXIT({
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                });
+                if (thread_group)
+                    CurrentThread::attachToIfDetached(thread_group);
+                setThreadName("WritePart");
+
+                processBlockWithPartition(block_data);
+            });
+        else
+            processBlockWithPartition(block_with_partition);
+    }
+
+    if (use_thread_pool)
+    {
+        write_pool.wait();
+        LOG_DEBUG(
+            storage.getLogger(),
+            "Write pool totally write {} part, {} rows, pool size {}, elapsed {} ms",
+            parts.size(),
+            rows_size,
+            thread_num,
+            write_pool_watch.elapsedMilliseconds());
     }
 
     return parts;
@@ -231,7 +322,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
     auto txn = context->getCurrentTransaction();
     if (dynamic_pointer_cast<CnchServerTransaction>(txn) && !disable_transaction_commit)
     {
-        txn->setMainTableUUID(storage.getStorageUUID());
+        txn->setMainTableUUID(storage.getCnchStorageUUID());
         txn->commitV2();
         LOG_DEBUG(storage.getLogger(), "Finishing insert values commit in cnch server.");
     }
@@ -243,7 +334,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
         auto kafka_table_id = txn->getKafkaTableID();
         if (!kafka_table_id.empty() && !worker_txn->hasEnableExplicitCommit())
         {
-            txn->setMainTableUUID(UUIDHelpers::toUUID(storage.getSettings()->cnch_table_uuid.value));
+            txn->setMainTableUUID(storage.getCnchStorageUUID());
             Stopwatch watch;
             txn->commitV2();
             LOG_TRACE(
@@ -294,12 +385,9 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
     if (!txn)
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 
-    /// prefer to get cnch table uuid from settings as CloudMergeTree has no uuid for Kafka task
-    String uuid_str = storage.getSettings()->cnch_table_uuid.value;
-    if (uuid_str.empty())
-        uuid_str = UUIDHelpers::UUIDToString(storage.getStorageUUID());
-
-    txn->setMainTableUUID(UUIDHelpers::toUUID(uuid_str));
+    UUID uuid = storage.getCnchStorageUUID();
+    String uuid_str = UUIDHelpers::UUIDToString(uuid);
+    txn->setMainTableUUID(uuid);
     if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn); worker_txn && !worker_txn->tryGetServerClient())
     {
         /// case: server initiated "insert select/infile" txn, need to set server client here in order to commit from worker

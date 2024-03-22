@@ -12,7 +12,7 @@ namespace DB
 
 void ImplementJoinOperationHints::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    JoinOperationHintsVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
+    JoinOperationHintsVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     VisitorUtil::accept(*plan.getPlanNode(), visitor, v);
 }
@@ -124,8 +124,8 @@ void JoinOperationHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
     }
     else if (left_repartition_hint || right_repartition_hint)
     {
-        auto left_stats = CardinalityEstimator::estimate(*node.getChildren()[0], cte_info, context);
-        auto right_stats = CardinalityEstimator::estimate(*node.getChildren()[1], cte_info, context);
+        auto left_stats = CardinalityEstimator::estimate(*node.getChildren()[0], cte_helper.getCTEInfo(), context);
+        auto right_stats = CardinalityEstimator::estimate(*node.getChildren()[1], cte_helper.getCTEInfo(), context);
 
         if((left_stats.has_value() && right_stats.has_value())
             && (right_stats.value()->getRowCount() > left_stats.value()->getRowCount())
@@ -187,7 +187,7 @@ void JoinOperationHintsVisitor::visitPlanNode(PlanNodeBase & node, Void & v)
 void JoinOperationHintsVisitor::visitCTERefNode(CTERefNode & node, Void & v)
 {
     CTEId cte_id = node.getStep()->getId();
-    post_order_cte_helper.accept(cte_id, *this, v);
+    cte_helper.accept(cte_id, *this, v);
 }
 
 

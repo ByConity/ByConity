@@ -134,6 +134,7 @@ protected:
 
     bool cache_disabled = false;
     UInt32 cache_timeout = 5;  /// seconds
+    bool check_result = false;
 };
 
 using ServiceDiscoveryClientPtr = std::shared_ptr<IServiceDiscovery>;

@@ -54,6 +54,14 @@ public:
     {
         return file_name;
     }
+
+    WriteBuffer * inplaceReconstruct(const String & out_path, [[maybe_unused]] std::unique_ptr<WriteBuffer> nested) override
+    {
+        // Call the destructor explicitly but does not free memory
+        this->~WriteBufferFromFile();
+        new (this) WriteBufferFromFile(out_path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
+        return this;
+    }
 };
 
 }

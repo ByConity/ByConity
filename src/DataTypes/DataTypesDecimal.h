@@ -26,6 +26,7 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypeDecimalBase.h>
+#include <DataTypes/DataTypeDateTime64.h>
 
 
 namespace DB
@@ -90,6 +91,9 @@ inline UInt32 getDecimalScale(const IDataType & data_type, UInt32 default_value 
         return decimal_type->getScale();
     if (auto * decimal_type = checkDecimal<Decimal256>(data_type))
         return decimal_type->getScale();
+    if (const auto * date_time_type = typeid_cast<const DataTypeDateTime64 *>(&data_type))
+        return date_time_type->getScale();
+
     return default_value;
 }
 
@@ -103,6 +107,8 @@ inline UInt32 getDecimalPrecision(const IDataType & data_type)
         return decimal_type->getPrecision();
     if (auto * decimal_type = checkDecimal<Decimal256>(data_type))
         return decimal_type->getPrecision();
+    if (const auto * date_time_type = typeid_cast<const DataTypeDateTime64 *>(&data_type))
+        return date_time_type->getPrecision();
     return 0;
 }
 

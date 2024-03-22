@@ -129,6 +129,7 @@ public:
 
     StorageID getTableId() const;
     String getDatabaseName() const;
+    String getTableName() const;
 
     // FIXME: used only when it's needed to rewrite distributed table name to real remote table name.
     void resetTable(const String & database_name, const String & table_name);  // TODO(ilezhankin): get rid of this
@@ -163,4 +164,5 @@ inline String getIdentifierName(const ASTPtr & ast) { return getIdentifierName(a
 inline std::optional<String> tryGetIdentifierName(const ASTPtr & ast) { return tryGetIdentifierName(ast.get()); }
 inline bool tryGetIdentifierNameInto(const ASTPtr & ast, String & name) { return tryGetIdentifierNameInto(ast.get(), name); }
 
+inline std::shared_ptr<ASTIdentifier> makeASTIdentifier(const String & name) { return std::make_shared<ASTIdentifier>(name); }
 }

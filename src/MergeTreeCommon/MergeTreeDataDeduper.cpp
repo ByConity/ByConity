@@ -553,7 +553,7 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
 
     auto log_dedup_detail = [&](const DedupTask & task, const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts) {
         WriteBufferFromOwnString msg;
-        msg << "Start to dedup in txn_id: " << txn_id.toUInt64() << ", dedup level info: " << task.getDedupLevelInfo() << ",, visible_parts: [";
+        msg << "Start to dedup in txn_id: " << txn_id.toUInt64() << ", dedup level info: " << task.getDedupLevelInfo() << ", visible_parts: [";
         for (size_t i = 0; i < visible_parts.size(); ++i)
         {
             if (i > 0)
@@ -633,7 +633,7 @@ MergeTreeDataDeduper::DedupTasks MergeTreeDataDeduper::convertIntoSubDedupTasks(
         if (!valid_bucket || bucket_level_dedup)
             return;
         auto it = std::find_if(all_parts.begin(), all_parts.end(), [&](const auto & part) {
-            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+            return part->bucket_number == -1 || !table_definition_hash.match(part->table_definition_hash);
         });
         if (it != all_parts.end())
             valid_bucket = false;

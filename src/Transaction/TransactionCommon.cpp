@@ -106,6 +106,12 @@ const char * txnInitiatorToString(CnchTransactionInitiator initiator)
 
         case CnchTransactionInitiator::Txn:
             return "Txn";
+
+        case CnchTransactionInitiator::MvRefresh:
+            return "MvRefresh";
+
+        case CnchTransactionInitiator::MergeSelect:
+            return "MergeSelect";
     }
 
     throw Exception("Bad type of Transaction Initiator", ErrorCodes::BAD_TYPE_OF_FIELD);

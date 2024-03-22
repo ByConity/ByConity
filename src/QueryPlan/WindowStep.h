@@ -60,7 +60,6 @@ public:
 private:
     WindowDescription window_description;
     std::vector<WindowFunctionDescription> window_functions;
-    Block input_header;
     bool need_sort;
     SortDescription prefix_description;
     void scatterByPartitionIfNeeded(QueryPipeline& pipeline);

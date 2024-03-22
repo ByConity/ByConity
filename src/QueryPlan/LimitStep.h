@@ -14,8 +14,9 @@
  */
 
 #pragma once
-#include <QueryPlan/ITransformingStep.h>
 #include <Core/SortDescription.h>
+#include <Interpreters/prepared_statement.h>
+#include <QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
@@ -26,8 +27,8 @@ class LimitStep : public ITransformingStep
 public:
     LimitStep(
         const DataStream & input_stream_,
-        size_t limit_,
-        size_t offset_,
+        SizeOrVariable limit_,
+        SizeOrVariable offset_,
         bool always_read_till_end_ = false, /// Read all data even if limit is reached. Needed for totals.
         bool with_ties_ = false, /// Limit with ties.
         SortDescription description_ = {},
@@ -44,13 +45,31 @@ public:
 
     size_t getLimitForSorting() const
     {
-        if (limit > std::numeric_limits<UInt64>::max() - offset)
+        if (getLimitValue() > std::numeric_limits<UInt64>::max() - getOffsetValue())
             return 0;
 
-        return limit + offset;
+        return getLimitValue() + getOffsetValue();
     }
-    size_t getLimit() const { return limit; }
-    size_t getOffset() const { return offset; }
+    const SizeOrVariable & getLimit() const
+    {
+        return limit;
+    }
+    const SizeOrVariable & getOffset() const
+    {
+        return offset;
+    }
+    size_t getLimitValue() const
+    {
+        return std::get<size_t>(limit);
+    }
+    size_t getOffsetValue() const
+    {
+        return std::get<size_t>(offset);
+    }
+    bool hasPreparedParam() const
+    {
+        return std::holds_alternative<String>(limit) || std::holds_alternative<String>(offset);
+    }
     bool isAlwaysReadTillEnd() const { return always_read_till_end; }
     bool isWithTies() const { return with_ties; }
     const SortDescription & getSortDescription() const { return description; }
@@ -67,9 +86,11 @@ public:
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 
+    void prepare(const PreparedStatementContext & prepared_context) override;
+
 private:
-    size_t limit;
-    size_t offset;
+    SizeOrVariable limit;
+    SizeOrVariable offset;
     bool always_read_till_end;
 
     bool with_ties;

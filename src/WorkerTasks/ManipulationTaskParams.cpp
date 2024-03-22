@@ -67,17 +67,32 @@ String ManipulationTaskParams::toDebugString() const
     if (mutation_commit_time)
         oss << " mutation_commit_time: " << mutation_commit_time;
 
+    if (last_modification_time)
+        oss << " last_modification_time: " << last_modification_time;
+
     return oss.str();
 }
 
 template <class Vec>
-void ManipulationTaskParams::assignSourcePartsImpl(const Vec & parts)
+void ManipulationTaskParams::assignSourcePartsImpl(const Vec & parts, UInt64 ts)
 {
     if (unlikely(type == Type::Empty))
         throw Exception("Expected non-empty manipulate type", ErrorCodes::LOGICAL_ERROR);
 
     if (parts.empty())
         return;
+
+    if (ts)
+    {
+        MergeTreePartInfo part_info;
+        part_info.partition_id = parts.front()->get_info().partition_id;
+        part_info.min_block = ts;
+        part_info.max_block = ts;
+        part_info.level = 0;
+        part_info.mutation = txn_id; 
+        new_part_names.push_back(part_info.getPartName());
+        return;
+    }
 
     auto left = parts.begin();
     auto right = parts.begin();
@@ -115,24 +130,27 @@ void ManipulationTaskParams::assignSourcePartsImpl(const Vec & parts)
     }
 }
 
+/// For server (CnchMergeMutateThread)
 void ManipulationTaskParams::assignSourceParts(ServerDataPartsVector parts)
 {
     assignSourcePartsImpl(parts);
     source_parts = std::move(parts);
 }
 
+/// For part merger
 void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
 {
     assignSourcePartsImpl(parts);
     source_data_parts = std::move(parts);
 }
 
-void ManipulationTaskParams::assignParts(MergeTreeMutableDataPartsVector parts)
+/// For worker
+void ManipulationTaskParams::assignParts(MergeTreeMutableDataPartsVector parts, const std::function<UInt64()> & ts_getter)
 {
     for (auto & part: parts)
         all_parts.emplace_back(std::move(part));
     source_data_parts = CnchPartsHelper::calcVisibleParts(all_parts, false);
-    assignSourcePartsImpl(source_data_parts);
+    assignSourcePartsImpl(source_data_parts, (source_data_parts.size() == 1 && type == Type::Merge) ? ts_getter() : 0);
 }
 
 }

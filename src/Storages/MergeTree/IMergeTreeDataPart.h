@@ -561,6 +561,7 @@ public:
 
     TxnTimestamp columns_commit_time;
     TxnTimestamp mutation_commit_time;
+    TxnTimestamp last_modification_time;
 
     UInt64 staging_txn_id = 0;
 

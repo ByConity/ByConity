@@ -40,6 +40,14 @@ PlanNodePtr PlanNodeBase::getNodeById(PlanNodeId node_id) const
     return nullptr;
 }
 
+void PlanNodeBase::prepare(const PreparedStatementContext & prepared_context)
+{
+    for (const auto & child : children)
+        child->prepare(prepared_context);
+
+    getStep()->prepare(prepared_context);
+}
+
 #define PLAN_NODE_DEF(TYPE) \
 template class PlanNode<TYPE##Step>;
 APPLY_STEP_TYPES(PLAN_NODE_DEF)

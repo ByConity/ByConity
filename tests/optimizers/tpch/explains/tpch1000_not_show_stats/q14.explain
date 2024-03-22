@@ -1,27 +1,31 @@
 Projection
-│     Expressions: promo_revenue:=('100' * `expr#sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0))`) / `expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
-└─ MergingAggregated
-   └─ Gather Exchange
-      └─ Aggregating
-         │     Group by: {}
-         │     Aggregates: expr#sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0)):=AggNull(sum)(expr#multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0)), expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-         └─ Projection
-            │     Expressions: expr#multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0):=multiIf(p_type LIKE 'PROMO%', l_extendedprice * (1 - l_discount), 0), expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-            └─ Inner (PARALLEL_HASH) Join
-               │     Condition: p_partkey == l_partkey
-               │     Runtime Filters Builder: {l_partkey}
-               ├─ Repartition Exchange
-               │  │     Partition by: {p_partkey}
-               │  └─ Filter
-               │     │     Condition: Runtime Filters: {p_partkey}
-               │     └─ TableScan tpch1000.part
-               │              Where: Runtime Filters: {p_partkey}
-               │              Outputs: [p_partkey, p_type]
-               └─ Repartition Exchange
-                  │     Partition by: {l_partkey}
-                  └─ Filter
-                     │     Condition: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
-                     └─ TableScan tpch1000.lineitem
-                              Where: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
-                              Outputs: [l_partkey, l_extendedprice, l_discount, l_shipdate]
+│     Expressions: promo_revenue:=`expr#divide(multiply('100', sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0))), sum(multiply(l_extendedprice, minus(1, l_discount))))`
+└─ Projection
+   │     Expressions: expr#divide(multiply('100', sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0))), sum(multiply(l_extendedprice, minus(1, l_discount)))):=('100' * `expr#sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0))`) / `expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
+   └─ MergingAggregated
+      └─ Gather Exchange
+         └─ Aggregating
+            │     Group by: {}
+            │     Aggregates: expr#sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0)):=AggNull(sum)(expr#multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0)), expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
+            └─ Projection
+               │     Expressions: expr#multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0):=multiIf(p_type LIKE 'PROMO%', l_extendedprice * (1 - l_discount), 0), expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
+               └─ Inner (PARALLEL_HASH) Join
+                  │     Condition: p_partkey == l_partkey
+                  │     Runtime Filters Builder: {l_partkey}
+                  ├─ Repartition Exchange
+                  │  │     Partition by: {p_partkey}
+                  │  └─ Filter
+                  │     │     Condition: Runtime Filters: {p_partkey}
+                  │     └─ TableScan tpch1000.part
+                  │              Where: Runtime Filters: {p_partkey}
+                  │              Outputs: [p_partkey, p_type]
+                  └─ Repartition Exchange
+                     │     Partition by: {l_partkey}
+                     └─ Projection
+                        │     Expressions: [l_discount, l_extendedprice, l_partkey]
+                        └─ Filter
+                           │     Condition: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
+                           └─ TableScan tpch1000.lineitem
+                                    Where: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
+                                    Outputs: [l_partkey, l_extendedprice, l_discount, l_shipdate]
 note: Runtime Filter is applied for 1 times.

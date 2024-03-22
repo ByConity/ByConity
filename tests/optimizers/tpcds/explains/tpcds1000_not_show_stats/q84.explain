@@ -1,52 +1,58 @@
 Projection
-│     Expressions: customer_id:=c_customer_id, customername:=concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))
-└─ Limit
-   │     Limit: 100
-   └─ Sorting
-      │     Order by: {c_customer_id ASC NULLS LAST}
+│     Expressions: customer_id:=c_customer_id, customername:=`expr#concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))`
+└─ Projection
+   │     Expressions: [c_customer_id], expr#concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, '')):=concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))
+   └─ Limit
       │     Limit: 100
-      └─ Gather Exchange
-         └─ Sorting
-            │     Order by: {c_customer_id ASC NULLS LAST}
-            │     Limit: 100
-            └─ Inner Join
-               │     Condition: sr_cdemo_sk == c_current_cdemo_sk
-               │     Runtime Filters Builder: {c_current_cdemo_sk}
-               ├─ Filter
-               │  │     Condition: Runtime Filters: {sr_cdemo_sk}
-               │  └─ TableScan tpcds1000.store_returns
-               │           Where: Runtime Filters: {sr_cdemo_sk}
-               │           Outputs: [sr_cdemo_sk]
-               └─ Broadcast Exchange
-                  └─ Inner Join
-                     │     Condition: c_current_hdemo_sk == hd_demo_sk
-                     │     Runtime Filters Builder: {hd_demo_sk}
-                     ├─ Repartition Exchange
-                     │  │     Partition by: {c_current_hdemo_sk}
-                     │  └─ Inner Join
-                     │     │     Condition: c_current_addr_sk == ca_address_sk
-                     │     │     Runtime Filters Builder: {ca_address_sk}
-                     │     ├─ Filter
-                     │     │  │     Condition: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
-                     │     │  └─ TableScan tpcds1000.customer
-                     │     │           Where: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
-                     │     │           Outputs: [c_customer_id, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_name, c_last_name]
-                     │     └─ Broadcast Exchange
-                     │        └─ Filter
-                     │           │     Condition: ca_city = 'Edgewood'
-                     │           └─ TableScan tpcds1000.customer_address
-                     │                    Where: ca_city = 'Edgewood'
-                     │                    Outputs: [ca_address_sk, ca_city]
-                     └─ Repartition Exchange
-                        │     Partition by: {hd_demo_sk}
-                        └─ Inner Join
-                           │     Condition: hd_income_band_sk == ib_income_band_sk
-                           ├─ TableScan tpcds1000.household_demographics
-                           │        Outputs: [hd_demo_sk, hd_income_band_sk]
-                           └─ Broadcast Exchange
-                              └─ Filter
-                                 │     Condition: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
-                                 └─ TableScan tpcds1000.income_band
-                                          Where: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
-                                          Outputs: [ib_income_band_sk, ib_lower_bound, ib_upper_bound]
+      └─ Sorting
+         │     Order by: {c_customer_id ASC NULLS LAST}
+         │     Limit: 100
+         └─ Gather Exchange
+            └─ Sorting
+               │     Order by: {c_customer_id ASC NULLS LAST}
+               │     Limit: 100
+               └─ Inner Join
+                  │     Condition: sr_cdemo_sk == c_current_cdemo_sk
+                  │     Runtime Filters Builder: {c_current_cdemo_sk}
+                  ├─ Filter
+                  │  │     Condition: Runtime Filters: {sr_cdemo_sk}
+                  │  └─ TableScan tpcds1000.store_returns
+                  │           Where: Runtime Filters: {sr_cdemo_sk}
+                  │           Outputs: [sr_cdemo_sk]
+                  └─ Broadcast Exchange
+                     └─ Inner Join
+                        │     Condition: c_current_hdemo_sk == hd_demo_sk
+                        │     Runtime Filters Builder: {hd_demo_sk}
+                        ├─ Repartition Exchange
+                        │  │     Partition by: {c_current_hdemo_sk}
+                        │  └─ Inner Join
+                        │     │     Condition: c_current_addr_sk == ca_address_sk
+                        │     │     Runtime Filters Builder: {ca_address_sk}
+                        │     ├─ Filter
+                        │     │  │     Condition: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
+                        │     │  └─ TableScan tpcds1000.customer
+                        │     │           Where: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
+                        │     │           Outputs: [c_customer_id, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_name, c_last_name]
+                        │     └─ Broadcast Exchange
+                        │        └─ Projection
+                        │           │     Expressions: [ca_address_sk]
+                        │           └─ Filter
+                        │              │     Condition: ca_city = 'Edgewood'
+                        │              └─ TableScan tpcds1000.customer_address
+                        │                       Where: ca_city = 'Edgewood'
+                        │                       Outputs: [ca_address_sk, ca_city]
+                        └─ Repartition Exchange
+                           │     Partition by: {hd_demo_sk}
+                           └─ Inner Join
+                              │     Condition: hd_income_band_sk == ib_income_band_sk
+                              ├─ TableScan tpcds1000.household_demographics
+                              │        Outputs: [hd_demo_sk, hd_income_band_sk]
+                              └─ Broadcast Exchange
+                                 └─ Projection
+                                    │     Expressions: [ib_income_band_sk]
+                                    └─ Filter
+                                       │     Condition: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
+                                       └─ TableScan tpcds1000.income_band
+                                                Where: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
+                                                Outputs: [ib_income_band_sk, ib_lower_bound, ib_upper_bound]
 note: Runtime Filter is applied for 3 times.

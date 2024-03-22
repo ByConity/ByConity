@@ -1,0 +1,18 @@
+-- construct test db1 and tables --
+-- construct test db2 and tables --
+-- construct test db3 and tables --
+-- test count --
+6
+-- test single table query --
+test_cnch_50002_db2	tb1
+-- test multiple tables or query --
+test_cnch_50002_db1	tb1
+test_cnch_50002_db3	tb2
+-- test db and db_table mixed query --
+test_cnch_50002_db1	tb1
+test_cnch_50002_db2	tb1
+test_cnch_50002_db2	tb2
+test_cnch_50002_db3	tb1
+test_cnch_50002_db3	tb2
+test_cnch_50002_db3	tb3
+-- clean --

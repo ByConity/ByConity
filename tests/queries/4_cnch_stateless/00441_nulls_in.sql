@@ -1,4 +1,5 @@
 SET enable_shuffle_with_order = 1;
+SET bsp_mode = 0; -- bsp mode does not support system.numbers LIMIT
 
 SELECT number IN (1, NULL, 3) FROM system.numbers LIMIT 5;
 SELECT nullIf(number, 2) IN (1, NULL, 3) FROM system.numbers LIMIT 5;

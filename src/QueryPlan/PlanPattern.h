@@ -97,7 +97,7 @@ public:
 
 private:
     ContextMutablePtr context;
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<void> cte_helper;
     size_t max_size = 0;
 };
 

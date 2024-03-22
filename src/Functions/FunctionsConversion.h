@@ -1460,7 +1460,7 @@ template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat64, DataT
 
 
 template <typename FromDataType, typename ToDataType, typename Name,
-    ConvertFromStringExceptionMode exception_mode, ConvertFromStringParsingMode parsing_mode>
+    ConvertFromStringExceptionMode exception_mode, ConvertFromStringParsingMode parsing_mode, bool mysql_mode = false>
 struct ConvertThroughParsing
 {
     static_assert(std::is_same_v<FromDataType, DataTypeString> || std::is_same_v<FromDataType, DataTypeFixedString>,
@@ -1525,7 +1525,7 @@ struct ConvertThroughParsing
 
     template <typename Additions = void *>
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & res_type, size_t input_rows_count,
-                        Additions additions [[maybe_unused]] = Additions(), bool mysql_mode [[maybe_unused]] = false)
+                        Additions additions [[maybe_unused]] = Additions())
     {
         using ColVecTo = typename ToDataType::ColumnType;
 
@@ -1715,7 +1715,7 @@ struct ConvertThroughParsing
                         DateTime64 res = 0;
                         parsed = tryParseDateTime64BestEffort(res, vec_to.getScale(), read_buffer, *local_time_zone, *utc_time_zone);
                         vec_to[i] = res;
-                        if (mysql_mode)
+                        if constexpr (mysql_mode)
                             read_buffer.ignore(read_buffer.buffer().end() - read_buffer.position());
                     }
                     else if (std::is_same_v<ToDataType, DataTypeFloat64>)
@@ -1970,7 +1970,6 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBeha
 
 /// Declared early because used below.
 struct NameToDate { static constexpr auto name = "toDate"; };
-struct NameToDateMySql { static constexpr auto name = "toDateMySql"; };
 struct NameToDate32 { static constexpr auto name = "toDate32"; };
 struct NameToTime { static constexpr auto name = "toTimeType"; };
 struct NameToDateTime { static constexpr auto name = "toDateTime"; };
@@ -2099,21 +2098,23 @@ public:
 
     static FunctionPtr create(ContextPtr context)
     {
+        const bool mysql_mode = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
+        const bool to_string_extra_arguments = context && context->getSettingsRef().to_string_extra_arguments;
         if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
         {
             if constexpr (forceAdaptive)
-                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, true));
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, context->getSettingsRef().dialect_type == DialectType::MYSQL));
+                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, true, false, to_string_extra_arguments));
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, mysql_mode, to_string_extra_arguments));
         }
         /// Template variable forceAdaptive is to co-work with the rewriting of toDate-like functions
         /// in terms of query parsing stage, so as to enforce the apply of adaptive timestamp.
         /// Here, the original toDate-like functions shall be replaced with counterparts whose are built with
         /// the true value of forceAdaptive: toDateAdaptive/toDateTimeAdaptive
         if constexpr (forceAdaptive)
-            return std::make_shared<FunctionConvert>(context,true);
+            return std::make_shared<FunctionConvert>(context,true, false, to_string_extra_arguments);
         if (!context)
-            return std::make_shared<FunctionConvert>(context, false);
-        return std::make_shared<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, context->getSettingsRef().dialect_type == DialectType::MYSQL);
+            return std::make_shared<FunctionConvert>(context, false, false, false);
+        return std::make_shared<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, mysql_mode, to_string_extra_arguments);
     }
     static FunctionPtr create(bool adaptive = false) { return std::make_shared<FunctionConvert>(nullptr, adaptive, false); }
 
@@ -2123,10 +2124,14 @@ public:
             return ArgType::DATE_OR_DATETIME;
         else if constexpr (std::is_same_v<Name, NameToTime>)
             return ArgType::STR_NUM;
+        else if constexpr (std::is_same_v<Name, NameToDate>)
+            return ArgType::STRINGS;
         return ArgType::UNDEFINED;
     }
 
-    explicit FunctionConvert(ContextPtr context_ = nullptr, bool adaptive = false, bool mysql_mode_ = false) : context(context_), adaptive_conversion(adaptive), mysql_mode(mysql_mode_)
+    explicit FunctionConvert(
+        ContextPtr context_ = nullptr, bool adaptive = false, bool mysql_mode_ = false, bool to_string_extra_arguments_ = false)
+        : context(context_), adaptive_conversion(adaptive), mysql_mode(mysql_mode_), to_string_extra_arguments(to_string_extra_arguments_)
     {
     }
 
@@ -2218,6 +2223,12 @@ public:
             optional_args.push_back({"timezone", &isString, &isColumnConst, "const String"});
         }
 
+        // We need this for 1.4 compatability :(
+        if (to_string_extra_arguments && optional_args.empty())
+        {
+            optional_args.push_back({"dummy string", &isString, &isColumnConst, "const String"});
+        }
+
         validateFunctionArgumentTypes(*this, arguments, mandatory_args, optional_args);
 
         DataTypePtr res;
@@ -2288,7 +2299,7 @@ public:
     /// Function actually uses default implementation for nulls,
     /// but we need to know if return type is Nullable or not,
     /// so we use checked_return_type only to intercept the first call to getReturnTypeImpl(...).
-    bool useDefaultImplementationForNulls() const override { return checked_return_type; }
+    bool useDefaultImplementationForNulls() const override { return mysql_mode ? true : checked_return_type; }
 
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
@@ -2349,6 +2360,7 @@ private:
     ContextPtr context;
     bool adaptive_conversion = false;
     bool mysql_mode = false;
+    bool to_string_extra_arguments = false;
     mutable bool checked_return_type = false;
     mutable bool to_nullable = false;
 
@@ -2545,20 +2557,12 @@ public:
 
     static FunctionPtr create(ContextPtr context)
     {
-        if (context && (context->getSettingsRef().enable_implicit_arg_type_convert || context->getSettingsRef().dialect_type == DialectType::MYSQL))
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvertFromString>(true));
-        return std::make_shared<FunctionConvertFromString>();
+        const bool mysql_mode = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
+        return std::make_shared<FunctionConvertFromString>(mysql_mode);
     }
     static FunctionPtr create() { return std::make_shared<FunctionConvertFromString>(); }
 
     explicit FunctionConvertFromString(bool mysql_mode_ = false) : mysql_mode(mysql_mode_) {}
-
-    ArgType getArgumentsType() const override
-    {
-        if constexpr (std::is_same_v<Name, NameToDateMySql>)
-            return ArgType::STRINGS;
-        return ArgType::UNDEFINED;
-    }
 
     String getName() const override
     {
@@ -2676,13 +2680,17 @@ public:
 
         if (checkAndGetDataType<DataTypeString>(from_type))
         {
-            return ConvertThroughParsing<DataTypeString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
-                arguments, result_type, input_rows_count, scale, mysql_mode);
+            return mysql_mode ? ConvertThroughParsing<DataTypeString, ConvertToDataType, Name, exception_mode, parsing_mode, true>::execute(
+                arguments, result_type, input_rows_count, scale)
+                : ConvertThroughParsing<DataTypeString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
+                arguments, result_type, input_rows_count, scale);
         }
         else if (checkAndGetDataType<DataTypeFixedString>(from_type))
         {
-            return ConvertThroughParsing<DataTypeFixedString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
-                arguments, result_type, input_rows_count, scale, mysql_mode);
+            return mysql_mode ? ConvertThroughParsing<DataTypeFixedString, ConvertToDataType, Name, exception_mode, parsing_mode, true>::execute(
+                arguments, result_type, input_rows_count, scale)
+                : ConvertThroughParsing<DataTypeFixedString, ConvertToDataType, Name, exception_mode, parsing_mode>::execute(
+                arguments, result_type, input_rows_count, scale);
         }
 
         return nullptr;
@@ -2970,7 +2978,6 @@ using FunctionToInt256 = FunctionConvert<DataTypeInt256, NameToInt256, ToNumberM
 using FunctionToFloat32 = FunctionConvert<DataTypeFloat32, NameToFloat32, ToNumberMonotonicity<Float32>>;
 using FunctionToFloat64 = FunctionConvert<DataTypeFloat64, NameToFloat64, ToNumberMonotonicity<Float64>>;
 using FunctionToDate = FunctionConvert<DataTypeDate, NameToDate, ToDateMonotonicity>;
-using FunctionToDateMySql = FunctionConvertFromString<DataTypeDate, NameToDateMySql, ConvertFromStringExceptionMode::Zero>;
 using FunctionToDate32 = FunctionConvert<DataTypeDate32, NameToDate32, ToDateMonotonicity>;
 using FunctionToDateTime = FunctionConvert<DataTypeDateTime, NameToDateTime, ToDateTimeMonotonicity>;
 using FunctionToDateTime32 = FunctionConvert<DataTypeDateTime, NameToDateTime32, ToDateTimeMonotonicity>;

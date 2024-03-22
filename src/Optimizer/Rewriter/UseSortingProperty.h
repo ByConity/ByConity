@@ -2,7 +2,9 @@
 
 #include <Core/SortDescription.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/prepared_statement.h>
 #include <Optimizer/Property/Equivalences.h>
+#include <Optimizer/Property/Property.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/SimplePlanRewriter.h>
@@ -21,12 +23,6 @@ private:
         return context->getSettingsRef().enable_sorting_property;
     }   
     class Rewriter;
-};
-
-struct PlanAndProp
-{
-    PlanNodePtr plan;
-    Property property;
 };
 
 class SortingOrderedSource::Rewriter : public PlanNodeVisitor<PlanAndProp, Void>
@@ -49,23 +45,19 @@ private:
 struct SortInfo
 {
     SortDescription sort_desc;
-    size_t limit;
+    SizeOrVariable limit;
 };
 
 class PushSortingInfoRewriter : public SimplePlanRewriter<SortInfo>
 {
 public:
-    PushSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_, PlanNodePtr & root)
-        : SimplePlanRewriter(context_, cte_info_), post_order_cte_helper(cte_info_, root)
+    PushSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_)
     {
     }
     PlanNodePtr visitSortingNode(SortingNode &, SortInfo &) override;
     PlanNodePtr visitAggregatingNode(AggregatingNode &, SortInfo &) override;
     PlanNodePtr visitWindowNode(WindowNode &, SortInfo &) override;
     PlanNodePtr visitTableScanNode(TableScanNode &, SortInfo &) override;
-
-private:
-    CTEPostorderVisitHelper post_order_cte_helper;
 };
 
 }

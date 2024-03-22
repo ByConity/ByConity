@@ -56,6 +56,7 @@
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
@@ -136,7 +137,6 @@
 #include <common/logger_useful.h>
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
-#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/ChineseTokenExtractor.h>
 
 #include <CloudServices/CnchServerClientPool.h>
@@ -575,6 +575,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setServerType(config().getString("cnch_type", "standalone"));
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->setIsRestrictSettingsToWhitelist(config().getBool("restrict_tenanted_users_to_whitelist_settings", false));
+    if (global_context->getIsRestrictSettingsToWhitelist())
+    {
+        auto setting_names = getMultipleValuesFromConfig(config(), "tenant_whitelist_settings", "name");
+        global_context->addRestrictSettingsToWhitelist(setting_names);
+    }
 
     global_context->initCnchConfig(config());
     global_context->initRootConfig(config());
@@ -1041,6 +1047,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #if USE_JEMALLOC
             JeprofControl::instance().loadFromConfig(*config);
 #endif
+            global_context->updateAdditionalServices(*config);
             if (global_context->getServerType() == ServerType::cnch_server)
             {
                 global_context->updateQueueManagerConfig();
@@ -1049,6 +1056,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 {
                     auto_stats_manager->prepareNewConfig(*config);
                 }
+
+                global_context->setVWCustomizedSettings(std::make_shared<VWCustomizedSettings>(config));
             }
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
@@ -1062,20 +1071,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
     setDefaultUseMapType(config().getBool("default_use_kv_map_type", false));
 
     /// Still need `users_config` for server-worker communication
-    ConfigurationPtr users_config;
+    String users_config_path;
     if (config().has("users_config") || config().has("config-file") || fs::exists("config.xml"))
     {
         // String config_dir = std::filesystem::path{config_path}.remove_filename().string()
-        const auto users_config_path = config().getString("users_config", config().getString("config-file", "config.xml"));
-        ConfigProcessor config_processor(users_config_path);
-        const auto loaded_config = config_processor.loadConfig();
-        users_config = loaded_config.configuration;
+        users_config_path = config().getString("users_config", config().getString("config-file", "config.xml"));
     }
 
-    if (users_config)
-        global_context->setUsersConfig(users_config);
-    else
-        LOG_ERROR(log, "Can't load config for users");
+    auto users_config_reloader = std::make_unique<ConfigReloader>(
+        users_config_path,
+        include_from_path,
+        config().getString("path", ""),
+        zkutil::ZooKeeperNodeCache([&] { return global_context->getZooKeeper(); }),
+        std::make_shared<Poco::Event>(),
+        [&](ConfigurationPtr config, bool) { global_context->setUsersConfig(config); },
+        /* already_loaded = */ false);
 
     /// Initialize access storages.
     access_control.setUpFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });
@@ -1085,6 +1095,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setConfigReloadCallback([&]()
     {
         main_config_reloader->reload();
+        users_config_reloader->reload();
         access_control.reloadUsersConfigs();
     });
 
@@ -1112,7 +1123,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto vw_customized_settings_ptr = std::make_shared<VWCustomizedSettings>(config());
         if (!vw_customized_settings_ptr->isEmpty())
         {
-            vw_customized_settings_ptr->loadCustomizedSettings();
             global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
         }
     }
@@ -1377,6 +1387,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // Uses a raw pointer to global context for getting ZooKeeper.
         main_config_reloader.reset();
+        users_config_reloader.reset();
 
         /** Explicitly destroy Context. It is more convenient than in destructor of Server, because logger is still available.
           * At this moment, no one could own shared part of Context.
@@ -1788,12 +1799,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         global_context->setEnableSSL(enable_ssl);
 
-        bool enable_tenant_systemdb = config().getBool("enable_tenant_systemdb", true);
-        setEnableTenantSystemDB(enable_tenant_systemdb);
-
         buildLoggers(config(), logger());
 
         main_config_reloader->start();
+        users_config_reloader->start();
         access_control.startPeriodicReloadingUsersConfigs();
         if (dns_cache_updater)
             dns_cache_updater->start();
@@ -1832,6 +1841,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Statistics::CacheManager::initialize(global_context);
             BindingCacheManager::initializeGlobalBinding(global_context);
             PlanCacheManager::initialize(global_context);
+            PreparedStatementManager::initialize(global_context);
             Statistics::AutoStats::AutoStatisticsManager::initialize(global_context, global_context->getConfigRef());
         }
 

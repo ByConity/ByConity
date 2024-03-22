@@ -5,8 +5,10 @@
 #include <string_view>
 #include <time.h>
 #include <Client/Connection.h>
+#include <CloudServices/CnchServerResource.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Interpreters/Cluster.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/DAGGraph.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/sendPlanSegment.h>
@@ -169,7 +171,7 @@ class SourceNodeSelector : public CommonNodeSelector<SourceNodeSelector>
 {
 public:
     SourceNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
-    NodeSelectorResult select(PlanSegment * plan_segment_ptr);
+    NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context);
 };
 
 class ComputeNodeSelector : public CommonNodeSelector<ComputeNodeSelector>
@@ -196,6 +198,7 @@ public:
     }
 
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, bool is_source);
+    static PlanSegmentInputPtr tryGetLocalInput(PlanSegment * plan_segment_ptr);
 
 private:
     ContextPtr query_context;

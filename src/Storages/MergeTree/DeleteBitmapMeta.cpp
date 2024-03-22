@@ -14,6 +14,7 @@
  */
 
 
+#include <unordered_set>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
@@ -21,8 +22,8 @@
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <Common/Coding.h>
 #include <Common/ThreadPool.h>
-#include "IO/ReadBufferFromFileBase.h"
-#include "IO/ReadSettings.h"
+#include <IO/ReadBufferFromFileBase.h>
+#include <IO/ReadSettings.h>
 
 namespace DB::ErrorCodes
 {
@@ -92,7 +93,7 @@ bool LocalDeleteBitmap::canInlineStoreInCatalog() const
     return !bitmap || bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality;
 }
 
-DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage) const
+DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage, bool check_dir) const
 {
     if (bitmap)
     {
@@ -113,7 +114,8 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage) c
             {
                 DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
                 String dir_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapDirRelativePath(model->partition_id());
-                disk->createDirectories(dir_rel_path);
+                if (check_dir && !disk->exists(dir_rel_path))
+                    disk->createDirectories(dir_rel_path);
 
                 String file_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*model);
                 auto out = disk->writeFile(file_rel_path);
@@ -136,16 +138,34 @@ DeleteBitmapMetaPtrVector dumpDeleteBitmaps(const MergeTreeMetaBase & storage, c
     res.resize(temp_bitmaps.size());
 
     size_t non_inline_bitmaps = 0;
-    for (auto & temp_bitmap : temp_bitmaps)
+    for (const auto & temp_bitmap : temp_bitmaps)
     {
         non_inline_bitmaps += (!temp_bitmap->canInlineStoreInCatalog());
+    }
+
+    {
+        /// Check and create delete bitmap dir
+        DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+        std::unordered_set<String> delete_bitmap_dirs;
+        for (const auto & temp_bitmap : temp_bitmaps)
+        {
+            if (!temp_bitmap->canInlineStoreInCatalog())
+                delete_bitmap_dirs.emplace(
+                    fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN))
+                    / DeleteBitmapMeta::deleteBitmapDirRelativePath(temp_bitmap->getModel()->partition_id()));
+        }
+        for (const auto & delete_bitmap_dir : delete_bitmap_dirs)
+        {
+            if (!disk->exists(delete_bitmap_dir))
+                disk->createDirectories(delete_bitmap_dir);
+        }
     }
 
     const UInt64 max_dumping_threads = storage.getSettings()->cnch_parallel_dumping_threads;
     if (max_dumping_threads == 0 || non_inline_bitmaps <= 4)
     {
         for (size_t i = 0; i < temp_bitmaps.size(); ++i)
-            res[i] = temp_bitmaps[i]->dump(storage);
+            res[i] = temp_bitmaps[i]->dump(storage, /*check_dir=*/false);
     }
     else
     {
@@ -154,14 +174,14 @@ DeleteBitmapMetaPtrVector dumpDeleteBitmaps(const MergeTreeMetaBase & storage, c
         for (size_t i = 0; i < temp_bitmaps.size(); ++i)
         {
             if (temp_bitmaps[i]->canInlineStoreInCatalog())
-                res[i] = temp_bitmaps[i]->dump(storage);
+                res[i] = temp_bitmaps[i]->dump(storage, /*check_dir=*/false);
             else
             {
                 pool.scheduleOrThrowOnError([i, &res, &temp_bitmaps, &storage] {
                     /// can avoid locking because different threads are writing different elements
                     /// 1. different threads are writing different elements
                     /// 2. vector is resized in advance, hence no reallocation
-                    res[i] = temp_bitmaps[i]->dump(storage);
+                    res[i] = temp_bitmaps[i]->dump(storage, /*check_dir=*/false);
                 });
             }
         }
@@ -238,13 +258,8 @@ void DeleteBitmapMeta::removeFile()
     {
         String rel_file_path = path.value();
         DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        if (likely(disk->exists(rel_file_path)))
-        {
-            disk->removeFile(rel_file_path);
-            LOG_TRACE(storage.getLogger(), "Removed delete bitmap file {}", rel_file_path);
-        }
-        else
-            LOG_WARNING(storage.getLogger(), "Trying to remove file {}, but it doest exist.", rel_file_path);
+        LOG_TRACE(storage.getLogger(), "Remove delete bitmap file {} if exists", rel_file_path);
+        disk->removeFileIfExists(rel_file_path);
     }
 }
 
@@ -293,7 +308,7 @@ void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataMo
             DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
             String rel_path = std::filesystem::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*meta);
             ReadSettings read_settings = storage.getContext()->getReadSettings();
-            read_settings.buffer_size = meta->file_size();
+            read_settings.adjustBufferSize(meta->file_size());
             std::unique_ptr<ReadBufferFromFileBase> in = disk->readFile(rel_path, read_settings);
             in->readStrict(buf.data(), meta->file_size());
 

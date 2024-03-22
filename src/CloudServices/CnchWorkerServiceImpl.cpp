@@ -37,11 +37,13 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MutationCommands.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Storages/StorageMaterializedView.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TxnTimestamp.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTask.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
+#include <WorkerTasks/StorageMaterializedViewRefreshTask.h>
 
 #include <condition_variable>
 #include <mutex>
@@ -159,6 +161,80 @@ void CnchWorkerServiceImpl::executeSimpleQuery(
 
 }
 
+void CnchWorkerServiceImpl::submitMVRefreshTask(
+    google::protobuf::RpcController * cntl,
+    const Protos::SubmitMVRefreshTaskReq * request,
+    Protos::SubmitMVRefreshTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    SUBMIT_THREADPOOL({
+        LOG_DEBUG(log, "Received request {}", request->DebugString());
+
+        if (request->task_id().empty())
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Require non-empty task_id");
+
+        auto txn_id = TxnTimestamp(request->txn_id());
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        rpc_context->setCurrentQueryId(request->task_id());
+        rpc_context->getClientInfo().rpc_port = request->rpc_port();
+        auto server_client = rpc_context->getCnchServerClient(rpc_context->getClientInfo().current_address.host().toString(), request->rpc_port());
+        rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, server_client));
+
+        rpc_context->initCnchServerResource(txn_id);
+        rpc_context->setSetting("prefer_localhost_replica", false);
+        rpc_context->setSetting("prefer_cnch_catalog", true);
+
+        const auto & settings = getContext()->getSettingsRef();
+        UInt64 max_running_task = settings.max_threads * getContext()->getRootConfig().max_ratio_of_cnch_tasks_to_threads;
+        if (getContext()->getManipulationList().size() > max_running_task)
+            throw Exception(ErrorCodes::TOO_MANY_SIMULTANEOUS_TASKS, "Too many simultaneous tasks. Maximum: {}", max_running_task);
+
+        StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
+        auto * data = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+        if (!data)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table {} is not StorageCloudMergeTree", storage->getStorageID().getNameForLogs());
+
+        trySetVirtualWarehouseAndWorkerGroup(data->getSettings()->cnch_vw_default.value, rpc_context);
+
+        auto params = ManipulationTaskParams(storage);
+        params.type = ManipulationType::MvRefresh;
+        params.task_id = request->task_id();
+        params.rpc_port = static_cast<UInt16>(request->rpc_port());
+        params.txn_id = txn_id;
+        params.mv_refresh_param = std::make_shared <AsyncRefreshParam>(); 
+        params.mv_refresh_param->drop_partition_query = request->drop_partition_query();
+        params.mv_refresh_param->insert_select_query = request->insert_select_query();
+
+        auto remote_address
+            = addBracketsIfIpv6(rpc_context->getClientInfo().current_address.host().toString()) + ':' + toString(params.rpc_port);
+
+        LOG_DEBUG(log, "Received mv refresh task from {} :{}", remote_address, params.toDebugString());
+
+        auto mv_storage_id = RPCHelpers::createStorageID(request->mv_storage_id());
+
+        auto task = std::make_shared<StorageMaterializedViewRefreshTask>(*data, params, mv_storage_id, rpc_context, server_client);
+        auto event = std::make_shared<Poco::Event>();
+
+        ThreadFromGlobalPool([task = std::move(task),  event]() mutable {
+            try
+            {
+                task->setManipulationEntry();
+                event->set();
+                task->execute();
+            }
+            catch (...)
+            {
+                event->set();
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+            }
+        }).detach();
+
+        /// Waiting for manipulation task to be added to the ManipulationList
+        event->wait(3 * 1000);
+    })
+}
+
+
 void CnchWorkerServiceImpl::submitManipulationTask(
     google::protobuf::RpcController * cntl,
     const Protos::SubmitManipulationTaskReq * request,
@@ -228,7 +304,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         auto remote_address
             = addBracketsIfIpv6(rpc_context->getClientInfo().current_address.host().toString()) + ':' + toString(params.rpc_port);
         auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
-        params.assignParts(all_parts);
+        params.assignParts(all_parts, [&]() {return rpc_context->getTimestamp(); });
 
         LOG_DEBUG(log, "Received manipulation from {} :{}", remote_address, params.toDebugString());
 
@@ -294,6 +370,9 @@ void CnchWorkerServiceImpl::touchManipulationTasks(
             for (auto & e : container)
             {
                 if (uuid != e.storage_id.uuid)
+                    continue;
+
+                if (e.type == ManipulationType::MvRefresh)
                     continue;
 
                 if (request_tasks.count(e.task_id))
@@ -372,6 +451,19 @@ void CnchWorkerServiceImpl::sendCreateQuery(
         {
             /// store cloud tables in cnch_session_resource.
             worker_resource->executeCreateQuery(create_context, create_query, true);
+        }
+
+        /// when create query with cnch table (support mv with multiple tables like subqery or join)
+        if (!request->cnch_table_create_queries().empty())
+            query_context->initCnchServerResource(request->txn_id());
+        for (const auto & cnch_table_create_query : request->cnch_table_create_queries())
+        {
+            StoragePtr storage = createStorageFromQuery(cnch_table_create_query, query_context);
+            if (auto data = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
+            {
+                trySetVirtualWarehouseAndWorkerGroup(data->getSettings()->cnch_vw_default.value, query_context);
+                worker_resource->cnch_tables.emplace(storage->getStorageID().database_name, storage->getStorageID().table_name);
+            }
         }
 
         LOG_TRACE(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());

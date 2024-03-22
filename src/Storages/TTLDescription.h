@@ -81,7 +81,7 @@ struct TTLDescription
 
     /// Parse TTL structure from definition. Able to parse both column and table
     /// TTLs.
-    static TTLDescription getTTLFromAST(const ASTPtr & definition_ast, const ColumnsDescription & columns, ContextPtr context, const KeyDescription & primary_key);
+    static TTLDescription getTTLFromAST(const ASTPtr & definition_ast, const ColumnsDescription & columns, ContextPtr context, const KeyDescription & primary_key, bool allow_nullable_type = false);
 
     /// Previously, HaMergeTree storages calculate partition level TTL for each part to decide whether
     /// need to remove the data part. For those tables that partition key contains function like 'toDate(xxx)',
@@ -126,7 +126,11 @@ struct TTLTableDescription
     TTLTableDescription & operator=(const TTLTableDescription & other);
 
     static TTLTableDescription getTTLForTableFromAST(
-        const ASTPtr & definition_ast, const ColumnsDescription & columns, ContextPtr context, const KeyDescription & primary_key);
+        const ASTPtr & definition_ast,
+        const ColumnsDescription & columns,
+        ContextPtr context,
+        const KeyDescription & primary_key,
+        bool allow_nullable_type = false);
 };
 
 }

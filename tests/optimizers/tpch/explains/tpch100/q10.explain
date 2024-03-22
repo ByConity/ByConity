@@ -22,11 +22,13 @@ Projection Est. 20 rows
                            │     Runtime Filters Builder: {o_orderkey}
                            ├─ Repartition Exchange Est. 148067261 rows
                            │  │     Partition by: {l_orderkey}
-                           │  └─ Filter Est. 148067261 rows
-                           │     │     Condition: l_returnflag = 'R' Runtime Filters: {l_orderkey}
-                           │     └─ TableScan tpch100.lineitem Est. 600037902 rows
-                           │              Where: l_returnflag = 'R' Runtime Filters: {l_orderkey}
-                           │              Outputs: [l_orderkey, l_extendedprice, l_discount, l_returnflag]
+                           │  └─ Projection Est. 148067261 rows
+                           │     │     Expressions: [l_discount, l_extendedprice, l_orderkey]
+                           │     └─ Filter Est. 148067261 rows
+                           │        │     Condition: l_returnflag = 'R' Runtime Filters: {l_orderkey}
+                           │        └─ TableScan tpch100.lineitem Est. 600037902 rows
+                           │                 Where: l_returnflag = 'R' Runtime Filters: {l_orderkey}
+                           │                 Outputs: [l_orderkey, l_extendedprice, l_discount, l_returnflag]
                            └─ Repartition Exchange Est. 5792534 rows
                               │     Partition by: {o_orderkey}
                               └─ Inner Join Est. 5792534 rows
@@ -43,11 +45,13 @@ Projection Est. 20 rows
                                  │  │              Outputs: [c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_comment]
                                  │  └─ Repartition Exchange Est. 5792534 rows
                                  │     │     Partition by: {o_custkey}
-                                 │     └─ Filter Est. 5792534 rows
-                                 │        │     Condition: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
-                                 │        └─ TableScan tpch100.orders Est. 150000000 rows
-                                 │                 Where: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
-                                 │                 Outputs: [o_orderkey, o_custkey, o_orderdate]
+                                 │     └─ Projection Est. 5792534 rows
+                                 │        │     Expressions: [o_custkey, o_orderkey]
+                                 │        └─ Filter Est. 5792534 rows
+                                 │           │     Condition: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
+                                 │           └─ TableScan tpch100.orders Est. 150000000 rows
+                                 │                    Where: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
+                                 │                    Outputs: [o_orderkey, o_custkey, o_orderdate]
                                  └─ Broadcast Exchange Est. 25 rows
                                     └─ TableScan tpch100.nation Est. 25 rows
                                              Outputs: [n_nationkey, n_name]

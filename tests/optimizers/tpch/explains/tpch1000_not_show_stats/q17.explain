@@ -1,56 +1,34 @@
 Projection
-│     Expressions: avg_yearly:=`expr#sum(l_extendedprice)` / '7'
-└─ MergingAggregated
-   └─ Gather Exchange
-      └─ Aggregating
-         │     Group by: {}
-         │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
-         └─ Inner Join
-            │     Condition: l_partkey == l_partkey_1
-            │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)`)
-            ├─ Repartition Exchange
-            │  │     Partition by: {l_partkey}
-            │  └─ Filter
-            │     │     Condition: Runtime Filters: {l_partkey}
-            │     └─ TableScan tpch1000.lineitem
-            │              Where: Runtime Filters: {l_partkey}
-            │              Outputs: [l_partkey, l_quantity, l_extendedprice]
-            └─ Inner Join
-               │     Condition: p_partkey == l_partkey_1
-               │     Runtime Filters Builder: {l_partkey_1}
-               ├─ Repartition Exchange
-               │  │     Partition by: {p_partkey}
-               │  └─ Filter
-               │     │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
-               │     └─ TableScan tpch1000.part
-               │              Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
-               │              Outputs: [p_partkey, p_brand, p_container]
-               └─ Aggregating
-                  │     Group by: {l_partkey_1}
-                  │     Aggregates: expr#avg(l_quantity):=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
-                  └─ Projection
-                     │     Expressions: [l_partkey_1, l_quantity_1], build_side_non_null_symbol:=1
+│     Expressions: avg_yearly:=`expr#divide(sum(l_extendedprice), '7')`
+└─ Projection
+   │     Expressions: expr#divide(sum(l_extendedprice), '7'):=`expr#sum(l_extendedprice)` / '7'
+   └─ MergingAggregated
+      └─ Gather Exchange
+         └─ Aggregating
+            │     Group by: {}
+            │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
+            └─ Projection
+               │     Expressions: [l_extendedprice]
+               └─ Filter
+                  │     Condition: l_quantity < cast('0.2' * `expr#avg(l_quantity)`, 'Nullable(Float64)')
+                  └─ Window
                      └─ Inner Join
-                        │     Condition: l_partkey_1 == p_partkey_1
-                        │     Runtime Filters Builder: {p_partkey_1}
+                        │     Condition: l_partkey == p_partkey
+                        │     Runtime Filters Builder: {p_partkey}
                         ├─ Repartition Exchange
-                        │  │     Partition by: {l_partkey_1}
+                        │  │     Partition by: {l_partkey}
                         │  └─ Filter
-                        │     │     Condition: Runtime Filters: {l_partkey_1}
+                        │     │     Condition: Runtime Filters: {l_partkey}
                         │     └─ TableScan tpch1000.lineitem
                         │              Where: Runtime Filters: {l_partkey}
-                        │              Outputs: l_partkey_1:=l_partkey, l_quantity_1:=l_quantity
-                        └─ MergingAggregated
-                           └─ Repartition Exchange
-                              │     Partition by: {p_partkey_1}
-                              └─ Aggregating
-                                 │     Group by: {p_partkey_1}
-                                 └─ Projection
-                                    │     Expressions: p_partkey_1:=p_partkey
-                                    └─ Filter
-                                       │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
-                                       └─ TableScan tpch1000.part
-                                                Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
-                                                Outputs: [p_partkey, p_brand, p_container]
-note: Magic Set is applied for 1 parts.
-note: Runtime Filter is applied for 3 times.
+                        │              Outputs: [l_partkey, l_quantity, l_extendedprice]
+                        └─ Repartition Exchange
+                           │     Partition by: {p_partkey}
+                           └─ Projection
+                              │     Expressions: [p_partkey]
+                              └─ Filter
+                                 │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
+                                 └─ TableScan tpch1000.part
+                                          Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
+                                          Outputs: [p_partkey, p_brand, p_container]
+note: Runtime Filter is applied for 1 times.

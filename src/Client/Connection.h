@@ -224,7 +224,8 @@ public:
         const ConnectionTimeouts & timeouts,
         const PlanSegment * plan_segment,
         const Settings * settings = nullptr,
-        const ClientInfo * client_info = nullptr);
+        const ClientInfo * client_info = nullptr,
+        UInt16 server_rpc_port = 0);
 
     void sendCancel();
     /// Send block of data; if name is specified, server will write it to external (temporary) table of that name.

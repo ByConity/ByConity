@@ -33,11 +33,6 @@ ManipulationTask::ManipulationTask(ManipulationTaskParams params_, ContextPtr co
     : params(std::move(params_))
     , context(std::move(context_))
 {
-    if (/*params.source_parts.empty() && */params.source_data_parts.empty())
-        throw Exception("Expected non-empty source parts in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
-
-    if (params.new_part_names.empty())
-        throw Exception("Expected non-empty new part names in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void ManipulationTask::setManipulationEntry()

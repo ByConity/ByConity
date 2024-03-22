@@ -1,6 +1,7 @@
 #include <Interpreters/PartitionPredicateVisitor.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/pushFilterIntoStorage.h>
+#include <Optimizer/EqualityASTMap.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SelectQueryInfoHelper.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
@@ -57,19 +58,26 @@ ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQuer
 
     /// Set query.where()
     {
-        ASTPtr new_where;
+        // try remove filter from where if (user defined) prewhere exists the same
+        EqualityASTSet set;
+        if (auto prewhere = select_query->prewhere())
+        {
+            for (const auto & predicate : PredicateUtils::extractConjuncts(prewhere))
+                set.emplace(predicate);
+        }
 
+        ASTs new_conjuncts;
+        for (const auto & conjunct : conjuncts)
+        {
+            if (!set.contains(conjunct))
+                new_conjuncts.emplace_back(conjunct);
+        }
+
+        // add previous where
         if (auto prev_where = select_query->where())
-        {
-            ASTs new_conjuncts = conjuncts;
             new_conjuncts.push_back(prev_where);
-            new_where = PredicateUtils::combineConjuncts(new_conjuncts);
-        }
-        else
-        {
-            new_where = PredicateUtils::combineConjuncts<false>(conjuncts);
-        }
 
+        ASTPtr new_where = PredicateUtils::combineConjuncts<false>(new_conjuncts);
         if (!PredicateUtils::isTruePredicate(new_where))
             select_query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(new_where));
     }
@@ -78,20 +86,27 @@ ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQuer
     if (storage_statistics && select_query->where() && !select_query->prewhere())
     {
         std::vector<ASTPtr> pre_conjuncts;
+        std::vector<ASTPtr> where_conjuncts;
 
         for (const auto & conjunct : PredicateUtils::extractConjuncts(select_query->getWhere()))
         {
             double selectivity = FilterEstimator::estimateFilterSelectivity(storage_statistics, conjunct, names_and_types, context);
-            if (selectivity < context->getSettingsRef().max_active_prewhere_selectivity)
-                pre_conjuncts.push_back(conjunct);
+                        LOG_DEBUG(&Poco::Logger::get("OptimizerActivePrewhere"), "conjunct=" + serializeAST(*conjunct) + ", selectivity=" + std::to_string(selectivity));
 
-            if (pre_conjuncts.size() >= context->getSettingsRef().max_active_prewhere_size)
-                break;
-            LOG_DEBUG(&Poco::Logger::get("OptimizerActivePrewhere"), "conjunct=" + serializeAST(*conjunct) + ", selectivity=" + std::to_string(selectivity));
+            if (selectivity <= context->getSettingsRef().max_active_prewhere_selectivity
+                && pre_conjuncts.size() < context->getSettingsRef().max_active_prewhere_size)
+                pre_conjuncts.push_back(conjunct);
+            else
+                where_conjuncts.push_back(conjunct);
         }
 
         if (!pre_conjuncts.empty())
             select_query->setExpression(ASTSelectQuery::Expression::PREWHERE, PredicateUtils::combineConjuncts(pre_conjuncts));
+
+        if (!where_conjuncts.empty())
+            select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(where_conjuncts));
+        else
+            select_query->setExpression(ASTSelectQuery::Expression::WHERE, nullptr);
     }
 
     /// Set query.prewhere()

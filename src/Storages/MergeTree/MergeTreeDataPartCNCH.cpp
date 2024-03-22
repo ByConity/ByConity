@@ -47,6 +47,11 @@ namespace ProfileEvents
     extern const Event LoadPrimaryIndexMicroseconds;
     extern const Event PrimaryIndexDiskCacheHits;
     extern const Event PrimaryIndexDiskCacheMisses;
+
+    extern const Event LoadDataPartFooter;
+    extern const Event LoadChecksums;
+    extern const Event LoadRemoteChecksums;
+    extern const Event LoadChecksumsMicroseconds;
 }
 
 namespace DB
@@ -198,9 +203,10 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     has_bitmap = local_part.has_bitmap.load();
     deleted = local_part.deleted;
     bucket_number = local_part.bucket_number;
-    table_definition_hash = storage.getTableHashForClusterBy();
+    table_definition_hash = storage.getTableHashForClusterBy().getDeterminHash();
     columns_commit_time = local_part.columns_commit_time;
     mutation_commit_time = local_part.mutation_commit_time;
+    last_modification_time = local_part.last_modification_time;
     min_unique_key = local_part.min_unique_key;
     max_unique_key = local_part.max_unique_key;
     /// TODO:
@@ -590,7 +596,7 @@ void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
         /* index_executor */ {},
         /*avg_value_size_hints*/ {},
         /*profile_callback*/ {},
-        /*internal_progress_callback*/ {}
+        /*progress_callback*/ {}
     );
 
     size_t deleted_count = 0;
@@ -626,19 +632,22 @@ ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getDeleteBitmap(bool allow_null)
 
 MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFooter() const
 {
+    ProfileEvents::increment(ProfileEvents::LoadDataPartFooter);
     const String data_file_path = fs::path(getFullRelativePath()) / DATA_FILE;
     size_t data_file_size = volume->getDisk()->getFileSize(data_file_path);
-    if (!volume->getDisk()->exists(data_file_path))
-        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No data file of part {} under path {}", name, data_file_path);
 
     auto data_file = openForReading(volume->getDisk(), data_file_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
 
     if (!parent_part)
+    {
+        data_file->setReadUntilPosition(data_file_size);
         data_file->seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+    }
     else
     {
         // for projection part
         auto [projection_offset, projection_size] = getFileOffsetAndSize(*parent_part, name + ".proj");
+        data_file->setReadUntilPosition(projection_offset + projection_size);
         data_file->seek(projection_offset + projection_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
     }
 
@@ -760,6 +769,8 @@ IMergeTreeDataPart::IndexPtr MergeTreeDataPartCNCH::loadIndexFromStorage() const
 
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_unused]] bool require)
 {
+    ProfileEvents::increment(ProfileEvents::LoadChecksums);
+    ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::LoadChecksumsMicroseconds);
     ChecksumsPtr checksums = std::make_shared<Checksums>();
     checksums->storage_type = StorageType::ByteHDFS;
     if ((!parent_part && deleted) || (parent_part && parent_part->deleted))
@@ -799,6 +810,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(bool follow_part_chain)
 {
+    ProfileEvents::increment(ProfileEvents::LoadRemoteChecksums);
     ChecksumsPtr checksums = std::make_shared<Checksums>();
     checksums->storage_type = StorageType::ByteHDFS;
     if ((!parent_part && deleted) || (parent_part && parent_part->deleted))
@@ -1125,21 +1137,18 @@ void MergeTreeDataPartCNCH::updateCommitTimeForProjection()
         throw Exception("Parent part cannot be empty. It's bug.", ErrorCodes::LOGICAL_ERROR);
 }
 
-void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
+void MergeTreeDataPartCNCH::removeImpl(bool /*keep_shared_data*/) const
 {
-    for (const auto & [_, projection_part] : projection_parts)
-        projection_part->projectionRemove(relative_path, keep_shared_data);
-
     auto disk = volume->getDisk();
     auto path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path;
     try
     {
         disk->removeFile(path_on_disk / "data");
-        disk->removeDirectory(path_on_disk);
+        if (disk->getType() != DiskType::Type::ByteS3) disk->removeDirectory(path_on_disk);
     }
     catch (...)
     {
-        if (!disk->exists(path_on_disk)) {
+        if (!disk->fileExists(path_on_disk / "data")) {
             /// Early exit if the part has already been deleted.
             LOG_TRACE(storage.log, "the Part {} has already been removed.", fullPath(disk, path_on_disk));
             return;
@@ -1151,27 +1160,6 @@ void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
             fullPath(disk, path_on_disk),
             getCurrentExceptionMessage(false));
         disk->removeRecursive(path_on_disk);
-    }
-}
-
-void MergeTreeDataPartCNCH::projectionRemove(const String & parent_to, bool) const
-{
-    auto projection_path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path / parent_to;
-    auto disk = volume->getDisk();
-    try
-    {
-        disk->removeFile(projection_path_on_disk / "data");
-        disk->removeDirectory(projection_path_on_disk);
-    }
-    catch (...)
-    {
-        /// Recursive directory removal does many excessive "stat" syscalls under the hood.
-        LOG_INFO(
-            storage.log,
-            "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}",
-            fullPath(disk, projection_path_on_disk),
-            getCurrentExceptionMessage(false));
-        disk->removeRecursive(projection_path_on_disk);
     }
 }
 
@@ -1216,7 +1204,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     }
 
     String part_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    if (!volume->getDisk()->exists(part_path))
+    if (!volume->getDisk()->fileExists(part_path))
     {
         LOG_WARNING(storage.log, "Can't find {} when preload level: {} before caching", full_path + DATA_FILE, preload_level);
         return;
@@ -1311,14 +1299,6 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     }
 
     pool.scheduleOrThrowOnError([this, part_path, full_path, level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
-        if (!volume->getDisk()->exists(part_path))
-        {
-            LOG_WARNING(storage.log, "Can't find {} when preload level: {} on caching", full_path + DATA_FILE, level);
-            if (cb)
-                cb("Can't find part file!", 0);
-            return;
-        }
-
         String last_exception{};
         int real_cache_segments_count = 0;
 
@@ -1425,7 +1405,7 @@ void MergeTreeDataPartCNCH::dropDiskCache(ThreadPool & pool, bool drop_vw_disk_c
 std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(const DiskPtr & disk, const String & path, size_t file_size) const
 {
     ReadSettings settings = storage.getContext()->getReadSettings();
-    settings.buffer_size = std::min(settings.buffer_size, file_size);
+    settings.adjustBufferSize(file_size);
     return disk->readFile(path, settings);
 }
 

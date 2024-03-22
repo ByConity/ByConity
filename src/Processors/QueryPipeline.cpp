@@ -47,6 +47,9 @@
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <Common/CurrentThread.h>
 #include <Common/typeid_cast.h>
+#include <Interpreters/ConcurrentHashJoin.h>
+
+#include <sys/eventfd.h>
 
 namespace DB
 {
@@ -399,6 +402,22 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
 
     /// This counter is needed for every Joining except totals, to decide which Joining will generate non joined rows.
     auto finish_counter = std::make_shared<JoiningTransform::FinishCounter>(num_streams);
+    auto finish_pipe = std::make_shared<std::vector<JoiningTransform::EventFdStruct>>();
+    if (join->getType() == JoinType::PARALLEL_HASH)
+    {
+        for (size_t i = 0; i < num_streams; i++)
+        {
+            finish_pipe->push_back({-1});
+        }
+
+        for (size_t i = 0; i < num_streams; i++)
+        {
+            int event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+            if (-1 == event_fd)
+                throwFromErrno("Cannot create event_fd for ConcurrentJoin", ErrorCodes::CANNOT_OPEN_FILE);
+            (*finish_pipe)[i].event_fd = event_fd;
+        }
+    }
 
     auto lit = left->pipe.output_ports.begin();
     auto rit = right->pipe.output_ports.begin();
@@ -430,7 +449,7 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        auto joining = std::make_shared<JoiningTransform>(left->getHeader(), join, max_block_size, false, default_totals, join_parallel_left_right, finish_counter);
+        auto joining = std::make_shared<JoiningTransform>(left->getHeader(), join, max_block_size, false, default_totals, join_parallel_left_right,finish_counter, num_streams, i, finish_pipe);
         connect(**lit, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());
         if (delayed_root)
@@ -583,15 +602,6 @@ void QueryPipeline::setProcessListElement(QueryStatus * elem)
     {
         if (auto * source = dynamic_cast<ISourceWithProgress *>(processor.get()))
             source->setProcessListElement(elem);
-    }
-}
-
-void QueryPipeline::setInternalProgressCallback(const ProgressCallback & callback)
-{
-    for (auto & processor : pipe.processors)
-    {
-        if (auto * source = dynamic_cast<ISourceWithProgress *>(processor.get()))
-            source->setInternalProgressCallback(callback);
     }
 }
 

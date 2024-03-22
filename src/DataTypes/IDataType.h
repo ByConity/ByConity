@@ -395,7 +395,7 @@ protected:
 public:
     const IDataTypeCustomName * getCustomName() const { return custom_name.get(); }
     const ISerialization * getCustomSerialization() const { return custom_serialization.get(); }
-    
+
 private:
     template <typename Ptr>
     Ptr getForSubcolumn(
@@ -663,6 +663,7 @@ inline bool isNullableOrLowCardinalityNullable(const DataTypePtr & data_type)
 template <typename DataType> constexpr bool IsDataTypeDecimal = false;
 template <typename DataType> constexpr bool IsDataTypeNumber = false;
 template <typename DataType> constexpr bool IsDataTypeDateOrDateTime = false;
+template <typename DataType> constexpr bool IsDataTypeDate = false;
 
 template <typename DataType> constexpr bool IsDataTypeDecimalOrNumber = IsDataTypeDecimal<DataType> || IsDataTypeNumber<DataType>;
 
@@ -684,12 +685,27 @@ template <> inline constexpr bool IsDataTypeDecimal<DataTypeTime> = true;
 
 template <typename T> constexpr bool IsDataTypeNumber<DataTypeNumber<T>> = true;
 
+template <> inline constexpr bool IsDataTypeDate<DataTypeDate> = true;
+template <> inline constexpr bool IsDataTypeDate<DataTypeDate32> = true;
+
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDate> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDate32> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime64> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeTime> = true;
 
+#define FOR_BASIC_NUMERIC_TYPES(M) \
+    M(UInt8) \
+    M(UInt16) \
+    M(UInt32) \
+    M(UInt64) \
+    M(Int8) \
+    M(Int16) \
+    M(Int32) \
+    M(Int64) \
+    M(Float32) \
+    M(Float64)
+    
 #define FOR_NUMERIC_TYPES(M) \
     M(UInt8) \
     M(UInt16) \
@@ -704,5 +720,5 @@ template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeTime> = true;
     M(Int128) \
     M(Int256) \
     M(Float32) \
-    M(Float64) 
+    M(Float64)
 }

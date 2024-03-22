@@ -35,6 +35,7 @@
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/formatAST.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 
@@ -49,7 +50,7 @@ using InterpretResult = ExpressionInterpreter::InterpretResult;
 using InterpretIMResult = ExpressionInterpreter::InterpretIMResult;
 using InterpretIMResults = ExpressionInterpreter::InterpretIMResults;
 
-static ASTPtr makeFunction(const String & name, const InterpretIMResults & arguments, const ContextMutablePtr & context)
+static ASTPtr makeFunction(const String & name, const InterpretIMResults & arguments, const ContextPtr & context)
 {
     ASTs argument_asts;
     std::transform(arguments.begin(), arguments.end(), std::back_inserter(argument_asts),
@@ -140,7 +141,7 @@ struct LogicalFunctionRewriter
         const ASTPtr & node,
         InterpretIMResults argument_results,
         InterpretIMResult & rewrite_result,
-        const ContextMutablePtr & context)
+        const ContextPtr & context)
     {
         if (function.name != FunctionName::name)
             return false;
@@ -297,7 +298,7 @@ bool simplifyMultiIf(
     const ASTPtr &,
     const InterpretIMResults & argument_results,
     InterpretIMResult & simplify_result,
-    const ContextMutablePtr & context)
+    const ContextPtr & context)
 {
     if (function.name != "multiIf" || argument_results.size() < 3 || argument_results.size() % 2 == 0)
         return false;
@@ -346,13 +347,30 @@ bool simplifyMultiIf(
     simplify_result = {function_base->getResultType(), makeFunction(function.name, new_argument_results, context)};
     return true;
 }
+
+bool simplifyAssumeNotNull(
+    const ASTFunction & function,
+    const ASTPtr &,
+    const InterpretIMResults & argument_results,
+    InterpretIMResult & simplify_result,
+    const ContextPtr & context)
+{
+    if (!context->getSettingsRef().enable_simplify_assume_not_null || function.name != "assumeNotNull" || argument_results.size() != 1)
+        return false;
+
+    if (isNullableOrLowCardinalityNullable(argument_results[0].type))
+        return false;
+
+    simplify_result = argument_results[0];
+    return true;
+}
 }
 
-ExpressionInterpreter::ExpressionInterpreter(InterpretSetting setting_, ContextMutablePtr context_)
+ExpressionInterpreter::ExpressionInterpreter(InterpretSetting setting_, ContextPtr context_)
     : context(std::move(context_)), setting(std::move(setting_)), type_analyzer(TypeAnalyzer::create(context, setting.identifier_types))
 {}
 
-ExpressionInterpreter ExpressionInterpreter::basicInterpreter(ExpressionInterpreter::IdentifierTypes types, ContextMutablePtr context)
+ExpressionInterpreter ExpressionInterpreter::basicInterpreter(ExpressionInterpreter::IdentifierTypes types, ContextPtr context)
 {
     ExpressionInterpreter::InterpretSetting setting
         {
@@ -361,7 +379,7 @@ ExpressionInterpreter ExpressionInterpreter::basicInterpreter(ExpressionInterpre
     return {std::move(setting), std::move(context)};
 }
 
-ExpressionInterpreter ExpressionInterpreter::optimizedInterpreter(ExpressionInterpreter::IdentifierTypes types, ExpressionInterpreter::IdentifierValues values, ContextMutablePtr context)
+ExpressionInterpreter ExpressionInterpreter::optimizedInterpreter(ExpressionInterpreter::IdentifierTypes types, ExpressionInterpreter::IdentifierValues values, ContextPtr context)
 {
     ExpressionInterpreter::InterpretSetting setting
         {
@@ -409,7 +427,7 @@ InterpretResult ExpressionInterpreter::evaluate(const ConstASTPtr & expression) 
         return {im_result.type, im_result.getField()};
 }
 
-ASTPtr InterpretResult::convertToAST(const ContextMutablePtr & ctx) const
+ASTPtr InterpretResult::convertToAST(const ContextPtr & ctx) const
 {
     if (isAST())
         return ast;
@@ -468,7 +486,7 @@ bool InterpretIMResult::isSuitablyRepresentedByValue() const
     return true;
 }
 
-ASTPtr InterpretIMResult::convertToAST(const ContextMutablePtr & ctx) const
+ASTPtr InterpretIMResult::convertToAST(const ContextPtr & ctx) const
 {
     assert(ast != nullptr);
 
@@ -487,6 +505,8 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
         return visitASTLiteral(*ast_literal, node);
     if (const auto * ast_identifier = node->as<ASTIdentifier>())
         return visitASTIdentifier(*ast_identifier, node);
+    if (const auto * ast_prepared_param = node->as<ASTPreparedParameter>())
+        return visitASTPreparedParameter(*ast_prepared_param, node);
     if (const auto * ast_func = node->as<ASTFunction>())
     {
         const auto & func_name = ast_func->name;
@@ -496,6 +516,8 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
             return visitInFunction(*ast_func, node);
         return visitOrdinaryFunction(*ast_func, node);
     }
+    if (const auto * ast_table_column = node->as<ASTTableColumnReference>())
+        return originalNode(node);
 
     throw Exception(ErrorCodes::LOGICAL_ERROR, "Unable to evaluate AST");
 }
@@ -511,6 +533,11 @@ InterpretIMResult ExpressionInterpreter::visitASTIdentifier(const ASTIdentifier 
         it != setting.identifier_values.end())
         return {getType(node), node->clone(), it->second};
 
+    return originalNode(node);
+}
+
+InterpretIMResult ExpressionInterpreter::visitASTPreparedParameter(const ASTPreparedParameter &, const ConstASTPtr & node) const
+{
     return originalNode(node);
 }
 
@@ -565,7 +592,9 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
 
     ASTPtr simplified_node = makeFunction(function.name, argument_results, context);
 
-    auto function_builder = FunctionFactory::instance().get(function.name, context);
+    auto function_builder = FunctionFactory::instance().tryGet(function.name, context);
+    if (!function_builder)
+        return originalNode(node);
     auto function_builder_params = convertToFunctionBuilderParams(argument_results);
     FunctionBasePtr function_base = function_builder->build(function_builder_params);
     // arguments' type may be changed by some simplify rules, so refresh current node's type
@@ -616,7 +645,8 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
             || simplifyNullPrediction(function, simplified_node, argument_results, simplify_result)
             || simplifyTrivialEquals(function, simplified_node, argument_results, simplify_result)
             || simplifyIf(function, simplified_node, argument_results, simplify_result, reevaluate)
-            || simplifyMultiIf(function, simplified_node, argument_results, simplify_result, context);
+            || simplifyMultiIf(function, simplified_node, argument_results, simplify_result, context)
+            || simplifyAssumeNotNull(function, simplified_node, argument_results, simplify_result, context);
     }
 
     if (!simplified)

@@ -1,4 +1,5 @@
 #include <Catalog/Catalog.h>
+#include <Storages/CnchPartitionInfo.h>
 #include <Storages/CnchTablePartitionMetricsHelper.h>
 #include <Storages/PartCacheManager.h>
 #include <Common/CurrentMetrics.h>
@@ -316,6 +317,12 @@ void CnchTablePartitionMetricsHelper::initializeMetricsFromMetastore(const UUID 
     auto table_uuid = UUIDHelpers::UUIDToString(uuid);
     LOG_TRACE(log, "initializeMetricsFromMetastore {}", table_uuid);
 
+    /// Before loading partition metrics, we must make sure all partition info is cached.
+    if (table_meta->cache_status != CacheStatus::LOADED)
+    {
+        return;
+    }
+
     table_meta->loading_metrics = true;
     UInt64 current_time{0};
     try
@@ -342,25 +349,24 @@ void CnchTablePartitionMetricsHelper::initializeMetricsFromMetastore(const UUID 
 
         /// Partition exists, but no metrics snapshot found.
         /// In this case, we need to (try) recalculate the history.
-        if (found == metrics_map.end())
-        {
-            LOG_TRACE(log, "Partition {} metrics is missing from metastore", partition_id);
-            getTablePartitionThreadPool().scheduleOrThrowOnError([this, partition_info_ptr, current_time, table_meta]() {
-                CurrentMetrics::Increment metric_increment(CurrentMetrics::SystemCnchPartsInfoRecalculationTasksSize);
-                /// After actually recalculated, update `metrics_last_update_time`.
-                if (partition_info_ptr->metrics_ptr->recalculate(current_time, getContext()))
-                {
-                    auto lock = table_meta->writeLock();
-                    table_meta->metrics_last_update_time = current_time;
-                }
-            });
-        }
-        else
+        if (found != metrics_map.end())
         {
             /// Initialize metrics from snapshot.
             LOG_TRACE(log, "Partition {} metrics loaded from metastore: {}", found->first, found->second->read().toString());
             partition_info_ptr->metrics_ptr->restoreFromSnapshot(*found->second);
         }
+
+        /// Recalculate no matter if metrics snapshot exists or not.
+        /// This will benifit the accuracy with the price of IO consumption.
+        getTablePartitionThreadPool().scheduleOrThrowOnError([this, partition_info_ptr, current_time, table_meta]() {
+            CurrentMetrics::Increment metric_increment(CurrentMetrics::SystemCnchPartsInfoRecalculationTasksSize);
+            /// After actually recalculated, update `metrics_last_update_time`.
+            if (partition_info_ptr->metrics_ptr->recalculate(current_time, getContext()))
+            {
+                auto lock = table_meta->writeLock();
+                table_meta->metrics_last_update_time = current_time;
+            }
+        });
     }
 
     auto && table_trash_items_snapshot = getContext()->getCnchCatalog()->loadTableTrashItemsMetricsSnapshotFromMetastore(table_uuid);
@@ -368,15 +374,13 @@ void CnchTablePartitionMetricsHelper::initializeMetricsFromMetastore(const UUID 
     {
         table_meta->trash_item_metrics->restoreFromSnapshot(table_trash_items_snapshot);
     }
-    else
-    {
-        /// Schedule a trash items metrics recalculation.
-        getTablePartitionThreadPool().scheduleOrThrowOnError([this, table_meta, current_time]() {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::SystemCnchTrashItemsInfoRecalculationTasksSize};
 
-            table_meta->trash_item_metrics->recalculate(current_time, getContext());
-        });
-    }
+    /// Schedule a trash items metrics recalculation.
+    getTablePartitionThreadPool().scheduleOrThrowOnError([this, table_meta, current_time]() {
+        CurrentMetrics::Increment metric_increment{CurrentMetrics::SystemCnchTrashItemsInfoRecalculationTasksSize};
+
+        table_meta->trash_item_metrics->recalculate(current_time, getContext());
+    });
 
     table_meta->partition_metrics_loaded = true;
     table_meta->loading_metrics = false;
@@ -391,8 +395,7 @@ void CnchTablePartitionMetricsHelper::updateMetrics(
     auto current_time = getContext()->getTimestamp();
     for (const auto & part : items.data_parts)
         table_metrics_ptr->getDataRef().update(part, current_time, positive);
-    for (const auto & part : items.staged_parts)
-        table_metrics_ptr->getDataRef().update(part, current_time, positive);
+    /// not handling staged parts because we never move them to trash
     for (const auto & bitmap : items.delete_bitmaps)
         table_metrics_ptr->getDataRef().update(bitmap, current_time, positive);
 }

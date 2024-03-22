@@ -86,6 +86,7 @@ public:
     UInt64 getColumnsCommitTime() const;
     UInt64 getMutationCommitTime() const;
     UInt64 getEndTime() const;
+    UInt64 getLastModificationTime() const;
     void setEndTime(UInt64 end_time) const;
 
     bool containsExactly(const ServerDataPart & other) const;
@@ -104,6 +105,7 @@ public:
     const Protos::DataModelPart & part_model() const;
     const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & minmax_idx() const;
     UInt64 txnID() const;
+    bool hasStagingTxnID() const;
 
     const MergeTreePartInfo & info() const;
     const String & name() const;
@@ -138,6 +140,7 @@ public:
 
 private:
     mutable std::optional<UInt64> commit_time;
+    mutable std::optional<UInt64> last_modification_time;
     mutable ServerDataPartPtr prev_part;
     mutable UInt64 virtual_part_size = 0;
     mutable ImmutableDeleteBitmapPtr delete_bitmap;

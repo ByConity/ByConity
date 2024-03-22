@@ -50,6 +50,7 @@ public:
             cache.remove(params);
         }
         auto res = std::shared_ptr<ContextAccess>(new ContextAccess(manager, params));
+        res->initialize();
         cache.add(params, res);
         return res;
     }
@@ -217,16 +218,6 @@ void AccessControlManager::addKVStorage(const ContextPtr & context)
     LOG_DEBUG(getLogger(), "Added {} access storage '{}'", String(new_storage->getStorageType()), new_storage->getStorageName());
 }
 
-void AccessControlManager::stopBgJobForKVStorage()
-{
-    auto storages = getStoragesPtr();
-    for (const auto & storage : *storages)
-    {
-        if (auto kv_storage = typeid_cast<std::shared_ptr<KVAccessStorage>>(storage))
-            kv_storage->stopBgJob();
-    }
-}
-
 void AccessControlManager::addDiskStorage(const String & directory_, bool readonly_)
 {
     addDiskStorage(DiskAccessStorage::STORAGE_TYPE, directory_, readonly_);
@@ -333,7 +324,7 @@ void AccessControlManager::setUpFromMainConfig(const Poco::Util::AbstractConfigu
 {
     if (config_.has("custom_settings_prefixes"))
         setCustomSettingsPrefixes(config_.getString("custom_settings_prefixes"));
-   
+
     /// Optional improvements in access control system.
     /// The default values are false because we need to be compatible with earlier access configurations
     setSelectFromSystemDatabaseRequiresGrant(config_.getBool("access_control_improvements.select_from_system_db_requires_grant", false));

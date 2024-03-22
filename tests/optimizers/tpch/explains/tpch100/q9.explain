@@ -11,39 +11,45 @@ Projection Est. 54134 rows
                └─ Aggregating Est. 54134 rows
                   │     Group by: {n_name, expr#toYear(o_orderdate)}
                   │     Aggregates: expr#sum(amount):=AggNull(sum)(expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)))
-                  └─ Projection Est. 1708319596 rows
+                  └─ Projection Est. 288048311 rows
                      │     Expressions: [n_name], expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)):=(l_extendedprice * (1 - l_discount)) - (ps_supplycost * l_quantity), expr#toYear(o_orderdate):=toYear(o_orderdate)
-                     └─ Inner (PARALLEL_HASH) Join Est. 1719071302 rows
-                        │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
-                        ├─ Repartition Exchange Est. 593104506 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 288048311 rows
+                        │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
+                        ├─ Repartition Exchange Est. 90609665 rows
                         │  │     Partition by: {l_suppkey}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 593104506 rows
-                        │     │     Condition: l_orderkey == o_orderkey
-                        │     ├─ Repartition Exchange Est. 600037902 rows
-                        │     │  │     Partition by: {l_orderkey}
-                        │     │  └─ TableScan tpch100.lineitem Est. 600037902 rows
-                        │     │           Outputs: [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
-                        │     └─ Repartition Exchange Est. 150000000 rows
-                        │        │     Partition by: {o_orderkey}
-                        │        └─ TableScan tpch100.orders Est. 150000000 rows
-                        │                 Outputs: [o_orderkey, o_orderdate]
-                        └─ Inner Join Est. 71999997 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 90609665 rows
+                        │     │     Condition: o_orderkey == l_orderkey
+                        │     ├─ Repartition Exchange Est. 150000000 rows
+                        │     │  │     Partition by: {o_orderkey}
+                        │     │  └─ TableScan tpch100.orders Est. 150000000 rows
+                        │     │           Outputs: [o_orderkey, o_orderdate]
+                        │     └─ Repartition Exchange Est. 90005682 rows
+                        │        │     Partition by: {l_orderkey}
+                        │        └─ Inner (PARALLEL_HASH) Join Est. 90005682 rows
+                        │           │     Condition: l_partkey == p_partkey
+                        │           │     Runtime Filters Builder: {p_partkey}
+                        │           ├─ Repartition Exchange Est. 600037902 rows
+                        │           │  │     Partition by: {l_partkey}
+                        │           │  └─ Filter Est. 600037902 rows
+                        │           │     │     Condition: Runtime Filters: {l_partkey}
+                        │           │     └─ TableScan tpch100.lineitem Est. 600037902 rows
+                        │           │              Where: Runtime Filters: {l_partkey}
+                        │           │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
+                        │           └─ Repartition Exchange Est. 3000000 rows
+                        │              │     Partition by: {p_partkey}
+                        │              └─ Projection Est. 3000000 rows
+                        │                 │     Expressions: [p_partkey]
+                        │                 └─ Filter Est. 3000000 rows
+                        │                    │     Condition: p_name LIKE '%green%'
+                        │                    └─ TableScan tpch100.part Est. 20000000 rows
+                        │                             Where: p_name LIKE '%green%'
+                        │                             Outputs: [p_partkey, p_name]
+                        └─ Inner Join Est. 80000000 rows
                            │     Condition: ps_suppkey == s_suppkey
-                           ├─ Repartition Exchange Est. 71999997 rows
+                           ├─ Repartition Exchange Est. 80000000 rows
                            │  │     Partition by: {ps_suppkey}
-                           │  └─ Inner (PARALLEL_HASH) Join Est. 71999997 rows
-                           │     │     Condition: ps_partkey == p_partkey
-                           │     ├─ Repartition Exchange Est. 80000000 rows
-                           │     │  │     Partition by: {ps_partkey}
-                           │     │  └─ TableScan tpch100.partsupp Est. 80000000 rows
-                           │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-                           │     └─ Repartition Exchange Est. 18000000 rows
-                           │        │     Partition by: {p_partkey}
-                           │        └─ Filter Est. 18000000 rows
-                           │           │     Condition: p_name LIKE '%green%'
-                           │           └─ TableScan tpch100.part Est. 20000000 rows
-                           │                    Where: p_name LIKE '%green%'
-                           │                    Outputs: [p_partkey, p_name]
+                           │  └─ TableScan tpch100.partsupp Est. 80000000 rows
+                           │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
                            └─ Repartition Exchange Est. 1000000 rows
                               │     Partition by: {s_suppkey}
                               └─ Inner Join Est. 1000000 rows
@@ -53,3 +59,4 @@ Projection Est. 54134 rows
                                  └─ Broadcast Exchange Est. 25 rows
                                     └─ TableScan tpch100.nation Est. 25 rows
                                              Outputs: [n_nationkey, n_name]
+note: Runtime Filter is applied for 1 times.

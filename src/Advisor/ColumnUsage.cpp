@@ -102,11 +102,12 @@ public:
     }
 
 protected:
-    void addUsage(ColumnUsages & column_usages,
-                  const std::string & symbol,
-                  ColumnUsageType type,
-                  const PlanNodeBase & node,
-                  ConstASTPtr expression = nullptr);
+    void addUsage(
+        ColumnUsages & column_usages,
+        const std::string & symbol,
+        ColumnUsageType type,
+        const PlanNodeBase & node,
+        ConstASTPtr expression = nullptr);
 
     void processChildren(PlanNodeBase & node, ColumnUsages & column_usages);
     void visitPlanNode(PlanNodeBase & node, ColumnUsages & column_usages) override;
@@ -168,11 +169,8 @@ std::vector<ColumnUsage> ColumnUsageInfo::getUsages(ColumnUsageType type, bool o
     return res;
 }
 
-void ColumnUsageVisitor::addUsage(ColumnUsages & column_usages,
-                                  const std::string & symbol,
-                                  ColumnUsageType type,
-                                  const PlanNodeBase & node,
-                                  ConstASTPtr expression)
+void ColumnUsageVisitor::addUsage(
+    ColumnUsages & column_usages, const std::string & symbol, ColumnUsageType type, const PlanNodeBase & node, ConstASTPtr expression)
 {
     auto it = symbol_to_table_column_map.find(symbol);
     if (it == symbol_to_table_column_map.end()) // no matching column

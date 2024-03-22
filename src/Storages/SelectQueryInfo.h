@@ -62,7 +62,7 @@ struct FilterDAGInfo;
 using FilterDAGInfoPtr = std::shared_ptr<FilterDAGInfo>;
 
 struct InputOrderInfo;
-using InputOrderInfoPtr = std::shared_ptr<const InputOrderInfo>;
+using InputOrderInfoPtr = std::shared_ptr<InputOrderInfo>;
 
 struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
@@ -157,7 +157,7 @@ struct InputOrderInfo
     bool operator !=(const InputOrderInfo & other) const { return !(*this == other); }
 
     void toProto(Protos::InputOrderInfo & proto) const;
-    static std::shared_ptr<InputOrderInfo> fromProto(const Protos::InputOrderInfo & proto, ContextPtr context);
+    static std::shared_ptr<InputOrderInfo> fromProto(const Protos::InputOrderInfo & proto);
 };
 
 class IMergeTreeDataPart;

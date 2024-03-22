@@ -16,6 +16,7 @@
 #pragma once
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
+#include <Interpreters/prepared_statement.h>
 #include <Parsers/IAST_fwd.h>
 #include <Protos/EnumMacros.h>
 #include <Protos/plan_node.pb.h>
@@ -162,6 +163,7 @@ public:
     MM(Offset, offset) \
     MM(FinishSorting, finish_sorting) \
     MM(TotalsHaving, totals_having) \
+    MM(LocalExchange, local_exchange) \
     MM(MultiJoin, multi_join)
 
 // macro helpers to convert MM(x, y) to M(x)
@@ -225,7 +227,7 @@ public:
     const DataStreams & getInputStreams() const { return input_streams; }
     virtual void setInputStreams(const DataStreams & input_streams_) = 0;
 
-    void addHints(SqlHints & sql_hints, ContextMutablePtr & context);
+    void addHints(SqlHints & sql_hints, ContextMutablePtr & context, bool check_type = false);
 
     const PlanHints & getHints() const
     {
@@ -288,6 +290,9 @@ public:
     }
     static String toString(Type type);
 
+    virtual void prepare(const PreparedStatementContext &)
+    {
+    }
 protected:
     DataStreams input_streams;
     std::optional<DataStream> output_stream;

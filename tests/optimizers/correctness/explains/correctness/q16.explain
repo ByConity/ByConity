@@ -19,4 +19,4 @@ Projection Est. ? rows
                            │     Group by: {}
                            │     Aggregates: expr#count():=AggNull(count)()
                            └─ TableScan correctness.q16_t2 Est. ? rows
-                                    Outputs: [a.null]
+                                    Outputs: a_1:=a

@@ -130,6 +130,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     request.set_query_unique_id(trans_key->query_unique_id);
     request.set_exchange_id(trans_key->exchange_id);
     request.set_parallel_id(trans_key->partition_id);
+    request.set_parallel_index(trans_key->parallel_index);
     request.set_wait_timeout_ms(context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
     sendRegisterRPC(stub, cntl, &request, &response, nullptr);
 
@@ -331,6 +332,7 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     res.request->set_query_unique_id(exchange_key->query_unique_id);
     res.request->set_exchange_id(exchange_key->exchange_id);
     res.request->set_parallel_id(exchange_key->partition_id);
+    res.request->set_parallel_index(exchange_key->parallel_index);
     res.request->set_wait_timeout_ms(timeout_ms);
     std::function<void(void)> func = [&, s_cp = s]() {
         if (enable_receiver_metrics)

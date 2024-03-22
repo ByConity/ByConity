@@ -3,20 +3,29 @@
 #include <Interpreters/join_common.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/ConcurrentHashJoin.h>
+#include <thread>
+#include <chrono>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int CANNOT_READ_FROM_SOCKET;
 }
 
 Block JoiningTransform::transformHeader(Block header, const JoinPtr & join)
 {
     ExtraBlockPtr tmp;
     join->initialize(header);
-    join->joinBlock(header, tmp);
+    if (auto * concurrent_hash_join = dynamic_cast<ConcurrentHashJoin*>(join.get()))
+    {
+        BlocksPtr tmp_blocks;
+        concurrent_hash_join->joinBlock(header, tmp, nullptr, tmp_blocks);
+    }
+    else
+        join->joinBlock(header, tmp);
     return header;
 }
 
@@ -27,7 +36,10 @@ JoiningTransform::JoiningTransform(
     bool on_totals_,
     bool default_totals_,
     bool join_parallel_left_right_,
-    FinishCounterPtr finish_counter_)
+    FinishCounterPtr finish_counter_,
+    size_t total_size_,
+    size_t index_,
+    FinishPipePtr finish_pipe_)
     : IProcessor({input_header}, {transformHeader(input_header, join_)})
     , join(std::move(join_))
     , on_totals(on_totals_)
@@ -35,9 +47,14 @@ JoiningTransform::JoiningTransform(
     , join_parallel_left_right(join_parallel_left_right_)
     , finish_counter(std::move(finish_counter_))
     , max_block_size(max_block_size_)
+    , total_size(total_size_)
+    , index(index_)
+    , finish_pipe(std::move(finish_pipe_))
 {
     if (!join->isFilled())
         inputs.emplace_back(Block(), this);
+    if (dynamic_cast<ConcurrentHashJoin *>(join.get()))
+        is_concurrent_hash = true;
 }
 
 IProcessor::Status JoiningTransform::prepare()
@@ -66,8 +83,19 @@ IProcessor::Status JoiningTransform::prepare()
     if (has_output)
     {
         output.push(std::move(output_chunk));
-        has_output = false;
 
+        if (dispatched_blocks && !dispatched_blocks->empty())
+        {
+            auto & current_block = dispatched_blocks->back();
+            auto rows = current_block.rows();
+            output_chunk.setColumns(current_block.getColumns(), rows);
+
+            dispatched_blocks->pop_back();
+        }
+        else
+        {
+            has_output = false;
+        }
         return Status::PortFull;
     }
 
@@ -97,8 +125,18 @@ IProcessor::Status JoiningTransform::prepare()
     auto & input = inputs.front();
     if (input.isFinished())
     {
-        if (process_non_joined)
+        if (!input_finish && is_concurrent_hash)
+        {
+            input_finish = true;
             return Status::Ready;
+        }
+
+        if (process_non_joined)
+        {
+            if (non_joined_stream && !finish_counter_finish && join->getType() == JoinType::PARALLEL_HASH)
+                return Status::Async;
+            return Status::Ready;
+        }
 
         output.finish();
         on_finish_output.finish();
@@ -117,7 +155,19 @@ IProcessor::Status JoiningTransform::prepare()
 
 void JoiningTransform::work()
 {
-    if (has_input)
+    if (input_finish && !dispatched_columns_cache.finished)
+    {
+        dispatched_columns_cache.finished = true;
+        if (auto * concurrent_hash_join = reinterpret_cast<ConcurrentHashJoin*>(join.get()))
+        {
+            Block empty_block;
+            concurrent_hash_join->joinBlock(empty_block, not_processed, &dispatched_columns_cache, dispatched_blocks);
+            auto num_rows = empty_block.rows();
+            output_chunk.setColumns(empty_block.getColumns(), num_rows);
+            has_output = !output_chunk.empty();
+        }
+    }
+    else if (has_input)
     {
         transform(input_chunk);
         output_chunk.swap(input_chunk);
@@ -128,18 +178,58 @@ void JoiningTransform::work()
     {
         if (!non_joined_stream)
         {
+            if (join->getType() == JoinType::PARALLEL_HASH)
+            {
+                if (!finish_counter)
+                {
+                    process_non_joined = false;
+                    return;
+                }
+                if (finish_counter->isLast())
+                {
+                    for (size_t i = 0; i < total_size; i++)
+                    {
+                        /// Send something to pipe to wake worker.
+                        uint64_t buf = 1;
+                        while (-1 == write((*finish_pipe)[i].event_fd, &buf, sizeof(buf)))
+                        {
+                            if (errno == EAGAIN)
+                                break;
+
+                            if (errno != EINTR)
+                                throwFromErrno("Cannot write to pipe", ErrorCodes::CANNOT_READ_FROM_SOCKET);
+                        }
+                    }
+                    finish_counter_finish = true;
+                }
+                non_joined_stream = join->createStreamWithNonJoinedRows(outputs.front().getHeader(), max_block_size, total_size, index);
+                if (!non_joined_stream)
+                {
+                    process_non_joined = false;
+                }
+                return;
+            }
             if (!finish_counter || !finish_counter->isLast())
             {
                 process_non_joined = false;
                 return;
             }
 
-            non_joined_stream = join->createStreamWithNonJoinedRows(outputs.front().getHeader(), max_block_size);
+            non_joined_stream = join->createStreamWithNonJoinedRows(outputs.front().getHeader(), max_block_size, 1, 0);
             if (!non_joined_stream)
             {
                 process_non_joined = false;
                 return;
             }
+        }
+
+        if (!finish_counter_finish && !finish_counter->isFinished())
+        {
+            return;
+        }
+        else
+        {
+            finish_counter_finish = true;
         }
 
         auto block = non_joined_stream->read();
@@ -219,7 +309,12 @@ Block JoiningTransform::readExecute(Chunk & chunk)
                 res.insert(side_block->getByPosition(i));
 
         if (res)
-            join->joinBlock(res, not_processed);
+        {
+            if (is_concurrent_hash)
+                static_cast<ConcurrentHashJoin *>(join.get())->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
+            else
+                join->joinBlock(res, not_processed);
+        }
     }
     else if (not_processed->empty()) /// There's not processed data inside expression.
     {
@@ -231,21 +326,36 @@ Block JoiningTransform::readExecute(Chunk & chunk)
                 res.insert(side_block->getByPosition(i));
 
         not_processed.reset();
-        join->joinBlock(res, not_processed);
+        if (is_concurrent_hash)
+            static_cast<ConcurrentHashJoin *>(join.get())->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
+        else
+            join->joinBlock(res, not_processed);
     }
     else
     {
         res = std::move(not_processed->block);
-        join->joinBlock(res, not_processed);
+        if (is_concurrent_hash)
+            static_cast<ConcurrentHashJoin *>(join.get())->joinBlock(res, not_processed, &dispatched_columns_cache, dispatched_blocks);
+        else
+            join->joinBlock(res, not_processed);
     }
 
     return res;
 }
 
-FillingRightJoinSideTransform::FillingRightJoinSideTransform(Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_)
-    : IProcessor({input_header}, {Block()})
-    , join(std::move(join_)), finish_counter(std::move(finish_counter_))
-{}
+JoiningTransform::~JoiningTransform()
+{
+    if (finish_pipe && finish_pipe->size() == total_size && (*finish_pipe)[index].event_fd != -1)
+        close((*finish_pipe)[index].event_fd);
+}
+
+FillingRightJoinSideTransform::FillingRightJoinSideTransform(
+    Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_)
+    : IProcessor({input_header}, {Block()}), join(std::move(join_)), finish_counter(std::move(finish_counter_))
+{
+    if (dynamic_cast<ConcurrentHashJoin *>(join.get()))
+        is_current_hash_join = true;
+}
 
 InputPort * FillingRightJoinSideTransform::addTotalsPort()
 {
@@ -264,12 +374,6 @@ IProcessor::Status FillingRightJoinSideTransform::prepare()
     {
         for (auto & input : inputs)
             input.close();
-
-        if (!build_rf && finish_counter && finish_counter->isLast())
-        {
-            build_rf = true;
-            return Status::Ready;
-        }
 
         return Status::Finished;
     }
@@ -320,6 +424,12 @@ IProcessor::Status FillingRightJoinSideTransform::prepare()
         return Status::Ready;
     }
 
+    if (!input_finish && is_current_hash_join)
+    {
+        input_finish = true;
+        return Status::Ready;
+    }
+
     if (!build_rf && finish_counter && finish_counter->isLast())
     {
         build_rf = true;
@@ -338,14 +448,27 @@ void FillingRightJoinSideTransform::work()
         return;
     }
 
-    auto block = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
+    if (!input_finish)
+    {
+        auto block = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
 
-    if (for_totals)
-        join->setTotals(block);
-    else
-        stop_reading = !join->addJoinedBlock(block);
+        if (for_totals)
+            join->setTotals(block);
+        else if (is_current_hash_join)
+        {
+            auto * concurrent_hash_join = static_cast<ConcurrentHashJoin *>(join.get());
+            stop_reading = !concurrent_hash_join->addJoinedBlock(block, &dispatched_columns_cache, true);
+        }
+        else
+            stop_reading = !join->addJoinedBlock(block);
 
-    set_totals = for_totals;
+        set_totals = for_totals;
+    }
+    else if (is_current_hash_join)
+    {
+        auto * concurrent_hash_join = static_cast<ConcurrentHashJoin *>(join.get());
+        concurrent_hash_join->addJoinedBlock({}, &dispatched_columns_cache, true);
+    }
 }
 
 DelayedJoinedBlocksWorkerTransform::DelayedJoinedBlocksWorkerTransform(Block output_header)

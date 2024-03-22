@@ -327,6 +327,10 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
 {
     QueryPipelineProcessorsCollector collector(pipeline, this);
     const auto & settings = build_settings.context->getSettingsRef();
+    this->max_block_size = settings.max_block_size;
+    this->temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads
+        ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
+        : static_cast<size_t>(settings.max_threads);
 
     if (isFinal() && hasNonParallelAggregateFunctions(params.aggregates))
     {
@@ -801,7 +805,7 @@ std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::Aggreg
 
     InputOrderInfoPtr group_by_info = nullptr;
     if (proto.has_group_by_info())
-        group_by_info = InputOrderInfo::fromProto(proto.group_by_info(), context);
+        group_by_info = InputOrderInfo::fromProto(proto.group_by_info());
     SortDescription group_by_sort_description;
     for (const auto & proto_element : proto.group_by_sort_description())
     {

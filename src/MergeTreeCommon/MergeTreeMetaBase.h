@@ -44,6 +44,9 @@ public:
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
 
+    std::optional<size_t> source_index;
+    std::optional<size_t> source_count;
+
     /// Function to call if the part is suspected to contain corrupt data.
     using BrokenPartCallback = std::function<void (const String &)>;
 
@@ -194,6 +197,9 @@ public:
 
     /// A global unique id for the storage. If storage UUID is not empty, use the storage UUID. Otherwise, use the address of current object.
     String getStorageUniqueID() const;
+
+    /// If uuid is empty, throw exception
+    UUID getCnchStorageUUID() const;
 
     //// Data parts
     /// Returns a copy of the list so that the caller shouldn't worry about locks.
@@ -375,6 +381,8 @@ public:
 
     Block getSampleBlockWithVirtualColumns() const;
 
+    Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
+
     /// Construct a block consisting only of possible virtual columns for part pruning.
     /// If one_part is true, fill in at most one part.
     Block getBlockWithVirtualPartColumns(const DataPartsVector & parts, bool one_part) const;
@@ -395,7 +403,8 @@ public:
     virtual bool unlockSharedData(const IMergeTreeDataPart &) const { return true; }
 
     bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
-    UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
+    TableDefinitionHash getTableHashForClusterBy() const override; // to compare table engines efficiently
+    bool isTableClustered(ContextPtr context_) const override;
 
     /// Snapshot for MergeTree contains the current set of data parts
     /// at the moment of the start of query.
@@ -420,6 +429,8 @@ public:
 
     /// The same as above but does not hold vector of data parts.
     virtual StorageSnapshotPtr getStorageSnapshotWithoutParts(const StorageMetadataPtr & metadata_snapshot) const;
+
+    ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const override;
 
 protected:
     friend class IMergeTreeDataPart;

@@ -82,7 +82,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<PredicatePushdown>(),
 
         // normalize plan after predicate push down
-        std::make_shared<ColumnPruning>(),
+        std::make_shared<WindowToSortPruning>(),
         std::make_shared<RemoveRedundantDistinct>(),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
@@ -95,7 +95,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // push down limit and aggregate
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
-        std::make_shared<ColumnPruning>(true),
+        std::make_shared<DistinctToAggregatePruning>(),
 
         std::make_shared<ImplementJoinOrderHints>(),
 
@@ -121,9 +121,10 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<OptimizeTrivialCount>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
-        std::make_shared<ColumnPruning>(),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+        // column pruned by add extra projection, DO NOT ADD RemoveRedundant rule after this rule !!!
+        std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
         std::make_shared<AddBufferForDeadlockCTE>(),
@@ -161,6 +162,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // rules for remove subquery, the order of subquery rules matters, DO NOT change !!!.
         std::make_shared<IterativeRewriter>(Rules::pushApplyRules(), "PushApply"),
+        std::make_shared<IterativeRewriter>(Rules::unnestingSubqueryRules(), "UnnestingSubquery"),
         std::make_shared<RemoveUnCorrelatedInSubquery>(),
         std::make_shared<RemoveCorrelatedInSubquery>(),
         std::make_shared<RemoveUnCorrelatedExistsSubquery>(),
@@ -188,7 +190,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<PredicatePushdown>(true),
 
         // predicate push down may convert outer-join to inner-join, make sure data type is correct.
-        std::make_shared<ColumnPruning>(),
+        std::make_shared<WindowToSortPruning>(),
         std::make_shared<RemoveRedundantDistinct>(),
         std::make_shared<UnifyNullableType>(),
 
@@ -213,8 +215,9 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // push down limit & aggregate
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
-        std::make_shared<ColumnPruning>(true),
+        std::make_shared<DistinctToAggregatePruning>(),
         std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
+
 
         std::make_shared<ImplementJoinOrderHints>(),
 
@@ -281,9 +284,10 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         // TODO cost-based projection push down
-        std::make_shared<ColumnPruning>(),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+        // column pruned by add extra projection, DO NOT ADD RemoveRedundant rule after this rule !!!        
+        std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
         std::make_shared<AddBufferForDeadlockCTE>(),

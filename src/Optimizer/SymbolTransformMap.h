@@ -19,8 +19,8 @@
 #include <Parsers/IAST_fwd.h>
 #include <QueryPlan/PlanNode.h>
 
-#include <unordered_map>
 #include <optional>
+#include <unordered_map>
 
 namespace DB
 {
@@ -33,28 +33,23 @@ public:
     static std::optional<SymbolTransformMap> buildFrom(PlanNodeBase & plan, std::optional<PlanNodeId> stop_node = std::nullopt);
 
     ASTPtr inlineReferences(const ConstASTPtr & expression) const;
-    ASTPtr inlineReferences(const String & column) const
-    {
-        auto expr = std::make_shared<ASTIdentifier>(column);
-        return inlineReferences(expr);
-    }
+
+    ASTPtr inlineReferences(const String & symbol) const { return inlineReferences(std::make_shared<ASTIdentifier>(symbol)); }
+
+    /**
+     * violation may happen when matching the root node, which may contain duplicate,
+     * symbol names with other plan nodes. e.g. select sum(amount) as amount
+     */
+    bool addSymbolMapping(const String & symbol, ConstASTPtr expr) { return symbol_to_expressions.emplace(symbol, std::move(expr)).second; }
 
     SymbolTransformMap() = default;
 
     String toString() const;
 
 private:
-    SymbolTransformMap(
-        std::unordered_map<String, ConstASTPtr> symbol_to_expressions_,
-        std::unordered_map<String, ConstASTPtr> symbol_to_cast_lossless_expressions_)
-        : symbol_to_expressions(std::move(symbol_to_expressions_))
-        , symbol_to_cast_lossless_expressions(std::move(symbol_to_cast_lossless_expressions_))
-    {
-    }
-
     std::unordered_map<String, ConstASTPtr> symbol_to_expressions;
-    std::unordered_map<String, ConstASTPtr> symbol_to_cast_lossless_expressions;
 
+    // cache
     mutable std::unordered_map<String, ConstASTPtr> expression_lineage;
 
     class Visitor;

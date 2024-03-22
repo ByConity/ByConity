@@ -7,7 +7,7 @@ namespace DB
 
 class Context;
 
-void setEnableTenantSystemDB(bool v);
+String getCurrentTenantId();
 
 // database_name -> tenant_id.[catalog$$].database_name
 String formatTenantDatabaseName(const String & database_name);
@@ -29,6 +29,8 @@ String getOriginalEntityName(const String & tenant_entity_name);
 bool isTenantMatchedEntityName(const String & tenant_entity_name);
 
 String getOriginalDatabaseName(const String & tenant_database_name);
+
+String getOriginalDatabaseName(const String & tenant_database_name, const String & tenant_id);
 
 void pushTenantId(const String &tenant_id);
 

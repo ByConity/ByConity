@@ -56,6 +56,11 @@ UInt64 ServerDataPart::getEndTime() const
     return part_model_wrapper->part_model->has_end_time() ? part_model_wrapper->part_model->end_time() : 0;
 }
 
+UInt64 ServerDataPart::getLastModificationTime() const
+{
+    return part_model().has_last_modification_time() ? part_model().last_modification_time() : 0;
+}
+
 void ServerDataPart::setEndTime(UInt64 end_time) const
 {
     const_cast<ServerDataPart *>(this)->part_model_wrapper->part_model->set_end_time(end_time);
@@ -156,6 +161,11 @@ UUID ServerDataPart::get_uuid() const
 UInt64 ServerDataPart::txnID() const
 {
     return part_model_wrapper->txnID();
+}
+
+bool ServerDataPart::hasStagingTxnID() const
+{
+    return part_model().has_staging_txn_id();
 }
 
 MutableMergeTreeDataPartCNCHPtr ServerDataPart::toCNCHDataPart(

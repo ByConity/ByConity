@@ -17,27 +17,25 @@ Projection Est. 100 rows
                      │     Aggregates: expr#sum(act_sales):=AggNull(sum)(expr#multiIf(isNotNull(sr_return_quantity), multiply(minus(ss_quantity, sr_return_quantity), ss_sales_price), multiply(ss_quantity, ss_sales_price)))
                      └─ Projection Est. 45270423 rows
                         │     Expressions: [ss_customer_sk], expr#multiIf(isNotNull(sr_return_quantity), multiply(minus(ss_quantity, sr_return_quantity), ss_sales_price), multiply(ss_quantity, ss_sales_price)):=multiIf(isNotNull(sr_return_quantity), (ss_quantity - sr_return_quantity) * ss_sales_price, ss_quantity * ss_sales_price)
-                        └─ Inner (PARALLEL_HASH) Join Est. 45272708 rows
+                        └─ Inner (PARALLEL_HASH) Join Est. 45270423 rows
                            │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │     Runtime Filters Builder: {sr_ticket_number}
-                           ├─ Repartition Exchange Est. 2879987999 rows
-                           │  │     Partition by: {ss_item_sk, ss_ticket_number}
-                           │  └─ Filter Est. 2879987999 rows
-                           │     │     Condition: Runtime Filters: {ss_ticket_number}
-                           │     └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
-                           │              Where: Runtime Filters: {ss_ticket_number}
-                           │              Outputs: [ss_item_sk, ss_customer_sk, ss_ticket_number, ss_quantity, ss_sales_price]
-                           └─ Repartition Exchange Est. 4430765 rows
-                              │     Partition by: {sr_item_sk, sr_ticket_number}
-                              └─ Inner Join Est. 4430765 rows
-                                 │     Condition: sr_reason_sk == r_reason_sk
-                                 │     Runtime Filters Builder: {r_reason_sk}
-                                 ├─ Filter Est. 287999764 rows
-                                 │  │     Condition: Runtime Filters: {sr_reason_sk}
-                                 │  └─ TableScan tpcds1000_sample.store_returns Est. 287999764 rows
-                                 │           Where: Runtime Filters: {sr_reason_sk}
-                                 │           Outputs: [sr_item_sk, sr_reason_sk, sr_ticket_number, sr_return_quantity]
-                                 └─ Broadcast Exchange Est. 1 rows
+                           ├─ Filter Est. 2879987999 rows
+                           │  │     Condition: Runtime Filters: {ss_ticket_number}
+                           │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
+                           │           Where: Runtime Filters: {ss_ticket_number}
+                           │           Outputs: [ss_item_sk, ss_customer_sk, ss_ticket_number, ss_quantity, ss_sales_price]
+                           └─ Inner Join Est. 4430765 rows
+                              │     Condition: sr_reason_sk == r_reason_sk
+                              │     Runtime Filters Builder: {r_reason_sk}
+                              ├─ Filter Est. 287999764 rows
+                              │  │     Condition: Runtime Filters: {sr_reason_sk}
+                              │  └─ TableScan tpcds1000_sample.store_returns Est. 287999764 rows
+                              │           Where: Runtime Filters: {sr_reason_sk}
+                              │           Outputs: [sr_item_sk, sr_reason_sk, sr_ticket_number, sr_return_quantity]
+                              └─ Broadcast Exchange Est. 1 rows
+                                 └─ Projection Est. 1 rows
+                                    │     Expressions: [r_reason_sk]
                                     └─ Filter Est. 1 rows
                                        │     Condition: r_reason_desc = 'reason 28'
                                        └─ TableScan tpcds1000_sample.reason Est. 65 rows

@@ -1,4 +1,5 @@
-
+create database if not exists test_00278 engine = Cnch;
+use test_00278;
 DROP TABLE IF EXISTS sorted;
 CREATE TABLE sorted (d Date DEFAULT '2000-01-01', x UInt64) ENGINE = CnchMergeTree() PARTITION BY toYYYYMM(d) ORDER BY x SETTINGS index_granularity = 8192;
 

@@ -86,7 +86,7 @@ PlanNodePtr PredicateVisitor::visitPlanNode(PlanNodeBase & node, PredicateContex
         }
 
         auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), remaining_filter);
-        auto filter_node = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+        auto filter_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
         return filter_node;
     }
     return rewritten;
@@ -167,7 +167,7 @@ PlanNodePtr PredicateVisitor::visitProjectionNode(ProjectionNode & node, Predica
     {
         auto filter_step = std::make_shared<FilterStep>(
             rewritten->getStep()->getOutputStream(), PredicateUtils::combineConjuncts(non_inlining_conjuncts));
-        auto filter_node = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+        auto filter_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
         rewritten = filter_node;
     }
     return rewritten;
@@ -285,13 +285,13 @@ PlanNodePtr PredicateVisitor::visitAggregatingNode(AggregatingNode & node, Predi
     PlanNodePtr output = node.shared_from_this();
     if (rewritten != node.getChildren()[0])
     {
-        output = std::make_shared<AggregatingNode>(context->nextNodeId(), node.getStep(), PlanNodes{rewritten});
+        output = PlanNodeBase::createPlanNode(context->nextNodeId(), node.getStep(), PlanNodes{rewritten}, node.getStatistics());
     }
     if (!post_aggregation_conjuncts.empty())
     {
         auto filter_step = std::make_shared<FilterStep>(
             output->getStep()->getOutputStream(), PredicateUtils::combineConjuncts(post_aggregation_conjuncts));
-        output = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{output});
+        output = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{output});
     }
     return output;
 }
@@ -319,6 +319,12 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     ConstASTPtr right_effective_predicate = EffectivePredicateExtractor::extract(right, context);
     ConstASTPtr join_predicate = PredicateUtils::extractJoinPredicate(node);
 
+    LOG_TRACE(
+        logger,
+        "join node {} has left effective predicate: {} , right effective predicate: {}",
+        node.getId(),
+        left_effective_predicate->formatForErrorMessage(),
+        right_effective_predicate->formatForErrorMessage());
     std::set<String> left_symbols;
     for (const auto & column : left->getStep()->getOutputStream().header)
     {
@@ -640,8 +646,8 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             step->getHints());
     }
 
-    auto join_node = std::make_shared<JoinNode>(
-        context->nextNodeId(), join_step, PlanNodes{left_source_expression_node, right_source_expression_node});
+    auto join_node = PlanNodeBase::createPlanNode(
+        context->nextNodeId(), join_step, PlanNodes{left_source_expression_node, right_source_expression_node}, node.getStatistics());
 
     /**
      * Predicate push down may produce nest loop join with right join, which is not supported by nest loop join.
@@ -669,14 +675,14 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             step->isSimpleReordered(),
             step->getRuntimeFilterBuilders(),
             step->getHints());
-        join_node = std::make_shared<JoinNode>(
-            context->nextNodeId(), join_step, PlanNodes{right_source_expression_node, left_source_expression_node});
+        join_node = PlanNodeBase::createPlanNode(
+            context->nextNodeId(), join_step, PlanNodes{right_source_expression_node, left_source_expression_node}, node.getStatistics());
     }
 
     if (!PredicateUtils::isTruePredicate(post_join_predicate))
     {
         auto filter_step = std::make_shared<FilterStep>(join_node->getStep()->getOutputStream(), post_join_predicate);
-        auto filter_node = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{join_node});
+        auto filter_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{join_node});
         output_node = filter_node;
     }
     else
@@ -755,7 +761,7 @@ PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContex
     {
         ASTPtr extra_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
         auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), extra_predicate);
-        auto filter_node = std::make_shared<FilterNode>(ctx->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+        auto filter_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
         return filter_node;
     }
     return rewritten;
@@ -800,7 +806,7 @@ PlanNodePtr PredicateVisitor::visitMarkDistinctNode(MarkDistinctNode & node, Pre
     {
         ASTPtr extra_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
         auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), extra_predicate);
-        auto filter_node = std::make_shared<FilterNode>(ctx->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+        auto filter_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
         return filter_node;
     }
     return rewritten;
@@ -822,7 +828,7 @@ PlanNodePtr PredicateVisitor::visitPartialSortingNode(PartialSortingNode & node,
 
 PlanNodePtr PredicateVisitor::visitSortingNode(SortingNode & node, PredicateContext & predicate_context)
 {
-    if (node.getStep()->getLimit() != 0)
+    if (node.getStep()->hasPreparedParam() || node.getStep()->getLimitValue() != 0)
         return visitPlanNode(node, predicate_context);
     return processChild(node, predicate_context);
 }
@@ -914,6 +920,7 @@ PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContex
 
 PlanNodePtr PredicateVisitor::process(PlanNodeBase & node, PredicateContext & predicate_context)
 {
+    LOG_TRACE(logger, "node {} has inherited predicate: {}", node.getId(), predicate_context.predicate->formatForErrorMessage());
     return VisitorUtil::accept(node, *this, predicate_context);
 }
 

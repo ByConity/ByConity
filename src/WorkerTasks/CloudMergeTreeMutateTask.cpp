@@ -36,6 +36,11 @@ CloudMergeTreeMutateTask::CloudMergeTreeMutateTask(
     : ManipulationTask(std::move(params_), std::move(context_))
     , storage(storage_)
 {
+    if (/*params.source_parts.empty() && */params.source_data_parts.empty())
+        throw Exception("Expected non-empty source parts in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
+
+    if (params.new_part_names.empty())
+        throw Exception("Expected non-empty new part names in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void CloudMergeTreeMutateTask::executeImpl()

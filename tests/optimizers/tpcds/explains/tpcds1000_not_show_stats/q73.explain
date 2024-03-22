@@ -5,7 +5,7 @@ Projection
    └─ Gather Exchange
       └─ Sorting
          │     Order by: {expr#count() DESC NULLS LAST, c_last_name ASC NULLS LAST}
-         └─ Inner (PARALLEL_HASH) Join
+         └─ Inner Join
             │     Condition: c_customer_sk == ss_customer_sk
             │     Runtime Filters Builder: {ss_customer_sk}
             ├─ Repartition Exchange
@@ -40,21 +40,27 @@ Projection
                               │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk, ss_store_sk}
                               │  │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_hdemo_sk, ss_store_sk, ss_ticket_number]
                               │  │  └─ Broadcast Exchange
-                              │  │     └─ Filter
-                              │  │        │     Condition: (d_dom >= 1) AND (d_dom <= 2) AND (d_year IN (1999, 2000, 2001))
-                              │  │        └─ TableScan tpcds1000.date_dim
-                              │  │                 Where: (d_dom >= 1) AND (d_dom <= 2) AND (d_year IN (1999, 2000, 2001))
-                              │  │                 Outputs: [d_date_sk, d_year, d_dom]
+                              │  │     └─ Projection
+                              │  │        │     Expressions: [d_date_sk]
+                              │  │        └─ Filter
+                              │  │           │     Condition: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
+                              │  │           └─ TableScan tpcds1000.date_dim
+                              │  │                    Where: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
+                              │  │                    Outputs: [d_date_sk, d_year, d_dom]
                               │  └─ Broadcast Exchange
-                              │     └─ Filter
-                              │        │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (hd_vehicle_count > 0) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > 1.)
-                              │        └─ TableScan tpcds1000.household_demographics
-                              │                 Where: (hd_buy_potential IN ('>10000', 'Unknown')) AND (hd_vehicle_count > 0) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > 1.)
-                              │                 Outputs: [hd_demo_sk, hd_buy_potential, hd_dep_count, hd_vehicle_count]
+                              │     └─ Projection
+                              │        │     Expressions: [hd_demo_sk]
+                              │        └─ Filter
+                              │           │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > 1.) AND (hd_vehicle_count > 0)
+                              │           └─ TableScan tpcds1000.household_demographics
+                              │                    Where: (hd_buy_potential IN ('>10000', 'Unknown')) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > 1.) AND (hd_vehicle_count > 0)
+                              │                    Outputs: [hd_demo_sk, hd_buy_potential, hd_dep_count, hd_vehicle_count]
                               └─ Broadcast Exchange
-                                 └─ Filter
-                                    │     Condition: s_county IN ('Bronx County', 'Franklin Parish', 'Orange County', 'Williamson County')
-                                    └─ TableScan tpcds1000.store
-                                             Where: s_county IN ('Bronx County', 'Franklin Parish', 'Orange County', 'Williamson County')
-                                             Outputs: [s_store_sk, s_county]
+                                 └─ Projection
+                                    │     Expressions: [s_store_sk]
+                                    └─ Filter
+                                       │     Condition: s_county IN ('Bronx County', 'Franklin Parish', 'Orange County', 'Williamson County')
+                                       └─ TableScan tpcds1000.store
+                                                Where: s_county IN ('Bronx County', 'Franklin Parish', 'Orange County', 'Williamson County')
+                                                Outputs: [s_store_sk, s_county]
 note: Runtime Filter is applied for 4 times.

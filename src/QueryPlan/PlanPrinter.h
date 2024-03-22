@@ -112,7 +112,7 @@ public:
     static String prettySeconds(size_t seconds);
     static String printPrefix(PlanNodeBase & plan);
     String printSuffix(PlanNodeBase & plan);
-    static String printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles);
+    static String printQError(const PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles);
     static String printFilter(ConstASTPtr filter);
 private:
     String printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const;

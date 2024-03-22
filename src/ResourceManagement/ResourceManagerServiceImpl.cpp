@@ -293,7 +293,7 @@ void ResourceManagerServiceImpl::createWorkerGroup(
 
         auto worker_group_data = WorkerGroupData::createFromProto(request->worker_group_data());
 
-        rm_controller.createWorkerGroup(worker_group_data.id, request->if_not_exists(), request->vw_name(), worker_group_data);
+        rm_controller.createWorkerGroup(worker_group_data.id, request->vw_name(), worker_group_data);
     }
     catch (...)
     {

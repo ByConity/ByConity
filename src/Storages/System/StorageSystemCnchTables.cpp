@@ -69,6 +69,7 @@ StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
             {"cluster_key", std::make_shared<DataTypeString>()},
             {"split_number", std::make_shared<DataTypeInt64>()},
             {"with_range", std::make_shared<DataTypeUInt8>()},
+            {"table_definition_hash", std::make_shared<DataTypeString>()},
             {"engine", std::make_shared<DataTypeString>()},
         }));
     setInMemoryMetadata(storage_metadata);
@@ -89,6 +90,7 @@ static std::unordered_set<std::string> columns_require_storage =
 {
     "dependencies_database",
     "dependencies_table",
+    "table_definition_hash",
     "engine"
 };
 
@@ -107,13 +109,13 @@ static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromW
         {
             tmp_map["database"] = item["database"].get<String>();
         }
-        
+
         if (item.count("name") && item["name"].getType() == Field::Types::String)
         {
             tmp_map["name"] = item["name"].get<String>();
         }
 
-        tmp_res.push_back(tmp_map);
+        tmp_res.push_back(std::move(tmp_map));
     }
 
     if (!tmp_res.empty())
@@ -122,24 +124,24 @@ static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromW
     return res;
 }
 
-static bool getDBTablesFromPredicates(const std::optional<std::vector<std::map<String, String>>> & predicates, 
+static bool getDBTablesFromPredicates(const std::optional<std::vector<std::map<String, String>>> & predicates,
         std::vector<std::pair<String, String>> & db_table_pairs)
 {
     if (!predicates)
         return false;
-    
+
     for (const auto & item : predicates.value())
     {
         if (!item.count("database") || !item.count("name"))
             return false;
-        
+
         db_table_pairs.push_back(std::make_pair(item.at("database"), item.at("name")));
     }
 
     return true;
 }
 
-static bool matchAnyPredicate(const std::optional<std::vector<std::map<String, String>>> & predicates, 
+static bool matchAnyPredicate(const std::optional<std::vector<std::map<String, String>>> & predicates,
         const Protos::DataModelTable & table_model)
 {
     if (!predicates)
@@ -203,7 +205,7 @@ Pipe StorageSystemCnchTables::read(
     auto predicates = parsePredicatesFromWhere(query_info, context);
     bool get_db_tables_ok = getDBTablesFromPredicates(predicates, db_table_pairs);
     if (get_db_tables_ok && (db_table_pairs.size() <= GET_ALL_TABLES_LIMIT))
-    {        
+    {
         auto table_ids = cnch_catalog->getTableIDsByNames(db_table_pairs);
         if (table_ids)
             table_models = cnch_catalog->getTablesByIDs(*table_ids);
@@ -401,6 +403,14 @@ Pipe StorageSystemCnchTables::read(
         }
         else
             src_index += 7;
+
+        if (columns_mask[src_index++])
+        {
+            if (storage && storage->isBucketTable())
+                res_columns[col_num++]->insert(storage->getTableHashForClusterBy().toString());
+            else
+                res_columns[col_num++]->insertDefault();
+        }
 
         if (columns_mask[src_index++])
         {

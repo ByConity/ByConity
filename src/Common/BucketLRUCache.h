@@ -479,8 +479,8 @@ private:
     }
 
     bool setRetEvictWithLock(const Key & key, const MappedPtr & mapped, SetMode mode
-        , std::vector<std::pair<Key, MappedPtr>> removed_elements
-        , std::vector<std::pair<Key, MappedPtr>> updated_elements
+        , std::vector<std::pair<Key, MappedPtr>> & removed_elements
+        , std::vector<std::pair<Key, MappedPtr>> & updated_elements
         , [[maybe_unused]]std::lock_guard<std::mutex> & guard)
     {
         std::optional<Cell> cell = container.get(key, false);

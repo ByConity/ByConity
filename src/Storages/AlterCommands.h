@@ -75,6 +75,8 @@ struct AlterCommand
         MATERIALIZE_PROJECTION,
         CHANGE_ENGINE,
         MODIFY_DATABASE_SETTING,
+        RENAME_TABLE,
+        DROP_PARTITION
     };
 
     /// Which property user wants to remove from column
@@ -122,6 +124,8 @@ struct AlterCommand
 
     /// For ADD_COLUMN
     bool if_not_exists = false;
+
+    bool mysql_primary_key = false;
 
     /// For MODIFY_ORDER_BY
     ASTPtr order_by = nullptr;

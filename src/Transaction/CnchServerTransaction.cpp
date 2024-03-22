@@ -15,15 +15,16 @@
 
 #include <Transaction/CnchServerTransaction.h>
 
+#include <mutex>
 #include <Catalog/Catalog.h>
-#include <common/scope_guard.h>
+#include <IO/WriteBuffer.h>
+#include <Transaction/TransactionCleaner.h>
+#include <Transaction/TransactionCommon.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
-#include <IO/WriteBuffer.h>
-#include <Transaction/TransactionCommon.h>
-#include <Transaction/TransactionCleaner.h>
-#include <mutex>
+#include <common/scope_guard.h>
+#include <common/scope_guard_safe.h>
 
 namespace ProfileEvents
 {
@@ -315,7 +316,21 @@ TxnTimestamp CnchServerTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
 
-                bool success = global_context->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+                bool success = false;
+                if (!extern_commit_functions.empty())
+                {
+                    for (auto & txn_f : extern_commit_functions)
+                    {
+                        auto extern_requests = txn_f.commit_func(getContext());
+                        for (auto & req : extern_requests.puts)
+                            requests.AddPut(req);
+                        for (auto & req : extern_requests.deletes)
+                            requests.AddDelete(req.key);
+                    }
+                    success = getContext()->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+                }
+                else
+                    success = global_context->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
 
                 txn_record = std::move(target_record);
 
@@ -325,6 +340,9 @@ TxnTimestamp CnchServerTransaction::commit()
                     ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
                     LOG_DEBUG(log, "Successfully committed transaction {} at {}\n", txn_record.txnID().toUInt64(), commit_ts);
                     commitModifiedCount(this->modified_counter);
+
+                    /// Clean merging_mutating_parts after txn succeed.
+                    tryCleanMergeTagger();
                     return commit_ts;
                 }
                 else // CAS failed
@@ -386,12 +404,16 @@ TxnTimestamp CnchServerTransaction::rollback()
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 
+    tryCleanMergeTagger();
     return ts;
 }
 
 TxnTimestamp CnchServerTransaction::abort()
 {
     LOG_DEBUG(log, "Start abort transaction {}\n", txn_record.txnID().toUInt64());
+
+    SCOPE_EXIT_SAFE({ tryCleanMergeTagger(); });
+
     auto lock = getLock();
     if (isReadOnly())
         throw Exception("Invalid commit operation", ErrorCodes::LOGICAL_ERROR);
@@ -400,8 +422,23 @@ TxnTimestamp CnchServerTransaction::abort()
     target_record.setStatus(CnchTransactionStatus::Aborted)
                  .setCommitTs(global_context->getTimestamp())
                  .setMainTableUUID(getMainTableUUID());
-
-    bool success = global_context->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+    bool success = false;
+    Catalog::BatchCommitRequest requests(true, true);
+    Catalog::BatchCommitResponse response;
+    if (!extern_commit_functions.empty())
+    {
+        for (auto & txn_f : extern_commit_functions)
+        {
+            auto extern_requests = txn_f.abort_func(getContext());
+            for (auto & req : extern_requests.puts)
+                requests.AddDelete(req.key);
+            for (auto & req : extern_requests.deletes)
+                requests.AddPut(req);
+        }
+        success = getContext()->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+    }
+    else
+        success = global_context->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
     txn_record = std::move(target_record);
 
     if (success)

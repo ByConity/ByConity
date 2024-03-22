@@ -94,6 +94,7 @@
 
 #include <Parsers/formatAST.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <Parsers/queryToString.h>
 
 namespace DB
 {
@@ -655,6 +656,7 @@ void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables(bool do_global)
 {
     if (do_global && !getContext()->getSettingsRef().distributed_perfect_shard)
     {
+        LOG_DEBUG(&Poco::Logger::get("ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables"), "input query-{}", queryToString(query));
         GlobalSubqueriesVisitor::Data subqueries_data(
             getContext(), subquery_depth, isRemoteStorage(), external_tables, subqueries_for_sets, has_global_subqueries);
         GlobalSubqueriesVisitor(subqueries_data).visit(query);
@@ -1301,7 +1303,7 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
         if (analyzed_join->allowParallelHashJoin())
         {
             LOG_TRACE(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "will use ConcurrentHashJoin");
-            return std::make_shared<ConcurrentHashJoin>(analyzed_join, context->getSettings().max_threads, r_sample_block);
+            return std::make_shared<ConcurrentHashJoin>(analyzed_join, context->getSettings().max_threads, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
         }
         return std::make_shared<HashJoin>(analyzed_join, r_sample_block);
     }
@@ -1310,7 +1312,10 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
     else if (analyzed_join->forceNestedLoopJoin())
         return std::make_shared<NestedLoopJoin>(analyzed_join, r_sample_block, context);
     else if (analyzed_join->forceGraceHashLoopJoin())
-        return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk());
+    {
+        auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: context->getSettings().max_threads);
+        return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel);
+    }
     return std::make_shared<JoinSwitcher>(analyzed_join, r_sample_block);
 }
 
@@ -1890,12 +1895,14 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendProjectResult(ExpressionActio
     ExpressionActionsChain::Step & step = chain.lastStep(aggregated_columns);
 
     NamesWithAliases result_columns;
+    NameSet required_result_columns_set(required_result_columns.begin(), required_result_columns.end());
 
     ASTs asts = select_query->select()->children;
     for (const auto & ast : asts)
     {
         String result_name = ast->getAliasOrColumnName();
-        if (required_result_columns.empty() || required_result_columns.count(result_name))
+        auto it = required_result_columns_set.find(result_name);
+        if (required_result_columns_set.empty() || it != required_result_columns_set.end())
         {
             std::string source_name = ast->getColumnName();
 
@@ -1926,11 +1933,35 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendProjectResult(ExpressionActio
 
             result_columns.emplace_back(source_name, result_name);
             step.addRequiredOutput(result_columns.back().second);
+            if (!required_result_columns_set.empty())
+                required_result_columns_set.erase(it);
         }
     }
 
     auto actions = chain.getLastActions();
     actions->project(result_columns);
+
+    if (!required_result_columns.empty())
+    {
+        const NameSet & required_result_columns_not_present = required_result_columns_set;
+        result_columns.clear();
+        for (const auto & column : required_result_columns)
+        {
+            // This is a simple fix for the test case tests/queries/4_cnch_stateless/00998_materialized_view_multiple_joins.sql
+            // whereby INSERT INTO `1234.test00998mv`.target_join_448189919111675915_write SELECT t.id, t.s FROM `1234.test00998mv`.source AS t INNER JOIN `1234.test00998mv`.dim AS d ON t.s = d.s WHERE _partition_id = 1
+            // results in _partition_id being one of the required_result_columns.
+            // But actions does not have the virtual column _partition_id.
+            // This is probably not the best way to do it. Should _partition_id even be allowed here?
+            if (required_result_columns_not_present.count(column) > 0)
+            {
+                LOG_DEBUG(&Poco::Logger::get("SelectQueryExpressionAnalyzer::appendProjectResult"), "Column not present: {}", column);
+                continue;
+            }
+            result_columns.emplace_back(column, std::string{});
+        }
+        actions->project(result_columns);
+    }
+
     return actions;
 }
 

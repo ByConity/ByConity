@@ -140,6 +140,8 @@ public:
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(this->argument_types[0]); }
 
+    bool returnTypeCanBeNullable() const override { return false; }
+
     void insertWithSampler(Data & a, const T & v, Arena * arena) const
     {
         ++a.total_values;
@@ -465,6 +467,8 @@ public:
     String getName() const override { return getNameByTrait<Trait>(); }
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(data_type); }
+
+    bool returnTypeCanBeNullable() const override { return false; }
 
     void insertWithSampler(Data & a, const Node * v, Arena * arena) const
     {

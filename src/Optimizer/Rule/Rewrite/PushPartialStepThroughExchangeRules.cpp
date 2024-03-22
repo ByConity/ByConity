@@ -30,38 +30,24 @@
 #include <QueryPlan/SortingStep.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <Poco/StringTokenizer.h>
+#include "QueryPlan/SortingStep.h"
 
 namespace DB
 {
 
-NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationFuse"};
+NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationFuse", "attribution", "attributionCorrelation"};
 
 static std::pair<bool, bool> canPushPartialWithHint(const AggregatingStep * step)
 {
     const auto & hint_list = step->getHints();
-    bool enable_push_partical_agg = true;
     for (const auto & hint : hint_list)
     {
         if (hint->getType() == HintCategory::PUSH_PARTIAL_AGG)
         {
-            auto match = [&](String & name) -> bool {
-                for (const auto & agg : step->getAggregates())
-                {
-                    if (name == agg.function->getName())
-                        return true;
-                }
-                return false;
-            };
-
             if (auto enable_hint = std::dynamic_pointer_cast<EnablePushPartialAgg>(hint))
-            {
-                enable_push_partical_agg = match(enable_hint->getFunctionName());
-            }
+                return {true, true};
             else if (auto disable_hint = std::dynamic_pointer_cast<DisablePushPartialAgg>(hint))
-            {
-                enable_push_partical_agg = !match(disable_hint->getFunctionName());
-            }
-            return {true, enable_push_partical_agg};
+                return {true, false};
         }
     }
     return {false, true};
@@ -325,7 +311,7 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
         }
 
         auto before_exchange_sort = std::make_unique<SortingStep>(
-            exchange_child->getStep()->getOutputStream(), new_sort_desc, step->getLimit(), true, SortDescription{});
+            exchange_child->getStep()->getOutputStream(), new_sort_desc, step->getLimit(), SortingStep::Stage::PARTIAL, SortDescription{});
         PlanNodes children{exchange_child};
         auto before_exchange_sort_node
             = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(before_exchange_sort), children, node->getStatistics());
@@ -333,10 +319,12 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
     }
 
     auto exchange_step = old_exchange_step->copy(context.context);
+    dynamic_cast<ExchangeStep *>(exchange_step.get())->setKeepOrder(true);
     auto exchange_node = PlanNodeBase::createPlanNode(
         context.context->nextNodeId(), std::move(exchange_step), exchange_children, old_exchange_node->getStatistics());
 
     QueryPlanStepPtr final_sort = step->copy(context.context);
+    dynamic_cast<SortingStep *>(final_sort.get())->setStage(SortingStep::Stage::MERGE);
     PlanNodes exchange{exchange_node};
     auto final_sort_node
         = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(final_sort), exchange, node->getStatistics());
@@ -346,7 +334,7 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
 static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
 {
     auto range = PlanNodeCardinality::extractCardinality(*node);
-    return range.upperBound > limit.getLimit() + limit.getOffset();
+    return !limit.hasPreparedParam() && range.upperBound > limit.getLimitValue() + limit.getOffsetValue();
 }
 
 PatternPtr PushPartialLimitThroughExchange::getPattern() const
@@ -369,8 +357,8 @@ TransformResult PushPartialLimitThroughExchange::transformImpl(PlanNodePtr node,
         {
             auto partial_limit = std::make_unique<LimitStep>(
                 exchange_child->getStep()->getOutputStream(),
-                step->getLimit() + step->getOffset(),
-                0,
+                step->getLimitValue() + step->getOffsetValue(),
+                size_t{0},
                 false,
                 false,
                 step->getSortDescription(),

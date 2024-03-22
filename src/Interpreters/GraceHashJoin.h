@@ -57,6 +57,7 @@ public:
         ContextPtr context_, std::shared_ptr<TableJoin> table_join_,
         const Block & left_sample_block_, const Block & right_sample_block_,
         TemporaryDataOnDiskScopePtr tmp_data_,
+        int left_side_parallel_,
         bool any_take_last_row_ = false);
 
     ~GraceHashJoin() override;
@@ -107,9 +108,6 @@ private:
     /// Throws if a bucket creation fails
     void addBuckets(size_t bucket_count);
 
-    /// Create new bucket at the end of @destination.
-    void addBucket(Buckets & destination);
-
     /// Increase number of buckets to match desired_size.
     /// Called when HashJoin in-memory table for one bucket exceeds the limits.
     ///
@@ -152,6 +150,7 @@ private:
     InMemoryJoinPtr hash_join;
     Block hash_join_sample_block;
     mutable std::mutex hash_join_mutex;
+    int left_side_parallel;
 };
 
 }

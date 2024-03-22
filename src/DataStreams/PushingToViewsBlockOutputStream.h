@@ -72,6 +72,7 @@ private:
         BlockOutputStreamPtr out;
         std::exception_ptr exception;
         UInt64 elapsed_ms = 0;
+        Block output_header;
     };
 
     std::vector<ViewInfo> views;

@@ -298,7 +298,7 @@ std::shared_ptr<Protos::TableIdentifier> MetastoreProxy::getTableID(const String
     return res;
 }
 
-std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> MetastoreProxy::getTableIDs(const String & name_space, 
+std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> MetastoreProxy::getTableIDs(const String & name_space,
         const std::vector<std::pair<String, String>> & db_table_pairs)
 {
     Strings keys;
@@ -307,12 +307,14 @@ std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> Metastore
         keys.push_back(tableUUIDMappingKey(name_space, pair.first, pair.second));
     }
 
-    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> res(new std::vector<std::shared_ptr<Protos::TableIdentifier>>());
+    auto res = std::make_shared<std::vector<std::shared_ptr<Protos::TableIdentifier>>>(std::vector<std::shared_ptr<Protos::TableIdentifier>>{});
 
     auto values = metastore_ptr->multiGet(keys);
     for (const auto & value : values)
     {
-        res->emplace_back(new Protos::TableIdentifier);
+        if (value.first.empty())
+            continue;
+        res->emplace_back(std::make_shared<Protos::TableIdentifier>());
         res->back()->ParseFromString(std::move(value.first));
     }
 
@@ -463,8 +465,14 @@ Strings MetastoreProxy::getUDFsMetaByName(const String & name_space, const std::
 
 std::vector<std::shared_ptr<Protos::TableIdentifier>> MetastoreProxy::getAllTablesId(const String & name_space, const String & db)
 {
+    return getTablesIdByPrefix(name_space, db.empty() ? escapeString(db) : escapeString(db) + "_");
+}
+
+std::vector<std::shared_ptr<Protos::TableIdentifier>> MetastoreProxy::getTablesIdByPrefix(const String & name_space, const String & prefix)
+{
     std::vector<std::shared_ptr<Protos::TableIdentifier>> res;
-    auto it = metastore_ptr->getByPrefix(tableUUIDMappingPrefix(name_space, db));
+    String meta_prefix = tableUUIDMappingPrefix(name_space) + prefix;
+    auto it = metastore_ptr->getByPrefix(meta_prefix);
     while(it->next())
     {
         std::shared_ptr<Protos::TableIdentifier> identifier_ptr(new Protos::TableIdentifier());
@@ -485,6 +493,109 @@ Strings MetastoreProxy::getAllDependence(const String & name_space, const String
     return res;
 }
 
+std::vector<std::shared_ptr<Protos::VersionedPartitions>> MetastoreProxy::getMvBaseTables(const String & name_space, const String & uuid)
+{
+    std::vector<std::shared_ptr<Protos::VersionedPartitions>> res;
+    auto it = metastore_ptr->getByPrefix(matViewBaseTablesPrefix(name_space, uuid));
+    while(it->next())
+    {
+        std::shared_ptr<Protos::VersionedPartitions> identifier_ptr(new Protos::VersionedPartitions());
+        identifier_ptr->add_versioned_partition()->ParseFromString(it->value());
+        StorageID storage_id = RPCHelpers::createStorageID(identifier_ptr->versioned_partition(0).storage_id());
+        RPCHelpers::fillStorageID(storage_id, *identifier_ptr->mutable_storage_id());
+        if (!res.empty()
+            && identifier_ptr->storage_id().uuid().low() == res.back()->storage_id().uuid().low()
+            && identifier_ptr->storage_id().uuid().high() == res.back()->storage_id().uuid().high())
+        {
+            for (const auto & p : identifier_ptr->versioned_partition())
+                res.back()->add_versioned_partition()->CopyFrom(p);
+        }
+        else
+            res.push_back(identifier_ptr);
+    }
+    return res;
+}
+
+String MetastoreProxy::getMvMetaVersion(const String & name_space, const String & uuid)
+{
+    String mv_meta_version_ts;
+    metastore_ptr->get(matViewVersionKey(name_space, uuid), mv_meta_version_ts);
+    LOG_TRACE(&Poco::Logger::get("MetaStore"), "get mv meta, version {}.", mv_meta_version_ts);
+    if (mv_meta_version_ts.empty())
+        return "";
+
+    return mv_meta_version_ts;
+}
+
+BatchCommitRequest MetastoreProxy::constructMvMetaRequests(const String & name_space, const String & uuid,
+    std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions,
+    std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions,
+    String mv_version_ts)
+{
+    LOG_TRACE(&Poco::Logger::get("MetaStore"), "construct mv meta, version {}.", mv_version_ts);
+
+    BatchCommitRequest multi_write;
+    for (const auto & add : add_partitions)
+    {
+        String base_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(add->storage_id().uuid()));
+        String value;
+        add->SerializeToString(&value);
+        String key = matViewBaseTablesKey(name_space, uuid, base_uuid, add->partition());
+        multi_write.AddPut(SinglePutRequest(key, value));
+        LOG_TRACE(&Poco::Logger::get("MetaStore"), "add key {} value size {}.", key, value.size());
+    }
+
+    multi_write.AddPut(SinglePutRequest(matViewVersionKey(name_space, uuid), mv_version_ts));
+
+    for (const auto & drop : drop_partitions)
+    {
+        String base_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(drop->storage_id().uuid()));
+        String value;
+        drop->SerializeToString(&value);
+        String key = matViewBaseTablesKey(name_space, uuid, base_uuid, drop->partition());
+        multi_write.AddDelete(SinglePutRequest(key, value));
+        LOG_TRACE(&Poco::Logger::get("MetaStore"), "drop key {}.", key);
+    }
+
+    return multi_write;
+}
+
+void MetastoreProxy::updateMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
+{
+    for (const auto & ele : versioned_partitions)
+    {
+        if (!ele->versioned_partition().empty())
+        {
+            String base_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(ele->storage_id().uuid()));
+            for (const auto & p : ele->versioned_partition())
+            {
+                String serialized_meta;
+                p.SerializeToString(&serialized_meta);
+                metastore_ptr->put(matViewBaseTablesKey(name_space, uuid, base_uuid, p.partition()), serialized_meta);
+                LOG_TRACE(&Poco::Logger::get("MetaStore"), "value size {}.", serialized_meta.size());
+            }
+        }
+    }
+}
+
+void MetastoreProxy::cleanMvMeta(const String & name_space, const String & uuid)
+{
+    metastore_ptr->clean(matViewVersionKey(name_space, uuid));
+    metastore_ptr->clean(matViewBaseTablesPrefix(name_space, uuid));
+}
+
+void MetastoreProxy::dropMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
+{
+    for (const auto & ele : versioned_partitions)
+    {
+        if (!ele->versioned_partition().empty())
+        {
+            String base_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(ele->storage_id().uuid()));
+            for (const auto & p : ele->versioned_partition())
+                metastore_ptr->drop(matViewBaseTablesKey(name_space, uuid, base_uuid, p.partition()));
+        }
+    }
+}
 
 IMetaStore::IteratorPtr MetastoreProxy::getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size)
 {
@@ -858,7 +969,9 @@ void MetastoreProxy::prepareAddDataParts(const String & name_space, const String
 }
 
 void MetastoreProxy::prepareAddStagedParts(
-    const String & name_space, const String & table_uuid,
+    const String & name_space,
+    const String & table_uuid,
+    const Strings & current_partitions,
     const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
     BatchCommitRequest & batch_write,
     const std::vector<String> & expected_staged_parts)
@@ -866,6 +979,8 @@ void MetastoreProxy::prepareAddStagedParts(
     if (parts.empty())
         return;
 
+    std::unordered_set<String> existing_partitions{current_partitions.begin(), current_partitions.end()};
+    std::unordered_map<String, String> partition_map;
     size_t expected_staged_part_size = expected_staged_parts.size();
     if (expected_staged_part_size != static_cast<size_t>(parts.size()))
         throw Exception("Staged part size wants to write does not match the expected staged part size.", ErrorCodes::LOGICAL_ERROR);
@@ -875,6 +990,22 @@ void MetastoreProxy::prepareAddStagedParts(
         auto info_ptr = createPartInfoFromModel(it->part_info());
         String part_meta = it->SerializeAsString();
         batch_write.AddPut(SinglePutRequest(stagedDataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_staged_parts[it - parts.begin()]));
+
+        if (!existing_partitions.count(info_ptr->partition_id) && !partition_map.count(info_ptr->partition_id))
+            partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
+    }
+
+    Protos::PartitionMeta partition_model;
+    for (auto & it : partition_map)
+    {
+        std::stringstream ss;
+        /// To keep the partitions have the same order as data parts in bytekv, we add an extra "_" in the key of partition meta
+        ss << tablePartitionInfoPrefix(name_space, table_uuid) << it.first << '_';
+
+        partition_model.set_id(it.first);
+        partition_model.set_partition_minmax(it.second);
+
+        batch_write.AddPut(SinglePutRequest(ss.str(), partition_model.SerializeAsString()));
     }
 }
 
@@ -893,6 +1024,12 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
     metastore_ptr->clean(detachedPartPrefix(name_space, uuid));
     metastore_ptr->clean(partitionPartsMetricsSnapshotPrefix(name_space,uuid, ""));
     metastore_ptr->clean(tableTrashItemsMetricsSnapshotPrefix(name_space, uuid));
+}
+
+void MetastoreProxy::dropAllMutationsInTable(const String & name_space, const String & uuid)
+{
+    /// clear mutations metadata
+    metastore_ptr->clean(tableMutationPrefix(name_space, uuid));
 }
 
 void MetastoreProxy::dropAllDeleteBitmapInTable(const String & name_space, const String & uuid)
@@ -1133,7 +1270,7 @@ bool MetastoreProxy::updateTransactionRecordWithBinlog(const String & name_space
 std::pair<bool, String> MetastoreProxy::MetastoreProxy::updateTransactionRecordWithRequests(
     SinglePutRequest & txn_request, BatchCommitRequest & requests, BatchCommitResponse & response)
 {
-    if (requests.puts.empty())
+    if (requests.puts.empty() && requests.deletes.empty())
     {
         return metastore_ptr->putCAS(
             String(txn_request.key), String(txn_request.value), String(*txn_request.expected_value), true);
@@ -1648,8 +1785,12 @@ void MetastoreProxy::setBGJobStatus(const String & name_space, const String & uu
     else if (type == CnchBGThreadType::ObjectSchemaAssemble)
         metastore_ptr->put(
             objectSchemaAssembleBGJobStatusKey(name_space, uuid),
-            String{BGJobStatusInCatalog::serializeToChar(status)}
+            String {BGJobStatusInCatalog::serializeToChar(status)}
         );
+    else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
+        metastore_ptr->put(
+            refreshViewBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)});
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 }
@@ -1671,6 +1812,8 @@ std::optional<CnchBGThreadStatus> MetastoreProxy::getBGJobStatus(const String & 
         metastore_ptr->get(dedupWorkerBGJobStatusKey(name_space, uuid), status_store_data);
     else if (type == CnchBGThreadType::ObjectSchemaAssemble)
         metastore_ptr->get(objectSchemaAssembleBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
+        metastore_ptr->get(refreshViewBGJobStatusKey(name_space, uuid), status_store_data);
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 
@@ -1707,6 +1850,8 @@ std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(co
                 return metastore_ptr->getByPrefix(allDedupWorkerBGJobStatusKeyPrefix(name_space));
             else if (type == CnchBGThreadType::ObjectSchemaAssemble)
                 return metastore_ptr->getByPrefix(allObjectSchemaAssembleBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
+                return metastore_ptr->getByPrefix(allRefreshViewJobStatusKeyPrefix(name_space));
             else
                 throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
         };
@@ -1750,6 +1895,9 @@ void MetastoreProxy::dropBGJobStatus(const String & name_space, const String & u
             break;
         case CnchBGThreadType::ObjectSchemaAssemble:
             metastore_ptr->drop(objectSchemaAssembleBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::CnchRefreshMaterializedView:
+            metastore_ptr->drop(dedupWorkerBGJobStatusKey(name_space, uuid));
             break;
         default:
             throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
@@ -2865,7 +3013,7 @@ SerializedObjectSchema MetastoreProxy::getObjectPartialSchema(const String &name
     metastore_ptr->get(partialSchemaKey(name_space, table_uuid, txn_id), partial_schema);
     if (partial_schema.empty())
         return "";
-    
+
     return partial_schema;
 }
 
@@ -2891,7 +3039,7 @@ SerializedObjectSchema MetastoreProxy::getObjectAssembledSchema(const String &na
     metastore_ptr->get(assembledSchemaKey(name_space, table_uuid), assembled_schema);
     if (assembled_schema.empty())
         return "";
-    
+
     return assembled_schema;
 }
 
@@ -2996,6 +3144,13 @@ String MetastoreProxy::getTableTrashItemsSnapshot(const String & name_space, con
     String value;
     metastore_ptr->get(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), value);
     return value;
+}
+
+String MetastoreProxy::getByKey(const String & key)
+{
+    String meta_str;
+    metastore_ptr->get(key, meta_str);
+    return meta_str;
 }
 
 // Access Entities

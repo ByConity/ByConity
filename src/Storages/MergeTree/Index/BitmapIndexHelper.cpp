@@ -471,4 +471,9 @@ Block BitmapIndexInfo::updateHeader(Block header)
         res.insert(std::move(item));
     return res;
 }
+
+bool functionCanUseBitmapIndex(const ASTFunction & function)
+{
+    return array_set_functions.count(function.name) || bitmap_functions.count(function.name);
+}
 }

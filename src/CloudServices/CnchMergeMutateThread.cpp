@@ -131,6 +131,12 @@ namespace
     }
 }
 
+/// We maintain merging_mutating_parts based on the merge task's lifecycle.
+/// Source parts are added to merging_mutating_parts when task is created, see FutureManipulationTask::assignSourceParts.
+/// And they are removed from merging_mutating_parts when task record is destroyed.
+/// As the merge txn is committed in a 2-phase style, we need to hold the task record until txn phase-2 finish (success or fail).
+/// * phase 1 - ::finishTask is called. We mark the task record as committing by set commit_start_time, instead of destroy the record.
+/// * phase 2 - We use ITransaction::tryCleanMergeTagger (which is called after phase 2 finish) to destroy the task record.
 ManipulationTaskRecord::~ManipulationTaskRecord()
 {
     try
@@ -227,6 +233,7 @@ FutureManipulationTask & FutureManipulationTask::prepareTransaction()
     auto & txn_coordinator = parent.getContext()->getCnchTransactionCoordinator();
     record->transaction = txn_coordinator.createTransaction(
         CreateTransactionOption().setInitiator(CnchTransactionInitiator::Merge).setPriority(CnchTransactionPriority::low));
+    record->transaction->setMainTableUUID(parent.storage_id.uuid);
 
     return *this;
 }
@@ -352,7 +359,9 @@ void CnchMergeMutateThread::runHeartbeatTask()
                 const auto & partition_id = task->parts.front()->info().partition_id;
                 scheduled_mutation_partitions.erase(partition_id);
             }
-            removeTaskImpl(task->task_id, lock);
+
+            if (time(nullptr) - task->commit_start_time > root_config.cnch_merge_txn_commit_timeout)
+                removeTaskImpl(task->task_id, lock);
         }
     };
 
@@ -671,9 +680,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     metrics.elapsed_calc_visible_parts = watch.elapsedMicroseconds();
     watch.restart();
 
-    if (visible_parts.size() <= 1)
+    if (visible_parts.empty())
     {
-        LOG_TRACE(log, "There is only {} part in visible_parts, exit merge selection.", visible_parts.size());
+        LOG_TRACE(log, "There is no visible parts, exit merge selection.");
         return false;
     }
 
@@ -719,9 +728,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
             visible_parts.end()
         );
 
-        if (visible_parts.size() <= 1)
+        if (visible_parts.empty())
         {
-            LOG_TRACE(log, "Only {} parts in visible_parts, exit merge selection.", visible_parts.size());
+            LOG_TRACE(log, "There is no visible parts, exit merge selection.");
             return false;
         }
 
@@ -782,7 +791,7 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
     Stopwatch watch;
     auto & txn_coordinator = getContext()->getCnchTransactionCoordinator();
     auto transaction = txn_coordinator.createTransaction(
-        CreateTransactionOption().setInitiator(CnchTransactionInitiator::Merge).setPriority(CnchTransactionPriority::low));
+        CreateTransactionOption().setInitiator(CnchTransactionInitiator::MergeSelect).setPriority(CnchTransactionPriority::low));
 
     SCOPE_EXIT({
         try
@@ -802,7 +811,7 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
         {
             LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
             partition_lock->setMode(LockMode::X);
-            partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(getStorageID().uuid));
+            partition_lock->setUUIDAndPrefix(getStorageID().uuid, LockInfo::task_domain);
             partition_lock->setPartition(partition);
 
             auto cnch_lock = transaction->createLockHolder({std::move(partition_lock)});
@@ -818,10 +827,12 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
             }
         });
 
-    transaction->abort();
+    /// It's safe to use commitV2() (not abort()) to release the txn as there is no actions to do.
+    /// And finishTransaction in the SCOPE_EXIT make sure the txn is clean by server but not DM.
+    transaction->commitV2();
     UInt64 milliseconds = watch.elapsedMilliseconds();
     if (milliseconds >= SLOW_THRESHOLD_MS)
-        LOG_INFO(log, "removeLockedPartition tooks {} ms.", milliseconds);
+        LOG_INFO(log, "removeLockedPartition took {} ms.", milliseconds);
     return res;
 }
 
@@ -847,7 +858,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
 
     LockInfoPtr partition_lock = std::make_shared<LockInfo>(transaction_id);
     partition_lock->setMode(LockMode::X);
-    partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(getStorageID().uuid));
+    partition_lock->setUUIDAndPrefix(getStorageID().uuid, LockInfo::task_domain);
     partition_lock->setTimeout(storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
 
     /*
@@ -990,9 +1001,9 @@ String CnchMergeMutateThread::triggerPartMerge(
 
     auto visible_parts = CnchPartsHelper::calcVisibleParts(
         data_parts, false, (try_select ? CnchPartsHelper::EnableLogging : CnchPartsHelper::DisableLogging));
-    if (visible_parts.size() <= 1)
+    if (visible_parts.empty())
     {
-        LOG_DEBUG(log, "triggerPartMerge(): size of visible_parts <= 1");
+        LOG_TRACE(log, "There is no visible parts, exit merge selection.");
         return {};
     }
 
@@ -1067,7 +1078,7 @@ void CnchMergeMutateThread::waitTasksFinish(const std::vector<String> & task_ids
     Stopwatch watch;
     for (const auto & task_id: task_ids)
     {
-        std::unique_lock lock(task_records_mutex);
+        std::unique_lock lock(currently_synchronous_tasks_mutex);
         if (!timeout_ms)
         {
             currently_synchronous_tasks_cv.wait(lock, [&]() { return !shutdown_called && !currently_synchronous_tasks.count(task_id); });
@@ -1133,38 +1144,49 @@ void CnchMergeMutateThread::removeTaskImpl(const String & task_id, std::lock_gua
     task_records.erase(it);
 }
 
-void CnchMergeMutateThread::finishTask(const String & task_id, std::function<void(const ManipulationTaskRecord &)> && commit_parts)
+/// Merge txn's phase-1 commit.
+void CnchMergeMutateThread::finishTask(const String & task_id, std::function<void(const Strings &)> && precommit_parts)
 {
     auto local_context = getContext();
+    UInt64 current_ts = local_context->getPhysicalTimestamp();
+    bool need_check_start_time = current_ts - last_schedule_time > DELAY_SCHEDULE_TIME_IN_SECOND;
+    UInt64 fetched_start_time = need_check_start_time ? catalog->getMergeMutateThreadStartTime(storage_id) : 0;
 
     Stopwatch watch;
 
-    TaskRecordPtr curr_task;
+    /// Set task_record's commit_start_time before precommit_parts().
+    /// And for a committing task, it must be destroyed from txn (commit/abort/rollback) or heartbeat check.
+    /// Other threads (like INGEST PARTITION) should skip those committing tasks when cancelling merge.
+    String partition_id;
+    Strings source_part_names;
+    bool try_execute;
+
     {
         std::lock_guard lock(task_records_mutex);
         auto it = task_records.find(task_id);
         if (it == task_records.end())
             throw Exception(ErrorCodes::ABORTED, "Task {} not found in this node.", task_id);
-        removeTaskImpl(task_id, lock, &curr_task);
-        if (!curr_task)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to move task {} ", task_id);
+        it->second->commit_start_time = time(nullptr);
+
+        partition_id = it->second->parts.front()->info().partition_id;
+        source_part_names = it->second->getSourcePartNames();
+        try_execute = it->second->try_execute;
     }
 
     if (local_context->getRootConfig().debug_disable_merge_commit.safeGet())
         throw Exception("Disable merge commit", ErrorCodes::ABORTED);
 
-    if (curr_task->try_execute)
+    if (try_execute)
     {
         LOG_DEBUG(log, "Ignored the `try_execute` task {}", task_id);
+        /// Leave the task in task_records and it will be destroyed by heartbeat check.
         return;
     }
 
-    UInt64 current_ts = local_context->getPhysicalTimestamp();
     /// Check with catalog when the last_schedule_time is not updated for some time. The task can be committed only if current
     /// thread start up time equals to that in catalog.
-    if (current_ts - last_schedule_time > DELAY_SCHEDULE_TIME_IN_SECOND)
+    if (need_check_start_time)
     {
-        UInt64 fetched_start_time = catalog->getMergeMutateThreadStartTime(storage_id);
         if (thread_start_time != fetched_start_time)
             throw Exception(
                 ErrorCodes::ABORTED,
@@ -1172,27 +1194,8 @@ void CnchMergeMutateThread::finishTask(const String & task_id, std::function<voi
                 task_id, storage_id.getFullTableName());
     }
 
-    commit_parts(*curr_task);
+    precommit_parts(source_part_names);
 
-    auto now = time(nullptr);
-
-    ProfileEvents::increment(ProfileEvents::ManipulationSuccess, 1);
-    if (auto part_merge_log = local_context->getPartMergeLog())
-    {
-        PartMergeLogElement part_merge_log_elem;
-        part_merge_log_elem.event_type = PartMergeLogElement::COMMIT;
-        part_merge_log_elem.event_time = now;
-        part_merge_log_elem.database = storage_id.database_name;
-        part_merge_log_elem.table = storage_id.table_name;
-        part_merge_log_elem.uuid = storage_id.uuid;
-        part_merge_log_elem.duration_us = watch.elapsedMicroseconds();
-        part_merge_log_elem.new_tasks = 1;
-        part_merge_log_elem.source_parts_in_new_tasks = curr_task->parts.size();
-
-        part_merge_log->add(part_merge_log_elem);
-    }
-
-    auto partition_id = curr_task->parts.front()->info().partition_id;
     if(auto gc_thread = getContext()->tryGetCnchBGThread(CnchBGThreadType::PartGC, storage_id))
         gc_thread->addCandidatePartition(partition_id);
 
@@ -1319,9 +1322,10 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
             else if (mutation_command.predicate)
             {
                 ServerDataPartsVector parts_to_recluster;
+                auto table_definition_hash = storage.getTableHashForClusterBy();
                 for (const auto & part : visible_parts)
                 {
-                    if (part->part_model().table_definition_hash() != storage.getTableHashForClusterBy())
+                    if (!table_definition_hash.match(part->part_model().table_definition_hash()))
                         parts_to_recluster.push_back(part);
                 }
 
@@ -1620,8 +1624,17 @@ void CnchMergeMutateThread::triggerPartMutate(StoragePtr storage)
     tryMutateParts(storage, *cnch);
 }
 
+/// Cancel existing merge tasks:
+/// 1. [lock guarded] collect tasks and group by worker.
+/// 2. [lock guarded] remove tasks from task_records.
+/// 3. send shutdown signal to workers.
+/// 4. wait committing tasks finish (be aborted or committed).
 bool CnchMergeMutateThread::removeTasksOnPartitions(const std::unordered_set<String> & partitions)
 {
+    if (partitions.empty())
+        return true;
+    bool remove_all = *partitions.begin() == "all";
+
     std::lock_guard lock_merge(try_merge_parts_mutex);
     std::lock_guard lock_mutate(try_mutate_parts_mutex);
     {
@@ -1629,44 +1642,57 @@ bool CnchMergeMutateThread::removeTasksOnPartitions(const std::unordered_set<Str
         merge_pending_queue.swap(empty_for_clear);
     }
 
-    std::vector<String> remove_task_ids;
+    std::vector<String> task_ids;
     std::unordered_map<CnchWorkerClientPtr, Strings> worker_with_tasks;
+    NameSet committing_tasks;
 
     {
         std::lock_guard lock(task_records_mutex);
+        for (const auto & [task_id, task] : task_records)
+        {
+            if (task->parts.empty())
+                continue;
 
-        std::for_each(task_records.begin(), task_records.end(), [&remove_task_ids, &partitions](auto & p) {
-            auto & task_ptr = p.second;
-            if (task_ptr->parts.empty())
-                return;
-            if ((task_ptr->type == ManipulationType::Clustering) || (task_ptr->type == ManipulationType::Mutate))
-                remove_task_ids.push_back(p.first);
+            if (task->commit_start_time > 0)
+            {
+                committing_tasks.insert(task_id);
+                continue;
+            }
 
-            if ((task_ptr->type == ManipulationType::Merge) && partitions.contains(task_ptr->parts.front()->info().partition_id))
-                remove_task_ids.push_back(p.first);
-        });
+            if (task->type == ManipulationType::Clustering || task->type == ManipulationType::Mutate || remove_all)
+                task_ids.push_back(task_id);
+            else if (task->type == ManipulationType::Merge && partitions.contains(task->parts.front()->info().partition_id))
+                task_ids.push_back(task_id); 
+        }
 
-        std::for_each(remove_task_ids.begin(), remove_task_ids.end(), [this, &worker_with_tasks](const String & task_id) {
+        for (const auto & task_id : task_ids)
+        {
             auto it = task_records.find(task_id);
             if (it == task_records.end())
-                return;
+                continue;
             worker_with_tasks[it->second->worker].push_back(task_id);
-        });
+
+            LOG_INFO(log, "Remove task: {} ", task_id);
+            removeTaskImpl(task_id, lock);
+        }
     }
 
-    std::for_each(worker_with_tasks.begin(), worker_with_tasks.end(), [this](auto & p) {
-        if (!p.first)
-            throw Exception("Worker is null for task " + p.second[0], ErrorCodes::LOGICAL_ERROR);
-        p.first->shutdownManipulationTasks(storage_id.uuid, p.second);
-    });
-
+    for (const auto & [worker, tasks] : worker_with_tasks)
     {
-        std::lock_guard lock(task_records_mutex);
+        if (!worker)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't find worker host for task {}", tasks[0]);
+        worker->shutdownManipulationTasks(storage_id.uuid, tasks);
+    }
 
-        std::for_each(remove_task_ids.begin(), remove_task_ids.end(), [this, &lock](const String & task_id) {
-            LOG_INFO(log, "Remove task: {} for ingest partition", task_id);
-            removeTaskImpl(task_id, lock);
-        });
+    /// Make sure all tasks are aborted or committed, so that we can generate a DropRange safely.
+    /// The final state of the task(aborted or committed) is not important.
+    auto & txn_coordinator = getContext()->getCnchTransactionCoordinator();
+    for (const auto & task_id : committing_tasks)
+    {
+        auto txn_id = std::stoull(task_id);
+        try {
+            txn_coordinator.getTransaction(txn_id)->abort();
+        } catch(...) {}
     }
 
     return true;

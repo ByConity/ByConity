@@ -3,6 +3,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Processors/IProcessor.h>
 #include <Storages/IStorage_fwd.h>
+#include <Transaction/CnchLock.h>
 
 namespace DB
 {
@@ -10,7 +11,7 @@ namespace DB
 class TableFinishTransform : public IProcessor
 {
 public:
-    TableFinishTransform(const Block & header_, const StoragePtr & storage_, const ContextPtr & context_);
+    TableFinishTransform(const Block & header_, const StoragePtr & storage_, const ContextPtr & context_, ASTPtr & query_);
 
     String getName() const override
     {
@@ -46,6 +47,8 @@ private:
 
     StoragePtr storage;
     ContextPtr context;
+    ASTPtr query;
+    CnchLockHolderPtrs lock_holders;
 };
 
 }

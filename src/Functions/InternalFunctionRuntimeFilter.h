@@ -49,7 +49,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override { return std::make_shared<DataTypeUInt8>(); }
 
-    size_t getNumberOfArguments() const override { return 3; }
+    size_t getNumberOfArguments() const override { return 4; }
 };
 
 }

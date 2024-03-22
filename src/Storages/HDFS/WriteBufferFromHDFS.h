@@ -45,11 +45,10 @@ public:
         size_t buf_size_ = DBMS_DEFAULT_BUFFER_SIZE,
         int flags = O_WRONLY);
 
-
-    WriteBufferFromHDFS(
+    explicit WriteBufferFromHDFS(
         const std::string & hdfs_name_,
-        const HDFSConnectionParams & hdfs_params = HDFSConnectionParams::defaultNNProxy(),
-        const size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        const HDFSConnectionParams & hdfs_params_ = HDFSConnectionParams::defaultNNProxy(),
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         int flag = O_WRONLY,
         bool overwrite_current_file = false);
 
@@ -62,7 +61,20 @@ public:
     std::string getFileName() const override;
     void finalizeImpl() override;
 
+    WriteBuffer * inplaceReconstruct(const String & out_path, [[maybe_unused]] std::unique_ptr<WriteBuffer> nested) override
+    {
+        HDFSConnectionParams hdfs_params_tmp = std::move(this->hdfs_params);
+        bool skip_file_exist_check_tmp = this->skip_file_exist_check;
+        auto buf_size = internal_buffer.size();
+        // Call the destructor explicitly but does not free memory
+        this->~WriteBufferFromHDFS();
+        new (this) WriteBufferFromHDFS(out_path, hdfs_params_tmp, buf_size, O_WRONLY, skip_file_exist_check_tmp);
+        return this;
+    }
+
 private:
+    HDFSConnectionParams hdfs_params;
+    bool skip_file_exist_check = false;
     struct WriteBufferFromHDFSImpl;
     std::unique_ptr<WriteBufferFromHDFSImpl> impl;
     std::string hdfs_name;

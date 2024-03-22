@@ -11,39 +11,21 @@ Projection Est. 1 rows
                └─ Aggregating Est. 1 rows
                   │     Group by: {o_orderpriority}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ Inner (PARALLEL_HASH) Join Est. 57353820 rows
-                     │     Condition: o_orderkey == l_orderkey
-                     │     Runtime Filters Builder: {l_orderkey}
-                     ├─ Repartition Exchange Est. 57353820 rows
-                     │  │     Partition by: {o_orderkey}
-                     │  └─ Filter Est. 57353820 rows
-                     │     │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')) Runtime Filters: {o_orderkey}
-                     │     └─ TableScan tpch1000.orders Est. 1500000000 rows
-                     │              Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')) Runtime Filters: {o_orderkey}
-                     │              Outputs: [o_orderkey, o_orderdate, o_orderpriority]
-                     └─ Aggregating Est. 41195828 rows
-                        │     Group by: {l_orderkey}
-                        └─ Inner (PARALLEL_HASH) Join Est. 229414886 rows
-                           │     Condition: l_orderkey == o_orderkey_1
-                           │     Runtime Filters Builder: {o_orderkey_1}
-                           ├─ Repartition Exchange Est. 5999989709 rows
-                           │  │     Partition by: {l_orderkey}
-                           │  └─ Filter Est. 5999989709 rows
-                           │     │     Condition: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
-                           │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
-                           │              Where: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
-                           │              Outputs: [l_orderkey, l_commitdate, l_receiptdate]
-                           └─ MergingAggregated Est. 41195828 rows
-                              └─ Repartition Exchange Est. 41195828 rows
-                                 │     Partition by: {o_orderkey_1}
-                                 └─ Aggregating Est. 41195828 rows
-                                    │     Group by: {o_orderkey_1}
-                                    └─ Projection Est. 57353820 rows
-                                       │     Expressions: o_orderkey_1:=o_orderkey
-                                       └─ Filter Est. 57353820 rows
-                                          │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
-                                          └─ TableScan tpch1000.orders Est. 1500000000 rows
-                                                   Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
-                                                   Outputs: [o_orderkey, o_orderdate]
-note: Magic Set is applied for 1 parts.
-note: Runtime Filter is applied for 2 times.
+                  └─ Right Semi (PARALLEL_HASH) Join Est. 57353820 rows
+                     │     Condition: l_orderkey == o_orderkey
+                     │     Runtime Filters Builder: {o_orderkey}
+                     ├─ Projection Est. 1499997427 rows
+                     │  │     Expressions: [l_orderkey]
+                     │  └─ Filter Est. 1499997427 rows
+                     │     │     Condition: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
+                     │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
+                     │              Where: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
+                     │              Outputs: [l_orderkey, l_commitdate, l_receiptdate]
+                     └─ Projection Est. 57353820 rows
+                        │     Expressions: [o_orderkey, o_orderpriority]
+                        └─ Filter Est. 57353820 rows
+                           │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
+                           └─ TableScan tpch1000.orders Est. 1500000000 rows
+                                    Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
+                                    Outputs: [o_orderkey, o_orderdate, o_orderpriority]
+note: Runtime Filter is applied for 1 times.

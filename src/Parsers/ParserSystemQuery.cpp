@@ -272,7 +272,9 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::START_GC:
         case Type::STOP_GC:
         case Type::FORCE_GC:
+        case Type::DROP_CNCH_META_CACHE:
         case Type::DROP_CNCH_PART_CACHE:
+        case Type::DROP_CNCH_DELETE_BITMAP_CACHE:
         case Type::STOP_TTL_MERGES:
         case Type::START_TTL_MERGES:
         case Type::STOP_MOVES:
@@ -428,6 +430,13 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
             break;
         }
+
+        case Type::START_VIEW:
+        case Type::STOP_VIEW:
+        case Type::DROP_VIEW_META:
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            break;
 
         default:
             /// There are no [db.table] after COMMAND NAME

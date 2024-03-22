@@ -43,6 +43,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/LocalExchangeStep.h>
 #include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
@@ -112,6 +113,7 @@ public:
     NameToType getOutputNamesToTypes() const { return getCurrentDataStream().header.getNamesToTypes(); }
     Names getOutputNames() const { return getCurrentDataStream().header.getNames(); }
     PlanNodePtr getNodeById(PlanNodeId node_id) const;
+    void prepare(const PreparedStatementContext & prepared_context);
 
     static PlanNodePtr createPlanNode(
         [[maybe_unused]] PlanNodeId id_,

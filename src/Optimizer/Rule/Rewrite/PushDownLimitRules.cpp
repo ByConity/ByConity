@@ -29,7 +29,7 @@ namespace DB
 static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
 {
     auto range = PlanNodeCardinality::extractCardinality(*node);
-    return range.upperBound > limit.getLimit() + limit.getOffset();
+    return !limit.hasPreparedParam() && range.upperBound > limit.getLimitValue() + limit.getOffsetValue();
 }
 
 PatternPtr PushLimitIntoDistinct::getPattern() const
@@ -43,13 +43,12 @@ TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Cap
     auto distinct = node->getChildren()[0];
     const auto * distinct_step = dynamic_cast<const DistinctStep *>(distinct->getStep().get());
 
-    // when limit 0, we skip this rule since another rule will delete the whole node
-    auto limit_value = limit_step->getLimit();
-    if (limit_value == 0)
+    if (!isLimitNeeded(*limit_step, distinct))
         return {};
 
-
-    if (!isLimitNeeded(*limit_step, distinct))
+    // when limit 0, we skip this rule since another rule will delete the whole node
+    auto limit_value = limit_step->getLimitValue();
+    if (limit_value == 0)
         return {};
 
     auto new_distinct = PlanNodeBase::createPlanNode(
@@ -57,7 +56,7 @@ TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Cap
         std::make_shared<DistinctStep>(
             distinct_step->getInputStreams()[0],
             distinct_step->getSetSizeLimits(),
-            limit_step->getLimit() + limit_step->getOffset(),
+            limit_step->getLimitValue() + limit_step->getOffsetValue(),
             distinct_step->getColumns(),
             distinct_step->preDistinct()),
         distinct->getChildren());
@@ -132,8 +131,8 @@ TransformResult PushLimitThroughUnion::transformImpl(PlanNodePtr node, const Cap
                 context.context->nextNodeId(),
                 std::make_shared<LimitStep>(
                     child->getStep()->getOutputStream(),
-                    limit_step->getLimit() + limit_step->getOffset(),
-                    0,
+                    limit_step->getLimitValue() + limit_step->getOffsetValue(),
+                    size_t{0},
                     limit_step->isAlwaysReadTillEnd(),
                     limit_step->withTies(),
                     limit_step->getSortDescription(),
@@ -177,8 +176,8 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
             context.context->nextNodeId(),
             std::make_shared<LimitStep>(
                 left->getStep()->getOutputStream(),
-                limit_step->getLimit() + limit_step->getOffset(),
-                0,
+                limit_step->getLimitValue() + limit_step->getOffsetValue(),
+                size_t{0},
                 limit_step->isAlwaysReadTillEnd(),
                 limit_step->withTies(),
                 limit_step->getSortDescription(),
@@ -193,8 +192,8 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
             context.context->nextNodeId(),
             std::make_shared<LimitStep>(
                 right->getStep()->getOutputStream(),
-                limit_step->getLimit() + limit_step->getOffset(),
-                0,
+                limit_step->getLimitValue() + limit_step->getOffsetValue(),
+                size_t{0},
                 limit_step->isAlwaysReadTillEnd(),
                 limit_step->withTies(),
                 limit_step->getSortDescription(),
@@ -209,7 +208,9 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
 
 PatternPtr LimitZeroToReadNothing::getPattern() const
 {
-    return Patterns::limit().matchingStep<LimitStep>([](const LimitStep & step) { return step.getLimit() == 0; }).result();
+    return Patterns::limit()
+        .matchingStep<LimitStep>([](const LimitStep & step) { return !step.hasPreparedParam() && step.getLimitValue() == 0; })
+        .result();
 }
 
 TransformResult LimitZeroToReadNothing::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -219,7 +220,9 @@ TransformResult LimitZeroToReadNothing::transformImpl(PlanNodePtr node, const Ca
         return {};
 
     const auto & step = *limit_node->getStep();
-    if (step.getLimit() == 0)
+    if (step.hasPreparedParam())
+        return {};
+    if (step.getLimitValue() == 0)
     {
         auto read_nothing_step = std::make_shared<ReadNothingStep>(step.getOutputStream().header);
         auto read_nothing_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(read_nothing_step), {});
@@ -248,6 +251,9 @@ TransformResult PushdownLimitIntoWindow::transformImpl(PlanNodePtr node, const C
     const auto * limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
     auto source = window->getChildren()[0];
 
+    if (limit_step->hasPreparedParam())
+        return {};
+
     if (source->getStep()->getType() == IQueryPlanStep::Type::Limit || window_step->getWindow().order_by.empty())
     {
         return {};
@@ -257,7 +263,7 @@ TransformResult PushdownLimitIntoWindow::transformImpl(PlanNodePtr node, const C
     auto new_sort = PlanNodeBase::createPlanNode(
         context.context->nextNodeId(),
         std::make_shared<SortingStep>(
-            source->getStep()->getOutputStream(), window_step->getWindow().order_by, limit_step->getLimit(), false, SortDescription{}),
+            source->getStep()->getOutputStream(), window_step->getWindow().order_by, limit_step->getLimitValue(), SortingStep::Stage::FULL, SortDescription{}),
         {source});
 
     auto new_limit = PlanNodeBase::createPlanNode(
@@ -280,9 +286,10 @@ TransformResult PushdownLimitIntoWindow::transformImpl(PlanNodePtr node, const C
 PatternPtr PushLimitIntoSorting::getPattern() const
 {
     return Patterns::limit()
-        .matchingStep<LimitStep>([](const LimitStep & step) { return step.getLimit() != 0; })
-        .withSingle(
-            Patterns::sorting().matchingStep<SortingStep>([](const auto & sorting_step) { return sorting_step.getLimit() == 0; })).result();
+        .matchingStep<LimitStep>([](const LimitStep & step) { return !step.hasPreparedParam() && step.getLimitValue() != 0; })
+        .withSingle(Patterns::sorting().matchingStep<SortingStep>(
+            [](const auto & sorting_step) { return !sorting_step.hasPreparedParam() && sorting_step.getLimitValue() == 0; }))
+        .result();
 }
 
 TransformResult PushLimitIntoSorting::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -291,8 +298,11 @@ TransformResult PushLimitIntoSorting::transformImpl(PlanNodePtr node, const Capt
     auto sorting = node->getChildren()[0];
     const auto *sorting_step = dynamic_cast<const SortingStep *>(sorting->getStep().get());
 
+    if (limit_step->hasPreparedParam())
+        return {};
+
     // when limit 0, we skip this rule since another rule will delete the whole node
-    auto limit_value = limit_step->getLimit();
+    auto limit_value = limit_step->getLimitValue();
     if (limit_value == 0)
         return {};
 
@@ -304,8 +314,9 @@ TransformResult PushLimitIntoSorting::transformImpl(PlanNodePtr node, const Capt
         std::make_shared<SortingStep>(
             sorting_step->getInputStreams()[0],
             sorting_step->getSortDescription(),
-            limit_step->getLimit() + limit_step->getOffset(),
-            sorting_step->isPartial()),
+            limit_step->getLimitValue() + limit_step->getOffsetValue(),
+            sorting_step->getStage(),
+            sorting_step->getPrefixDescription()),
         sorting->getChildren());
     node->replaceChildren({new_sorting});
     return TransformResult{node};

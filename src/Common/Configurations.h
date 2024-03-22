@@ -103,7 +103,7 @@ struct TracerConfiguration final : public TracerConfigurationData
     M(String, volume, "", "local", ConfigFlag::Default, "volume to store bsp mode disk exchange data") \
     M(UInt64, gc_interval_seconds, "", 1800, ConfigFlag::Default, "by default, garbage collection for bsp directory is done every 1800 seconds") \
     M(UInt64, file_expire_seconds, "", 172800, ConfigFlag::Default, "by default, bsp mode disk exchange data expire after two days") \
-    M(Int64, max_disk_bytes, "", 1024LL * 1024 * 1024 * 100, ConfigFlag::Default, "by default, exchange data file will consume at most 100 GB disk space")
+    M(Int64, max_disk_bytes, "", 1024LL * 1024 * 1024 * 500, ConfigFlag::Default, "by default, exchange data file will consume at most 500 GB disk space")
 
 DECLARE_CONFIG_DATA(BSPConfigurationData, BSP_CONFIG_FIELDS_LISTS)
 
@@ -136,6 +136,7 @@ struct BSPConfiguration final : public BSPConfigurationData
     M(UInt64, cnch_transaction_ts_expire_time, "", 2 * 60 * 60 * 1000, ConfigFlag::Default, "") \
     M(UInt64, cnch_task_heartbeat_interval, "", 5, ConfigFlag::Default, "") \
     M(UInt64, cnch_task_heartbeat_max_retries, "", 5, ConfigFlag::Default, "") \
+    M(Int64, cnch_merge_txn_commit_timeout, "", 10, ConfigFlag::Default, "") \
     M(Float32, max_ratio_of_cnch_tasks_to_threads, "", 1.5, ConfigFlag::Default, "") \
     M(Float32, vw_ratio_of_busy_worker, "", 1.2, ConfigFlag::Default, "The ratio for detecting busy worker in the VW.") \
     M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use.") \

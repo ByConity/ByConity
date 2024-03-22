@@ -1,21 +1,23 @@
 Projection Est. ? rows
 │     Expressions: count():=`expr#count()`
 └─ Gather Exchange Est. ? rows
-   └─ MergingAggregated Est. ? rows
-      └─ Repartition Exchange Est. ? rows
-         │     Partition by: {item_id}
-         └─ Aggregating Est. ? rows
-            │     Group by: {item_id}
-            │     Aggregates: expr#count():=AggNull(count)()
-            └─ Projection Est. ? rows
-               │     Expressions: [item_id]
-               └─ MergingAggregated Est. ? rows
-                  └─ Repartition Exchange Est. ? rows
-                     │     Partition by: {item_id, name}
-                     └─ Aggregating Est. ? rows
-                        │     Group by: {item_id, name}
-                        └─ TableScan zx_test.customer Est. ? rows
-                                 Outputs: [item_id, name]
+   └─ Projection Est. ? rows
+      │     Expressions: [expr#count()]
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {item_id}
+            └─ Aggregating Est. ? rows
+               │     Group by: {item_id}
+               │     Aggregates: expr#count():=AggNull(count)()
+               └─ Projection Est. ? rows
+                  │     Expressions: [item_id]
+                  └─ MergingAggregated Est. ? rows
+                     └─ Repartition Exchange Est. ? rows
+                        │     Partition by: {item_id, name}
+                        └─ Aggregating Est. ? rows
+                           │     Group by: {item_id, name}
+                           └─ TableScan zx_test.customer Est. ? rows
+                                    Outputs: [item_id, name]
 Projection Est. ? rows
 │     Expressions: count():=`expr#count()`
 └─ MergingAggregated Est. ? rows

@@ -37,7 +37,6 @@ public:
     void setQuota(const std::shared_ptr<const EnabledQuota> & quota_) final { stream->setQuota(quota_); }
     void setProcessListElement(QueryStatus * elem) final { stream->setProcessListElement(elem); }
     void setProgressCallback(const ProgressCallback & callback) final { stream->setProgressCallback(callback); }
-    void setInternalProgressCallback([[maybe_unused]] const ProgressCallback & callback) final { }
     void addTotalRowsApprox(size_t value) final { stream->addTotalRowsApprox(value); }
 
     /// Stop reading from stream if output port is finished.

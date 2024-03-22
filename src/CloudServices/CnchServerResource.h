@@ -15,13 +15,13 @@
 
 #pragma once
 #include <optional>
+#include <unordered_map>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <CloudServices/CnchWorkerClient.h>
-#include <Common/HostWithPorts.h>
-#include <Storages/ColumnsDescription.h>
 #include <Core/Types.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/WorkerGroupHandle.h>
+#include <Storages/ColumnsDescription.h>
 #include <Storages/DataPart_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
@@ -173,8 +173,13 @@ public:
 
     void setSendMutations(bool send_mutations_) { send_mutations = send_mutations_; }
 
+    std::unordered_map<HostWithPorts, size_t> & getResourceSizeMap(UUID & table_id);
+
 private:
-    auto getLock() const { return std::lock_guard(mutex); }
+    auto getLock() const
+    {
+        return std::lock_guard(mutex);
+    }
     auto getLockForSend(const String & address) const { return SendLock{address, lock_manager}; }
     void cleanTaskInWorker(bool clean_resource = false) const;
 
@@ -185,6 +190,9 @@ private:
         const ContextPtr & context,
         std::lock_guard<std::mutex> &,
         std::optional<ResourceOption> resource_option = std::nullopt);
+
+    void computeResourceSize(
+        std::optional<ResourceOption> & resource_option, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources);
 
     void sendCreateQueries(const ContextPtr & context);
     void sendDataParts(const ContextPtr & context);
@@ -201,6 +209,8 @@ private:
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
 
     ResourceStageInfo resource_stage_info;
+    /// table id -> [worker address -> resources size]
+    std::unordered_map<UUID, std::unordered_map<HostWithPorts, size_t>> assigned_resources_size;
 
     bool skip_clean_worker{false};
     Poco::Logger * log;

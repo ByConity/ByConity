@@ -1,10 +1,10 @@
 #include "Storages/Hive/StorageCnchHive.h"
-#include <Protos/hive_models.pb.h>
 #if USE_HIVE
 
 #include <thrift/TToString.h>
 #include "CloudServices/CnchServerResource.h"
 #include "DataStreams/narrowBlockInputStreams.h"
+#include "Functions/FunctionFactory.h"
 #include "Interpreters/ClusterProxy/SelectStreamFactory.h"
 #include "Interpreters/ClusterProxy/executeQuery.h"
 #include "Interpreters/InterpreterSelectQuery.h"
@@ -12,12 +12,14 @@
 #include "Interpreters/evaluateConstantExpression.h"
 #include "Interpreters/trySetVirtualWarehouse.h"
 #include "MergeTreeCommon/CnchStorageCommon.h"
+#include "Parsers/ASTClusterByElement.h"
 #include "Parsers/ASTCreateQuery.h"
 #include "Parsers/ASTLiteral.h"
 #include "Parsers/ASTSetQuery.h"
 #include "Parsers/ASTSelectQuery.h"
 #include "Parsers/queryToString.h"
 #include "Processors/Sources/NullSource.h"
+#include <Protos/hive_models.pb.h>
 #include "QueryPlan/BuildQueryPipelineSettings.h"
 #include "QueryPlan/Optimizations/QueryPlanOptimizationSettings.h"
 #include "QueryPlan/ReadFromPreparedSource.h"
@@ -47,6 +49,35 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_FORMAT;
     extern const int SUPPORT_IS_DISABLED;
+}
+
+static std::optional<UInt64> get_file_hash_index(const String & hive_file_path)
+{
+    auto get_hash_index_from_position = [&hive_file_path] (size_t pos) -> std::optional<Int64> {
+        size_t l = pos, r = pos;
+        for (; r < hive_file_path.size(); ++r)
+        {
+            if (!std::isdigit(hive_file_path[r]))
+                break;
+        }
+        if (l < r)
+            return std::stoi(hive_file_path.substr(l, r - l));
+        return {};
+    };
+
+    /// This is special format used by tea
+    /// part-00000-5cf7580f-a3f6-4beb-90a6-e9f4de61c887_00003.c000
+    /// 00003 : part hash index
+    if (auto res = get_hash_index_from_position(hive_file_path.find_last_of('_') + 1); res)
+        return res;
+
+    /// The naming convention has the bucket number as the start of the file name
+    /// Used mostly by Hive and Trino
+    /// /000003_0_66add4ef-d1fc-4015-87b4-6962de044323_20240229_033029_00033_erdcf
+    if (auto res = get_hash_index_from_position(hive_file_path.find_last_of('/') + 1); res)
+        return res;
+
+    return {};
 }
 
 StorageCnchHive::StorageCnchHive(
@@ -180,7 +211,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr & local_context,
-    unsigned)
+    unsigned num_streams)
 {
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
     HiveWhereOptimizer optimizer(metadata_snapshot, query_info);
@@ -191,7 +222,6 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
 
     auto lister = getDirectoryLister();
     auto list_partition = [&](const HivePartitionPtr & partition) {
-        LOG_DEBUG(log, "Fetch hive files from {}", partition->location);
         HiveFiles files = lister->list(partition);
         {
             std::lock_guard lock(mu);
@@ -199,38 +229,46 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
         }
     };
 
-    // if (num_streams <= 1 || partitions.size() == 1)
-    // {
-    //     for (const auto & partition : partitions)
-    //     {
-    //         list_partition(partition);
-    //     }
-    // }
-    // else
-    // {
-    //     size_t num_threads = std::min(size_t(num_streams), partitions.size());
-
-    //     ThreadPool pool(num_threads);
-    //     for (const auto & partition : partitions)
-    //     {
-    //         pool.scheduleOrThrowOnError([&, partition, thread_group = CurrentThread::getGroup()] {
-    //             SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
-    //             if (thread_group)
-    //                 CurrentThread::attachTo(thread_group);
-    //             list_partition(partition);
-    //         });
-    //     }
-    //     pool.wait();
-    // }
-
-    /// TODO: fix me
-    for (const auto & partition : partitions)
+    if (num_streams <= 1 || partitions.size() == 1)
     {
-        list_partition(partition);
+        for (const auto & partition : partitions)
+        {
+            list_partition(partition);
+        }
+    }
+    else
+    {
+        size_t num_threads = std::min(size_t(num_streams), partitions.size());
+
+        ThreadPool pool(num_threads);
+        for (const auto & partition : partitions)
+        {
+            pool.scheduleOrThrowOnError([&, partition, thread_group = CurrentThread::getGroup()] {
+                SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
+                if (thread_group)
+                    CurrentThread::attachTo(thread_group);
+                list_partition(partition);
+            });
+        }
+        pool.wait();
     }
 
-    LOG_DEBUG(log, "Read from {} hive files", hive_files.size());
+    size_t total_hive_files = hive_files.size();
+    const auto & settings = local_context->getSettingsRef();
+    if (isBucketTable() && settings.use_hive_cluster_key_filter)
+    {
+        auto required_bucket = getSelectedBucketNumber(local_context, query_info, metadata_snapshot, optimizer);
+        /// prune files with required bucket number
+        auto end = std::remove_if(hive_files.begin(), hive_files.end(), [&] (auto & file) {
+            if (!required_bucket)
+                return false;
+            auto hash_index = get_file_hash_index(file->file_path);
+            return hash_index && hash_index != *required_bucket;
+        });
+        hive_files.erase(end, hive_files.end());
+    }
 
+    LOG_DEBUG(log, "Read from {}/{} hive files", hive_files.size(), total_hive_files);
     PrepareContextResult result{.hive_files = std::move(hive_files)};
 
     collectResource(local_context, result);
@@ -340,8 +378,67 @@ HivePartitions StorageCnchHive::selectPartitions(
         }
     }
 
-    LOG_DEBUG(log, "Read from {} partitions", partitions.size());
+    LOG_DEBUG(log, "Read from {}/{} partitions", partitions.size(), apache_hive_partitions.size());
     return partitions;
+}
+
+std::optional<UInt64> StorageCnchHive::getSelectedBucketNumber(
+    [[maybe_unused]] ContextPtr local_context,
+    [[maybe_unused]] SelectQueryInfo & query_info,
+    const StorageMetadataPtr & metadata_snapshot,
+    HiveWhereOptimizer & optimizer) const
+{
+    if (!isBucketTable() || !optimizer.cluster_key_conds)
+        return {};
+
+    ExpressionActionsPtr cluster_by_expression = metadata_snapshot->cluster_by_key.expression;
+    const auto & required_cols = cluster_by_expression->getRequiredColumnsWithTypes();
+    Block block;
+    for (const auto &item : required_cols)
+        block.insert(ColumnWithTypeAndName{item.type, item.name});
+
+    MutableColumns columns = block.mutateColumns();
+    ASTPtr cluster_by_conds = optimizer.cluster_key_conds;
+    LOG_DEBUG(log, "Useful cluster by conditions {}. Cluster key actions {}. Input block {}",
+        queryToString(cluster_by_conds), cluster_by_expression->dumpActions(), block.dumpStructure());
+
+    std::function<void(ASTPtr)> parse_cluster_by_cond = [&] (const ASTPtr &ast) -> void {
+        auto *func = ast->as<ASTFunction>();
+        if (!func || !func->arguments)
+            return;
+
+        if (func->name == "equals" && func->arguments->children.size() == 2) {
+            ASTPtr column = evaluateConstantExpressionOrIdentifierAsLiteral(func->arguments->children[0], local_context);
+            ASTPtr field = evaluateConstantExpressionOrIdentifierAsLiteral(func->arguments->children[1], local_context);
+
+            String column_name = column->as<ASTLiteral &>().value.safeGet<String>();
+            auto & value = field->as<ASTLiteral &>().value;
+            if (block.has(column_name))
+            {
+                size_t pos = block.getPositionByName(column_name);
+                if (columns[pos]->empty())
+                    columns[pos]->insert(value);
+            }
+        }
+        else if (func->name == "and")
+        {
+            for (const auto & child : func->arguments->children) {
+                parse_cluster_by_cond(child);
+            }
+        }
+    };
+    parse_cluster_by_cond(cluster_by_conds);
+
+    if (std::any_of(columns.begin(), columns.end(), [] (auto &column) { return column->empty(); }))
+        return {};
+
+    block.setColumns(std::move(columns));
+    cluster_by_expression->execute(block);
+    String result_column_name = metadata_snapshot->cluster_by_key.expression_list_ast->children[0]->getColumnName();
+    auto result_column = block.getByName(result_column_name).column;
+    UInt64 required_bucket = result_column->get64(0);
+    LOG_DEBUG(log, "result column: {} required bucket hash index is {}", result_column_name, required_bucket);
+    return required_bucket;
 }
 
 void StorageCnchHive::checkAlterSettings(const AlterCommands & commands) const
@@ -442,6 +539,30 @@ std::optional<TableStatistics> StorageCnchHive::getTableStats(const Strings & co
     return stats;
 }
 
+std::vector<std::pair<String, UInt64>> StorageCnchHive::getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format)
+{
+    String filter = {};
+    auto apache_hive_partitions = hive_client->getPartitionsByFilter(hive_db_name, hive_table_name, filter);
+    std::vector<std::pair<String, UInt64>> partition_last_modification_times;
+    partition_last_modification_times.reserve(apache_hive_partitions.size());
+    for (const auto & apache_partition : apache_hive_partitions)
+    {
+
+        auto partition = std::make_shared<HivePartition>();
+        partition->load(apache_partition, metadata_snapshot->getPartitionKey());
+        if (binary_format)
+        {
+            String partition_str;
+            WriteBufferFromString write_buffer(partition_str);
+            partition->store(write_buffer, metadata_snapshot->getPartitionKey());
+            partition_last_modification_times.emplace_back(partition_str, apache_partition.lastAccessTime);
+        }
+        else
+            partition_last_modification_times.emplace_back(partition->partition_id, apache_partition.lastAccessTime);
+    }
+    return partition_last_modification_times;
+}
+
 void StorageCnchHive::serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
 {
     /// TODO: {caoliu} hack here
@@ -532,15 +653,18 @@ void registerStorageCnchHive(StorageFactory & factory)
 
             if (args.storage_def->partition_by)
             {
-                ASTPtr partition_by_key;
-                partition_by_key = args.storage_def->partition_by->ptr();
+                ASTPtr partition_by_key = args.storage_def->partition_by->ptr();
                 metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_key, metadata.columns, args.getContext());
             }
 
             if (args.storage_def->cluster_by)
             {
-                ASTPtr cluster_by_key;
-                cluster_by_key = args.storage_def->cluster_by->ptr();
+                ASTPtr cluster_by_ast = args.storage_def->cluster_by->ptr();
+                chassert(cluster_by_ast->children.size() == 2);
+                auto bucket_num = cluster_by_ast->children[1];
+                auto func_hash = makeASTFunction("javaHash", cluster_by_ast->children[0]);
+                auto func_mod = makeASTFunction("modulo", ASTs{func_hash, bucket_num});
+                auto cluster_by_key = std::make_shared<ASTClusterByElement>(func_mod, bucket_num, -1, false, false);
                 metadata.cluster_by_key = KeyDescription::getClusterByKeyFromAST(cluster_by_key, metadata.columns, args.getContext());
             }
 

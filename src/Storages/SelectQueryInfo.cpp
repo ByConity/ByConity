@@ -16,6 +16,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Protos/PreparedStatementHelper.h>
 #include <Protos/plan_node_utils.pb.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -32,7 +33,7 @@ void InputOrderInfo::toProto(Protos::InputOrderInfo & proto) const
     proto.set_direction(direction);
 }
 
-std::shared_ptr<InputOrderInfo> InputOrderInfo::fromProto(const Protos::InputOrderInfo & proto, ContextPtr)
+std::shared_ptr<InputOrderInfo> InputOrderInfo::fromProto(const Protos::InputOrderInfo & proto)
 {
     SortDescription order_key_prefix_descr;
     for (const auto & proto_element : proto.order_key_prefix_descr())
@@ -52,6 +53,8 @@ void SelectQueryInfo::toProto(Protos::SelectQueryInfo & proto) const
     serializeASTToProto(query, *proto.mutable_query());
     serializeASTToProto(view_query, *proto.mutable_view_query());
     serializeASTToProto(partition_filter, *proto.mutable_partition_filter());
+    if (input_order_info)
+        input_order_info->toProto(*proto.mutable_input_order_info());
 }
 
 void SelectQueryInfo::fillFromProto(const Protos::SelectQueryInfo & proto)
@@ -59,6 +62,7 @@ void SelectQueryInfo::fillFromProto(const Protos::SelectQueryInfo & proto)
     query = deserializeASTFromProto(proto.query());
     view_query = deserializeASTFromProto(proto.view_query());
     partition_filter = deserializeASTFromProto(proto.partition_filter());
+    input_order_info = proto.has_input_order_info() ? InputOrderInfo::fromProto(proto.input_order_info()) : nullptr;
 }
 
 std::shared_ptr<InterpreterSelectQuery> SelectQueryInfo::buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info)

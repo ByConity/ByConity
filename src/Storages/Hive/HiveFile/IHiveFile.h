@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/config.h"
+#include "Storages/SelectQueryInfo.h"
 #if USE_HIVE
 
 #include "Core/NamesAndTypes.h"
@@ -86,6 +87,7 @@ public:
         ContextPtr context;
         std::optional<size_t> slice;
         ReadSettings read_settings;
+        std::shared_ptr<SelectQueryInfo> query_info;
         std::unique_ptr<ReadBufferFromFileBase> read_buf;
     };
     virtual SourcePtr getReader(const Block & block, const std::shared_ptr<ReadParams> & params);

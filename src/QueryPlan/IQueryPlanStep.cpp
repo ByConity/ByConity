@@ -254,14 +254,18 @@ void IQueryPlanStep::aliases(QueryPipeline & pipeline, const Block & target, con
     pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ExpressionTransform>(header, convert_actions); });
 }
 
-void IQueryPlanStep::addHints(SqlHints & sql_hints, ContextMutablePtr & context)
+void IQueryPlanStep::addHints(SqlHints & sql_hints, ContextMutablePtr & context, bool check_type)
 {
     PlanHintPtr plan_hint;
     for (auto & hint : sql_hints)
     {
         plan_hint = PlanHintFactory::instance().tryGet(hint.getName(), context, hint);
         if (plan_hint)
+        {
+            if (check_type && !plan_hint->checkStepType(*this))
+                continue;
             hints.emplace_back(plan_hint);
+        }
     }
 }
 

@@ -9,6 +9,7 @@
 
 namespace DB
 {
+
 template<typename Type>
 bool IFunctionMySql::isVaildArguments(const Type & arguments) const
 {
@@ -29,7 +30,9 @@ bool IFunctionMySql::isVaildArguments(const Type & arguments) const
             || (isUnsignedInteger(expected[i]) && !isUnsignedInteger(arg))
             || (isInteger(expected[i]) && !isInteger(arg))
             || (isDateTime64(expected[i]) && !(isDateTime64(arg) || isDateOrDate32(arg) || isDateTime(arg) || isTime(arg)))
-            || (isDateTime(expected[i]) && !isDateTime(arg)))
+            || (isDateTime(expected[i]) && !isDateTime(arg))
+            || (arg_type == ArgType::ARRAY_FIRST && !expected[i]->equals(*arg))
+            || (arg_type == ArgType::ARRAY_COMMON && !areCompatibleArrays(arg, expected[i])))
             return false;
     }
     return true;
@@ -68,31 +71,107 @@ bool IFunctionMySql::isVaildIntervalArithmetic(const Type & arguments) const
     return false;
 }
 
+ColumnWithTypeAndName IFunctionMySql::recursiveConvertArrayArgument(DataTypePtr toType, const ColumnWithTypeAndName& argument)
+{
+    /// the actual array may be nested inside const nullable column
+    const ColumnArray * arr_col = nullptr;
+    const ColumnNullable * null_col = nullptr;
+    const auto * const_col = checkAndGetColumn<ColumnConst>(argument.column.get());
+    if (const_col)
+    {
+        null_col = checkAndGetColumn<ColumnNullable>(const_col->getDataColumnPtr().get());
+        if (null_col)
+            arr_col = assert_cast<const ColumnArray *>(null_col->getNestedColumnPtr().get());
+        else
+            arr_col = assert_cast<const ColumnArray *>(const_col->getDataColumnPtr().get());
+    }
+    else if (null_col = checkAndGetColumn<ColumnNullable>(argument.column.get()); null_col)
+    {
+        arr_col = assert_cast<const ColumnArray *>(null_col->getNestedColumnPtr().get());
+    }
+    else
+    {
+        arr_col = assert_cast<const ColumnArray *>(argument.column.get());
+    }
+
+    auto expected_nested_type = extractNestedArrayType(*toType);
+    auto cur_nested_type = extractNestedArrayType(*argument.type);
+
+    ColumnPtr converted_nested_col = nullptr;
+    if (expected_nested_type->equals(*cur_nested_type))
+    {
+        converted_nested_col = arr_col->getDataPtr();
+    }
+    else
+    {
+        auto expected_nested_type_no_null = removeNullable(expected_nested_type);
+        auto nested_arg = ColumnWithTypeAndName{arr_col->getDataPtr(), cur_nested_type, argument.name};
+
+        if (isArray(expected_nested_type_no_null))
+            converted_nested_col = recursiveConvertArrayArgument(expected_nested_type, nested_arg).column;
+        else
+        {
+            auto input_rows_count = nested_arg.column->size();
+
+            if (isStringOrFixedString(expected_nested_type_no_null) || isIPv6(expected_nested_type_no_null))
+                converted_nested_col = convertToTypeStatic<DataTypeString>(nested_arg, expected_nested_type, input_rows_count);
+            else if (isFloat(expected_nested_type_no_null))
+                converted_nested_col = convertToTypeStatic<DataTypeFloat64>(nested_arg, expected_nested_type, input_rows_count);
+            else if (isInteger(expected_nested_type_no_null))
+                converted_nested_col = convertToTypeStatic<DataTypeInt64>(nested_arg, expected_nested_type, input_rows_count);
+            else if (isUnsignedInteger(expected_nested_type_no_null))
+                converted_nested_col = convertToTypeStatic<DataTypeUInt64>(nested_arg, expected_nested_type, input_rows_count);
+            else if (isDateTime64(expected_nested_type_no_null))
+                converted_nested_col = convertToTypeStatic<DataTypeDateTime64>(nested_arg, expected_nested_type, input_rows_count);
+            else if (isDateTime(expected_nested_type_no_null))
+                converted_nested_col = convertToTypeStatic<DataTypeDateTime>(nested_arg, expected_nested_type, input_rows_count);
+            else
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Convert to Array({}) is not implemented", expected_nested_type->getName());
+
+            if (expected_nested_type->isNullable() && !checkColumn<ColumnNullable>(*converted_nested_col))
+                converted_nested_col = makeNullable(converted_nested_col);
+        }
+    }
+
+    ColumnPtr converted_col = nullptr;
+    converted_col = ColumnArray::create(converted_nested_col, arr_col->getOffsetsPtr());
+
+    if (toType->isNullable())
+    {
+        if (null_col)
+            converted_col = ColumnNullable::create(converted_col, null_col->getNullMapColumnPtr());
+        else
+            converted_col = makeNullable(converted_col);
+    }
+
+    if(const_col)
+        converted_col = ColumnConst::create(std::move(converted_col), argument.column->size());
+
+    return ColumnWithTypeAndName{converted_col, toType, argument.name};
+}
+
 void IFunctionMySql::checkAndConvert(const ColumnsWithTypeAndName & arguments, ColumnsWithTypeAndName & new_arguments) const
 {
     DataTypes expected = getColumnsType(arg_type, arguments);
 
     auto convertAndAddToNewArguments = [&](auto toType, const ColumnWithTypeAndName& argument, bool is_nullable) {
-        size_t input_rows_count = argument.column->size();
         DataTypePtr new_type = nullptr;
         if constexpr (std::is_same_v<decltype(toType), DataTypeDateTime64>)
             new_type = is_nullable ? makeNullable(std::make_shared<decltype(toType)>(DataTypeDateTime64::default_scale))
-                                   : std::make_shared<decltype(toType)>(DataTypeDateTime64::default_scale);
+                                    : std::make_shared<decltype(toType)>(DataTypeDateTime64::default_scale);
         else
             new_type = is_nullable ? makeNullable(std::make_shared<decltype(toType)>()) : std::make_shared<decltype(toType)>();
-        auto converted_col = convertToTypeStatic<decltype(toType)>(argument, new_type, input_rows_count);
-        converted_col = isColumnConst(*argument.column) ? ColumnConst::create(std::move(converted_col), input_rows_count) : converted_col;
+
+        const auto * const_col = checkAndGetColumn<ColumnConst>(argument.column.get());
+        auto col = const_col ? const_col->getDataColumnPtr() : argument.column;
+        auto converted_col = convertToTypeStatic<decltype(toType)>(ColumnWithTypeAndName{col, argument.type, argument.name}, new_type, col->size());
+        /// must convert it back to const column as some funcs expects args to be const
+        converted_col = const_col && converted_col->size() ? ColumnConst::create(std::move(converted_col), argument.column->size()) : converted_col;
         new_arguments.emplace_back(converted_col, new_type, argument.name);
     };
 
     for (size_t i = 0; i < arguments.size(); ++i)
     {
-        if (!arguments[i].column)
-        {
-            new_arguments.emplace_back(nullptr, expected[i], arguments[i].name);
-            continue;
-        }
-
         auto arg = arguments[i].type;
         bool is_nullable = [&]() {
             if (arg->getTypeId() != TypeIndex::Nullable)
@@ -100,9 +179,32 @@ void IFunctionMySql::checkAndConvert(const ColumnsWithTypeAndName & arguments, C
             arg = typeid_cast<const DataTypeNullable *>(arg.get())->getNestedType();
             return true;
         }();
+
+        /// for funcs like array_remove, array_position,
+        /// the first arg should be converted to nullable if the rest has nullable
+        if (i == 0 && (arg_type == ArgType::ARRAY_FIRST))
+        {
+            bool has_nullable = false;
+            for (size_t j = 1; j < arguments.size() && !has_nullable; j++)
+                has_nullable = arguments[j].type->isNullable();
+            if (!is_nullable && has_nullable)
+                new_arguments.emplace_back(arguments[0].column ? makeNullable(arguments[0].column) : nullptr,
+                                           makeNullable(arguments[0].type),
+                                           arguments[0].name);
+            else
+                new_arguments.emplace_back(arguments[0]);
+            continue;
+        }
+
         if (isNothing(arg))
         {
             new_arguments.emplace_back(arguments[i]);
+            continue;
+        }
+
+        if (!arguments[i].column)
+        {
+            new_arguments.emplace_back(nullptr, expected[i], arguments[i].name);
             continue;
         }
 
@@ -110,7 +212,8 @@ void IFunctionMySql::checkAndConvert(const ColumnsWithTypeAndName & arguments, C
             convertAndAddToNewArguments(DataTypeString(), arguments[i], is_nullable);
         else if (arg_type != ArgType::NOT_DECIMAL && isFloat(expected[i]) && !isNumber(arg))
             convertAndAddToNewArguments(DataTypeFloat64(), arguments[i], is_nullable);
-        else if (arg_type == ArgType::NOT_DECIMAL && isFloat(expected[i]) && !(isInteger(arg) || isFloat(arg)))
+        /// for array funcs, if the the non array arg is decimal, conver it to float as the func cannot handle decimal arg
+        else if ((arg_type == ArgType::NOT_DECIMAL || arg_type == ArgType::ARRAY_FIRST) && isFloat(expected[i]) && !(isInteger(arg) || isFloat(arg)))
             convertAndAddToNewArguments(DataTypeFloat64(), arguments[i], is_nullable);
         else if (isUnsignedInteger(expected[i]) && !isInteger(arg))
             convertAndAddToNewArguments(DataTypeUInt64(), arguments[i], is_nullable);
@@ -120,6 +223,8 @@ void IFunctionMySql::checkAndConvert(const ColumnsWithTypeAndName & arguments, C
             convertAndAddToNewArguments(DataTypeDateTime64(DataTypeDateTime64::default_scale), arguments[i], is_nullable);
         else if (isDateTime(expected[i]) && !isDateTime(arg))
             convertAndAddToNewArguments(DataTypeDateTime(), arguments[i], is_nullable);
+        else if (arg_type == ArgType::ARRAY_COMMON && !areCompatibleArrays(arguments[i].type, expected[i]))
+            new_arguments.push_back(recursiveConvertArrayArgument(expected[i], arguments[i]));
         else
             new_arguments.emplace_back(arguments[i]);
     }
@@ -140,8 +245,7 @@ ColumnPtr IFunctionMySql::convertToTypeStatic(const ColumnWithTypeAndName & argu
         return func->build(input)->execute(input, output_type, input_rows_count);
     };
 
-    ColumnPtr col = argument.column;
-    col = col->convertToFullColumnIfConst();
+    ColumnPtr col = argument.column->convertToFullColumnIfConst();
 
     DataTypePtr tmp_type;
 
@@ -209,6 +313,7 @@ ColumnPtr IFunctionMySql::convertToTypeStatic(const ColumnWithTypeAndName & argu
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "function for converting column from type {} to {} is not implemented", argument.type->getName(), result_type->getName());
 }
+
 template<typename toType>
 ColumnPtr IFunctionMySql::convertToTypeStatic(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count)
 {

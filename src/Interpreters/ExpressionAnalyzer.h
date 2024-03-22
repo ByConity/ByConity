@@ -347,7 +347,7 @@ public:
         const TreeRewriterResultPtr & syntax_analyzer_result_,
         ContextPtr context_,
         const StorageMetadataPtr & metadata_snapshot_,
-        const NameSet & required_result_columns_ = {},
+        const Names & required_result_columns_ = {},
         bool do_global_ = false,
         const SelectQueryOptions & options_ = {},
         SubqueriesForSets subqueries_for_sets_ = {},
@@ -410,7 +410,7 @@ public:
 
 private:
     /// If non-empty, ignore all expressions not from this list.
-    NameSet required_result_columns;
+    Names required_result_columns;
     SelectQueryOptions query_options;
 
     JoinPtr makeTableJoin(

@@ -20,6 +20,7 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
+#include <Storages/MergeTree/PartitionPruner.h>
 #include <common/logger_useful.h>
 #include <Common/SimpleIncrement.h>
 #include "WorkerTasks/ManipulationType.h"
@@ -37,7 +38,8 @@ public:
         MergeTreeMetaBase & storage_,
         StorageMetadataPtr metadata_snapshot_,
         ContextPtr context_,
-        bool to_staging_area_ = false);
+        bool to_staging_area_ = false,
+        ASTPtr overwrite_partition_ = nullptr);
 
     Block getHeader() const override;
 
@@ -56,6 +58,8 @@ private:
     void writeSuffixForInsert();
     void writeSuffixForUpsert();
 
+    void initOverwritePartitionPruner();
+
     MergeTreeMetaBase & storage;
     Poco::Logger * log;
     StorageMetadataPtr metadata_snapshot;
@@ -70,6 +74,9 @@ private:
 
     bool disable_transaction_commit{false};
     SimpleIncrement increment;
+
+    ASTPtr overwrite_partition;
+    NameSet overwrite_partition_ids;
 };
 
 }

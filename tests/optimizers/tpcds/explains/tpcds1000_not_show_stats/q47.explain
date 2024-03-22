@@ -22,7 +22,7 @@ Projection
                   │     │  └─ Buffer
                   │     │     └─ CTERef[1]
                   │     └─ Filter
-                  │        │     Condition: (d_year_1 = 1999) AND (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1` > 0.) AND (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1` > 0, abs(`expr#sum(ss_sales_price)_1` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1`, NULL) > 0.1)
+                  │        │     Condition: (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1` > 0.) AND (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1` > 0, abs(`expr#sum(ss_sales_price)_1` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1`, NULL) > 0.1) AND (d_year_1 = 1999)
                   │        └─ Buffer
                   │           └─ CTERef[1]
                   └─ Projection
@@ -44,26 +44,22 @@ CTEDef [1]
                      │     Condition: ss_store_sk == s_store_sk
                      ├─ Inner Join
                      │  │     Condition: ss_item_sk == i_item_sk
-                     │  ├─ Repartition Exchange
-                     │  │  │     Partition by: {ss_item_sk}
-                     │  │  └─ Inner Join
-                     │  │     │     Condition: ss_sold_date_sk == d_date_sk
-                     │  │     │     Runtime Filters Builder: {d_date_sk}
-                     │  │     ├─ Filter
-                     │  │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
-                     │  │     │  └─ TableScan tpcds1000.store_sales
-                     │  │     │           Where: Runtime Filters: {ss_sold_date_sk}
-                     │  │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
-                     │  │     └─ Broadcast Exchange
-                     │  │        └─ Filter
-                     │  │           │     Condition: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
-                     │  │           └─ TableScan tpcds1000.date_dim
-                     │  │                    Where: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
-                     │  │                    Outputs: [d_date_sk, d_year, d_moy]
-                     │  └─ Repartition Exchange
-                     │     │     Partition by: {i_item_sk}
-                     │     └─ TableScan tpcds1000.item
-                     │              Outputs: [i_item_sk, i_brand, i_category]
+                     │  ├─ Inner Join
+                     │  │  │     Condition: ss_sold_date_sk == d_date_sk
+                     │  │  │     Runtime Filters Builder: {d_date_sk}
+                     │  │  ├─ Filter
+                     │  │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                     │  │  │  └─ TableScan tpcds1000.store_sales
+                     │  │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                     │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
+                     │  │  └─ Broadcast Exchange
+                     │  │     └─ Filter
+                     │  │        │     Condition: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
+                     │  │        └─ TableScan tpcds1000.date_dim
+                     │  │                 Where: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
+                     │  │                 Outputs: [d_date_sk, d_year, d_moy]
+                     │  └─ TableScan tpcds1000.item
+                     │           Outputs: [i_item_sk, i_brand, i_category]
                      └─ Broadcast Exchange
                         └─ TableScan tpcds1000.store
                                  Outputs: [s_store_sk, s_store_name, s_company_name]

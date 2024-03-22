@@ -14,7 +14,9 @@
  */
 
 #include <memory>
+#include <mutex>
 #include <string>
+#include <IO/Progress.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/DistributedStages/PlanSegmentReport.h>
@@ -24,9 +26,8 @@
 #include <Protos/plan_segment_manager.pb.h>
 #include <brpc/controller.h>
 #include <butil/iobuf.h>
-#include <mutex>
-#include <common/types.h>
 #include <Common/Exception.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -102,9 +103,15 @@ void PlanSegmentManagerRpcService::executeQuery(
             request->password(),
             static_cast<UInt16>(request->current_exchange_port())};
         execution_info.parallel_id = request->parallel_id();
+        if (request->has_source_task_index() && request->has_source_task_count())
+        {
+            execution_info.source_task_index = request->source_task_index();
+            execution_info.source_task_count = request->source_task_count();
+        }
         query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{request->plan_segment_id(), request->parallel_id()});
         /// Set client info.
         ClientInfo & client_info = query_context->getClientInfo();
+        client_info.rpc_port = request->coordinator_exchange_port();
         client_info.brpc_protocol_major_version = request->brpc_protocol_major_revision();
         client_info.brpc_protocol_minor_version = request->brpc_protocol_minor_revision();
         client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
@@ -270,6 +277,14 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             request->message(),
             request->code()};
         SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
+        /// if retry is successful, this status is not used anymore
+        auto bsp_scheduler = scheduler->getBSPScheduler(request->query_id());
+        if (bsp_scheduler && !status.is_succeed && !status.is_cancelled)
+        {
+            bsp_scheduler->updateSegmentStatusCounter(request->segment_id(), request->parallel_index(), status);
+            if (bsp_scheduler->retryTaskIfPossible(request->segment_id(), request->parallel_index()))
+                return;
+        }
         scheduler->updateSegmentStatus(status);
         scheduler->updateQueryStatus(status);
         if (request->has_sender_metrics())
@@ -281,8 +296,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             }
         }
         // TODO(WangTao): fine grained control, conbining with retrying.
-        if (status.is_succeed)
-            scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index());
+        scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index(), status);
 
         if (!status.is_cancelled && status.code == 0)
         {
@@ -299,11 +313,26 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         }
 
         // this means exception happened during execution.
+        auto coordinator = MPPQueryManager::instance().getCoordinator(request->query_id());
+        if (coordinator && request->metrics().has_progress())
+        {
+            Progress progress;
+            progress.fromProto(status.metrics.final_progress);
+            coordinator->onFinalProgress(request->segment_id(), request->parallel_index(), progress);
+        }
         if (!status.is_succeed && !status.is_cancelled)
         {
-            auto coodinator = MPPQueryManager::instance().getCoordinator(request->query_id());
-            if (coodinator)
-                coodinator->updateSegmentInstanceStatus(status);
+            if (coordinator)
+                coordinator->updateSegmentInstanceStatus(status);
+            else
+            {
+                LOG_INFO(
+                    log,
+                    "cant find coordinator for query_id:{} segment_id:{} parallel_index:{}",
+                    request->query_id(),
+                    request->segment_id(),
+                    request->parallel_index());
+            }
             scheduler->onSegmentFinished(status);
         }
         // todo  scheduler.cancelSchedule
@@ -379,7 +408,9 @@ void PlanSegmentManagerRpcService::reportProcessorProfileMetrics(
     }
     catch (...)
     {
-        controller->SetFailed("Report fail.");
+        auto error_msg = getCurrentExceptionMessage(true);
+        controller->SetFailed(error_msg);
+        LOG_ERROR(log, "reportProcessorProfileMetrics failed: {}", error_msg);
     }
 }
 
@@ -406,7 +437,36 @@ void PlanSegmentManagerRpcService::batchReportProcessorProfileMetrics(
     }
     catch (...)
     {
-        controller->SetFailed("Report fail.");
+        auto error_msg = getCurrentExceptionMessage(true);
+        controller->SetFailed(error_msg);
+        LOG_ERROR(log, "batchReportProcessorProfileMetrics failed: {}", error_msg);
+    }
+}
+
+void PlanSegmentManagerRpcService::sendProgress(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::SendProgressRequest * request,
+    ::DB::Protos::SendProgressResponse * /*response*/,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        Progress progress;
+        progress.fromProto(request->progress());
+        auto coordinator = MPPQueryManager::instance().getCoordinator(request->query_id());
+        if (coordinator)
+        {
+            coordinator->onProgress(request->segment_id(), request->parallel_id(), progress);
+        }
+        else
+            LOG_INFO(log, "sendProgress cant find coordinator for query_id:{}", request->query_id());
+    }
+    catch (...)
+    {
+        auto error_msg = getCurrentExceptionMessage(true);
+        controller->SetFailed(error_msg);
+        LOG_ERROR(log, "sendProgress failed: {}", error_msg);
     }
 }
 
@@ -473,12 +533,18 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
 
         execution_info.parallel_id = request->parallel_id();
         execution_info.execution_address = AddressInfo(request->execution_address());
+        if (request->has_source_task_index() && request->has_source_task_count())
+        {
+            execution_info.source_task_index = request->source_task_index();
+            execution_info.source_task_count = request->source_task_count();
+        }
         query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{request->plan_segment_id(), request->parallel_id()});
 
         /// Set client info.
         ClientInfo & client_info = query_context->getClientInfo();
         Poco::Net::SocketAddress initial_socket_address(query_common->initial_client_host(), query_common->initial_client_port());
 
+        client_info.rpc_port = query_common->mutable_coordinator_address()->exchange_port();
         client_info.brpc_protocol_major_version = request->brpc_protocol_major_revision();
         client_info.brpc_protocol_minor_version = query_common->brpc_protocol_minor_revision();
         client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
@@ -510,6 +576,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     ErrorCodes::LOGICAL_ERROR);
             }
             ReadBufferFromBrpcBuf settings_read_buf(settings_io_buf);
+
             /// Sets an extra row policy based on `client_info.initial_user`.
             /// Not saft since KVAccessStorage will call rpc inside lock
             // query_context->setInitialRowPolicy();

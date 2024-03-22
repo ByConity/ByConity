@@ -68,9 +68,10 @@
 
 #include <Interpreters/InterpreterSelectQuery.h>
 
+#include <IO/WriteBufferFromOStream.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
-#include <IO/WriteBufferFromOStream.h>
 #include <roaring.hh>
 
 namespace ProfileEvents
@@ -169,6 +170,12 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     const auto & metadata_for_reading = storage_snapshot->getMetadataForQuery();
 
     auto parts = data.getDataPartsVector();
+
+    if (data.source_index && data.source_count)
+    {
+        LOG_TRACE(log, "Filter the data parts with index {} count {}", data.source_index.value(), data.source_count.value());
+        filterParts(parts, data.source_index.value(), data.source_count.value());
+    }
 
     if (settings.enable_ab_index_optimization)
         query_info.index_context->enable_read_bitmap_index = settings.enable_ab_index_optimization;
@@ -1005,7 +1012,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                     log_,
                     index_time_watcher
                 );
-                
+
                 (*filter_bitmap) |= tmp_filter_bitmap;
 
                 index_and_condition.total_granules.fetch_add(total_granules, std::memory_order_relaxed);
@@ -1210,14 +1217,14 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
         // Compute sampled size
         size_t marks_size = range.end - range.begin;
         UInt64 sampled_size;
-        if (ensure_one_mark_in_part_when_sample_by_range) 
+        if (ensure_one_mark_in_part_when_sample_by_range)
         {
             // old logic to ensure at least one mark is sample in this part
             // keep it as default mode
             RelativeSize total_size = RelativeSize(marks_size);
             sampled_size = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * total_size + RelativeSize(1)));
-        } 
-        else 
+        }
+        else
         {
             // new logic will sample part
             // and make sure that the number of rows sampled meets the expected value
@@ -1777,7 +1784,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
         ranges,
         reader_settings,
         context->getMarkCache().get(),
-        context->getInternalProgressCallback());
+        context->getProgressCallback());
 
     MarkRanges res;
 
@@ -1790,6 +1797,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
 
     if (dynamic_cast<const MergeTreeIndexInverted *>(&*index_helper) != nullptr)
     {
+        context->mustEnableAdditionalService(AdditionalService::FullTextSearch, true);
         std::unique_ptr<IGinDataPartHelper> gin_part_helper = nullptr;
         if (part->getType() == IMergeTreeDataPart::Type::CNCH)
         {
@@ -1804,6 +1812,11 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     }
 
     const auto * gin_filter_condition = dynamic_cast<const MergeTreeConditionInverted *>(&*condition);
+
+    if (gin_filter_condition != nullptr)
+    {
+        context->mustEnableAdditionalService(AdditionalService::FullTextSearch, true);
+    }
 
     for (const auto & range : ranges)
     {

@@ -17,7 +17,7 @@ Projection Est. 25 rows
                         │     Condition: c_nationkey == s_nationkey, l_suppkey == s_suppkey
                         ├─ Repartition Exchange Est. 254157929 rows
                         │  │     Partition by: {c_nationkey, l_suppkey}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 254157927 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 254157929 rows
                         │     │     Condition: l_orderkey == o_orderkey
                         │     │     Runtime Filters Builder: {o_orderkey}
                         │     ├─ Repartition Exchange Est. 5999989709 rows
@@ -29,16 +29,18 @@ Projection Est. 25 rows
                         │     │              Outputs: [l_orderkey, l_suppkey, l_extendedprice, l_discount]
                         │     └─ Repartition Exchange Est. 45638914 rows
                         │        │     Partition by: {o_orderkey}
-                        │        └─ Inner (PARALLEL_HASH) Join Est. 228194572 rows
+                        │        └─ Inner (PARALLEL_HASH) Join Est. 45638914 rows
                         │           │     Condition: o_custkey == c_custkey
                         │           │     Runtime Filters Builder: {c_custkey}
                         │           ├─ Repartition Exchange Est. 228194572 rows
                         │           │  │     Partition by: {o_custkey}
-                        │           │  └─ Filter Est. 228194572 rows
-                        │           │     │     Condition: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
-                        │           │     └─ TableScan tpch1000.orders Est. 1500000000 rows
-                        │           │              Where: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
-                        │           │              Outputs: [o_orderkey, o_custkey, o_orderdate]
+                        │           │  └─ Projection Est. 228194572 rows
+                        │           │     │     Expressions: [o_custkey, o_orderkey]
+                        │           │     └─ Filter Est. 228194572 rows
+                        │           │        │     Condition: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
+                        │           │        └─ TableScan tpch1000.orders Est. 1500000000 rows
+                        │           │                 Where: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
+                        │           │                 Outputs: [o_orderkey, o_custkey, o_orderdate]
                         │           └─ Repartition Exchange Est. 30000000 rows
                         │              │     Partition by: {c_custkey}
                         │              └─ Inner Join Est. 30000000 rows
@@ -58,11 +60,13 @@ Projection Est. 25 rows
                         │                       │           Outputs: [n_nationkey, n_name, n_regionkey]
                         │                       └─ Repartition Exchange Est. 1 rows
                         │                          │     Partition by: {r_regionkey}
-                        │                          └─ Filter Est. 1 rows
-                        │                             │     Condition: r_name = 'ASIA'
-                        │                             └─ TableScan tpch1000.region Est. 5 rows
-                        │                                      Where: r_name = 'ASIA'
-                        │                                      Outputs: [r_regionkey, r_name]
+                        │                          └─ Projection Est. 1 rows
+                        │                             │     Expressions: [r_regionkey]
+                        │                             └─ Filter Est. 1 rows
+                        │                                │     Condition: r_name = 'ASIA'
+                        │                                └─ TableScan tpch1000.region Est. 5 rows
+                        │                                         Where: r_name = 'ASIA'
+                        │                                         Outputs: [r_regionkey, r_name]
                         └─ Repartition Exchange Est. 10000000 rows
                            │     Partition by: {s_nationkey, s_suppkey}
                            └─ TableScan tpch1000.supplier Est. 10000000 rows

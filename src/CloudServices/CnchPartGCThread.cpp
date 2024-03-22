@@ -236,7 +236,7 @@ Strings CnchPartGCThread::selectPartitions(const StoragePtr & storage)
     return {res.begin(), res.end()};
 }
 
-void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const ServerDataPartsVector & parts, bool is_staged, String log_type, size_t pool_size, size_t batch_size)
+void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const ServerDataPartsVector & parts, bool is_staged, String log_type, size_t pool_size, size_t batch_size, bool is_zombie_with_staging_txn_id)
 {
     auto local_context = getContext();
 
@@ -265,7 +265,7 @@ void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const Server
 
             try
             {
-                catalog->moveDataItemsToTrash(storage, items);
+                catalog->moveDataItemsToTrash(storage, items, is_zombie_with_staging_txn_id);
                 num_moved.fetch_add(is_staged ? items.staged_parts.size() : items.data_parts.size());
                 ServerPartLog::addRemoveParts(local_context, storage_id, parts, is_staged);
             }
@@ -529,7 +529,7 @@ size_t CnchPartGCThread::doPhaseTwoGC(const StoragePtr & istorage, StorageCnchMe
     return ntotal;
 }
 
-ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp)
+std::pair<ServerDataPartsVector, ServerDataPartsVector> CnchPartGCThread::processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp)
 {
     ServerDataPartsVector intermediate_parts;
     std::set<TxnTimestamp> txn_ids;
@@ -574,8 +574,11 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
     if (transactions.empty())
         return {};
 
-    // now collect zombie intermediate parts to remove and put back visible intermediate parts for further processing
-    ServerDataPartsVector zombie_intermediate_parts;
+    // now collect zombie parts to remove and put back visible intermediate parts for further processing
+    // note that zombie parts with staging_txn_id don't own its data files, so we can only clean its part metadata,
+    // refer to https://bytedance.larkoffice.com/docx/InHmdbM97oh1oMxEwVVcMbTinXg for more details
+    ServerDataPartsVector zombie_metadata_only_parts;
+    ServerDataPartsVector zombie_parts;
     for (const auto & part : intermediate_parts)
     {
         auto txn_id = part->txnID();
@@ -584,11 +587,19 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
             continue;
 
         if (!transactions[txn_id])
-            zombie_intermediate_parts.push_back(part);
+        {
+            if (part->hasStagingTxnID())
+                zombie_metadata_only_parts.push_back(part);
+            else
+                zombie_parts.push_back(part);
+        }
         else if (transactions[txn_id] <= gc_timestamp)
+        {
+            part->setCommitTime(transactions[txn_id]); /// make sure committed parts have commit time set
             parts.push_back(part);
+        }
     }
-    return zombie_intermediate_parts;
+    return {zombie_metadata_only_parts, zombie_parts};
 }
 
 void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
@@ -603,12 +614,29 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
     watch.restart();
 
     // Get zombie parts to remove and filter out invisible intermediate parts.
-    auto intermediate_parts_to_remove = processIntermediateParts(all_parts, gc_timestamp);
-    if (!intermediate_parts_to_remove.empty())
+    auto [zombie_metadata_only_parts, zombie_parts] = processIntermediateParts(all_parts, gc_timestamp);
+    if (!zombie_metadata_only_parts.empty())
     {
-        LOG_TRACE(log, "Get {} intermediate parts to remove for {} ", intermediate_parts_to_remove.size(), partition_id);
-        movePartsToTrash(istorage, intermediate_parts_to_remove, /*is_staged*/ false, "intermediate parts",
-            storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size);
+        LOG_TRACE(log, "Get {} zombie metadata-only parts to remove for {} ", zombie_metadata_only_parts.size(), partition_id);
+        movePartsToTrash(
+            istorage,
+            zombie_metadata_only_parts,
+            /*is_staged*/ false,
+            "zombie metadata-only parts",
+            storage_settings->gc_trash_part_thread_pool_size,
+            storage_settings->gc_trash_part_batch_size,
+            /*is_zombie_with_staging_txn_id*/ true);
+    }
+    if (!zombie_parts.empty())
+    {
+        LOG_TRACE(log, "Get {} zombie parts to remove for {} ", zombie_parts.size(), partition_id);
+        movePartsToTrash(
+            istorage,
+            zombie_parts,
+            /*is_staged*/ false,
+            "zombie parts",
+            storage_settings->gc_trash_part_thread_pool_size,
+            storage_settings->gc_trash_part_batch_size);
     }
 
     auto visible_parts = CnchPartsHelper::calcVisibleParts(all_parts, false);
@@ -663,7 +691,7 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
     {
         watch.restart();
         /// TODO: handle zombie intermediate bitmaps
-        DeleteBitmapMetaPtrVector all_bitmaps = catalog->getDeleteBitmapsInPartitions(istorage, {partition_id}, gc_timestamp);
+        DeleteBitmapMetaPtrVector all_bitmaps = catalog->getDeleteBitmapsInPartitionsFromMetastore(istorage, {partition_id}, gc_timestamp);
         DeleteBitmapMetaPtrVector bitmaps_to_gc;
         CnchPartsHelper::calcBitmapsForGC(all_bitmaps, &bitmaps_to_gc, nullptr);
         LOG_DEBUG(
@@ -689,6 +717,7 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
         /// not using gc_timestamp here because
         /// staged part is tmp part which is unecessary to last for old_parts_lifetime, delete it directly
         TxnTimestamp ts = storage.getContext()->getTimestamp();
+        /// TODO: handle zombie staged parts
         ServerDataPartsVector all_staged_parts = catalog->getStagedServerDataParts(istorage, ts, &partition_filter);
         ServerDataPartsVector staged_parts_to_gc;
         CnchPartsHelper::calcPartsForGC(all_staged_parts, &staged_parts_to_gc, nullptr);

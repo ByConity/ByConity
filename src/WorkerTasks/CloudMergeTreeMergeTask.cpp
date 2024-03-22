@@ -38,6 +38,11 @@ CloudMergeTreeMergeTask::CloudMergeTreeMergeTask(
     : ManipulationTask(std::move(params_), std::move(context_))
     , storage(storage_)
 {
+    if (/*params.source_parts.empty() && */params.source_data_parts.empty())
+        throw Exception("Expected non-empty source parts in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
+
+    if (params.new_part_names.empty())
+        throw Exception("Expected non-empty new part names in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void CloudMergeTreeMergeTask::executeImpl()
@@ -81,6 +86,7 @@ void CloudMergeTreeMergeTask::executeImpl()
         /// rows_count and bytes_on_disk is required for parts info statistics.
         drop_part->covered_parts_rows = part->rows_count;
         drop_part->covered_parts_size = part->bytes_on_disk;
+        drop_part->last_modification_time = part->last_modification_time? part->last_modification_time : part->commit_time;
         temp_parts.push_back(std::move(drop_part));
     }
 

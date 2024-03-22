@@ -1,6 +1,7 @@
 #pragma once
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/ITransformingStep.h>
+#include "Parsers/IAST_fwd.h"
 
 namespace DB
 {
@@ -54,7 +55,8 @@ private:
         Block & header,
         size_t max_threads,
         bool no_destination,
-        bool no_squash);
+        bool no_squash,
+        ASTPtr query);
 
     TargetPtr target;
 };
@@ -75,8 +77,8 @@ public:
 class TableWriteStep::InsertTarget : public TableWriteStep::Target
 {
 public:
-    InsertTarget(StoragePtr storage_, StorageID storage_id_, NamesAndTypes columns_)
-        : storage(std::move(storage_)), storage_id(storage_id_), columns(std::move(columns_))
+    InsertTarget(StoragePtr storage_, StorageID storage_id_, NamesAndTypes columns_, ASTPtr query_)
+        : storage(std::move(storage_)), storage_id(storage_id_), columns(std::move(columns_)), query(query_)
     {
     }
 
@@ -97,6 +99,11 @@ public:
         return storage_id;
     }
 
+    ASTPtr getQuery() const
+    {
+        return query;
+    }
+
     void toProtoImpl(Protos::TableWriteStep::InsertTarget & proto) const;
     static std::shared_ptr<InsertTarget> createFromProtoImpl(const Protos::TableWriteStep::InsertTarget & proto, ContextPtr context);
 
@@ -104,6 +111,7 @@ private:
     StoragePtr storage;
     StorageID storage_id;
     NamesAndTypes columns;
+    ASTPtr query;
 };
 
 }

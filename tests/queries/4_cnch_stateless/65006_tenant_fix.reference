@@ -1,0 +1,17 @@
+----- check for X.Y.Z selecting ------
+2	2	2
+3	3	3
+1	1	1
+4	4	4
+0	0	0
+Df	Df	Df	Df
+			
+ABC	ABC	ABC	ABC
+			
+			
+----- check for X.Y.Z selecting for multi-table------
+2	2	2	Df	Df	Df
+3	3	3			
+1	1	1	ABC	ABC	ABC
+4	4	4			
+0	0	0			

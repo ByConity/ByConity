@@ -230,16 +230,21 @@ public:
     {
         if (arguments.size() == 1)
             return FunctionFactory::instance().getImpl("toString", context)->build(arguments);
-        if (std::all_of(arguments.begin(), arguments.end(), [](const auto & elem) { return isArray(elem.type); }))
+        if (std::all_of(arguments.begin(), arguments.end(),
+            [this](const auto & elem) {
+                return context && context->getSettingsRef().dialect_type == DialectType::MYSQL ?
+                    isArray(removeNullable(elem.type)) :
+                    isArray(elem.type);
+            }))
             return FunctionFactory::instance().getImpl("arrayConcat", context)->build(arguments);
         if (std::all_of(arguments.begin(), arguments.end(), [](const auto & elem) { return isMap(elem.type); }))
             return FunctionFactory::instance().getImpl("mapConcat", context)->build(arguments);
         if (std::all_of(arguments.begin(), arguments.end(), [](const auto & elem) { return isTuple(elem.type); }))
             return FunctionFactory::instance().getImpl("tupleConcat", context)->build(arguments);
         return std::make_unique<FunctionToFunctionBaseAdaptor>(
-            FunctionConcat::create(context),
-            collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
-            return_type);
+                FunctionConcat::create(context),
+                collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
+                return_type);
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override

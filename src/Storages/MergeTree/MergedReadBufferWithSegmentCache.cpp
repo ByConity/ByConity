@@ -144,7 +144,7 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         source_data_offset(source_data_offset_), source_data_size(source_data_size_),
         cache_segment_size(cache_segment_size_), segment_cache(segment_cache_),
         settings(settings_), uncompressed_cache(uncompressed_cache_),
-        profile_callback(profile_callback_), internal_progress_callback(internal_progress_cb_),
+        profile_callback(profile_callback_), progress_callback(internal_progress_cb_),
         clock_type(clock_type_),
         total_segment_count(total_segment_count_), marks_loader(marks_loader_),
         current_segment_idx(0), current_compressed_offset(std::nullopt), part_host(part_host_),
@@ -187,8 +187,8 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
 
             ProfileEvents::increment(ProfileEvents::CnchReadSizeFromDiskCache,
                 buf_size);
-            if (internal_progress_callback)
-                internal_progress_callback({0, 0, 0, 0, buf_size});
+            if (progress_callback)
+                progress_callback({0, 0, 0, 0, buf_size});
 
             return true;
         }
@@ -242,8 +242,8 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
                 ProfileEvents::CnchReadSizeFromDiskCache
                 : ProfileEvents::CnchReadSizeFromRemote,
             buf_size);
-            if (cache_buffer.initialized() && internal_progress_callback)
-                internal_progress_callback({0, 0, 0, 0, buf_size});
+            if (cache_buffer.initialized() && progress_callback)
+                progress_callback({0, 0, 0, 0, buf_size});
 
         if (segment_cache != nullptr && !cache_buffer.initialized())
         {
@@ -420,7 +420,7 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInRemoteSegmentCache(size_t seg
         .max_queue_count = segment_cache->getSettings().stealing_max_queue_count,
     };
     auto remote_data_client = std::make_shared<DistributedDataClient>(part_host.disk_cache_host_port, segment_key, option);
-    auto remote_cache_file = std::make_unique<ReadBufferFromRpcStreamFile>(remote_data_client, settings.read_settings.buffer_size);
+    auto remote_cache_file = std::make_unique<ReadBufferFromRpcStreamFile>(remote_data_client, settings.read_settings.remote_fs_buffer_size);
     if (remote_cache_file->getFileName().empty())
         return false;
     try

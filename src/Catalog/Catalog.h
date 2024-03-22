@@ -37,6 +37,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
 #include "common/types.h"
+#include <Common/Exception.h>
 #include <Common/Config/MetastoreConfig.h>
 #include <Common/Configurations.h>
 #include <Common/DNSResolver.h>
@@ -71,7 +72,7 @@ enum class VisibilityLevel
 {
     // all items visible to xid (commit_ts <= xid && end_ts > xid)
     Visible,
-    // all items committed before xid, including unvisible items (end_ts <= xid)
+    // all items committed before xid, including invisible items (end_ts <= xid)
     Committed,
     // all items written before xid, including intermediate uncommitted items
     All
@@ -245,9 +246,29 @@ public:
     /// Data parts API
     /////////////////////////////
 
-    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
+    /**
+     * @brief Get the Server Data Parts In Partitions With Delete Bitmap Metas.
+     * For data consistency, data parts and delete bitmap metas must use the same transaction records to filter out. Otherwise it will get incorrect result.
+     * Please see more detail in doc: https://bytedance.larkoffice.com/docx/Xo52dhoMnofCROxvXUUceyK9nQd
+     */
+    ServerDataPartsWithDBM getServerDataPartsInPartitionsWithDBM(
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        VisibilityLevel visibility = VisibilityLevel::Visible);
 
-    ServerDataPartsVector getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
+    ServerDataPartsVector getServerDataPartsInPartitions(
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        VisibilityLevel visibility = VisibilityLevel::Visible,
+        bool execute_filter = true);
+
+    ServerDataPartsWithDBM getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
+
+    ServerDataPartsVector getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter = true);
 
     ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
@@ -256,20 +277,28 @@ public:
 
     // return table's committed staged parts. if partitions != null, ignore staged parts not belong to `partitions`.
     DataPartsVector getStagedParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
-    ServerDataPartsVector getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
+
+    ServerDataPartsWithDBM getStagedServerDataPartsWithDBM(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
+    ServerDataPartsVector getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool execute_filter = true);
 
     /////////////////////////////
     /// Delete bitmaps API (UNIQUE KEY)
     /////////////////////////////
 
     /// fetch all delete bitmaps <= ts in the given partitions
-    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
-    DeleteBitmapMetaPtrVector getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
+    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitions(
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context = nullptr,
+        bool execute_filter = true);
+    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsFromMetastore(
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter = true);
+    DeleteBitmapMetaPtrVector getTrashedDeleteBitmapsInPartitions(
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter = true);
 
     /// get bitmaps by keys
     DeleteBitmapMetaPtrVector getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys);
-    /// remove bitmaps meta from KV, used by GC
-    void removeDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps);
 
     // V1 part commit API
     void finishCommit(
@@ -292,6 +321,7 @@ public:
     void dropAllPart(const StoragePtr & storage, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
     std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList(const ConstStoragePtr & table, const Context * session_context);
+    std::vector<Protos::LastModificationTimeHint> getLastModificationTimeHints(const ConstStoragePtr & table);
 
     template<typename Map>
     void getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list);
@@ -399,14 +429,11 @@ public:
         const TxnTimestamp & commitTs,
         const UInt64 txn_id = 0);
 
-    void clearParts(
-        const StoragePtr & table,
-        const CommitItems & commit_data,
-        const bool skip_part_cache = false);
+    void clearParts(const StoragePtr & table, const CommitItems & commit_data);
 
     /// write undo buffer before write vfs
-    void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, const UndoResources & resources);
-    void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, UndoResources && resources);
+    void writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, const UndoResources & resources);
+    void writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, UndoResources && resources);
 
     /// clear undo buffer
     void clearUndoBuffer(const TxnTimestamp & txnID);
@@ -444,6 +471,7 @@ public:
     /// clean zombie records. If the total transaction record number is too large, it may be impossible to get all of them. We can
     /// pass a max_result_number to only get part of them and clean zombie records repeatedlly
     std::vector<TransactionRecord> getTransactionRecordsForGC(size_t max_result_number);
+    TransactionRecords getTransactionRecords(const ServerDataPartsVector & parts, const DeleteBitmapMetaPtrVector & bitmaps);
 
     /// Clear intents written by zombie transaction.
     void clearZombieIntent(const TxnTimestamp & txnID);
@@ -512,6 +540,7 @@ public:
     DataModelDBs getDatabaseInTrash();
 
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getAllTablesID(const String & db = "");
+    std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesIDByTenant(const String & tenant_id);
 
     std::shared_ptr<Protos::TableIdentifier> getTableIDByName(const String & db, const String & table);
     std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> getTableIDsByNames(const std::vector<std::pair<String, String>> & db_table_pairs);
@@ -524,17 +553,19 @@ public:
     void clearDatabaseMeta(const String & database, const UInt64 & ts);
 
     void clearTableMetaForGC(const String & database, const String & name, const UInt64 & ts);
-    void clearDataPartsMeta(const StoragePtr & storage, const DataPartsVector & parts, const bool skip_part_cache = false);
+    void clearDataPartsMeta(const StoragePtr & storage, const DataPartsVector & parts);
     void clearStagePartsMeta(const StoragePtr & storage, const ServerDataPartsVector & parts);
     void clearDataPartsMetaForTable(const StoragePtr & table);
+    void clearMutationEntriesForTable(const StoragePtr & storage);
     void clearDeleteBitmapsMetaForTable(const StoragePtr & table);
 
     /**
      * @brief Move specified items into trash.
      *
      * @param skip_part_cache Evict parts caches if set to `false`.
+     * @param is_zombie_with_staging_txn_id If true, just remove items.data_parts' kv entry
      */
-    void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool skip_part_cache = false);
+    void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool is_zombie_with_staging_txn_id = false);
 
     /**
      * @brief Delete specified trashed items from catalog.
@@ -640,6 +671,15 @@ public:
 
     std::list<CnchServerTopology> getTopologies();
 
+    // materialized view meta.
+    BatchCommitRequest constructMvMetaRequests(const String & uuid,
+            std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions, String mv_version_ts);
+    String getMvMetaVersion(const String & uuid);
+    std::vector<std::shared_ptr<Protos::VersionedPartitions>> getMvBaseTables(const String & uuid);
+    void updateMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+    void dropMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+    void cleanMvMeta(const String & uuid);
+
     /// Time Travel relate interfaces
     std::vector<UInt64> getTrashDBVersions(const String & database);
     void undropDatabase(const String & database, const UInt64 & ts);
@@ -677,6 +717,10 @@ public:
     void dropWorkerGroup(const String & worker_group_id);
 
     UInt64 getNonHostUpdateTimestampFromByteKV(const UUID & uuid);
+
+    String getDictionaryBucketUpdateTimeKey(const StorageID & storage_id, Int64 bucket_number) const;
+
+    String getByKey(const String & key);
 
     /** Masking policy NOTEs
      * 1. Column masking policy refers to the masking policy data model, it will be applied to multiple columns with 1-n association.
@@ -804,7 +848,10 @@ private:
     DataModelPartWithNameVector getDataPartsMetaFromMetastore(
         const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash = false);
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false);
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false, bool execute_filter = true);
+    DataModelDeleteBitmapPtrVector getDeleteBitmapsInPartitionsImpl(
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts);
+
     void detachOrAttachDictionary(const String & db, const String & name, bool is_detach);
     void moveTableIntoTrash(
         Protos::DataModelTable & table,
@@ -961,6 +1008,6 @@ void remove_not_exist_items(std::vector<T> & items_to_write, std::vector<size_t>
 }
 
 using CatalogPtr = std::shared_ptr<Catalog>;
-void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & tenanted_name, const UUID & uuid, Poco::Logger * log);
+void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & tenanted_name, const UUID & uuid);
 void fillUUIDForDictionary(DB::Protos::DataModelDictionary &);
 }

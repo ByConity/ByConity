@@ -23,11 +23,16 @@ public:
                              "  name Nullable(String),"
                              "  salary Nullable(Float64),"
                              "  commission Nullable(UInt32)"
-                             ") ENGINE=Memory();");
+                             ") ENGINE=CnchMergeTree() order by empid;");
         tester->execute("CREATE TABLE IF NOT EXISTS depts("
                              "  deptno UInt32 not null,"
                              "  name Nullable(String)"
-                             ") ENGINE=Memory();");
+                             ") ENGINE=CnchMergeTree() order by deptno;");
+    }
+
+    static void TearDownTestCase()
+    {
+        tester.reset();
     }
     
     static std::shared_ptr<BaseWorkloadTest> tester;

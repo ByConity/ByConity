@@ -266,7 +266,7 @@ DataTypePtr DomainVisitor<T>::checkedTypeLookup(const T & symbol) const
     if constexpr (std::is_same_v<T, String>)
         type = column_types.at(symbol);
     else
-        type = type_analyzer.getType(symbol);
+        type = type_analyzer.getTypeWithoutCheck(symbol);
     if (!type)
         throw Exception("Types is missing info for symbol", DB::ErrorCodes::LOGICAL_ERROR);
     return type;
@@ -480,8 +480,8 @@ std::optional<NormalizedSimpleComparison> DomainVisitor<T>::toNormalizedSimpleCo
     if (left.has_value() == right.has_value())
         return std::nullopt;
 
-    DataTypePtr left_type = left.has_value() ? left->first : type_analyzer.getType(ast_fun->arguments->children[0]);
-    DataTypePtr right_type = right.has_value() ? right->first : type_analyzer.getType(ast_fun->arguments->children[1]);
+    DataTypePtr left_type = left.has_value() ? left->first : type_analyzer.getTypeWithoutCheck(ast_fun->arguments->children[0]);
+    DataTypePtr right_type = right.has_value() ? right->first : type_analyzer.getTypeWithoutCheck(ast_fun->arguments->children[1]);
     //TODO: not support float32(symbol) comparator float32(value)
     /** get the superType for leftType and right Type,
      * if the identifier's type is narrow type, then return std::nullopt;
@@ -841,7 +841,7 @@ std::optional<ExtractionResult<T>> DomainVisitor<T>::processSimpleInPredicate(AS
     if (!symbol)
         return std::nullopt;
 
-    DataTypePtr sym_type = type_analyzer.getType(in_fun->arguments->children[0]);
+    DataTypePtr sym_type = type_analyzer.getTypeWithoutCheck(in_fun->arguments->children[0]);
 
     if (!isTypeOrderable(sym_type) && !isTypeComparable(sym_type))
     {
@@ -927,7 +927,7 @@ ExtractionResult<T> DomainVisitor<T>::visitLikeFunction(ASTPtr & node, const boo
         return visitNode(node, complement);
 
     //TODO: support FixedString, why?
-    DataTypePtr type = type_analyzer.getType(left);
+    DataTypePtr type = type_analyzer.getTypeWithoutCheck(left);
     if (type->getTypeId() != TypeIndex::String)
         return visitNode(node, complement);
 
@@ -961,7 +961,7 @@ ExtractionResult<T> DomainVisitor<T>::visitStartsWithFunction(ASTPtr & node, con
     auto * ast_fun = node->as<ASTFunction>();
     ASTPtr & target = ast_fun->arguments->children[0];
     ASTPtr & prefix = ast_fun->arguments->children[1];
-    DataTypePtr type = type_analyzer.getType(target);
+    DataTypePtr type = type_analyzer.getTypeWithoutCheck(target);
 
     auto symbol = checkAndGetSymbol(target);
 

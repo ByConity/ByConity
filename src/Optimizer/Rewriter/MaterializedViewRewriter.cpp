@@ -18,36 +18,67 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Analyzers/TypeAnalyzer.h>
 #include <Catalog/Catalog.h>
+#include <Core/Field.h>
 #include <Core/SettingsEnums.h>
+#include <DataTypes/DataTypeCustomSimpleAggregateFunction.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 #include <Optimizer/DomainTranslator.h>
 #include <Optimizer/JoinGraph.h>
-#include <Optimizer/MaterializedView/MaterializeViewChecker.h>
+#include <Optimizer/MaterializedView/ExpressionSubstitution.h>
+#include <Optimizer/MaterializedView/InnerJoinCollector.h>
+#include <Optimizer/MaterializedView/MaterializedViewChecker.h>
+#include <Optimizer/MaterializedView/MaterializedViewJoinHyperGraph.h>
 #include <Optimizer/MaterializedView/MaterializedViewMemoryCache.h>
 #include <Optimizer/MaterializedView/MaterializedViewStructure.h>
+#include <Optimizer/MaterializedView/PartitionConsistencyChecker.h>
+#include <Optimizer/MaterializedView/RelatedMaterializedViewsExtractor.h>
 #include <Optimizer/OptimizerMetrics.h>
+#include <Optimizer/PredicateConst.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/SelectQueryInfoHelper.h>
 #include <Optimizer/SimpleExpressionRewriter.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Optimizer/Utils.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTableColumnReference.h>
+#include <Parsers/IAST.h>
+#include <Parsers/IAST_fwd.h>
+#include <QueryPlan/Assignment.h>
+#include <QueryPlan/CTEInfo.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/PlanNode.h>
+#include <QueryPlan/PlanSymbolReallocator.h>
+#include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/SimplePlanVisitor.h>
+#include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
+#include "Common/LinkedHashMap.h"
+#include <Common/Exception.h>
 #include <common/logger_useful.h>
-#include <Optimizer/EqualityASTMap.h>
+#include "QueryPlan/CTEVisitHelper.h"
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <optional>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
+#include <vector>
+#include <boost/smart_ptr/intrusive_ptr.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
 
@@ -56,8 +87,10 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int PARAMETER_OUT_OF_BOUND;
+extern const int NO_AVAILABLE_MATERIALIZED_VIEW;
 }
 
+using namespace MaterializedView;
 namespace
 {
 struct RewriterCandidate
@@ -73,6 +106,7 @@ struct RewriterCandidate
     ASTPtr compensation_predicate;
     bool need_rollup = false;
     std::vector<ASTPtr> rollup_keys;
+    ASTPtr union_predicate;
 };
 using RewriterCandidates = std::vector<RewriterCandidate>;
 
@@ -108,376 +142,77 @@ struct RewriterFailureMessage
 };
 using RewriterFailureMessages = std::vector<RewriterFailureMessage>;
 
-struct TableInputRef
+using TableMapping = std::unordered_map<size_t, size_t>;
+using TableInputRefs = std::vector<TableInputRef>;
+using TableInputRefMapping = std::unordered_map<TableInputRef, TableInputRef, TableInputRefHash, TableInputRefEqual>;
+using TableInputRefMultiMapping = std::unordered_map<TableInputRef, TableInputRefs, TableInputRefHash, TableInputRefEqual>;
+struct JoinSetMatchResult
 {
-    StoragePtr storage;
-    PlanNodeId unique_id;
-    [[nodiscard]] String getDatabaseTableName() const {
-        return storage->getStorageID().getFullTableName();
-    }
-    [[nodiscard]] String toString() const { return getDatabaseTableName() + "#" + std::to_string(unique_id); }
+    TableInputRefMultiMapping query_to_view_table_multi_mappings;
+    // std::vector<TableInputRef> view_missing_tables;
+    // std::unordered_map<String, std::shared_ptr<ASTTableColumnReference>> view_missing_columns;
 };
 
-struct TableInputRefHash
+struct PredicateInfo
 {
-    size_t operator()(const TableInputRef & ref) const { return std::hash<UInt32>()(ref.unique_id); }
-};
+    std::vector<std::pair<ConstASTPtr, ConstASTPtr>> equal_predicates;
+    std::vector<ConstASTPtr> inner_predicates;
 
-struct TableInputRefEqual
-{
-    bool operator()(const TableInputRef & lhs, const TableInputRef & rhs) const
+    std::unordered_map<JoinHyperGraph::NodeSet, std::vector<ConstASTPtr>> outer_predicates;
+    std::unordered_map<JoinHyperGraph::NodeSet, std::vector<ConstASTPtr>> outer_join_clauses;
+
+    String toString() const
     {
-        return lhs.storage == rhs.storage && lhs.unique_id == rhs.unique_id;
-    }
-};
+        auto combine_equal_predicates = [&]() {
+            std::vector<ASTPtr> res;
+            res.reserve(equal_predicates.size());
+            for (const auto & item : equal_predicates)
+                res.emplace_back(makeASTFunction("equals", item.first->clone(), item.second->clone()));
+            return res;
+        };
 
-struct JoinGraphMatchResult
-{
-    std::unordered_map<TableInputRef, std::vector<TableInputRef>, TableInputRefHash, TableInputRefEqual> query_to_view_table_mappings;
-    std::vector<TableInputRef> view_missing_tables;
-    std::unordered_map<String, std::shared_ptr<ASTTableColumnReference>> view_missing_columns;
-};
+        auto combine_other_predicates = [&](const auto & predicates) {
+            std::vector<ConstASTPtr> res;
+            for (const auto & item : predicates)
+                res.insert(res.end(), item.second.begin(), item.second.end());
+            return res;
+        };
 
-using TableInputRefMap = std::unordered_map<TableInputRef, TableInputRef, TableInputRefHash, TableInputRefEqual>;
-
-String toString(const TableInputRefMap & table_mapping)
-{
-    String str;
-    for (const auto & x: table_mapping)
-        str += x.first.toString() + "->" + x.second.toString() + ", ";
-    return str;
-}
-
-class SwapTableInputRefRewriter : public SimpleExpressionRewriter<const TableInputRefMap>
-{
-public:
-    static ASTPtr rewrite(ASTPtr & expression, const TableInputRefMap & table_mapping)
-    {
-        SwapTableInputRefRewriter rewriter;
-        return ASTVisitorUtil::accept(expression, rewriter, table_mapping);
-    }
-
-    ASTPtr visitASTTableColumnReference(ASTPtr & node, const TableInputRefMap & context) override
-    {
-        auto & table_column_ref = node->as<ASTTableColumnReference &>();
-        auto storage_ptr = (const_cast<IStorage *>(table_column_ref.storage))->shared_from_this();
-        TableInputRef ref{std::move(storage_ptr), table_column_ref.unique_id};
-        if (!context.contains(ref)) {
-            throw Exception("table ref not exists: " + ref.toString(), ErrorCodes::LOGICAL_ERROR);
-        }
-        auto & replace_table_ref = context.at(ref);
-        return std::make_shared<ASTTableColumnReference>(
-            replace_table_ref.storage.get(), replace_table_ref.unique_id, table_column_ref.column_name);
+        std::stringstream ss;
+        ss << "equal_predicates: " << queryToString(PredicateUtils::combineConjuncts(combine_equal_predicates()))
+           << ", inner_predicates: " << queryToString(PredicateUtils::combineConjuncts(inner_predicates))
+           << ", outer_predicates: " << queryToString(PredicateUtils::combineConjuncts(combine_other_predicates(outer_predicates)))
+           << ", outer_join_clauses: " << queryToString(PredicateUtils::combineConjuncts(combine_other_predicates(outer_join_clauses)));
+        return ss.str();
     }
 };
 
 using ExpressionEquivalences = Equivalences<ConstASTPtr, EqualityASTMap>;
-using ConstASTMap = EqualityASTMap<ConstASTPtr>;
-class EquivalencesRewriter : public SimpleExpressionRewriter<const ConstASTMap>
-{
-public:
-    static ASTPtr rewrite(ASTPtr & expression, const ExpressionEquivalences & expression_equivalences)
-    {
-        EquivalencesRewriter rewriter;
-        const auto map = expression_equivalences.representMap();
-        return ASTVisitorUtil::accept(expression, rewriter, map);
-    }
-
-    ASTPtr visitNode(ASTPtr & node, const ConstASTMap & context) override
-    {
-        auto it = context.find(node);
-        if (it != context.end())
-            return it->second->clone();
-        return SimpleExpressionRewriter::visitNode(node, context);
-    }
-};
-
-class ColumnReferenceRewriter : public SimpleExpressionRewriter<const Void>
-{
-public:
-    ASTPtr visitASTTableColumnReference(ASTPtr & node, const Void &) override
-    {
-        auto & column_ref = node->as<ASTTableColumnReference &>();
-        if (!belonging.has_value())
-            belonging = column_ref.unique_id;
-        else if (*belonging != column_ref.unique_id)
-            belonging = std::nullopt;
-        return std::make_shared<ASTIdentifier>(column_ref.column_name);
-    }
-
-    std::optional<UInt32> belonging;
-};
-
-std::tuple<std::optional<UInt32>, ASTPtr>
-rewritePredicateForPartitionCheck(const ConstASTPtr & expression, const SymbolTransformMap & query_transform_map)
-{
-    ColumnReferenceRewriter rewriter;
-    auto rewritten = ASTVisitorUtil::accept(query_transform_map.inlineReferences(expression), rewriter, {});
-    return {rewriter.belonging, rewritten};
-}
-
-/// Return whether the first is a subset of the second
-bool subset(const std::unordered_set<String> & first, const std::unordered_set<String> & second)
-{
-    if (first.empty() && !second.empty())
-        return false;
-
-    for (const auto & element : first)
-    {
-        if (!second.count(element))
-            return false;
-    }
-
-    return true;
-}
-
-bool checkMVConsistencyByPartition(
-    const std::vector<PlanNodePtr> query_table_scans,
-    const ConstASTs & query_predicates,
-    const SymbolTransformMap & query_transform_map,
-    const StorageID & mv_target_table,
-    ContextPtr context,
-    const std::function<void(const String &)> & add_failure_message,
-    Poco::Logger * logger)
-{
-    // inline query predicates & determine belonging base table
-    std::unordered_map<UInt32, ASTs> predicates_by_table;
-    for (const auto & pred : query_predicates)
-    {
-        auto [node_id, new_pred] = rewritePredicateForPartitionCheck(pred, query_transform_map);
-        LOG_DEBUG(
-            logger,
-            "mv check partition: inline query predicate {} to origin nodeId {}, belonging table: {}",
-            serializeAST(*pred),
-            serializeAST(*new_pred),
-            node_id.has_value() ? std::to_string(*node_id) : "?");
-        if (node_id.has_value())
-            predicates_by_table[*node_id].emplace_back(new_pred);
-    }
-
-    // check base table partition schema & collect query required partitions
-    // TODO: now the partition schema check is by checking key size, it's better to also check key's expression
-    std::unordered_set<String> required_part_name_set;
-    std::optional<DataTypes> first_partition_key_types;
-    String first_partition_table;
-    auto check_partition_schema = [&](const auto & key_description, const auto & storage_id) -> bool {
-        // skip non-partitioned table
-        if (key_description.data_types.empty())
-            return true;
-
-        if (!first_partition_key_types)
-        {
-            first_partition_key_types = key_description.data_types;
-            first_partition_table = storage_id.getFullTableName();
-            return true;
-        }
-
-        const auto & partition_key_types = key_description.data_types;
-        return partition_key_types.size() == first_partition_key_types->size();
-    };
-
-    for (const auto & table_scan : query_table_scans)
-    {
-        const auto * table_step = dynamic_cast<const TableScanStep *>(table_scan->getStep().get());
-        if (!table_step)
-            continue;
-
-        auto storage = DatabaseCatalog::instance().getTable(table_step->getStorageID(), context);
-        auto * merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-        if (!merge_tree || merge_tree->getSettings()->disable_block_output)
-            continue;
-
-        auto storage_metadata = storage->getInMemoryMetadataPtr();
-        const auto & key_description = storage_metadata->getPartitionKey();
-        // ignore non-partitioned tables
-        if (key_description.data_types.empty())
-            continue;
-
-        if (!check_partition_schema(key_description, storage->getStorageID()))
-        {
-            add_failure_message(
-                "table " + storage->getStorageID().getFullTableName() + " has a inconsistent partition schema with table "
-                + first_partition_table);
-            return false;
-        }
-
-        auto select_query = std::make_shared<ASTSelectQuery>();
-        auto select_expr = std::make_shared<ASTExpressionList>();
-        Names column_names_to_return;
-        for (const auto & col_name : table_step->getColumnNames())
-        {
-            select_expr->children.push_back(std::make_shared<ASTIdentifier>(col_name));
-            column_names_to_return.push_back(col_name);
-        }
-        select_query->setExpression(ASTSelectQuery::Expression::SELECT, std::move(select_expr));
-        select_query->replaceDatabaseAndTable(storage->getStorageID());
-        auto & table_preds = predicates_by_table[table_scan->getId()];
-        if (!table_preds.empty())
-            select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(table_preds));
-
-        SelectQueryInfo query_info = buildSelectQueryInfoForQuery(select_query, context);
-        auto required_partitions = merge_tree->getPrunedPartitions(query_info, column_names_to_return, context).partitions;
-        std::unordered_set<String> required_part_name_set_for_this_table;
-        for (const auto & part : required_partitions)
-        {
-            required_part_name_set_for_this_table.emplace(part);
-        }
-
-        LOG_DEBUG(
-            logger,
-            "Get table {} required partition set: {} by query {}",
-            storage->getStorageID().getFullTableName(),
-            fmt::join(required_part_name_set_for_this_table, ", "),
-            serializeAST(*select_query));
-
-        required_part_name_set.insert(required_part_name_set_for_this_table.begin(), required_part_name_set_for_this_table.end());
-    }
-
-    if (required_part_name_set.empty())
-        return true;
-
-    // check mv partition schema
-    auto mv_target_storage = DatabaseCatalog::instance().getTable(mv_target_table, context);
-    const auto * mv_target_merge_tree = dynamic_cast<StorageCnchMergeTree *>(mv_target_storage.get());
-    if (!mv_target_merge_tree)
-        return true;
-
-    auto mv_target_storage_metadata = mv_target_storage->getInMemoryMetadataPtr();
-    if (!check_partition_schema(mv_target_storage_metadata->getPartitionKey(), mv_target_table))
-    {
-        add_failure_message(
-            "mv target table " + mv_target_table.getFullTableName() + " has a inconsistent partition schema with table "
-            + first_partition_table);
-        return false;
-    }
-
-    // check mv partitions
-    std::unordered_set<String> view_part_name_set;
-    if (context->getCnchCatalog())
-    {
-        auto view_partitions = context->getCnchCatalog()->getPartitionList(mv_target_storage, context.get());
-        MergeTreeMetaBase * view_tree_base = dynamic_cast<MergeTreeMetaBase *>(mv_target_storage.get());
-        for (const auto & partition : view_partitions)
-            view_part_name_set.emplace(partition->getID(*view_tree_base));
-    }
-
-    LOG_DEBUG(
-        logger,
-        "Get mv target table {} owned partition set: {}",
-        mv_target_storage->getStorageID().getFullTableName(),
-        fmt::join(view_part_name_set, ", "));
-
-    if (!subset(required_part_name_set, view_part_name_set))
-    {
-        String required_partitions_str;
-        for (const auto & require_partition : required_part_name_set)
-            required_partitions_str.append(require_partition).append(",");
-        String owned_partitions_str;
-        for (const auto & own_partition : view_part_name_set)
-            owned_partitions_str.append(own_partition).append(",");
-        add_failure_message(
-            "checkPartitions - require partitions-" + required_partitions_str + " owned partitions-" + owned_partitions_str
-            + " match fail.");
-        return false;
-    }
-
-    return true;
-}
-
-class ExtractResult
-{
-public:
-    std::map<String, std::vector<StorageID>> table_based_materialized_views;
-    std::map<String, std::vector<StorageID>> table_based_local_materialized_views;
-    std::map<String, StorageID> local_table_to_distributed_table;
-
-    ExtractResult(
-        const std::map<String, std::vector<StorageID>> & tableBasedMaterializedViews,
-        const std::map<String, std::vector<StorageID>> & tableBasedLocalMaterializedViews,
-        const std::map<String, StorageID> & localTableToDistributedTable)
-        : table_based_materialized_views(tableBasedMaterializedViews)
-        , table_based_local_materialized_views(tableBasedLocalMaterializedViews)
-        , local_table_to_distributed_table(localTableToDistributedTable)
-    {
-    }
-};
-
-/**
- * Extract materialized views related into the query tables.
- */
-class RelatedMaterializedViewExtractor : public SimplePlanVisitor<Void>
-{
-public:
-    static ExtractResult
-    extract(QueryPlan & plan, ContextMutablePtr context_)
-    {
-        Void c;
-        RelatedMaterializedViewExtractor finder{context_, plan.getCTEInfo()};
-        VisitorUtil::accept(plan.getPlanNode(), finder, c);
-        return ExtractResult{
-            finder.table_based_materialized_views,
-            finder.table_based_local_materialized_views,
-            finder.local_table_to_distributed_table};
-    }
-
-protected:
-    RelatedMaterializedViewExtractor(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanVisitor(cte_info_), context(context_) { }
-
-    Void visitTableScanNode(TableScanNode & node, Void &) override
-    {
-        auto table_scan = dynamic_cast<const TableScanStep *>(node.getStep().get());
-        auto catalog_client = context->tryGetCnchCatalog();
-        if (catalog_client)
-        {
-            auto start_time = context->getTimestamp();
-            auto views = catalog_client->getAllViewsOn(*context, table_scan->getStorage(), start_time);
-            if (!views.empty())
-            {
-                Dependencies dependencies;
-                for (const auto & view : views)
-                    dependencies.emplace_back(view->getStorageID());
-                table_based_materialized_views.emplace(table_scan->getStorageID().getFullTableName(), std::move(dependencies));
-            }
-        }
-        else
-        {
-            auto dependencies = DatabaseCatalog::instance().getDependencies(table_scan->getStorageID());
-            if (!dependencies.empty())
-                table_based_materialized_views.emplace(table_scan->getStorageID().getFullTableName(), std::move(dependencies));
-        }
-        return Void{};
-    }
-
-private:
-    ContextMutablePtr context;
-    std::map<String, std::vector<StorageID>> table_based_materialized_views;
-    std::map<String, std::vector<StorageID>> table_based_local_materialized_views;
-    std::map<String, StorageID> local_table_to_distributed_table;
-};
 
 /**
  * tables that children contains, empty if there are unsupported plan nodes
  */
 struct BaseTables
 {
-    std::vector<StorageID> base_tables;
+    std::unordered_set<StorageID> base_tables;
+    PlanNodePtr inlined;
 };
 
 /**
  * Top-down match whether any node in query can be rewrite using materialized view.
  */
-class CandidatesExplorer : public PlanNodeVisitor<BaseTables, Void>
+class CandidatesExplorer : public PlanNodeVisitor<BaseTables, std::unordered_set<String>>
 {
 public:
     static std::unordered_map<PlanNodePtr, RewriterCandidates> explore(
         QueryPlan & query,
         ContextMutablePtr context,
-        const std::map<String, std::vector<MaterializedViewStructurePtr>> & table_based_materialized_views,
+        LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> & materialized_views,
         bool verbose)
     {
-        CandidatesExplorer explorer{context, table_based_materialized_views, verbose};
-        Void c;
-        VisitorUtil::accept(query.getPlanNode(), explorer, c);
+        CandidatesExplorer explorer{query.getCTEInfo(), context, materialized_views, verbose};
+        std::unordered_set<String> required_columns;
+        VisitorUtil::accept(query.getPlanNode(), explorer, required_columns);
 
         if (verbose)
         {
@@ -503,174 +238,231 @@ public:
 
 protected:
     CandidatesExplorer(
+        CTEInfo & cte_info,
         ContextMutablePtr context_,
-        const std::map<String, std::vector<MaterializedViewStructurePtr>> & table_based_materialized_views_,
+        LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> & materialized_views_,
         bool verbose_)
-        : context(context_), table_based_materialized_views(table_based_materialized_views_), verbose(verbose_)
+        : context(context_), materialized_views(materialized_views_), verbose(verbose_), cte_helper(cte_info)
     {
     }
 
-    BaseTables visitPlanNode(PlanNodeBase & node, Void &) override { return process(node); }
-
-    BaseTables visitTableScanNode(TableScanNode & node, Void &) override
+    BaseTables visitPlanNode(PlanNodeBase & node, std::unordered_set<String> & required_columns) override
     {
-        auto step = dynamic_cast<const TableScanStep *>(node.getStep().get());
-        BaseTables res;
-        res.base_tables.emplace_back(StorageID{step->getDatabase(), step->getTable()});
-        return res;
+        return process(node, required_columns);
     }
 
-    BaseTables process(PlanNodeBase & node)
+    BaseTables visitTableScanNode(TableScanNode & node, std::unordered_set<String> &) override
+    {
+        auto & step = node.getStep();
+        std::unordered_set<StorageID> base_tables;
+        base_tables.emplace(step->getStorageID());
+        return BaseTables{
+            .base_tables = base_tables,
+            .inlined = node.shared_from_this(),
+        };
+    }
+
+    BaseTables visitCTERefNode(CTERefNode & node, std::unordered_set<String> & required_columns) override
+    {
+        auto cte_id = node.getStep()->getId();
+        auto res = cte_helper.accept(cte_id, *this, required_columns);
+
+        return BaseTables{.base_tables = res.base_tables, .inlined = node.getStep()->toInlinedPlanNode(cte_helper.getCTEInfo(), context)};
+    }
+
+    BaseTables process(PlanNodeBase & node, const std::unordered_set<String> & required_columns)
     {
         bool supported = MaterializedViewStepChecker::isSupported(node.getStep(), context);
 
-        std::vector<StorageID> base_tables;
+        std::unordered_set<String> child_required_columns;
+        if (node.getType() == IQueryPlanStep::Type::Projection)
+        {
+            auto & step = dynamic_cast<ProjectionStep &>(*node.getStep().get());
+            for (const auto & assignment : step.getAssignments())
+            {
+                for (const auto & symbol : SymbolsExtractor::extract(assignment.second))
+                    child_required_columns.emplace(symbol);
+            }
+        }
+
+        std::unordered_set<StorageID> base_tables;
+        PlanNodes children;
         for (auto & child : node.getChildren())
         {
-            Void c;
-            auto res = VisitorUtil::accept(child, *this, c);
+            auto res = VisitorUtil::accept(child, *this, child_required_columns);
             if (res.base_tables.empty())
                 supported = false;
             else
-                base_tables.insert(base_tables.end(), res.base_tables.begin(), res.base_tables.end());
+                base_tables.insert(res.base_tables.begin(), res.base_tables.end());
+            children.emplace_back(res.inlined);
         }
         if (!supported)
             return {};
 
-        matches(node, base_tables);
-        return BaseTables{.base_tables = base_tables};
+        auto inlined = PlanNodeBase::createPlanNode(node.getId(), node.getStep(), children);
+        matches(inlined, node.shared_from_this(), base_tables, required_columns);
+        return BaseTables{.base_tables = base_tables, .inlined = inlined};
     }
 
     /**
      * matches plan node using all related materialized view.
      */
-    void matches(PlanNodeBase & query, const std::vector<StorageID> & tables)
+    void matches(PlanNodePtr query, PlanNodePtr origin, const std::unordered_set<StorageID> & tables, const std::unordered_set<String> & query_required_columns)
     {
+        if (tables.size() > JoinHyperGraph::MAX_NODE)
+            return;
+
         std::vector<MaterializedViewStructurePtr> related_materialized_views;
-        for (const auto & table : tables)
-            if (auto it = table_based_materialized_views.find(table.getFullTableName()); it != table_based_materialized_views.end())
-                related_materialized_views.insert(related_materialized_views.end(), it->second.begin(), it->second.end());
+        std::shared_ptr<const AggregatingStep> query_aggregate = extractTopAggregate(query);
+
+        for (const auto & materialized_view : materialized_views)
+        {
+            if (materialized_view.first->top_aggregating_step.get() && !query_aggregate)
+                continue;
+            if (tables == materialized_view.first->base_storage_ids)
+                related_materialized_views.emplace_back(materialized_view.first);
+        }
 
         if (related_materialized_views.empty())
             return;
 
-        std::vector<ConstASTPtr> query_other_predicates;
-        std::shared_ptr<const AggregatingStep> query_aggregate;
-
-        JoinGraph query_join_graph = JoinGraph::build(query.shared_from_this(), context, true, false, true);
-        if (query_join_graph.getNodes().size() == 1 &&
-            query_join_graph.getNodes()[0]->getStep()->getType() == IQueryPlanStep::Type::Aggregating) {
-
-            auto having_predicates = query_join_graph.getFilters();
-            query_other_predicates.insert(query_other_predicates.end(), having_predicates.begin(), having_predicates.end());
-            query_aggregate = dynamic_pointer_cast<const AggregatingStep>(query_join_graph.getNodes()[0]->getStep());
-            query_join_graph = JoinGraph::build(query_join_graph.getNodes()[0]->getChildren()[0], context, true, false, true);
+        std::optional<SymbolTransformMap> query_map = SymbolTransformMap::buildFrom(*query);
+        if (!query_map)
+        {
+            LOG_ERROR(logger, "skip plan node {}: duplicate symbol name.", query->getId(), ErrorCodes::LOGICAL_ERROR);
+            return;
         }
 
-        std::optional<SymbolTransformMap> query_map; // lazy initialization later
-        std::optional<NameToType> query_symbol_types; // lazy initialization later
+        std::unordered_set<IQueryPlanStep::Type> skip_nodes;
+        skip_nodes.emplace(IQueryPlanStep::Type::Aggregating);
+        skip_nodes.emplace(IQueryPlanStep::Type::Sorting);
+        JoinHyperGraph query_join_hyper_graph = JoinHyperGraph::build(query, *query_map, context, skip_nodes);
+        InnerJoinCollector inner_join_collector;
+        inner_join_collector.collect(query);
+        PlanNodes query_inner_sources = inner_join_collector.getInnerSources();
+        // get all predicates from join graph
+        auto query_predicates = extractPredicates(query_join_hyper_graph, query_join_hyper_graph.getNodeSet(query_inner_sources));
 
         for (const auto & view : related_materialized_views)
             if (auto result = match(
                     query,
-                    query_join_graph,
-                    query_other_predicates,
+                    query_required_columns,
+                    query_join_hyper_graph,
+                    query_predicates,
+                    query_inner_sources,
                     query_map,
                     query_aggregate,
-                    query_symbol_types,
-                    view->join_graph,
-                    view->other_predicates,
+                    view->join_hyper_graph,
+                    view->inner_sources,
+                    view->having_predicates,
                     view->symbol_map,
                     view->output_columns,
                     view->output_columns_to_table_columns_map,
-                    view->expression_equivalences,
+                    view->output_columns_to_query_columns_map,
                     view->top_aggregating_step,
-                    view->symbol_types,
+                    view->async_materialized_view,
+                    materialized_views[view],
                     view->view_storage_id,
                     view->target_storage_id))
-                candidates[query.shared_from_this()].emplace_back(*result);
+                candidates[origin].emplace_back(*result);
     }
+
 
     /**
      * main logic for materialized view based query rewriter.
      */
     std::optional<RewriterCandidate> match(
-        PlanNodeBase & query,
-        const JoinGraph & query_join_graph,
-        const std::vector<ConstASTPtr> & query_other_predicates,
+        const PlanNodePtr & query,
+        const std::unordered_set<String> & query_required_columns,
+        const JoinHyperGraph & query_join_hyper_graph,
+        const PredicateInfo & query_predicates,
+        const PlanNodes & query_inner_sources,
         std::optional<SymbolTransformMap> & query_map,
         const std::shared_ptr<const AggregatingStep> & query_aggregate,
-        std::optional<NameToType> query_symbol_types,
-        const JoinGraph & view_join_graph,
-        const std::vector<ConstASTPtr> & view_other_predicates,
+        const JoinHyperGraph & view_join_hyper_graph,
+        const PlanNodes & view_inner_sources,
+        const bool & view_has_having_predicates,
         const SymbolTransformMap & view_map,
         const std::unordered_set<String> & view_outputs,
         const std::unordered_map<String, String> & view_outputs_to_table_columns_map,
-        const ExpressionEquivalences & view_equivalences,
+        std::unordered_map<String, String> output_columns_to_query_columns_map,
         const std::shared_ptr<const AggregatingStep> & view_aggregate,
-        const NameToType view_symbol_types,
+        const bool & async_materialized_view,
+        const PartitionCheckResult & partition_check_result,
         const StorageID view_storage_id,
         const StorageID target_storage_id)
     {
         auto add_failure_message = [&](const String & message) {
             if (verbose)
-                failure_messages[query.shared_from_this()].emplace_back(
+                failure_messages[query].emplace_back(
                     RewriterFailureMessage{view_storage_id, message});
         };
 
         // 0. pre-check
+        if (view_aggregate.get() && !query_aggregate)
+            return {};
 
-        // 1. check join
-        auto join_graph_match_result = matchJoinGraph(query_join_graph, view_join_graph, context);
+        // 1. check join nodes
+        auto join_graph_match_result = matchJoinSet(query_join_hyper_graph, view_join_hyper_graph, context);
         if (!join_graph_match_result)
         {
             add_failure_message("join graph rewrite fail.");
             return {};
         }
 
-        if (!query_symbol_types)
-        {
-            query_symbol_types = Utils::extractNameToType(query);
-            // actually we should skip all subsequent matches for this plan node
-            if (!query_symbol_types)
-            {
-                add_failure_message("query has ambiguous names.");
-                return {};
-            }
-        }
-
-        // get all predicates from join graph
-        auto query_predicates = PredicateUtils::extractEqualPredicates(query_join_graph.getFilters());
-        for (const auto & predicate : query_other_predicates)
-            query_predicates.second.emplace_back(predicate);
-        auto view_predicates = PredicateUtils::extractEqualPredicates(view_join_graph.getFilters());
-        for (const auto & predicate : view_other_predicates)
-            view_predicates.second.emplace_back(predicate);
-
-        if (!query_map)
-        {
-            query_map = SymbolTransformMap::buildFrom(query); // lazy initialization here.
-            if (!query_map)
-            {
-                add_failure_message("query transform map invalid, maybe has duplicate symbols");
-                return {};
-            }
-        }
-
         // 1-2. generate table mapping from join graph
-        // If a table is used multiple times, we will create multiple mappings,
-        // and we will try to rewrite the query using each of the mappings.
-        // Then, we will try to map every source table (query) to a target table (view).
-        for (auto & query_to_view_table_mappings : generateFlatTableMappings(join_graph_match_result->query_to_view_table_mappings))
+        /// If a table is used multiple times, we will create multiple mappings,
+        /// and we will try to rewrite the query using each of the mappings.
+        /// Then, we will try to map every source table (query) to a target table (view).
+        for (auto & query_to_view_table_mappings : generateFlatTableMappings(join_graph_match_result->query_to_view_table_multi_mappings))
         {
+            // 1-3. check join edges
+            TableMapping query_to_view_table_node_set_index_mappings;
+            for (const auto & item : query_to_view_table_mappings)
+                query_to_view_table_node_set_index_mappings.emplace(
+                    query_join_hyper_graph.getNodeSetIndex(item.first.unique_id),
+                    view_join_hyper_graph.getNodeSetIndex(item.second.unique_id));
+
+            auto join_relation_match_result = matchJoinRelation(
+                    query_join_hyper_graph,
+                    view_join_hyper_graph,
+                    view_inner_sources,
+                    query_to_view_table_node_set_index_mappings,
+                    *join_graph_match_result);
+            if (!join_relation_match_result)
+            {
+                add_failure_message(
+                    "join relation match fail. query: " + query_join_hyper_graph.toString() + ";view: " + view_join_hyper_graph.toString());
+                break; // bail out
+            }
+
             // 2. check where(predicates)
+            ASTPtr union_predicate = PredicateConst::FALSE_VALUE;
             std::vector<ConstASTPtr> compensation_predicates;
-            ExpressionEquivalences view_based_query_equivalences_map;
+
+            // 2-0. prepare predicates
+            auto view_predicates = extractPredicates(
+                view_join_hyper_graph,
+                mapQueryNodeSet(query_join_hyper_graph.getNodeSet(query_inner_sources), query_to_view_table_node_set_index_mappings));
+            if (verbose)
+            {
+                LOG_DEBUG(logger, "query_predicates: {}; view_predicates: {}", query_predicates.toString(), view_predicates.toString());
+            }
+
+            // can not get equivalences from materialized view structure as join compensation
+            ExpressionEquivalences view_equivalences;
+            for (const auto & predicate : view_predicates.equal_predicates)
+            {
+                auto left_symbol_lineage = normalizeExpression(predicate.first, view_map);
+                auto right_symbol_lineage = normalizeExpression(predicate.second, view_map);
+                view_equivalences.add(left_symbol_lineage, right_symbol_lineage);
+            }
 
             // 2-1. equal-predicates
-            // Rewrite query equal predicates to view-based and build new equivalences map. Then check whether
-            // these query equal-predicates exists in view equivalences, otherwise, construct missing predicate for view.
-            for (const auto & predicate : query_predicates.first)
+            /// Rewrite query equal predicates to view-based and build new equivalences map. Then check whether
+            /// these query equal-predicates exists in view equivalences, otherwise, construct missing predicate for view.
+            ExpressionEquivalences view_based_query_equivalences_map;
+            for (const auto & predicate : query_predicates.equal_predicates)
             {
                 auto left_symbol_lineage = normalizeExpression(predicate.first, *query_map, query_to_view_table_mappings);
                 auto right_symbol_lineage = normalizeExpression(predicate.second, *query_map, query_to_view_table_mappings);
@@ -682,7 +474,7 @@ protected:
 
             // check whether view equal-predicates exists in query equivalences, otherwise, give up.
             bool has_missing_predicate = false;
-            for (const auto & predicate : view_predicates.first)
+            for (const auto & predicate : view_predicates.equal_predicates)
             {
                 auto left_symbol_lineage = normalizeExpression(predicate.first, view_map);
                 auto right_symbol_lineage = normalizeExpression(predicate.second, view_map);
@@ -696,61 +488,151 @@ protected:
             if (has_missing_predicate)
                 continue; // bail out
 
-            ASTPtr query_other_predicate;
-            ASTPtr view_other_predicate;
-
-            // 2-2. range-predicates(optional)
-            //// Currently range predicate matching is not perfect, as TupleDomain can not normalize OR filters.
-            //// See also MV unit test case: MaterializedViewRewriteTest.testFilterQueryOnFilterView3
-            if (context->getSettingsRef().enable_materialized_view_rewrite_match_range_filter)
-            {
-                using namespace DB::Predicate;
-                DomainTranslator<ASTPtr> domain_translator(context);
-                auto query_extraction_result
-                    = domain_translator.getExtractionResult(PredicateUtils::combineConjuncts(query_predicates.second), *query_symbol_types);
-                auto view_extraction_result
-                    = domain_translator.getExtractionResult(PredicateUtils::combineConjuncts(view_predicates.second), view_symbol_types);
-
-                TupleDomain<ASTPtr> & query_domain_result = query_extraction_result.tuple_domain;
-                TupleDomain<ASTPtr> & view_domain_result = view_extraction_result.tuple_domain;
-
-                TupleDomain<ASTPtr> view_based_query_domain = query_domain_result.mapKey<TupleDomain<ASTPtr>>([&](const ASTPtr & ast) {
-                    auto res = normalizeExpression(ast, *query_map, query_to_view_table_mappings);
-                    return res;
-                });
-
-                TupleDomain<ASTPtr> view_domain = view_domain_result.mapKey<TupleDomain<ASTPtr>>([&](const ASTPtr & ast) {
-                    auto res = normalizeExpression(ast, view_map);
-                    return res;
-                });
-
-                if (!view_domain.contains(view_based_query_domain))
+            // 2-2. rewrite outer join predicates
+            auto check_outer_predicates = [&](auto & query_outer_predicates, auto & view_outer_predicates) {
+                if (query_outer_predicates.size() != view_outer_predicates.size())
                 {
-                    add_failure_message("range predicates rewrite fail.");
+                    add_failure_message("rewrite outer predciates rewrite fail: different size.");
+                    return false;
+                }
+                for (const auto & item : query_outer_predicates)
+                {
+                    auto normalized_query_outer_predicates = normalizeExpression(
+                        PredicateUtils::combineConjuncts(item.second),
+                        *query_map,
+                        query_to_view_table_mappings,
+                        view_based_query_equivalences_map);
+                    auto normalized_view_outer_predicates = normalizeExpression(
+                        PredicateUtils::combineConjuncts(
+                            view_outer_predicates[mapQueryNodeSet(item.first, query_to_view_table_node_set_index_mappings)]),
+                        view_map,
+                        view_based_query_equivalences_map);
+                    if (!ASTEquality::ASTEquals()(normalized_view_outer_predicates, normalized_query_outer_predicates))
+                    {
+                        add_failure_message("rewrite outer predicates rewrite fail.");
+                        return false;
+                    }
+                }
+                return true;
+            };
+            if (!check_outer_predicates(query_predicates.outer_predicates, view_predicates.outer_predicates))
+                continue;
+            if (!check_outer_predicates(query_predicates.outer_join_clauses, view_predicates.outer_join_clauses))
+                continue;
+
+            // 2-3. rewrite partition-predicates
+            auto mv_partition_prediate = normalizeExpression(
+                SymbolMapper::simpleMapper(output_columns_to_query_columns_map).map(partition_check_result.mview_partition_predicate),
+                *query_map,
+                query_to_view_table_mappings);
+            compensation_predicates.emplace_back(mv_partition_prediate);
+
+            if (!PredicateUtils::isFalsePredicate(partition_check_result.union_query_partition_predicate))
+            {
+                auto it = std::find_if(query_to_view_table_mappings.begin(), query_to_view_table_mappings.end(), [&](const auto & item) {
+                    return item.first.storage == partition_check_result.depend_storage;
+                });
+                if (it == query_to_view_table_mappings.end())
+                {
+                    add_failure_message("union query partition predicate rewrite fail.");
+                    continue; // bail out
+                }
+                union_predicate = IdentifierToColumnReference::rewrite(
+                    partition_check_result.depend_storage.get(),
+                    it->first.unique_id,
+                    partition_check_result.union_query_partition_predicate);
+            }
+
+            // 2-4. range-predicates
+            using namespace DB::Predicate;
+            DomainTranslator<ASTPtr> domain_translator(context);
+            auto query_extraction_result = domain_translator.getExtractionResult(
+                normalizeExpression(
+                    PredicateUtils::combineConjuncts(query_predicates.inner_predicates),
+                    *query_map,
+                    query_to_view_table_mappings,
+                    view_based_query_equivalences_map),
+                NameToType{});
+            auto view_extraction_result = domain_translator.getExtractionResult(
+                normalizeExpression(PredicateUtils::combineConjuncts(view_predicates.inner_predicates), view_map, view_based_query_equivalences_map),
+                NameToType{});
+
+            TupleDomain<ASTPtr> & view_based_query_domain = query_extraction_result.tuple_domain;
+            TupleDomain<ASTPtr> & view_domain = view_extraction_result.tuple_domain;
+
+            ASTPtr view_based_query_other_predicate = query_extraction_result.remaining_expression;
+            ASTPtr view_other_predicate = view_extraction_result.remaining_expression;
+
+            if (view_based_query_domain.isNone() || view_domain.isNone())
+            {
+                add_failure_message("tuple domain is none");
+                continue; // bail out
+            }
+
+            // 2-5. union rewrite for range predicate
+            /// view don't contains all datas query need, it still can be used for query rewrite.
+            /// we can get some data view and get remaining data from query.
+            /// eg:
+            /// ┌────────┐
+            /// │ query  │
+            /// │  ┌─────┼─┐ (intersect)
+            /// └──┼─────┘ │
+            ///    │ view  │
+            ///    └───────┘
+            ///
+            /// ┌────────┐
+            /// │ query  │   (union_predicate)
+            /// │ ┌──────┘
+            /// └─┘
+            ///  union all
+            ///   ┌──────┐
+            ///   └──────┘   (intersect of view_based_query_domain and view)
+            ///
+            /// we only check range filter for union rewrite as only range filter can be used for io pruning.
+            if (!view_domain.contains(view_based_query_domain))
+            {
+                if (!context->getSettingsRef().enable_materialized_view_union_rewriting)
+                {
+                    add_failure_message("union rewrite is disabled");
                     continue; // bail out
                 }
 
-                if (view_domain != view_based_query_domain)
+                if (!PredicateUtils::isFalsePredicate(partition_check_result.union_query_partition_predicate))
                 {
-                    compensation_predicates.emplace_back(domain_translator.toPredicate(view_based_query_domain));
+                    add_failure_message("union predicate is not false");
+                    continue; // bail out
                 }
 
-                query_other_predicate = query_extraction_result.remaining_expression;
-                view_other_predicate = view_extraction_result.remaining_expression;
-            }
-            else
-            {
-                query_other_predicate = PredicateUtils::combineConjuncts(query_predicates.second);
-                view_other_predicate = PredicateUtils::combineConjuncts(view_predicates.second);
+                auto union_domain = view_based_query_domain.subtract(view_domain);
+                if (!union_domain)
+                {
+                    add_failure_message("union_predicate is dnf");
+                    continue; // bail out
+                }
+                auto view_based_union_predicate = domain_translator.toPredicate(*union_domain);
+                TableInputRefMap view_to_query_table_mappings;
+                for (const auto & item : query_to_view_table_mappings)
+                    view_to_query_table_mappings.emplace(item.second, item.first);
+                union_predicate = normalizeExpression(view_based_union_predicate, view_to_query_table_mappings);
+
+                view_based_query_domain = view_based_query_domain.intersect(view_domain);
+                if (view_based_query_domain.isNone())
+                {
+                    add_failure_message("no intersect between view and query");
+                    continue; // bail out
+                }
             }
 
-            // 2-3. other-predicates
-            // compensation_predicates.emplace_back(PredicateUtils.splitPredicates(
-            //     query_domain_result.getOtherPredicates(), view_domain_result.getOtherPredicates()));
-            auto view_based_query_predicates
-                = normalizeExpression(query_other_predicate, *query_map, query_to_view_table_mappings, view_based_query_equivalences_map);
+            // calculate range predicate need to be apply to view outputs
+            if (view_domain != view_based_query_domain)
+            {
+                ASTPtr compensation_predicate = domain_translator.toPredicate(view_based_query_domain);
+                compensation_predicates.emplace_back(compensation_predicate);
+            }
+
+            // 2-6. other-predicates
             auto other_compensation_predicate = PredicateUtils::splitPredicates(
-                view_based_query_predicates, normalizeExpression(view_other_predicate, view_map, view_based_query_equivalences_map));
+                view_based_query_other_predicate, normalizeExpression(view_other_predicate, view_map, view_based_query_equivalences_map));
             if (!other_compensation_predicate)
             {
                 add_failure_message("other-predicates rewrite fail.");
@@ -758,6 +640,11 @@ protected:
             }
             compensation_predicates.emplace_back(other_compensation_predicate);
 
+            // 2-7. join compensation predicates
+            compensation_predicates.emplace_back(normalizeExpression(
+                PredicateUtils::combineConjuncts(*join_relation_match_result), view_map, view_based_query_equivalences_map));
+
+            // 2-6. finish predicates rewrite
             auto compensation_predicate = PredicateUtils::combineConjuncts(compensation_predicates);
             if (PredicateUtils::isFalsePredicate(compensation_predicate))
             {
@@ -767,11 +654,9 @@ protected:
 
             // 3. check need rollup
             // Note: aggregate always need rollup for aggregating merge tree in clickhouse,
-            //  but code here is not removed for future features.
-            bool need_rollup = query_aggregate.get();
-            if (view_aggregate.get() && !query_aggregate.get()) {
-                continue;
-            }
+            bool need_rollup = query_aggregate
+                && (!async_materialized_view || !view_aggregate || query_aggregate->getKeys().size() < view_aggregate->getKeys().size()
+                    || !PredicateUtils::isFalsePredicate(union_predicate));
 
             // 3-1. query aggregate has default result if group by has empty set. not supported yet.
             bool empty_groupings = query_aggregate && query_aggregate->getKeys().empty() &&
@@ -782,7 +667,7 @@ protected:
             auto default_value_provider = getAggregateDefaultValueProvider(query_aggregate, context);
 
             // 3-2. having can't rewrite if aggregate need rollup.
-            if (need_rollup && !query_other_predicates.empty())
+            if (need_rollup && view_has_having_predicates)
             {
                 add_failure_message("having predicate rollup rewrite fail.");
                 continue;
@@ -797,19 +682,22 @@ protected:
                     makeASTIdentifier(view_output));
 
             // 5-2. update symbol transform map if there are view missing tables.
-            for (const auto & missing_table_column : join_graph_match_result->view_missing_columns)
-                view_output_columns_map.emplace(
-                    normalizeExpression(
-                        missing_table_column.second, *query_map, query_to_view_table_mappings, view_based_query_equivalences_map),
-                    makeASTIdentifier(missing_table_column.first));
+            // for (const auto & missing_table_column : join_graph_match_result->view_missing_columns)
+            //     view_output_columns_map.emplace(
+            //         normalizeExpression(
+            //             missing_table_column.second, *query_map, query_to_view_table_mappings, view_based_query_equivalences_map),
+            //         makeASTIdentifier(missing_table_column.first));
 
             // 5-3. check select columns (contains aggregates)
-            NameSet required_columns_set;
+            NameOrderedSet required_columns_set;
             Assignments assignments;
             NameToType name_to_type;
             bool enforce_agg_node = false;
-            for (const auto & name_and_type : query.getCurrentDataStream().header)
+            for (const auto & name_and_type : query->getCurrentDataStream().header)
             {
+                if (!query_required_columns.empty() && !query_required_columns.contains(name_and_type.name))
+                    continue;
+
                 const auto & output_name = name_and_type.name;
 
                 auto rewrite = rewriteExpressionContainsAggregates(
@@ -823,7 +711,13 @@ protected:
                     default_value_provider);
                 if (!rewrite)
                 {
-                    add_failure_message("output column `" + output_name + "` rewrite fail.");
+                    String failure_message = "output column `" + output_name + "` rewrite fail.";
+                    if (verbose)
+                    {
+                        failure_message += "\nquery_map: " + query_map->toString();
+                        failure_message += "\nview_output_columns_map: " + toString(view_output_columns_map);
+                    }
+                    add_failure_message(failure_message);
                     break; // bail out
                 }
                 auto columns = SymbolsExtractor::extract(*rewrite);
@@ -834,9 +728,10 @@ protected:
 
                 enforce_agg_node = enforce_agg_node || Utils::containsAggregateFunction(*rewrite);
             }
-            if (assignments.size() != query.getCurrentDataStream().header.columns())
+            size_t required_column_size
+                = query_required_columns.empty() ? query->getCurrentDataStream().header.columns() : query_required_columns.size();
+            if (assignments.size() != required_column_size)
                 continue; // bail out
-
 
             // 5-4. if rollup is needed, check group by keys.
             need_rollup = need_rollup || enforce_agg_node;
@@ -868,41 +763,55 @@ protected:
             auto rewrite_compensation_predicate = rewriteExpression(compensation_predicate, view_output_columns_map, view_outputs);
             if (!rewrite_compensation_predicate)
             {
-                add_failure_message("compensation predicate rewrite fail.");
+                String failure_message = "compensation predicate rewrite fail.";
+                if (verbose)
+                    failure_message += "\nview_output_columns_map:" + toString(view_output_columns_map);
+                add_failure_message(failure_message);
                 continue;
             }
-            auto columns = SymbolsExtractor::extract(*rewrite_compensation_predicate);
+            auto columns = SymbolsExtractor::extract(compensation_predicate);
             required_columns_set.insert(columns.begin(), columns.end());
 
-            // 5. check data consistency
-            auto consistency_check_method = context->getSettingsRef().materialized_view_consistency_check_method;
-            if (consistency_check_method == MaterializedViewConsistencyCheckMethod::PARTITION)
+            // 6. rewrite union predicate
+            if (!PredicateUtils::isFalsePredicate(union_predicate))
             {
-                if (!checkMVConsistencyByPartition(
-                    query_join_graph.getNodes(),
-                    query_join_graph.getFilters(),
-                    *query_map,
-                    target_storage_id,
-                    context,
-                    add_failure_message,
-                    &Poco::Logger::get("CandidatesExplorer")))
+                if (query_aggregate && query->getType() != IQueryPlanStep::Type::Aggregating)
                 {
+                    add_failure_message("union rewrite for aggregating only supports query with aggregates on the top");
                     continue; // bail out
                 }
+
+                EqualityASTMap<ConstASTPtr> query_output_columns_map;
+                NameSet outputs;
+                for (const auto & plan_node : query_inner_sources)
+                {
+                    for (const auto & query_output : plan_node->getOutputNames())
+                    {
+                        outputs.emplace(query_output);
+                        query_output_columns_map.emplace(
+                            normalizeExpression(makeASTIdentifier(query_output), *query_map), makeASTIdentifier(query_output));
+                    }
+                }
+
+                auto rewrite_union_predicate = rewriteExpression(union_predicate, query_output_columns_map, outputs);
+                if (!rewrite_union_predicate)
+                {
+                    String failure_message = "union predicate rewrite fail.";
+                    if (verbose)
+                        failure_message += "\nquery_output_columns_map: " + toString(query_output_columns_map);
+                    add_failure_message(failure_message);
+                    continue;
+                }
+                union_predicate = *rewrite_union_predicate;
             }
 
-            // 6. construct candidate
+            // 7. construct candidate
             auto it_stats = materialized_views_stats.find(target_storage_id.getFullTableName());
             if (it_stats == materialized_views_stats.end())
             {
                 auto stats = TableScanEstimator::estimate(context, target_storage_id);
                 it_stats = materialized_views_stats.emplace(target_storage_id.getFullTableName(), stats).first;
             }
-
-            auto storage = DatabaseCatalog::instance().getTable(target_storage_id, context);
-            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
-            const auto & ordered_columns = metadata_snapshot->sorting_key.column_names;
-            bool contains_ordered_columns = !ordered_columns.empty() && columns.count(ordered_columns.front());
 
             NamesWithAliases table_columns_with_aliases;
             if (required_columns_set.empty()) {
@@ -919,12 +828,28 @@ protected:
                 table_columns_with_aliases.emplace_back(it->second, column);
             }
 
-            // 6. other query info
-            // 6-1. keep prewhere info for single table rewriting
-            ASTPtr prewhere_expr;
-            if (query_join_graph.getNodes().size() == 1)
+            auto storage = DatabaseCatalog::instance().getTable(target_storage_id, context);
+            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
+            const auto & ordered_columns = metadata_snapshot->sorting_key.column_names;
+            bool contains_ordered_columns = false;
+            if (!ordered_columns.empty())
             {
-                const auto * table_scan = dynamic_cast<const TableScanStep *>(query_join_graph.getNodes().at(0)->getStep().get());
+                for (const auto & column_with_alias : table_columns_with_aliases)
+                {
+                    if (ordered_columns[0] == column_with_alias.first && columns.count(column_with_alias.second))
+                    {
+                        contains_ordered_columns = true;
+                        break;
+                    }
+                }
+            }
+
+            // 8. other query info
+            // 8-1. keep prewhere info for single table rewriting
+            ASTPtr prewhere_expr;
+            if (query_join_hyper_graph.getPlanNodes().size() == 1)
+            {
+                const auto * table_scan = dynamic_cast<const TableScanStep *>(query_join_hyper_graph.getPlanNodes().at(0)->getStep().get());
                 if (table_scan != nullptr && table_scan->getQueryInfo().query)
                 {
                     auto & select_query = table_scan->getQueryInfo().query->as<ASTSelectQuery &>();
@@ -936,7 +861,13 @@ protected:
                             view_output_columns_map,
                             view_outputs);
                         if (rewritten_prewhere)
-                            prewhere_expr = *rewritten_prewhere;
+                        {
+                            std::unordered_map<String, String> mappings;
+                            for (const auto & item : table_columns_with_aliases)
+                                mappings.emplace(item.second, item.first);
+                            SymbolMapper symbol_mapper = SymbolMapper::symbolMapper(mappings);
+                            prewhere_expr = symbol_mapper.map(*rewritten_prewhere);
+                        }
                     }
                 }
             }
@@ -952,82 +883,65 @@ protected:
                 name_to_type,
                 *rewrite_compensation_predicate,
                 need_rollup,
-                rollup_keys};
+                rollup_keys,
+                union_predicate};
         }
         // no matches
         return {};
     }
 
-    static void logNormalizeExpression(const ConstASTPtr & expression,
-                                       const SymbolTransformMap & symbol_transform_map,
-                                       const TableInputRefMap & table_mapping)
+    static std::shared_ptr<const DB::AggregatingStep> extractTopAggregate(PlanNodePtr query)
     {
-        static auto log = &Poco::Logger::get("MaterializedViewRewriter");
-        LOG_TRACE(log, "normalize expression, input expression: " + serializeAST(*expression)
-                       + "\nsymbol transform map: " + symbol_transform_map.toString()
-                       + "\ntable mapping: " + toString(table_mapping));
+        if (query->getType() == IQueryPlanStep::Type::Aggregating)
+            return dynamic_pointer_cast<const DB::AggregatingStep>(query->getStep());
+        if (query->getChildren().size() == 1)
+            return extractTopAggregate(query->getChildren()[0]);
+        return nullptr;
     }
 
-    /**
-     * First, it rewrite identifiers in expression recursively, get lineage-form expression.
-     * Then, it swaps the all TableInputRefs using table_mapping.
-     * Finally, it rewrite equivalent expressions to unified expression.
-     *
-     * <p> it is used to rewrite expression from query to view-based uniform expression.
-     */
-    static ASTPtr normalizeExpression(
-        const ConstASTPtr & expression,
-        const SymbolTransformMap & symbol_transform_map,
-        const TableInputRefMap & table_mapping,
-        const ExpressionEquivalences & expression_equivalences)
+    static PredicateInfo extractPredicates(const JoinHyperGraph & join_hyper_graph, const JoinHyperGraph::NodeSet & node_set)
     {
-        logNormalizeExpression(expression, symbol_transform_map, table_mapping);
-        auto lineage = symbol_transform_map.inlineReferences(expression);
-        lineage = SwapTableInputRefRewriter::rewrite(lineage, table_mapping);
-        lineage = EquivalencesRewriter::rewrite(lineage, expression_equivalences);
-        return lineage;
+        std::vector<ConstASTPtr> inner_predictes;
+        std::unordered_map<JoinHyperGraph::NodeSet, std::vector<ConstASTPtr>> outer_predictes;
+        std::unordered_map<JoinHyperGraph::NodeSet, std::vector<ConstASTPtr>> outer_join_clauses;
+
+        for (const auto & filter : join_hyper_graph.getFilters())
+        {
+            if ((node_set & filter.first) == filter.first)
+                inner_predictes.insert(inner_predictes.end(), filter.second.begin(), filter.second.end());
+            else
+                outer_predictes[filter.first].insert(outer_predictes[filter.first].end(), filter.second.begin(), filter.second.end());
+        }
+
+        for (const auto & filter : join_hyper_graph.getJoinConditions())
+        {
+            if ((node_set & filter.first) == filter.first)
+                inner_predictes.insert(inner_predictes.end(), filter.second.begin(), filter.second.end());
+            else
+                outer_join_clauses[filter.first].insert(outer_predictes[filter.first].end(), filter.second.begin(), filter.second.end());
+        }
+
+        auto equal_predicates = PredicateUtils::extractEqualPredicates(inner_predictes);
+        return PredicateInfo{std::move(equal_predicates.first), std::move(equal_predicates.second), std::move(outer_predictes), std::move(outer_join_clauses)};
     }
 
-    /**
-     * it is used to rewrite expression from view to uniform expression.
-     */
-    static ASTPtr normalizeExpression(
-        const ConstASTPtr & expression,
-        const SymbolTransformMap & symbol_transform_map,
-        const ExpressionEquivalences & expression_equivalences)
+    static String toString(const EqualityASTMap<ConstASTPtr> & equality_map)
     {
-        auto lineage = symbol_transform_map.inlineReferences(expression);
-        lineage = EquivalencesRewriter::rewrite(lineage, expression_equivalences);
-        return lineage;
+        String res;
+        for (const auto & item : equality_map)
+            res += queryToString(*item.first) + " -> " + queryToString(*item.second) + "; ";
+        return res;
     }
-
-    static ASTPtr normalizeExpression(const ConstASTPtr & expression, const SymbolTransformMap & symbol_transform_map)
-    {
-        auto lineage = symbol_transform_map.inlineReferences(expression);
-        return lineage;
-    }
-
-    static ASTPtr normalizeExpression(
-        const ConstASTPtr & expression, const SymbolTransformMap & symbol_transform_map, const TableInputRefMap & table_mapping)
-    {
-        logNormalizeExpression(expression, symbol_transform_map, table_mapping);
-        auto lineage = symbol_transform_map.inlineReferences(expression);
-        lineage = SwapTableInputRefRewriter::rewrite(lineage, table_mapping);
-        return lineage;
-    }
-
-    static inline ASTPtr makeASTIdentifier(const String & name) { return std::make_shared<ASTIdentifier>(name); }
 
     /**
      * It will flatten a multimap containing table references to table references, producing all possible combinations of mappings.
      */
-    static std::vector<std::unordered_map<TableInputRef, TableInputRef, TableInputRefHash, TableInputRefEqual>> generateFlatTableMappings(
-        const std::unordered_map<TableInputRef, std::vector<TableInputRef>, TableInputRefHash, TableInputRefEqual> & table_multi_mapping)
+    static std::vector<TableInputRefMapping> generateFlatTableMappings(const TableInputRefMultiMapping & table_multi_mapping)
     {
         if (table_multi_mapping.empty())
             return {};
 
-        std::vector<std::unordered_map<TableInputRef, TableInputRef, TableInputRefHash, TableInputRefEqual>> table_mappings;
+        std::vector<TableInputRefMapping> table_mappings;
         table_mappings.emplace_back(); // init with empty map
         for (const auto & item : table_multi_mapping)
         {
@@ -1040,7 +954,7 @@ protected:
             }
             else
             {
-                std::vector<std::unordered_map<TableInputRef, TableInputRef, TableInputRefHash, TableInputRefEqual>> new_table_mappings;
+                std::vector<TableInputRefMapping> new_table_mappings;
                 for (const auto & view_table_ref : view_table_refs)
                 {
                     for (auto & mappings : table_mappings)
@@ -1063,56 +977,40 @@ protected:
     }
 
     /**
-     * We try to extract table reference and check whether query can be computed from view.
-     * if not, try to compensate, e.g., for join queries it might be possible to join missing tables
-     * with view to compute result.
-     *
-     * <p> supported:
-     * - Self join
-     * - view tables are subset of query tables (add additional tables through joins if possible)
-     *
-     * <p> todo:
-     * - query tables are subset of view tables (we need to check whether they are cardinality-preserving joins)
-     * - outer join
-     * - semi join and anti join
+     * We try to extract table reference and create table mapping relation from query to view.
+     * We only check table size here, Join-Relation will check later using table mapping.
+     * There we consider extended scenarios, like query missing tables, view missing tables, and self-join.
      */
-    static std::optional<JoinGraphMatchResult>
-    matchJoinGraph(const JoinGraph & query_graph, const JoinGraph & view_graph, ContextMutablePtr context)
+    static std::optional<JoinSetMatchResult>
+    matchJoinSet(const JoinHyperGraph & query_graph, const JoinHyperGraph & view_graph, ContextMutablePtr context)
     {
         if (query_graph.isEmpty())
             return {}; // bail out, if there is no tables.
-        const auto & query_nodes = query_graph.getNodes();
-        const auto & view_nodes = view_graph.getNodes();
+        const auto & query_nodes = query_graph.getPlanNodes();
+        const auto & view_nodes = view_graph.getPlanNodes();
 
         if (!context->getSettingsRef().enable_materialized_view_join_rewriting && query_nodes.size() > 1) {
             return {};
         }
 
-        if (query_nodes.size() < view_nodes.size())
-            return {}; // bail out, if some tables are missing in the query
-
-        auto extract_table_ref = [](PlanNodeBase & node) -> std::optional<TableInputRef> {
-            if (const auto * table_step = dynamic_cast<const TableScanStep *>(node.getStep().get()))
-                return TableInputRef{table_step->getStorage(), node.getId()};
-            return {};
-        };
-
         std::unordered_map<String, std::vector<std::pair<PlanNodePtr, TableInputRef>>> query_table_map;
         for (const auto & node : query_nodes)
         {
-            auto table_input_ref = extract_table_ref(*node);
-            if (!table_input_ref)
-                return {}; // bail out
-            query_table_map[table_input_ref->getDatabaseTableName()].emplace_back(node, *table_input_ref);
+            const auto * table_step = dynamic_cast<const TableScanStep *>(node->getStep().get());
+            if (!table_step)
+                return {};
+            TableInputRef table_input_ref{table_step->getStorage(), node->getId()};
+            query_table_map[table_input_ref.getDatabaseTableName()].emplace_back(node, table_input_ref);
         }
 
         std::unordered_map<String, std::vector<TableInputRef>> view_table_map;
         for (const auto & node : view_nodes)
         {
-            auto table_input_ref = extract_table_ref(*node);
-            if (!table_input_ref)
-                return {}; // bail out
-            view_table_map[table_input_ref->getDatabaseTableName()].emplace_back(*table_input_ref);
+            const auto * table_step = dynamic_cast<const TableScanStep *>(node->getStep().get());
+            if (!table_step)
+                return {};
+            TableInputRef table_input_ref{table_step->getStorage(), node->getId()};
+            view_table_map[table_input_ref.getDatabaseTableName()].emplace_back(table_input_ref);
         }
 
         bool is_query_missing_table = std::any_of(view_table_map.begin(), view_table_map.end(), [&](const auto & item) {
@@ -1121,9 +1019,9 @@ protected:
         if (is_query_missing_table)
             return {}; // bail out, if some tables are missing in the query
 
-        std::unordered_map<TableInputRef, std::vector<TableInputRef>, TableInputRefHash, TableInputRefEqual> table_mapping;
-        std::vector<TableInputRef> view_missing_tables;
-        std::unordered_map<String, std::shared_ptr<ASTTableColumnReference>> view_missing_columns;
+        TableInputRefMultiMapping table_multi_mapping;
+        // std::vector<TableInputRef> view_missing_tables;
+        // std::unordered_map<String, std::shared_ptr<ASTTableColumnReference>> view_missing_columns;
         for (auto & item : query_table_map)
         {
             auto & query_table_refs = item.second;
@@ -1134,321 +1032,196 @@ protected:
                 return {};
 
             for (auto & query_table_ref : query_table_refs)
-                table_mapping[query_table_ref.second] = view_table_refs;
+                table_multi_mapping[query_table_ref.second] = view_table_refs;
         }
 
-        return JoinGraphMatchResult{table_mapping, view_missing_tables, view_missing_columns};
+        return JoinSetMatchResult{table_multi_mapping /*, view_missing_tables, view_missing_columns*/};
     }
 
-    using AggregateDefaultValueProvider = std::function<std::optional<Field>(const ASTFunction &)>;
-    static AggregateDefaultValueProvider getAggregateDefaultValueProvider(
-        const std::shared_ptr<const AggregatingStep> & query_step, ContextMutablePtr context)
-    {
-        return [&, context](const ASTFunction & aggregate_ast_function) -> std::optional<Field> {
-            if (!query_step)
-                return {};
-            const auto & input_types = query_step->getInputStreams()[0].header.getNamesAndTypes();
-            DataTypes agg_argument_types;
-            if (aggregate_ast_function.arguments)
-            {
-                for (auto & argument : aggregate_ast_function.arguments->children)
-                {
-                    auto type = TypeAnalyzer::getType(argument, context, input_types);
-                    agg_argument_types.emplace_back(type);
-                }
-            }
-
-            Array parameters;
-            if (aggregate_ast_function.parameters)
-            {
-                for (auto & argument : aggregate_ast_function.parameters->children)
-                    parameters.emplace_back(argument->as<ASTLiteral &>().value);
-            }
-
-            AggregateFunctionProperties properties;
-            auto aggregate_function = AggregateFunctionFactory::instance().tryGet(
-                aggregate_ast_function.name, agg_argument_types, parameters, properties);
-            if (!aggregate_function) {
-                return {};
-            }
-
-            AlignedBuffer place_buffer(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
-            AggregateDataPtr place = place_buffer.data();
-            aggregate_function->create(place);
-
-            auto column = aggregate_function->getReturnType()->createColumn();
-            auto arena = std::make_unique<Arena>();
-            aggregate_function->insertResultInto(place, *column, arena.get());
-            Field default_value;
-            column->get(0, default_value);
-            return default_value;
-        };
-    }
-
-    static std::string getFunctionName(const ASTPtr & rewrite) {
-        return rewrite->as<ASTFunction>()->name;
+    static JoinHyperGraph::NodeSet mapQueryNodeSet(const JoinHyperGraph::NodeSet & query_node_set, const TableMapping & table_mapping) {
+        JoinHyperGraph::NodeSet view_node_set;
+        for (size_t i = 0; i < table_mapping.size(); i++)
+            if (query_node_set.test(i))
+                view_node_set.set(table_mapping.at(i));
+        return view_node_set;
     }
 
     /**
-     * if query is aggregate with empty groupings,
-     * rewrite result is not aggregate or aggregate changed (eg. rollup),
-     * we need add coalesce to assign default value from origin aggregate function for empty result.
+     * Here we check Join-Relation using table mapping, return compensation predicate
      */
-    static std::optional<ASTPtr> rewriteEmptyGroupings(
-        const ASTPtr & rewrite,
-        const ASTFunction & original_aggregate_function, AggregateDefaultValueProvider & default_value_provider) {
-        if (rewrite->getType() == ASTType::ASTFunction
-            && getFunctionName(rewrite) == original_aggregate_function.name) {
-            return rewrite;
-        }
-
-        ASTPtr any_aggregate_function;
-        if (rewrite->getType() == ASTType::ASTFunction
-            && AggregateFunctionFactory::instance().isAggregateFunctionName(getFunctionName(rewrite))) {
-            any_aggregate_function = rewrite;
-        }  else {
-            any_aggregate_function = makeASTFunction("any", rewrite);
-        }
-        auto default_value = default_value_provider(original_aggregate_function);
-        if (!default_value)
-            return {};
-        return std::make_optional(makeASTFunction("coalesce", any_aggregate_function, std::make_shared<ASTLiteral>(*default_value)));
-    }
-
-    /**
-     * It rewrite input expression using output column.
-     * If any of the expressions in the input expression cannot be mapped, it will return null.
-     *
-     * <p> Compared with rewriteExpression, it supports expression contains aggregates, and do rollup rewrite.
-     */
-    static std::optional<ASTPtr> rewriteExpressionContainsAggregates(
-        ASTPtr expression,
-        const EqualityASTMap<ConstASTPtr> & view_output_columns_map,
-        const std::unordered_set<String> & output_columns,
-        bool view_contains_aggregates,
-        bool need_rollup,
-        bool empty_groupings,
-        AggregateDefaultValueProvider & default_value_provider)
+    static std::optional<std::vector<ConstASTPtr>> matchJoinRelation(
+        const JoinHyperGraph & query_graph,
+        const JoinHyperGraph & view_graph,
+        const PlanNodes & view_inner_sources,
+        const TableMapping & table_mapping,
+        const JoinSetMatchResult & /*join_set_match_result*/)
     {
-        class ExpressionWithAggregateRewriter : public ASTVisitor<std::optional<ASTPtr>, Void>
-        {
-        public:
-            ExpressionWithAggregateRewriter(
-                const EqualityASTMap<ConstASTPtr> & view_output_columns_map_,
-                const std::unordered_set<String> & output_columns_,
-                bool view_contains_aggregates_,
-                bool need_rollup_,
-                bool empty_groupings_,
-                AggregateDefaultValueProvider & default_value_provider_)
-                : view_output_columns_map(view_output_columns_map_)
-                , output_columns(output_columns_)
-                , view_contains_aggregates(view_contains_aggregates_)
-                , need_rollup(need_rollup_)
-                , empty_groupings(empty_groupings_)
-                , default_value_provider(default_value_provider_)
-            {
-            }
+        std::vector<ConstASTPtr> compensation_predicates;
+        if (query_graph.getEdges().empty()) // single table scan
+            return compensation_predicates;
 
-            std::optional<ASTPtr> visitNode(ASTPtr & node, Void & c) override
-            {
-                if (!need_rollup || !Utils::containsAggregateFunction(node)) {
-                    if (view_output_columns_map.contains(node))
-                    {
-                        auto & result = view_output_columns_map.at(node);
-                        return result->clone();
-                    }
-                }
+        bool all_inner = std::all_of(query_graph.getEdges().begin(), query_graph.getEdges().end(), [](const auto & edge) {
+            return edge.join_step->getKind() == ASTTableJoin::Kind::Inner;
+        }) && std::all_of(view_graph.getEdges().begin(), view_graph.getEdges().end(), [](const auto & edge) {
+            return edge.join_step->getKind() == ASTTableJoin::Kind::Inner;
+        });
+        if (all_inner)
+            return compensation_predicates;
 
-                for (auto & child : node->children)
-                {
-                    auto result = ASTVisitorUtil::accept(child, *this, c);
-                    if (!result)
-                        return {};
-                    if (*result != child)
-                        child = std::move(*result);
-                }
-                return node;
-            }
+        if (query_graph.getEdges().size() != view_graph.getEdges().size())
+            return {}; // baild out, maybe remove this check for query compensation rewrite
 
-            std::optional<ASTPtr> visitASTFunction(ASTPtr & node, Void & c) override
-            {
-                auto * function = node->as<ASTFunction>();
-                if (!AggregateFunctionFactory::instance().isAggregateFunctionName(function->name))
-                    return visitNode(node, c);
+        auto view_inner_sources_node_set = view_graph.getNodeSet(view_inner_sources);
 
-                // 0. view is not aggregate
-                if (!view_contains_aggregates) {
-                    return rewriteExpression(node, view_output_columns_map, output_columns, true);
-                }
-
-                // try to rewrite the expression with the following rules:
-                // 1. state aggregate support rollup directly.
-                if (!function->name.ends_with("State"))
-                {
-                    auto state_function = function->clone();
-                    if (function->name.ends_with("Merge")) {
-                        function->name = function->name.substr(0, function->name.size() - 5);
-                    }
-                    state_function->as<ASTFunction &>().name = function->name + "State";
-                    auto rewrite_expression = rewriteExpression(state_function, view_output_columns_map, output_columns);
-                    if (rewrite_expression)
-                    {
-                        auto rewritten_function = std::make_shared<ASTFunction>();
-                        rewritten_function->name = need_rollup ? (function->name + "Merge") : ("finalizeAggregation");
-                        rewritten_function->arguments = std::make_shared<ASTExpressionList>();
-                        rewritten_function->children.emplace_back(rewritten_function->arguments);
-                        rewritten_function->arguments->children.push_back(*rewrite_expression);
-                        rewritten_function->parameters = function->parameters;
-                        return rewritten_function;
-                    }
-                }
-
-                // 2. rewrite with direct match
-                auto rewrite = rewriteExpression(node, view_output_columns_map, output_columns, true);
-                if (!rewrite)
-                    return {};
-                if (isAggregateFunction(*rewrite))
-                {
-                    // special case, some aggregate functions allow to be calculated from group by keys results:
-                    //  MV:      select empid from emps group by empid
-                    //  Query:   select max(empid) from emps group by empid
-                    //  rewrite: select max(empid) from emps group by empid
-                    if (!canRollupOnGroupByResults(rewrite.value()->as<const ASTFunction>()->name))
-                        return {};
-                    return rewrite;
-                } else {
-                    if (need_rollup)
-                        rewrite = getRollupAggregate(function, *rewrite);
-                    if (!rewrite)
-                        return {};
-                    if (empty_groupings)
-                        rewrite = rewriteEmptyGroupings(*rewrite, *function, default_value_provider);
-                    return rewrite;
-                }
-            }
-
-            static std::optional<ASTPtr> getRollupAggregate(const ASTFunction * original_function, const ASTPtr & rewrite) {
-                String rollup_aggregate_name = getRollupAggregateName(original_function->name);
-                if (rollup_aggregate_name.empty())
-                    return {};
-                auto rollup_function = std::make_shared<ASTFunction>();
-                rollup_function->name = std::move(rollup_aggregate_name);
-                rollup_function->arguments = std::make_shared<ASTExpressionList>();
-                rollup_function->arguments->children.emplace_back(rewrite);
-                rollup_function->parameters = original_function->parameters;
-                rollup_function->children.emplace_back(rollup_function->arguments);
-                return rollup_function;
-            }
-
-            static bool isAggregateFunction(const ASTPtr & ast)
-            {
-                if (const auto * function = ast->as<const ASTFunction>())
-                    if (AggregateFunctionFactory::instance().isAggregateFunctionName(function->name))
-                        return true;
+        auto match_join_edge = [&](const ASTTableJoin::Kind & query_kind,
+                                   const ASTTableJoin::Strictness & query_strictness,
+                                   const JoinHyperGraph::NodeSet & query_left_conditions_used_nodes,
+                                   const JoinHyperGraph::NodeSet & query_right_conditions_used_nodes,
+                                   const JoinHyperGraph::NodeSet & query_left_required_nodes,
+                                   const JoinHyperGraph::NodeSet & query_right_required_nodes,
+                                   const JoinHyperGraph::Edge & view_edge,
+                                   const JoinHyperGraph::HyperEdge & view_hyper_edge) -> bool {
+            ASTTableJoin::Kind view_kind = view_edge.join_step->getKind();
+            ASTTableJoin::Strictness view_strictness = view_edge.join_step->getStrictness();
+            if (query_strictness != view_strictness)
                 return false;
-            }
 
-            static String getRollupAggregateName(const String & name)
+            if (query_kind == view_kind)
             {
-                if (name == "count")
-                    return "sum";
-                else if (name == "min" || name == "max" || name == "sum")
-                    return name;
-                return {};
-            }
-
-            static bool canRollupOnGroupByResults(const String & name)
-            {
-                if (name.ends_with("distinct") || name.starts_with("uniq") ||name == "min" || name == "max")
+                if (view_edge.left_conditions_used_nodes == query_left_conditions_used_nodes
+                    && view_edge.right_conditions_used_nodes == query_right_conditions_used_nodes
+                    && view_hyper_edge.left_required_nodes == query_left_required_nodes
+                    && view_hyper_edge.right_required_nodes == query_right_required_nodes)
+                {
                     return true;
-                else
-                    return false;
+                }
             }
 
-            const EqualityASTMap<ConstASTPtr> & view_output_columns_map;
-            const std::unordered_set<String> & output_columns;
-            bool view_contains_aggregates;
-            bool need_rollup;
-            bool empty_groupings;
-            AggregateDefaultValueProvider & default_value_provider;
+            // left to right
+            if ((query_kind == ASTTableJoin::Kind::Inner && view_kind == ASTTableJoin::Kind::Inner)
+                || (query_kind == ASTTableJoin::Kind::Left && view_kind == ASTTableJoin::Kind::Right)
+                || (query_kind == ASTTableJoin::Kind::Right && view_kind == ASTTableJoin::Kind::Left))
+            {
+                if (view_edge.left_conditions_used_nodes == query_right_conditions_used_nodes
+                    && view_edge.right_conditions_used_nodes == query_left_conditions_used_nodes
+                    && view_hyper_edge.left_required_nodes == query_right_required_nodes
+                    && view_hyper_edge.right_required_nodes == query_left_required_nodes)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         };
-        ExpressionWithAggregateRewriter rewriter{
-            view_output_columns_map, output_columns, view_contains_aggregates, need_rollup, empty_groupings, default_value_provider};
-        Void c;
-        auto rewrite = ASTVisitorUtil::accept(expression, rewriter, c);
-        if (rewrite && isValidExpression(*rewrite, output_columns, true))
-            return rewrite;
-        return {};
-    }
 
-    /**
-     * It rewrite input expression using output column.
-     * If any of the expressions in the input expression cannot be mapped, it will return null.
-     */
-    static std::optional<ASTPtr> rewriteExpression(
-        ASTPtr expression,
-        const EqualityASTMap<ConstASTPtr> & view_output_columns_map,
-        const std::unordered_set<String> & output_columns,
-        bool allow_aggregate = false)
-    {
-        EquivalencesRewriter rewriter;
-        auto rewrite_expression = ASTVisitorUtil::accept(expression, rewriter, view_output_columns_map);
-        if (isValidExpression(rewrite_expression, output_columns, allow_aggregate))
-            return rewrite_expression;
-        return {}; // rewrite fail, bail out
-    }
-
-    /**
-     * Checks whether there are identifiers in input expression are mapped into output columns,
-     * or there are unmapped table references,
-     * or there are nested aggregate functions.
-     */
-    static bool
-    isValidExpression(const ConstASTPtr & expression, const std::unordered_set<String> & output_columns, bool allow_aggregate = false)
-    {
-        class ExpressionChecker : public ConstASTVisitor<bool, bool>
+        std::unordered_set<size_t> matched_view_edges;
+        for (size_t i = 0; i < query_graph.getEdges().size(); i++)
         {
-        public:
-            explicit ExpressionChecker(const std::unordered_set<String> & output_columns_) : output_columns(output_columns_) { }
+            const auto & query_edge = query_graph.getEdges()[i];
+            const auto & query_hyper_edge = query_graph.getHyperEdges()[i];
 
-            bool visitNode(const ConstASTPtr & ast, bool & c) override
+            ASTTableJoin::Kind query_kind = query_edge.join_step->getKind();
+            ASTTableJoin::Strictness query_strictness = query_edge.join_step->getStrictness();
+
+            auto query_left_conditions_used_nodes = mapQueryNodeSet(query_edge.left_conditions_used_nodes, table_mapping);
+            auto query_right_conditions_used_nodes = mapQueryNodeSet(query_edge.right_conditions_used_nodes, table_mapping);
+            auto query_left_required_nodes = mapQueryNodeSet(query_hyper_edge.left_required_nodes, table_mapping);
+            auto query_right_required_nodes = mapQueryNodeSet(query_hyper_edge.right_required_nodes, table_mapping);
+
+            bool matched = false;
+            for (size_t j = 0; j < view_graph.getEdges().size(); j++)
             {
-                return std::all_of(ast->children.begin(), ast->children.end(), [&](const auto & child) {
-                    return ASTVisitorUtil::accept(child, *this, c);
-                });
+                if (matched_view_edges.contains(i))
+                    continue;
+
+                matched = match_join_edge(
+                    query_kind,
+                    query_strictness,
+                    query_left_conditions_used_nodes,
+                    query_right_conditions_used_nodes,
+                    query_left_required_nodes,
+                    query_right_required_nodes,
+                    view_graph.getEdges()[i],
+                    view_graph.getHyperEdges()[i]);
+                if (matched)
+                {
+                    matched_view_edges.emplace(i);
+                    break;
+                }
             }
 
-            bool visitASTTableColumnReference(const ConstASTPtr &, bool &) override { return false; }
-
-            bool visitASTIdentifier(const ConstASTPtr & node, bool &) override
+            // join derive: try compute inner from left
+            // TODO: other join type like anti.
+            if (!matched && query_kind == ASTTableJoin::Kind::Inner)
             {
-                return output_columns.count(node->as<const ASTIdentifier &>().name());
+                for (size_t j = 0; j < view_graph.getEdges().size(); j++)
+                {
+                    if (matched_view_edges.contains(i))
+                        continue;
+
+                    const auto & view_edge = view_graph.getEdges()[i];
+                    const auto & view_hyper_edge = view_graph.getHyperEdges()[i];
+
+                    if (view_edge.join_step->getLeftKeys().empty())
+                        continue;
+
+                    // check join derive tables is query inner sources
+                    JoinHyperGraph::NodeSet inner_sources;
+                    if (view_edge.join_step->getKind() == ASTTableJoin::Kind::Left)
+                        inner_sources = view_edge.left_conditions_used_nodes;
+                    else if (view_edge.join_step->getKind() == ASTTableJoin::Kind::Right)
+                        inner_sources = view_edge.right_conditions_used_nodes;
+                    else
+                        continue;
+
+                    if ((view_inner_sources_node_set & inner_sources) != inner_sources)
+                        continue;
+
+                    matched = match_join_edge(
+                                  ASTTableJoin::Kind::Left,
+                                  query_strictness,
+                                  query_left_conditions_used_nodes,
+                                  query_right_conditions_used_nodes,
+                                  query_left_required_nodes,
+                                  query_right_required_nodes,
+                                  view_edge,
+                                  view_hyper_edge)
+                        || match_join_edge(
+                                  ASTTableJoin::Kind::Right,
+                                  query_strictness,
+                                  query_left_conditions_used_nodes,
+                                  query_right_conditions_used_nodes,
+                                  query_left_required_nodes,
+                                  query_right_required_nodes,
+                                  view_edge,
+                                  view_hyper_edge);
+                    if (matched)
+                    {
+                        compensation_predicates.emplace_back(makeASTFunction(
+                            "isNotNull",
+                            view_edge.join_step->getKind() == ASTTableJoin::Kind::Left
+                                ? makeASTIdentifier(view_edge.join_step->getLeftKeys()[0])
+                                : makeASTIdentifier(view_edge.join_step->getRightKeys()[0])));
+                        matched_view_edges.emplace(i);
+                        break;
+                    }
+                }
             }
 
-            bool visitASTFunction(const ConstASTPtr & node, bool & allow_aggregate) override
-            {
-                if (!AggregateFunctionFactory::instance().isAggregateFunctionName(node->as<ASTFunction &>().name))
-                    return visitNode(node, allow_aggregate);
-                if (!allow_aggregate)
-                    return false;
-                bool allow_nested_aggregate = false;
-                return visitNode(node, allow_nested_aggregate);
-            }
-
-        private:
-            const std::unordered_set<String> & output_columns;
-        };
-        ExpressionChecker checker{output_columns};
-        return ASTVisitorUtil::accept(expression, checker, allow_aggregate);
+            if (!matched)
+                return {}; // bail out
+        }
+        return compensation_predicates;
     }
 
 public:
     ContextMutablePtr context;
-    const std::map<String, std::vector<MaterializedViewStructurePtr>> & table_based_materialized_views;
+    LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> & materialized_views;
     std::unordered_map<PlanNodePtr, RewriterCandidates> candidates;
     std::unordered_map<PlanNodePtr, RewriterFailureMessages> failure_messages;
     std::map<String, std::optional<PlanNodeStatisticsPtr>> materialized_views_stats;
     const bool verbose;
+    SimpleCTEVisitHelper<BaseTables> cte_helper;
     Poco::Logger * logger = &Poco::Logger::get("CandidatesExplorer");
 };
 
@@ -1478,12 +1251,12 @@ protected:
             auto & candidates = it->second;
             auto candidate_it = std::min_element(candidates.begin(), candidates.end(), RewriterCandidateSort());
             context->getOptimizerMetrics()->addMaterializedView(candidate_it->view_database_and_table_name);
-            return constructEquivalentPlan(*candidate_it);
+            return constructEquivalentPlan(node.shared_from_this(), *candidate_it);
         }
         return SimplePlanRewriter::visitPlanNode(node, c);
     }
 
-    PlanNodePtr constructEquivalentPlan(const RewriterCandidate & candidate)
+    PlanNodePtr constructEquivalentPlan(const PlanNodePtr & query, const RewriterCandidate & candidate)
     {
         // table scan
         auto plan = planTableScan(candidate.target_database_and_table_name, candidate.table_output_columns, candidate.prewhere_expr);
@@ -1493,15 +1266,96 @@ protected:
             plan = PlanNodeBase::createPlanNode(
                 context->nextNodeId(), std::make_shared<FilterStep>(plan->getCurrentDataStream(), candidate.compensation_predicate), {plan});
 
-        // aggregation
-        Assignments rewrite_assignments;
-        std::tie(plan, rewrite_assignments) = planAggregate(plan, candidate.need_rollup, candidate.rollup_keys, candidate.assignments);
+        plan = checkOutputTypes(plan);
 
-        // output projection
-        plan = PlanNodeBase::createPlanNode(
-            context->nextNodeId(),
-            std::make_shared<ProjectionStep>(plan->getCurrentDataStream(), rewrite_assignments, candidate.name_to_type),
-            {plan});
+        if (candidate.need_rollup)
+        {
+            // aggregate
+            auto [aggregate, rewrite_assignments] = planAggregate(plan, candidate.need_rollup, candidate.rollup_keys, candidate.assignments);
+
+            // reallocate symbols from view scope to query scope
+            auto [reallocate, mappings] = PlanSymbolReallocator::reallocate(aggregate, context);
+            plan = reallocate;
+
+            // prepare plan final output projection
+            SymbolMapper symbol_mapper = SymbolMapper::symbolMapper(mappings);
+            Assignments assignments;
+            for (const auto & assignemnt : rewrite_assignments)
+                assignments.emplace(assignemnt.first, symbol_mapper.map(assignemnt.second));
+
+            // plan aggregate + union rewrite before
+            if (!PredicateUtils::isFalsePredicate(candidate.union_predicate))
+                plan = planUnionBeforeAggragte(plan, query, candidate.union_predicate, assignments);
+
+            plan = PlanNodeBase::createPlanNode(
+                context->nextNodeId(),
+                std::make_shared<ProjectionStep>(plan->getCurrentDataStream(), assignments, candidate.name_to_type),
+                {plan});
+            return plan;
+        }
+        else
+        {
+            // output project
+            plan = PlanNodeBase::createPlanNode(
+                context->nextNodeId(),
+                std::make_shared<ProjectionStep>(plan->getCurrentDataStream(), candidate.assignments, candidate.name_to_type),
+                {plan});
+
+            // simple union rewrite
+            if (!PredicateUtils::isFalsePredicate(candidate.union_predicate))
+                plan = planUnion(plan, query, candidate.union_predicate);
+
+                        // reallocate symbols
+            PlanNodeAndMappings plan_node_and_mappings = PlanSymbolReallocator::reallocate(plan, context);
+            plan = plan_node_and_mappings.plan_node;
+
+            // create projection step to guarante output symbols
+            Assignments assignments;
+            for (const auto & output : candidate.name_to_type)
+                assignments.emplace_back(output.first, std::make_shared<ASTIdentifier>(plan_node_and_mappings.mappings.at(output.first)));
+
+            plan = PlanNodeBase::createPlanNode(
+                context->nextNodeId(),
+                std::make_shared<ProjectionStep>(plan->getStep()->getOutputStream(), assignments, candidate.name_to_type),
+                {plan});
+            return plan;
+        }
+    }
+
+    PlanNodePtr checkOutputTypes(PlanNodePtr plan)
+    {
+        Assignments assignments;
+        NameToType name_to_type;
+        for(size_t i = 0; i < plan->getStep()->getOutputStream().header.columns(); i++)
+        {
+            const auto & column = plan->getStep()->getOutputStream().header.getByPosition(i);
+            auto type = column.type;
+            type = removeNullable(removeLowCardinality(type));
+
+            const auto * single_aggregate_function = dynamic_cast<const DataTypeCustomSimpleAggregateFunction *>( type->getCustomName());
+            if (single_aggregate_function)
+            {
+                assignments.emplace(
+                    column.name,
+                    makeASTFunction(
+                        "cast",
+                        makeASTIdentifier(column.name),
+                        std::make_shared<ASTLiteral>(single_aggregate_function->getFunction()->getReturnType()->getName())));
+                name_to_type.emplace(column.name, single_aggregate_function->getFunction()->getReturnType());
+            }
+            else
+            {
+                assignments.emplace(column.name, makeASTIdentifier(column.name));
+                name_to_type.emplace(column.name, type);
+            }
+        }
+        if (!Utils::isIdentity(assignments))
+        {
+            plan = PlanNodeBase::createPlanNode(
+                    context->nextNodeId(),
+                    std::make_shared<ProjectionStep>(plan->getCurrentDataStream(), assignments, name_to_type),
+                    {plan});
+        }
         return plan;
     }
 
@@ -1542,14 +1396,161 @@ protected:
                 max_block_size));
     }
 
+    // Union + Rollup Rewrite
+    //
+    // Before:
+    //  view:
+    //    - agg[v0]
+    //      - projection[v1]
+    //        - ts[v2]
+    //  query:
+    //    - agg[q1]
+    //      - any [q2]
+    //
+    // After:
+    //  view:
+    //    - agg[v0]
+    //      - union
+    //        - projection[v1]
+    //          - ts[v2]
+    //        - agg[q1]
+    //          - filter
+    //             - any[q2]
+    PlanNodePtr
+    planUnionBeforeAggragte(const PlanNodePtr & view, PlanNodePtr query, ASTPtr union_predicate, const Assignments & assignments)
+    {
+        if (query->getStep()->getType() != IQueryPlanStep::Type::Aggregating || view->getStep()->getType() != IQueryPlanStep::Type::Aggregating)
+            throw Exception("union rewrite failed: view & query root node expectes as aggregate", ErrorCodes::LOGICAL_ERROR);
+
+        const auto & view_step = dynamic_cast<const AggregatingStep &>(*view->getStep().get());
+        const auto & query_step = dynamic_cast<const AggregatingStep &>(*query->getStep().get());
+
+        OutputToInputs output_to_inputs;
+        for (const auto & key : query_step.getKeys())
+        {
+            const auto & view_key = assignments.at(key);
+            if (view_key->getType() != ASTType::ASTIdentifier)
+                throw Exception("union rewrite failed: view_key expected as identifier", ErrorCodes::LOGICAL_ERROR);
+            const auto & view_key_name = view_key->as<ASTIdentifier>()->name();
+
+            auto & inputs = output_to_inputs[view_key_name];
+            inputs.emplace_back(view_key_name);
+            inputs.emplace_back(key);
+        }
+
+        std::unordered_map<String, const AggregateDescription *> view_name_to_aggreagte;
+        for (const auto & aggregate : view_step.getAggregates())
+            view_name_to_aggreagte.emplace(aggregate.column_name, &aggregate);
+
+        AggregateDescriptions rewrite_aggregates;
+        for (const auto & aggregate : query_step.getAggregates())
+        {
+            const auto & view_aggregate_output = assignments.at(aggregate.column_name);
+            if (view_aggregate_output->getType() != ASTType::ASTIdentifier)
+                throw Exception("union rewrite failed: view_aggregate_output expected as identifier", ErrorCodes::LOGICAL_ERROR);
+            const auto & view_aggregate_output_name = view_aggregate_output->as<ASTIdentifier>()->name();
+            const auto * view_aggreagte = view_name_to_aggreagte.at(view_aggregate_output_name);
+            if (view_aggreagte->argument_names.size() != 1)
+                throw Exception("size of rollup aggregate arguments expected be 1", ErrorCodes::LOGICAL_ERROR);
+            auto & inputs = output_to_inputs[view_aggreagte->argument_names[0]];
+            inputs.emplace_back(view_aggreagte->argument_names[0]);
+            inputs.emplace_back(aggregate.column_name);
+
+            // check whether need rewrite
+            if (view_aggreagte->function->getName().ends_with("Merge") && !aggregate.function->getName().ends_with("State"))
+            {
+                auto rewrite = aggregate;
+                AggregateFunctionProperties properties;
+                rewrite.function = AggregateFunctionFactory::instance().get(
+                    aggregate.function->getName() + "State",
+                    aggregate.function->getArgumentTypes(),
+                    aggregate.function->getParameters(),
+                    properties);
+                rewrite_aggregates.emplace_back(rewrite);
+            }
+            else
+            {
+                rewrite_aggregates.emplace_back(aggregate);
+            }
+        }
+
+        InsertFilterRewriter rewriter{context, union_predicate};
+        Void c;
+        auto query_with_filter = VisitorUtil::accept(query->getChildren()[0], rewriter, c);
+
+        query_with_filter = PlanNodeBase::createPlanNode(
+            context->nextNodeId(),
+            std::make_shared<AggregatingStep>(
+                query_with_filter->getStep()->getOutputStream(),
+                query_step.getKeys(),
+                query_step.getKeysNotHashed(),
+                rewrite_aggregates,
+                query_step.getGroupingSetsParams(),
+                query_step.isFinal(),
+                query_step.getGroupBySortDescription(),
+                query_step.getGroupings(),
+                query_step.needOverflowRow(),
+                query_step.shouldProduceResultsInOrderOfBucketNumber()),
+            {query_with_filter});
+
+        auto [reallocate, mappings] = PlanSymbolReallocator::reallocate(query_with_filter, context);
+        for (auto & item : output_to_inputs)
+            item.second[1] = mappings.at(item.second[1]);
+
+        const auto & view_child = view->getChildren()[0];
+
+        Block output_stream;
+        for (const auto & output : view_child->getStep()->getOutputStream().header)
+        {
+            if (output_to_inputs.contains(output.name))
+                output_stream.insert(output);
+        }
+
+        auto unionn = PlanNodeBase::createPlanNode(
+            context->nextNodeId(),
+            std::make_shared<UnionStep>(
+                DataStreams{view_child->getStep()->getOutputStream(), reallocate->getStep()->getOutputStream()},
+                DataStream{output_stream},
+                output_to_inputs),
+            {view_child, reallocate});
+
+        return PlanNodeBase::createPlanNode(context->nextNodeId(), view->getStep(), {unionn});
+    }
+
+    // Union + Rollup Rewrite
+    PlanNodePtr planUnion(const PlanNodePtr & view, const PlanNodePtr & query, ASTPtr union_predicate)
+    {
+        InsertFilterRewriter rewriter{context, union_predicate};
+        Void c;
+        auto query_with_filter = VisitorUtil::accept(query, rewriter, c);
+
+        OutputToInputs output_to_inputs;
+        auto view_outputs = view->getOutputNames();
+        auto query_outputs = query->getOutputNames();
+
+        auto [reallocate, mappings] = PlanSymbolReallocator::reallocate(query_with_filter, context);
+        for (size_t i = 0; i < view_outputs.size(); i++)
+        {
+            auto & inputs = output_to_inputs[view_outputs[i]];
+            inputs.emplace_back(view_outputs[i]);
+            inputs.emplace_back(mappings.at(query_outputs[i]));
+        }
+
+        auto unionn = PlanNodeBase::createPlanNode(
+            context->nextNodeId(),
+            std::make_shared<UnionStep>(
+                DataStreams{view->getStep()->getOutputStream(), reallocate->getStep()->getOutputStream()},
+                view->getStep()->getOutputStream(),
+                output_to_inputs),
+            {view, reallocate});
+        return unionn;
+    }
+
     /**
      * Extracts aggregates from assignments, plan (rollup) aggregate nodes, return final projection assignments.
      */
-    std::pair<PlanNodePtr, Assignments> planAggregate(
-        PlanNodePtr plan,
-        bool need_rollup,
-        const std::vector<ASTPtr> & rollup_keys,
-        const Assignments & assignments)
+    std::pair<PlanNodePtr, Assignments>
+    planAggregate(PlanNodePtr plan, bool need_rollup, const std::vector<ASTPtr> & rollup_keys, const Assignments & assignments)
     {
         if (!need_rollup)
             return {plan->shared_from_this(), assignments};
@@ -1571,7 +1572,7 @@ protected:
         }
 
         AggregateRewriter agg_rewriter{context, input_types, arguments, arguments_types};
-        GroupByKeyRewrite key_rewriter{};
+        GroupByKeyRewriter key_rewriter{};
         Void c;
         Assignments rewrite_arguments;
         for (const auto & assignment : assignments)
@@ -1665,7 +1666,7 @@ private:
         EqualityASTMap<String> aggregates_map;
     };
 
-    class GroupByKeyRewrite : public SimpleExpressionRewriter<ASTToStringMap>
+    class GroupByKeyRewriter : public SimpleExpressionRewriter<ASTToStringMap>
     {
     public:
         ASTPtr visitNode(ASTPtr & node, ASTToStringMap & map) override
@@ -1676,54 +1677,117 @@ private:
             return SimpleExpressionRewriter::visitNode(node, map);
         }
     };
+
+    class InsertFilterRewriter : public PlanNodeVisitor<PlanNodePtr, Void>
+    {
+    public:
+        InsertFilterRewriter(ContextMutablePtr context_, ASTPtr predicate_)
+            : context(std::move(context_)), predicate(std::move(predicate_)), required_symbols(SymbolsExtractor::extract(predicate))
+        {
+        }
+
+        PlanNodePtr visitPlanNode(PlanNodeBase & node, Void & c) override
+        {
+            PlanNodes children;
+            for (const auto & item : node.getChildren())
+            {
+                PlanNodePtr child = VisitorUtil::accept(*item, *this, c);
+                children.emplace_back(child);
+            }
+            node.replaceChildren(children);
+
+            if (!predicate_added)
+            {
+                for (const auto & symbol : node.getOutputNames())
+                {
+                    if (required_symbols.contains(symbol))
+                    {
+                        predicate_added = true;
+                        return PlanNodeBase::createPlanNode(
+                            context->nextNodeId(),
+                            std::make_shared<FilterStep>(node.getStep()->getOutputStream(), predicate),
+                            {node.shared_from_this()});
+                    }
+                }
+            }
+
+            return node.shared_from_this();
+        }
+
+    private:
+        ContextMutablePtr context;
+        ASTPtr predicate;
+        std::set<std::string> required_symbols;
+        bool predicate_added = false;
+    };
 };
 }
 
 void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
+    bool enforce = context->getSettingsRef().enforce_materialized_view_rewrite;
     bool verbose = context->getSettingsRef().enable_materialized_view_rewrite_verbose_log;
 
     auto materialized_views = getRelatedMaterializedViews(plan, context);
     if (materialized_views.empty())
+    {
+        if (enforce)
+            throw Exception("no related materialized views", ErrorCodes::NO_AVAILABLE_MATERIALIZED_VIEW);
         return;
+    }
 
     auto candidates = CandidatesExplorer::explore(plan, context, materialized_views, verbose);
     if (candidates.empty())
+    {
+        if (enforce)
+            throw Exception("no materialized view candidates", ErrorCodes::NO_AVAILABLE_MATERIALIZED_VIEW);
         return;
+    }
 
     CostBasedMaterializedViewRewriter::rewrite(plan, context, candidates);
     // todo: add monitoring metrics
+
+    PredicatePushdown predicate_push_down;
+    predicate_push_down.rewritePlan(plan, context);
+    auto res = PlanSymbolReallocator::reallocate(plan.getPlanNode(), context);
+    plan.update(res.plan_node);
 }
 
-std::map<String, std::vector<MaterializedViewStructurePtr>>
-MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context)
+LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context) const
 {
-    std::map<String, std::vector<MaterializedViewStructurePtr>> table_based_mview_structures;
+    std::vector<MaterializedViewStructurePtr> materialized_views;
     auto & cache = MaterializedViewMemoryCache::instance();
 
-    auto result = RelatedMaterializedViewExtractor::extract(plan, context);
-    for (const auto & views : result.table_based_materialized_views)
+    auto result = RelatedMaterializedViewsExtractor::extract(plan, context);
+    for (const auto & view : result.materialized_views)
     {
-        std::vector<MaterializedViewStructurePtr> structures;
-        for (const auto & view : views.second)
-            if (auto structure = cache.getMaterializedViewStructure(view, context, false, result.local_table_to_distributed_table))
-                structures.push_back(*structure);
-        if (structures.empty())
-            continue;
-        table_based_mview_structures.emplace(views.first, std::move(structures));
+        if (auto structure = cache.getMaterializedViewStructure(view, context, false, result.local_table_to_distributed_table))
+            materialized_views.push_back(*structure);
     }
 
-    for (const auto & views : result.table_based_local_materialized_views)
+    for (const auto & view : result.local_materialized_views)
     {
-        std::vector<MaterializedViewStructurePtr> structures;
-        for (const auto & view : views.second)
-            if (auto structure = cache.getMaterializedViewStructure(view, context, true, result.local_table_to_distributed_table))
-                structures.push_back(*structure);
-        if (structures.empty())
-            continue;
-        table_based_mview_structures.emplace(views.first, std::move(structures));
+        if (auto structure = cache.getMaterializedViewStructure(view, context, true, result.local_table_to_distributed_table))
+            materialized_views.push_back(*structure);
     }
-    return table_based_mview_structures;
+
+    if (log->debug())
+    {
+        std::stringstream ss;
+        for (const auto & materialized_view : materialized_views)
+            ss << materialized_view->view_storage_id.getFullTableName() << ", ";
+        LOG_DEBUG(log, "related {} materialized views: {}", materialized_views.size(), ss.str());
+    }
+
+
+    LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> res;
+    for (const auto & materialized_view : materialized_views)
+    {
+        if (auto partition_check_result = checkMaterializedViewPartitionConsistency(materialized_view, context))
+            res.emplace(materialized_view, *partition_check_result);
+        else
+            LOG_DEBUG(log, "skip materialized view {}: check consistency failed", materialized_view->view_storage_id.getFullTableName());
+    }
+    return res;
 }
-
 }

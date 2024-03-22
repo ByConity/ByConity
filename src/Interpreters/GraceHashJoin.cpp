@@ -8,14 +8,18 @@
 
 #include <Formats/NativeWriter.h>
 #include <Interpreters/TemporaryDataOnDisk.h>
-
-#include <Disks/IVolume.h>
-#include <Disks/TemporaryFileOnDisk.h>
+#include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <Common/thread_local_rng.h>
 
+#include <memory>
+#include <random>
+#include <string>
+#include <utility>
 #include <fmt/format.h>
 #include "common/FnTraits.h"
+#include "Storages/MergeTree/MergeTreeIOSettings.h"
+
 
 
 namespace CurrentMetrics
@@ -38,51 +42,93 @@ namespace
     class AccumulatedBlockReader
     {
     public:
-        AccumulatedBlockReader(TemporaryFileStream & reader_,
-                               std::mutex & mutex_,
-                               size_t result_block_size_ = 0)
-            : reader(reader_)
-            , mutex(mutex_)
+        AccumulatedBlockReader(std::shared_ptr<TemporaryFileStreams> readers_, size_t result_block_size_)
+            : readers(readers_)
+            , total_reader(readers->size())
             , result_block_size(result_block_size_)
+            , reader_queue(std::make_shared<BoundedDataQueue<size_t>>(readers->size()))
         {
-            if (!reader.isWriteFinished())
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "Reading not finished file");
+            size_t i = 0;
+            for (const auto & r : *readers_)
+            {
+                if (!r->isWriteFinished())
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Reading not finished file");
+                reader_queue->push(i);
+                i++;
+            }
         }
 
         Block read()
         {
-            std::lock_guard lock(mutex);
-
-            if (eof)
-                return {};
-
-            Blocks blocks;
-            size_t rows_read = 0;
+            size_t index = 0;
             do
             {
-                Block block = reader.read();
+                try
+                {
+                    if (!reader_queue->tryPop(index, UINT_MAX))
+                    {
+                        LOG_INFO(&Poco::Logger::get("GraceHashJoin"), "all file read done");
+                        return {};
+                    }
+                    const auto & [finished, block] = readThisReader(readers->at(index));
+                    if (finished)
+                    {
+                        std::unique_lock<std::mutex> lock(eof_cnt_mutex);
+                        LOG_TRACE(&Poco::Logger::get("GraceHashJoin"), "file " + std::to_string(index) + " read done");
+                        eof_cnt ++;
+                        if (eof_cnt == total_reader)
+                        {
+                            LOG_INFO(&Poco::Logger::get("GraceHashJoin"), "close all readers");
+                            reader_queue->close();
+                        }
+                    }
+                    else
+                        reader_queue->tryPush(index);
+
+                    if (block)
+                        return block;
+                }
+                catch (...)
+                {
+                    tryLogCurrentException(&Poco::Logger::get("GraceHashJoin"), "Fail to read file");
+                    reader_queue->close();
+                    throw;
+                }
+
+            } while (true);
+        }
+
+        std::pair<bool, Block> readThisReader(std::shared_ptr<TemporaryFileStream> reader) const
+        {
+            Blocks blocks;
+            size_t rows_read = 0;
+            bool fin = false;
+            do
+            {
+                Block block = reader->read();
                 rows_read += block.rows();
                 if (!block)
                 {
-                    eof = true;
+                    fin = true;
                     if (blocks.size() == 1)
-                        return blocks.front();
-                    return concatenateBlocks(blocks);
+                        return std::make_pair(fin, blocks.front());
+                    return std::make_pair(fin, concatenateBlocks(blocks));
                 }
                 blocks.push_back(std::move(block));
             } while (rows_read < result_block_size);
 
             if (blocks.size() == 1)
-                return blocks.front();
-            return concatenateBlocks(blocks);
+                return std::make_pair(fin, blocks.front());
+            return std::make_pair(fin, concatenateBlocks(blocks));
         }
 
     private:
-        TemporaryFileStream & reader;
-        std::mutex & mutex;
-
+        std::shared_ptr<TemporaryFileStreams> readers;
+        const size_t total_reader;
         const size_t result_block_size;
-        bool eof = false;
+        std::mutex eof_cnt_mutex;
+        size_t eof_cnt = 0;
+        std::shared_ptr<BoundedDataQueue<size_t>> reader_queue;
     };
 
     std::deque<size_t> generateRandomPermutation(size_t from, size_t to)
@@ -121,43 +167,54 @@ class GraceHashJoin::FileBucket : boost::noncopyable
 public:
     using BucketLock = std::unique_lock<std::mutex>;
 
-    explicit FileBucket(size_t bucket_index_, TemporaryFileStream & left_file_, TemporaryFileStream & right_file_, Poco::Logger * log_)
-        : idx{bucket_index_}
-        , left_file{left_file_}
-        , right_file{right_file_}
-        , state{State::WRITING_BLOCKS}
-        , log{log_}
+    explicit FileBucket(size_t bucket_index_, std::shared_ptr<TemporaryFileStreams> & left_files_, TemporaryFileStreamShardPtr & right_file_, Poco::Logger * log_, size_t read_result_block_size_)
+        : idx{bucket_index_}, left_files{left_files_}, right_file{right_file_}, state{State::WRITING_BLOCKS}, read_result_block_size{read_result_block_size_}, log{log_}
     {
+        left_side_parallel = left_files_->size();
+        for (int i = 0; i < left_side_parallel; i++)
+            left_file_mutexs.push_back(std::make_shared<std::mutex>());
     }
 
     void addLeftBlock(const Block & block)
     {
-        std::unique_lock<std::mutex> lock(left_file_mutex);
-        addBlockImpl(block, left_file, lock);
+        int index = (left_blk_id++) % left_side_parallel;
+        std::unique_lock<std::mutex> lock(*left_file_mutexs.at(index));
+        addBlockImpl(block, *left_files->at(index), lock);
     }
 
     void addRightBlock(const Block & block)
     {
         std::unique_lock<std::mutex> lock(right_file_mutex);
-        addBlockImpl(block, right_file, lock);
+        addBlockImpl(block, *right_file, lock);
     }
 
     bool tryAddLeftBlock(const Block & block)
     {
-        std::unique_lock<std::mutex> lock(left_file_mutex, std::try_to_lock);
-        return addBlockImpl(block, left_file, lock);
+        int index = (left_blk_id++) % left_side_parallel;
+        std::unique_lock<std::mutex> lock(*left_file_mutexs.at(index));
+        return addBlockImpl(block, *left_files->at(index), lock);
     }
 
     bool tryAddRightBlock(const Block & block)
     {
         std::unique_lock<std::mutex> lock(right_file_mutex, std::try_to_lock);
-        return addBlockImpl(block, right_file, lock);
+        return addBlockImpl(block, *right_file, lock);
     }
 
     bool finished() const
     {
-        std::unique_lock<std::mutex> left_lock(left_file_mutex);
-        return left_file.isEof();
+        auto is_finished = true;
+        int i = 0;
+        for (const auto & file : *left_files)
+        {
+            std::unique_lock<std::mutex> lock(*left_file_mutexs.at(i));
+            if (!file->isEof())
+            {
+                return false;
+            }
+            i++;
+        }
+        return is_finished;
     }
 
     bool empty() const { return is_empty.load(); }
@@ -166,21 +223,28 @@ public:
     {
         LOG_DEBUG(log, "Joining file bucket {}", idx);
         {
-            std::unique_lock<std::mutex> left_lock(left_file_mutex);
             std::unique_lock<std::mutex> right_lock(right_file_mutex);
 
-            left_file.finishWriting();
-            right_file.finishWriting();
+            int i = 0;
+            for (const auto & file : *left_files)
+            {
+                std::unique_lock<std::mutex> lock(*left_file_mutexs.at(i));
+                file->finishWriting();
+                i++;
+            }
+            right_file->finishWriting();
 
             state = State::JOINING_BLOCKS;
         }
-        return AccumulatedBlockReader(right_file, right_file_mutex);
+        std::shared_ptr<TemporaryFileStreams> right_files = std::make_shared<TemporaryFileStreams>();
+        right_files->push_back(right_file);
+        return AccumulatedBlockReader(right_files, read_result_block_size);
     }
 
     AccumulatedBlockReader getLeftTableReader()
     {
         ensureState(State::JOINING_BLOCKS);
-        return AccumulatedBlockReader(left_file, left_file_mutex);
+        return AccumulatedBlockReader(left_files, read_result_block_size);
     }
 
     const size_t idx;
@@ -214,16 +278,19 @@ private:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid state transition, expected {}, got {}", expected, state.load());
     }
 
-    TemporaryFileStream & left_file;
-    TemporaryFileStream & right_file;
-    mutable std::mutex left_file_mutex;
+    std::shared_ptr<TemporaryFileStreams> left_files;
+    TemporaryFileStreamShardPtr right_file;
+    mutable std::vector<std::shared_ptr<std::mutex>> left_file_mutexs;
     mutable std::mutex right_file_mutex;
-
+    int left_side_parallel;
     std::atomic_bool is_empty = true;
 
     std::atomic<State> state;
+    std::atomic<size_t> left_blk_id{0};
+    size_t read_result_block_size;
 
     Poco::Logger * log;
+
 };
 
 namespace
@@ -260,6 +327,7 @@ GraceHashJoin::GraceHashJoin(
     const Block & left_sample_block_,
     const Block & right_sample_block_,
     TemporaryDataOnDiskScopePtr tmp_data_,
+    int left_side_parallel_,
     bool any_take_last_row_)
     : log{&Poco::Logger::get("GraceHashJoin")}
     , context{context_}
@@ -276,6 +344,12 @@ GraceHashJoin::GraceHashJoin(
     , hash_join(makeInMemoryJoin())
     , hash_join_sample_block(hash_join->savedBlockSample())
 {
+    if (left_side_parallel_ == 0)
+        left_side_parallel = context->getSettingsRef().max_threads;
+    else
+        left_side_parallel = left_side_parallel_;
+
+    LOG_DEBUG(log, "Grace hash join left side parallel:{}, max threads:{}", left_side_parallel, context->getSettingsRef().max_threads);
     if (!GraceHashJoin::isSupported(table_join))
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "GraceHashJoin is not supported for this join type");
 }
@@ -289,10 +363,7 @@ void GraceHashJoin::initBuckets()
 
     size_t initial_num_buckets = roundUpToPowerOfTwoOrZero(std::clamp<size_t>(settings.grace_hash_join_initial_buckets, 1, settings.grace_hash_join_max_buckets));
 
-    for (size_t i = 0; i < initial_num_buckets; ++i)
-    {
-        addBucket(buckets);
-    }
+    addBuckets(initial_num_buckets);
 
     if (buckets.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "No buckets created");
@@ -399,10 +470,15 @@ void GraceHashJoin::addBuckets(const size_t bucket_count)
     for (size_t i = 0; i < bucket_count; ++i)
         try
         {
-            auto & left_file = tmp_data->createStream(left_sample_block);
-            auto & right_file = tmp_data->createStream(prepareRightBlock(right_sample_block));
-
-            BucketPtr new_bucket = std::make_shared<FileBucket>(current_size + i, left_file, right_file, log);
+            std::shared_ptr<TemporaryFileStreams> left_files = std::make_shared<TemporaryFileStreams>();
+            for (int j = 0; j < left_side_parallel; j++)
+            {
+                std::shared_ptr<TemporaryFileStream> left_file = tmp_data->createStreamPtrToRegularFile(left_sample_block);
+                left_files->push_back(left_file);
+            }
+            std::shared_ptr<TemporaryFileStream> right_file = tmp_data->createStreamPtrToRegularFile(prepareRightBlock(right_sample_block));
+            auto read_result_block_size = context->getSettingsRef().grace_hash_join_read_result_block_size;
+            BucketPtr new_bucket = std::make_shared<FileBucket>(current_size + i, left_files, right_file, log, read_result_block_size);
             tmp_buckets.emplace_back(std::move(new_bucket));
         }
         catch (...)
@@ -418,15 +494,6 @@ void GraceHashJoin::addBuckets(const size_t bucket_count)
     buckets.reserve(buckets.size() + bucket_count);
     for (auto & bucket : tmp_buckets)
         buckets.emplace_back(std::move(bucket));
-}
-
-void GraceHashJoin::addBucket(Buckets & destination)
-{
-    auto & left_file = tmp_data->createStream(left_sample_block);
-    auto & right_file = tmp_data->createStream(prepareRightBlock(right_sample_block));
-
-    BucketPtr new_bucket = std::make_shared<FileBucket>(destination.size(), left_file, right_file, log);
-    destination.emplace_back(std::move(new_bucket));
 }
 
 // void GraceHashJoin::checkTypesOfKeys(const Block & block) const

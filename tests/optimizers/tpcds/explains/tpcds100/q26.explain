@@ -17,41 +17,43 @@ Projection Est. 100 rows
                      │     Aggregates: expr#avg(cs_quantity):=AggNull(avg)(cs_quantity), expr#avg(cs_list_price):=AggNull(avg)(cs_list_price), expr#avg(cs_coupon_amt):=AggNull(avg)(cs_coupon_amt), expr#avg(cs_sales_price):=AggNull(avg)(cs_sales_price)
                      └─ Inner Join Est. 408653 rows
                         │     Condition: cs_item_sk == i_item_sk
-                        ├─ Repartition Exchange Est. 408653 rows
-                        │  │     Partition by: {cs_item_sk}
-                        │  └─ Inner Join Est. 408653 rows
-                        │     │     Condition: cs_promo_sk == p_promo_sk
-                        │     ├─ Inner Join Est. 409063 rows
-                        │     │  │     Condition: cs_sold_date_sk == d_date_sk
-                        │     │  │     Runtime Filters Builder: {d_date_sk}
-                        │     │  ├─ Inner Join Est. 2057643 rows
-                        │     │  │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
-                        │     │  │  │     Runtime Filters Builder: {cd_demo_sk}
-                        │     │  │  ├─ Filter Est. 143997065 rows
-                        │     │  │  │  │     Condition: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
-                        │     │  │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
-                        │     │  │  │           Where: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
-                        │     │  │  │           Outputs: [cs_sold_date_sk, cs_bill_cdemo_sk, cs_item_sk, cs_promo_sk, cs_quantity, cs_list_price, cs_sales_price, cs_coupon_amt]
-                        │     │  │  └─ Broadcast Exchange Est. 27440 rows
-                        │     │  │     └─ Filter Est. 27440 rows
-                        │     │  │        │     Condition: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
-                        │     │  │        └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
-                        │     │  │                 Where: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
-                        │     │  │                 Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status]
-                        │     │  └─ Broadcast Exchange Est. 366 rows
-                        │     │     └─ Filter Est. 366 rows
-                        │     │        │     Condition: d_year = 2000
-                        │     │        └─ TableScan tpcds100.date_dim Est. 73049 rows
-                        │     │                 Where: d_year = 2000
-                        │     │                 Outputs: [d_date_sk, d_year]
-                        │     └─ Broadcast Exchange Est. 999 rows
+                        ├─ Inner Join Est. 408653 rows
+                        │  │     Condition: cs_promo_sk == p_promo_sk
+                        │  ├─ Inner Join Est. 409063 rows
+                        │  │  │     Condition: cs_sold_date_sk == d_date_sk
+                        │  │  │     Runtime Filters Builder: {d_date_sk}
+                        │  │  ├─ Inner Join Est. 2057643 rows
+                        │  │  │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
+                        │  │  │  │     Runtime Filters Builder: {cd_demo_sk}
+                        │  │  │  ├─ Filter Est. 143997065 rows
+                        │  │  │  │  │     Condition: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
+                        │  │  │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
+                        │  │  │  │           Where: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
+                        │  │  │  │           Outputs: [cs_sold_date_sk, cs_bill_cdemo_sk, cs_item_sk, cs_promo_sk, cs_quantity, cs_list_price, cs_sales_price, cs_coupon_amt]
+                        │  │  │  └─ Broadcast Exchange Est. 27440 rows
+                        │  │  │     └─ Projection Est. 27440 rows
+                        │  │  │        │     Expressions: [cd_demo_sk]
+                        │  │  │        └─ Filter Est. 27440 rows
+                        │  │  │           │     Condition: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                        │  │  │           └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
+                        │  │  │                    Where: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                        │  │  │                    Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status]
+                        │  │  └─ Broadcast Exchange Est. 366 rows
+                        │  │     └─ Projection Est. 366 rows
+                        │  │        │     Expressions: [d_date_sk]
+                        │  │        └─ Filter Est. 366 rows
+                        │  │           │     Condition: d_year = 2000
+                        │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+                        │  │                    Where: d_year = 2000
+                        │  │                    Outputs: [d_date_sk, d_year]
+                        │  └─ Broadcast Exchange Est. 999 rows
+                        │     └─ Projection Est. 999 rows
+                        │        │     Expressions: [p_promo_sk]
                         │        └─ Filter Est. 999 rows
                         │           │     Condition: (p_channel_email = 'N') OR (p_channel_event = 'N')
                         │           └─ TableScan tpcds100.promotion Est. 1000 rows
                         │                    Where: (p_channel_email = 'N') OR (p_channel_event = 'N')
                         │                    Outputs: [p_promo_sk, p_channel_email, p_channel_event]
-                        └─ Repartition Exchange Est. 204000 rows
-                           │     Partition by: {i_item_sk}
-                           └─ TableScan tpcds100.item Est. 204000 rows
-                                    Outputs: [i_item_sk, i_item_id]
+                        └─ TableScan tpcds100.item Est. 204000 rows
+                                 Outputs: [i_item_sk, i_item_id]
 note: Runtime Filter is applied for 2 times.

@@ -24,11 +24,13 @@
 #include <Parsers/IAST.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTForeignKeyDeclaration.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
+#include <Parsers/MySQL/ASTDeclareIndex.h>
 #include <Parsers/ASTProjectionDeclaration.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
@@ -38,14 +40,15 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserSetQuery.h>
 #include <Parsers/ASTConstraintDeclaration.h>
 #include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/ParserDictionary.h>
 #include <Parsers/ParserDictionaryAttributeDeclaration.h>
 #include <Parsers/ParserProjectionSelectQuery.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
+#include <Parsers/ParserSetQuery.h>
+#include <Parsers/ParserRefreshStrategy.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Poco/Logger.h>
 
@@ -338,6 +341,8 @@ bool ParserProjectionDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
 bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_index("INDEX");
+    ParserKeyword s_key("KEY");
+    ParserKeyword s_cluster_key("CLUSTERED KEY");
     ParserKeyword s_constraint("CONSTRAINT");
     ParserKeyword s_bitengine_constraint("BITENGINE_CONSTRAINT");
     ParserKeyword s_projection("PROJECTION");
@@ -353,6 +358,21 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     ParserUniqueNotEnforcedDeclaration unique_p(dt);
 
     ASTPtr new_node = nullptr;
+
+    if (dt.parse_mysql_ddl)
+    {
+        // mysql table_constraints
+        if (s_index.checkWithoutMoving(pos, expected) || s_key.checkWithoutMoving(pos, expected) ||
+            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected))
+        {
+            MySQLParser::ParserDeclareIndex index_p_mysql;
+            if (index_p_mysql.parse(pos, new_node, expected))
+            {
+                node = new_node;
+                return true;
+            }
+        }
+    }
 
     if (s_index.ignore(pos, expected))
     {
@@ -441,6 +461,7 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
 
     ASTPtr columns = std::make_shared<ASTExpressionList>();
     ASTPtr indices = std::make_shared<ASTExpressionList>();
+    ASTPtr mysql_indices = std::make_shared<ASTExpressionList>();
     ASTPtr constraints = std::make_shared<ASTExpressionList>();
     ASTPtr projections = std::make_shared<ASTExpressionList>();
     ASTPtr primary_key;
@@ -472,6 +493,8 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
             foreign_keys->children.push_back(elem);
         else if (elem->as<ASTUniqueNotEnforcedDeclaration>())
             unique->children.push_back(elem);
+        else if (elem->as<MySQLParser::ASTDeclareIndex>())
+            mysql_indices->children.push_back(elem);
         else
             return false;
     }
@@ -492,6 +515,8 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
         res->set(res->foreign_keys, foreign_keys);
     if (!unique->children.empty())
         res->set(res->unique, unique);
+    if (!mysql_indices->children.empty())
+        res->set(res->mysql_indices, mysql_indices);
 
     node = res;
 
@@ -632,6 +657,255 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
+bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserKeyword s_distributed_by("DISTRIBUTED BY");
+    ParserKeyword s_distribute_by("DISTRIBUTE BY");
+    ParserKeyword s_hash("HASH");
+    ParserToken s_eq(TokenType::Equals);
+    ParserToken s_lparen(TokenType::OpeningRoundBracket);
+    ParserToken s_rparen(TokenType::ClosingRoundBracket);
+    ParserKeyword s_broadcast("BROADCAST");
+    ParserKeyword s_partition_by("PARTITION BY");
+    ParserKeyword s_value("VALUE");
+    ParserKeyword s_lifecycle("LIFECYCLE");
+    ParserKeyword s_storage_policy("STORAGE_POLICY");
+    ParserKeyword s_block_size("BLOCK_SIZE");
+    ParserKeyword s_engine("ENGINE");
+    ParserKeyword s_rt_engine("RT_ENGINE");
+    ParserKeyword s_table_properties("TABLE_PROPERTIES");
+    ParserKeyword s_hot_partition_count("HOT_PARTITION_COUNT");
+
+    ParserKeyword s_cluster_by("CLUSTER BY");
+    ParserKeyword s_primary_key("PRIMARY KEY");
+    ParserKeyword s_order_by("ORDER BY");
+    ParserKeyword s_unique_key("UNIQUE KEY");
+    ParserKeyword s_sample_by("SAMPLE BY");
+    ParserKeyword s_ttl("TTL");
+    ParserKeyword s_settings("SETTINGS");
+    ParserKeyword s_comment("COMMENT");
+
+    ParserIdentifierWithOptionalParameters ident_with_optional_params_p(dt);
+    ParserExpression expression_p(dt);
+    ParserClusterByElement cluster_p;
+    ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
+    ParserTTLExpressionList parser_ttl_list(dt);
+    ParserStringLiteral string_literal_parser;
+    ParserNumber number_parser(dt);
+
+    ASTPtr engine;
+    ASTPtr cluster_by;
+    ASTPtr primary_key;
+    ASTPtr order_by;
+    ASTPtr unique_key;
+    ASTPtr sample_by;
+    ASTPtr ttl_table;
+    ASTPtr settings;
+    ASTPtr comment_expression;
+
+    // MySQL specfic
+    ASTPtr distributed_by;
+    ASTPtr storage_policy;
+    ASTPtr hot_partition_count;
+    ASTPtr block_size;
+    ASTPtr mysql_engine;
+    ASTPtr rt_engine;
+    ASTPtr table_properties;
+    ASTPtr mysql_partition_by;
+    ASTPtr life_cycle;
+    bool broadcast = false;
+
+    // optional engine
+    if (s_engine.ignore(pos, expected))
+    {
+        s_eq.ignore(pos, expected);
+
+        if (!ident_with_optional_params_p.parse(pos, engine, expected) && !string_literal_parser.parse(pos, mysql_engine, expected))
+            return false;
+    }
+
+    while (true)
+    {
+        if (!distributed_by && (s_distributed_by.ignore(pos, expected) || s_distribute_by.ignore(pos, expected)))
+        {
+            if (s_hash.ignore(pos, expected))
+            {
+                if (!expression_p.parse(pos, distributed_by, expected))
+                    return false;
+            }
+            else if (s_broadcast.ignore(pos, expected))
+                broadcast = true;
+            else
+                return false;
+        }
+
+        if (!mysql_partition_by && s_partition_by.ignore(pos, expected))
+        {
+            if (s_value.ignore(pos, expected) && expression_p.parse(pos, mysql_partition_by, expected))
+            {
+                // partition by value(expr) life cycle n
+                if (s_lifecycle.ignore(pos, expected) && number_parser.parse(pos, life_cycle, expected))
+                    continue;
+                // not enforce lifecycle n
+                continue;
+            }
+            else if (expression_p.parse(pos, mysql_partition_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!storage_policy && s_storage_policy.ignore(pos, expected))
+        {
+            if (!s_eq.ignore(pos, expected))
+                return false;
+
+            if (!string_literal_parser.parse(pos, storage_policy, expected))
+                return false;
+
+            if (s_hot_partition_count.ignore(pos, expected))
+            {
+                if (!s_eq.ignore(pos, expected))
+                    return false;
+                if (number_parser.parse(pos, hot_partition_count, expected))
+                    continue;
+                else
+                    return false;
+            }
+        }
+
+        if (!block_size && s_block_size.ignore(pos, expected))
+        {
+            if (!s_eq.ignore(pos, expected))
+                return false;
+            if (number_parser.parse(pos, block_size, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!engine && s_engine.ignore(pos, expected))
+        {
+            s_eq.ignore(pos, expected);
+
+            if (!ident_with_optional_params_p.parse(pos, engine, expected) && !string_literal_parser.parse(pos, mysql_engine, expected))
+            {
+                return false;
+            }
+        }
+
+        if (!rt_engine && s_rt_engine.ignore(pos, expected))
+        {
+            if (!s_eq.ignore(pos, expected))
+                return false;
+            if (string_literal_parser.parse(pos, rt_engine, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!table_properties && s_table_properties.ignore(pos, expected))
+        {
+            if (!s_eq.ignore(pos, expected))
+                return false;
+            if (string_literal_parser.parse(pos, table_properties, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!cluster_by && s_cluster_by.ignore(pos, expected))
+        {
+            if (cluster_p.parse(pos, cluster_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!primary_key && s_primary_key.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, primary_key, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!order_by && s_order_by.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, order_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+
+        if (!unique_key && s_unique_key.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, unique_key, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!sample_by && s_sample_by.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, sample_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!ttl_table && s_ttl.ignore(pos, expected))
+        {
+            if (parser_ttl_list.parse(pos, ttl_table, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (s_settings.ignore(pos, expected))
+        {
+            if (!settings_p.parse(pos, settings, expected))
+                return false;
+        }
+
+        if (s_comment.ignore(pos, expected))
+        {
+            /// should be followed by a string literal
+            if (!string_literal_parser.parse(pos, comment_expression, expected))
+                return false;
+        }
+
+        break;
+    }
+
+    auto storage = std::make_shared<ASTStorageAnalyticalMySQL>();
+    storage->set(storage->engine, engine);
+    storage->set(storage->cluster_by, cluster_by);
+    storage->set(storage->primary_key, primary_key);
+    storage->set(storage->order_by, order_by);
+    storage->set(storage->unique_key, unique_key);
+    storage->set(storage->sample_by, sample_by);
+    storage->set(storage->ttl_table, ttl_table);
+
+    storage->set(storage->settings, settings);
+
+    storage->set(storage->comment, comment_expression);
+
+    storage->set(storage->mysql_engine, mysql_engine);
+    storage->set(storage->distributed_by, distributed_by);
+    storage->set(storage->storage_policy, storage_policy);
+    storage->set(storage->hot_partition_count, hot_partition_count);
+    storage->set(storage->block_size, block_size);
+    storage->set(storage->rt_engine, rt_engine);
+    storage->set(storage->table_properties, table_properties);
+    storage->set(storage->mysql_partition_by, mysql_partition_by);
+    storage->set(storage->life_cycle, life_cycle);
+    storage->broadcast = broadcast;
+
+    node = storage;
+    return true;
+}
 
 bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -646,6 +920,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_from("FROM");
     ParserKeyword s_on("ON");
     ParserKeyword s_as("AS");
+    ParserKeyword s_like("LIKE");
     ParserKeyword s_ignore("IGNORE");
     ParserKeyword s_replicated("REPLICATED");
     ParserKeyword s_async("ASYNC");
@@ -826,10 +1101,224 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
                     storage_p.parse(pos, storage, expected);
             }
         }
+        else if (s_like.ignore(pos, expected))
+        {
+            /// LIKE [db.]table
+            if (!name_p.parse(pos, as_table, expected))
+                return false;
+
+            if (s_dot.ignore(pos, expected))
+            {
+                as_database = as_table;
+                tryRewriteCnchDatabaseName(as_database, pos.getContext());
+                if (!name_p.parse(pos, as_table, expected))
+                    return false;
+            }
+        }
     }
 
 
     auto query = std::make_shared<ASTCreateQuery>();
+    node = query;
+
+    if (as_table_function)
+        query->as_table_function = as_table_function;
+
+    query->attach = attach;
+    query->replace_table = replace;
+    query->create_or_replace = or_replace;
+    query->if_not_exists = if_not_exists;
+    query->temporary = is_temporary;
+    query->ignore_replicated = ignore_replicated;
+    query->ignore_async = ignore_async;
+    query->ignore_bitengine_encode = ignore_bitengine_encode;
+    query->ignore_ttl = ignore_ttl;
+
+    query->setTableInfo(table_id);
+    // query->catalog = table_id.catalog_name;
+    // query->database = table_id.database_name;
+    // query->table = table_id.table_name;
+    // query->uuid = table_id.uuid;
+    query->cluster = cluster_str;
+
+    query->set(query->columns_list, columns_list);
+    query->set(query->storage, storage);
+
+    if (query->storage && query->columns_list && query->columns_list->primary_key)
+    {
+        if (query->storage->primary_key)
+        {
+            throw Exception("Multiple primary keys are not allowed.", ErrorCodes::BAD_ARGUMENTS);
+        }
+        query->storage->primary_key = query->columns_list->primary_key;
+    }
+
+    tryGetIdentifierNameInto(as_database, query->as_database);
+    tryGetIdentifierNameInto(as_table, query->as_table);
+    query->set(query->select, select);
+
+    if (from_path)
+        query->attach_from_path = from_path->as<ASTLiteral &>().value.get<String>();
+
+    return true;
+}
+
+bool ParserCreateTableAnalyticalMySQLQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserKeyword s_create("CREATE");
+    ParserKeyword s_table("TABLE");
+    ParserKeyword s_if_not_exists("IF NOT EXISTS");
+    ParserCompoundIdentifier table_name_p(true);
+    ParserKeyword s_on("ON");
+    ParserKeyword s_as("AS");
+    ParserKeyword s_like("LIKE");
+    ParserKeyword s_ignore("IGNORE");
+    ParserKeyword s_replicated("REPLICATED");
+    ParserKeyword s_async("ASYNC");
+    ParserKeyword s_bitengine_encode("BITENGINEENCODE");
+    ParserKeyword s_ttl("TTL");
+    ParserToken s_dot(TokenType::Dot);
+    ParserToken s_lparen(TokenType::OpeningRoundBracket);
+    ParserToken s_rparen(TokenType::ClosingRoundBracket);
+    ParserStorageMySQL storage_p(dt);
+    ParserIdentifier name_p;
+    ParserTablePropertiesDeclarationList table_properties_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
+    ParserFunction table_function_p(dt);
+    ParserNameList names_p(dt);
+
+    ASTPtr table;
+    ASTPtr columns_list;
+    ASTPtr storage;
+    ASTPtr as_database;
+    ASTPtr as_table;
+    ASTPtr as_table_function;
+    ASTPtr select;
+    ASTPtr from_path;
+
+    String cluster_str;
+    bool attach = false;
+    bool replace = false;
+    bool or_replace = false;
+    bool if_not_exists = false;
+    bool is_temporary = false;
+    bool ignore_replicated = false;
+    bool ignore_async = false;
+    bool ignore_bitengine_encode = false;
+    bool ignore_ttl = false;
+
+    if (!s_create.ignore(pos, expected))
+        return false;
+
+    if (!s_table.ignore(pos, expected))
+        return false;
+
+    if (s_if_not_exists.ignore(pos, expected))
+        if_not_exists = true;
+
+    if (!table_name_p.parse(pos, table, expected))
+        return false;
+    tryRewriteCnchDatabaseName(table, pos.getContext());
+
+    auto table_id = table->as<ASTTableIdentifier>()->getTableId();
+
+    /// List of columns.
+    if (s_lparen.ignore(pos, expected))
+    {
+        if (!table_properties_p.parse(pos, columns_list, expected))
+            return false;
+
+        if (!s_rparen.ignore(pos, expected))
+            return false;
+
+        auto storage_parse_result = storage_p.parse(pos, storage, expected);
+
+        if (storage_parse_result && s_as.ignore(pos, expected))
+        {
+            if (!select_p.parse(pos, select, expected))
+                return false;
+        }
+
+        if (!storage_parse_result && !is_temporary)
+        {
+            if (!s_as.ignore(pos, expected))
+                return false;
+            if (!table_function_p.parse(pos, as_table_function, expected))
+            {
+                return false;
+            }
+        }
+    }
+    /** Create queries without list of columns:
+      *  - CREATE|ATTACH TABLE ... AS ...
+      *  - CREATE|ATTACH TABLE ... ENGINE = engine
+      */
+    else
+    {
+        storage_p.parse(pos, storage, expected);
+
+        if (s_as.ignore(pos, expected) && !select_p.parse(pos, select, expected)) /// AS SELECT ...
+        {
+            /// ENGINE can not be specified for table functions.
+            if (storage || !table_function_p.parse(pos, as_table_function, expected))
+            {
+                /// AS [db.]table
+                if (!name_p.parse(pos, as_table, expected))
+                    return false;
+
+                if (s_dot.ignore(pos, expected))
+                {
+                    as_database = as_table;
+                    tryRewriteCnchDatabaseName(as_database, pos.getContext());
+                    if (!name_p.parse(pos, as_table, expected))
+                        return false;
+                }
+
+                /// Optional - IGNORE REPLCIATE can be specified
+                if (s_ignore.ignore(pos, expected))
+                {
+                    bool option = false;
+                    do
+                    {
+                        option = false;
+                        bool temp = s_replicated.ignore(pos, expected);
+                        if (temp) option = ignore_replicated = true;
+                        temp = s_async.ignore(pos, expected);
+                        if (temp) option = ignore_async = true;
+                        temp = s_ttl.ignore(pos, expected);
+                        if (temp) option = ignore_ttl = true;
+                        temp = s_bitengine_encode.ignore(pos, expected);
+                        if (temp)
+                            option = ignore_bitengine_encode = true;
+
+                    } while (option);
+
+                    if (!ignore_replicated && !ignore_async && !ignore_ttl && !ignore_bitengine_encode)
+                        return false;
+                }
+
+                /// Optional - ENGINE can be specified.
+                if (!storage)
+                    storage_p.parse(pos, storage, expected);
+            }
+        }
+        else if (s_like.ignore(pos, expected)) {
+            /// AS [db.]table
+            if (!name_p.parse(pos, as_table, expected))
+                return false;
+
+            if (s_dot.ignore(pos, expected))
+            {
+                as_database = as_table;
+                tryRewriteCnchDatabaseName(as_database, pos.getContext());
+                if (!name_p.parse(pos, as_table, expected))
+                    return false;
+            }
+        }
+    }
+
+
+    auto query = std::make_shared<ASTCreateQueryAnalyticalMySQL>();
     node = query;
 
     if (as_table_function)
@@ -1183,7 +1672,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserKeyword s_default("DEFAULT");
     ParserKeyword s_character_set("CHARACTER SET");
     ParserKeyword s_collate("COLLATE");
-    
+
     ASTPtr database;
     ASTPtr storage;
     ASTPtr table_overrides;
@@ -1229,7 +1718,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     }
 
     s_default.ignore(pos, expected);
-    if (s_character_set.ignore(pos, expected)) 
+    if (s_character_set.ignore(pos, expected))
     {
         if (!id_p.parse(pos, character_set, expected))
             return false;
@@ -1240,7 +1729,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
         if (!id_p.parse(pos, collate, expected))
                 return false;
     }
-    
+
     storage_p.parse(pos, storage, expected);
 
     if (!table_overrides_p.parse(pos, table_overrides, expected))
@@ -1346,6 +1835,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ASTPtr as_database;
     ASTPtr as_table;
     ASTPtr select;
+    ASTPtr refresh_strategy;
 
     String cluster_str;
     bool attach = false;
@@ -1392,7 +1882,6 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             return false;
     }
 
-
     if (ParserKeyword{"TO INNER UUID"}.ignore(pos, expected))
     {
         ParserLiteral literal_p(dt);
@@ -1427,6 +1916,15 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             is_populate = true;
     }
 
+    if (ParserKeyword{"REFRESH"}.ignore(pos, expected))
+    {
+        // REFRESH only with materialized views
+        if (!is_materialized_view)
+            return false;
+        if (!ParserRefreshStrategy{}.parse(pos, refresh_strategy, expected))
+            return false;
+    }
+
     /// AS SELECT ...
     if (!s_as.ignore(pos, expected))
         return false;
@@ -1458,6 +1956,8 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     query->set(query->columns_list, columns_list);
     query->set(query->storage, storage);
+    if (refresh_strategy)
+        query->set(query->refresh_strategy, refresh_strategy);
 
     tryGetIdentifierNameInto(as_database, query->as_database);
     tryGetIdentifierNameInto(as_table, query->as_table);
@@ -1617,12 +2117,24 @@ bool ParserCreateSnapshotQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserCreateTableQuery table_p(dt);
+    ParserCreateTableAnalyticalMySQLQuery table_mysql_p(dt);
     ParserCreateDatabaseQuery database_p(dt);
     ParserCreateViewQuery view_p(dt);
     ParserCreateDictionaryQuery dictionary_p(dt);
     ParserCreateLiveViewQuery live_view_p(dt);
     ParserCreateCatalogQuery catalog_p(dt);
     ParserCreateSnapshotQuery snapshot_p(dt);
+
+    if (dt.parse_mysql_ddl)
+    {
+        return table_mysql_p.parse(pos, node, expected)
+            || database_p.parse(pos, node, expected)
+            || view_p.parse(pos, node, expected)
+            || dictionary_p.parse(pos, node, expected)
+            || live_view_p.parse(pos, node, expected)
+            || catalog_p.parse(pos, node, expected)
+            || snapshot_p.parse(pos, node, expected);
+    }
 
     return table_p.parse(pos, node, expected)
         || database_p.parse(pos, node, expected)

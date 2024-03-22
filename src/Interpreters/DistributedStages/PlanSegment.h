@@ -23,6 +23,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/StorageID.h>
 #include <Protos/EnumMacros.h>
 #include <Protos/enum.pb.h>
@@ -127,14 +128,17 @@ protected:
     Names shuffle_keys;
 };
 
+using PlanSegmentSet = std::unordered_set<PlanSegmentInstanceId>;
+
 class PlanSegmentInput : public IPlanSegment
 {
 public:
     PlanSegmentInput(const Block & header_, const PlanSegmentType & type_)
     : IPlanSegment(header_, type_) {}
 
-    PlanSegmentInput(const PlanSegmentType & type_)
-    : IPlanSegment(type_) {}
+    explicit PlanSegmentInput(const PlanSegmentType & type_) : IPlanSegment(type_)
+    {
+    }
 
     PlanSegmentInput() = default;
 
@@ -144,18 +148,9 @@ public:
 
     void insertSourceAddress(const AddressInfo & address_info) { source_addresses.push_back(address_info); }
 
-    void insertSourceAddresses(AddressInfos & address_infos, bool unique = false)
+    void insertSourceAddresses(AddressInfos & address_infos)
     {
-        if (unique)
-        {
-            std::sort(address_infos.begin(), address_infos.end());
-            auto last = std::unique(address_infos.begin(), address_infos.end());
-            source_addresses.insert(source_addresses.end(), address_infos.begin(), last);
-        }
-        else
-        {
-            source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end());
-        }
+        source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end());
     }
 
     const AddressInfos & getSourceAddress() const { return source_addresses; }
@@ -178,7 +173,7 @@ public:
     void setStorageID(const StorageID & storage_id_) { storage_id = storage_id_;}
 
 private:
-    size_t parallel_index = 0;
+    size_t parallel_index = std::numeric_limits<size_t>::max(); ///  no longer used
     bool keep_order = false;
     AddressInfos source_addresses;
     std::optional<StorageID> storage_id;

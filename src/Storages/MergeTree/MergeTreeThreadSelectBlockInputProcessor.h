@@ -63,6 +63,8 @@ private:
     std::string last_readed_part_name;
     /// Names from header. Used in order to order columns in read blocks.
     Names ordered_names;
+
+    Poco::Logger * log;
 };
 
 }

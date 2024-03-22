@@ -3,7 +3,6 @@
 #include <IO/S3Common.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
-#include <aws/s3/model/UploadPartRequest.h>
 #include <common/logger_useful.h>
 #include <common/scope_guard_safe.h>
 
@@ -52,11 +51,12 @@ WriteBufferFromByteS3::WriteBufferFromByteS3(
     size_t buf_size_,
     bool allow_overwrite_,
     char* mem_,
-    size_t alignment_)
+    size_t alignment_,
+    bool for_disk_s3_)
     : WriteBufferFromFileBase(buf_size_, mem_, alignment_)
     , key(key_)
     , object_metadata(object_metadata_)
-    , s3_util(client_, bucket_)
+    , s3_util(client_, bucket_, for_disk_s3_)
     , max_single_put_threshold(max_single_put_threshold_)
     , min_segment_size(min_segment_size_)
     , temporary_buffer(nullptr)
@@ -182,7 +182,7 @@ void WriteBufferFromByteS3::createMultipartUpload()
         ProfileEvents::WriteBufferFromS3WriteMicroseconds,
         "Create multipart upload with id " + multipart_upload_id);
 
-    multipart_upload_id = s3_util.createMultipartUpload(key, object_metadata);
+    multipart_upload_id = s3_util.createMultipartUpload(key, object_metadata, std::nullopt);
 }
 
 void WriteBufferFromByteS3::writePart()
@@ -258,7 +258,7 @@ void WriteBufferFromByteS3::makeSinglepartUpload()
         ProfileEvents::WriteBufferFromS3WriteMicroseconds,
         "Put single part of size " + std::to_string(size));
 
-    s3_util.upload(key, size, temporary_buffer, object_metadata);
+    s3_util.upload(key, size, temporary_buffer, object_metadata, std::nullopt);
     ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteBytes, size);
 }
 

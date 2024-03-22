@@ -15,7 +15,7 @@ namespace ErrorCodes
 
 static const String catalog_delim = "$$";
 
-static String getTenantId()
+String getCurrentTenantId()
 {
     String empty_result;
     if (!CurrentThread::isInitialized())
@@ -29,13 +29,6 @@ static String getTenantId()
             return context->getSettings().tenant_id.toString();
     }
     return CurrentThread::get().getTenantId();
-}
-
-static bool enable_tenant_systemdb = true;
-
-void setEnableTenantSystemDB(bool v)
-{
-    enable_tenant_systemdb = v;
 }
 
 String getCurrentCatalog()
@@ -64,18 +57,13 @@ static bool isInternalDatabaseName(const String & database_name)
         if (db == database_name)
             return true;
     }
-    if(!enable_tenant_systemdb)
-    {
-        if (DatabaseCatalog::SYSTEM_DATABASE == database_name)
-            return true;
-    }
     return false;
 }
 
 //Format pattern {tenant_id}.{database_name}
 static String formatTenantDatabaseNameImpl(const String & database_name, char separator = '.')
 {
-    auto tenant_id = getTenantId();
+    auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty() && !isInternalDatabaseName(database_name) &&
         (database_name.find(tenant_id) != 0 || database_name.size() == tenant_id.size() || database_name[tenant_id.size()] != separator))
     {
@@ -90,7 +78,7 @@ static String formatTenantDatabaseNameImpl(const String & database_name, char se
 //Format pattern {tenant_id}.{username}
 static String formatTenantUserNameImpl(const String & user_name, char separator = '`')
 {
-    auto tenant_id = getTenantId();
+    auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty() &&
         (user_name.find(tenant_id) != 0 || user_name.size() == tenant_id.size() || user_name[tenant_id.size()] != separator))
     {
@@ -137,7 +125,7 @@ String formatTenantDatabaseNameWithTenantId(const String & database_name, const 
 //Format pattern {tenant_id}`{database_name}
 String formatTenantConnectDefaultDatabaseName(const String & database_name)
 {
-     auto tenant_id = getTenantId();
+     auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty())
     {
         auto pos = database_name.find(tenant_id);
@@ -163,7 +151,7 @@ String formatTenantConnectDefaultDatabaseName(const String & database_name)
 //Format pattern {tenant_id}`{user_name}
 String formatTenantConnectUserName(const String & user_name, bool is_force)
 {
-    auto tenant_id = getTenantId();
+    auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty())
     {
         auto pos = user_name.find(tenant_id);
@@ -198,7 +186,7 @@ String formatTenantEntityName(const String & name)
 
 bool isTenantMatchedEntityName(const String & tenant_entity_name)
 {
-    auto tenant_id = getTenantId();
+    auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty())
     {
         auto size = tenant_id.size();
@@ -212,7 +200,7 @@ bool isTenantMatchedEntityName(const String & tenant_entity_name)
 
 String getOriginalEntityName(const String & tenant_entity_name)
 {
-    auto tenant_id = getTenantId();
+    auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty()) {
         auto size = tenant_id.size();
         if (tenant_entity_name.size() > size + 1 && tenant_entity_name[size] == '.'
@@ -225,7 +213,11 @@ String getOriginalEntityName(const String & tenant_entity_name)
 // {tenant_id}.{original_database_name}
 String getOriginalDatabaseName(const String & tenant_database_name)
 {
-    auto tenant_id = getTenantId();
+    return getOriginalDatabaseName(tenant_database_name, getCurrentTenantId());
+}
+
+String getOriginalDatabaseName(const String & tenant_database_name, const String & tenant_id)
+{
     if (!tenant_id.empty())
     {
         auto size = tenant_id.size();

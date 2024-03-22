@@ -38,6 +38,7 @@
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTPartition.h>
+#include <Parsers/ASTPreparedParameter.h>
 #include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTQuantifiedComparison.h>
 #include <Parsers/ASTRenameQuery.h>

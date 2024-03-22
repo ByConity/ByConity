@@ -86,7 +86,10 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
         /// SCOPE_EXIT wrap logic which run after done->Run(),
         /// since host socket of the accpeted stream is set in done->Run()
         key = std::make_shared<ExchangeDataKey>(
-            request->registry().query_unique_id(), request->registry().exchange_id(), request->registry().parallel_id());
+            request->registry().query_unique_id(),
+            request->registry().exchange_id(),
+            request->registry().parallel_id(),
+            request->registry().parallel_index());
         Block header = deserializeHeaderFromProto(request->header());
         auto mgr = context->getDiskExchangeDataManager();
         auto query_context = Context::createCopy(context);
@@ -105,6 +108,16 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
         query_context->setQueryExpirationTimeStamp();
         auto query_id = request->registry().query_id();
         auto coordinator_addr = request->registry().coordinator_address();
+        /// we need to do this as to avoid previous sender waitBecomeRealSender in finish
+        auto previous_sender = BroadcastSenderProxyRegistry::instance().get(key);
+        if (previous_sender)
+        {
+            previous_sender->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled as previous sender");
+            BroadcastSenderProxyRegistry::instance().remove(key);
+            LOG_WARNING(log, "previous_sender found for query_id:{} key:{}", query_id, *key);
+        }
+        mgr->cancelReadTask(key); /// cancel possible previous read task from last execution
+        previous_sender = nullptr; // dont forget to release
         BroadcastSenderProxyPtr sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(key);
         sender_proxy->accept(query_context, header);
         auto processors = mgr->createProcessors(sender_proxy, std::move(header), std::move(query_context));
@@ -198,7 +211,7 @@ void BrpcExchangeReceiverRegistryService::cancelExchangeDataReader(
     try
     {
         auto mgr = context->getDiskExchangeDataManager();
-        mgr->cancel(request->query_unique_id(), request->exchange_id());
+        mgr->cancelReadTask(request->query_unique_id(), request->exchange_id());
     }
     catch (Exception & e)
     {

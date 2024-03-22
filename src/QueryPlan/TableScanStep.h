@@ -178,6 +178,8 @@ public:
 
     Names getRequiredColumns(GetFlags flags = All) const;
 
+    void prepare(const PreparedStatementContext & prepared_context) override;
+
 private:
     StoragePtr storage;
     StorageID storage_id;
@@ -213,12 +215,12 @@ private:
 
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;
-    ASTPtr rewriteRuntimeFilter(
-        const ASTPtr & filter, const String & query_id, size_t wait_ms, bool is_prewhere, bool enable_bf, bool range_cover);
-    bool rewriteDynamicFilterIntoPrewhere(ASTSelectQuery * query);
-    // enforce calculating inline expressions(an example is to calculate arraySetCheck for data parts without index), then alias outputs
+    void rewriteDynamicFilter(ASTSelectQuery * query, const BuildQueryPipelineSettings & build_settings, bool use_expand_pipe);
+
     void aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings &, const String & pipeline_name);
     void setQuotaAndLimits(QueryPipeline & pipeline, const SelectQueryOptions & options, const BuildQueryPipelineSettings &);
+
+    bool hasFunctionCanUseBitmapIndex() const;
 };
 
 }

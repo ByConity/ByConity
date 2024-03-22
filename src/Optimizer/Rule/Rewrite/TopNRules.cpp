@@ -36,9 +36,11 @@ TransformResult CreateTopNFilteringForAggregating::transformImpl(PlanNodePtr nod
 {
     const auto & topn_step = dynamic_cast<const SortingStep &>(*node->getStep());
 
-    if (topn_step.getLimit() > getMaxRowsToUseTopnFiltering(context.context))
+    if (topn_step.getLimitValue() > getMaxRowsToUseTopnFiltering(context.context))
         return {};
 
+    if (topn_step.hasPreparedParam())
+        return {};
     auto & aggregate_node = node->getChildren()[0];
     const auto & aggregate_step = dynamic_cast<const AggregatingStep &>(*aggregate_node->getStep());
 
@@ -63,7 +65,10 @@ TransformResult CreateTopNFilteringForAggregating::transformImpl(PlanNodePtr nod
     const auto & aggregate_child_node = aggregate_node->getChildren()[0];
 
     auto topn_filter_step = std::make_shared<TopNFilteringStep>(
-        aggregate_child_node->getStep()->getOutputStream(), topn_step.getSortDescription(), topn_step.getLimit(), TopNModel::DENSE_RANK);
+        aggregate_child_node->getStep()->getOutputStream(),
+        topn_step.getSortDescription(),
+        topn_step.getLimitValue(),
+        TopNModel::DENSE_RANK);
     auto topn_filter_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), topn_filter_step, PlanNodes{aggregate_child_node});
 
     aggregate_node->replaceChildren(PlanNodes{topn_filter_node});
@@ -102,7 +107,7 @@ TransformResult PushTopNThroughProjection::transformImpl(PlanNodePtr node, const
             source->getStep()->getOutputStream(),
             new_sort,
             topn_step->getLimit(),
-            topn_step->isPartial(),
+            topn_step->getStage(),
             topn_step->getPrefixDescription()),
         {source});
 

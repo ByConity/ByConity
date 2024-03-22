@@ -177,13 +177,15 @@ public:
     using Key = TKey;
     using Mapped = TMapped;
     using MappedPtr = std::shared_ptr<Mapped>;
+    using Delay = std::chrono::seconds;
 
 private:
     using Clock = std::chrono::steady_clock;
+    using Timestamp = Clock::time_point;
 
 public:
-    LRUCache(size_t max_size_)
-        : max_size(std::max(static_cast<size_t>(1), max_size_)) {}
+    LRUCache(size_t max_size_, const Delay & expiration_delay_ = Delay::zero())
+        : max_size(std::max(static_cast<size_t>(1), max_size_)), expiration_delay(expiration_delay_) {}
 
     MappedPtr get(const Key & key)
     {
@@ -335,9 +337,16 @@ protected:
 
     struct Cell
     {
+        bool expired(const Timestamp & last_timestamp, const Delay & delay) const
+        {
+            return (delay == Delay::zero()) ||
+                ((last_timestamp > timestamp) && ((last_timestamp - timestamp) > delay));
+        }
+
         MappedPtr value;
         size_t size;
         LRUQueueIterator queue_iterator;
+        Timestamp timestamp;
         bool load_from_external{false};
     };
 
@@ -347,7 +356,7 @@ protected:
 
     mutable std::mutex mutex;
 
-    void setInternal(const Key & key, const MappedPtr & mapped, bool from_external = false)
+    Cell & setInternal(const Key & key, const MappedPtr & mapped, bool from_external = false)
     {
         auto [it, inserted] = cells.emplace(std::piecewise_construct,
             std::forward_as_tuple(key),
@@ -377,6 +386,8 @@ protected:
         cell.value = mapped;
         cell.size = cell.value ? weight_function(*cell.value) : 0;
         current_size += cell.size;
+
+        return cell;
     }
 
 private:
@@ -452,6 +463,7 @@ private:
     /// Total weight of values.
     size_t current_size = 0;
     const size_t max_size;
+    const Delay expiration_delay;
 
     std::atomic<size_t> hits {0};
     std::atomic<size_t> misses {0};
@@ -466,6 +478,7 @@ private:
 
         Cell & cell = it->second;
 
+        updateCellTimestamp(cell);
         /// Move the key to the end of the queue. The iterator remains valid.
         queue.splice(queue.end(), queue, cell.queue_iterator);
 
@@ -474,11 +487,18 @@ private:
 
     void setImpl(const Key & key, const MappedPtr & mapped, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
     {
-        setInternal(key, mapped);
-        removeOverflow();
+        Cell & cell = setInternal(key, mapped);
+        updateCellTimestamp(cell);
+        removeOverflow(cell.timestamp);
     }
 
-    void removeOverflow()
+    void updateCellTimestamp(Cell & cell)
+    {
+        if (expiration_delay != Delay::zero())
+            cell.timestamp = Clock::now();
+    }
+
+    void removeOverflow(const Timestamp & last_timestamp)
     {
         size_t current_weight_lost = 0;
         size_t queue_size = cells.size();
@@ -494,6 +514,8 @@ private:
             }
 
             const auto & cell = it->second;
+            if (!cell.expired(last_timestamp, expiration_delay))
+                break;
 
             current_size -= cell.size;
             current_weight_lost += cell.size;

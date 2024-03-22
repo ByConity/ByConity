@@ -24,24 +24,22 @@ Projection Est. 100 rows
                                  │     Aggregates: expr#sum(ws_net_paid):=AggNull(sum)(ws_net_paid)
                                  └─ Inner Join Est. 126599215 rows
                                     │     Condition: ws_item_sk == i_item_sk
-                                    ├─ Repartition Exchange Est. 131914495 rows
-                                    │  │     Partition by: {ws_item_sk}
-                                    │  └─ Inner Join Est. 131914495 rows
-                                    │     │     Condition: ws_sold_date_sk == d_date_sk
-                                    │     │     Runtime Filters Builder: {d_date_sk}
-                                    │     ├─ Filter Est. 720000376 rows
-                                    │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
-                                    │     │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
-                                    │     │           Where: Runtime Filters: {ws_sold_date_sk}
-                                    │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_net_paid]
-                                    │     └─ Broadcast Exchange Est. 335 rows
+                                    ├─ Inner Join Est. 131914495 rows
+                                    │  │     Condition: ws_sold_date_sk == d_date_sk
+                                    │  │     Runtime Filters Builder: {d_date_sk}
+                                    │  ├─ Filter Est. 720000376 rows
+                                    │  │  │     Condition: Runtime Filters: {ws_sold_date_sk}
+                                    │  │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
+                                    │  │           Where: Runtime Filters: {ws_sold_date_sk}
+                                    │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_net_paid]
+                                    │  └─ Broadcast Exchange Est. 335 rows
+                                    │     └─ Projection Est. 335 rows
+                                    │        │     Expressions: [d_date_sk]
                                     │        └─ Filter Est. 335 rows
-                                    │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                    │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
                                     │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                    │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                    │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
                                     │                    Outputs: [d_date_sk, d_month_seq]
-                                    └─ Repartition Exchange Est. 300000 rows
-                                       │     Partition by: {i_item_sk}
-                                       └─ TableScan tpcds1000_sample.item Est. 300000 rows
-                                                Outputs: [i_item_sk, i_class, i_category]
+                                    └─ TableScan tpcds1000_sample.item Est. 300000 rows
+                                             Outputs: [i_item_sk, i_class, i_category]
 note: Runtime Filter is applied for 1 times.

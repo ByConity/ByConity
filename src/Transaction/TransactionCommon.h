@@ -54,6 +54,8 @@ enum class CnchTransactionInitiator
     Merge = 3, /// Transaction initiated by merge task
     GC = 4, /// Transaction initiated by garbage collection task
     Txn = 5, /// Transaction initiated by interactive transaction session
+    MvRefresh = 6, /// Transaction initiated by Mv refresh task
+    MergeSelect = 7, /// Transaction initiated by merge selecting task
 };
 
 const char * txnInitiatorToString(CnchTransactionInitiator initiator);
@@ -397,5 +399,7 @@ struct TransactionRecord
     String toString() const { return pb_model.ShortDebugString(); }
     bool isInactive() const { return pb_model.status() == CnchTransactionStatus::Inactive; }
 };
+
+using TransactionRecords = std::vector<TransactionRecord>;
 
 }

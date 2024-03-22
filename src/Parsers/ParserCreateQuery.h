@@ -151,8 +151,10 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     NameParser name_parser;
     ParserDataType type_parser(dt);
     ParserKeyword s_default{"DEFAULT"};
+    ParserKeyword s_auto_increment{"AUTO_INCREMENT"};
     ParserKeyword s_null{"NULL"};
     ParserKeyword s_not{"NOT"};
+    ParserKeyword s_pk{"PRIMARY KEY"};
     ParserKeyword s_materialized{"MATERIALIZED"};
     ParserKeyword s_alias{"ALIAS"};
     ParserKeyword s_comment{"COMMENT"};
@@ -222,7 +224,9 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     };
 
     if (!null_check_without_moving()
+        && !s_pk.checkWithoutMoving(pos, expected)
         && !s_default.checkWithoutMoving(pos, expected)
+        && !s_auto_increment.checkWithoutMoving(pos, expected)
         && !s_materialized.checkWithoutMoving(pos, expected)
         && !s_alias.checkWithoutMoving(pos, expected)
         && (require_type
@@ -254,6 +258,9 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         if (!expr_parser.parse(pos, default_expression, expected))
             return false;
     }
+    else if (s_auto_increment.ignore(pos, expected)) {
+        column_declaration->auto_increment = true;
+    }
 
     if (require_type && !type && !default_expression)
         return false; /// reject column name without type
@@ -268,6 +275,11 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         }
         else if (s_null.ignore(pos, expected))
             null_modifier.emplace(true);
+    }
+
+    if (s_pk.ignore(pos, expected))
+    {
+        column_declaration->mysql_primary_key = true;
     }
 
     if (s_comment.ignore(pos, expected))
@@ -331,10 +343,18 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
 
     if (type)
     {
+        /// under mysql dialect, every column is altered to nullable by default
+        /// if it is not defined as Nullable(T)
+        // if (dt.parse_mysql_ddl && !null_modifier.has_value())
+        // {
+        //     const auto * ast_type = type->as<ASTDataType>();
+        //     if (!ast_type || !ast_type->getNullable())
+        //         null_modifier.emplace(true);
+        // }
+
         column_declaration->type = type;
         column_declaration->children.push_back(std::move(type));
     }
-
     column_declaration->null_modifier = null_modifier;
 
     if (default_expression)
@@ -554,6 +574,30 @@ class ParserCreateTableQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CREATE TABLE or ATTACH TABLE query"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+/**
+  * table_attribute [partition_options] [storage_policy] [block_size] [engine] [rt_engine] [table_properties]
+  */
+class ParserStorageMySQL : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "storage definition for MySQL"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+/**
+  * Please refer to the doc of supported syntax
+  */
+class ParserCreateTableAnalyticalMySQLQuery : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "CREATE TABLE query for MySQL"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 public:
     using IParserDialectBase::IParserDialectBase;

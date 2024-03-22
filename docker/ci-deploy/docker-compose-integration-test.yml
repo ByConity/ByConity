@@ -1,0 +1,200 @@
+version: "3"
+services:
+# image use digest to avoid network issue
+# hdfs / remote fs
+  hdfs:
+    # image: gchq/hdfs@sha256:36b33f72247310f0785f535b20427fba4f2454938b84476cdd749ef038d551ad
+    image: gchq/hdfs:3.3
+    command: namenode
+    container_name: "${COMPOSE_PROJECT_NAME}-hdfs-namenode"
+    environment:
+      - HADOOP_CONF_DIR=/etc/hadoop/conf
+    ports:
+      - "${CLICKHOUSE_PORT_HDFS}:9870"
+    volumes:
+      - hdfs_volume:/etc/hadoop/conf
+      - /var/log/hadoop
+      - /data1
+      - /data2
+
+  hdfs-datanode:
+    depends_on:
+      - hdfs
+    # image: gchq/hdfs@sha256:36b33f72247310f0785f535b20427fba4f2454938b84476cdd749ef038d551ad
+    image: gchq/hdfs:3.3
+    command: datanode
+    container_name: "${COMPOSE_PROJECT_NAME}-hdfs-datanode"
+    environment:
+      - HADOOP_CONF_DIR=/etc/hadoop/conf
+    volumes:
+      - hdfs_volume:/etc/hadoop/conf
+      - /var/log/hadoop
+      - /data1
+      - /data2
+
+# foundation db / catalog
+  fdb:
+    # image: foundationdb/foundationdb@sha256:43e6a4e51e181e4ec65161ec57d538196b1b9101c913fccba2867bfc480acadd
+    image: foundationdb/foundationdb:7.1.24
+    environment:
+      FDB_NETWORKING_MODE: container
+      FDB_COORDINATOR_PORT: 4550
+      FDB_PORT: 4550
+    container_name: "${COMPOSE_PROJECT_NAME}_fdb-0"
+    volumes:
+      - /var/fdb/data
+      - /var/fdb/logs 
+
+# byconity:
+  tso:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/; fdbcli -C /config/fdb.cluster --exec \"configure new single memory\"; tso-server --config-file /config/tso.yml"
+    depends_on:
+      - fdb
+      - hdfs
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
+    # evironment:
+    container_name: "${COMPOSE_PROJECT_NAME}_tso-0"
+    cap_add:
+      - SYS_PTRACE
+
+  resource-manager:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_tso-0:18845 && resource-manager --config-file /config/resource-manager.yml"
+    depends_on:
+      - tso
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
+    container_name: "${COMPOSE_PROJECT_NAME}_resource-manager-0"
+    cap_add:
+      - SYS_PTRACE
+
+  server:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+      - CI_JOB_NAME=github 
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_tso-0:18845 && clickhouse-server --config-file /config/server.yml"
+    depends_on:
+      - tso
+      - hdfs
+    ports:
+      - "${CLICKHOUSE_PORT_TCP}:52145"
+      - "${CLICKHOUSE_PORT_HTTP}:21557"
+    container_name: "${COMPOSE_PROJECT_NAME}_server-0"
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
+    cap_add:
+      - SYS_PTRACE
+
+  worker-write:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w0 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    ports:
+      - "${CNCH_WRITE_WORKER_PORT_TCP}:52145"
+    container_name: "${COMPOSE_PROJECT_NAME}_worker-write-0"
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
+    cap_add:
+      - SYS_PTRACE
+
+  worker-default-0:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r0 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    container_name: "${COMPOSE_PROJECT_NAME}_worker-default-0"
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
+    cap_add:
+      - SYS_PTRACE
+
+  worker-default-1:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r1 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    container_name: "${COMPOSE_PROJECT_NAME}_worker-default-1"
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
+    cap_add:
+      - SYS_PTRACE
+
+  daemon-manager:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && daemon-manager --config-file ./config/daemon-manager.yml"
+    depends_on:
+      - server
+    container_name: "${COMPOSE_PROJECT_NAME}_daemon-manager-0"
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
+    cap_add:
+      - SYS_PTRACE
+  community-clickhouse:
+    image: clickhouse/clickhouse-server:24.2.1.2248-alpine
+    healthcheck:
+      test: clickhouse-client -q "select 1;"
+      interval: 5s
+      timeout: 3s
+      retries: 4
+  community-clickhouse_init:
+    image: clickhouse/clickhouse-server:24.2.1.2248-alpine
+    depends_on:
+      community-clickhouse:
+        condition: service_healthy
+    entrypoint: > 
+      /bin/sh -c "sleep 5; clickhouse-client --host community-clickhouse -n -q \"create database db; create table db.tb (d Date, i Int64) Engine=MergeTree partition by d order by i; insert into db.tb Values('2010-01-01', 1)\""
+  mysql_server:
+    image: mysql:5.7.25
+    command: bash /entrypoint.sh --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --sql-mode="" --log-bin --server-id=123 --gtid-mode=ON --enforce-gtid-consistency=ON # For 8.x: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ppassword", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: test
+      MYSQL_ROOT_PASSWORD: password
+  mysql_server_init:
+    image: mysql:5.7.25
+    depends_on:
+      mysql_server:
+        condition: service_healthy
+    command: /bin/sh -c "sleep 5; echo \"CREATE DATABASE IF NOT EXISTS test; USE test; CREATE TABLE IF NOT EXISTS test (id INT, column1 VARCHAR(10), PRIMARY KEY(id)) ENGINE = InnoDB; INSERT IGNORE INTO test (id, column1) VALUES (1, 'abc'), (2, 'def'), (3, 'ghi');\" | mysql -hmysql_server -uroot -ppassword" 
+
+volumes:
+    config_volume:
+      name: "${CONFIG_VOL}"
+    hdfs_volume:
+      name: "${HDFS_VOL}"
+    binary_volume:
+      name: "${BINARY_VOL}"

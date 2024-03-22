@@ -55,12 +55,14 @@ message LimitByStep {
 
 message LimitStep {
   required ITransformingStep query_plan_base = 1;
-  required uint64 limit = 2;
-  required uint64 offset = 3;
+  required uint64 limit = 2; // deprecated, use limit_or_var instead
+  required uint64 offset = 3; // deprecated, use offset_or_var instead
   required bool always_read_till_end = 4;
   required bool with_ties = 5;
   repeated SortColumnDescription description = 6;
   required bool partial = 7;
+  optional SizeOrVariable limit_or_var = 8;
+  optional SizeOrVariable offset_or_var = 9;
 }
 
 message MarkDistinctStep {
@@ -82,11 +84,21 @@ message OffsetStep {
 }
 
 message SortingStep {
+  message Stage {
+    enum Enum {
+        FULL = 0;
+        MERGE = 1;
+        PARTIAL = 2;
+    }
+  }
+
   required ITransformingStep query_plan_base = 1;
   repeated SortColumnDescription result_description = 2;
-  required uint64 limit = 3;
+  required uint64 limit = 3; // deprecated, use limit_or_var instead
   required bool partial = 4;
   repeated SortColumnDescription prefix_description = 5;
+  optional Stage.Enum stage = 6;
+  optional SizeOrVariable limit_or_var = 7;
 }
 
 message ValuesStep {
@@ -184,6 +196,7 @@ message TableWriteStep {
   message InsertTarget {
     required StorageID storage_id = 1;
     repeated NameAndTypePair columns = 2;
+    optional AST query = 3;
   }
 
   message Target {
@@ -200,6 +213,7 @@ message TableFinishStep {
   required ITransformingStep query_plan_base = 1;
   required TableWriteStep.Target target = 2;
   required string output_affected_row_count_symbol = 3;
+  optional AST query = 4;
 }
 
 message FilterStep {
@@ -351,6 +365,11 @@ message BufferStep {
 
 message ExplainAnalyzeStep {}
 
+message LocalExchangeStep {
+  required ITransformingStep query_plan_base = 1;
+  required ExchangeMode.Enum exchange_type = 2;
+  required Partitioning schema = 3;
+}
 
 message MultiJoinStep {
   required Graph graph = 1;
@@ -405,6 +424,7 @@ message QueryPlanStep {
     ApplyStep apply_step = 39;
     ExplainAnalyzeStep explain_analyze_step = 44;
     TotalsHavingStep totals_having_step = 50;
+    LocalExchangeStep local_exchange_step = 54;
     MultiJoinStep multi_join_step = 55;
   }
 }
@@ -429,3 +449,8 @@ message QueryPlan {
   map<uint64, uint64> cte_id_mapping = 3;
   required PlanMode.Enum mode = 4;
 }
+
+message PreparedStatement {
+  required string query = 1;
+}
+

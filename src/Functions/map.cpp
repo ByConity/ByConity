@@ -64,7 +64,7 @@ namespace
 
         if (type->canBeInsideNullable())
             return makeNullable(type);
-        
+
         /// Can't be inside nullable
         return type;
     }
@@ -700,7 +700,7 @@ public:
             arguments[1]
         };
 
-        return FunctionArrayIndex<HasAction, NameMapContains>().executeImpl(new_arguments, result_type, input_rows_count);
+        return FunctionArrayIndex<HasAction, NameMapContains>(nullptr).executeImpl(new_arguments, result_type, input_rows_count);
     }
 };
 
@@ -1034,9 +1034,12 @@ public:
         auto res = stream->read();
         if (res)
         {
-            Field field;
-            res.getByName("keys").column->get(0, field);
-            return result_type->createColumnConst(input_rows_count, field)->convertToFullColumnIfConst();
+            // TODO(shiyuze): maybe add a new function to get result in different rows, just like arrayJoin(getMapKeys(xxx))
+
+            /// Total map key number in result may exceed max_array_size_as_field (for example, 
+            /// each pratition or bucket has different key sets), so we need to avoid calling 
+            /// ColumnArray::[] or ColumnArray::get() to get array as a Field here.
+            return ColumnConst::create(res.getByName("keys").column, input_rows_count)->convertToFullColumnIfConst();
         }
         else
         {
@@ -1044,7 +1047,7 @@ public:
         }
     }
 
-    /// override executeImplDryRun to prevent calling getMapKeys multi times under 
+    /// override executeImplDryRun to prevent calling getMapKeys multi times under
     /// same txn id, which may cause worker create table multi times
     ColumnPtr executeImplDryRun(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {

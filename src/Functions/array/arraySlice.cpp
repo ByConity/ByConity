@@ -1,4 +1,5 @@
 #include <Functions/IFunction.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <DataTypes/DataTypeArray.h>
@@ -7,6 +8,7 @@
 #include <Columns/ColumnConst.h>
 #include <Common/typeid_cast.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -17,6 +19,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    extern const int ZERO_ARRAY_OR_TUPLE_INDEX;
+    extern const int BAD_ARGUMENTS;
 }
 
 /** arraySlice(arr, offset, length) - make slice of array. Offsets and length may be < 0 or Null
@@ -32,14 +36,25 @@ namespace ErrorCodes
   */
 class FunctionArraySlice : public IFunction
 {
+private:
+    bool is_mysql;
+
 public:
     static constexpr auto name = "arraySlice";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArraySlice>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        return std::make_shared<FunctionArraySlice>(context);
+    }
+
+    explicit FunctionArraySlice(ContextPtr context)
+    {
+        is_mysql = context && (context->getSettingsRef().dialect_type == DialectType::MYSQL);
+    }
 
     String getName() const override { return name; }
 
     bool isVariadic() const override { return true; }
-    size_t getNumberOfArguments() const override { return 0; }
+    size_t getNumberOfArguments() const override { return is_mysql ? 3 : 0; }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
@@ -47,28 +62,44 @@ public:
     {
         const size_t number_of_arguments = arguments.size();
 
-        if (number_of_arguments < 2 || number_of_arguments > 3)
+        if (is_mysql && number_of_arguments != 3)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
+                            + toString(number_of_arguments) + ", should be 3",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        else if (number_of_arguments < 2 || number_of_arguments > 3)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
                             + toString(number_of_arguments) + ", should be 2 or 3",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
+        /// return nullable if arg convert
         if (arguments[0]->onlyNull())
-            return arguments[0];
+            return is_mysql ? makeNullable(arguments[0]) : arguments[0];
 
-        const auto * array_type = typeid_cast<const DataTypeArray *>(arguments[0].get());
-        if (!array_type)
-            throw Exception("First argument for function " + getName() + " must be an array but it has type "
-                            + arguments[0]->getName() + ".", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (is_mysql)
+        {
+            if (!isArray(removeNullable(arguments[0])))
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "First argument for function {} must be an (nullable) array but it has type {}",
+                        getName(), arguments[0]->getName());
+        }
+        else
+        {
+            const auto * array_type = typeid_cast<const DataTypeArray *>(arguments[0].get());
+            if (!array_type)
+                throw Exception("First argument for function " + getName() + " must be an array but it has type "
+                        + arguments[0]->getName() + ".", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
 
+        bool has_nullable_args = false;
         for (size_t i = 1; i < number_of_arguments; ++i)
         {
+            has_nullable_args = has_nullable_args || arguments[i]->isNullable();
             if (!isInteger(removeNullable(arguments[i])) && !arguments[i]->onlyNull())
                 throw Exception(
                         "Argument " + toString(i) + " for function " + getName() + " must be integer but it has type "
                         + arguments[i]->getName() + ".", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        return arguments[0];
+        return is_mysql && has_nullable_args? makeNullable(arguments[0]) : arguments[0];
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, size_t input_rows_count) const override
@@ -91,6 +122,16 @@ public:
             array_column = const_array_column->getDataColumnPtr();
         }
 
+        const NullMap * source_null_map = nullptr;
+        if (is_mysql)
+        {
+            if (const auto * null_array_column = typeid_cast<const ColumnNullable *>(array_column.get()))
+            {
+                array_column = null_array_column->getNestedColumnPtr();
+                source_null_map = &(null_array_column->getNullMapData());
+            }
+        }
+
         if (const auto * argument_column_array = typeid_cast<const ColumnArray *>(array_column.get()))
             source = GatherUtils::createArraySource(*argument_column_array, is_const, size);
         else
@@ -100,6 +141,9 @@ public:
 
         if (offset_column->onlyNull())
         {
+            if (is_mysql)
+                return return_type->createColumnConstWithDefaultValue(input_rows_count);
+
             if (!length_column || length_column->onlyNull())
             {
                 return array_column;
@@ -118,6 +162,9 @@ public:
 
             if (!length_column || length_column->onlyNull())
             {
+                if (is_mysql)
+                    return return_type->createColumnConstWithDefaultValue(input_rows_count);
+
                 if (offset > 0)
                     sink = GatherUtils::sliceFromLeftConstantOffsetUnbounded(*source, static_cast<size_t>(offset - 1));
                 else
@@ -137,9 +184,55 @@ public:
         else
         {
             if (!length_column || length_column->onlyNull())
+            {
+                if (is_mysql)
+                    return return_type->createColumnConstWithDefaultValue(input_rows_count);
                 sink = GatherUtils::sliceDynamicOffsetUnbounded(*source, *offset_column);
+            }
             else
                 sink = GatherUtils::sliceDynamicOffsetBounded(*source, *offset_column, *length_column);
+        }
+
+        if (is_mysql)
+        {
+            auto offset_col = arguments[1].column->convertToFullColumnIfConst();
+            const NullMap * offset_null_map = nullptr;
+            if (const auto * null_col = checkAndGetColumn<ColumnNullable>(offset_col.get()); null_col)
+            {
+                offset_null_map = &(null_col->getNullMapData());
+                offset_col = null_col->getNestedColumnPtr();
+            }
+
+            auto len_col = arguments[2].column->convertToFullColumnIfConst();
+            const NullMap * len_null_map = nullptr;
+            if (const auto * null_col = checkAndGetColumn<ColumnNullable>(len_col.get()); null_col)
+            {
+                len_null_map = &(null_col->getNullMapData());
+                len_col = null_col->getNestedColumnPtr();
+            }
+
+            bool is_ret_nullable = return_type->isNullable();
+            bool is_sink_nullable = checkColumn<ColumnNullable>(*sink);
+
+            auto ret = return_type->createColumn();
+            auto * ret_nullable = typeid_cast<ColumnNullable *>(ret.get());
+
+            /// if offset !=0, or length <0, throw error
+            /// if offset or length is NULL, insert NULL
+            for (size_t i = 0; i < input_rows_count; i++)
+            {
+                if ((source_null_map && (*source_null_map)[i]) || (len_null_map && (*len_null_map)[i]) || (offset_null_map && (*offset_null_map)[i]))
+                    ret->insertDefault();
+                else if (offset_col->getInt(i) == 0)
+                    throw Exception("Array indices are 1-based", ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX);
+                else if (len_col->getInt(i) < 0)
+                    throw Exception("Array slice length must be non negative", ErrorCodes::BAD_ARGUMENTS);
+                else if (is_ret_nullable == is_sink_nullable)
+                    ret->insertFrom(*sink, i);
+                else if (is_ret_nullable && !is_sink_nullable)
+                    ret_nullable->insertFromNotNullable(*sink, i);
+            }
+            return ret;
         }
 
         return sink;
@@ -153,6 +246,7 @@ public:
 REGISTER_FUNCTION(ArraySlice)
 {
     factory.registerFunction<FunctionArraySlice>();
+    factory.registerAlias("slice", FunctionArraySlice::name, FunctionFactory::CaseInsensitive);
 }
 
 

@@ -1023,8 +1023,7 @@ inline ReturnType readDateTimeTzTextImpl(time_t & datetime, ReadBuffer & buf, co
             return ReturnType(true);
         }
         else
-            /// Why not readIntTextUnsafe? Because for needs of AdFox, parsing of unix timestamp with leading zeros is supported: 000...NNNN.
-            return readIntTextImpl<time_t, ReturnType, ReadIntTextCheckOverflow::CHECK_OVERFLOW>(datetime, buf);
+            return readDateTimeTextFallback<ReturnType>(datetime, buf, date_lut);
     }
     else
         return readDateTimeTextFallback<ReturnType>(datetime, buf, date_lut);
@@ -1044,6 +1043,10 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
         readDateTimeTzTextImpl<void>(datetime, buf, date_lut);
     else if (!readDateTimeTzTextImpl<bool>(datetime, buf, date_lut))
         return false;
+
+    /// Read Datetime64 text as Date
+    if (buf.position() < buf.buffer().end() && *buf.position() == '.')
+        while(++buf.position() < buf.buffer().end() && isNumericASCII(*buf.position()));
 
     if (!ignoreTimezoneOffset(buf)) {
         return ReturnType(false);
@@ -1171,18 +1174,32 @@ inline bool readTimeTextImpl(time_t & t, ReadBuffer & buf)
             buf.ignore(DataSizeMySQL);
     }
 
-    UInt8 hour = 0;
-    UInt8 minute = 0;
-    UInt8 sec = 0;
+    UInt64 hour = 0;
+    UInt64 minute = 0;
+    UInt64 sec = 0;
 
     size_t totalIntegerSize = end_pos - buf.position();
     const char * s = buf.position();
-    if (totalIntegerSize >= 8 && s[2] == ':' && s[5] == ':')
+    if (totalIntegerSize >= 5 && have_separater)
     {
-        hour = (s[0] - '0') * 10 + (s[1] - '0');
-        minute = (s[3] - '0') * 10 + (s[4] - '0');
-        sec = (s[6] - '0') * 10 + (s[7] - '0');
-        totalIntegerSize = 8;
+        auto next = [&]()
+        {
+            UInt64 res = 0;
+            /// skip delimiters
+            while (s < buf.buffer().end() && !isNumericASCII(*s))
+                ++s;
+
+            while (s < buf.buffer().end() && isNumericASCII(*s))
+                res = res * 10 + (*(s++) - '0');
+
+            return res;
+        };
+
+        hour = next();
+        minute = next();
+        sec = next();
+
+        totalIntegerSize = s - buf.position();
     }
     else if (totalIntegerSize == 6)
     {

@@ -92,6 +92,7 @@ public:
     bool supportsDistributedRead() const override { return true; }
     StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;
     std::optional<TableStatistics> getTableStats(const Strings & columns, ContextPtr local_context) override;
+    std::vector<std::pair<String, UInt64>> getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format = true);
 
     virtual void serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files);
 
@@ -103,6 +104,12 @@ protected:
         const StorageMetadataPtr & metadata_snapshot,
         const SelectQueryInfo & query_info,
         const HiveWhereOptimizer & optimizer);
+
+    std::optional<UInt64> getSelectedBucketNumber(
+        ContextPtr local_context,
+        SelectQueryInfo & query_info,
+        const StorageMetadataPtr & metadata_snapshot,
+        HiveWhereOptimizer & optimizer) const;
 
     /// DirectoryList is not multi-threaded
     virtual std::shared_ptr<IDirectoryLister> getDirectoryLister();

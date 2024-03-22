@@ -35,9 +35,9 @@
 #include <Access/ExternalAuthenticators.h>
 #include <Access/GSSAcceptor.h>
 #include <Access/QuotaUsage.h>
-#include <Access/SettingsProfilesInfo.h>
 #include <Access/SettingsConstraintsAndProfileIDs.h>
 #include <Access/SettingsProfile.h>
+#include <Access/SettingsProfilesInfo.h>
 #include <Access/User.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchBGThreadsMap.h>
@@ -85,9 +85,12 @@
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/NamedSession.h>
+#include <Interpreters/Lemmatizers.h>
+#include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueueManager.h>
 #include <Interpreters/SegmentScheduler.h>
+#include <Interpreters/SynonymsExtensions.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/VirtualWarehousePool.h>
 #include <Interpreters/WorkerGroupHandle.h>
@@ -240,6 +243,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_DATABASE;
     extern const int UNKNOWN_CATALOG;
     extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_SETTING;
     extern const int TABLE_ALREADY_EXISTS;
     extern const int THERE_IS_NO_SESSION;
     extern const int THERE_IS_NO_QUERY;
@@ -318,6 +322,7 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
+    AdditionalServices additional_services;
 
     VETosConnectionParams vetos_connection_params;
     OSSConnectionParams oss_connection_params;
@@ -450,6 +455,7 @@ struct ContextSharedPart
     std::map<String, UInt16> server_ports;
 
     bool shutdown_called = false;
+    bool restrict_tenanted_users_to_whitelist_settings = false;
 
     Stopwatch uptime_watch;
 
@@ -465,6 +471,7 @@ struct ContextSharedPart
     Context::ConfigReloadCallback config_reload_callback;
 
     VWCustomizedSettingsPtr vw_customized_settings_ptr;
+    mutable std::mutex vw_customized_settings_update_mutex;
 
     /// @ByteDance
     bool ready_for_query = false; /// Server is ready for incoming queries
@@ -473,6 +480,9 @@ struct ContextSharedPart
     std::unique_ptr<Statistics::AutoStats::AutoStatisticsManager> auto_stats_manager;
 
     std::unique_ptr<PlanCacheManager> plan_cache_manager;
+
+    std::unique_ptr<PreparedStatementManager> prepared_statement_manager;
+
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
     {
@@ -570,8 +580,6 @@ struct ContextSharedPart
 
             global_binding_cache_manager.reset();
 
-            access_control_manager.stopBgJobForKVStorage();
-
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -584,6 +592,8 @@ struct ContextSharedPart
             ///
             /// But they cannot be created before storages since they may required table as a source,
             /// but at least they can be preserved for storage termination.
+            prepared_statement_manager.reset();
+
             dictionaries_xmls.reset();
             dictionaries_cnch_catalog.reset();
 
@@ -782,16 +792,17 @@ ReadSettings Context::getReadSettings() const
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
     res.enable_io_pfra = settings.enable_io_pfra;
-    res.buffer_size = settings.max_read_buffer_size;
-    res.remote_fs_buffer_size = settings.remote_fs_buffer_size;
+    res.local_fs_buffer_size
+        = settings.max_read_buffer_size_local_fs ? settings.max_read_buffer_size_local_fs : settings.max_read_buffer_size;
+    res.remote_fs_buffer_size
+        = settings.max_read_buffer_size_remote_fs ? settings.max_read_buffer_size_remote_fs : settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
     res.mmap_cache = getMMappedFileCache().get();
     res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
     res.disk_cache_mode = settings.disk_cache_mode;
     res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
-    res.parquet_parallel_read= settings.parquet_parallel_read;
-    res.parquet_decode_threads = settings.max_download_thread;
+    res.parquet_decode_threads = settings.max_download_threads;
     res.filtered_ratio_to_use_skip_read = settings.filtered_ratio_to_use_skip_read;
     return res;
 }
@@ -1412,6 +1423,24 @@ std::unique_ptr<GSSAcceptorContext> Context::makeGSSAcceptorContext() const
     return std::make_unique<GSSAcceptorContext>(shared->access_control_manager.getExternalAuthenticators().getKerberosParams());
 }
 
+bool Context::mustEnableAdditionalService(AdditionalService::Value svc, bool need_throw) const
+{
+    if (need_throw)
+    {
+         shared->additional_services.throwIfDisabled(svc);
+         return true;
+    }
+    else
+    {
+         return shared->additional_services.enabled(svc);
+    }
+}
+
+void Context::updateAdditionalServices(const Poco::Util::AbstractConfiguration & config)
+{
+    shared->additional_services.parseAdditionalServicesFromConfig(config);
+}
+
 void Context::setUsersConfig(const ConfigurationPtr & config)
 {
     auto lock = getLock();
@@ -1435,11 +1464,23 @@ ConfigurationPtr Context::getUsersConfig()
 
 VWCustomizedSettingsPtr Context::getVWCustomizedSettings() const
 {
+    std::lock_guard<std::mutex> lock(shared->vw_customized_settings_update_mutex);
     return shared->vw_customized_settings_ptr;
 }
 
 void Context::setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_settings_ptr_)
 {
+    if (shared->vw_customized_settings_ptr)
+        LOG_INFO(
+            &Poco::Logger::get("Context"),
+            fmt::format(
+                "VWCustomizedSetting before update:[{}] and after update:[{}]",
+                shared->vw_customized_settings_ptr->toString(),
+                vw_customized_settings_ptr_->toString()));
+    else
+        LOG_INFO(&Poco::Logger::get("Context"), fmt::format("VWCustomizedSetting :[{}]", vw_customized_settings_ptr_->toString()));
+
+    std::lock_guard<std::mutex> lock(shared->vw_customized_settings_update_mutex);
     shared->vw_customized_settings_ptr = vw_customized_settings_ptr_;
 }
 
@@ -2122,6 +2163,19 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
         }
     };
 
+    // NOTE: tenanted users connect to server using tenant id given in connection info.
+    // allow only whitelisted settings for tenanted users
+    if (this->getIsRestrictSettingsToWhitelist() && !this->getTenantId().empty())
+    {
+        for (const auto & change : changes)
+        {
+            if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
+                throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
+                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    " in configuration");
+        }
+    }
+
     find_dialect_type_if_any(changes);
 
     // skip if a previous setting change is in process
@@ -2542,16 +2596,6 @@ void Context::setProgressCallback(ProgressCallback callback)
 ProgressCallback Context::getProgressCallback() const
 {
     return progress_callback;
-}
-
-void Context::setInternalProgressCallback(ProgressCallback callback)
-{
-    internal_progress_callback = callback;
-}
-
-ProgressCallback Context::getInternalProgressCallback() const
-{
-    return internal_progress_callback;
 }
 
 void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)
@@ -3724,6 +3768,15 @@ void Context::insertQueryMetricsElement(const QueryMetricElement & element)
     }
 }
 
+void Context::insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element) const
+{
+    auto view_refresh_task_log = getViewRefreshTaskLog();
+    if (view_refresh_task_log)
+        view_refresh_task_log->add(element);
+    else
+        LOG_WARNING(&Poco::Logger::get("Context"), "View Refresh Task Log has not been initialized.");
+}
+
 std::shared_ptr<QueryWorkerMetricLog> Context::getQueryWorkerMetricsLog() const
 {
     auto lock = getLock();
@@ -3755,6 +3808,16 @@ std::shared_ptr<CnchQueryLog> Context::getCnchQueryLog() const
         return {};
 
     return shared->cnch_system_logs->getCnchQueryLog();
+}
+
+std::shared_ptr<ViewRefreshTaskLog> Context::getViewRefreshTaskLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getViewRefreshTaskLog();
 }
 
 std::shared_ptr<TraceLog> Context::getTraceLog() const
@@ -4198,9 +4261,14 @@ BlockOutputStreamPtr Context::getOutputStream(const String & name, WriteBuffer &
     return FormatFactory::instance().getOutputStream(name, buf, sample, shared_from_this());
 }
 
-OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const
+OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample, bool out_to_directory) const
 {
-    return FormatFactory::instance().getOutputFormatParallelIfPossible(name, buf, sample, shared_from_this());
+    return FormatFactory::instance().getOutputFormatParallelIfPossible(name, buf, sample, shared_from_this(), out_to_directory);
+}
+
+OutputFormatPtr Context::getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const
+{
+    return FormatFactory::instance().getOutputFormat(name, buf, sample, shared_from_this());
 }
 
 
@@ -4253,6 +4321,23 @@ void Context::setApplicationType(ApplicationType type)
 {
     /// Lock isn't required, you should set it at start
     shared->application_type = type;
+}
+
+bool Context::getIsRestrictSettingsToWhitelist() const
+{
+    return shared->restrict_tenanted_users_to_whitelist_settings;
+}
+
+void Context::setIsRestrictSettingsToWhitelist(bool is_restrict)
+{
+    /// Lock isn't required, you should set it at start
+    shared->restrict_tenanted_users_to_whitelist_settings = is_restrict;
+}
+
+void Context::addRestrictSettingsToWhitelist(const std::vector<String>& setting_names) const
+{
+    for (auto & name : setting_names)
+        SettingsChanges::WHITELIST_SETTINGS.emplace(name);
 }
 
 void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
@@ -4949,7 +5034,7 @@ void Context::setPartCacheManager()
     if (shared->cache_manager)
         throw Exception("Part cache manager has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->cache_manager = std::make_shared<PartCacheManager>(shared_from_this());
+    shared->cache_manager = std::make_shared<PartCacheManager>(shared_from_this(), total_memory_tracker.getHardLimit());
 }
 
 PartCacheManagerPtr Context::getPartCacheManager() const
@@ -5610,9 +5695,9 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
     }
 }
 
-void Context::createPlanNodeIdAllocator()
+void Context::createPlanNodeIdAllocator(int max_id)
 {
-    id_allocator = std::make_shared<PlanNodeIdAllocator>();
+    id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id);
 }
 
 void Context::createSymbolAllocator()
@@ -5709,6 +5794,18 @@ PlanCacheManager* Context::getPlanCacheManager()
     return shared->plan_cache_manager ? shared->plan_cache_manager.get() : nullptr;
 }
 
+void Context::setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager)
+{
+    auto lock = getLock();
+    shared->prepared_statement_manager = std::move(manager);
+}
+
+PreparedStatementManager * Context::getPreparedStatementManager()
+{
+    auto lock = getLock();
+    return shared->prepared_statement_manager ? shared->prepared_statement_manager.get() : nullptr;
+}
+
 UInt32 Context::getQueryMaxExecutionTime() const
 {
     // max is 4294967295/1000/60=71582 min
@@ -5736,11 +5833,13 @@ AsynchronousReaderPtr Context::getThreadPoolReader() const
 {
     auto lock = getLock();
 
-    const Poco::Util::AbstractConfiguration & config = getConfigRef();
-    auto pool_size = config.getUInt(".threadpool_remote_fs_reader_pool_size", 250);
-    auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
     if (!shared->asynchronous_remote_fs_reader)
+    {
+        const Poco::Util::AbstractConfiguration & config = getConfigRef();
+        auto pool_size = config.getUInt(".threadpool_remote_fs_reader_pool_size", 250);
+        auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
         shared->asynchronous_remote_fs_reader = std::make_shared<ThreadPoolRemoteFSReader>(pool_size, queue_size);
+    }
 
     return shared->asynchronous_remote_fs_reader;
 }

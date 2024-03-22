@@ -543,6 +543,7 @@ public:
             return;
         }
 
+        // o, p, q;
         if (attribution_mode == 3)
         {
             double avg = p / (all_cnt-2)*1.0, extra;

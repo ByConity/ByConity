@@ -4,6 +4,13 @@ import "cnch_common.proto";
 import "enum.proto";
 package DB.Protos;
 
+message SizeOrVariable {
+  oneof size_or_variable {
+    uint64 size = 1;
+    string variable = 2;
+  }
+}
+
 message Field {
   required FieldType.Enum type = 1;
   optional bytes blob = 2;
@@ -107,7 +114,7 @@ message Partitioning {
 // possibly nullptr
 message AST {
   // empty bytes means nullptr
-  required bytes blob = 1; // exact binary 
+  required bytes blob = 1; // exact binary
   optional string text = 2; // only for read
   // TODO: use better serialize method
 }
@@ -194,6 +201,7 @@ message SelectQueryInfo {
   required AST query = 1;
   required AST view_query = 2;
   optional AST partition_filter = 3;
+  optional InputOrderInfo input_order_info = 5;
 }
 
 message NameWithAliasPair {
@@ -268,7 +276,7 @@ message WindowFrame {
   required bool begin_preceding = 5;
   required BoundaryType.Enum end_type = 6;
   required Field end_offset = 7;
-  required bool end_preceding = 8; 
+  required bool end_preceding = 8;
 }
 
 message WindowFunctionDescription {
@@ -299,3 +307,11 @@ message Graph {
   required AST filter = 3;
 }
 
+message SettingChange {
+  required string name = 1;
+  required Field value = 2;
+}
+
+message SettingsChanges {
+  repeated SettingChange settings_changes = 1;
+}

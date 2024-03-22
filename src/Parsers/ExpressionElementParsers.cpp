@@ -55,11 +55,12 @@
 #include <Parsers/IAST.h>
 #include <Parsers/ASTAssignment.h>
 
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserCase.h>
+#include <Parsers/ParserPreparedParameter.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/parseIdentifierOrStringLiteral.h>
 #include <Parsers/parseIntervalKind.h>
-#include <Parsers/ExpressionListParsers.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserCase.h>
 
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -1231,6 +1232,7 @@ bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
 
     ASTPtr expr_list_args;
     ASTPtr expr_list_params;
+    ASTPtr order_by_list;
 
     if (!ParserKeyword("GROUP_CONCAT").ignore(pos, expected) && !ParserKeyword("groupConcat").ignore(pos, expected))
         return false;
@@ -1247,12 +1249,8 @@ bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
 
     if (s_order_by.ignore(pos, expected))
     {
-        ASTPtr order_by_ast;
-
-        if (!columns_order_by.parse(pos, order_by_ast, expected))
+        if (!columns_order_by.parse(pos, order_by_list, expected))
             return false;
-
-        // TODO: order the data by the column specified BEFORE aggregating
     }
 
     if (s_separator.ignore(pos, expected))
@@ -1272,11 +1270,37 @@ bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
     auto function_node = std::make_shared<ASTFunction>();
 
     function_node->name = "groupConcat";
+    if (order_by_list)
+        function_node->name += "OrderBy";
     if (has_distinct)
         function_node->name += "Distinct";
+    
+    if (order_by_list)
+    {
+        for (const ASTPtr & order_by_elem : order_by_list->children)
+        {
+            const ASTPtr & expr_elem = order_by_elem->children.front();
+            expr_list_args->children.push_back(expr_elem);
+        }
+    }
 
     function_node->arguments = expr_list_args;
     function_node->children.push_back(function_node->arguments);
+
+    if (order_by_list)
+    {
+        if (!expr_list_params)
+            expr_list_params = std::make_shared<ASTExpressionList>();
+        
+        for (ASTPtr order_by_elem_ : order_by_list->children)
+        {
+            auto order_by_elem = order_by_elem_->as<ASTOrderByElement>();
+            Field sort_ascending(static_cast<UInt8>(order_by_elem->direction > 0));
+            expr_list_params->children.push_back(std::make_shared<ASTLiteral>(sort_ascending));
+        }
+        Field num_order_by_params(static_cast<UInt32>(order_by_list->children.size()));
+        expr_list_params->children.push_back(std::make_shared<ASTLiteral>(num_order_by_params));
+    }
 
     if (expr_list_params)
     {
@@ -2585,7 +2609,8 @@ bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         || ParserExistsExpression(dt).parse(pos, node, expected)
         || ParserCompoundIdentifier(false, true).parse(pos, node, expected)
         || ParserSubstitution(dt).parse(pos, node, expected)
-        || ParserMySQLGlobalVariable().parse(pos, node, expected);
+        || ParserMySQLGlobalVariable().parse(pos, node, expected)
+        || ParserPreparedParameter().parse(pos, node, expected);
 }
 
 

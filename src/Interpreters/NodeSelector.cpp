@@ -1,7 +1,12 @@
+#include <mutex>
 #include <unordered_map>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/NodeSelector.h>
+#include <bthread/mutex.h>
+#include <Common/HostWithPorts.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 
@@ -18,11 +23,7 @@ bool isLocal(PlanSegment * plan_segment_ptr)
 }
 
 void setParallelIndexAndSourceAddrs(
-    PlanSegment * plan_segment_ptr,
-    DAGGraph * dag_graph_ptr,
-    NodeSelectorResult * result,
-    Poco::Logger * log,
-    NodeSelectorPolicy /* node_select_policy */)
+    PlanSegment * plan_segment_ptr, DAGGraph * dag_graph_ptr, NodeSelectorResult * result, Poco::Logger * log)
 {
     LOG_TRACE(log, "Set parallel index for segment id {}", plan_segment_ptr->getPlanSegmentId());
     //set parallel index
@@ -58,16 +59,10 @@ void setParallelIndexAndSourceAddrs(
                 }
                 else
                 {
-                    if (dag_graph_ptr->id_to_address.find(plan_segment_input_id) == dag_graph_ptr->id_to_address.end())
-                    {
-                        throw Exception(
-                            "Logical error: address of segment " + std::to_string(plan_segment_input_id)
-                                + " can not be found",
-                            ErrorCodes::LOGICAL_ERROR);
-                    }
                     LOG_TRACE(log, "Non-local plan segment plan_segment_input_id:{}", plan_segment_input_id);
-                    source_iter = result->source_addresses.emplace(
-                        plan_segment_input_id, dag_graph_ptr->id_to_address[plan_segment_input_id]).first;
+                    source_iter
+                        = result->source_addresses.emplace(plan_segment_input_id, dag_graph_ptr->getAddressInfos(plan_segment_input_id))
+                              .first;
                 }
             }
             // collect status, useful for debug
@@ -117,17 +112,61 @@ NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_con
     return result;
 }
 
-NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr)
+NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context)
 {
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
-    size_t parallel_index = 0;
-    for (const auto & worker : cluster_nodes.rank_workers)
+    if (plan_segment_ptr->getParallelSize() > cluster_nodes.rank_workers.size())
     {
-        parallel_index++;
-        if (parallel_index > plan_segment_ptr->getParallelSize())
-            break;
-        result.worker_nodes.emplace_back(worker);
+        std::unordered_map<HostWithPorts, size_t> size_per_worker;
+        for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+        {
+            auto storage_id = plan_segment_input->getStorageID();
+            if (storage_id && storage_id->hasUUID())
+            {
+                const auto & size_map = query_context->getCnchServerResource()->getResourceSizeMap(storage_id->uuid);
+                for (const auto & [h, s] : size_map)
+                {
+                    auto & size_on_this_worker = size_per_worker[h];
+                    if (size_on_this_worker)
+                        size_on_this_worker += s;
+                    else
+                        size_on_this_worker = s;
+                }
+            }
+        }
+        /// TODO(WangTao): Use more fine grained assigned algorithm.
+        size_t sum = 0;
+        for (const auto & [h, current_size] : size_per_worker)
+        {
+            sum += current_size;
+            size_per_worker[h] = current_size;
+        }
+        size_t avg = sum / plan_segment_ptr->getParallelSize();
+        for (const auto & [h, s] : size_per_worker)
+        {
+            size_t p = s / avg;
+            if (s % avg * 5 > avg)
+                p++;
+            if (p == 0 && s > 0)
+                p = 1;
+            for (size_t i = 0; i < p; i++)
+            {
+                auto worker_address = getRemoteAddress(h, query_context);
+                result.worker_nodes.emplace_back(worker_address, NodeType::Remote, h.id);
+            }
+        }
+    }
+    else
+    {
+        size_t parallel_index = 0;
+        for (const auto & worker : cluster_nodes.rank_workers)
+        {
+            parallel_index++;
+            if (parallel_index > plan_segment_ptr->getParallelSize())
+                break;
+            result.worker_nodes.emplace_back(worker);
+        }
     }
     return result;
 }
@@ -151,22 +190,16 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
 {
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
-    const auto & inputs = plan_segment_ptr->getPlanSegmentInputs();
-    if (auto it = std::find_if(
-            inputs.begin(),
-            inputs.end(),
-            [](PlanSegmentInputPtr input) {
-                return input->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
-                    || input->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION;
-            });
-        it != inputs.end())
+    auto local_input = NodeSelector::tryGetLocalInput(plan_segment_ptr);
+    if (local_input)
     {
-        auto address_it = dag_graph_ptr->id_to_address.find(it->get()->getPlanSegmentId());
-        if (address_it == dag_graph_ptr->id_to_address.end())
+        std::unique_lock<std::mutex> lock(dag_graph_ptr->finished_address_mutex);
+        auto address_it = dag_graph_ptr->finished_address.find(local_input->getPlanSegmentId());
+        if (address_it == dag_graph_ptr->finished_address.end())
             throw Exception(
-                "Logical error: address of segment " + std::to_string(it->get()->getPlanSegmentId()) + " not found",
+                "Logical error: address of segment " + std::to_string(local_input->getPlanSegmentId()) + " not found",
                 ErrorCodes::LOGICAL_ERROR);
-        for (const auto & addr : address_it->second)
+        for (const auto & [parallel_index, addr] : address_it->second)
         {
             result.worker_nodes.emplace_back(addr);
         }
@@ -203,20 +236,16 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
     NodeSelectorResult result;
     auto segment_id = plan_segment_ptr->getPlanSegmentId();
     LOG_TRACE(log, "Begin to select nodes for segment, id: {}, is_source: {}", segment_id, is_source);
-    auto node_select_policy = NodeSelectorPolicy::InvalidPolicy;
     if (isLocal(plan_segment_ptr))
     {
-        node_select_policy = NodeSelectorPolicy::LocalPolicy;
         result = local_node_selector.select(plan_segment_ptr, query_context);
     }
     else if (is_source)
     {
-        node_select_policy = NodeSelectorPolicy::SourcePolicy;
-        result = source_node_selector.select(plan_segment_ptr);
+        result = source_node_selector.select(plan_segment_ptr, query_context);
     }
     else
     {
-        node_select_policy = NodeSelectorPolicy::ComputePolicy;
         if (query_context->getSettingsRef().bsp_mode)
         {
             result = locality_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
@@ -237,7 +266,7 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
         }
     }
 
-    setParallelIndexAndSourceAddrs(plan_segment_ptr, dag_graph_ptr, &result, log, node_select_policy);
+    setParallelIndexAndSourceAddrs(plan_segment_ptr, dag_graph_ptr, &result, log);
     auto it = dag_graph_ptr->id_to_segment.find(segment_id);
     if (it == dag_graph_ptr->id_to_segment.end())
         throw Exception("Logical error: plan segment segment can not be found", ErrorCodes::LOGICAL_ERROR);
@@ -245,4 +274,16 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
     LOG_TRACE(log, "Select node for plansegment {} result {}", segment_id, result.toString());
     return result;
 }
+
+PlanSegmentInputPtr NodeSelector::tryGetLocalInput(PlanSegment * plan_segment_ptr)
+{
+    const auto & inputs = plan_segment_ptr->getPlanSegmentInputs();
+    auto it = std::find_if(inputs.begin(), inputs.end(), [](PlanSegmentInputPtr input) {
+        return input->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+            || input->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION;
+    });
+    return it != inputs.end() ? *it : nullptr;
+}
+
+
 } // namespace DB

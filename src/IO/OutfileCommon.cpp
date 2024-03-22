@@ -36,31 +36,84 @@ namespace ErrorCodes
     extern const int NETWORK_ERROR;
 }
 
-OutfileTarget::OutfileTarget(std::string uri_, std::string format_, std::string compression_method_str_, int compression_level_)
-    : uri(uri_), format(format_), compression_method_str(compression_method_str_), compression_level(compression_level_)
+constexpr UInt64 DEFAULT_SPLIT_FILE_SIZE_IN_MB = 256UL;  // Default threshold size when splitting out file
+constexpr UInt64 MAX_SPLIT_FILE_SIZE_IN_MB = 3096UL; // Upper bound of the threshold for split data
+
+size_t calcFileSizeLimit(ContextMutablePtr context)
 {
+    size_t split_file_size_in_mb = context->getSettingsRef().split_file_size_in_mb;
+    size_t split_file_limit = split_file_size_in_mb * 1024 * 1024;
+    // Considering that split_size is actually used in memory, in which
+    // data size is normally less than that in disk, thus 3GB maybe
+    // a quite large limit. Here it is treated as an undesirable threshold.
+    if (split_file_size_in_mb == 0 || split_file_size_in_mb > MAX_SPLIT_FILE_SIZE_IN_MB)
+        split_file_limit = DEFAULT_SPLIT_FILE_SIZE_IN_MB * 1024 * 1024;
+
+    return split_file_limit;
 }
 
-OutfileTarget::OutfileTarget(const OutfileTarget & outfile_target_)
-    : uri(outfile_target_.uri)
-    , format(outfile_target_.format)
-    , compression_method_str(outfile_target_.compression_method_str)
-    , compression_level(outfile_target_.compression_level)
+String getFullOutPath(String & format_name, String & path, int serial_no, CompressionMethod compression_method)
 {
+    const static std::vector<std::pair<String, String>> format_suffixes
+        = {{"JSON", ".json"}, {"CSV", ".csv"}, {"Tab", ".tsv"}, {"TSV", ".tsv"}, {"Parquet", ".parquet"}};
+
+    String out_path = path + "clickhouse_outfile_" + std::to_string(serial_no);
+    for (const auto & suffix : format_suffixes)
+    {
+        if (startsWith(format_name, suffix.first))
+        {
+            out_path += suffix.second;
+            break;
+        }
+    }
+
+    if (compression_method != CompressionMethod::None)
+        out_path += "." + toContentEncodingName(compression_method);
+
+    return out_path;
 }
 
-std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & context, bool allow_into_local)
+OutfileTarget::OutfileTarget(
+    const ContextMutablePtr & context_, std::string uri_, std::string format_, std::string compression_method_str_, int compression_level_)
+    : context(context_)
+    , request_uri(uri_)
+    , format(format_)
+    , compression_method_str(compression_method_str_)
+    , compression_level(compression_level_)
 {
-    const Poco::URI out_uri(uri);
-    const String & scheme = out_uri.getScheme();
-    CompressionMethod compression_method = chooseCompressionMethod(uri, compression_method_str);
+    const Poco::URI out_uri(request_uri);
+    scheme = out_uri.getScheme();
+    compression_method = chooseCompressionMethod(request_uri, compression_method_str);
+
+    // hdfs always use CompressionMethod::Gzip default
+    if (scheme == "hdfs" && compression_method_str.empty())
+        compression_method = CompressionMethod::Gzip;
+    // lasfs maybe not support compression
+    else if (scheme == "lasfs")
+        compression_method = CompressionMethod::None;
+
+    if (Poco::Path(request_uri).isFile())
+    {
+        out_type = OutType::SINGLE_OUT_FILE;
+        real_outfile_path = request_uri;
+    }
+    else
+    {
+        out_type = OutType::MULTI_OUT_FILE;
+        split_file_limit = calcFileSizeLimit(context);
+
+        /// the first real out_file_path;
+        real_outfile_path = getFullOutPath(format, request_uri, serial_no, compression_method);
+    }
+}
+
+void OutfileTarget::getRawBuffer()
+{
+    const Poco::URI out_uri(real_outfile_path);
 
     if (scheme.empty())
     {
-        if (!allow_into_local)
-            throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
-
-        out_buf_raw = std::make_unique<WriteBufferFromFile>(uri, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
+        out_buf_raw = std::make_unique<WriteBufferFromFile>(real_outfile_path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
     }
     else if (scheme == "tos")
     {
@@ -74,24 +127,26 @@ std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & 
     else if (DB::isHdfsOrCfsScheme(scheme))
     {
         out_buf_raw = std::make_unique<WriteBufferFromHDFS>(
-            uri,
+            real_outfile_path,
             context->getHdfsConnectionParams(),
             context->getSettingsRef().max_hdfs_write_buffer_size,
             O_WRONLY,
             context->getSettingsRef().overwrite_current_file);
-
-        // hdfs always use CompressionMethod::Gzip default
-        if (compression_method_str.empty())
-        {
-            compression_method = CompressionMethod::Gzip;
-        }
+    }
+#endif
+#if USE_LASFS
+    else if (scheme == "lasfs")
+    {
+        LasfsSettings lasfs_settings;
+        refreshCurrentLasfsSettings(lasfs_settings, context);
+        out_buf_raw = std::make_unique<WriteBufferFromLasfs>(lasfs_settings, "lasfs:/" + out_uri.getHost() + out_uri.getPath());
     }
 #endif
 #if USE_AWS_S3
     else if (scheme == "vetos")
     {
         VETosConnectionParams vetos_connect_params = VETosConnectionParams::getVETosSettingsFromContext(context);
-        auto tos_uri = verifyTosURI(uri);
+        auto tos_uri = verifyTosURI(real_outfile_path);
         std::string bucket = tos_uri.getHost();
         std::string key = getTosKeyFromURI(tos_uri);
         S3::S3Config s3_config = VETosConnectionParams::getS3Config(vetos_connect_params, bucket);
@@ -106,7 +161,7 @@ std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & 
     else if (scheme == "oss")
     {
         OSSConnectionParams oss_connect_params = OSSConnectionParams::getOSSSettingsFromContext(context);
-        auto oss_uri = verifyOSSURI(uri);
+        auto oss_uri = verifyOSSURI(real_outfile_path);
         std::string bucket = oss_uri.getHost();
         std::string key = getOSSKeyFromURI(oss_uri);
         S3::S3Config s3_config = OSSConnectionParams::getS3Config(oss_connect_params, bucket);
@@ -141,21 +196,46 @@ std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & 
 #endif
     else
     {
-        throw Exception("Path: " + uri + " is illegal, scheme " + scheme + " is not supported.", ErrorCodes::ILLEGAL_OUTPUT_PATH);
+        throw Exception("Path: " + real_outfile_path + " is illegal, scheme " + scheme + " is not supported.", ErrorCodes::ILLEGAL_OUTPUT_PATH);
     }
+}
 
+std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(bool allow_into_local)
+{
+    if (scheme.empty() && !allow_into_local)
+        throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
+    // get raw write buffer
+    getRawBuffer();
+    // wrap raw write buffer with compression buffer
     out_buf = wrapWriteBufferWithCompressionMethod(std::move(out_buf_raw), compression_method, compression_level);
 
     return out_buf;
 }
 
-void OutfileTarget::flushFile(ContextMutablePtr context)
+WriteBuffer * OutfileTarget::updateBuffer()
+{
+    WriteBuffer * new_buffer;
+    if (compression_method == CompressionMethod::None)
+    {
+        new_buffer = out_buf->inplaceReconstruct(real_outfile_path, nullptr);
+    }
+    else
+    {
+        // get raw write buffer
+        getRawBuffer();
+        // wrap raw write buffer with compression buffer
+        new_buffer = out_buf->inplaceReconstruct(real_outfile_path, std::move(out_buf_raw));
+    }
+    return new_buffer;
+}
+
+void OutfileTarget::flushFile()
 {
     if (auto * out_tos_buf = dynamic_cast<WriteBufferFromOwnString *>(out_buf.get()))
     {
         try
         {
-            const Poco::URI out_uri(uri);
+            const Poco::URI out_uri(request_uri);
             std::string host = out_uri.getHost();
             auto port = out_uri.getPort();
 
@@ -199,10 +279,14 @@ void OutfileTarget::flushFile(ContextMutablePtr context)
     }
 }
 
-OutfileTargetPtr OutfileTarget::getOutfileTarget(
-    const std::string & uri, const std::string & format, const std::string & compression_method_str, int compression_level)
+void OutfileTarget::updateOutPathIfNeeded()
 {
-    return std::make_unique<OutfileTarget>(uri, format, compression_method_str, compression_level);
+    if (out_type == MULTI_OUT_FILE)
+    {
+        ++serial_no;
+        current_bytes = 0;
+        real_outfile_path = getFullOutPath(format, request_uri, serial_no, compression_method);
+    }
 }
 
 void OutfileTarget::setOutfileCompression(

@@ -86,6 +86,10 @@
     M(LoadPrimaryIndexMicroseconds, "") \
     M(ChecksumsCacheHits, "") \
     M(ChecksumsCacheMisses, "") \
+    M(LoadDataPartFooter, "Number of times load data part footer from remote.") \
+    M(LoadChecksums, "Number of times load checksums.") \
+    M(LoadRemoteChecksums, "Number of times load checksums from remote.") \
+    M(LoadChecksumsMicroseconds, "Times spent loading checksums from remote.") \
     M(CreatedReadBufferOrdinary, "Number of times ordinary read buffer was created for reading data (while choosing among other read methods).") \
     M(CreatedReadBufferDirectIO, "Number of times a read buffer with O_DIRECT was created for reading data (while choosing among other read methods).") \
     M(CreatedReadBufferDirectIOFailed, "Number of times a read buffer with O_DIRECT was attempted to be created for reading data (while choosing among other read methods), but the OS did not allow it (due to lack of filesystem support or other reasons) and we fallen back to the ordinary reading method.") \
@@ -306,8 +310,9 @@
     M(CreatedHTTPConnections, "Total amount of created HTTP connections (closed or opened).") \
     \
     M(ThreadPoolReaderTaskMicroseconds, "Time spent getting the data in asynchronous reading") \
+    M(ThreadPoolReaderScheduleMicroseconds, "Time spent waiting for scheduling.") \
     M(ThreadPoolReaderReadBytes, "Bytes read from a thread pool task in asynchronous reading") \
-    M(ThreadPoolReaderSubmit, "Bytes read from a thread pool task in asynchronous reading") \
+    M(ThreadPoolReaderSubmit, "The number of submit asynchronous reading tasks.") \
     \
     M(CannotWriteToWriteBufferDiscard, \
       "Number of stack traces dropped by query profiler or signal handler because pipe is full or cannot write to pipe.") \
@@ -332,11 +337,29 @@
     M(S3WriteRequestsThrottling, "Number of 429 and 503 errors in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(S3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to S3 storage.") \
 \
+    M(S3DeleteObjects, "Number of S3 API DeleteObject(s) calls.") \
+    M(S3CopyObject, "Number of S3 API CopyObject calls.") \
+    M(S3ListObjects, "Number of S3 API ListObjects calls.") \
+    M(S3HeadObject,  "Number of S3 API HeadObject calls.") \
     M(S3CreateMultipartUpload, "Number of S3 API CreateMultipartUpload calls.") \
+    M(S3UploadPartCopy, "Number of S3 API UploadPartCopy calls.") \
     M(S3UploadPart, "Number of S3 API UploadPart calls.") \
     M(S3AbortMultipartUpload, "Number of S3 API AbortMultipartUpload calls.") \
     M(S3CompleteMultipartUpload, "Number of S3 API CompleteMultipartUpload calls.") \
     M(S3PutObject, "Number of S3 API PutObject calls.") \
+    M(S3GetObject, "Number of S3 API GetObject calls.") \
+\
+    M(DiskS3DeleteObjects, "Number of DiskS3 API DeleteObject(s) calls.") \
+    M(DiskS3CopyObject, "Number of DiskS3 API CopyObject calls.") \
+    M(DiskS3ListObjects, "Number of DiskS3 API ListObjects calls.") \
+    M(DiskS3HeadObject,  "Number of DiskS3 API HeadObject calls.") \
+    M(DiskS3CreateMultipartUpload, "Number of DiskS3 API CreateMultipartUpload calls.") \
+    M(DiskS3UploadPartCopy, "Number of DiskS3 API UploadPartCopy calls.") \
+    M(DiskS3UploadPart, "Number of DiskS3 API UploadPart calls.") \
+    M(DiskS3AbortMultipartUpload, "Number of DiskS3 API AbortMultipartUpload calls.") \
+    M(DiskS3CompleteMultipartUpload, "Number of DiskS3 API CompleteMultipartUpload calls.") \
+    M(DiskS3PutObject, "Number of DiskS3 API PutObject calls.") \
+    M(DiskS3GetObject, "Number of DiskS3 API GetObject calls.") \
 \
     M(QueryMemoryLimitExceeded, "Number of times when memory limit exceeded for query.") \
     M(MarkBitmapIndexReadMicroseconds, "Total time spent in reading mark bitmap index.") \
@@ -345,10 +368,12 @@
     \
     M(RemoteFSSeeks, "Total number of seeks for async buffer") \
     M(RemoteFSPrefetchRequests, "Number of prefetches made with asynchronous reading from remote filesystem") \
-    M(RemoteFSCancelledPrefetches, "Number of cancelled prefecthes (because of seek)") \
+    M(RemoteFSCancelledPrefetches, "Number of cancelled prefetches (because of seek)") \
     M(RemoteFSUnusedPrefetches, "Number of prefetches pending at buffer destruction") \
-    M(RemoteFSPrefetchedReads, "Number of reads from prefecthed buffer") \
-    M(RemoteFSPrefetchedBytes, "Number of bytes from prefecthed buffer") \
+    M(RemoteFSPrefetchedReads, "Number of reads from prefetched buffer") \
+    M(RemoteFSPrefetchTaskWait, "Number of waiting when reading from prefetched buffer") \
+    M(RemoteFSPrefetchTaskNotWait, "Number of not waiting when reading from prefetched buffer") \
+    M(RemoteFSPrefetchedBytes, "Number of bytes from prefetched buffer") \
     M(RemoteFSUnprefetchedReads, "Number of reads from unprefetched buffer") \
     M(RemoteFSUnprefetchedBytes, "Number of bytes from unprefetched buffer") \
     M(RemoteFSLazySeeks, "Number of lazy seeks") \
@@ -376,10 +401,10 @@
     M(HDFSReadElapsedMicroseconds, "")\
     M(HDFSSeek, "")\
     M(HDFSSeekElapsedMicroseconds, "")\
-    M(HdfsGetBlkLocMicroseconds, "Total number of millisecons spent to call getBlockLocations") \
-    M(HdfsSlowNodeCount, "Total number of millisecons spent to call getBlockLocations") \
-    M(HdfsFailedNodeCount, "Total number of millisecons spent to call getBlockLocations")     \
-    \
+    M(HdfsGetBlkLocMicroseconds, "Total number of milliseconds spent to call getBlockLocations") \
+    M(HdfsSlowNodeCount, "Total number of milliseconds spent to call getBlockLocations") \
+    M(HdfsFailedNodeCount, "Total number of milliseconds spent to call getBlockLocations") \
+\
     M(DiskCacheGetMicroSeconds, "Total time for disk cache get operation") \
     M(DiskCacheAcquireStatsLock, "Total time for acquire table stats lock") \
     M(DiskCacheScheduleCacheTaskMicroseconds, "Total time for schedule disk cache task") \
@@ -405,7 +430,7 @@
     M(CnchTxnCommitV2Failed, "Number of commitV2 failures") \
     M(CnchTxnCommitV1ElapsedMilliseconds, "Total number of milliseconds spent to commitV1") \
     M(CnchTxnCommitV2ElapsedMilliseconds, "Total number of milliseconds spent to commitV2") \
-    M(CnchTxnPrecommitElapsedMilliseconds, "Total number of milliseconds spent to preempt tranasctions") \
+    M(CnchTxnPrecommitElapsedMilliseconds, "Total number of milliseconds spent to preempt transactions") \
     M(CnchTxnCommitKVElapsedMilliseconds, "Total number of milliseconds spent to commit transaction in catalog") \
     M(CnchTxnCleanFailed, "Number of times clean a transaction was failed") \
     M(CnchTxnCleanElapsedMilliseconds, "Total number of milliseconds spent to clean transactions") \
@@ -534,6 +559,8 @@
     M(GetStagedPartsFailed, "") \
     M(GetDeleteBitmapsInPartitionsSuccess, "") \
     M(GetDeleteBitmapsInPartitionsFailed, "") \
+    M(GetDeleteBitmapsFromCacheInPartitionsSuccess, "") \
+    M(GetDeleteBitmapsFromCacheInPartitionsFailed, "") \
     M(GetDeleteBitmapByKeysSuccess, "") \
     M(GetDeleteBitmapByKeysFailed, "") \
     M(AddDeleteBitmapsSuccess, "") \
@@ -680,6 +707,8 @@
     M(GetDatabaseInTrashFailed, "") \
     M(GetAllTablesIDSuccess, "") \
     M(GetAllTablesIDFailed, "") \
+    M(GetTablesIDByTenantSuccess, "") \
+    M(GetTablesIDByTenantFailed, "") \
     M(GetTableIDByNameSuccess, "") \
     M(GetTableIDByNameFailed, "") \
     M(GetTableIDsByNamesSuccess, "") \
@@ -814,6 +843,10 @@
     M(DropMaskingPoliciesFailed, "") \
     M(IsHostServerSuccess, "") \
     M(IsHostServerFailed, "") \
+    M(CnchDataPartCacheHits, "")\
+    M(CnchDataPartCacheMisses, "")\
+    M(CnchDataDeleteBitmapCacheHits, "")\
+    M(CnchDataDeleteBitmapCacheMisses, "")\
     M(CnchReadSizeFromDiskCache, "") \
     M(CnchReadSizeFromRemote, "") \
     M(CnchReadDataMicroSeconds,"") \
@@ -861,7 +894,7 @@
     M(HealthWorkerSize, "Number of worker which can execute any type plan segment") \
     M(HeavyLoadWorkerSize, "Number of worker which can only execute source plan segment") \
     M(SourceOnlyWorkerSize, "Number of worker which can only execute source plan segment") \
-    M(UnhealthWorkerSize, "Number of unhealth worker") \
+    M(UnhealthWorkerSize, "Number of unhealthy worker") \
     M(NotConnectedWorkerSize, "Number of not connected worker size") \
     M(SelectHealthWorkerMilliSeconds, "Total time for select health worker") \
     \
@@ -1010,12 +1043,17 @@
     M(GinIndexCacheHit, "Cache hit of gin index") \
     M(GinIndexCacheMiss, "Cache miss of gin index") \
     M(PostingReadBytes, "Readed postings list size in bytes") \
-\
     M(QueryRewriterTime, "Total elapsed time spent on QueryRewriter in milliseconds") \
     M(QueryAnalyzerTime, "Total elapsed time spent on QueryAnalyzer in milliseconds") \
     M(QueryPlannerTime, "Total elapsed time spent on QueryPlanner in milliseconds") \
     M(QueryOptimizerTime, "Total elapsed time spent on QueryOptimizer in milliseconds") \
-    M(PlanSegmentSplitterTime, "Total elapsed time spent on PlanSegmentSplitter in milliseconds")
+    M(PlanSegmentSplitterTime, "Total elapsed time spent on PlanSegmentSplitter in milliseconds") \
+    M(GetMvBaseTableIDSuccess, "") \
+    M(GetMvBaseTableIDFailed, "") \
+    M(GetMvBaseTableVersionSuccess, "") \
+    M(GetMvBaseTableVersionFailed, "") \
+    M(UpdateMvMetaIDSuccess, "") \
+    M(UpdateMvMetaIDFailed, "")
 
 namespace ProfileEvents
 {

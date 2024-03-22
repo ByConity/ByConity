@@ -1,9 +1,10 @@
-#include <Storages/MergeTree/Index/TableScanExecutorWithIndex.h>
-#include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <QueryPlan/ExecutePlanElement.h>
 #include <QueryPlan/TableScanStep.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/Index/BitmapIndexHelper.h>
+#include <Storages/MergeTree/Index/TableScanExecutorWithIndex.h>
+#include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
+#include <Storages/StorageReplicatedMergeTree.h>
 
 namespace DB
 {
@@ -38,7 +39,7 @@ TableScanExecutorWithIndex::TableScanExecutorWithIndex(TableScanStep & step, Con
     }
 }
 
-ExecutePlan TableScanExecutorWithIndex::buildExecutePlan()
+ExecutePlan TableScanExecutorWithIndex::buildExecutePlan(const DistributedPipelineSettings & distributed_settings)
 {
     // Do not build execute plan when there isn't bitmap index
     if (columns_with_index.empty())
@@ -47,6 +48,14 @@ ExecutePlan TableScanExecutorWithIndex::buildExecutePlan()
     PartGroups part_groups;
     {
         auto parts = merge_tree_data.getDataPartsVector();
+        if (distributed_settings.source_task_index && distributed_settings.source_task_count)
+        {
+            log->trace(
+                "Filter the data parts with index {} count {}",
+                distributed_settings.source_task_index.value(),
+                distributed_settings.source_task_count.value());
+            filterParts(parts, distributed_settings.source_task_index.value(), distributed_settings.source_task_count.value());
+        }
         parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }), parts.end());
 
         prunePartsByIndex(parts);

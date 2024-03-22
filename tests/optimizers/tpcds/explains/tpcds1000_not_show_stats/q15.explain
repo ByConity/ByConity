@@ -29,11 +29,13 @@ Projection
                         │     │           Where: Runtime Filters: {cs_sold_date_sk}
                         │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_sales_price]
                         │     └─ Broadcast Exchange
-                        │        └─ Filter
-                        │           │     Condition: (d_qoy = 2) AND (d_year = 2001)
-                        │           └─ TableScan tpcds1000.date_dim
-                        │                    Where: (d_qoy = 2) AND (d_year = 2001)
-                        │                    Outputs: [d_date_sk, d_year, d_qoy]
+                        │        └─ Projection
+                        │           │     Expressions: [d_date_sk]
+                        │           └─ Filter
+                        │              │     Condition: (d_qoy = 2) AND (d_year = 2001)
+                        │              └─ TableScan tpcds1000.date_dim
+                        │                       Where: (d_qoy = 2) AND (d_year = 2001)
+                        │                       Outputs: [d_date_sk, d_year, d_qoy]
                         └─ Repartition Exchange
                            │     Partition by: {c_customer_sk}
                            └─ Inner (PARALLEL_HASH) Join

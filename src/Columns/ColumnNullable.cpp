@@ -30,6 +30,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnCompressed.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <DataTypes/recursiveTypeConversions.h>
 
 
 namespace DB
@@ -768,6 +769,25 @@ ColumnPtr makeNullableOrLowCardinalityNullable(const ColumnPtr & column)
         return assert_cast<const ColumnLowCardinality &>(*column).cloneNullable();
 
     return ColumnNullable::create(column, ColumnUInt8::create(column->size(), 0));
+}
+
+ColumnPtr recursiveAssumeNotNullable(const ColumnPtr & column)
+{
+    auto column_no_nullable_lc = recursiveConvertColumn<ColumnLowCardinality>(column, [](const auto & column_lc) -> ColumnPtr
+    {
+        if (column_lc.nestedIsNullable())
+        {
+            auto column_lc_not_nullable = IColumn::mutate(column_lc.getPtr());
+            assert_cast<ColumnLowCardinality &>(*column_lc_not_nullable).nestedRemoveNullable();
+            return column_lc_not_nullable;
+        }
+        return column_lc.getPtr();
+    });
+
+    return recursiveConvertColumn<ColumnNullable>(column_no_nullable_lc, [](const auto & column_nullable)
+    {
+        return column_nullable.getNestedColumnPtr();
+    });
 }
 
 }

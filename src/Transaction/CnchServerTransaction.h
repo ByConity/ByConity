@@ -70,6 +70,7 @@ protected:
     Statistics::AutoStats::ModifiedCounter modified_counter;
 
 private:
+
     Poco::Logger * log {&Poco::Logger::get("CnchServerTransaction")};
 
 };

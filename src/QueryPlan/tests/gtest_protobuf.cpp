@@ -347,11 +347,10 @@ TEST_F(ProtobufTest, SortingStep)
         for (int i = 0; i < 2; ++i)
             result_description.emplace_back(generateSortColumnDescription(eng));
         auto limit = eng() % 1000;
-        auto partial = eng() % 2 == 1;
         SortDescription prefix_description;
         for (int i = 0; i < 2; ++i)
             prefix_description.emplace_back(generateSortColumnDescription(eng));
-        auto result = std::make_shared<SortingStep>(base_input_stream, result_description, limit, partial, prefix_description);
+        auto result = std::make_shared<SortingStep>(base_input_stream, result_description, limit, SortingStep::Stage::FULL, prefix_description);
         result->setStepDescription(step_description);
         return result;
     }();
@@ -701,7 +700,7 @@ TEST_F(ProtobufTest, TableFinishStep)
         auto base_input_stream = generateDataStream(eng);
         auto target = generateTableWriteStepInsertTarget(eng);
         auto output_affected_row_count_symbol = fmt::format("text{}", eng() % 100);
-        auto s = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol);
+        auto s = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol, nullptr);
         s->setStepDescription(step_description);
         return s;
     }();

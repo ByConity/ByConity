@@ -212,6 +212,11 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes(
     }
 }
 
+static auto isMergePart(const MergeTreeDataPartPtr & part) -> bool
+{
+    return !part->get_deleted() && part->get_info().hint_mutation == 0 && part->get_info().level != 0;
+}
+
 MergeTreeMutableDataPartPtr MergeTreeDataMerger::prepareNewParts(
     const MergeTreeDataPartsVector & source_data_parts, const IMergeTreeDataPart * parent_part, const NamesAndTypesList & storage_columns)
 {
@@ -253,6 +258,18 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::prepareNewParts(
     for (const auto & part : source_data_parts)
         mutation_commit_time = std::max(mutation_commit_time, part->mutation_commit_time);
     new_data_part->mutation_commit_time = mutation_commit_time;
+
+    TxnTimestamp last_modification_time = 0;
+    for (const MergeTreeDataPartPtr & part : source_data_parts)
+    {
+        if (isMergePart(part)) {
+            last_modification_time = std::max(last_modification_time, part->last_modification_time);
+        } else {
+            last_modification_time
+                = std::max(last_modification_time, part->last_modification_time ? part->last_modification_time : part->commit_time);
+        }
+    }
+    new_data_part->last_modification_time = last_modification_time;
 
     if (!parent_part && params.is_bucket_table)
         new_data_part->bucket_number = source_data_parts.front()->bucket_number;

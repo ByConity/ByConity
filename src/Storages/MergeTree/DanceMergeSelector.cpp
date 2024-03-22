@@ -77,13 +77,13 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
         return {};
     }
 
-    for (auto & partition : partitions)
+    for (const auto & partition : partitions)
     {
         if (partition.size() >= 2)
             num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
     }
 
-    for (auto & partition : partitions)
+    for (const auto & partition : partitions)
     {
         if (partition.size() >= 2)
             selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
@@ -94,7 +94,7 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
     {
         if (!ranges_in_partition.empty())
         {
-            auto & range = ranges_in_partition.front();
+            const auto & range = ranges_in_partition.front();
             res.update(range.min_score, range.best_begin, range.best_end);
         }
     }
@@ -106,16 +106,15 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
 
 IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
-    for (auto & partition : partitions)
+    for (const auto & partition : partitions)
     {
         if (partition.size() >= 2)
             num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
     }
 
-    for (auto & partition : partitions)
+    for (const auto & partition : partitions)
     {
-        if (partition.size() >= 2)
-            selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
+        selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
     }
 
     std::vector<BestRangeWithScore *> range_vec;
@@ -132,6 +131,9 @@ IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & 
     PartsRanges res;
     for (auto & range : range_vec)
         res.push_back(PartsRange(range->best_begin, range->best_end));
+
+    for (const auto & range : single_part_ranges)
+        res.push_back(range);
 
     return res;
 }
@@ -195,8 +197,16 @@ void DanceMergeSelector::selectRangesFromScoreTable(
 
 void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge, [[maybe_unused]] MergeScheduler * merge_scheduler)
 {
-    if (parts.size() <= 1)
+    if (parts.empty())
         return;
+
+    if (parts.size() == 1
+        && parts.front().chain_depth > 0
+        && static_cast<UInt64>(parts.front().age) >= settings.max_age_for_single_part_chain)
+    {
+        single_part_ranges.push_back(PartsRange(parts.begin(), parts.end()));
+        return;
+    }
 
     BestRangeWithScore best_range;
 

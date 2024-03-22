@@ -25,40 +25,37 @@ Projection
                      │              └─ Gather Exchange
                      │                 └─ Projection
                      │                    │     Expressions: [ws_item_sk], expr#divide(CAST(sum(coalesce(wr.wr_return_amt, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_net_paid, 0)), 'decimal(15, 4)')):=CAST(`expr#sum(coalesce(wr.wr_return_amt, 0))`, 'decimal(15, 4)') / CAST(`expr#sum(coalesce(ws.ws_net_paid, 0))`, 'decimal(15, 4)'), expr#divide(CAST(sum(coalesce(wr.wr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_quantity, 0)), 'decimal(15, 4)')):=CAST(`expr#sum(coalesce(wr.wr_return_quantity, 0))`, 'decimal(15, 4)') / CAST(`expr#sum(coalesce(ws.ws_quantity, 0))`, 'decimal(15, 4)')
-                     │                    └─ MergingAggregated
-                     │                       └─ Repartition Exchange
-                     │                          │     Partition by: {ws_item_sk}
-                     │                          └─ Aggregating
-                     │                             │     Group by: {ws_item_sk}
-                     │                             │     Aggregates: expr#sum(coalesce(wr.wr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(wr.wr_return_quantity, 0)), expr#sum(coalesce(ws.ws_quantity, 0)):=AggNull(sum)(expr#coalesce(ws.ws_quantity, 0)), expr#sum(coalesce(wr.wr_return_amt, 0)):=AggNull(sum)(expr#coalesce(wr.wr_return_amt, 0)), expr#sum(coalesce(ws.ws_net_paid, 0)):=AggNull(sum)(expr#coalesce(ws.ws_net_paid, 0))
-                     │                             └─ Projection
-                     │                                │     Expressions: [ws_item_sk], expr#coalesce(wr.wr_return_amt, 0):=coalesce(wr_return_amt, 0), expr#coalesce(wr.wr_return_quantity, 0):=coalesce(wr_return_quantity, 0), expr#coalesce(ws.ws_net_paid, 0):=coalesce(ws_net_paid, 0), expr#coalesce(ws.ws_quantity, 0):=coalesce(ws_quantity, 0)
-                     │                                └─ Inner Join
-                     │                                   │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
-                     │                                   │     Runtime Filters Builder: {wr_item_sk,wr_order_number}
-                     │                                   ├─ Repartition Exchange
-                     │                                   │  │     Partition by: {ws_item_sk, ws_order_number}
-                     │                                   │  └─ Inner Join
-                     │                                   │     │     Condition: ws_sold_date_sk == d_date_sk
-                     │                                   │     │     Runtime Filters Builder: {d_date_sk}
-                     │                                   │     ├─ Filter
-                     │                                   │     │  │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
-                     │                                   │     │  └─ TableScan tpcds1000.web_sales
-                     │                                   │     │           Where: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
-                     │                                   │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_order_number, ws_quantity, ws_net_paid, ws_net_profit]
-                     │                                   │     └─ Broadcast Exchange
-                     │                                   │        └─ Filter
-                     │                                   │           │     Condition: (d_moy = 12) AND (d_year = 2001)
-                     │                                   │           └─ TableScan tpcds1000.date_dim
-                     │                                   │                    Where: (d_moy = 12) AND (d_year = 2001)
-                     │                                   │                    Outputs: [d_date_sk, d_year, d_moy]
-                     │                                   └─ Repartition Exchange
-                     │                                      │     Partition by: {wr_item_sk, wr_order_number}
-                     │                                      └─ Filter
-                     │                                         │     Condition: wr_return_amt > 10000.
-                     │                                         └─ TableScan tpcds1000.web_returns
-                     │                                                  Where: wr_return_amt > 10000.
-                     │                                                  Outputs: [wr_item_sk, wr_order_number, wr_return_quantity, wr_return_amt]
+                     │                    └─ Aggregating
+                     │                       │     Group by: {ws_item_sk}
+                     │                       │     Aggregates: expr#sum(coalesce(wr.wr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(wr.wr_return_quantity, 0)), expr#sum(coalesce(ws.ws_quantity, 0)):=AggNull(sum)(expr#coalesce(ws.ws_quantity, 0)), expr#sum(coalesce(wr.wr_return_amt, 0)):=AggNull(sum)(expr#coalesce(wr.wr_return_amt, 0)), expr#sum(coalesce(ws.ws_net_paid, 0)):=AggNull(sum)(expr#coalesce(ws.ws_net_paid, 0))
+                     │                       └─ Projection
+                     │                          │     Expressions: [ws_item_sk], expr#coalesce(wr.wr_return_amt, 0):=coalesce(wr_return_amt, 0), expr#coalesce(wr.wr_return_quantity, 0):=coalesce(wr_return_quantity, 0), expr#coalesce(ws.ws_net_paid, 0):=coalesce(ws_net_paid, 0), expr#coalesce(ws.ws_quantity, 0):=coalesce(ws_quantity, 0)
+                     │                          └─ Inner Join
+                     │                             │     Condition: ws_sold_date_sk == d_date_sk
+                     │                             │     Runtime Filters Builder: {d_date_sk}
+                     │                             ├─ Inner Join
+                     │                             │  │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
+                     │                             │  │     Runtime Filters Builder: {wr_item_sk,wr_order_number}
+                     │                             │  ├─ Projection
+                     │                             │  │  │     Expressions: [ws_item_sk, ws_net_paid, ws_order_number, ws_quantity, ws_sold_date_sk]
+                     │                             │  │  └─ Filter
+                     │                             │  │     │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
+                     │                             │  │     └─ TableScan tpcds1000.web_sales
+                     │                             │  │              Where: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
+                     │                             │  │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_order_number, ws_quantity, ws_net_paid, ws_net_profit]
+                     │                             │  └─ Filter
+                     │                             │     │     Condition: wr_return_amt > 10000.
+                     │                             │     └─ TableScan tpcds1000.web_returns
+                     │                             │              Where: wr_return_amt > 10000.
+                     │                             │              Outputs: [wr_item_sk, wr_order_number, wr_return_quantity, wr_return_amt]
+                     │                             └─ Broadcast Exchange
+                     │                                └─ Projection
+                     │                                   │     Expressions: [d_date_sk]
+                     │                                   └─ Filter
+                     │                                      │     Condition: (d_moy = 12) AND (d_year = 2001)
+                     │                                      └─ TableScan tpcds1000.date_dim
+                     │                                               Where: (d_moy = 12) AND (d_year = 2001)
+                     │                                               Outputs: [d_date_sk, d_year, d_moy]
                      ├─ Aggregating
                      │  │     Group by: {expr#'catalog', cs_item_sk, expr#divide(CAST(sum(coalesce(cr.cr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(cs.cs_quantity, 0)), 'decimal(15, 4)')), expr#rank() OVER (ORDER BY return_ratio ASC)_1, expr#rank() OVER (ORDER BY currency_ratio ASC)_1}
                      │  └─ Projection
@@ -70,40 +67,37 @@ Projection
                      │              └─ Gather Exchange
                      │                 └─ Projection
                      │                    │     Expressions: [cs_item_sk], expr#divide(CAST(sum(coalesce(cr.cr_return_amount, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(cs.cs_net_paid, 0)), 'decimal(15, 4)')):=CAST(`expr#sum(coalesce(cr.cr_return_amount, 0))`, 'decimal(15, 4)') / CAST(`expr#sum(coalesce(cs.cs_net_paid, 0))`, 'decimal(15, 4)'), expr#divide(CAST(sum(coalesce(cr.cr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(cs.cs_quantity, 0)), 'decimal(15, 4)')):=CAST(`expr#sum(coalesce(cr.cr_return_quantity, 0))`, 'decimal(15, 4)') / CAST(`expr#sum(coalesce(cs.cs_quantity, 0))`, 'decimal(15, 4)')
-                     │                    └─ MergingAggregated
-                     │                       └─ Repartition Exchange
-                     │                          │     Partition by: {cs_item_sk}
-                     │                          └─ Aggregating
-                     │                             │     Group by: {cs_item_sk}
-                     │                             │     Aggregates: expr#sum(coalesce(cr.cr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(cr.cr_return_quantity, 0)), expr#sum(coalesce(cs.cs_quantity, 0)):=AggNull(sum)(expr#coalesce(cs.cs_quantity, 0)), expr#sum(coalesce(cr.cr_return_amount, 0)):=AggNull(sum)(expr#coalesce(cr.cr_return_amount, 0)), expr#sum(coalesce(cs.cs_net_paid, 0)):=AggNull(sum)(expr#coalesce(cs.cs_net_paid, 0))
-                     │                             └─ Projection
-                     │                                │     Expressions: [cs_item_sk], expr#coalesce(cr.cr_return_amount, 0):=coalesce(cr_return_amount, 0), expr#coalesce(cr.cr_return_quantity, 0):=coalesce(cr_return_quantity, 0), expr#coalesce(cs.cs_net_paid, 0):=coalesce(cs_net_paid, 0), expr#coalesce(cs.cs_quantity, 0):=coalesce(cs_quantity, 0)
-                     │                                └─ Inner Join
-                     │                                   │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                     │                                   │     Runtime Filters Builder: {cr_item_sk,cr_order_number}
-                     │                                   ├─ Repartition Exchange
-                     │                                   │  │     Partition by: {cs_item_sk, cs_order_number}
-                     │                                   │  └─ Inner Join
-                     │                                   │     │     Condition: cs_sold_date_sk == d_date_sk_1
-                     │                                   │     │     Runtime Filters Builder: {d_date_sk_1}
-                     │                                   │     ├─ Filter
-                     │                                   │     │  │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
-                     │                                   │     │  └─ TableScan tpcds1000.catalog_sales
-                     │                                   │     │           Where: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
-                     │                                   │     │           Outputs: [cs_sold_date_sk, cs_item_sk, cs_order_number, cs_quantity, cs_net_paid, cs_net_profit]
-                     │                                   │     └─ Broadcast Exchange
-                     │                                   │        └─ Filter
-                     │                                   │           │     Condition: (d_year_1 = 2001) AND (d_moy_1 = 12)
-                     │                                   │           └─ TableScan tpcds1000.date_dim
-                     │                                   │                    Where: (d_year = 2001) AND (d_moy = 12)
-                     │                                   │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
-                     │                                   └─ Repartition Exchange
-                     │                                      │     Partition by: {cr_item_sk, cr_order_number}
-                     │                                      └─ Filter
-                     │                                         │     Condition: cr_return_amount > 10000.
-                     │                                         └─ TableScan tpcds1000.catalog_returns
-                     │                                                  Where: cr_return_amount > 10000.
-                     │                                                  Outputs: [cr_item_sk, cr_order_number, cr_return_quantity, cr_return_amount]
+                     │                    └─ Aggregating
+                     │                       │     Group by: {cs_item_sk}
+                     │                       │     Aggregates: expr#sum(coalesce(cr.cr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(cr.cr_return_quantity, 0)), expr#sum(coalesce(cs.cs_quantity, 0)):=AggNull(sum)(expr#coalesce(cs.cs_quantity, 0)), expr#sum(coalesce(cr.cr_return_amount, 0)):=AggNull(sum)(expr#coalesce(cr.cr_return_amount, 0)), expr#sum(coalesce(cs.cs_net_paid, 0)):=AggNull(sum)(expr#coalesce(cs.cs_net_paid, 0))
+                     │                       └─ Projection
+                     │                          │     Expressions: [cs_item_sk], expr#coalesce(cr.cr_return_amount, 0):=coalesce(cr_return_amount, 0), expr#coalesce(cr.cr_return_quantity, 0):=coalesce(cr_return_quantity, 0), expr#coalesce(cs.cs_net_paid, 0):=coalesce(cs_net_paid, 0), expr#coalesce(cs.cs_quantity, 0):=coalesce(cs_quantity, 0)
+                     │                          └─ Inner Join
+                     │                             │     Condition: cs_sold_date_sk == d_date_sk_1
+                     │                             │     Runtime Filters Builder: {d_date_sk_1}
+                     │                             ├─ Inner Join
+                     │                             │  │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
+                     │                             │  │     Runtime Filters Builder: {cr_item_sk,cr_order_number}
+                     │                             │  ├─ Projection
+                     │                             │  │  │     Expressions: [cs_item_sk, cs_net_paid, cs_order_number, cs_quantity, cs_sold_date_sk]
+                     │                             │  │  └─ Filter
+                     │                             │  │     │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
+                     │                             │  │     └─ TableScan tpcds1000.catalog_sales
+                     │                             │  │              Where: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
+                     │                             │  │              Outputs: [cs_sold_date_sk, cs_item_sk, cs_order_number, cs_quantity, cs_net_paid, cs_net_profit]
+                     │                             │  └─ Filter
+                     │                             │     │     Condition: cr_return_amount > 10000.
+                     │                             │     └─ TableScan tpcds1000.catalog_returns
+                     │                             │              Where: cr_return_amount > 10000.
+                     │                             │              Outputs: [cr_item_sk, cr_order_number, cr_return_quantity, cr_return_amount]
+                     │                             └─ Broadcast Exchange
+                     │                                └─ Projection
+                     │                                   │     Expressions: [d_date_sk_1]
+                     │                                   └─ Filter
+                     │                                      │     Condition: (d_moy_1 = 12) AND (d_year_1 = 2001)
+                     │                                      └─ TableScan tpcds1000.date_dim
+                     │                                               Where: (d_moy = 12) AND (d_year = 2001)
+                     │                                               Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                      └─ Aggregating
                         │     Group by: {expr#'store', ss_item_sk, expr#divide(CAST(sum(coalesce(sr.sr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(sts.ss_quantity, 0)), 'decimal(15, 4)')), expr#rank() OVER (ORDER BY return_ratio ASC)_2, expr#rank() OVER (ORDER BY currency_ratio ASC)_2}
                         └─ Projection
@@ -115,38 +109,35 @@ Projection
                                     └─ Gather Exchange
                                        └─ Projection
                                           │     Expressions: [ss_item_sk], expr#divide(CAST(sum(coalesce(sr.sr_return_amt, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(sts.ss_net_paid, 0)), 'decimal(15, 4)')):=CAST(`expr#sum(coalesce(sr.sr_return_amt, 0))`, 'decimal(15, 4)') / CAST(`expr#sum(coalesce(sts.ss_net_paid, 0))`, 'decimal(15, 4)'), expr#divide(CAST(sum(coalesce(sr.sr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(sts.ss_quantity, 0)), 'decimal(15, 4)')):=CAST(`expr#sum(coalesce(sr.sr_return_quantity, 0))`, 'decimal(15, 4)') / CAST(`expr#sum(coalesce(sts.ss_quantity, 0))`, 'decimal(15, 4)')
-                                          └─ MergingAggregated
-                                             └─ Repartition Exchange
-                                                │     Partition by: {ss_item_sk}
-                                                └─ Aggregating
-                                                   │     Group by: {ss_item_sk}
-                                                   │     Aggregates: expr#sum(coalesce(sr.sr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(sr.sr_return_quantity, 0)), expr#sum(coalesce(sts.ss_quantity, 0)):=AggNull(sum)(expr#coalesce(sts.ss_quantity, 0)), expr#sum(coalesce(sr.sr_return_amt, 0)):=AggNull(sum)(expr#coalesce(sr.sr_return_amt, 0)), expr#sum(coalesce(sts.ss_net_paid, 0)):=AggNull(sum)(expr#coalesce(sts.ss_net_paid, 0))
-                                                   └─ Projection
-                                                      │     Expressions: [ss_item_sk], expr#coalesce(sr.sr_return_amt, 0):=coalesce(sr_return_amt, 0), expr#coalesce(sr.sr_return_quantity, 0):=coalesce(sr_return_quantity, 0), expr#coalesce(sts.ss_net_paid, 0):=coalesce(ss_net_paid, 0), expr#coalesce(sts.ss_quantity, 0):=coalesce(ss_quantity, 0)
-                                                      └─ Inner Join
-                                                         │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
-                                                         │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
-                                                         ├─ Repartition Exchange
-                                                         │  │     Partition by: {ss_item_sk, ss_ticket_number}
-                                                         │  └─ Inner Join
-                                                         │     │     Condition: ss_sold_date_sk == d_date_sk_2
-                                                         │     │     Runtime Filters Builder: {d_date_sk_2}
-                                                         │     ├─ Filter
-                                                         │     │  │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
-                                                         │     │  └─ TableScan tpcds1000.store_sales
-                                                         │     │           Where: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
-                                                         │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ticket_number, ss_quantity, ss_net_paid, ss_net_profit]
-                                                         │     └─ Broadcast Exchange
-                                                         │        └─ Filter
-                                                         │           │     Condition: (d_moy_2 = 12) AND (d_year_2 = 2001)
-                                                         │           └─ TableScan tpcds1000.date_dim
-                                                         │                    Where: (d_moy = 12) AND (d_year = 2001)
-                                                         │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
-                                                         └─ Repartition Exchange
-                                                            │     Partition by: {sr_item_sk, sr_ticket_number}
-                                                            └─ Filter
-                                                               │     Condition: sr_return_amt > 10000.
-                                                               └─ TableScan tpcds1000.store_returns
-                                                                        Where: sr_return_amt > 10000.
-                                                                        Outputs: [sr_item_sk, sr_ticket_number, sr_return_quantity, sr_return_amt]
+                                          └─ Aggregating
+                                             │     Group by: {ss_item_sk}
+                                             │     Aggregates: expr#sum(coalesce(sr.sr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(sr.sr_return_quantity, 0)), expr#sum(coalesce(sts.ss_quantity, 0)):=AggNull(sum)(expr#coalesce(sts.ss_quantity, 0)), expr#sum(coalesce(sr.sr_return_amt, 0)):=AggNull(sum)(expr#coalesce(sr.sr_return_amt, 0)), expr#sum(coalesce(sts.ss_net_paid, 0)):=AggNull(sum)(expr#coalesce(sts.ss_net_paid, 0))
+                                             └─ Projection
+                                                │     Expressions: [ss_item_sk], expr#coalesce(sr.sr_return_amt, 0):=coalesce(sr_return_amt, 0), expr#coalesce(sr.sr_return_quantity, 0):=coalesce(sr_return_quantity, 0), expr#coalesce(sts.ss_net_paid, 0):=coalesce(ss_net_paid, 0), expr#coalesce(sts.ss_quantity, 0):=coalesce(ss_quantity, 0)
+                                                └─ Inner Join
+                                                   │     Condition: ss_sold_date_sk == d_date_sk_2
+                                                   │     Runtime Filters Builder: {d_date_sk_2}
+                                                   ├─ Inner Join
+                                                   │  │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                                                   │  │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
+                                                   │  ├─ Projection
+                                                   │  │  │     Expressions: [ss_item_sk, ss_net_paid, ss_quantity, ss_sold_date_sk, ss_ticket_number]
+                                                   │  │  └─ Filter
+                                                   │  │     │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                                                   │  │     └─ TableScan tpcds1000.store_sales
+                                                   │  │              Where: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                                                   │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_ticket_number, ss_quantity, ss_net_paid, ss_net_profit]
+                                                   │  └─ Filter
+                                                   │     │     Condition: sr_return_amt > 10000.
+                                                   │     └─ TableScan tpcds1000.store_returns
+                                                   │              Where: sr_return_amt > 10000.
+                                                   │              Outputs: [sr_item_sk, sr_ticket_number, sr_return_quantity, sr_return_amt]
+                                                   └─ Broadcast Exchange
+                                                      └─ Projection
+                                                         │     Expressions: [d_date_sk_2]
+                                                         └─ Filter
+                                                            │     Condition: (d_year_2 = 2001) AND (d_moy_2 = 12)
+                                                            └─ TableScan tpcds1000.date_dim
+                                                                     Where: (d_year = 2001) AND (d_moy = 12)
+                                                                     Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
 note: Runtime Filter is applied for 9 times.

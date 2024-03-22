@@ -1,0 +1,11 @@
+Insert, alter and drop table.
+1
+1
+1
+1
+Merge would not affect the last_modification_time.
+1
+1
+Recalculate would not affect the correctness.
+1
+1

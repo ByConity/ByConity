@@ -76,7 +76,12 @@ SymbolEquivalencesDeriverVisitor::visitProjectionStep(const ProjectionStep & ste
         revert_identifies[item.second] = item.first;
     }
 
-    return context[0]->translate(revert_identifies);
+    auto equivalences = context[0]->translate(revert_identifies);
+    for (auto & item : identities)
+    {
+        equivalences->add(item.second, item.first);
+    }
+    return equivalences;
 }
 
 SymbolEquivalencesPtr
@@ -89,6 +94,17 @@ SymbolEquivalencesPtr
 SymbolEquivalencesDeriverVisitor::visitExchangeStep(const ExchangeStep &, std::vector<SymbolEquivalencesPtr> & context)
 {
     return context[0];
+}
+
+SymbolEquivalencesPtr
+SymbolEquivalencesDeriverVisitor::visitCTERefStep(const CTERefStep & step, std::vector<SymbolEquivalencesPtr> & context)
+{
+    auto mapping = step.getReverseOutputColumns();
+    if (!context.empty() && context[0])
+    {
+        context[0]->translate(mapping);
+    }
+    return std::make_shared<SymbolEquivalences>();
 }
 
 }

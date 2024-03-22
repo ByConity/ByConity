@@ -102,7 +102,8 @@ public:
     /// and we combine the original delete bitmap and _row_exists when data processing.
     ImmutableDeleteBitmapPtr getDeleteBitmap(bool allow_null = false) const override;
 
-    virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const override;
+    /// it's a no-op because in CNCH, projection parts are uploaded to parent part's data file
+    virtual void projectionRemove(const String &, bool) const override { }
 
     void preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const;
     void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
