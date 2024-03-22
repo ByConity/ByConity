@@ -400,6 +400,8 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
     {
         SimpleMergeSelector::Settings merge_settings;
         /// Override value from table settings
+        auto & config = data.getContext()->getConfigRef();
+        merge_settings.loadFromConfig(config);
         merge_settings.max_parts_to_merge_at_once = data_settings->max_parts_to_merge_at_once;
 
         if (aggressive)
@@ -618,6 +620,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
     else
     {
         SimpleMergeSelector::Settings merge_settings;
+        merge_settings.loadFromConfig(config);
         /// Override value from table settings
         merge_settings.max_parts_to_merge_at_once = std::min(data_settings->cnch_merge_max_parts_to_merge, data_settings->max_parts_to_merge_at_once);
         merge_settings.enable_batch_select = enable_batch_select;
