@@ -239,7 +239,7 @@ void AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr contex
     FindDirectRightVisitor find_deadlock_cte_visitor{plan.getCTEInfo(), logger};
     VisitorUtil::accept<void, const JoinPath>(plan.getPlanNode(), find_deadlock_cte_visitor, JoinPath::RIGHT);
 
-    if (logger && logger->is(Poco::Message::PRIO_DEBUG))
+    if (logger && logger->is(Poco::Message::PRIO_DEBUG) && !find_deadlock_cte_visitor.deadlock_ctes.empty())
     {
         std::ostringstream os;
         for (const auto & cte_id : find_deadlock_cte_visitor.deadlock_ctes)

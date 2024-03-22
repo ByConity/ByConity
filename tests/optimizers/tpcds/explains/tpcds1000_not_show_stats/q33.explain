@@ -56,26 +56,25 @@ Projection
                   │           │                       Outputs: [ca_address_sk, ca_gmt_offset]
                   │           └─ Repartition Exchange
                   │              │     Partition by: {i_item_sk}
-                  │              └─ Inner Join
+                  │              └─ Left Semi Join
                   │                 │     Condition: i_manufact_id == i_manufact_id_1
-                  │                 ├─ Filter
-                  │                 │  │     Condition: isNotNull(i_manufact_id)
-                  │                 │  └─ TableScan tpcds1000.item
-                  │                 │           Where: isNotNull(i_manufact_id)
-                  │                 │           Outputs: [i_item_sk, i_manufact_id]
-                  │                 └─ Broadcast Exchange
-                  │                    └─ MergingAggregated
-                  │                       └─ Repartition Exchange
-                  │                          │     Partition by: {i_manufact_id_1}
-                  │                          └─ Aggregating
-                  │                             │     Group by: {i_manufact_id_1}
-                  │                             └─ Projection
-                  │                                │     Expressions: [i_manufact_id_1]
-                  │                                └─ Filter
-                  │                                   │     Condition: (i_category = 'Electronics') AND isNotNull(i_manufact_id_1)
-                  │                                   └─ TableScan tpcds1000.item
-                  │                                            Where: (i_category = 'Electronics') AND isNotNull(i_manufact_id)
-                  │                                            Outputs: [i_category], i_manufact_id_1:=i_manufact_id
+                  │                 │     Runtime Filters Builder: {i_manufact_id_1}
+                  │                 ├─ Repartition Exchange
+                  │                 │  │     Partition by: {i_manufact_id}
+                  │                 │  └─ Filter
+                  │                 │     │     Condition: Runtime Filters: {i_manufact_id}
+                  │                 │     └─ TableScan tpcds1000.item
+                  │                 │              Where: Runtime Filters: {i_manufact_id}
+                  │                 │              Outputs: [i_item_sk, i_manufact_id]
+                  │                 └─ Repartition Exchange
+                  │                    │     Partition by: {i_manufact_id_1}
+                  │                    └─ Projection
+                  │                       │     Expressions: [i_manufact_id_1]
+                  │                       └─ Filter
+                  │                          │     Condition: i_category = 'Electronics'
+                  │                          └─ TableScan tpcds1000.item
+                  │                                   Where: i_category = 'Electronics'
+                  │                                   Outputs: [i_category], i_manufact_id_1:=i_manufact_id
                   ├─ MergingAggregated
                   │  └─ Repartition Exchange
                   │     │     Partition by: {i_manufact_id_2}
@@ -103,9 +102,9 @@ Projection
                   │           │     │        └─ Projection
                   │           │     │           │     Expressions: [d_date_sk_1]
                   │           │     │           └─ Filter
-                  │           │     │              │     Condition: (d_moy_1 = 5) AND (d_year_1 = 1998)
+                  │           │     │              │     Condition: (d_year_1 = 1998) AND (d_moy_1 = 5)
                   │           │     │              └─ TableScan tpcds1000.date_dim
-                  │           │     │                       Where: (d_moy = 5) AND (d_year = 1998)
+                  │           │     │                       Where: (d_year = 1998) AND (d_moy = 5)
                   │           │     │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                   │           │     └─ Repartition Exchange
                   │           │        │     Partition by: {ca_address_sk_1}
@@ -118,26 +117,25 @@ Projection
                   │           │                       Outputs: ca_address_sk_1:=ca_address_sk, ca_gmt_offset_1:=ca_gmt_offset
                   │           └─ Repartition Exchange
                   │              │     Partition by: {i_item_sk_1}
-                  │              └─ Inner Join
+                  │              └─ Left Semi Join
                   │                 │     Condition: i_manufact_id_2 == i_manufact_id_3
-                  │                 ├─ Filter
-                  │                 │  │     Condition: isNotNull(i_manufact_id_2)
-                  │                 │  └─ TableScan tpcds1000.item
-                  │                 │           Where: isNotNull(i_manufact_id)
-                  │                 │           Outputs: i_item_sk_1:=i_item_sk, i_manufact_id_2:=i_manufact_id
-                  │                 └─ Broadcast Exchange
-                  │                    └─ MergingAggregated
-                  │                       └─ Repartition Exchange
-                  │                          │     Partition by: {i_manufact_id_3}
-                  │                          └─ Aggregating
-                  │                             │     Group by: {i_manufact_id_3}
-                  │                             └─ Projection
-                  │                                │     Expressions: [i_manufact_id_3]
-                  │                                └─ Filter
-                  │                                   │     Condition: (i_category_1 = 'Electronics') AND isNotNull(i_manufact_id_3)
-                  │                                   └─ TableScan tpcds1000.item
-                  │                                            Where: (i_category = 'Electronics') AND isNotNull(i_manufact_id)
-                  │                                            Outputs: i_category_1:=i_category, i_manufact_id_3:=i_manufact_id
+                  │                 │     Runtime Filters Builder: {i_manufact_id_3}
+                  │                 ├─ Repartition Exchange
+                  │                 │  │     Partition by: {i_manufact_id_2}
+                  │                 │  └─ Filter
+                  │                 │     │     Condition: Runtime Filters: {i_manufact_id_2}
+                  │                 │     └─ TableScan tpcds1000.item
+                  │                 │              Where: Runtime Filters: {i_manufact_id}
+                  │                 │              Outputs: i_item_sk_1:=i_item_sk, i_manufact_id_2:=i_manufact_id
+                  │                 └─ Repartition Exchange
+                  │                    │     Partition by: {i_manufact_id_3}
+                  │                    └─ Projection
+                  │                       │     Expressions: [i_manufact_id_3]
+                  │                       └─ Filter
+                  │                          │     Condition: i_category_1 = 'Electronics'
+                  │                          └─ TableScan tpcds1000.item
+                  │                                   Where: i_category = 'Electronics'
+                  │                                   Outputs: i_category_1:=i_category, i_manufact_id_3:=i_manufact_id
                   └─ MergingAggregated
                      └─ Repartition Exchange
                         │     Partition by: {i_manufact_id_4}
@@ -165,9 +163,9 @@ Projection
                               │     │        └─ Projection
                               │     │           │     Expressions: [d_date_sk_2]
                               │     │           └─ Filter
-                              │     │              │     Condition: (d_year_2 = 1998) AND (d_moy_2 = 5)
+                              │     │              │     Condition: (d_moy_2 = 5) AND (d_year_2 = 1998)
                               │     │              └─ TableScan tpcds1000.date_dim
-                              │     │                       Where: (d_year = 1998) AND (d_moy = 5)
+                              │     │                       Where: (d_moy = 5) AND (d_year = 1998)
                               │     │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
                               │     └─ Repartition Exchange
                               │        │     Partition by: {ca_address_sk_2}
@@ -180,24 +178,23 @@ Projection
                               │                       Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
                               └─ Repartition Exchange
                                  │     Partition by: {i_item_sk_2}
-                                 └─ Inner Join
+                                 └─ Left Semi Join
                                     │     Condition: i_manufact_id_4 == i_manufact_id_5
-                                    ├─ Filter
-                                    │  │     Condition: isNotNull(i_manufact_id_4)
-                                    │  └─ TableScan tpcds1000.item
-                                    │           Where: isNotNull(i_manufact_id)
-                                    │           Outputs: i_item_sk_2:=i_item_sk, i_manufact_id_4:=i_manufact_id
-                                    └─ Broadcast Exchange
-                                       └─ MergingAggregated
-                                          └─ Repartition Exchange
-                                             │     Partition by: {i_manufact_id_5}
-                                             └─ Aggregating
-                                                │     Group by: {i_manufact_id_5}
-                                                └─ Projection
-                                                   │     Expressions: [i_manufact_id_5]
-                                                   └─ Filter
-                                                      │     Condition: (i_category_2 = 'Electronics') AND isNotNull(i_manufact_id_5)
-                                                      └─ TableScan tpcds1000.item
-                                                               Where: (i_category = 'Electronics') AND isNotNull(i_manufact_id)
-                                                               Outputs: i_category_2:=i_category, i_manufact_id_5:=i_manufact_id
-note: Runtime Filter is applied for 6 times.
+                                    │     Runtime Filters Builder: {i_manufact_id_5}
+                                    ├─ Repartition Exchange
+                                    │  │     Partition by: {i_manufact_id_4}
+                                    │  └─ Filter
+                                    │     │     Condition: Runtime Filters: {i_manufact_id_4}
+                                    │     └─ TableScan tpcds1000.item
+                                    │              Where: Runtime Filters: {i_manufact_id}
+                                    │              Outputs: i_item_sk_2:=i_item_sk, i_manufact_id_4:=i_manufact_id
+                                    └─ Repartition Exchange
+                                       │     Partition by: {i_manufact_id_5}
+                                       └─ Projection
+                                          │     Expressions: [i_manufact_id_5]
+                                          └─ Filter
+                                             │     Condition: i_category_2 = 'Electronics'
+                                             └─ TableScan tpcds1000.item
+                                                      Where: i_category = 'Electronics'
+                                                      Outputs: i_category_2:=i_category, i_manufact_id_5:=i_manufact_id
+note: Runtime Filter is applied for 9 times.

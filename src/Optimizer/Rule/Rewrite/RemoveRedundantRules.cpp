@@ -385,7 +385,8 @@ TransformResult RemoveRedundantTwoApply::transformImpl(PlanNodePtr node, const C
             first_apply->getApplyType(),
             first_apply->getSubqueryType(),
             first_apply->getAssignment(),
-            first_apply->getOuterColumns());
+            first_apply->getOuterColumns(),
+            first_apply->supportSemiAnti());
         auto new_apply_node = PlanNodeBase::createPlanNode(
             context.context->nextNodeId(), new_apply, {second_apply_left, node->getChildren()[0]->getChildren()[1]});
 

@@ -65,4 +65,17 @@ void registerStorageMockDistributedDistirubted(StorageFactory & factory)
         },
         {.supports_settings = true, .supports_sort_order = true});
 }
+
+inline void tryRegisterStorageMockDistributed()
+{
+    static struct Register
+    {
+        Register()
+        {
+            auto & factory = StorageFactory::instance();
+            registerStorageMockDistributedDistirubted(factory);
+        }
+    } registered;
+}
+
 }

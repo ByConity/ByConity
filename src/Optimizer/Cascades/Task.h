@@ -30,12 +30,25 @@ using OptimizerTaskPtr = std::shared_ptr<OptimizerTask>;
 class OptimizationContext;
 using OptContextPtr = std::shared_ptr<OptimizationContext>;
 
+/*
+ *   OptimizeGroup <-- OptimizeInput
+ *         |                ^
+ *         v                |
+ * OptimizeExpression <-> ApplyRule
+ *         |
+ *         v
+ *    ExploreGroup
+ *        |  ^
+ *        v  |
+ *  ExploreExpression <-> ApplyRule
+ */
 class OptimizerTask : public std::enable_shared_from_this<OptimizerTask>
 {
 public:
-    explicit OptimizerTask(OptContextPtr context_) : context(std::move(context_)) { }
+    explicit OptimizerTask(OptContextPtr context_);
 
     virtual ~OptimizerTask() = default;
+
     /**
      * Function to execute the task
      */
@@ -44,6 +57,7 @@ public:
     void pushTask(const OptimizerTaskPtr & task);
 
     const std::vector<RulePtr> & getTransformationRules() const;
+
     const std::vector<RulePtr> & getImplementationRules() const;
 
     /**
@@ -61,6 +75,7 @@ public:
 
 protected:
     OptContextPtr context;
+    Poco::Logger * log;
 };
 
 class OptimizeGroup : public OptimizerTask
@@ -116,11 +131,36 @@ public:
         : OptimizerTask(context_), group_expr(std::move(group_expr_)) { }
     void execute() override;
 
+/**
+     * Enforce remote exchange and local exchange base on required and actual property, 
+     * then caluclate cost and update group winner.
+     * @param context cost upper bound may be update
+     * @param group_expr group expression to optimize
+     * @param output_prop output property
+     * @param total_cost sum of children cost and group_expr step cost
+     * @param input_props input actual properties
+     * @param cte_common_ancestor cost of the cte need to be calculated
+     * @param actual_intput_cte_props input cte actual properties
+     */
+    static void enforcePropertyAndUpdateWinner(
+        OptContextPtr & context,
+        GroupExprPtr group_expr,
+        Property output_prop,
+        double total_cost,
+        const PropertySet & input_props,
+        const std::set<CTEId> & cte_common_ancestor,
+        const std::vector<std::pair<CTEId, std::pair<Property, double>>> & actual_intput_cte_props);
+
 private:
     /**
      * Determine input properties.
      */
     void initInputProperties();
+
+    /**
+     * Init input properties with cte.
+     */
+    void initPropertiesForCTE(PropertySets & required_properties);
 
     /**
      * Explore input properties. This function may be called repeatedly
@@ -134,6 +174,12 @@ private:
      * @param cte_description property for cte
      */
     void addInputPropertiesForCTE(CTEId id, CTEDescription cte_description);
+
+    /**
+     * Check whether join input properties satisfy the same handle.
+     * If not, correct required input properties will be add into input_properties.
+     */
+    bool checkJoinInputProperties(const PropertySet & requried_input_props, const PropertySet & actual_input_props);
 
     /**
      * GroupExpression to optimize
@@ -161,6 +207,11 @@ private:
     std::set<CTEId> cte_property_enumerated;
 
     /**
+     * Indicate whether cte inline property is enumerated
+     */
+    bool cte_inlined_enumerated = false;
+
+    /**
      * Explored property for CTE
      */
     std::unordered_map<CTEId, std::unordered_set<CTEDescription, CTEDescriptionHash>> explored_cte_properties;
@@ -168,7 +219,7 @@ private:
     /**
      * Current total cost
      */
-    double cur_total_cost;
+    double cur_total_cost = 0;
 
     /**
      * Current stage of enumeration through child groups
@@ -186,10 +237,30 @@ private:
     int cur_prop_pair_idx = 0;
 
     /**
-     * Indicate whether we have already submit optimization task for cte.
-     * it works in the same way as prev_child_idx
+     * Trace elapsed time
      */
-    bool wait_cte_optimization = false;
+    UInt64 elapsed_ns = 0;
+};
+
+class OptimizeCTE : public OptimizerTask
+{
+public:
+    OptimizeCTE(GroupExprPtr group_expr_, const OptContextPtr & context_) : OptimizerTask(context_), group_expr(std::move(group_expr_))
+    {
+    }
+
+    void execute() override;
+
+private:
+    /**
+     * GroupExpression to optimize
+     */
+    GroupExprPtr group_expr;
+
+    /**
+     * Trace elapsed time
+     */
+    UInt64 elapsed_ns = 0;
 };
 
 class ApplyRule : public OptimizerTask

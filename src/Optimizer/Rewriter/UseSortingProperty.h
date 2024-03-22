@@ -25,12 +25,6 @@ private:
     class Rewriter;
 };
 
-struct PlanAndProp
-{
-    PlanNodePtr plan;
-    Property property;
-};
-
 class SortingOrderedSource::Rewriter : public PlanNodeVisitor<PlanAndProp, Void>
 {
 public:

@@ -208,8 +208,8 @@ ASTPtr SymbolMapper::map(const ConstASTPtr & expr)
 Partitioning SymbolMapper::map(const Partitioning & partition)
 {
     return {
-        partition.getPartitioningHandle(),
-        map(partition.getPartitioningColumns()),
+        partition.getHandle(),
+        map(partition.getColumns()),
         partition.isRequireHandle(),
         partition.getBuckets(),
         partition.isEnforceRoundRobin(),
@@ -426,7 +426,8 @@ std::shared_ptr<ApplyStep> SymbolMapper::map(const ApplyStep & apply)
         apply.getApplyType(),
         apply.getSubqueryType(),
         map(apply.getAssignment()),
-        map(apply.getOuterColumns()));
+        map(apply.getOuterColumns()),
+        apply.supportSemiAnti());
 }
 
 std::shared_ptr<ArrayJoinStep> SymbolMapper::map(const ArrayJoinStep & array_join)
@@ -737,7 +738,13 @@ std::shared_ptr<CTERefStep> SymbolMapper::map(const CTERefStep & cte_ref)
 
 std::shared_ptr<ExplainAnalyzeStep> SymbolMapper::map(const ExplainAnalyzeStep & step)
 {
-    return std::make_shared<ExplainAnalyzeStep>(map(step.getInputStreams()[0]), step.getKind(), step.getContext(), step.getQueryPlan(), step.getSetting());
+    return std::make_shared<ExplainAnalyzeStep>(
+        map(step.getInputStreams()[0]), map(step.getOutputName()), step.getKind(), step.getContext(), step.getQueryPlan(), step.getSetting());
+}
+
+std::shared_ptr<LocalExchangeStep> SymbolMapper::map(const LocalExchangeStep & step)
+{
+    return std::make_shared<LocalExchangeStep>(map(step.getInputStreams()[0]), step.getExchangeMode(), map(step.getSchema()));
 }
 
 std::shared_ptr<TableWriteStep> SymbolMapper::map(const TableWriteStep & step)

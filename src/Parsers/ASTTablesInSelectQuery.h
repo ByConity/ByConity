@@ -185,6 +185,7 @@ inline bool isAny(ASTTableJoin::Strictness strictness)  { return strictness == A
 inline bool isSemi(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Semi; }
 inline bool isAnti(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Anti; }
 inline bool isAsof(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Asof; }
+inline bool isUnspecified(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Unspecified; }
 
 String kindToString(ASTTableJoin::Kind kind);
 

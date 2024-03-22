@@ -163,6 +163,7 @@ public:
     MM(Offset, offset) \
     MM(FinishSorting, finish_sorting) \
     MM(TotalsHaving, totals_having) \
+    MM(LocalExchange, local_exchange) \
     MM(MultiJoin, multi_join)
 
 // macro helpers to convert MM(x, y) to M(x)

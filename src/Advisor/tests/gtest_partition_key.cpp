@@ -19,7 +19,7 @@ public:
                         "  name Nullable(String),"
                         "  salary Nullable(Float64),"
                         "  commission Nullable(UInt32)"
-                        ") ENGINE=Memory();");
+                        ") ENGINE=CnchMergeTree() order by empid;");
     }
 
     static std::shared_ptr<BaseWorkloadTest> tester;

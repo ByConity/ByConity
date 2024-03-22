@@ -40,5 +40,6 @@ public:
     SymbolEquivalencesPtr visitProjectionStep(const ProjectionStep & step, std::vector<SymbolEquivalencesPtr> & context) override;
     SymbolEquivalencesPtr visitAggregatingStep(const AggregatingStep & step, std::vector<SymbolEquivalencesPtr> & context) override;
     SymbolEquivalencesPtr visitExchangeStep(const ExchangeStep & step, std::vector<SymbolEquivalencesPtr> & context) override;
+SymbolEquivalencesPtr visitCTERefStep(const CTERefStep & step, std::vector<SymbolEquivalencesPtr> & context) override;
 };
 }

@@ -5,11 +5,11 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {c_last_name ASC NULLS LAST, ss_ticket_number ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 2011127 rows
+      └─ Gather Exchange Est. 1005563 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_last_name ASC NULLS LAST, ss_ticket_number ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 2011127 rows
+            └─ Inner Join Est. 1005563 rows
                │     Condition: ca_address_sk_1 == c_current_addr_sk
                │     Filter: ca_city_1 != ca_city
                │     Runtime Filters Builder: {c_current_addr_sk}
@@ -69,9 +69,9 @@ Projection Est. 100 rows
                                        │  │     └─ Projection Est. 72 rows
                                        │  │        │     Expressions: [d_date_sk]
                                        │  │        └─ Filter Est. 72 rows
-                                       │  │           │     Condition: (d_dom >= 1) AND (d_dom <= 2) AND (d_year IN (1999, 2000, 2001))
+                                       │  │           │     Condition: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
                                        │  │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                       │  │                    Where: (d_dom >= 1) AND (d_dom <= 2) AND (d_year IN (1999, 2000, 2001))
+                                       │  │                    Where: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
                                        │  │                    Outputs: [d_date_sk, d_year, d_dom]
                                        │  └─ Broadcast Exchange Est. 36 rows
                                        │     └─ Projection Est. 36 rows

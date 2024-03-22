@@ -223,8 +223,8 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize
         }
     }
 
-    if (query_plan->getPlanNodeRoot())
-        block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
+    if (query_plan->getPlanNode())
+        block = query_plan->getPlanNode()->getCurrentDataStream().header;
     GraphvizPrinter::printLogicalPlan(*query_plan, context, "3999_final_plan");
     query_plan->addInterpreterContext(context);
     LOG_DEBUG(log, "join order {}", JoinOrderUtils::getJoinOrder(*query_plan));

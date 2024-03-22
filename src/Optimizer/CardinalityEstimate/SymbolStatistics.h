@@ -28,11 +28,11 @@ class SymbolStatistics;
 using SymbolStatisticsPtr = std::shared_ptr<SymbolStatistics>;
 
 // export symbols
-using Statistics::OverlappedRange;
-using Statistics::OverlappedRanges;
 using Statistics::Bucket;
 using Statistics::Buckets;
 using Statistics::Histogram;
+using Statistics::OverlappedRange;
+using Statistics::OverlappedRanges;
 
 namespace Statistics
 {

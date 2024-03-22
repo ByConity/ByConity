@@ -17,6 +17,7 @@
 
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
+#include <Optimizer/Utils.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <QueryPlan/CTEInfo.h>
@@ -80,7 +81,7 @@ std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStep() const
 
 PlanNodePtr CTERefStep::toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context) const
 {
-    auto [plan_node, mappings] = PlanSymbolReallocator::reallocate(cte_info.getCTEDef(id), context);
+    auto rewrite = PlanSymbolReallocator::reallocate(cte_info.getCTEDef(id), context);
 
     // create projection step to guarante output symbols
     NamesAndTypes inputs;
@@ -90,14 +91,13 @@ PlanNodePtr CTERefStep::toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr 
     {
         if (output_columns.contains(item.name))
         {
-            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(mappings.at(output_columns.at(item.name))));
+            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(rewrite.mappings.at(output_columns.at(item.name))));
             name_to_type.emplace(item.name, item.type);
             inputs.emplace_back(NameAndTypePair{output_columns.at(item.name), item.type});
         }
     }
-
     return PlanNodeBase::createPlanNode(
-        context->nextNodeId(), std::make_shared<ProjectionStep>(DataStream{inputs}, assignments, name_to_type), {plan_node});
+        context->nextNodeId(), std::make_shared<ProjectionStep>(DataStream{inputs}, assignments, name_to_type), {rewrite.plan_node});
 }
 
 std::unordered_map<String, String> CTERefStep::getReverseOutputColumns() const

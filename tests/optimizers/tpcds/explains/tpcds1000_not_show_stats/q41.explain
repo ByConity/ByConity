@@ -22,9 +22,9 @@ Projection
                         │  ├─ Projection
                         │  │  │     Expressions: [i_manufact, i_product_name]
                         │  │  └─ Filter
-                        │  │     │     Condition: (i_manufact_id >= 738) AND (i_manufact_id <= 778)
+                        │  │     │     Condition: (i_manufact_id >= 738) AND (i_manufact_id <= cast(778, 'UInt32'))
                         │  │     └─ TableScan tpcds1000.item
-                        │  │              Where: (i_manufact_id >= 738) AND (i_manufact_id <= 778)
+                        │  │              Where: (i_manufact_id >= 738) AND (i_manufact_id <= cast(778, 'UInt32'))
                         │  │              Outputs: [i_manufact_id, i_manufact, i_product_name]
                         │  └─ Broadcast Exchange
                         │     └─ MergingAggregated

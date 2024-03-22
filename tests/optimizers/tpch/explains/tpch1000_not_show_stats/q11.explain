@@ -7,7 +7,7 @@ Projection
          │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) DESC NULLS LAST}
          └─ Inner Join
             │     Condition: 
-            │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')`
+            │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')_1`
             ├─ MergingAggregated
             │  └─ Repartition Exchange
             │     │     Partition by: {ps_partkey}
@@ -46,7 +46,7 @@ Projection
             │                                      Outputs: [n_nationkey, n_name]
             └─ Broadcast Exchange
                └─ Projection
-                  │     Expressions: expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001'):=`expr#sum(multiply(ps_supplycost, ps_availqty))_1` * '0.0001'
+                  │     Expressions: expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')_1:=cast(`expr#sum(multiply(ps_supplycost, ps_availqty))_1` * '0.0001', 'Nullable(Decimal(38, 6))')
                   └─ MergingAggregated
                      └─ Gather Exchange
                         └─ Aggregating

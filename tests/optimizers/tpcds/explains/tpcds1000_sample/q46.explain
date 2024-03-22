@@ -5,11 +5,11 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {c_last_name ASC NULLS LAST, c_first_name ASC NULLS LAST, ca_city_1 ASC NULLS LAST, ca_city ASC NULLS LAST, ss_ticket_number ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 8600232 rows
+      └─ Gather Exchange Est. 4300116 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_last_name ASC NULLS LAST, c_first_name ASC NULLS LAST, ca_city_1 ASC NULLS LAST, ca_city ASC NULLS LAST, ss_ticket_number ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner (PARALLEL_HASH) Join Est. 8600232 rows
+            └─ Inner (PARALLEL_HASH) Join Est. 4300116 rows
                │     Condition: c_current_addr_sk == ca_address_sk_1
                │     Filter: ca_city_1 != ca_city
                ├─ Repartition Exchange Est. 8600232 rows

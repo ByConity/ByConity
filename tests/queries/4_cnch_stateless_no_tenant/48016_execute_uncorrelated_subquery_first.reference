@@ -50,12 +50,6 @@
 3
 4
 5
-1
-2
-2
-3
-4
-5
 Projection Est. ? rows
 │     Expressions: [a, b]
 └─ Sorting Est. ? rows
@@ -101,15 +95,11 @@ Projection Est. ? rows
          │     Order by: {a ASC NULLS LAST}
          └─ TableScan test.uncorrelated Est. ? rows
                   Outputs: [a]
-Projection Est. ? rows
+Projection Est. 0 rows, cost 0.000000e+00
 │     Expressions: [a]
-└─ Sorting Est. ? rows
+└─ Sorting Est. 0 rows, cost 0.000000e+00
    │     Order by: {a ASC NULLS LAST}
-   └─ Gather Exchange Est. ? rows
-      └─ Sorting Est. ? rows
-         │     Order by: {a ASC NULLS LAST}
-         └─ TableScan test.uncorrelated Est. ? rows
-                  Outputs: [a]
+   └─ ReadNothing Est. 0 rows, cost 0.000000e+00
 4
 3
 Projection Est. 1000 rows, cost 2.341600e+02

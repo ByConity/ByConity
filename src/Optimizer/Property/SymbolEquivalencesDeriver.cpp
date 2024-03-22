@@ -96,4 +96,15 @@ SymbolEquivalencesDeriverVisitor::visitExchangeStep(const ExchangeStep &, std::v
     return context[0];
 }
 
+SymbolEquivalencesPtr
+SymbolEquivalencesDeriverVisitor::visitCTERefStep(const CTERefStep & step, std::vector<SymbolEquivalencesPtr> & context)
+{
+    auto mapping = step.getReverseOutputColumns();
+    if (!context.empty() && context[0])
+    {
+        context[0]->translate(mapping);
+    }
+    return std::make_shared<SymbolEquivalences>();
+}
+
 }

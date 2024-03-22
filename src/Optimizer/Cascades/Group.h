@@ -49,18 +49,17 @@ public:
     GroupId getId() const { return id; }
     bool isSimpleChildren() const { return simple_children; }
     bool isTableScan() const { return is_table_scan; }
-    bool isMagic() const { return is_magic; }
     bool isJoinRoot() const { return is_join_root; }
     UInt64 getMaxTableScans() const { return max_table_scans; }
     UInt64 getMaxTableScanRows() const { return max_table_scan_rows; }
 
-    void setMagic(bool is_magic_) { is_magic = is_magic_; }
-
     void addExpression(const GroupExprPtr & expression, CascadesContext & context);
-    double getCostLowerBound() const { return cost_lower_bound; }
-    
     void makeRootJoinInfo(CascadesContext & context);
     void makeRootJoinInfo(GroupExpression & expression, CascadesContext & context);
+
+    double getCostLowerBound(const Property & property) const;
+    void setCostLowerBound(const Property & property, double lower_bound);
+    bool hasOptimized(const Property & property) const;
 
     void deleteExpression(const GroupExprPtr & expression);
     void deleteAllExpression();
@@ -74,9 +73,9 @@ public:
      */
     WinnerPtr getBestExpression(const Property & property_set) const
     {
-        if (lowest_cost_expressions.contains(property_set))
+        if (auto it = lowest_cost_expressions.find(property_set); it != lowest_cost_expressions.end())
         {
-            return lowest_cost_expressions.at(property_set);
+            return it->second;
         }
         throw Exception(
             "Cascades can not build plan, Group " + std::to_string(id) + " " + property_set.toString(), ErrorCodes::PLAN_BUILD_ERROR);
@@ -97,9 +96,18 @@ public:
 
     const std::vector<GroupExprPtr> & getLogicalExpressions() const { return logical_expressions; }
     const std::vector<GroupExprPtr> & getPhysicalExpressions() const { return physical_expressions; }
+    const std::vector<GroupExprPtr> & getLogicalOtherwisePhysicalExpressions() const
+    {
+        if (!logical_expressions.empty())
+            return logical_expressions;
+        if (!physical_expressions.empty())
+            return physical_expressions;
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "cascades group must has at least one logical/physical expression!");
+    }
+
     QueryPlanStepPtr & getStep() const
     {
-        if (logical_expressions.size() == 0)
+        if (logical_expressions.empty())
             return physical_expressions[0]->getStep();
         return logical_expressions[0]->getStep();
     }
@@ -148,7 +156,7 @@ private:
      * Mapping from property requirements to winner
      */
     std::unordered_map<Property, WinnerPtr, PropertyHash> lowest_cost_expressions;
-
+    
     /**
      * Vector of equivalent logical expressions
      */
@@ -162,7 +170,7 @@ private:
     /**
      * Cost Lower Bound
      */
-    double cost_lower_bound = -1;
+    std::unordered_map<Property, double, PropertyHash> cost_lower_bounds;
 
     /**
      * Whether equivalent logical expressions have been explored for this group
@@ -186,7 +194,6 @@ private:
 
     bool simple_children = true;
     bool is_table_scan = false;
-    bool is_magic = false;
     bool is_join_root = false;
     UInt32 join_root_id = 0;
 };

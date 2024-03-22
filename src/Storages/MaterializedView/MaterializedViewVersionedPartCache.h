@@ -21,8 +21,13 @@ public:
     using EntryPtr = std::shared_ptr<Entry>;
 
     struct VersionedPartCacheEntryWeight {
-        size_t operator()(const Entry & /*entry*/) {
-            return 1;
+        size_t operator()(const Entry & entry) {
+            size_t total = entry.version.size();
+            for (const auto & it : entry.kv_cache)
+            {
+                total += it->SpaceUsedLong();
+            }
+            return total;
         }
     };
 
@@ -30,6 +35,11 @@ public:
     {
         static MaterializedViewVersionedPartCache cache_instance;
         return cache_instance;
+    }
+
+    size_t weight() const
+    {
+        return cache.weight();
     }
 
     void setMaxSize(size_t max_size_in_bytes)

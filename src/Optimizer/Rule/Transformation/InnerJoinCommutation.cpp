@@ -29,7 +29,7 @@ PatternPtr InnerJoinCommutation::getPattern() const
 
 TransformResult InnerJoinCommutation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
-    auto join_node = dynamic_cast<JoinNode *>(node.get());
+    auto * join_node = dynamic_cast<JoinNode *>(node.get());
     if (!join_node)
         return {};
 
@@ -38,7 +38,7 @@ TransformResult InnerJoinCommutation::transformImpl(PlanNodePtr node, const Capt
 
 PlanNodePtr InnerJoinCommutation::swap(JoinNode & node, RuleContext & rule_context)
 {
-    auto step = *node.getStep();
+    auto & step = *node.getStep();
     DataStreams streams = {step.getInputStreams()[1], step.getInputStreams()[0]};
     auto join_step = std::make_shared<JoinStep>(
         streams,

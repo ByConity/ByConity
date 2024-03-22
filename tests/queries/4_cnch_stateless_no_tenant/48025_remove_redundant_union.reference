@@ -48,7 +48,7 @@ Projection Est. ? rows
                            │     Partition by: {k1k1k1, k2k2k2, k4k4k4}
                            └─ Aggregating Est. ? rows
                               │     Group by: {k1k1k1, k2k2k2, k4k4k4}
-                              └─ Inner Join Est. ? rows
+                              └─ Left Semi Join Est. ? rows
                                  │     Condition: my_date_3 == expr#max(my_date)_2
                                  ├─ Filter Est. ? rows
                                  │  │     Condition: k4k4k4 = \'XXX\'
@@ -57,14 +57,9 @@ Projection Est. ? rows
                                  │           Outputs: [k1k1k1, k2k2k2, k4k4k4], my_date_3:=my_date
                                  └─ Broadcast Exchange Est. ? rows
                                     └─ MergingAggregated Est. ? rows
-                                       └─ Repartition Exchange Est. ? rows
-                                          │     Partition by: {expr#max(my_date)_2}
+                                       └─ Gather Exchange Est. ? rows
                                           └─ Aggregating Est. ? rows
-                                             │     Group by: {expr#max(my_date)_2}
-                                             └─ MergingAggregated Est. ? rows
-                                                └─ Gather Exchange Est. ? rows
-                                                   └─ Aggregating Est. ? rows
-                                                      │     Group by: {}
-                                                      │     Aggregates: expr#max(my_date)_2:=AggNull(max)(my_date_4)
-                                                      └─ TableScan zx_test.table2 Est. ? rows
-                                                               Outputs: my_date_4:=my_date
+                                             │     Group by: {}
+                                             │     Aggregates: expr#max(my_date)_2:=AggNull(max)(my_date_4)
+                                             └─ TableScan zx_test.table2 Est. ? rows
+                                                      Outputs: my_date_4:=my_date

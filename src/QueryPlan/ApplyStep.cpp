@@ -27,8 +27,19 @@
 namespace DB
 {
 ApplyStep::ApplyStep(
-    DataStreams input_streams_, Names correlation_, ApplyType apply_type_, SubqueryType subquery_type_, Assignment assignment_, NameSet outer_columns_)
-    : correlation(std::move(correlation_)), apply_type(apply_type_), subquery_type(subquery_type_), assignment(std::move(assignment_)), outer_columns(std::move(outer_columns_))
+    DataStreams input_streams_,
+    Names correlation_,
+    ApplyType apply_type_,
+    SubqueryType subquery_type_,
+    Assignment assignment_,
+    NameSet outer_columns_,
+    bool support_semi_anti_)
+    : correlation(std::move(correlation_))
+    , apply_type(apply_type_)
+    , subquery_type(subquery_type_)
+    , assignment(std::move(assignment_))
+    , outer_columns(std::move(outer_columns_))
+    , support_semi_anti(support_semi_anti_)
 {
     setInputStreams(input_streams_);
 }
@@ -80,6 +91,6 @@ QueryPipelinePtr ApplyStep::updatePipeline(QueryPipelines, const BuildQueryPipel
 
 std::shared_ptr<IQueryPlanStep> ApplyStep::copy(ContextPtr) const
 {
-    return std::make_shared<ApplyStep>(input_streams, correlation, apply_type, subquery_type, assignment, outer_columns);
+    return std::make_shared<ApplyStep>(input_streams, correlation, apply_type, subquery_type, assignment, outer_columns, support_semi_anti);
 }
 }

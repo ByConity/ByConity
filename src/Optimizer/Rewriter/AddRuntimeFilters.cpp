@@ -93,7 +93,8 @@ PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::replaceChildre
     PropertySet input_properties)
 {
     node.replaceChildren(children);
-    Property prop = PropertyDeriver::deriveProperty(node.getStep(), input_properties, context);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), input_properties, any_prop, context);
     auto equivalences = SymbolEquivalencesDeriver::deriveEquivalences(node.getStep(), children_equivalences);
     prop = prop.normalize(*equivalences);
     return PlanPropEquivalences{node.shared_from_this(), prop, equivalences};
@@ -103,7 +104,8 @@ PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::visitCTERefNod
 {
     const auto * step = node.getStep().get();
     auto result = cte_helper.accept(step->getId(), *this, c);
-    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, context);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, any_prop, context);
     auto equivalences = SymbolEquivalencesDeriver::deriveEquivalences(node.getStep(), {result.equivalences});
     prop = prop.normalize(*equivalences);
     return {node.shared_from_this(), prop, equivalences};
@@ -111,8 +113,8 @@ PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::visitCTERefNod
 
 static bool isFixedHashShuffleOrBucketTableShuffle(const Property & property)
 {
-    return property.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH
-        || property.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE;
+    return property.getNodePartitioning().getHandle() == Partitioning::Handle::FIXED_HASH
+        || property.getNodePartitioning().getHandle() == Partitioning::Handle::BUCKET_TABLE;
 }
 
 PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(JoinNode & node, Void & c)
@@ -158,7 +160,7 @@ PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(
         Names partition_columns;
         if (!is_broadcast && isFixedHashShuffleOrBucketTableShuffle(left.property))
         {
-            partition_columns = left.property.getNodePartitioning().getPartitioningColumns();
+            partition_columns = left.property.getNodePartitioning().getColumns();
         }
 
         double selectivity;
@@ -207,7 +209,8 @@ PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(
         join.getHints());
 
     PropertySet input_properties{left.property, right.property};
-    Property prop = PropertyDeriver::deriveProperty(node.getStep(), input_properties, context);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), input_properties, any_prop, context);
 
     std::vector<SymbolEquivalencesPtr> children_equivalences{left.equivalences, right.equivalences};
     auto equivalences = SymbolEquivalencesDeriver::deriveEquivalences(node.getStep(), children_equivalences);

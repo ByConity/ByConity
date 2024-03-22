@@ -19,10 +19,10 @@ Projection Est. 1 rows
    │  │  │  │  │  │  │     └─ Aggregating Est. 1 rows
    │  │  │  │  │  │  │        │     Group by: {}
    │  │  │  │  │  │  │        │     Aggregates: expr#count():=AggNull(count)()
-   │  │  │  │  │  │  │        └─ Inner Join Est. 7221893 rows
+   │  │  │  │  │  │  │        └─ Inner Join Est. 7164576 rows
    │  │  │  │  │  │  │           │     Condition: ss_hdemo_sk == hd_demo_sk
    │  │  │  │  │  │  │           │     Runtime Filters Builder: {hd_demo_sk}
-   │  │  │  │  │  │  │           ├─ Inner Join Est. 27687770 rows
+   │  │  │  │  │  │  │           ├─ Inner Join Est. 27468025 rows
    │  │  │  │  │  │  │           │  │     Condition: ss_store_sk == s_store_sk
    │  │  │  │  │  │  │           │  │     Runtime Filters Builder: {s_store_sk}
    │  │  │  │  │  │  │           │  ├─ Inner Join Est. 110091848 rows
@@ -41,10 +41,10 @@ Projection Est. 1 rows
    │  │  │  │  │  │  │           │  │           └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
    │  │  │  │  │  │  │           │  │                    Where: (t_hour = 8) AND (t_minute >= 30)
    │  │  │  │  │  │  │           │  │                    Outputs: [t_time_sk, t_hour, t_minute]
-   │  │  │  │  │  │  │           │  └─ Broadcast Exchange Est. 126 rows
-   │  │  │  │  │  │  │           │     └─ Projection Est. 126 rows
+   │  │  │  │  │  │  │           │  └─ Broadcast Exchange Est. 125 rows
+   │  │  │  │  │  │  │           │     └─ Projection Est. 125 rows
    │  │  │  │  │  │  │           │        │     Expressions: [s_store_sk]
-   │  │  │  │  │  │  │           │        └─ Filter Est. 126 rows
+   │  │  │  │  │  │  │           │        └─ Filter Est. 125 rows
    │  │  │  │  │  │  │           │           │     Condition: s_store_name = 'ese'
    │  │  │  │  │  │  │           │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
    │  │  │  │  │  │  │           │                    Where: s_store_name = 'ese'
@@ -63,10 +63,10 @@ Projection Est. 1 rows
    │  │  │  │  │  │           └─ Aggregating Est. 1 rows
    │  │  │  │  │  │              │     Group by: {}
    │  │  │  │  │  │              │     Aggregates: expr#count()_1:=AggNull(count)()
-   │  │  │  │  │  │              └─ Inner Join Est. 7464103 rows
+   │  │  │  │  │  │              └─ Inner Join Est. 7404864 rows
    │  │  │  │  │  │                 │     Condition: ss_hdemo_sk_1 == hd_demo_sk_1
    │  │  │  │  │  │                 │     Runtime Filters Builder: {hd_demo_sk_1}
-   │  │  │  │  │  │                 ├─ Inner Join Est. 28616370 rows
+   │  │  │  │  │  │                 ├─ Inner Join Est. 28389256 rows
    │  │  │  │  │  │                 │  │     Condition: ss_store_sk_1 == s_store_sk_1
    │  │  │  │  │  │                 │  │     Runtime Filters Builder: {s_store_sk_1}
    │  │  │  │  │  │                 │  ├─ Inner Join Est. 113784141 rows
@@ -85,10 +85,10 @@ Projection Est. 1 rows
    │  │  │  │  │  │                 │  │           └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
    │  │  │  │  │  │                 │  │                    Where: (t_hour = 9) AND (t_minute < 30)
    │  │  │  │  │  │                 │  │                    Outputs: t_time_sk_1:=t_time_sk, t_hour_1:=t_hour, t_minute_1:=t_minute
-   │  │  │  │  │  │                 │  └─ Broadcast Exchange Est. 126 rows
-   │  │  │  │  │  │                 │     └─ Projection Est. 126 rows
+   │  │  │  │  │  │                 │  └─ Broadcast Exchange Est. 125 rows
+   │  │  │  │  │  │                 │     └─ Projection Est. 125 rows
    │  │  │  │  │  │                 │        │     Expressions: [s_store_sk_1]
-   │  │  │  │  │  │                 │        └─ Filter Est. 126 rows
+   │  │  │  │  │  │                 │        └─ Filter Est. 125 rows
    │  │  │  │  │  │                 │           │     Condition: s_store_name_1 = 'ese'
    │  │  │  │  │  │                 │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
    │  │  │  │  │  │                 │                    Where: s_store_name = 'ese'
@@ -107,10 +107,10 @@ Projection Est. 1 rows
    │  │  │  │  │           └─ Aggregating Est. 1 rows
    │  │  │  │  │              │     Group by: {}
    │  │  │  │  │              │     Aggregates: expr#count()_2:=AggNull(count)()
-   │  │  │  │  │              └─ Inner Join Est. 7221893 rows
+   │  │  │  │  │              └─ Inner Join Est. 7164576 rows
    │  │  │  │  │                 │     Condition: ss_hdemo_sk_2 == hd_demo_sk_2
    │  │  │  │  │                 │     Runtime Filters Builder: {hd_demo_sk_2}
-   │  │  │  │  │                 ├─ Inner Join Est. 27687770 rows
+   │  │  │  │  │                 ├─ Inner Join Est. 27468025 rows
    │  │  │  │  │                 │  │     Condition: ss_store_sk_2 == s_store_sk_2
    │  │  │  │  │                 │  │     Runtime Filters Builder: {s_store_sk_2}
    │  │  │  │  │                 │  ├─ Inner Join Est. 110091848 rows
@@ -129,10 +129,10 @@ Projection Est. 1 rows
    │  │  │  │  │                 │  │           └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
    │  │  │  │  │                 │  │                    Where: (t_hour = 9) AND (t_minute >= 30)
    │  │  │  │  │                 │  │                    Outputs: t_time_sk_2:=t_time_sk, t_hour_2:=t_hour, t_minute_2:=t_minute
-   │  │  │  │  │                 │  └─ Broadcast Exchange Est. 126 rows
-   │  │  │  │  │                 │     └─ Projection Est. 126 rows
+   │  │  │  │  │                 │  └─ Broadcast Exchange Est. 125 rows
+   │  │  │  │  │                 │     └─ Projection Est. 125 rows
    │  │  │  │  │                 │        │     Expressions: [s_store_sk_2]
-   │  │  │  │  │                 │        └─ Filter Est. 126 rows
+   │  │  │  │  │                 │        └─ Filter Est. 125 rows
    │  │  │  │  │                 │           │     Condition: s_store_name_2 = 'ese'
    │  │  │  │  │                 │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
    │  │  │  │  │                 │                    Where: s_store_name = 'ese'
@@ -151,10 +151,10 @@ Projection Est. 1 rows
    │  │  │  │           └─ Aggregating Est. 1 rows
    │  │  │  │              │     Group by: {}
    │  │  │  │              │     Aggregates: expr#count()_3:=AggNull(count)()
-   │  │  │  │              └─ Inner Join Est. 7464103 rows
+   │  │  │  │              └─ Inner Join Est. 7404864 rows
    │  │  │  │                 │     Condition: ss_hdemo_sk_3 == hd_demo_sk_3
    │  │  │  │                 │     Runtime Filters Builder: {hd_demo_sk_3}
-   │  │  │  │                 ├─ Inner Join Est. 28616370 rows
+   │  │  │  │                 ├─ Inner Join Est. 28389256 rows
    │  │  │  │                 │  │     Condition: ss_store_sk_3 == s_store_sk_3
    │  │  │  │                 │  │     Runtime Filters Builder: {s_store_sk_3}
    │  │  │  │                 │  ├─ Inner Join Est. 113784141 rows
@@ -173,10 +173,10 @@ Projection Est. 1 rows
    │  │  │  │                 │  │           └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
    │  │  │  │                 │  │                    Where: (t_hour = 10) AND (t_minute < 30)
    │  │  │  │                 │  │                    Outputs: t_time_sk_3:=t_time_sk, t_hour_3:=t_hour, t_minute_3:=t_minute
-   │  │  │  │                 │  └─ Broadcast Exchange Est. 126 rows
-   │  │  │  │                 │     └─ Projection Est. 126 rows
+   │  │  │  │                 │  └─ Broadcast Exchange Est. 125 rows
+   │  │  │  │                 │     └─ Projection Est. 125 rows
    │  │  │  │                 │        │     Expressions: [s_store_sk_3]
-   │  │  │  │                 │        └─ Filter Est. 126 rows
+   │  │  │  │                 │        └─ Filter Est. 125 rows
    │  │  │  │                 │           │     Condition: s_store_name_3 = 'ese'
    │  │  │  │                 │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
    │  │  │  │                 │                    Where: s_store_name = 'ese'
@@ -195,10 +195,10 @@ Projection Est. 1 rows
    │  │  │           └─ Aggregating Est. 1 rows
    │  │  │              │     Group by: {}
    │  │  │              │     Aggregates: expr#count()_4:=AggNull(count)()
-   │  │  │              └─ Inner Join Est. 7221893 rows
+   │  │  │              └─ Inner Join Est. 7164576 rows
    │  │  │                 │     Condition: ss_hdemo_sk_4 == hd_demo_sk_4
    │  │  │                 │     Runtime Filters Builder: {hd_demo_sk_4}
-   │  │  │                 ├─ Inner Join Est. 27687770 rows
+   │  │  │                 ├─ Inner Join Est. 27468025 rows
    │  │  │                 │  │     Condition: ss_store_sk_4 == s_store_sk_4
    │  │  │                 │  │     Runtime Filters Builder: {s_store_sk_4}
    │  │  │                 │  ├─ Inner Join Est. 110091848 rows
@@ -217,10 +217,10 @@ Projection Est. 1 rows
    │  │  │                 │  │           └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
    │  │  │                 │  │                    Where: (t_hour = 10) AND (t_minute >= 30)
    │  │  │                 │  │                    Outputs: t_time_sk_4:=t_time_sk, t_hour_4:=t_hour, t_minute_4:=t_minute
-   │  │  │                 │  └─ Broadcast Exchange Est. 126 rows
-   │  │  │                 │     └─ Projection Est. 126 rows
+   │  │  │                 │  └─ Broadcast Exchange Est. 125 rows
+   │  │  │                 │     └─ Projection Est. 125 rows
    │  │  │                 │        │     Expressions: [s_store_sk_4]
-   │  │  │                 │        └─ Filter Est. 126 rows
+   │  │  │                 │        └─ Filter Est. 125 rows
    │  │  │                 │           │     Condition: s_store_name_4 = 'ese'
    │  │  │                 │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
    │  │  │                 │                    Where: s_store_name = 'ese'
@@ -239,10 +239,10 @@ Projection Est. 1 rows
    │  │           └─ Aggregating Est. 1 rows
    │  │              │     Group by: {}
    │  │              │     Aggregates: expr#count()_5:=AggNull(count)()
-   │  │              └─ Inner Join Est. 7464103 rows
+   │  │              └─ Inner Join Est. 7404864 rows
    │  │                 │     Condition: ss_hdemo_sk_5 == hd_demo_sk_5
    │  │                 │     Runtime Filters Builder: {hd_demo_sk_5}
-   │  │                 ├─ Inner Join Est. 28616370 rows
+   │  │                 ├─ Inner Join Est. 28389256 rows
    │  │                 │  │     Condition: ss_store_sk_5 == s_store_sk_5
    │  │                 │  │     Runtime Filters Builder: {s_store_sk_5}
    │  │                 │  ├─ Inner Join Est. 113784141 rows
@@ -261,10 +261,10 @@ Projection Est. 1 rows
    │  │                 │  │           └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
    │  │                 │  │                    Where: (t_hour = 11) AND (t_minute < 30)
    │  │                 │  │                    Outputs: t_time_sk_5:=t_time_sk, t_hour_5:=t_hour, t_minute_5:=t_minute
-   │  │                 │  └─ Broadcast Exchange Est. 126 rows
-   │  │                 │     └─ Projection Est. 126 rows
+   │  │                 │  └─ Broadcast Exchange Est. 125 rows
+   │  │                 │     └─ Projection Est. 125 rows
    │  │                 │        │     Expressions: [s_store_sk_5]
-   │  │                 │        └─ Filter Est. 126 rows
+   │  │                 │        └─ Filter Est. 125 rows
    │  │                 │           │     Condition: s_store_name_5 = 'ese'
    │  │                 │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
    │  │                 │                    Where: s_store_name = 'ese'
@@ -283,10 +283,10 @@ Projection Est. 1 rows
    │           └─ Aggregating Est. 1 rows
    │              │     Group by: {}
    │              │     Aggregates: expr#count()_6:=AggNull(count)()
-   │              └─ Inner Join Est. 7221893 rows
+   │              └─ Inner Join Est. 7164576 rows
    │                 │     Condition: ss_hdemo_sk_6 == hd_demo_sk_6
    │                 │     Runtime Filters Builder: {hd_demo_sk_6}
-   │                 ├─ Inner Join Est. 27687770 rows
+   │                 ├─ Inner Join Est. 27468025 rows
    │                 │  │     Condition: ss_store_sk_6 == s_store_sk_6
    │                 │  │     Runtime Filters Builder: {s_store_sk_6}
    │                 │  ├─ Inner Join Est. 110091848 rows
@@ -305,10 +305,10 @@ Projection Est. 1 rows
    │                 │  │           └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
    │                 │  │                    Where: (t_hour = 11) AND (t_minute >= 30)
    │                 │  │                    Outputs: t_time_sk_6:=t_time_sk, t_hour_6:=t_hour, t_minute_6:=t_minute
-   │                 │  └─ Broadcast Exchange Est. 126 rows
-   │                 │     └─ Projection Est. 126 rows
+   │                 │  └─ Broadcast Exchange Est. 125 rows
+   │                 │     └─ Projection Est. 125 rows
    │                 │        │     Expressions: [s_store_sk_6]
-   │                 │        └─ Filter Est. 126 rows
+   │                 │        └─ Filter Est. 125 rows
    │                 │           │     Condition: s_store_name_6 = 'ese'
    │                 │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
    │                 │                    Where: s_store_name = 'ese'
@@ -327,10 +327,10 @@ Projection Est. 1 rows
             └─ Aggregating Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#count()_7:=AggNull(count)()
-               └─ Inner Join Est. 7464103 rows
+               └─ Inner Join Est. 7404864 rows
                   │     Condition: ss_hdemo_sk_7 == hd_demo_sk_7
                   │     Runtime Filters Builder: {hd_demo_sk_7}
-                  ├─ Inner Join Est. 28616370 rows
+                  ├─ Inner Join Est. 28389256 rows
                   │  │     Condition: ss_store_sk_7 == s_store_sk_7
                   │  │     Runtime Filters Builder: {s_store_sk_7}
                   │  ├─ Inner Join Est. 113784141 rows
@@ -349,10 +349,10 @@ Projection Est. 1 rows
                   │  │           └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
                   │  │                    Where: (t_hour = 12) AND (t_minute < 30)
                   │  │                    Outputs: t_time_sk_7:=t_time_sk, t_hour_7:=t_hour, t_minute_7:=t_minute
-                  │  └─ Broadcast Exchange Est. 126 rows
-                  │     └─ Projection Est. 126 rows
+                  │  └─ Broadcast Exchange Est. 125 rows
+                  │     └─ Projection Est. 125 rows
                   │        │     Expressions: [s_store_sk_7]
-                  │        └─ Filter Est. 126 rows
+                  │        └─ Filter Est. 125 rows
                   │           │     Condition: s_store_name_7 = 'ese'
                   │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
                   │                    Where: s_store_name = 'ese'

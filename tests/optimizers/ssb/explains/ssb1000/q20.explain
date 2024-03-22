@@ -1,19 +1,19 @@
-Projection Est. 86 rows
+Projection Est. 5 rows
 │     Expressions: [C_NATION, S_NATION], revenue:=`expr#sum(LO_REVENUE)`, year:=`expr#toYear(LO_ORDERDATE)`
-└─ Sorting Est. 86 rows
+└─ Sorting Est. 5 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-   └─ Gather Exchange Est. 86 rows
-      └─ Sorting Est. 86 rows
+   └─ Gather Exchange Est. 5 rows
+      └─ Sorting Est. 5 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-         └─ MergingAggregated Est. 86 rows
-            └─ Repartition Exchange Est. 86 rows
+         └─ MergingAggregated Est. 5 rows
+            └─ Repartition Exchange Est. 5 rows
                │     Partition by: {C_NATION, S_NATION, expr#toYear(LO_ORDERDATE)}
-               └─ Aggregating Est. 86 rows
+               └─ Aggregating Est. 5 rows
                   │     Group by: {C_NATION, S_NATION, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 240035897 rows
+                  └─ Projection Est. 15002243 rows
                      │     Expressions: [C_NATION, LO_REVENUE, S_NATION], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Filter Est. 240035897 rows
+                     └─ Filter Est. 15002243 rows
                         │     Condition: (C_REGION = 'ASIA') AND (S_REGION = 'ASIA') AND (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997)
                         └─ TableScan ssb1000.lineorder_flat Est. 5999989813 rows
                                  Where: (C_REGION = 'ASIA') AND (S_REGION = 'ASIA') AND (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997)

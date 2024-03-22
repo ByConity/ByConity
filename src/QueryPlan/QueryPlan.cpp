@@ -844,7 +844,7 @@ void QueryPlan::fromProtoTreeLike(const Protos::QueryPlan & proto)
         this->cte_info.add(cte_id, id_to_plan.at(plan_id));
     }
     auto root_id = proto.root_id();
-    this->setPlanNodeRoot(id_to_plan.at(root_id));
+    this->setPlanNode(id_to_plan.at(root_id));
 }
 
 // TODO: deprecate when proto rpc is ready

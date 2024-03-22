@@ -1,17 +1,17 @@
-Projection Est. 47799 rows
+Projection Est. 47681 rows
 │     Expressions: [t_hour, t_minute], brand:=i_brand, brand_id:=i_brand_id, ext_price:=`expr#sum(ext_price)`
-└─ Sorting Est. 47799 rows
+└─ Sorting Est. 47681 rows
    │     Order by: {expr#sum(ext_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
-   └─ Gather Exchange Est. 47799 rows
-      └─ Sorting Est. 47799 rows
+   └─ Gather Exchange Est. 47681 rows
+      └─ Sorting Est. 47681 rows
          │     Order by: {expr#sum(ext_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
-         └─ MergingAggregated Est. 47799 rows
-            └─ Repartition Exchange Est. 47799 rows
+         └─ MergingAggregated Est. 47681 rows
+            └─ Repartition Exchange Est. 47681 rows
                │     Partition by: {i_brand, i_brand_id, t_hour, t_minute}
-               └─ Aggregating Est. 47799 rows
+               └─ Aggregating Est. 47681 rows
                   │     Group by: {i_brand, i_brand_id, t_hour, t_minute}
                   │     Aggregates: expr#sum(ext_price):=AggNull(sum)(ws_ext_sales_price_1)
-                  └─ Inner Join Est. 47799 rows
+                  └─ Inner Join Est. 47681 rows
                      │     Condition: t_time_sk == ws_sold_time_sk_1
                      │     Runtime Filters Builder: {ws_sold_time_sk_1}
                      ├─ Repartition Exchange Est. 60479 rows
@@ -23,9 +23,9 @@ Projection Est. 47799 rows
                      │        └─ TableScan tpcds100.time_dim Est. 86400 rows
                      │                 Where: t_meal_time IN ('breakfast', 'dinner') Runtime Filters: {t_time_sk}
                      │                 Outputs: [t_time_sk, t_hour, t_minute, t_meal_time]
-                     └─ Repartition Exchange Est. 47799 rows
+                     └─ Repartition Exchange Est. 47681 rows
                         │     Partition by: {ws_sold_time_sk_1}
-                        └─ Inner Join Est. 47799 rows
+                        └─ Inner Join Est. 47681 rows
                            │     Condition: ws_item_sk_1 == i_item_sk
                            │     Runtime Filters Builder: {i_item_sk}
                            ├─ Union Est. 8001258 rows
@@ -78,12 +78,11 @@ Projection Est. 47799 rows
                            │              └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │                       Where: (d_year = 1999) AND (d_moy = 11)
                            │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
-                           └─ Broadcast Exchange Est. 3657 rows
-                              └─ Projection Est. 3657 rows
-                                 │     Expressions: [i_brand, i_brand_id, i_item_sk]
-                                 └─ Filter Est. 3657 rows
-                                    │     Condition: i_manager_id = 1
-                                    └─ TableScan tpcds100.item Est. 204000 rows
-                                             Where: i_manager_id = 1
-                                             Outputs: [i_item_sk, i_brand_id, i_brand, i_manager_id]
+                           └─ Projection Est. 3647 rows
+                              │     Expressions: [i_brand, i_brand_id, i_item_sk]
+                              └─ Filter Est. 3647 rows
+                                 │     Condition: i_manager_id = 1
+                                 └─ TableScan tpcds100.item Est. 204000 rows
+                                          Where: i_manager_id = 1
+                                          Outputs: [i_item_sk, i_brand_id, i_brand, i_manager_id]
 note: Runtime Filter is applied for 7 times.

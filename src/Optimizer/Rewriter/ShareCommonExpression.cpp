@@ -163,7 +163,7 @@ namespace
     std::optional<int> FindSharableExpressionASTVisitor::visitASTFunction(ASTPtr & node, const Void & context)
     {
         auto & function = node->as<ASTFunction &>();
-        if (RuntimeFilterUtils::isInternalRuntimeFilter(node) || !ctx->isFunctionDeterministic(function.name))
+        if (RuntimeFilterUtils::isInternalRuntimeFilter(node) || ctx->isNonDeterministicFunction(function.name))
             return {};
 
         int complexity = 1; // complexity for this node

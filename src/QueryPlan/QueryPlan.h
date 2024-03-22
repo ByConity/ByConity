@@ -156,10 +156,8 @@ public:
 
     Node * getRoot() { return root; }
     const Node * getRoot() const { return root; }
-    PlanNodePtr getPlanNodeRoot() const { return plan_node; }
-    void setRoot(Node * root_) { root = root_; }
-    void setPlanNodeRoot(PlanNodePtr plan_node_) { plan_node = plan_node_; }
-    CTENodes & getCTENodes() { return cte_nodes; }
+        void setRoot(Node * root_) { root = root_; }
+        CTENodes & getCTENodes() { return cte_nodes; }
 
     Node * getLastNode() { return &nodes.back(); }
 
@@ -168,13 +166,14 @@ public:
     void addRoot(QueryPlan::Node && node_);
     UInt32 newPlanNodeId() { return (*max_node_id)++; }
     PlanNodePtr & getPlanNode() { return plan_node; }
+    PlanNodePtr getPlanNode() const { return plan_node; }
+    void setPlanNode(PlanNodePtr new_plan_node) { plan_node = std::move(new_plan_node); }
     CTEInfo & getCTEInfo() { return cte_info; }
-    PlanNodePtr getPlanNodeById(PlanNodeId node_id) const;
     const CTEInfo & getCTEInfo() const { return cte_info; }
+    PlanNodePtr getPlanNodeById(PlanNodeId node_id) const;
+    static UInt32 getPlanNodeCount(PlanNodePtr node);
 
     QueryPlan getSubPlan(QueryPlan::Node * node_);
-
-    static UInt32 getPlanNodeCount(PlanNodePtr node);
 
     void toProto(Protos::QueryPlan & proto) const;
     void fromProto(const Protos::QueryPlan & proto);
