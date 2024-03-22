@@ -432,8 +432,8 @@ public:
     void clearParts(const StoragePtr & table, const CommitItems & commit_data);
 
     /// write undo buffer before write vfs
-    void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, const UndoResources & resources);
-    void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, UndoResources && resources);
+    void writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, const UndoResources & resources);
+    void writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, UndoResources && resources);
 
     /// clear undo buffer
     void clearUndoBuffer(const TxnTimestamp & txnID);

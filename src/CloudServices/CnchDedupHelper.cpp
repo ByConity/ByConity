@@ -36,10 +36,6 @@ static void checkDedupScope(const DedupScope & scope, const MergeTreeMetaBase & 
 std::vector<LockInfoPtr>
 getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTreeMetaBase & storage, UInt64 timeout_ms)
 {
-    /// Attention: must make sure that storage has right UUID, it's important.
-    if (storage.getStorageUUID() == UUIDHelpers::Nil)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unique table {} doesn't have UUID, it's a bug!", storage.getStorageID().getNameForLogs());
-
     checkDedupScope(scope, storage);
 
     std::vector<LockInfoPtr> res;
@@ -53,7 +49,7 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
                 /// TODO: (lta, zuochuang.zema) use a separated prefix.
-                lock_info->setUUIDAndPrefix(storage.getStorageUUID());
+                lock_info->setUUIDAndPrefix(storage.getCnchStorageUUID());
                 lock_info->setBucket(bucket);
                 res.push_back(std::move(lock_info));
             }
@@ -63,7 +59,7 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
             auto lock_info = std::make_shared<LockInfo>(txn_id);
             lock_info->setMode(LockMode::X);
             lock_info->setTimeout(timeout_ms);
-            lock_info->setUUIDAndPrefix(storage.getStorageUUID());
+            lock_info->setUUIDAndPrefix(storage.getCnchStorageUUID());
             res.push_back(std::move(lock_info));
         }
     }
@@ -76,7 +72,7 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
                 auto lock_info = std::make_shared<LockInfo>(txn_id);
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
-                lock_info->setUUIDAndPrefix(storage.getStorageUUID());
+                lock_info->setUUIDAndPrefix(storage.getCnchStorageUUID());
                 lock_info->setPartition(bucket_with_partition.first);
                 lock_info->setBucket(bucket_with_partition.second);
                 res.push_back(std::move(lock_info));
@@ -89,7 +85,7 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
                 auto lock_info = std::make_shared<LockInfo>(txn_id);
                 lock_info->setMode(LockMode::X);
                 lock_info->setTimeout(timeout_ms);
-                lock_info->setUUIDAndPrefix(storage.getStorageUUID());
+                lock_info->setUUIDAndPrefix(storage.getCnchStorageUUID());
                 lock_info->setPartition(partition);
                 res.push_back(std::move(lock_info));
             }
