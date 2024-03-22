@@ -206,7 +206,7 @@ private:
         const ActionsDAGPtr & sorting_key_prefix_expr,
         ActionsDAGPtr & out_projection,
         const InputOrderInfoPtr & input_order_info,
-        bool force_preliminary_merge = false);
+        bool * has_do_preliminary_merge = nullptr);
 
     Pipe spreadMarkRangesAmongStreamsWithPartitionOrder(
         RangesInDataParts && parts_with_ranges,

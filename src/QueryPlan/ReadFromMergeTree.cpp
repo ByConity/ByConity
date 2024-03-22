@@ -543,17 +543,30 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
         sort_description.emplace_back(storage_snapshot->metadata->getSortingKey().column_names[j],
                                         input_order_info->direction, 1);
 
+    sort_description.emplace_back(storage_snapshot->metadata->getSortingKey().column_names[j],
+
     Pipes pipes;
     for (auto & partition: partition_ranges)
     {
+        bool has_do_preliminary_merge = false;
         auto pipe = spreadMarkRangesAmongStreamsWithOrder(
             std::move(partition.second),
             column_names,
             sorting_key_prefix_expr,
             out_projection,
             input_order_info,
-            true /*force_preliminary_merge*/
+            &has_do_preliminary_merge
         );
+        if (!has_do_preliminary_merge)
+        {
+            /// Drop temporary columns, added by 'sorting_key_prefix_expr'
+            out_projection = createProjection(pipe.getHeader());
+
+            pipe.addSimpleTransform([sorting_key_expr](const Block & header)
+            {
+                return std::make_shared<ExpressionTransform>(header, sorting_key_expr);
+            });
+        }
         if (pipe.numOutputPorts() > 1)
         {
             auto transform = std::make_shared<MergingSortedTransform>(
@@ -580,7 +593,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
     const ActionsDAGPtr & sorting_key_prefix_expr,
     ActionsDAGPtr & out_projection,
     const InputOrderInfoPtr & input_order_info,
-    bool force_preliminary_merge)
+    bool * has_do_preliminary_merge)
 {
     const auto & settings = context->getSettingsRef();
     const auto data_settings = data.getSettings();
@@ -713,8 +726,11 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
                            requested_num_streams, info.min_marks_for_concurrent_read, info.use_uncompressed_cache));
     }
 
-    if (need_preliminary_merge || force_preliminary_merge)
+    if (need_preliminary_merge)
     {
+        if (has_do_preliminary_merge)
+            *has_do_preliminary_merge = true;
+
         SortDescription sort_description;
         for (size_t j = 0; j < input_order_info->order_key_prefix_descr.size(); ++j)
             sort_description.emplace_back(storage_snapshot->metadata->getSortingKey().column_names[j],
