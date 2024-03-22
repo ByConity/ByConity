@@ -657,7 +657,8 @@ public:
      * @brief Recalculate the trash items metrics (table level) data of a table from metastore.
      * This is designed to be called when recalculation happens.
      */
-    TableMetrics::TableMetricsData getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, TxnTimestamp ts);
+    TableMetrics::TableMetricsData
+    getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, TxnTimestamp ts, std::function<bool()> need_abort);
     /**
      * @brief load a trash items (table level) snapshot from metastore.
      * It's designed to initialize trash items metrics.

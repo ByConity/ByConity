@@ -59,6 +59,8 @@ public:
         bool validateMetrics() const;
         void update(const ServerDataPartPtr & part, size_t ts, bool positive = true);
         void update(const DeleteBitmapMetaPtr & bitmap, size_t ts, bool positive = true);
+        void update(const Protos::DataModelPart & part, size_t ts, bool positive = true);
+        void update(const Protos::DataModelDeleteBitmap & bitmap, size_t ts, bool positive = true);
         bool matches(const TableMetricsData & rhs) const;
     };
 
