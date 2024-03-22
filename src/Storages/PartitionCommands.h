@@ -116,6 +116,7 @@ struct PartitionCommand
     {
         DISK,
         VOLUME,
+        BYTECOOL,
         TABLE,
         SHARD,
     };

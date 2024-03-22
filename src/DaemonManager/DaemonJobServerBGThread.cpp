@@ -1158,6 +1158,7 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::ObjectSchemaAssemble, isCnchMergeTree>>("OBJECT_SCHEMA_ASSEMBLE");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::MaterializedMySQL, isMaterializedMySQL>>("MATERIALIZED_MYSQL");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::CnchRefreshMaterializedView, isCnchRefreshMaterializedView>>("CNCH_REFRESH_MATERIALIZED_VIEW");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::PartMover, isCnchMergeTree>>("PART_MOVER");
 }
 
 void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)

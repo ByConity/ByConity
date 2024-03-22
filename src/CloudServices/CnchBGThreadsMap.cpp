@@ -27,6 +27,7 @@
 #include <CloudServices/CnchObjectColumnSchemaAssembleThread.h>
 
 #include <Databases/MySQL/MaterializedMySQLSyncThreadManager.h>
+#include <CloudServices/CnchPartMoverThread.h>
 
 #include <regex>
 
@@ -85,6 +86,10 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
     {
         return std::make_shared<CnchRefreshMaterializedViewThread>(getContext(), storage_id);
+    }
+    else if (type == CnchBGThreadType::PartMover)
+    {
+        return std::make_shared<CnchPartMoverThread>(getContext(), storage_id);
     }
     else
     {

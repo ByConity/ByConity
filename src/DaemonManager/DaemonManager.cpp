@@ -180,7 +180,8 @@ std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> createDaemonJob
         { "PART_CLUSTERING", 10000},
         { "OBJECT_SCHEMA_ASSEMBLE", 10000},
         { "MATERIALIZED_MYSQL", 10000},
-        { "CNCH_REFRESH_MATERIALIZED_VIEW", 10000}
+        { "CNCH_REFRESH_MATERIALIZED_VIEW", 10000},
+        { "PART_MOVER", 10000}
     };
 
     std::map<std::string, unsigned int> config = updateConfig(std::move(default_config), app_config);
