@@ -40,7 +40,9 @@
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/PlanPattern.h>
-#include <Storages/StorageDistributed.h>
+#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 #include <memory>
 
@@ -235,6 +237,7 @@ CascadesContext::CascadesContext(
     , log(&Poco::Logger::get("CascadesOptimizer"))
 {
     LOG_DEBUG(log, "max join size: {}", max_join_size_);
+    LOG_DEBUG(log, "worker size: {}", worker_size_);
     implementation_rules.emplace_back(std::make_shared<SetJoinDistribution>());
 
     if (enable_cbo)
@@ -282,16 +285,14 @@ size_t WorkerSizeFinder::find(QueryPlan & query_plan, const Context & context)
         return context.getSettingsRef().memory_catalog_worker_size;
 
     WorkerSizeFinder visitor{query_plan.getCTEInfo()};
-    Void c{};
-
     // default schedule to worker cluster
-    std::optional<size_t> result = VisitorUtil::accept(query_plan.getPlanNode(), visitor, c);
+    std::optional<size_t> result = VisitorUtil::accept(query_plan.getPlanNode(), visitor, context);
     if (result.has_value())
         return result.value();
     return 1;
 }
 
-std::optional<size_t> WorkerSizeFinder::visitPlanNode(PlanNodeBase & node, Void & context)
+std::optional<size_t> WorkerSizeFinder::visitPlanNode(PlanNodeBase & node, const Context & context)
 {
     for (const auto & child : node.getChildren())
     {
@@ -302,16 +303,22 @@ std::optional<size_t> WorkerSizeFinder::visitPlanNode(PlanNodeBase & node, Void 
     return std::nullopt;
 }
 
-std::optional<size_t> WorkerSizeFinder::visitTableScanNode(TableScanNode & node, Void &)
+std::optional<size_t> WorkerSizeFinder::visitTableScanNode(TableScanNode & node, const Context & context)
 {
-    const auto * source_step = node.getStep().get();
-    auto * distributed_table = dynamic_cast<StorageDistributed *>(source_step->getStorage().get());
-    if (distributed_table)
-        return std::make_optional<size_t>(distributed_table->getShardCount());
+    const auto storage = node.getStep()->getStorage();
+    const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    const auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get());
+    const auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get());
+
+    if (cnch_table || cnch_hive || cnch_file)
+    {
+        const auto & worker_group = context.getCurrentWorkerGroup();
+        return worker_group->getShardsInfo().size();
+    }
     return std::nullopt;
 }
 
-std::optional<size_t> WorkerSizeFinder::visitCTERefNode(CTERefNode & node, Void & context)
+std::optional<size_t> WorkerSizeFinder::visitCTERefNode(CTERefNode & node, const Context & context)
 {
     const auto * step = dynamic_cast<const CTERefStep *>(node.getStep().get());
     return VisitorUtil::accept(cte_info.getCTEDef(step->getId()), *this, context);
@@ -381,4 +388,4 @@ String CascadesContext::getInfo() const
     }
     return ss.str();
 }
-}
+    }
