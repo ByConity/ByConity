@@ -1421,7 +1421,7 @@ ServerDataPartsWithDBM StorageCnchMergeTree::selectPartsToReadWithDBM(
     return parts;
 }
 
-MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimestamp ts, const Strings & input_partitions, bool force_bitmap)
+MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimestamp ts, const Strings & input_partitions, bool force_bitmap, const std::set<Int64> & bucket_numbers)
 {
     auto catalog = getContext()->getCnchCatalog();
     auto storage = shared_from_this();
@@ -1432,7 +1432,7 @@ MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimesta
     else
         partitions = catalog->getPartitionIDs(storage, nullptr);
 
-    auto cnch_parts_with_dbm = catalog->getServerDataPartsInPartitionsWithDBM(storage, partitions, ts, nullptr);
+    auto cnch_parts_with_dbm = catalog->getServerDataPartsInPartitionsWithDBM(storage, partitions, ts, nullptr, Catalog::VisibilityLevel::Visible, bucket_numbers);
     auto parts = CnchPartsHelper::calcVisibleParts(cnch_parts_with_dbm.first, /*collect_on_chain=*/false);
 
     MergeTreeDataPartsCNCHVector res;
