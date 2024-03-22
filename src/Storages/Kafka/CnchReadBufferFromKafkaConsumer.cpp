@@ -116,7 +116,7 @@ void CnchReadBufferFromKafkaConsumer::commit()
     if (!offsets.empty())
     {
         auto tpl = getOffsets();
-        LOG_TRACE(log, "Committing offsets: {}", DB::Kafka::toString(tpl));
+        LOG_DEBUG(log, "Committing offsets: {}", DB::Kafka::toString(tpl));
 
         try
         {
@@ -169,6 +169,15 @@ void CnchReadBufferFromKafkaConsumer::assign(const cppkafka::TopicPartitionList 
         consumer->assign(topic_partition_list);
 
     reset();
+}
+
+void CnchReadBufferFromKafkaConsumer::setSampleConsumingPartitionList(const std::set<cppkafka::TopicPartition> & sample_partitions_)
+{
+    if (!sample_partitions_.empty())
+    {
+        sample_partitions = sample_partitions_;
+        enable_sample_consuming = true;
+    }
 }
 
 void CnchReadBufferFromKafkaConsumer::unassign()
@@ -238,6 +247,15 @@ bool CnchReadBufferFromKafkaConsumer::nextImpl()
         /// Once committed, the `postition` and the `committed position` would be equal
         offset = current.get_offset() + 1;
 
+        /// if sample consuming is enabled and the consumed topic & partition is not the sampled one,
+        /// the message would be discarded; but we still record the offset to avoid the lag
+        if (unlikely(enable_sample_consuming) && !sample_partitions.contains({current.get_topic(), current.get_partition()}))
+        {
+            /// XXX: record the discarded message number here
+            ++skip_messages_by_sample;
+            continue;
+        }
+
         const auto & payload = current.get_payload();
 
         /// Check empty payload to avoid CORE DUMP
@@ -258,7 +276,7 @@ bool CnchReadBufferFromKafkaConsumer::nextImpl()
     }
 
     /// This buffer/consumer has been expired if reached here
-    LOG_TRACE(log, "Stalled. Polled {} messages", read_messages);
+    LOG_DEBUG(log, "Stalled. Polled {} messages", read_messages);
     stalled = true;
     return false;
 }
@@ -273,6 +291,7 @@ void CnchReadBufferFromKafkaConsumer::reset()
     stalled = false;
     skipped_msgs_in_holes = 0;
     skipped_ofsets_hole.clear();
+    skip_messages_by_sample = 0;
 }
 
 bool CnchReadBufferFromKafkaConsumer::hasExpired()

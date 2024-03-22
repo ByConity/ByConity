@@ -84,6 +84,7 @@ message SubmitKafkaConsumeTaskReq
   required uint64 assigned_consumer = 7;
   repeated string create_table_command = 8;
   repeated TopicPartitionModel tpl = 9;
+  repeated TopicPartitionModel sample_partitions = 10;
 }
 
 message SubmitKafkaConsumeTaskResp
