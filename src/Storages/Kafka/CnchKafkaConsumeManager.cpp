@@ -331,7 +331,15 @@ CnchKafkaConsumeManager::ConsumerDependencies CnchKafkaConsumeManager::getDepend
         return {};
 
     for (auto & view : all_views_from_catalog)
-        init_dependencies.emplace(view->getStorageID());
+    {
+        if (auto * mv = dynamic_cast<StorageMaterializedView *>(view.get()))
+        {
+            if (mv->async())
+                continue;
+            init_dependencies.emplace(view->getStorageID());
+        }
+    }
+
 
     return init_dependencies;
 }

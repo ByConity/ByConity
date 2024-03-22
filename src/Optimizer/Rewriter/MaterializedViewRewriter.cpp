@@ -654,10 +654,8 @@ protected:
 
             // 3. check need rollup
             // Note: aggregate always need rollup for aggregating merge tree in clickhouse,
-            if (view_aggregate && !view_aggregate)
-                continue;
             bool need_rollup = query_aggregate
-                && (!async_materialized_view || query_aggregate->getKeys().size() < view_aggregate->getKeys().size()
+                && (!async_materialized_view || !view_aggregate || query_aggregate->getKeys().size() < view_aggregate->getKeys().size()
                     || !PredicateUtils::isFalsePredicate(union_predicate));
 
             // 3-1. query aggregate has default result if group by has empty set. not supported yet.

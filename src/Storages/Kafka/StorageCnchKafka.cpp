@@ -217,6 +217,9 @@ StoragePtr StorageCnchKafka::tryGetTargetTable()
         if (!mv)
             throw Exception("Dependence for CnchKafka should be MaterializedView, but got "
                             + view->getName(), ErrorCodes::LOGICAL_ERROR);
+        
+        if (mv->async())
+           continue;
 
         /// target_table should be CnchMergeTree now, but it may be some other new types
         auto target_table = mv->getTargetTable();

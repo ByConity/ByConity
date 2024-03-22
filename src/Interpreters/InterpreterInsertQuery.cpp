@@ -124,6 +124,8 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
 
         if (auto * mv = dynamic_cast<StorageMaterializedView*>(table.get()))
         {
+            if (mv->async())
+               continue;
             auto target_table = DatabaseCatalog::instance().tryGetTable(mv->getTargetTableId(), local_context);
             if (!target_table)
             {
