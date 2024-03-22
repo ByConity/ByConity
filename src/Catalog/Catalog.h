@@ -256,7 +256,8 @@ public:
         const Strings & partitions,
         const TxnTimestamp & ts,
         const Context * session_context,
-        VisibilityLevel visibility = VisibilityLevel::Visible);
+        VisibilityLevel visibility = VisibilityLevel::Visible,
+        const std::set<Int64> & bucket_numbers = {});
 
     ServerDataPartsVector getServerDataPartsInPartitions(
         const ConstStoragePtr & storage,
@@ -264,7 +265,8 @@ public:
         const TxnTimestamp & ts,
         const Context * session_context,
         VisibilityLevel visibility = VisibilityLevel::Visible,
-        bool execute_filter = true);
+        bool execute_filter = true,
+        const std::set<Int64> & bucket_numbers = {});
 
     ServerDataPartsWithDBM getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
 

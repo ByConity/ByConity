@@ -129,11 +129,17 @@ MergeTreeDataPartsCNCHVector getVisiblePartsToDedup(const DedupScope & scope, St
     {
         const auto & partitions = scope.getPartitions();
         Names partitions_filter {partitions.begin(), partitions.end()};
-        return cnch_table.getUniqueTableMeta(ts, partitions_filter, force_bitmap);
+        std::set<Int64> bucket_numbers;
+        if (scope.isBucketLock())
+        {
+            for (const auto & bucket_with_partition : scope.getBucketWithPartitionSet())
+                bucket_numbers.insert(bucket_with_partition.second);
+        }
+        return cnch_table.getUniqueTableMeta(ts, partitions_filter, force_bitmap, bucket_numbers);
     }
     else
     {
-        return cnch_table.getUniqueTableMeta(ts, {}, force_bitmap);
+        return cnch_table.getUniqueTableMeta(ts, {}, force_bitmap, (scope.isBucketLock() ? scope.getBuckets() : std::set<Int64>()));
     }
 }
 
