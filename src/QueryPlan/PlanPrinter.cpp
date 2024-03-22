@@ -15,18 +15,19 @@
 
 #include <QueryPlan/PlanPrinter.h>
 
+#include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Analyzers/ASTEquals.h>
+#include <Interpreters/convertFieldToType.h>
+#include <Optimizer/OptimizerMetrics.h>
 #include <Optimizer/PlanNodeSearcher.h>
 #include <Optimizer/PredicateConst.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
-#include <Optimizer/OptimizerMetrics.h>
-#include <AggregateFunctions/AggregateFunctionNull.h>
-#include <Poco/JSON/Object.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
-#include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/GraphvizPrinter.h>
-#include <Interpreters/convertFieldToType.h>
+#include <QueryPlan/QueryPlan.h>
+#include <Poco/JSON/Object.h>
 
 #include <utility>
 
@@ -34,21 +35,43 @@ namespace DB
 {
 namespace
 {
-template <class V>
-String join(const V & v, const String & sep, const String & prefix = {}, const String & suffix = {})
-{
-    std::stringstream out;
-    out << prefix;
-    if (!v.empty())
+    template <class V>
+    String join(const V & v, const String & sep, const String & prefix = {}, const String & suffix = {})
     {
-        auto it = v.begin();
-        out << *it;
-        for (++it; it != v.end(); ++it)
-            out << sep << *it;
+        std::stringstream out;
+        out << prefix;
+        if (!v.empty())
+        {
+            auto it = v.begin();
+            out << *it;
+            for (++it; it != v.end(); ++it)
+                out << sep << *it;
+        }
+        out << suffix;
+        return out.str();
     }
-    out << suffix;
-    return out.str();
-}
+
+    String getJoinAlgorithmString(JoinAlgorithm algorithm)
+    {
+        switch (algorithm)
+        {
+            case JoinAlgorithm::AUTO:
+                return "AUTO";
+            case JoinAlgorithm::HASH:
+                return "HASH";
+            case JoinAlgorithm::PARTIAL_MERGE:
+                return "PARTIAL_MERGE";
+            case JoinAlgorithm::PREFER_PARTIAL_MERGE:
+                return "PREFER_PARTIAL_MERGE";
+            case JoinAlgorithm::NESTED_LOOP_JOIN:
+                return "NESTED_LOOP_JOIN";
+            case JoinAlgorithm::PARALLEL_HASH:
+                return "PARALLEL_HASH";
+            case JoinAlgorithm::GRACE_HASH:
+                return "GRACE_HASH";
+        }
+        __builtin_unreachable();
+    }
 }
 
 String PlanPrinter::textPlanNode(PlanNodeBase & node)
@@ -73,10 +96,11 @@ String PlanPrinter::textLogicalPlan(
     bool has_children = !plan.getPlanNode()->getChildren().empty();
     auto output = printer.printLogicalPlan(*plan.getPlanNode(), TextPrinterIntent{0, has_children}, profiles);
 
-    for (auto & item : plan.getCTEInfo().getCTEs())
+    for (const auto & cte_id : plan.getCTEInfo().getCTEIds())
     {
-        output += "CTEDef [" + std::to_string(item.first) + "]\n";
-        output += printer.printLogicalPlan(*item.second, TextPrinterIntent{3, !item.second->getChildren().empty()}, profiles);
+        output += "CTEDef [" + std::to_string(cte_id) + "]\n";
+        auto & cte_plan = plan.getCTEInfo().getCTEDef(cte_id);
+        output += printer.printLogicalPlan(*cte_plan, TextPrinterIntent{3, !cte_plan->getChildren().empty()}, profiles);
     }
 
     auto magic_sets = PlanNodeSearcher::searchFrom(plan)
@@ -237,7 +261,7 @@ String PlanPrinter::textDistributedPlan(
     {
         if (segment_desc->segment_id == 0)
         {
-            segment_desc->plan_node = query_plan.getPlanNodeRoot();
+            segment_desc->plan_node = query_plan.getPlanNode();
             continue;
         }
 
@@ -263,7 +287,7 @@ String PlanPrinter::textDistributedPlan(
     for (auto & segment_ptr : segments_desc)
     {
         os << getPlanSegmentHeaderText(segment_ptr);
-        if (!segment_ptr->plan_node)
+                if (!segment_ptr->plan_node)
             continue;
 
         auto analyze_node = PlanNodeSearcher::searchFrom(segment_ptr->plan_node)
@@ -274,7 +298,8 @@ String PlanPrinter::textDistributedPlan(
             os << TextPrinter::printOutputColumns(*analyze_node.value()->getChildren()[0], TextPrinterIntent{3, false});
             TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment, print_profile};
             bool has_children = !analyze_node.value()->getChildren().empty();
-            if ((analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::CTERef || analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::Exchange))
+            if ((analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::CTERef
+                 || analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::Exchange))
                 has_children = false;
 
             auto output = printer.printLogicalPlan(*analyze_node.value(), TextPrinterIntent{6, has_children}, profiles);
@@ -286,7 +311,8 @@ String PlanPrinter::textDistributedPlan(
             os << TextPrinter::printOutputColumns(*segment_ptr->plan_node, TextPrinterIntent{3, false});
             TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment, print_profile};
             bool has_children = !plan_root->getChildren().empty();
-            if ((plan_root->getStep()->getType() == IQueryPlanStep::Type::CTERef || plan_root->getStep()->getType() == IQueryPlanStep::Type::Exchange))
+            if ((plan_root->getStep()->getType() == IQueryPlanStep::Type::CTERef
+                 || plan_root->getStep()->getType() == IQueryPlanStep::Type::Exchange))
                 has_children = false;
 
             auto output = printer.printLogicalPlan(*segment_ptr->plan_node, TextPrinterIntent{6, has_children}, profiles);
@@ -366,7 +392,7 @@ void PlanPrinter::getRemoteSegmentId(const QueryPlan::Node * node, std::unordere
 std::unordered_map<PlanNodeId, PlanNodePtr> PlanPrinter::getPlanNodeMap(const QueryPlan & query_plan)
 {
     std::unordered_map<PlanNodeId, PlanNodePtr> id_to_node;
-    const auto & plan =  query_plan.getPlanNodeRoot();
+    const auto & plan = query_plan.getPlanNode();
     if (!plan)
         return id_to_node;
 
@@ -408,18 +434,22 @@ String PlanPrinter::TextPrinter::printOutputColumns(PlanNodeBase & plan_node, co
     sort(output_columns.begin(), output_columns.end());
 
     bool first = true;
-    for (auto & column_name : output_columns) {
-        if (res.length() > line_feed_limit) {
+    for (auto & column_name : output_columns)
+    {
+        if (res.length() > line_feed_limit)
+        {
             res += "\n";
             res += intent.print() + String(17, ' ');
             line_feed_limit += 120;
             first = true;
         }
-        if (first) {
+        if (first)
+        {
             res += column_name;
             first = false;
         }
-        else {
+        else
+        {
             res += ", ";
             res += column_name;
         }
@@ -446,7 +476,8 @@ String TextPrinterIntent::detailIntent() const
     return "\n" + next_lines_prefix + (hasChildren ? VERTICAL_LINE : EMPTY_PREFIX) + EMPTY_PREFIX;
 }
 
-String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles) // NOLINT(misc-no-recursion)
+String PlanPrinter::TextPrinter::printLogicalPlan(
+    PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles) // NOLINT(misc-no-recursion)
 {
     std::stringstream out;
 
@@ -460,7 +491,8 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
             out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan) << " " << printStatistics(plan, intent)
                 << printDetail(plan.getStep(), intent) << "\n";
         else
-            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan) << printDetail(plan.getStep(), intent) << "\n";
+            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan) << printDetail(plan.getStep(), intent)
+                << "\n";
     }
     else
     {
@@ -471,7 +503,7 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
                 out << intent.detailIntent() << printStatistics(plan, intent);
             out << printOperatorProfiles(plan, intent, profiles);
             if (profiles.count(plan.getId()))
-                out << intent.detailIntent() << printQError(plan, profiles);
+                out << intent.detailIntent() << printQError(plan, intent, profiles);
             out << printDetail(plan.getStep(), intent) << "\n";
         }
         else
@@ -480,7 +512,7 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
             if (print_stats)
                 out << intent.detailIntent() << printStatistics(plan, intent);
             out << printDetail(plan.getStep(), intent) << "\n";
-        }
+}
 
     }
 
@@ -492,7 +524,8 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
         auto child = *it++;
         bool last = it == plan.getChildren().end();
         bool has_children = !child->getChildren().empty();
-        if ((child->getStep()->getType() == IQueryPlanStep::Type::CTERef || child->getStep()->getType() == IQueryPlanStep::Type::Exchange) && is_distributed)
+        if ((child->getStep()->getType() == IQueryPlanStep::Type::CTERef || child->getStep()->getType() == IQueryPlanStep::Type::Exchange)
+            && is_distributed)
             has_children = false;
 
         out << printLogicalPlan(*child, intent.forChild(last, has_children), profiles);
@@ -537,16 +570,18 @@ String PlanPrinter::TextPrinter::printStatistics(const PlanNodeBase & plan, cons
     return out.str();
 }
 
-String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles)
+String PlanPrinter::TextPrinter::printOperatorProfiles(
+    PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles)
 {
     size_t step_id = plan.getId();
     if (profiles.count(step_id))
     {
         const auto & profile = profiles.at(step_id);
         std::stringstream out;
-        out << intent.detailIntent() << "Act. Output: " << prettyNum(profile->output_rows) << " rows (" << prettyBytes(profile->output_bytes) << ")"
-            << ", Wait Time: " << prettySeconds(profile->max_output_wait_elapsed_us)
-            << ", Wall Time: " << prettySeconds(profile->max_elapsed_us);
+        out << intent.detailIntent() << "Act. Output " << prettyNum(profile->output_rows) << " rows (" << prettyBytes(profile->output_bytes)
+            << ")";
+        out << ", Output wait Time: " << prettySeconds(profile->max_output_wait_elapsed_us);
+        out << ", Wall Time: " << prettySeconds(profile->max_elapsed_us);
 
         int num = 1;
         if (!plan.getChildren().empty() && profile->inputs_profile.contains(plan.getChildren()[0]->getId()))
@@ -555,15 +590,15 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
             {
                 auto input_profile = profile->inputs_profile[child->getId()];
                 if (num == 1)
-                    out << intent.detailIntent() << "     Input: ";
+                    out << intent.detailIntent() << "Input. ";
                 else
                     out << intent.detailIntent() << "            ";
 
                 if (plan.getChildren().size() > 1)
                     out << "source [" << num << "] : ";
 
-                out <<  prettyNum(input_profile.input_rows) << " rows (" << prettyBytes(input_profile.input_bytes) << ")";
-                out << ", Wait Time: " << prettySeconds(input_profile.input_wait_elapsed_us);
+                out << prettyNum(input_profile.input_rows) << " rows (" << prettyBytes(input_profile.input_bytes) << ")";
+                out << ", Input wait Time: " << prettySeconds(input_profile.input_wait_elapsed_us);
                 ++num;
             }
         }
@@ -572,7 +607,7 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
             for (auto & [id, input_metrics] : profile->inputs_profile)
             {
                 if (num == 1)
-                    out << intent.detailIntent() << "     Input: ";
+                    out << intent.detailIntent() << "Input. ";
                 else
                     out << intent.detailIntent() << "            ";
 
@@ -591,7 +626,7 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
 
 String PlanPrinter::TextPrinter::prettyNum(size_t num)
 {
-    std::vector<std::string> suffixes{ "", "K", "M", "B", "T" };
+    std::vector<std::string> suffixes{"", "K", "M", "B", "T"};
     size_t idx = 0;
     auto count = static_cast<double>(num);
     while (count >= 1000 && idx < suffixes.size() - 1)
@@ -610,7 +645,7 @@ String PlanPrinter::TextPrinter::prettyNum(size_t num)
 
 String PlanPrinter::TextPrinter::prettySeconds(size_t us)
 {
-    std::vector<std::string> suffixes{ " us", " ms", " s" };
+    std::vector<std::string> suffixes{" us", " ms", " s"};
     size_t idx = 0;
     auto count = static_cast<double>(us);
     while (count >= 1000 && idx < suffixes.size() - 1)
@@ -626,7 +661,7 @@ String PlanPrinter::TextPrinter::prettySeconds(size_t us)
 
 String PlanPrinter::TextPrinter::prettyBytes(size_t bytes)
 {
-    std::vector<std::string> suffixes{ " Bytes", " KB", " MB", " GB", " TB" };
+    std::vector<std::string> suffixes{" Bytes", " KB", " MB", " GB", " TB"};
     size_t idx = 0;
     auto count = static_cast<double>(bytes);
     while (count >= 1024 && idx < suffixes.size() - 1)
@@ -640,7 +675,8 @@ String PlanPrinter::TextPrinter::prettyBytes(size_t bytes)
     return out.str();
 }
 
-String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles)
+String PlanPrinter::TextPrinter::printQError(
+    const PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles)
 {
     const auto & stats = plan.getStatistics();
     std::stringstream out;
@@ -648,7 +684,8 @@ String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const St
     size_t step_id = plan.getId();
     if (profiles.count(step_id))
     {
-        const auto& profile = profiles.at(step_id);
+        const auto & profile = profiles.at(step_id);
+        out << intent.detailIntent();
         if (plan.getChildren().size() > 1)
         {
             size_t max_input_rows = 0;
@@ -666,7 +703,6 @@ String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const St
                 double filtered = max_rows > 0 ? (((max_rows - static_cast<double>(profile->output_rows)) * static_cast<double>(100) / max_rows)) : 0.0;
                 out << "Filtered: " << std::fixed << std::setprecision(1) << filtered << "%";
             }
-
         }
         else if (plan.getChildren().size() == 1)
         {
@@ -687,9 +723,11 @@ String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const St
         if (stats && stats.value()->getRowCount() != 0 && profile->output_rows != 0)
         {
             if (profile->output_rows > stats.value()->getRowCount())
-                out << ", QError: " << std::fixed << std::setprecision(1) << static_cast<double>(profile->output_rows) / static_cast<double>(stats.value()->getRowCount());
+                out << ", QError: " << std::fixed << std::setprecision(1)
+                    << static_cast<double>(profile->output_rows) / static_cast<double>(stats.value()->getRowCount());
             else
-                out << ", QError: " << std::fixed << std::setprecision(1) << static_cast<double>(stats.value()->getRowCount()) / static_cast<double>(profile->output_rows);
+                out << ", QError: " << std::fixed << std::setprecision(1)
+                    << static_cast<double>(stats.value()->getRowCount()) / static_cast<double>(profile->output_rows);
         }
         return out.str();
     }
@@ -723,27 +761,56 @@ String PlanPrinter::TextPrinter::printPrefix(PlanNodeBase & plan)
     if (plan.getStep()->getType() == IQueryPlanStep::Type::Join)
     {
         const auto * join = dynamic_cast<const JoinStep *>(plan.getStep().get());
-        auto f = [](ASTTableJoin::Kind kind) {
+        auto f = [](ASTTableJoin::Kind kind, ASTTableJoin::Strictness strictness) {
+            String result;
             switch (kind)
             {
                 case ASTTableJoin::Kind::Inner:
-                    return "Inner ";
+                    result = "Inner ";
+                    break;
                 case ASTTableJoin::Kind::Left:
-                    return "Left ";
+                    result = "Left ";
+                    break;
                 case ASTTableJoin::Kind::Right:
-                    return "Right ";
+                    result = "Right ";
+                    break;
                 case ASTTableJoin::Kind::Full:
-                    return "Full ";
+                    result = "Full ";
+                    break;
                 case ASTTableJoin::Kind::Cross:
-                    return "Cross ";
+                    result = "Cross ";
+                    break;
                 default:
-                    return "";
+                    result = "";
+                    break;
             }
+            switch (strictness)
+            {
+                case ASTTableJoin::Strictness::RightAny:
+                    result += "RightAny ";
+                    break;
+                case ASTTableJoin::Strictness::Any:
+                    result += "Any ";
+                    break;
+                case ASTTableJoin::Strictness::Asof:
+                    result += "Asof ";
+                    break;
+                case ASTTableJoin::Strictness::Semi:
+                    result += "Semi ";
+                    break;
+                case ASTTableJoin::Strictness::Anti:
+                    result += "Anti ";
+                    break;
+                default:
+                    break;
+            }
+            return result;
         };
-        if (join->getJoinAlgorithm() != JoinAlgorithm::AUTO)
-            return fmt::format("{}({}) ", f(join->getKind()), JoinAlgorithmConverter::toString(join->getJoinAlgorithm()));
 
-        return f(join->getKind());
+        if (join->getJoinAlgorithm() != JoinAlgorithm::AUTO)
+            return fmt::format("{}({}) ", f(join->getKind(), join->getStrictness()), getJoinAlgorithmString(join->getJoinAlgorithm()));
+
+        return f(join->getKind(), join->getStrictness());
     }
     return "";
 }
@@ -766,10 +833,11 @@ String PlanPrinter::TextPrinter::printSuffix(PlanNodeBase & plan)
     }
     else if (plan.getStep()->getType() == IQueryPlanStep::Type::CTERef)
     {
-        const auto *cte = dynamic_cast<const CTERefStep *>(plan.getStep().get());
-        out << "[" << cte->getId() << "]" ;
+        const auto * cte = dynamic_cast<const CTERefStep *>(plan.getStep().get());
+        out << "[" << cte->getId() << "]";
         if (segment_id != -1)
-            out << " <--" << " segment[" << exchange_to_segment.at(plan.getId()) << "]";
+            out << " <--"
+                << " segment[" << exchange_to_segment.at(plan.getId()) << "]";
     }
     return out.str();
 }
@@ -817,7 +885,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
 
     if (verbose && plan->getType() == IQueryPlanStep::Type::Sorting)
     {
-        const auto *sort = dynamic_cast<const SortingStep *>(plan.get());
+        const auto * sort = dynamic_cast<const SortingStep *>(plan.get());
         std::vector<String> sort_columns;
         for (const auto & desc : sort->getSortDescription())
             sort_columns.emplace_back(desc.format());
@@ -885,7 +953,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             auto type_name = String(typeid(desc.function.get()).name());
             if (type_name.find("AggregateFunctionNull"))
                 func_name = String("AggNull(").append(std::move(func_name)).append(")");
-            ss << desc.column_name << ":=" << func_name << join(desc.argument_names, "," ,"(", ")");
+            ss << desc.column_name << ":=" << func_name << join(desc.argument_names, ",", "(", ")");
             aggregates.emplace_back(ss.str());
         }
         if (!aggregates.empty())
@@ -897,7 +965,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         const auto * exchange = dynamic_cast<const ExchangeStep *>(plan.get());
         if (exchange->getExchangeMode() == ExchangeMode::REPARTITION)
         {
-            auto keys = exchange->getSchema().getPartitioningColumns();
+            auto keys = exchange->getSchema().getColumns();
             out << intent.detailIntent() << "Partition by: " << join(keys, ", ", "{", "}");
         }
     }
@@ -945,8 +1013,8 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             else
                 assignments.emplace_back(name_with_alias.second + ":=" + name_with_alias.first);
 
-        const auto & query_info = table_scan->getQueryInfo();
-        auto *query = query_info.query->as<ASTSelectQuery>();
+        auto query_info = table_scan->getQueryInfo();
+        auto * query = query_info.query->as<ASTSelectQuery>();
 
         if (query_info.partition_filter)
         {
@@ -1030,7 +1098,7 @@ String PlanPrinter::TextPrinter::printFilter(ConstASTPtr filter)
         }
         if (!filters.second.empty())
             out << " ";
-        out << "Runtime Filters: "<< join(runtime_filters, ", ", "{", "}");
+        out << "Runtime Filters: " << join(runtime_filters, ", ", "{", "}");
     }
 
     if (filters.first.empty() && filters.second.empty())
@@ -1221,7 +1289,7 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
         step_detail["Mode"] = f(exchange->getExchangeMode());
         if (exchange->getExchangeMode() == ExchangeMode::REPARTITION)
         {
-            for (const auto & item : (exchange->getSchema().getPartitioningColumns()))
+            for (const auto & item : (exchange->getSchema().getColumns()))
                 step_vector_detail["PartitionBy"].emplace_back(item);
         }
     }
@@ -1441,6 +1509,7 @@ Poco::JSON::Object::Ptr NodeDescription::jsonNodeDescription(const StepAggregate
             descriptions->set(desc.first, desc.second->jsonNodeDescription(node_profiles, print_stats));
         json->set("StepDescriptions", descriptions);
     }
+
     Poco::JSON::Array children_array;
     for (auto & child : children)
         children_array.add(child->jsonNodeDescription(node_profiles, print_stats));

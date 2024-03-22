@@ -162,6 +162,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // rules for remove subquery, the order of subquery rules matters, DO NOT change !!!.
         std::make_shared<IterativeRewriter>(Rules::pushApplyRules(), "PushApply"),
+        std::make_shared<IterativeRewriter>(Rules::unnestingSubqueryRules(), "UnnestingSubquery"),
         std::make_shared<RemoveUnCorrelatedInSubquery>(),
         std::make_shared<RemoveCorrelatedInSubquery>(),
         std::make_shared<RemoveUnCorrelatedExistsSubquery>(),
@@ -216,6 +217,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
         std::make_shared<DistinctToAggregatePruning>(),
         std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
+
 
         std::make_shared<ImplementJoinOrderHints>(),
 

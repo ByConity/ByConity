@@ -8,7 +8,7 @@ Projection Est. 1 rows
          └─ Projection Est. 7944462 rows
             │     Expressions: expr#multiply(l_extendedprice, l_discount):=l_extendedprice * l_discount
             └─ Filter Est. 7944462 rows
-               │     Condition: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND (l_discount >= 0.049999999999999996) AND (l_discount <= 0.06999999999999999) AND (l_quantity < 24.)
+               │     Condition: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND (l_quantity < '24') AND (l_discount >= 0.049999999999999996) AND (l_discount <= 0.06999999999999999)
                └─ TableScan tpch100.lineitem Est. 600037902 rows
-                        Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND (l_discount >= 0.049999999999999996) AND (l_discount <= 0.06999999999999999) AND (l_quantity < 24.)
+                        Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND (l_quantity < '24') AND (l_discount >= 0.049999999999999996) AND (l_discount <= 0.06999999999999999)
                         Outputs: [l_quantity, l_extendedprice, l_discount, l_shipdate]

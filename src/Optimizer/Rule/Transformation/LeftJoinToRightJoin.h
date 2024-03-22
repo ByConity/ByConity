@@ -31,8 +31,7 @@ public:
     // Left join with filter is not allowed convert to Right join with filter. (nest loop join only support left join).
     static bool supportSwap(const JoinStep & s)
     {
-        return (s.getKind() == ASTTableJoin::Kind::Left || s.getKind() == ASTTableJoin::Kind::Full) && s.supportSwap()
-            && PredicateUtils::isTruePredicate(s.getFilter());
+        return (s.getKind() == ASTTableJoin::Kind::Left || s.getKind() == ASTTableJoin::Kind::Full) && s.supportSwap();
     }
 
     const std::vector<RuleType> & blockRules() const override

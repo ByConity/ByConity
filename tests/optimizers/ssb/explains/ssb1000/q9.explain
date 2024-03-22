@@ -1,27 +1,27 @@
-Projection Est. 7795 rows
+Projection Est. 1947 rows
 │     Expressions: [C_CITY, S_CITY], d_year:=`expr#toYear(LO_ORDERDATE)`, revenue:=`expr#sum(LO_REVENUE)`
-└─ Sorting Est. 7795 rows
+└─ Sorting Est. 1947 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-   └─ Gather Exchange Est. 7795 rows
-      └─ Sorting Est. 7795 rows
+   └─ Gather Exchange Est. 1947 rows
+      └─ Sorting Est. 1947 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-         └─ MergingAggregated Est. 7795 rows
-            └─ Repartition Exchange Est. 7795 rows
+         └─ MergingAggregated Est. 1947 rows
+            └─ Repartition Exchange Est. 1947 rows
                │     Partition by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
-               └─ Aggregating Est. 7795 rows
+               └─ Aggregating Est. 1947 rows
                   │     Group by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 588741 rows
+                  └─ Projection Est. 2354968 rows
                      │     Expressions: [C_CITY, LO_REVENUE, S_CITY], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner Join Est. 588741 rows
+                     └─ Inner Join Est. 2354968 rows
                         │     Condition: LO_CUSTKEY == C_CUSTKEY
                         │     Runtime Filters Builder: {C_CUSTKEY}
-                        ├─ Repartition Exchange Est. 48679852 rows
+                        ├─ Repartition Exchange Est. 48679926 rows
                         │  │     Partition by: {LO_CUSTKEY}
-                        │  └─ Inner Join Est. 48679852 rows
+                        │  └─ Inner Join Est. 48679926 rows
                         │     │     Condition: LO_SUPPKEY == S_SUPPKEY
                         │     │     Runtime Filters Builder: {S_SUPPKEY}
-                        │     ├─ Filter Est. 5999989813 rows
+                        │     ├─ Filter Est. 1499997453 rows
                         │     │  │     Condition: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
                         │     │  └─ TableScan ssb1000.lineorder Est. 5999989813 rows
                         │     │           Where: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}

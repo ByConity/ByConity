@@ -27,6 +27,9 @@ public:
     static void SetUpTestSuite()
     {
         std::unordered_map<std::string, DB::Field> settings = BasePlanTest::getDefaultOptimizerSettings();
+        // --print_graphviz=1 --graphviz_path=/data01/likaixi.kx/plan/
+        // settings["print_graphviz"] = true;
+        // settings["graphviz_path"] = "/data01/likaixi.kx/plan/";
         tester = std::make_shared<DB::BaseTpcdsPlanTest>(settings);
     }
 

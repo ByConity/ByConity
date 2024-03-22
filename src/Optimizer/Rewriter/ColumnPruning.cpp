@@ -27,9 +27,11 @@
 #include <Optimizer/ExpressionInterpreter.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Parsers/ASTIdentifier.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/AssignUniqueIdStep.h>
+#include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/DistinctStep.h>
 #include <QueryPlan/Dummy.h>
 #include <QueryPlan/ExceptStep.h>
@@ -222,6 +224,11 @@ PlanNodePtr ColumnPruningVisitor::visitMultiJoinNode(MultiJoinNode &, ColumnPrun
 }
 
 PlanNodePtr ColumnPruningVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode & node, ColumnPruningContext & column_pruning_context)
+{
+    return visitDefault<false>(node, column_pruning_context);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitLocalExchangeNode(LocalExchangeNode & node, ColumnPruningContext & column_pruning_context)
 {
     return visitDefault<false>(node, column_pruning_context);
 }
@@ -472,7 +479,13 @@ PlanNodePtr ColumnPruningVisitor::visitApplyNode(ApplyNode & node, ColumnPruning
     DataStreams input{left->getStep()->getOutputStream(), right->getStep()->getOutputStream()};
 
     auto apply_step = std::make_shared<ApplyStep>(
-        input, correlation, step->getApplyType(), step->getSubqueryType(), step->getAssignment(), step->getOuterColumns());
+        input,
+        correlation,
+        step->getApplyType(),
+        step->getSubqueryType(),
+        step->getAssignment(),
+        step->getOuterColumns(),
+        step->supportSemiAnti());
     PlanNodes children{left, right};
     auto apply_node = ApplyNode::createPlanNode(context->nextNodeId(), std::move(apply_step), children, node.getStatistics());
     return apply_node;

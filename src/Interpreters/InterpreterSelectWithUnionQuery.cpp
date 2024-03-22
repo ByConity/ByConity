@@ -33,8 +33,6 @@
 #include <Parsers/ASTSubquery.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 
-#include <Storages/StorageMemory.h>
-
 #include <QueryPlan/DistinctStep.h>
 #include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/IQueryPlanStep.h>

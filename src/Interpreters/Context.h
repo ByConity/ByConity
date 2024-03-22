@@ -553,7 +553,9 @@ private:
     mutable std::shared_ptr<BindingCacheManager> session_binding_cache_manager = nullptr;
 
     // make sure a context not be passed to ExprAnalyzer::analyze concurrently
-    mutable std::unordered_map<std::string, bool> function_deterministic;
+    mutable std::unordered_set<std::string> nondeterministic_functions_within_query_scope;
+    mutable std::unordered_set<std::string> nondeterministic_functions_out_of_query_scope;
+
     // worker status
     WorkerGroupStatusPtr worker_group_status;
 
@@ -1438,18 +1440,19 @@ public:
     void createOptimizerMetrics();
     OptimizerMetricsPtr & getOptimizerMetrics() { return optimizer_metrics; }
 
-    void setFunctionDeterministic(const std::string & fun_name, bool deterministic) const
+    void addNonDeterministicFunction(const std::string & fun_name, bool within_query_scope) const
     {
-        function_deterministic[fun_name] = deterministic;
+        nondeterministic_functions_out_of_query_scope.emplace(fun_name);
+        if (within_query_scope)
+            nondeterministic_functions_within_query_scope.emplace(fun_name);
     }
-
-    bool isFunctionDeterministic(const std::string & fun_name) const
+    bool isNonDeterministicFunction(const std::string & fun_name) const
     {
-        if (function_deterministic.contains(fun_name))
-        {
-            return function_deterministic.at(fun_name);
-        }
-        return true;
+        return nondeterministic_functions_within_query_scope.contains(fun_name);
+    }
+    bool isNonDeterministicFunctionOutOfQueryScope(const std::string & fun_name) const
+    {
+        return nondeterministic_functions_out_of_query_scope.contains(fun_name);
     }
 
     void initOptimizerProfile() { optimizer_profile = std::make_unique<OptimizerProfile>(); }

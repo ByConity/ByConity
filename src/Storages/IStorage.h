@@ -253,6 +253,7 @@ public:
 
     virtual bool isBucketTable() const {return false;}
     virtual TableDefinitionHash getTableHashForClusterBy() const {return {};}
+    virtual bool isTableClustered(ContextPtr /*context*/) const { return false; }
 
     /// Return true if there is at least one part containing lightweight deleted mask.
     virtual bool hasLightweightDeletedMask() const { return false; }

@@ -1702,6 +1702,13 @@ TableDefinitionHash MergeTreeMetaBase::getTableHashForClusterBy() const
 
 }
 
+bool MergeTreeMetaBase::isTableClustered(ContextPtr context_) const
+{
+    bool clustered;
+    context_->getCnchCatalog()->getTableClusterStatus(getStorageUUID(), clustered);
+    return clustered;
+}
+
 StorageSnapshotPtr MergeTreeMetaBase::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr  /*query_context*/) const
 {
     return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns);

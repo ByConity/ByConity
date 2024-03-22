@@ -14,12 +14,12 @@
  */
 
 #pragma once
-#include <QueryPlan/IQueryPlanStep.h>
-#include <QueryPlan/ITransformingStep.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Interpreters/asof.h>
 #include <Optimizer/PredicateConst.h>
 #include <Optimizer/RuntimeFilterUtils.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
@@ -93,10 +93,7 @@ public:
     const Names & getRightKeys() const { return right_keys; }
     const ConstASTPtr & getFilter() const { return filter; }
     bool isHasUsing() const { return has_using; }
-    std::optional<std::vector<bool>> getRequireRightKeys() const
-    {
-        return require_right_keys;
-    }
+    std::optional<std::vector<bool>> getRequireRightKeys() const { return require_right_keys; }
     ASOF::Inequality getAsofInequality() const { return asof_inequality; }
     DistributionType getDistributionType() const { return distribution_type; }
     void setDistributionType(DistributionType distribution_type_) { distribution_type = distribution_type_; }
@@ -150,7 +147,8 @@ public:
     bool supportSwap() const
     {
         if (getStrictness() != ASTTableJoin::Strictness::Unspecified && getStrictness() != ASTTableJoin::Strictness::All
-            && getStrictness() != ASTTableJoin::Strictness::Any)
+            && getStrictness() != ASTTableJoin::Strictness::Any && getStrictness() != ASTTableJoin::Strictness::Semi
+            && getStrictness() != ASTTableJoin::Strictness::Anti)
             return false;
 
         // todo can support swap
@@ -170,8 +168,7 @@ public:
 
     bool needStreamWithNonJoinedRows() const
     {
-        if (strictness == ASTTableJoin::Strictness::Asof ||
-            strictness == ASTTableJoin::Strictness::Semi)
+        if (strictness == ASTTableJoin::Strictness::Asof || strictness == ASTTableJoin::Strictness::Semi)
             return false;
         return isRightOrFull(kind);
     }

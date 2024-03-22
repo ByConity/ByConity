@@ -40,9 +40,9 @@ Projection
             │           │     └─ Projection
             │           │        │     Expressions: [t_time_sk]
             │           │        └─ Filter
-            │           │           │     Condition: (t_hour >= 8) AND (t_hour <= 9)
+            │           │           │     Condition: (t_hour >= 8) AND (t_hour <= cast(9, 'UInt16'))
             │           │           └─ TableScan tpcds1000.time_dim
-            │           │                    Where: (t_hour >= 8) AND (t_hour <= 9)
+            │           │                    Where: (t_hour >= 8) AND (t_hour <= cast(9, 'UInt16'))
             │           │                    Outputs: [t_time_sk, t_hour]
             │           └─ Broadcast Exchange
             │              └─ Projection
@@ -84,9 +84,9 @@ Projection
                            │     └─ Projection
                            │        │     Expressions: [t_time_sk_1]
                            │        └─ Filter
-                           │           │     Condition: (t_hour_1 >= 19) AND (t_hour_1 <= 20)
+                           │           │     Condition: (t_hour_1 >= 19) AND (t_hour_1 <= cast(20, 'UInt16'))
                            │           └─ TableScan tpcds1000.time_dim
-                           │                    Where: (t_hour >= 19) AND (t_hour <= 20)
+                           │                    Where: (t_hour >= 19) AND (t_hour <= cast(20, 'UInt16'))
                            │                    Outputs: t_time_sk_1:=t_time_sk, t_hour_1:=t_hour
                            └─ Broadcast Exchange
                               └─ Projection

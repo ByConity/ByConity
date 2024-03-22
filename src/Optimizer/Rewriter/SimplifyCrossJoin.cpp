@@ -42,6 +42,7 @@ PlanNodePtr SimplifyCrossJoinVisitor::visitJoinNode(JoinNode & node, Void & v)
     if (join_graph.size() < 3 || !join_graph.isContainsCrossJoin())
     {
         join_ptr = visitPlanNode(*join_ptr, v);
+        join_ptr->getStep()->setHints(node.getStep()->getHints());
         return join_ptr;
     }
 
@@ -49,6 +50,7 @@ PlanNodePtr SimplifyCrossJoinVisitor::visitJoinNode(JoinNode & node, Void & v)
     if (isOriginalOrder(join_order))
     {
         join_ptr = visitPlanNode(*join_ptr, v);
+        join_ptr->getStep()->setHints(node.getStep()->getHints());
         return join_ptr;
     }
 
@@ -58,7 +60,7 @@ PlanNodePtr SimplifyCrossJoinVisitor::visitJoinNode(JoinNode & node, Void & v)
         output_symbols.emplace_back(column.name);
     }
 
-    PlanNodePtr replacement = buildJoinTree(output_symbols, join_graph, join_order);
+    PlanNodePtr replacement = buildJoinTree(node, output_symbols, join_graph, join_order);
     replacement = visitPlanNode(*replacement, v);
     return replacement;
 }
@@ -125,7 +127,7 @@ std::vector<UInt32> SimplifyCrossJoinVisitor::getJoinOrder(JoinGraph & graph)
 }
 
 PlanNodePtr
-SimplifyCrossJoinVisitor::buildJoinTree(std::vector<String> & expected_output_symbols, JoinGraph & graph, std::vector<UInt32> & join_order)
+SimplifyCrossJoinVisitor::buildJoinTree(JoinNode & node, std::vector<String> & expected_output_symbols, JoinGraph & graph, std::vector<UInt32> & join_order)
 {
     Utils::checkArgument(join_order.size() >= 2);
 
@@ -142,7 +144,7 @@ SimplifyCrossJoinVisitor::buildJoinTree(std::vector<String> & expected_output_sy
         Names right_keys;
         for (auto & edge : graph.getEdges(right_node))
         {
-            PlanNodePtr target_node = edge.getTargetNode();
+            const PlanNodePtr & target_node = edge.getTargetNode();
             if (already_joined_nodes.contains(target_node->getId()))
             {
                 left_keys.emplace_back(edge.getTargetSymbol());
@@ -177,6 +179,8 @@ SimplifyCrossJoinVisitor::buildJoinTree(std::vector<String> & expected_output_sy
             right_keys);
         result = std::make_shared<JoinNode>(context->nextNodeId(), std::move(new_join_step), PlanNodes{result, right_node});
     }
+
+    result->getStep()->setHints(node.getStep()->getHints());
 
     auto filters = graph.getFilters();
     ASTPtr predicate = PredicateUtils::combineConjuncts(filters);

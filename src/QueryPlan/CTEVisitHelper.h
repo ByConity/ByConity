@@ -136,6 +136,30 @@ public:
         return res;
     }
 
+    template <typename C>
+    R acceptAndUpdate(CTEId id, PlanNodeVisitor<R, C> & visitor, C & context, std::function<PlanNodePtr(R &)> && proj_func)
+    {
+        auto it = visit_results.find(id);
+        if (it != visit_results.end())
+            return it->second;
+        auto res = VisitorUtil::accept(cte_info.getCTEDef(id), visitor, context);
+        cte_info.update(id, proj_func(res));
+        visit_results.emplace(id, res);
+        return res;
+    }
+
+    template <typename C>
+    R acceptAndUpdate(CTEId id, PlanNodeVisitor<R, C> & visitor, C & context)
+    {
+        auto it = visit_results.find(id);
+        if (it != visit_results.end())
+            return it->second;
+        auto res = VisitorUtil::accept(cte_info.getCTEDef(id), visitor, context);
+        cte_info.update(id, res);
+        visit_results.emplace(id, res);
+        return res;
+    }
+
     CTEInfo & getCTEInfo() { return cte_info; }
     bool hasVisited(CTEId cte_id) { return visit_results.contains(cte_id); }
 

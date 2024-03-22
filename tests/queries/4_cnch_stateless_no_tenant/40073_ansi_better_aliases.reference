@@ -29,6 +29,7 @@ Projection Est. ? rows
    └─ Projection Est. ? rows
       │     Expressions: expr#plus(a, 1):=a + 1
       └─ TableScan default.t40073_ansi_alias Est. ? rows
+               Where: (a + 1) > 1
                Prewhere: (a + 1) > 1
                Outputs: [a]
 SELECT a + 1 AS p FROM t40073_ansi_alias PREWHERE p > 1 ORDER BY p;
@@ -56,6 +57,7 @@ Projection Est. ? rows
    └─ Projection Est. ? rows
       │     Expressions: expr#plus(a, 1):=a + 1
       └─ TableScan default.t40073_ansi_alias Est. ? rows
+               Where: a > 1
                Prewhere: a > 1
                Outputs: [a]
 SELECT a + 1 AS a FROM t40073_ansi_alias PREWHERE a > 1 ORDER BY a;

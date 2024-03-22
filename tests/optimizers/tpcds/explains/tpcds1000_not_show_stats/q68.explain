@@ -69,9 +69,9 @@ Projection
                                        │  │     └─ Projection
                                        │  │        │     Expressions: [d_date_sk]
                                        │  │        └─ Filter
-                                       │  │           │     Condition: (d_dom >= 1) AND (d_dom <= 2) AND (d_year IN (1999, 2000, 2001))
+                                       │  │           │     Condition: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
                                        │  │           └─ TableScan tpcds1000.date_dim
-                                       │  │                    Where: (d_dom >= 1) AND (d_dom <= 2) AND (d_year IN (1999, 2000, 2001))
+                                       │  │                    Where: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
                                        │  │                    Outputs: [d_date_sk, d_year, d_dom]
                                        │  └─ Broadcast Exchange
                                        │     └─ Projection

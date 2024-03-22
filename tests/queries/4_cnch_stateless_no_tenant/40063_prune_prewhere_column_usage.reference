@@ -3,5 +3,6 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ TableScan default.t40063 Est. ? rows
             Partition filter: p_date >= cast(19358, \'Date\')
+            Where: b > 0
             Prewhere: b > 0
             Outputs: [a]

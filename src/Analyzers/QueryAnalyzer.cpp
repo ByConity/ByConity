@@ -13,6 +13,9 @@
  * limitations under the License.
  */
 
+#include <sstream>
+#include <unordered_map>
+#include <Access/ContextAccess.h>
 #include <Analyzers/ExprAnalyzer.h>
 #include <Analyzers/ExpressionVisitor.h>
 #include <Analyzers/QueryAnalyzer.h>
@@ -20,10 +23,12 @@
 #include <Analyzers/analyze_common.h>
 #include <Analyzers/function_utils.h>
 #include <Analyzers/tryEvaluateConstantExpression.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/ArrayJoinedColumnsVisitor.h>
@@ -32,7 +37,10 @@
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Interpreters/join_common.h>
 #include <Interpreters/processColumnTransformers.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Optimizer/Utils.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTExplainQuery.h>
@@ -42,28 +50,14 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTVisitor.h>
+#include <Parsers/formatAST.h>
 #include <Parsers/queryToString.h>
 #include <QueryPlan/Void.h>
 #include <Storages/IStorage.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/StorageDistributed.h>
-#include <Storages/StorageMemory.h>
-
-#if USE_HIVE
-#    include <Storages/Hive/StorageCnchHive.h>
-#endif
-#include <Optimizer/Utils.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeArray.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Interpreters/join_common.h>
-#include <unordered_map>
-#include <sstream>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
-#include "Parsers/formatAST.h"
-#include <Access/ContextAccess.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageDistributed.h>
 
 using namespace std::string_literals;
 
@@ -517,7 +511,6 @@ QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_select, AST
     for (size_t idx = 1; idx < tables_in_select.children.size(); ++idx)
     {
         auto & table_element = tables_in_select.children[idx]->as<ASTTablesInSelectQueryElement &>();
-
         if (table_element.table_expression)
         {
             auto * table_expression = table_element.table_expression->as<ASTTableExpression>();
@@ -570,6 +563,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
     // get storage information
     StoragePtr storage;
     String full_table_name;
+
     {
         auto storage_id = context->tryResolveStorageID(db_and_table.getTableId());
         storage = DatabaseCatalog::instance().getTable(storage_id, context);
@@ -580,12 +574,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
         storage->renameInMemory(storage_id);
         full_table_name = storage_id.getFullTableName();
 
-        if (storage_id.getDatabaseName() != "system" &&
-            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get())
-              || dynamic_cast<const StorageMemory *>(storage.get())
-              || dynamic_cast<const StorageCnchHive *>(storage.get())
-              || dynamic_cast<const IStorageCnchFile *>(storage.get())))
-            throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
+        if (storage_id.getDatabaseName() != "system" && !storage->supportsOptimizer())
+            throw Exception("table is not supported in optimizer", ErrorCodes::NOT_IMPLEMENTED);
 
         analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
 
@@ -1356,7 +1346,8 @@ void QueryAnalyzerVisitor::analyzeWhere(ASTSelectQuery & select_query, ScopePtr 
     ExprAnalyzerOptions expr_options {"WHERE expression"};
     expr_options
         .selectQuery(select_query)
-        .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED);
+        .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED)
+        .subqueryToSemiAnti(true);
     auto filter_type = ExprAnalyzer::analyze(select_query.where(), source_scope, context, analysis, expr_options);
 
     if (auto inner_type = removeNullable(removeLowCardinality(filter_type)))

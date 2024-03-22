@@ -3,7 +3,7 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: toDate(toDateTime(`expr#toInt64(divide(assumeNotNull(mapElement(int_profiles, \'first_event_time\')), 1000))`), \'Asia/Shanghai\') != toDate(toDateTime(toUInt64(time / 1000)), \'Asia/Shanghai\')
-      └─ Inner Join Est. ? rows
+      └─ Inner Any Join Est. ? rows
          │     Condition: hash_uid == hash_uid_1
          ├─ TableScan uba_production_default.events Est. ? rows
          │        Outputs: [app_id, app_name, device_id, web_id, hash_uid, server_time, time, event, stat_standard_id, event_date, string_params, int_params, float_params, string_profiles, int_profiles, float_profiles, user_id, ssid, content, string_array_profiles, string_array_params, string_item_profiles, float_item_profiles, int_item_profiles]

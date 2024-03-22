@@ -13,8 +13,10 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Optimizer/Rule/Rules.h>
 
+#include <Optimizer/Rewriter/RemoveApply.h>
 #include <Optimizer/Rule/Rewrite/DistinctToAggregate.h>
 #include <Optimizer/Rule/Rewrite/ExplainAnalyzeRules.h>
 #include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
@@ -127,8 +129,7 @@ std::vector<RulePtr> Rules::pushDownLimitRules()
         std::make_shared<PushLimitThroughUnion>(),
         std::make_shared<PushdownLimitIntoWindow>(),
         std::make_shared<PushTopNThroughProjection>(),
-        std::make_shared<PushLimitIntoSorting>()
-    };
+        std::make_shared<PushLimitIntoSorting>()};
 }
 
 std::vector<RulePtr> Rules::distinctToAggregateRules()
@@ -204,4 +205,12 @@ std::vector<RulePtr> Rules::pushApplyRules()
     return {std::make_shared<PushDownApplyThroughJoin>()};
 }
 
+std::vector<RulePtr> Rules::unnestingSubqueryRules()
+{
+    return {
+        std::make_shared<UnnestingWithWindow>(),
+        std::make_shared<UnnestingWithProjectionWindow>(),
+        std::make_shared<ExistsToSemiJoin>(),
+        std::make_shared<InToSemiJoin>()};
+}
 }

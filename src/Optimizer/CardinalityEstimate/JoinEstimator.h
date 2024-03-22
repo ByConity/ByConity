@@ -16,8 +16,8 @@
 #pragma once
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
 #include <Parsers/ASTLiteral.h>
-#include <QueryPlan/JoinStep.h>
 #include <Parsers/IAST_fwd.h>
+#include <QueryPlan/JoinStep.h>
 #include <Optimizer/DataDependency/InclusionDependency.h>
 
 namespace DB
@@ -47,9 +47,10 @@ public:
         PlanNodeStatisticsPtr & left_stats,
         PlanNodeStatisticsPtr & right_stats,
         const JoinStep & join_step,
-        Context & context,
+        ContextMutablePtr & context,
         bool is_left_base_table = false,
         bool is_right_base_table = false,
+        const std::vector<double> & children_filter_selectivity = {},
         const InclusionDependency & inclusion_dependency = {});
 
     static PlanNodeStatisticsPtr computeCardinality(
@@ -58,10 +59,11 @@ public:
         const Names & left_keys,
         const Names & right_keys,
         ASTTableJoin::Kind kind,
+        ASTTableJoin::Strictness strictness,
         Context & context,
         bool is_left_base_table = false,
         bool is_right_base_table = false,
-        ConstASTPtr filter = nullptr,
+        const std::vector<double> & children_filter_selectivity = {},
         const InclusionDependency & inclusion_dependency = {},
         bool only_cardinality = false);
 
@@ -82,6 +84,7 @@ private:
         String pk_key,
         bool is_left_base_table,
         bool is_right_base_table,
+        double pk_filter_selectivity,
         std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,
         bool only_cardinality = false);
 
@@ -91,6 +94,7 @@ private:
         SymbolStatistics & left_key_stats,
         SymbolStatistics & right_key_stats,
         ASTTableJoin::Kind kind,
+        ASTTableJoin::Strictness strictness,
         String left_key,
         String right_key,
         std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,
@@ -102,6 +106,7 @@ private:
         SymbolStatistics & left_key_stats,
         SymbolStatistics & right_key_stats,
         ASTTableJoin::Kind kind,
+        ASTTableJoin::Strictness strictness,
         String left_key,
         String right_key,
         std::unordered_map<String, SymbolStatisticsPtr> & join_output_statistics,

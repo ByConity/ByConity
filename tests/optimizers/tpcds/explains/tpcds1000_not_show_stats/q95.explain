@@ -10,37 +10,35 @@ Projection
             └─ Aggregating
                │     Group by: {}
                │     Aggregates: expr#uniqExact(ws_order_number):=AggNull(uniqExact)(ws_order_number), expr#sum(ws_ext_ship_cost):=AggNull(sum)(ws_ext_ship_cost), expr#sum(ws_net_profit):=AggNull(sum)(ws_net_profit)
-               └─ Inner Join
+               └─ Right Semi Join
                   │     Condition: wr_order_number == ws_order_number
                   │     Runtime Filters Builder: {ws_order_number}
-                  ├─ Aggregating
-                  │  │     Group by: {wr_order_number}
-                  │  └─ Inner (PARALLEL_HASH) Join
-                  │     │     Condition: wr_order_number == ws_order_number_5
-                  │     │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
-                  │     ├─ Inner (PARALLEL_HASH) Join
-                  │     │  │     Condition: ws_order_number_6 == wr_order_number
-                  │     │  ├─ Repartition Exchange
-                  │     │  │  │     Partition by: {ws_order_number_6}
-                  │     │  │  └─ Filter
-                  │     │  │     │     Condition: isNotNull(ws_order_number_6) Runtime Filters: {ws_order_number_6}
-                  │     │  │     └─ TableScan tpcds1000.web_sales
-                  │     │  │              Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
-                  │     │  │              Outputs: ws_warehouse_sk_7:=ws_warehouse_sk, ws_order_number_6:=ws_order_number
-                  │     │  └─ Repartition Exchange
-                  │     │     │     Partition by: {wr_order_number}
-                  │     │     └─ Filter
-                  │     │        │     Condition: isNotNull(wr_order_number) Runtime Filters: {wr_order_number}
-                  │     │        └─ TableScan tpcds1000.web_returns
-                  │     │                 Where: isNotNull(wr_order_number) Runtime Filters: {wr_order_number}
-                  │     │                 Outputs: [wr_order_number]
-                  │     └─ Repartition Exchange
-                  │        │     Partition by: {ws_order_number_5}
-                  │        └─ Filter
-                  │           │     Condition: isNotNull(ws_order_number_5) Runtime Filters: {ws_order_number_5}
-                  │           └─ TableScan tpcds1000.web_sales
-                  │                    Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
-                  │                    Outputs: ws_warehouse_sk_6:=ws_warehouse_sk, ws_order_number_5:=ws_order_number
+                  ├─ Inner (PARALLEL_HASH) Join
+                  │  │     Condition: wr_order_number == ws_order_number_5
+                  │  │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
+                  │  ├─ Inner (PARALLEL_HASH) Join
+                  │  │  │     Condition: ws_order_number_6 == wr_order_number
+                  │  │  ├─ Repartition Exchange
+                  │  │  │  │     Partition by: {ws_order_number_6}
+                  │  │  │  └─ Filter
+                  │  │  │     │     Condition: Runtime Filters: {ws_order_number_6}
+                  │  │  │     └─ TableScan tpcds1000.web_sales
+                  │  │  │              Where: Runtime Filters: {ws_order_number}
+                  │  │  │              Outputs: ws_warehouse_sk_7:=ws_warehouse_sk, ws_order_number_6:=ws_order_number
+                  │  │  └─ Repartition Exchange
+                  │  │     │     Partition by: {wr_order_number}
+                  │  │     └─ Filter
+                  │  │        │     Condition: Runtime Filters: {wr_order_number}
+                  │  │        └─ TableScan tpcds1000.web_returns
+                  │  │                 Where: Runtime Filters: {wr_order_number}
+                  │  │                 Outputs: [wr_order_number]
+                  │  └─ Repartition Exchange
+                  │     │     Partition by: {ws_order_number_5}
+                  │     └─ Filter
+                  │        │     Condition: Runtime Filters: {ws_order_number_5}
+                  │        └─ TableScan tpcds1000.web_sales
+                  │                 Where: Runtime Filters: {ws_order_number}
+                  │                 Outputs: ws_warehouse_sk_6:=ws_warehouse_sk, ws_order_number_5:=ws_order_number
                   └─ Repartition Exchange
                      │     Partition by: {ws_order_number}
                      └─ Inner Join
@@ -53,17 +51,17 @@ Projection
                         │  │  │     Condition: ws_ship_date_sk == d_date_sk
                         │  │  │     Runtime Filters Builder: {d_date_sk}
                         │  │  ├─ Filter
-                        │  │  │  │     Condition: isNotNull(ws_order_number) Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
+                        │  │  │  │     Condition: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
                         │  │  │  └─ TableScan tpcds1000.web_sales
-                        │  │  │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
+                        │  │  │           Where: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
                         │  │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_order_number, ws_ext_ship_cost, ws_net_profit]
                         │  │  └─ Broadcast Exchange
                         │  │     └─ Projection
                         │  │        │     Expressions: [d_date_sk]
                         │  │        └─ Filter
-                        │  │           │     Condition: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
+                        │  │           │     Condition: (d_date >= cast(10623, 'Date32')) AND (d_date <= cast(10683, 'Date32'))
                         │  │           └─ TableScan tpcds1000.date_dim
-                        │  │                    Where: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
+                        │  │                    Where: (d_date >= cast(10623, 'Date32')) AND (d_date <= cast(10683, 'Date32'))
                         │  │                    Outputs: [d_date_sk, d_date]
                         │  └─ Broadcast Exchange
                         │     └─ Projection

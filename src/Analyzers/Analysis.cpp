@@ -59,14 +59,14 @@ void Analysis::setTableStorageScope(ASTIdentifier & db_and_table, ScopePtr scope
     MAP_SET(table_storage_scopes, &db_and_table, scope);
 }
 
-std::unordered_map<ASTIdentifier *, ScopePtr> & Analysis::getTableStorageScopeMap()
-{
-    return table_storage_scopes;
-}
-
 ScopePtr Analysis::getTableStorageScope(ASTIdentifier & db_and_table)
 {
     MAP_GET(table_storage_scopes, &db_and_table);
+}
+
+std::unordered_map<ASTIdentifier *, ScopePtr> & Analysis::getTableStorageScopeMap()
+{
+    return table_storage_scopes;
 }
 
 /*

@@ -1,0 +1,20 @@
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [app_id, app_name, content, device_id, event, event_date, float_item_profiles, float_params, float_profiles, hash_uid, int_item_profiles, int_params, int_profiles, server_time, ssid, stat_standard_id, string_array_params, string_array_profiles, string_item_profiles, string_params, string_profiles, time, user_id, web_id], first_event_time:=`expr#toInt64(divide(assumeNotNull(mapElement(int_profiles, \'first_event_time\')), 1000))`, join_key:=hash_uid_1
+   └─ Filter Est. ? rows
+      │     Condition: toDate(toDateTime(`expr#toInt64(divide(assumeNotNull(mapElement(int_profiles, \'first_event_time\')), 1000))`), \'Asia/Shanghai\') != toDate(toDateTime(toUInt64(time / 1000)), \'Asia/Shanghai\')
+      └─ Inner Any Join Est. ? rows
+         │     Condition: hash_uid == hash_uid_1
+         ├─ Repartition Exchange Est. ? rows
+         │  │     Partition by: {hash_uid}
+         │  └─ TableScan uba_production_default.events Est. ? rows
+         │           Outputs: [app_id, app_name, content, device_id, event, event_date, float_item_profiles, float_params, float_profiles, hash_uid, int_item_profiles, int_params, int_profiles, server_time, ssid, stat_standard_id, string_array_params, string_array_profiles, string_item_profiles, string_params, string_profiles, time, user_id, web_id]
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {hash_uid_1}
+            └─ Projection Est. ? rows
+               │     Expressions: [hash_uid_1], expr#toInt64(divide(assumeNotNull(mapElement(int_profiles, \'first_event_time\')), 1000)):=toInt64(assumeNotNull(`__int_profiles__\'first_event_time\'`) / 1000)
+               └─ Filter Est. ? rows
+                  │     Condition: (app_id_1 = 20000696) AND (last_active_date >= cast(19431, \'Date\'))
+                  └─ TableScan uba_production_default.users Est. ? rows
+                           Where: (app_id = 20000696) AND (last_active_date >= cast(19431, \'Date\'))
+                           Outputs: [__int_profiles__\'first_event_time\', last_active_date], app_id_1:=app_id, hash_uid_1:=hash_uid

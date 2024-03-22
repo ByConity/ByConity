@@ -133,6 +133,14 @@ double SymbolStatistics::estimateLessThanOrLessThanEqualFilter(double upper_boun
     double selectivity;
     if (histogram.getBuckets().empty())
     {
+        if (std::isnan(max) || std::isnan(min))
+        {
+            return -1;
+        }
+        if (max == 0 && min == 0)
+        {
+            return -1;
+        }
         double range = upper_bound - lower_bound;
         if (range == 0 && upper_bound_inclusive)
         {
@@ -156,10 +164,18 @@ SymbolStatistics::estimateGreaterThanOrGreaterThanEqualFilter(double upper_bound
     double selectivity;
     if (histogram.getBuckets().empty())
     {
+        if (std::isnan(max) || std::isnan(min))
+        {
+            return -1;
+        }
+        if (max == 0 && min == 0)
+        {
+            return -1;
+        }
         double range = upper_bound - lower_bound;
         if (range == 0 && lower_bound_inclusive)
         {
-            selectivity = (max - min <= 0) ? 1 : 1 / (ndv);
+            selectivity = (max - min <= 0) ? 1 : 1 / (max - min);
         }
         else
         {

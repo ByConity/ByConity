@@ -5,9 +5,9 @@ Projection Est. 1 rows
       └─ Aggregating Est. 1 rows
          │     Group by: {}
          │     Aggregates: expr#sum(multiply(LO_EXTENDEDPRICE, LO_DISCOUNT)):=AggNull(sum)(expr#multiply(LO_EXTENDEDPRICE, LO_DISCOUNT))
-         └─ Projection Est. 327267329 rows
+         └─ Projection Est. 81816832 rows
             │     Expressions: expr#multiply(LO_EXTENDEDPRICE, LO_DISCOUNT):=LO_EXTENDEDPRICE * LO_DISCOUNT
-            └─ Filter Est. 327267329 rows
+            └─ Filter Est. 81816832 rows
                │     Condition: (toISOWeek(LO_ORDERDATE) = 6) AND (toYear(LO_ORDERDATE) = 1994) AND (LO_DISCOUNT >= 5) AND (LO_DISCOUNT <= 7) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35)
                └─ TableScan ssb1000.lineorder Est. 5999989813 rows
                         Where: (toISOWeek(LO_ORDERDATE) = 6) AND (toYear(LO_ORDERDATE) = 1994) AND (LO_DISCOUNT >= 5) AND (LO_DISCOUNT <= 7) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35)

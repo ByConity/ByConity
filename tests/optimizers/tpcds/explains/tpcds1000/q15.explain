@@ -5,14 +5,14 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {ca_zip ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 9322 rows
+      └─ Gather Exchange Est. 4661 rows
          └─ Sorting Est. 100 rows
             │     Order by: {ca_zip ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 9322 rows
-               └─ Repartition Exchange Est. 9322 rows
+            └─ MergingAggregated Est. 4661 rows
+               └─ Repartition Exchange Est. 4661 rows
                   │     Partition by: {ca_zip}
-                  └─ Aggregating Est. 9322 rows
+                  └─ Aggregating Est. 4661 rows
                      │     Group by: {ca_zip}
                      │     Aggregates: expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
                      └─ Inner (PARALLEL_HASH) Join Est. 70587275 rows

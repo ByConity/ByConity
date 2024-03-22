@@ -35,9 +35,9 @@ Projection Est. 100 rows
                            │  │  │     └─ Projection Est. 334 rows
                            │  │  │        │     Expressions: [d_date_sk]
                            │  │  │        └─ Filter Est. 334 rows
-                           │  │  │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                           │  │  │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
                            │  │  │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                           │  │  │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                           │  │  │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
                            │  │  │                    Outputs: [d_date_sk, d_month_seq]
                            │  │  └─ Broadcast Exchange Est. 20 rows
                            │  │     └─ TableScan tpcds1000.ship_mode Est. 20 rows

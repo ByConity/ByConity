@@ -43,9 +43,9 @@ Projection Est. 100 rows
                               │     │     │     └─ Projection Est. 137200 rows
                               │     │     │        │     Expressions: [cd_demo_sk, cd_dep_count]
                               │     │     │        └─ Filter Est. 137200 rows
-                              │     │     │           │     Condition: (cd_gender = 'F') AND (cd_education_status = 'Unknown')
+                              │     │     │           │     Condition: (cd_education_status = 'Unknown') AND (cd_gender = 'F')
                               │     │     │           └─ TableScan tpcds1000_sample.customer_demographics Est. 1920800 rows
-                              │     │     │                    Where: (cd_gender = 'F') AND (cd_education_status = 'Unknown')
+                              │     │     │                    Where: (cd_education_status = 'Unknown') AND (cd_gender = 'F')
                               │     │     │                    Outputs: [cd_demo_sk, cd_gender, cd_education_status, cd_dep_count]
                               │     │     └─ Broadcast Exchange Est. 365 rows
                               │     │        └─ Projection Est. 365 rows
@@ -72,9 +72,9 @@ Projection Est. 100 rows
                               │           └─ Repartition Exchange Est. 881333 rows
                               │              │     Partition by: {ca_address_sk}
                               │              └─ Filter Est. 881333 rows
-                              │                 │     Condition: ca_state IN ('IN', 'MS', 'ND', 'NM', 'OK', 'VA')
+                              │                 │     Condition: ca_state IN ('MS', 'IN', 'ND', 'OK', 'NM', 'VA')
                               │                 └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
-                              │                          Where: ca_state IN ('IN', 'MS', 'ND', 'NM', 'OK', 'VA')
+                              │                          Where: ca_state IN ('MS', 'IN', 'ND', 'OK', 'NM', 'VA')
                               │                          Outputs: [ca_address_sk, ca_county, ca_state, ca_country]
                               └─ Repartition Exchange Est. 300000 rows
                                  │     Partition by: {i_item_sk}

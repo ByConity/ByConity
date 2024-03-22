@@ -401,6 +401,7 @@ public:
 
     bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
     TableDefinitionHash getTableHashForClusterBy() const override; // to compare table engines efficiently
+    bool isTableClustered(ContextPtr context_) const override;
 
     /// Snapshot for MergeTree contains the current set of data parts
     /// at the moment of the start of query.

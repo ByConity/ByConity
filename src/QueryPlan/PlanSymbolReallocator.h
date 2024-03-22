@@ -121,7 +121,7 @@ public:
         {
             mappings.clear();
             for (const auto & output : step->getAssignments())
-                mappings[output.first] = output.first;
+                mappings.emplace(output.first, output.first);
         }
 
         return {plan_node, mappings};
@@ -137,11 +137,11 @@ public:
 
         auto symbol_mapper = symbol_mapper_provider(mappings);
         auto step = symbol_mapper.map(*join.getStep());
-        if (step->getKind() == ASTTableJoin::Kind::Inner && step->getStrictness() != ASTTableJoin::Strictness::Asof)
+        if (step->getKind() == ASTTableJoin::Kind::Inner && step->getAsofInequality() == ASOF::Inequality::GreaterOrEquals)
         {
             for (size_t i = 0; i < step->getLeftKeys().size(); i++)
             {
-                mappings[step->getRightKeys()[i]] = step->getLeftKeys()[i];
+                mappings.emplace(step->getRightKeys()[i], step->getLeftKeys()[i]);
             }
         }
 

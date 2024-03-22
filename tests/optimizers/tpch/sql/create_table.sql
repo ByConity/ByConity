@@ -1,46 +1,56 @@
 create table nation (
-    n_nationkey  Int32,
-    n_name  Nullable(String),
-    n_regionkey  Nullable(Int32),
-    n_comment  Nullable(String)
+        n_nationkey  Int32 NOT NULL,
+        n_name       LowCardinality(String NOT NULL),
+        n_regionkey  Int32 NOT NULL,
+        n_comment    String NOT NULL
 ) ENGINE = CnchMergeTree()
-ORDER BY n_nationkey;
+ORDER BY n_nationkey
+CLUSTER BY n_nationkey INTO 3 BUCKETS;
+
 create table region (
-    r_regionkey  Int32,
-    r_name  Nullable(String),
-    r_comment  Nullable(String)
+        r_regionkey  Int32 NOT NULL,
+        r_name       LowCardinality(String NOT NULL),
+        r_comment    LowCardinality(Nullable(String))
 ) ENGINE = CnchMergeTree()
-ORDER BY r_regionkey;
+ORDER BY r_regionkey
+CLUSTER BY r_regionkey INTO 3 BUCKETS;
+
 create table part (
-    p_partkey  Int32,
-    p_name  Nullable(String),
-    p_mfgr  Nullable(String),
-    p_brand  Nullable(String),
-    p_type  Nullable(String),
-    p_size  Nullable(Int32),
-    p_container  Nullable(String),
-    p_retailprice  Nullable(Float64),
-    p_comment  Nullable(String)
-) ENGINE = CnchMergeTree()
-ORDER BY p_partkey;
+        p_partkey     Int32 NOT NULL,
+        p_name        String NOT NULL,
+        p_mfgr        LowCardinality(String NOT NULL),
+        p_brand       LowCardinality(String NOT NULL),
+        p_type        LowCardinality(String NOT NULL),
+        p_size        Int32 NOT NULL,
+        p_container   LowCardinality(String NOT NULL),
+        p_retailprice Decimal(15,2) NOT NULL,
+        p_comment     String NOT NULL
+) ENGINE = CnchMergeTree() 
+ORDER BY p_partkey
+CLUSTER BY p_partkey INTO 3 BUCKETS;
+
 create table supplier (
-    s_suppkey  Int32,
-    s_name  Nullable(String),
-    s_address  Nullable(String),
-    s_nationkey  Nullable(Int32),
-    s_phone  Nullable(String),
-    s_acctbal  Nullable(Float64),
-    s_comment  Nullable(String)
-) ENGINE = CnchMergeTree()
-ORDER BY s_suppkey;
+        s_suppkey     Int32 NOT NULL,
+        s_name        String NOT NULL,
+        s_address     String NOT NULL,
+        s_nationkey   Int32 NOT NULL,
+        s_phone       String NOT NULL,
+        s_acctbal     Decimal(15,2) NOT NULL,
+        s_comment     String NOT NULL
+) ENGINE = CnchMergeTree() 
+ORDER BY s_suppkey
+CLUSTER BY s_suppkey INTO 3 BUCKETS;
+
 create table partsupp (
-    ps_partkey  Int32,
-    ps_suppkey  Int32,
-    ps_availqty  Nullable(Int32),
-    ps_supplycost  Nullable(Float64),
-    ps_comment  Nullable(String)
+        ps_partkey     Int32 NOT NULL,
+        ps_suppkey     Int32 NOT NULL,
+        ps_availqty    Int32 NOT NULL,
+        ps_supplycost  Decimal(15,2) NOT NULL,
+        ps_comment     String NOT NULL
 ) ENGINE = CnchMergeTree()
-ORDER BY ps_partkey;
+ORDER BY ps_partkey
+CLUSTER BY ps_partkey INTO 3 BUCKETS;
+
 create table customer (
     c_custkey  Int32,
     c_name  Nullable(String),
@@ -50,36 +60,41 @@ create table customer (
     c_acctbal  Nullable(Float64),
     c_mktsegment  Nullable(String),
     c_comment  Nullable(String)
-) ENGINE = CnchMergeTree()
-ORDER BY c_custkey;
-create table orders (
-    o_orderkey  Int32,
-    o_custkey  Nullable(Int32),
-    o_orderstatus  Nullable(String),
-    o_totalprice  Nullable(Float64),
-    o_orderdate Nullable(date),
-    o_orderpriority  Nullable(String),
-    o_clerk  Nullable(String),
-    o_shippriority  Nullable(Int32),
-    o_comment  Nullable(String)
-) ENGINE = CnchMergeTree()
-ORDER BY o_orderkey;
-create table lineitem (
-    l_orderkey  Int32,
-    l_partkey  Nullable(Int32),
-    l_suppkey  Nullable(Int32),
-    l_linenumber  Nullable(Int32),
-    l_quantity  Nullable(Float64),
-    l_extendedprice  Nullable(Float64),
-    l_discount  Nullable(Float64),
-    l_tax  Nullable(Float64),
-    l_returnflag  Nullable(String),
-    l_linestatus  Nullable(String),
-    l_shipdate Nullable(date),
-    l_commitdate Nullable(date),
-    l_receiptdate Nullable(date),
-    l_shipinstruct  Nullable(String),
-    l_shipmode  Nullable(String),
-    l_comment  Nullable(String)
 ) ENGINE = CnchMergeTree() 
-ORDER BY l_orderkey;
+ORDER BY c_custkey
+CLUSTER BY c_custkey INTO 3 BUCKETS;
+
+create table orders (
+        o_orderkey       Int32 NOT NULL,
+        o_custkey        Int32 NOT NULL,
+        o_orderstatus    FixedString(1) NOT NULL,
+        o_totalprice     Decimal(15,2)  NOT NULL,
+        o_orderdate      DATE NOT NULL,
+        o_orderpriority  LowCardinality(String NOT NULL),
+        o_clerk          String NOT NULL,
+        o_shippriority   Int32 NOT NULL,
+        o_comment        String NOT NULL
+) ENGINE = CnchMergeTree() 
+ORDER BY o_orderkey
+CLUSTER BY o_orderkey INTO 3 BUCKETS;
+
+create table lineitem (
+        l_orderkey    Int32 NOT NULL,
+        l_partkey     Int32 NOT NULL,
+        l_suppkey     Int32 NOT NULL,
+        l_linenumber  Int32 NOT NULL,
+        l_quantity    Decimal(15,2) NOT NULL,
+        l_extendedprice  Decimal(15,2) NOT NULL,
+        l_discount    Decimal(15,2) NOT NULL,
+        l_tax         Decimal(15,2) NOT NULL,
+        l_returnflag  FixedString(1) NOT NULL,
+        l_linestatus  FixedString(1) NOT NULL,
+        l_shipdate    DATE NOT NULL,
+        l_commitdate  DATE NOT NULL,
+        l_receiptdate DATE NOT NULL,
+        l_shipinstruct LowCardinality(String NOT NULL),
+        l_shipmode     LowCardinality(String NOT NULL),
+        l_comment      String NOT NULL
+) ENGINE = CnchMergeTree() 
+ORDER BY l_orderkey
+CLUSTER BY l_orderkey INTO 3 BUCKETS;

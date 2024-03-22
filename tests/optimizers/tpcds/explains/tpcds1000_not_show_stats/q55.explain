@@ -30,16 +30,15 @@ Projection
                         │     └─ Projection
                         │        │     Expressions: [d_date_sk]
                         │        └─ Filter
-                        │           │     Condition: (d_year = 1999) AND (d_moy = 11)
+                        │           │     Condition: (d_moy = 11) AND (d_year = 1999)
                         │           └─ TableScan tpcds1000.date_dim
-                        │                    Where: (d_year = 1999) AND (d_moy = 11)
+                        │                    Where: (d_moy = 11) AND (d_year = 1999)
                         │                    Outputs: [d_date_sk, d_year, d_moy]
-                        └─ Broadcast Exchange
-                           └─ Projection
-                              │     Expressions: [i_brand, i_brand_id, i_item_sk]
-                              └─ Filter
-                                 │     Condition: i_manager_id = 28
-                                 └─ TableScan tpcds1000.item
-                                          Where: i_manager_id = 28
-                                          Outputs: [i_item_sk, i_brand_id, i_brand, i_manager_id]
+                        └─ Projection
+                           │     Expressions: [i_brand, i_brand_id, i_item_sk]
+                           └─ Filter
+                              │     Condition: i_manager_id = 28
+                              └─ TableScan tpcds1000.item
+                                       Where: i_manager_id = 28
+                                       Outputs: [i_item_sk, i_brand_id, i_brand, i_manager_id]
 note: Runtime Filter is applied for 2 times.

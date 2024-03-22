@@ -22,7 +22,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <QueryPlan/Assignment.h>
-#include <Storages/StorageMemory.h>
 
 namespace DB
 {
