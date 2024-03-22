@@ -43,7 +43,7 @@ private:
     std::set<std::string> extractSymbol(const ConstASTPtr & node);
     PlanNodePtr resetChildren(PlanNodeBase & node, PlanNodes & children, RemoveRedundantAggregateContext & context);
 
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<PlanNodePtr> cte_helper;
     std::unordered_map<CTEId, std::vector<NameSet>> visit_results;
     ContextMutablePtr context;
 };

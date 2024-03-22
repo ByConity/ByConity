@@ -78,7 +78,7 @@ public:
     PlanNodeStatisticsPtr visitPlanNode(PlanNodeBase &, CardinalityContext &) override;
     PlanNodeStatisticsPtr visitCTERefNode(CTERefNode & node, CardinalityContext & context) override;
 private:
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<void> cte_helper;
 };
 
 }

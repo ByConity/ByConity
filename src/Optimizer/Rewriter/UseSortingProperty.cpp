@@ -15,7 +15,7 @@ void SortingOrderedSource::rewrite(QueryPlan & plan, ContextMutablePtr context) 
     Void require;
     auto result = VisitorUtil::accept(plan.getPlanNode(), rewriter, require);
 
-    PushSortingInfoRewriter push_rewriter{context, plan.getCTEInfo(), plan.getPlanNode()};
+    PushSortingInfoRewriter push_rewriter{context, plan.getCTEInfo()};
     SortInfo sort_info;
     auto plan_node = VisitorUtil::accept(result.plan, push_rewriter, sort_info);
     plan.update(plan_node);

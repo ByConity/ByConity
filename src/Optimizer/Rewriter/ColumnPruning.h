@@ -105,7 +105,7 @@ private:
     PlanNodePtr convertFilterWindowToSortingLimit(PlanNodePtr node, NameSet & require);
 
     ContextMutablePtr context;
-    CTEPostorderVisitHelper post_order_cte_helper;
+    PostorderCTEVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, ColumnPruningContext> cte_require_columns{};
 
     bool add_projection;

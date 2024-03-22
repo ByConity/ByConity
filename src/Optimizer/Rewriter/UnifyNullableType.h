@@ -59,7 +59,7 @@ public:
 #undef VISITOR_DEF
 
 private:
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<PlanNodePtr> cte_helper;
 };
 
 }

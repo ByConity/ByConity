@@ -59,7 +59,7 @@ public:
 
 private:
     ContextMutablePtr context;
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<PlanNodePtr> cte_helper;
     std::unordered_map<PlanNodeId, UnionFind<String>> & union_find_map;
 };
 }
