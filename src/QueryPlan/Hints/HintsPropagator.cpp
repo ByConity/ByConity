@@ -11,7 +11,7 @@ namespace DB
 
 void HintsPropagator::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    HintsVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
+    HintsVisitor visitor{context, plan.getCTEInfo()};
     HintsVisitorContext hints_context;
     VisitorUtil::accept(plan.getPlanNode(), visitor, hints_context);
 }
@@ -128,7 +128,7 @@ void HintsVisitor::visitCTERefNode(CTERefNode & node, HintsVisitorContext &)
     auto hints_list_tmp = hints_list;
     hints_list.clear();
     HintsVisitorContext hints_context;
-    post_order_cte_helper.accept(cte_id, *this, hints_context);
+    cte_helper.accept(cte_id, *this, hints_context);
     hints_list = hints_list_tmp;
 }
 

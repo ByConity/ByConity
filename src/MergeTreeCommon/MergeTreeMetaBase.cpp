@@ -1536,6 +1536,21 @@ String MergeTreeMetaBase::getStorageUniqueID() const
         return storage_address;
 }
 
+UUID MergeTreeMetaBase::getCnchStorageUUID() const
+{
+    if (getStorageID().hasUUID())
+        return getStorageID().uuid;
+    else
+    {
+        /// Get cnch table uuid from settings as CloudMergeTree has no uuid for Kafka task
+        String uuid_str = getSettings()->cnch_table_uuid.value;
+        if (!uuid_str.empty())
+            return UUIDHelpers::toUUID(uuid_str);
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Storage uuid of table {} can't be empty", getStorageID().getNameForLogs());
+    }
+}
+
 void MergeTreeMetaBase::calculateColumnSizesImpl()
 {
     Stopwatch stopwatch;

@@ -229,8 +229,7 @@ void AttachContext::writeMetaFilesNameRecord(const DB::DiskPtr & disk, const DB:
     res.rename_map[meta_file_name] = "";
 }
 
-void AttachContext::writeRenameMapToKV(Catalog::Catalog& catalog, const String& uuid,
-    const TxnTimestamp& txn_id)
+void AttachContext::writeRenameMapToKV(Catalog::Catalog & catalog, const StorageID & storage_id, const TxnTimestamp & txn_id)
 {
     UndoResources undo_buffers;
     for (const auto & [disk_name, resource] : resources)
@@ -242,7 +241,7 @@ void AttachContext::writeRenameMapToKV(Catalog::Catalog& catalog, const String& 
             undo_buffers.back().setDiskName(disk_name);
         }
     }
-    catalog.writeUndoBuffer(uuid, txn_id, undo_buffers);
+    catalog.writeUndoBuffer(storage_id, txn_id, undo_buffers);
 }
 
 void AttachContext::commit()
@@ -792,7 +791,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
         UndoResource attaching_mark_res(txn->getTransactionID(), UndoResourceType::S3AttachMeta, task_id_prefix);
         attaching_mark_res.setDiskName(disk_s3->getName());
         query_ctx->getCnchCatalog()->writeUndoBuffer(
-            UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()), txn->getTransactionID(), {attaching_mark_res});
+            target_tbl.getCnchStorageID(), txn->getTransactionID(), {attaching_mark_res});
     }
 
     S3PartsAttachMeta task_meta(disk_s3->getS3Client(), disk_s3->getS3Bucket(), disk_s3->getPath(), task_id_prefix);
@@ -1310,7 +1309,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
             }
             attach_ctx.writeRenameMapToKV(
                 *(query_ctx->getCnchCatalog()),
-                UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()),
+                target_tbl.getCnchStorageID(),
                 query_ctx->getCurrentTransaction()->getTransactionID());
 
             auto table_def_hash = target_tbl.getTableHashForClusterBy().getDeterminHash();
@@ -1342,7 +1341,8 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                                     // Move delete files
                                     String dir_rel_path = std::filesystem::path(tbl_rel_path)
                                         / DeleteBitmapMeta::deleteBitmapDirRelativePath(part_info.partition_id);
-                                    disk->createDirectories(dir_rel_path);
+                                    if (!disk->exists(dir_rel_path))
+                                        disk->createDirectories(dir_rel_path);
                                     String from_path = std::filesystem::path(tbl_rel_path) / bitmap_rel_path / (part->name + ".bitmap");
                                     String to_path = std::filesystem::path(tbl_rel_path)
                                         / DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta);
@@ -1471,7 +1471,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
             }
 
             /// Write undo buffer first
-            query_ctx->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()), txn_id, undo_resources);
+            query_ctx->getCnchCatalog()->writeUndoBuffer(target_tbl.getCnchStorageID(), txn_id, undo_resources);
 
             /// Dump new bitmap
             for (const auto & [part_name, new_bitmap] : new_bitmaps)

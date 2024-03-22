@@ -183,7 +183,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     auto curr_txn = context->getCurrentTransaction();
 
     // set main table uuid in server or worker side
-    curr_txn->setMainTableUUID(storage.getStorageUUID());
+    curr_txn->setMainTableUUID(storage.getCnchStorageUUID());
 
     /// get offsets first and the parts shouldn't be dumped and committed if get offsets failed
     if (context->getServerType() == ServerType::cnch_worker)
@@ -256,7 +256,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     try
     {
-        context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, undo_resources);
+        context->getCnchCatalog()->writeUndoBuffer(storage.getCnchStorageID(), txn_id, undo_resources);
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", undo_resources.size(), watch.elapsedMilliseconds());
     }
     catch (...)
@@ -496,7 +496,7 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
     auto txn = context->getCurrentTransaction();
     auto txn_id = txn->getTransactionID();
     /// set main table uuid in server side
-    txn->setMainTableUUID(storage.getStorageUUID());
+    txn->setMainTableUUID(storage.getCnchStorageUUID());
 
     auto storage_ptr = storage.shared_from_this();
     if (!storage_ptr)
@@ -692,7 +692,7 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
     {
         size_t size = undo_resources.size();
         Stopwatch watch;
-        context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, std::move(undo_resources));
+        context->getCnchCatalog()->writeUndoBuffer(storage.getCnchStorageID(), txn_id, std::move(undo_resources));
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", size, watch.elapsedMilliseconds());
     }
     catch (...)

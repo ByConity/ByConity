@@ -304,7 +304,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         auto remote_address
             = addBracketsIfIpv6(rpc_context->getClientInfo().current_address.host().toString()) + ':' + toString(params.rpc_port);
         auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
-        params.assignParts(all_parts);
+        params.assignParts(all_parts, [&]() {return rpc_context->getTimestamp(); });
 
         LOG_DEBUG(log, "Received manipulation from {} :{}", remote_address, params.toDebugString());
 

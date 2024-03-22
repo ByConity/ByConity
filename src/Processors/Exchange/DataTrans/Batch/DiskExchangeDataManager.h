@@ -100,7 +100,7 @@ public:
     /// one round of gc, this method is not thread-safe
     void gc();
     std::vector<std::unique_ptr<ReadBufferFromFileBase>> readFiles(const ExchangeDataKey & key) const;
-    void updateWrittenBytes(UInt64 query_unique_id, ssize_t disk_written_bytes);
+    void updateWrittenBytes(UInt64 query_unique_id, ExchangeDataKeyPtr key, ssize_t disk_written_bytes);
     void checkEnoughSpace();
     /// used by test only
     void setMaxDiskBytes(ssize_t max_disk_bytes_)
@@ -155,6 +155,7 @@ private:
         Protos::AliveQueryInfo proto;
         ssize_t disk_written_bytes = {0};
         std::multimap<PlanSegmentInstanceId, ExchangeDataKeyPtr> segment_write_task_keys = {};
+        std::map<ExchangeDataKeyPtr, ssize_t, ExchangeDataKeyPtrLess> segment_instance_write_bytes = {};
     };
     /// this controls the life time for disk exchange shuffule files, only deletes from it when cleanup() is called
     /// insert <query unique id, query id> into alive_queries before creating the corresponding directory

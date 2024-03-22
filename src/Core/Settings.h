@@ -762,6 +762,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_predicate_pushdown, false, "Where to push down predicate", 0) \
     M(Bool, dict_table_full_mode, false, "If encode / decode table is not bucket table, try to dispatch dict to all workers, if false, throw exception instead", 0) \
     M(UInt64, pathgraph_threshold_y, 0, "maximum point number in each level", 0) \
+    M(Bool, to_string_extra_arguments, true, "Whether to allow an extra argument in toString Function", 0) \
     \
     M(UInt64, max_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
     M(UInt64, max_distributed_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a distribute query can consume.", 0) \
@@ -1907,14 +1908,14 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
     M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
     /** materialized view async refresh related settings */ \
-    M(Bool, enable_mv_async_insert_overwrite, false, "whether async refresh use insert overwrite instead of drop partition and insert select mode", 0) \
+    M(Bool, enable_mv_async_insert_overwrite, true, "whether async refresh use insert overwrite instead of drop partition and insert select mode", 0) \
     M(Bool, enable_non_partitioned_base_refresh_throw_exception, false, "Whether when async refresh non-partitioned base table, throw exception", 0) \
     M(Bool, async_mv_refresh_offload_mode, false, "offload async mv refresh task to worker.", 0) \
     M(Bool, async_mv_refresh_task_submit_to_bg_thread, true, "submit async mv refresh task to bg thread.", 0) \
     M(Bool, async_mv_refresh_task_bsp_mode, true, "whether to execute async mv refresh task in bsp mode.", 0) \
     M(UInt64, max_server_refresh_materialized_view_task_num, 10, "refresh materialized async max thread num in server.", 0) \
     M(Bool, enable_async_mv_debug, false, "whether show async debug information", 0) \
-    M(Bool, async_mv_enable_mv_meta_cache, false, "whether enable read from mv meta cache.", 0) \
+    M(Bool, async_mv_enable_mv_meta_cache, true, "whether enable read from mv meta cache.", 0) \
     \
 
 // End of COMMON_SETTINGS

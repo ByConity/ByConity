@@ -77,12 +77,13 @@ protected:
     Void visitCTERefNode(CTERefNode & node, Void & context) override
     {
         const auto * cte = dynamic_cast<const CTERefStep *>(node.getStep().get());
-        return cte_helper.accept(cte->getId(), *this, context);
+        cte_helper.accept(cte->getId(), *this, context);
+        return Void{};
     }
 private:
     explicit TableFinder(CTEInfo & cte_info_) : cte_helper(cte_info_) { }
     std::set<QualifiedTableName> tables;
-    SimpleCTEVisitHelper<Void> cte_helper;
+    SimpleCTEVisitHelper<void> cte_helper;
 };
 
 WorkloadQueryPtr WorkloadQuery::build(const std::string & query_id, const std::string & query, const ContextPtr & from_context)

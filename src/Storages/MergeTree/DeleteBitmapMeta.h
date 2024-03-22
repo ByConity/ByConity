@@ -84,7 +84,7 @@ public:
 
     bool canInlineStoreInCatalog() const;
 
-    DeleteBitmapMetaPtr dump(const MergeTreeMetaBase & storage) const;
+    DeleteBitmapMetaPtr dump(const MergeTreeMetaBase & storage, bool check_dir = true) const;
 
     /// only for merge task to pre-set commit ts for merged part's base bitmap
     void setCommitTs(UInt64 commit_ts) { model->set_commit_time(commit_ts); }
