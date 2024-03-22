@@ -73,10 +73,9 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     reader_settings.read_settings.estimated_size = sum_mark_range_bytes;
 
     size_t total_segment_count = (marks_count_ + cache_segment_size_ - 1) / cache_segment_size_;
-
     read_buffer_holder = std::make_unique<MergedReadBufferWithSegmentCache>(
         storage_id_, part_name_, stream_name_, disk_, data_path_, data_offset_,
-        data_size_, cache_segment_size_, part_host_, segment_cache_ ? segment_cache_->getDataCache().get() : nullptr, settings_,
+        data_size_, cache_segment_size_, part_host_, segment_cache_ ? segment_cache_->getDataCache().get() : nullptr, reader_settings,
         total_segment_count, marks_loader, uncompressed_cache_, profile_callback_, internal_progress_cb_,
         clock_type_, stream_extension_
     );

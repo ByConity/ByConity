@@ -509,6 +509,8 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::STOP_CLUSTER:
         case Type::START_VIEW:
         case Type::STOP_VIEW:
+        case Type::STOP_MOVES:
+        case Type::START_MOVES:
             executeBGTaskInCnchServer(system_context, query.type);
             break;
         case Type::GC:
@@ -724,6 +726,12 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
             break;
         case Type::STOP_VIEW:
             daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::CnchRefreshMaterializedView, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
+            break;
+        case Type::START_MOVES:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartMover, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
+            break;
+        case Type::STOP_MOVES:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartMover, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
             break;
         default:
             throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
