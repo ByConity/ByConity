@@ -58,22 +58,22 @@ Pipe StorageCloudHive::read(
 
     Pipes pipes;
     auto block_info = std::make_shared<StorageHiveSource::BlockInfo>(
-        storage_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, storage_snapshot->metadata->getPartitionKey());
+        storage_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, storage_snapshot->metadata);
     auto allocator = std::make_shared<StorageHiveSource::Allocator>(std::move(hive_files));
 
-    if (block_info->to_read.columns() == 0)
-        allocator->allow_allocate_by_slice = false;
-
-    if (local_context->getReadSettings().parquet_parallel_read)
-        allocator->allow_allocate_by_slice = false;
+    /// TODO: remove this
+    allocator->allow_allocate_by_slice = false;
 
     LOG_DEBUG(log, "read with {} streams, disk_cache mode {}", num_streams, local_context->getSettingsRef().disk_cache_mode.toString());
+    auto query_info_ptr = std::make_shared<SelectQueryInfo>(query_info);
+
     for (size_t i = 0; i < num_streams; ++i)
     {
         pipes.emplace_back(std::make_shared<StorageHiveSource>(
             local_context,
             block_info,
-            allocator
+            allocator,
+            query_info_ptr
         ));
     }
     auto pipe = Pipe::unitePipes(std::move(pipes));

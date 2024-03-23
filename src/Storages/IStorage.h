@@ -36,6 +36,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/TableDefinitionHash.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/TableStatistics.h>
 #include <Transaction/TxnTimestamp.h>
@@ -104,6 +105,8 @@ using NameDependencies = std::unordered_map<String, std::vector<String>>;
 using PartNamesWithDisks = std::vector<std::pair<String, DiskPtr>>;
 using PartNamesWithDiskNames = std::vector<std::pair<String, String>>;
 
+class PlanNodeStatistics;
+using PlanNodeStatisticsPtr = std::shared_ptr<PlanNodeStatistics>;
 struct ColumnSize
 {
     size_t marks = 0;
@@ -142,6 +145,7 @@ public:
 
     /// The name of the table.
     StorageID getStorageID() const;
+    virtual StorageID getCnchStorageID() const { return getStorageID(); }
     std::string getTableName() const { return storage_id.table_name; }
     std::string getDatabaseName() const { return storage_id.database_name; }
     UUID getStorageUUID() const { return storage_id.uuid; }
@@ -249,7 +253,8 @@ public:
     String getCreateTableSql() const { return create_table_sql; }
 
     virtual bool isBucketTable() const {return false;}
-    virtual UInt64 getTableHashForClusterBy() const {return 0;}
+    virtual TableDefinitionHash getTableHashForClusterBy() const {return {};}
+    virtual bool isTableClustered(ContextPtr /*context*/) const { return false; }
 
     /// Return true if there is at least one part containing lightweight deleted mask.
     virtual bool hasLightweightDeletedMask() const { return false; }
@@ -721,6 +726,14 @@ public:
     std::map<UInt64, NamesAndTypesListPtr> previous_versions_part_columns;
     NamesAndTypesListPtr getPartColumns(const UInt64 & columns_commit_time) const;
     UInt64 getPartColumnsCommitTime(const NamesAndTypesList & search_part_columns) const;
+
+    // Apply filter for IStorage::read. Application results are stored in SelectQueryInfo, typically are:
+    //  - query.where(), the full filter used for generic purposes(e.g. partition pruning/index pruning...)
+    //  - partition_filter, filters used for partition pruning
+    //  - query.prewhere(), filters used in data reading
+    // Returns a remaining filter which consists of criteria that can not be evaluated completely in storage,
+    // and it will be evaluated again in the query pipeline.
+    virtual ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const;
 
 private:
     std::atomic<UInt64> update_time{0};

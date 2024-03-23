@@ -20,16 +20,16 @@ Projection Est. ? rows
 └─ Inner Join Est. ? rows
    │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    ├─ CTERef[0] Est. 1 rows
-   └─ Broadcast Exchange Est. 1 rows
-      └─ CTERef[1] Est. 1 rows
-CTEDef [1]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(2):=rand(2)
-   └─ Values Est. 1 rows
+   └─ CTERef[1] Est. 1 rows
 CTEDef [0]
    Projection Est. 1 rows
    │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
+CTEDef [1]
+   Broadcast Exchange Est. 1 rows
+   └─ Projection Est. 1 rows
+      │     Expressions: expr#rand(2):=rand(2)
+      └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 2 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from (select t1.x as x from c1 t1 join c2 t2 on t1.x = t2.x) j1 join c1 t3 on j1.x = t3.x;
 Projection Est. ? rows
@@ -40,19 +40,19 @@ Projection Est. ? rows
    │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ Buffer Est. 1 rows
    │  │  └─ CTERef[0] Est. 1 rows
-   │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[1] Est. 1 rows
+   │  └─ CTERef[1] Est. 1 rows
    └─ Broadcast Exchange Est. 1 rows
       └─ Buffer Est. 1 rows
          └─ CTERef[0] Est. 1 rows
-CTEDef [1]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(2):=rand(2)
-   └─ Values Est. 1 rows
 CTEDef [0]
    Projection Est. 1 rows
    │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
+CTEDef [1]
+   Broadcast Exchange Est. 1 rows
+   └─ Projection Est. 1 rows
+      │     Expressions: expr#rand(2):=rand(2)
+      └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from (select t1.x as x from c1 t1 join c2 t2 on t1.x = t2.x) j1 join c2 t3 on j1.x = t3.x;
 Projection Est. ? rows
@@ -62,18 +62,17 @@ Projection Est. ? rows
    ├─ Inner Join Est. ? rows
    │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ CTERef[0] Est. 1 rows
-   │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[1] Est. 1 rows
-   └─ Broadcast Exchange Est. 1 rows
-      └─ CTERef[1] Est. 1 rows
-CTEDef [1]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(2):=rand(2)
-   └─ Values Est. 1 rows
+   │  └─ CTERef[1] Est. 1 rows
+   └─ CTERef[1] Est. 1 rows
 CTEDef [0]
    Projection Est. 1 rows
    │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
+CTEDef [1]
+   Broadcast Exchange Est. 1 rows
+   └─ Projection Est. 1 rows
+      │     Expressions: expr#rand(2):=rand(2)
+      └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from c1 t1 join (select t2.x as x from c1 t2 join c2 t3 on t2.x = t3.x) j1 on t1.x = j1.x;
 Projection Est. ? rows
@@ -87,16 +86,16 @@ Projection Est. ? rows
          │     Condition: expr#rand(1)_2 == expr#rand(2)_1
          ├─ Buffer Est. 1 rows
          │  └─ CTERef[0] Est. 1 rows
-         └─ Broadcast Exchange Est. 1 rows
-            └─ CTERef[1] Est. 1 rows
-CTEDef [1]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(2):=rand(2)
-   └─ Values Est. 1 rows
+         └─ CTERef[1] Est. 1 rows
 CTEDef [0]
    Projection Est. 1 rows
    │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
+CTEDef [1]
+   Broadcast Exchange Est. 1 rows
+   └─ Projection Est. 1 rows
+      │     Expressions: expr#rand(2):=rand(2)
+      └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from c2 t1 join (select t2.x as x from c1 t2 join c2 t3 on t2.x = t3.x) j1 on t1.x = j1.x;
 Projection Est. ? rows
@@ -112,13 +111,13 @@ Projection Est. ? rows
          └─ Broadcast Exchange Est. 1 rows
             └─ Buffer Est. 1 rows
                └─ CTERef[0] Est. 1 rows
-CTEDef [1]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(1):=rand(1)
-   └─ Values Est. 1 rows
 CTEDef [0]
    Projection Est. 1 rows
    │     Expressions: expr#rand(2):=rand(2)
+   └─ Values Est. 1 rows
+CTEDef [1]
+   Projection Est. 1 rows
+   │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select t1.x as x from c1 t1 join c2 t2 on t1.x = t2.x union all select t3.x as x from c1 t3 join c2 t4 on t3.x = t4.x;
@@ -129,21 +128,20 @@ Projection Est. ? rows
    ├─ Inner Join Est. ? rows
    │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ CTERef[0] Est. 1 rows
-   │  └─ Broadcast Exchange Est. 1 rows
-   │     └─ CTERef[1] Est. 1 rows
+   │  └─ CTERef[1] Est. 1 rows
    └─ Inner Join Est. ? rows
       │     Condition: expr#rand(1)_2 == expr#rand(2)_2
       ├─ CTERef[0] Est. 1 rows
-      └─ Broadcast Exchange Est. 1 rows
-         └─ CTERef[1] Est. 1 rows
-CTEDef [1]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(2):=rand(2)
-   └─ Values Est. 1 rows
+      └─ CTERef[1] Est. 1 rows
 CTEDef [0]
    Projection Est. 1 rows
    │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
+CTEDef [1]
+   Broadcast Exchange Est. 1 rows
+   └─ Projection Est. 1 rows
+      │     Expressions: expr#rand(2):=rand(2)
+      └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 4 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select t1.x as x from c1 t1 join c2 t2 on t1.x = t2.x union all select t3.x as x from c2 t3 join c1 t4 on t3.x = t4.x;
 Projection Est. ? rows
@@ -164,13 +162,13 @@ Projection Est. ? rows
       └─ Broadcast Exchange Est. 1 rows
          └─ Buffer Est. 1 rows
             └─ CTERef[0] Est. 1 rows
-CTEDef [1]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(2):=rand(2)
-   └─ Values Est. 1 rows
 CTEDef [0]
    Projection Est. 1 rows
    │     Expressions: expr#rand(1):=rand(1)
+   └─ Values Est. 1 rows
+CTEDef [1]
+   Projection Est. 1 rows
+   │     Expressions: expr#rand(2):=rand(2)
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 4 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from (select t1.x as x from c1 t1 join c2 t2 on t1.x = t2.x) j1 join (select t3.x as x from c2 t3 join c1 t4 on t3.x = t4.x) j2 on j1.x = j2.x;
@@ -191,13 +189,13 @@ Projection Est. ? rows
          └─ Broadcast Exchange Est. 1 rows
             └─ Buffer Est. 1 rows
                └─ CTERef[0] Est. 1 rows
-CTEDef [1]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(2):=rand(2)
-   └─ Values Est. 1 rows
 CTEDef [0]
    Projection Est. 1 rows
    │     Expressions: expr#rand(1):=rand(1)
+   └─ Values Est. 1 rows
+CTEDef [1]
+   Projection Est. 1 rows
+   │     Expressions: expr#rand(2):=rand(2)
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 4 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x), c3 as (select rand(3) x) select t1.x from c1 t1 join c2 t2 on t1.x = t2.x union all select t3.x from c2 t3 join c3 t4 on t3.x = t4.x;
@@ -215,20 +213,20 @@ Projection Est. ? rows
       │     Condition: expr#rand(2)_2 == expr#rand(3)_1
       ├─ Buffer Est. 1 rows
       │  └─ CTERef[1] Est. 1 rows
-      └─ Broadcast Exchange Est. 1 rows
-         └─ CTERef[2] Est. 1 rows
-CTEDef [2]
+      └─ CTERef[2] Est. 1 rows
+CTEDef [0]
    Projection Est. 1 rows
-   │     Expressions: expr#rand(3):=rand(3)
+   │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
 CTEDef [1]
    Projection Est. 1 rows
    │     Expressions: expr#rand(2):=rand(2)
    └─ Values Est. 1 rows
-CTEDef [0]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(1):=rand(1)
-   └─ Values Est. 1 rows
+CTEDef [2]
+   Broadcast Exchange Est. 1 rows
+   └─ Projection Est. 1 rows
+      │     Expressions: expr#rand(3):=rand(3)
+      └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 4 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x), c3 as (select rand(3) x) select j1.x from (select t1.x from c1 t1 join c2 t2 on t1.x = t2.x) j1 join (select t3.x from c2 t3 join c3 t4 on t3.x = t4.x) j2 on j1.x = j2.x;
 Projection Est. ? rows
@@ -244,20 +242,20 @@ Projection Est. ? rows
       └─ Inner Join Est. ? rows
          │     Condition: expr#rand(2)_2 == expr#rand(3)_1
          ├─ CTERef[1] Est. 1 rows
-         └─ Broadcast Exchange Est. 1 rows
-            └─ CTERef[2] Est. 1 rows
-CTEDef [2]
+         └─ CTERef[2] Est. 1 rows
+CTEDef [0]
    Projection Est. 1 rows
-   │     Expressions: expr#rand(3):=rand(3)
+   │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
 CTEDef [1]
    Projection Est. 1 rows
    │     Expressions: expr#rand(2):=rand(2)
    └─ Values Est. 1 rows
-CTEDef [0]
-   Projection Est. 1 rows
-   │     Expressions: expr#rand(1):=rand(1)
-   └─ Values Est. 1 rows
+CTEDef [2]
+   Broadcast Exchange Est. 1 rows
+   └─ Projection Est. 1 rows
+      │     Expressions: expr#rand(3):=rand(3)
+      └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 4 times.
 explain with c1 as (select rand(1) x), c2 as (select t1.x as x from c1 t1 join c1 t2 on t1.x = t2.x) select x from c2 t3;
 Projection Est. ? rows

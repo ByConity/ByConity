@@ -81,7 +81,7 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             throw Exception("Logical error: cannot find aggregate function combinator to apply a function to Nullable arguments.",
                 ErrorCodes::LOGICAL_ERROR);
 
-        DataTypes nested_types = combinator->transformArguments(type_without_low_cardinality);
+        DataTypes nested_types = combinator->transformArguments(type_without_low_cardinality, parameters);
         Array nested_parameters = combinator->transformParameters(parameters);
 
         bool has_null_arguments = std::any_of(type_without_low_cardinality.begin(), type_without_low_cardinality.end(),
@@ -169,7 +169,7 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
             query_context->addQueryFactoriesInfo(Context::QueryLogFactories::AggregateFunctionCombinator, combinator->getName());
 
         String nested_name = name.substr(0, name.size() - combinator->getName().size());
-        DataTypes nested_types = combinator->transformArguments(argument_types);
+        DataTypes nested_types = combinator->transformArguments(argument_types, parameters);
         Array nested_parameters = combinator->transformParameters(parameters);
 
         AggregateFunctionPtr nested_function = get(nested_name, nested_types, nested_parameters, out_properties);

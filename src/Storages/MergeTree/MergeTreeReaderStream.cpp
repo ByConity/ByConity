@@ -69,11 +69,8 @@ MergeTreeReaderStream::MergeTreeReaderStream(
 
     /// Avoid empty buffer. May happen while reading dictionary for DataTypeLowCardinality.
     /// For example: part has single dictionary and all marks point to the same position.
-    if (max_mark_range_bytes == 0)
-        max_mark_range_bytes = settings_.read_settings.buffer_size;
-
-    size_t buffer_size = std::min(settings_.read_settings.buffer_size, max_mark_range_bytes);
-    read_settings.buffer_size = buffer_size;
+    if (max_mark_range_bytes != 0)
+        read_settings.adjustBufferSize(max_mark_range_bytes);
     read_settings.estimated_size = sum_mark_range_bytes;
 
     /// Initialize the objects that shall be used to perform read operations.

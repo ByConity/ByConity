@@ -26,7 +26,6 @@
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageMemory.h>
 #include <common/logger_useful.h>
 
 namespace DB

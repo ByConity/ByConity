@@ -99,6 +99,8 @@ public:
 
     virtual bool handleNullItSelf() const { return false; }
 
+    virtual bool returnTypeCanBeNullable() const { return true; }
+
     /// Get the result type.
     virtual DataTypePtr getReturnType() const = 0;
 

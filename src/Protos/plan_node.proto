@@ -365,6 +365,11 @@ message BufferStep {
 
 message ExplainAnalyzeStep {}
 
+message LocalExchangeStep {
+  required ITransformingStep query_plan_base = 1;
+  required ExchangeMode.Enum exchange_type = 2;
+  required Partitioning schema = 3;
+}
 
 message MultiJoinStep {
   required Graph graph = 1;
@@ -419,6 +424,7 @@ message QueryPlanStep {
     ApplyStep apply_step = 39;
     ExplainAnalyzeStep explain_analyze_step = 44;
     TotalsHavingStep totals_having_step = 50;
+    LocalExchangeStep local_exchange_step = 54;
     MultiJoinStep multi_join_step = 55;
   }
 }

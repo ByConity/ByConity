@@ -7,16 +7,10 @@
 namespace DB
 {
 
-bool PushPartialAgg::canAttach(PlanNodeBase & node, HintOptions & hint_options) const
+bool PushPartialAgg::canAttach(PlanNodeBase & node, HintOptions & ) const
 {
     if (node.getStep()->getType() != IQueryPlanStep::Type::Aggregating)
         return false;
-
-    for (auto & func_name : hint_options.func_names)
-    {
-        if (func_name == options[0])
-            return true;
-    }
     return false;
 }
 

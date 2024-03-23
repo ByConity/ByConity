@@ -67,7 +67,6 @@ void write(ContextMutablePtr & context, Block header, DiskExchangeDataManagerPtr
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataWriteAndRead)
 {
-    GTEST_SKIP() << "Skipping DiskExchangeDataWriteAndRead";
     auto context = getContext().context;
     auto header = getHeader(1);
 
@@ -105,7 +104,6 @@ Processors createMockExecutor(const ExchangeDataKeyPtr & key, Block header, uint
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
 {
-    GTEST_SKIP() << "Skipping DiskExchangeDataCancel";
     auto context = Context::createCopy(getContext().context);
     context->setPlanSegmentInstanceId({1, static_cast<UInt32>(parallel_idx)});
     auto manager = context->getDiskExchangeDataManager();
@@ -133,6 +131,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
     auto status = std::get<BroadcastStatus>(packet);
     ASSERT_EQ(status.code, BroadcastStatusCode::SEND_CANCELLED) << fmt::format("status_code:{} message:{}", status.code, status.message);
     manager->cleanup(key->query_unique_id);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
 }
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataCleanup)
@@ -144,6 +143,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCleanup)
     write(context, header, manager, key);
 
     manager->cleanup(key->query_unique_id);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
     auto file_name = manager->getFileName(*key);
     ASSERT_TRUE(!disk->exists(file_name));
 }
@@ -167,6 +167,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByHeartBeat)
     disk->createFile("bsp/v-1.0.0/invalid-file");
 
     manager->gc();
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
     std::mutex mu;
     std::condition_variable cv;
     for (size_t i = 0; i < 100; i++)
@@ -187,11 +188,14 @@ TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByExpire)
     auto context = getContext().context;
     auto header = getHeader(1);
     auto key = std::make_shared<ExchangeDataKey>(query_unique_id_4, exchange_id, parallel_idx);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
     write(context, header, manager, key);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 13);
 
     manager->setFileExpireSeconds(0);
     manager->gc();
     manager->setFileExpireSeconds(10000);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
 
     std::mutex mu;
     std::condition_variable cv;
@@ -209,8 +213,9 @@ TEST_F(ExchangeRemoteTest, DiskExchangeSizeLimit)
     auto context = getContext().context;
     auto header = getHeader(1);
     auto query_unique_id_5 = 555;
-    auto key = std::make_shared<ExchangeDataKey>(query_unique_id_5, exchange_id, parallel_idx);
-    write(context, header, manager, key);
+    auto key1 = std::make_shared<ExchangeDataKey>(query_unique_id_5, exchange_id, parallel_idx);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
+    write(context, header, manager, key1);
     std::mutex mu;
     std::condition_variable cv;
     for (size_t i = 0; i < 500; i++)
@@ -218,16 +223,19 @@ TEST_F(ExchangeRemoteTest, DiskExchangeSizeLimit)
         std::unique_lock<std::mutex> lock(mu);
         cv.wait_for(lock, std::chrono::milliseconds((10)), [&]() { return manager->getDiskWrittenBytes() == 13; });
     }
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 13);
     manager->setMaxDiskBytes(1);
-    query_unique_id_5 = 666;
-    key = std::make_shared<ExchangeDataKey>(query_unique_id_5, exchange_id, parallel_idx);
+    auto query_unique_id_6 = 666;
+    auto key2 = std::make_shared<ExchangeDataKey>(query_unique_id_6, exchange_id, parallel_idx);
     try
     {
-        write(context, header, manager, key);
+        write(context, header, manager, key2);
         ASSERT_TRUE(false);
     }
     catch (const Exception & e)
     {
         ASSERT_EQ(e.code(), ErrorCodes::BSP_EXCHANGE_DATA_DISK_LIMIT_EXCEEDED) << "code:" << e.code() << " e.message:" << e.message();
     }
+    manager->cleanup(key1->query_unique_id);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
 }

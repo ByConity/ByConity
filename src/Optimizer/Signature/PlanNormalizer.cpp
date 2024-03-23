@@ -93,7 +93,7 @@ PlanNormalizeResult PlanNormalizer::normalize(const QueryPlan & plan, ContextPtr
 {
     PlanNormalizeResult res;
     NormalizeVisitor visitor(context, plan.getCTEInfo());
-    VisitorUtil::accept(plan.getPlanNodeRoot(), visitor, res);
+    VisitorUtil::accept(plan.getPlanNode(), visitor, res);
     return res;
 }
 

@@ -21,7 +21,7 @@ PlanNodeToSignatures PlanSignatureProvider::computeSignatures()
 {
     buffer = PlanNodeToSignatures{};
     PlanNormalizeResult res = PlanNormalizer::normalize(query_plan, context);
-    computeSignatureImpl(query_plan.getPlanNodeRoot(), res, /*write_to_buffer*/true);
+    computeSignatureImpl(query_plan.getPlanNode(), res, /*write_to_buffer*/true);
     return std::move(buffer);
 }
 

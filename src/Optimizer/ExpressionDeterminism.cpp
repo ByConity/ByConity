@@ -115,7 +115,7 @@ Void DeterminismVisitor::visitASTFunction(const ConstASTPtr & node, ContextPtr &
 {
     visitNode(node, context);
     const auto & fun = node->as<const ASTFunction &>();
-    if (!context->isFunctionDeterministic(fun.name))
+    if (context->isNonDeterministicFunction(fun.name))
     {
         is_deterministic = false;
     }

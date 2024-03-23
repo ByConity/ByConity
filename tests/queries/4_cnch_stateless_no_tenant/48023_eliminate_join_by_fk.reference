@@ -103,11 +103,13 @@ Projection Est. 10 rows, cost 3.240000e+00
             └─ Sorting Est. 10 rows, cost 0.000000e+00
                │     Order by: {price ASC NULLS LAST}
                │     Limit: 10
-               └─ Filter Est. ? rows, cost 0.000000e+00
-                  │     Condition: isNotNull(sk)
-                  └─ TableScan test.web Est. ? rows, cost 0.000000e+00
-                           Where: isNotNull(sk)
-                           Outputs: [sk, price]
+               └─ Projection Est. ? rows, cost 0.000000e+00
+                  │     Expressions: [price]
+                  └─ Filter Est. ? rows, cost 0.000000e+00
+                     │     Condition: isNotNull(sk)
+                     └─ TableScan test.web Est. ? rows, cost 0.000000e+00
+                              Where: isNotNull(sk)
+                              Outputs: [sk, price]
 1000.2
 2000.3
 not OK: another incompeleted pk table
@@ -134,14 +136,16 @@ Projection Est. ? rows
             │        │              Outputs: [sk]
             │        └─ Repartition Exchange Est. ? rows
             │           │     Partition by: {expr#sum(sk)}
-            │           └─ MergingAggregated Est. ? rows
-            │              └─ Repartition Exchange Est. ? rows
-            │                 │     Partition by: {c_customer_id}
-            │                 └─ Aggregating Est. ? rows
-            │                    │     Group by: {c_customer_id}
-            │                    │     Aggregates: expr#sum(sk):=AggNull(sum)(sk_1)
-            │                    └─ TableScan test.cust Est. ? rows
-            │                             Outputs: [c_customer_id], sk_1:=sk
+            │           └─ Projection Est. ? rows
+            │              │     Expressions: [expr#sum(sk)]
+            │              └─ MergingAggregated Est. ? rows
+            │                 └─ Repartition Exchange Est. ? rows
+            │                    │     Partition by: {c_customer_id}
+            │                    └─ Aggregating Est. ? rows
+            │                       │     Group by: {c_customer_id}
+            │                       │     Aggregates: expr#sum(sk):=AggNull(sum)(sk_1)
+            │                       └─ TableScan test.cust Est. ? rows
+            │                                Outputs: [c_customer_id], sk_1:=sk
             └─ Repartition Exchange Est. ? rows
                │     Partition by: {expr#cast(sk_2, \'Nullable(Int64)\')}
                └─ Projection Est. ? rows

@@ -340,15 +340,17 @@ enum class RefreshViewTaskStatus : int8_t
 {
     START = 1,
     FINISH = 2,
-    EXCEPTION = 3,
+    EXCEPTION_EXECUTE_TASK = 3,
+    EXCEPTION_BEFORE_START = 4,
 };
 
 DECLARE_SETTING_ENUM(RefreshViewTaskStatus);
 
 enum class RefreshViewTaskType : int8_t
 {
-    PARTITION_BASED_REFRESH = 1,
-    FULL_REFRESH = 2,
+    NONE = 1,
+    PARTITION_BASED_REFRESH = 2,
+    FULL_REFRESH = 3,
 };
 
 DECLARE_SETTING_ENUM(RefreshViewTaskType);

@@ -183,7 +183,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     auto curr_txn = context->getCurrentTransaction();
 
     // set main table uuid in server or worker side
-    curr_txn->setMainTableUUID(storage.getStorageUUID());
+    curr_txn->setMainTableUUID(storage.getCnchStorageUUID());
 
     /// get offsets first and the parts shouldn't be dumped and committed if get offsets failed
     if (context->getServerType() == ServerType::cnch_worker)
@@ -256,7 +256,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     try
     {
-        context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, undo_resources);
+        context->getCnchCatalog()->writeUndoBuffer(storage.getCnchStorageID(), txn_id, undo_resources);
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", undo_resources.size(), watch.elapsedMilliseconds());
     }
     catch (...)
@@ -496,7 +496,7 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
     auto txn = context->getCurrentTransaction();
     auto txn_id = txn->getTransactionID();
     /// set main table uuid in server side
-    txn->setMainTableUUID(storage.getStorageUUID());
+    txn->setMainTableUUID(storage.getCnchStorageUUID());
 
     auto storage_ptr = storage.shared_from_this();
     if (!storage_ptr)
@@ -537,18 +537,18 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
                     // NOTE: set allow_attach_parts_with_different_table_definition_hash to false and
                     // skip_table_definition_hash_check to true if you want to force set part's TDH to table's TDH
                     if (context->getSettings().skip_table_definition_hash_check)
-                        part->table_definition_hash = table_definition_hash;
+                        part->table_definition_hash = table_definition_hash.getDeterminHash();
 
                     if (context->getSettings().allow_attach_parts_with_different_table_definition_hash && !storage_ptr->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey())
                         continue;
 
                     if (!part->deleted &&
-                        (part->bucket_number < 0 || table_definition_hash != part->table_definition_hash))
+                        (part->bucket_number < 0 || !table_definition_hash.match(part->table_definition_hash)))
                     {
                         throw Exception(
                             "Part " + part->name + " is not clustered or it has different table definition with storage. Part bucket number : "
                             + std::to_string(part->bucket_number) + ", part table_definition_hash : [" + std::to_string(part->table_definition_hash)
-                            + "], table's table_definition_hash : [" + std::to_string(table_definition_hash) + "]",
+                            + "], table's table_definition_hash : [" + table_definition_hash.toString() + "]",
                             ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
                     }
                 }
@@ -597,8 +597,8 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             }
             else
             {
-                merge_mutate_thread->finishTask(task_id, [&](const ManipulationTaskRecord & task) {
-                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, task.getSourcePartNames());
+                merge_mutate_thread->finishTask(task_id, [&](const Strings & source_part_names) {
+                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, source_part_names);
 
                     for (const auto & part : dumped_data.parts)
                         action->as<MergeMutateAction &>().appendPart(part);
@@ -692,7 +692,7 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
     {
         size_t size = undo_resources.size();
         Stopwatch watch;
-        context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, std::move(undo_resources));
+        context->getCnchCatalog()->writeUndoBuffer(storage.getCnchStorageID(), txn_id, std::move(undo_resources));
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", size, watch.elapsedMilliseconds());
     }
     catch (...)

@@ -5,38 +5,43 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 1174 rows
+      └─ Gather Exchange Est. 1169 rows
          └─ Sorting Est. 100 rows
             │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)) ASC NULLS LAST, expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)) ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 1174 rows
-               └─ Repartition Exchange Est. 1174 rows
+            └─ MergingAggregated Est. 1169 rows
+               └─ Repartition Exchange Est. 1169 rows
                   │     Partition by: {s_store_name, s_store_id}
-                  └─ Aggregating Est. 1174 rows
+                  └─ Aggregating Est. 1169 rows
                      │     Group by: {s_store_name, s_store_id}
                      │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))
-                     └─ Projection Est. 576629522 rows
+                     └─ Projection Est. 299248853 rows
                         │     Expressions: [s_store_id, s_store_name], expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Friday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Monday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Saturday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Sunday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Thursday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Tuesday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Wednesday', ss_sales_price, NULL)
-                        └─ Inner Join Est. 576629522 rows
+                        └─ Inner Join Est. 299248853 rows
                            │     Condition: ss_store_sk == s_store_sk
+                           │     Runtime Filters Builder: {s_store_sk}
                            ├─ Inner Join Est. 576629522 rows
                            │  │     Condition: ss_sold_date_sk == d_date_sk
                            │  │     Runtime Filters Builder: {d_date_sk}
                            │  ├─ Filter Est. 2879987999 rows
-                           │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                           │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                            │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                           │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                           │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                            │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_sales_price]
                            │  └─ Broadcast Exchange Est. 366 rows
-                           │     └─ Filter Est. 366 rows
-                           │        │     Condition: d_year = 2000
-                           │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                           │                 Where: d_year = 2000
-                           │                 Outputs: [d_date_sk, d_year, d_day_name]
-                           └─ Broadcast Exchange Est. 523 rows
-                              └─ Filter Est. 523 rows
-                                 │     Condition: s_gmt_offset = -5.
-                                 └─ TableScan tpcds1000.store Est. 1002 rows
-                                          Where: s_gmt_offset = -5.
-                                          Outputs: [s_store_sk, s_store_id, s_store_name, s_gmt_offset]
-note: Runtime Filter is applied for 1 times.
+                           │     └─ Projection Est. 366 rows
+                           │        │     Expressions: [d_date_sk, d_day_name]
+                           │        └─ Filter Est. 366 rows
+                           │           │     Condition: d_year = 2000
+                           │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │                    Where: d_year = 2000
+                           │                    Outputs: [d_date_sk, d_year, d_day_name]
+                           └─ Broadcast Exchange Est. 520 rows
+                              └─ Projection Est. 520 rows
+                                 │     Expressions: [s_store_id, s_store_name, s_store_sk]
+                                 └─ Filter Est. 520 rows
+                                    │     Condition: s_gmt_offset = -5.
+                                    └─ TableScan tpcds1000.store Est. 1002 rows
+                                             Where: s_gmt_offset = -5.
+                                             Outputs: [s_store_sk, s_store_id, s_store_name, s_gmt_offset]
+note: Runtime Filter is applied for 2 times.

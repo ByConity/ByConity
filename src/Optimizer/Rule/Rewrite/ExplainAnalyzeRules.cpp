@@ -4,6 +4,7 @@
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 
 namespace DB
 {
@@ -21,11 +22,11 @@ TransformResult ExplainAnalyze::transformImpl(PlanNodePtr node, const Captures &
     const auto & explain_step = dynamic_cast<const ExplainAnalyzeStep &>(*node->getStep());
     auto new_explain_analyze_step = std::make_shared<ExplainAnalyzeStep>(
         explain_step.getInputStreams()[0],
+        explain_step.getOutputName(),
         explain_step.getKind(),
         rule_context.context,
         original_query_plan_ptr,
-        explain_step.getSetting()
-    );
+        explain_step.getSetting());
 
     return PlanNodeBase::createPlanNode(
         rule_context.context->nextNodeId(),

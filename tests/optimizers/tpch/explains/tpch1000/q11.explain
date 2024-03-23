@@ -1,13 +1,13 @@
-Projection Est. 32000000 rows
+Projection Est. 16000000 rows
 │     Expressions: [ps_partkey], value:=`expr#sum(multiply(ps_supplycost, ps_availqty))`
-└─ Sorting Est. 32000000 rows
+└─ Sorting Est. 16000000 rows
    │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) DESC NULLS LAST}
-   └─ Gather Exchange Est. 32000000 rows
-      └─ Sorting Est. 32000000 rows
+   └─ Gather Exchange Est. 16000000 rows
+      └─ Sorting Est. 16000000 rows
          │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) DESC NULLS LAST}
-         └─ Inner Join Est. 32000000 rows
+         └─ Inner Join Est. 16000000 rows
             │     Condition: 
-            │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')`
+            │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')_1`
             ├─ MergingAggregated Est. 32000000 rows
             │  └─ Repartition Exchange Est. 32000000 rows
             │     │     Partition by: {ps_partkey}
@@ -37,14 +37,16 @@ Projection Est. 32000000 rows
             │                    │           Where: Runtime Filters: {s_nationkey}
             │                    │           Outputs: [s_suppkey, s_nationkey]
             │                    └─ Broadcast Exchange Est. 1 rows
-            │                       └─ Filter Est. 1 rows
-            │                          │     Condition: n_name = 'GERMANY'
-            │                          └─ TableScan tpch1000.nation Est. 25 rows
-            │                                   Where: n_name = 'GERMANY'
-            │                                   Outputs: [n_nationkey, n_name]
+            │                       └─ Projection Est. 1 rows
+            │                          │     Expressions: [n_nationkey]
+            │                          └─ Filter Est. 1 rows
+            │                             │     Condition: n_name = 'GERMANY'
+            │                             └─ TableScan tpch1000.nation Est. 25 rows
+            │                                      Where: n_name = 'GERMANY'
+            │                                      Outputs: [n_nationkey, n_name]
             └─ Broadcast Exchange Est. 1 rows
                └─ Projection Est. 1 rows
-                  │     Expressions: expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001'):=`expr#sum(multiply(ps_supplycost, ps_availqty))_1` * '0.0001'
+                  │     Expressions: expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')_1:=cast(`expr#sum(multiply(ps_supplycost, ps_availqty))_1` * '0.0001', 'Nullable(Decimal(38, 6))')
                   └─ MergingAggregated Est. 1 rows
                      └─ Gather Exchange Est. 1 rows
                         └─ Aggregating Est. 1 rows
@@ -73,9 +75,11 @@ Projection Est. 32000000 rows
                                        │           Where: Runtime Filters: {s_nationkey}
                                        │           Outputs: s_suppkey_1:=s_suppkey, s_nationkey_1:=s_nationkey
                                        └─ Broadcast Exchange Est. 1 rows
-                                          └─ Filter Est. 1 rows
-                                             │     Condition: n_name_1 = 'GERMANY'
-                                             └─ TableScan tpch1000.nation Est. 25 rows
-                                                      Where: n_name = 'GERMANY'
-                                                      Outputs: n_nationkey_1:=n_nationkey, n_name_1:=n_name
+                                          └─ Projection Est. 1 rows
+                                             │     Expressions: [n_nationkey_1]
+                                             └─ Filter Est. 1 rows
+                                                │     Condition: n_name_1 = 'GERMANY'
+                                                └─ TableScan tpch1000.nation Est. 25 rows
+                                                         Where: n_name = 'GERMANY'
+                                                         Outputs: n_nationkey_1:=n_nationkey, n_name_1:=n_name
 note: Runtime Filter is applied for 4 times.

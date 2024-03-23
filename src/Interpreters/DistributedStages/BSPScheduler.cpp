@@ -260,7 +260,6 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
             const auto & [has_result, result] = getInstanceToSchedule(address);
             if (!has_result)
             {
-                LOG_INFO(&Poco::Logger::get("debug"), "query_id:{} addr:{} no instance found", query_id, address.toString());
                 continue;
             }
             task_instance.emplace(result);

@@ -84,13 +84,11 @@ namespace SaslCommon
 
     static void setupGeneralCallbacks()
     {   
-        String context("General");
-
         GENERAL_CALLBACKS.resize(2);
 
         GENERAL_CALLBACKS[0].id = SASL_CB_LOG;
         GENERAL_CALLBACKS[0].proc = reinterpret_cast<int (*)()>(&saslLogCallbacks);
-        GENERAL_CALLBACKS[0].context = reinterpret_cast<void *>(context.data());
+        GENERAL_CALLBACKS[0].context = reinterpret_cast<void *>(GENERAL_CALLBACKS_CONTEXT_NAME.data());
 
         GENERAL_CALLBACKS[1].id = SASL_CB_LIST_END;
         GENERAL_CALLBACKS[1].proc = nullptr;
@@ -99,14 +97,12 @@ namespace SaslCommon
     }
 
     static void setupKerberosCallbacks()
-    {       
-        String context("KerBeros");
-
+    {
         KERBEROS_CALLBACKS.resize(3);
 
         KERBEROS_CALLBACKS[0].id = SASL_CB_LOG;
         KERBEROS_CALLBACKS[0].proc = reinterpret_cast<int (*)()>(&saslLogCallbacks);
-        KERBEROS_CALLBACKS[0].context = reinterpret_cast<void *>(context.data());
+        KERBEROS_CALLBACKS[0].context = reinterpret_cast<void *>(KERBEROS_CALLBACKS_CONTEXT_NAME.data());
 
         KERBEROS_CALLBACKS[1].id = SASL_CB_USER;
         KERBEROS_CALLBACKS[1].proc = reinterpret_cast<int (*)()>(&saslUserCallbacks);

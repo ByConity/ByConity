@@ -45,14 +45,18 @@ public:
 
 class DeleteBitmapAdapter : AdapterInterface
 {
-    const DeleteBitmapMetaPtr & data;
+    const DeleteBitmapMetaPtr data;
 
 public:
     explicit DeleteBitmapAdapter(const DeleteBitmapMetaPtr & x) : data(x) { }
     DeleteBitmapAdapter(const MergeTreeMetaBase & /*_storage*/, const DeleteBitmapMetaPtr & x) : data(x) { }
+    DeleteBitmapAdapter(const MergeTreeMetaBase & storage, const DataModelDeleteBitmapPtr & x)
+        : data(std::make_shared<DeleteBitmapMeta>(storage, x))
+    {
+    }
     String getPartitionId() override { return data->getPartitionID(); }
     String getName() override { return dataModelName(*data->getModel()); }
-    DeleteBitmapMetaPtr getData() { return data; }
+    DataModelDeleteBitmapPtr getData() { return data->getModel(); }
     DeleteBitmapMetaPtr toData() { return data; }
     size_t getCommitTime() { return data->getCommitTime(); }
 };
@@ -68,7 +72,10 @@ public:
         : data(std::make_shared<ServerDataPart>(createPartWrapperFromModel(storage, std::move(x))))
     {
     }
-    explicit ServerDataPartAdapter(const DataModelPartWrapperPtr & x) : data(std::make_shared<ServerDataPart>(x)) { }
+    explicit ServerDataPartAdapter(const MergeTreeMetaBase & /*storage*/, const DataModelPartWrapperPtr & x)
+        : data(std::make_shared<ServerDataPart>(x))
+    {
+    }
     String getPartitionId() override { return data->info().partition_id; }
     String getName() override { return data->name(); }
     DataModelPartWrapperPtr getData() const { return data->part_model_wrapper; }

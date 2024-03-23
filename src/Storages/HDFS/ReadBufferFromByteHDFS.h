@@ -61,6 +61,9 @@ public:
 
     void setReadUntilPosition(size_t position) override;
     void setReadUntilEnd() override;
+
+    bool isSeekCheap() override { return true; }
+
 private:
     std::unique_ptr<ReadBufferFromHDFSImpl> impl;
     ThrottlerPtr total_network_throttler;

@@ -827,12 +827,13 @@ void HTTPHandler::processQuery(
     query_scope.emplace(context);
 
     executeQuery(*in, *used_output.out_maybe_delayed_and_compressed, /* allow_into_outfile = */ false, context,
-        [&response] (const String & current_query_id, const String & content_type, const String & format, const String & timezone)
+        [&response,&http_write_buffer=used_output.out] (const String & current_query_id, const String & content_type, const String & format, const String & timezone, MPPQueryCoordinatorPtr coordinator)
         {
             response.setContentType(content_type);
             response.add("X-ClickHouse-Query-Id", current_query_id);
             response.add("X-ClickHouse-Format", format);
             response.add("X-ClickHouse-Timezone", timezone);
+            http_write_buffer->setMPPCordinator(std::move(coordinator));
         }
     );
 

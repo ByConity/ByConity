@@ -135,6 +135,16 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView4)
    * expression column. */
 TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView5)
 {
+    String result = "Gather Exchange\n"
+                    "└─ Projection\n"
+                    "   │     Expressions: [name], e:=ee\n"
+                    "   └─ Projection\n"
+                    "      │     Expressions: [ee, name]\n"
+                    "      └─ Filter\n"
+                    "         │     Condition: x = 2\n"
+                    "         └─ TableScan test_mview.MV0_MV_DATA\n"
+                    "                  Where: x = 2\n"
+                    "                  Outputs: [x, ee, name]\n";
     sql("select deptno - 10 as x, empid + 1 as ee, name from emps",
         "select name, empid + 1 as e from emps where deptno - 10 = 2")
         .checkingThatResultContains("Where: x = 2")
@@ -550,7 +560,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
     sql("select empid, deptno, count(*) as c, sum(empid) as s\n"
             "from emps group by empid, deptno",
         "select count(*) + 1 as c, deptno from emps group by deptno")
-        .checkingThatResultContains("Expressions: [deptno_3], expr#plus(count(), 1)_1:=`expr#sum(expr#count()_1)_2` + 1")
+        .checkingThatResultContains("Expressions: [deptno_2], expr#plus(count(), 1)_1:=`expr#sum(expr#count())_2` + 1")
         .ok();
 }
 
@@ -666,7 +676,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregateOnProject5)
     sql("select empid, deptno, name, count(*) from emps\n"
         "group by empid, deptno, name",
         "select name, empid, count(*) from emps group by name, empid")
-        .checkingThatResultContains("Group by: {empid_3, name_3}", "Aggregates: expr#sum(expr#count()_1)_2:=AggNull(sum)(expr#count()_3)")
+        .checkingThatResultContains("Aggregates: expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2)")
         .ok();
 }
 
@@ -1269,7 +1279,7 @@ TEST_F(MaterializedViewRewriteTest, testAggDistinctInMvGrouping)
         "from emps group by deptno, name";
     sql(mv, query)
         .checkingThatResultContains(
-            "Group by: {expr#name_4, deptno_3}", "Aggregates: expr#uniqExact(name_1)_2:=AggNull(uniqExact)(expr#name_5)")
+            "Aggregates: expr#uniqExact(name)_3:=AggNull(uniqExact)(expr#name_5)")
         .ok();
 }
 
@@ -1285,7 +1295,7 @@ TEST_F(MaterializedViewRewriteTest, testAggOptionalityInMvGrouping)
         "select deptno, salary, max(salary)\n"
         "from emps group by deptno, salary";
     sql(mv, query)
-        .checkingThatResultContains("Group by: {expr#salary_4, deptno_3}", " Aggregates: expr#max(salary_1)_2:=AggNull(max)(expr#salary_5)")
+        .checkingThatResultContains("Aggregates: expr#max(salary)_3:=AggNull(max)(expr#salary_5)")
         .ok();
 }
 

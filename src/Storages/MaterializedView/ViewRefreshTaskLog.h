@@ -9,7 +9,7 @@ struct ViewRefreshTaskLogElement
     String database;
     String view;
     RefreshViewTaskStatus status = RefreshViewTaskStatus::START;
-    RefreshViewTaskType refresh_type = RefreshViewTaskType::PARTITION_BASED_REFRESH;
+    RefreshViewTaskType refresh_type = RefreshViewTaskType::NONE;
     time_t event_date;
     time_t event_time;
     String partition_map;
@@ -21,6 +21,7 @@ struct ViewRefreshTaskLogElement
     String drop_query_id;
     String insert_select_query_id;
     String insert_overwrite_query_id;
+    String exception;
     static std::string name() { return "CnchViewRefreshTask"; }
     static NamesAndTypesList getNamesAndTypes();
     static NamesAndAliases getNamesAndAliases() { return {}; }

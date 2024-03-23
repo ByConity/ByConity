@@ -13,43 +13,30 @@ Projection
                   │     Aggregates: expr#uniqExact(ps_suppkey):=AggNull(count)(ps_suppkey)
                   └─ Aggregating
                      │     Group by: {p_brand, p_type, p_size, ps_suppkey}
-                     └─ Projection
-                        │     Expressions: [p_brand, p_size, p_type, ps_suppkey]
-                        └─ Filter
-                           │     Condition: if(isNull(ps_suppkey), NULL, NOT cast(multiIf(build_side_non_null_symbol = 1, 1, 0), 'UInt8'))
-                           └─ Left (PARALLEL_HASH) Join
-                              │     Condition: ps_suppkey == s_suppkey
-                              ├─ Repartition Exchange
-                              │  │     Partition by: {ps_suppkey}
-                              │  └─ Inner (PARALLEL_HASH) Join
-                              │     │     Condition: ps_partkey == p_partkey
-                              │     │     Runtime Filters Builder: {p_partkey}
-                              │     ├─ Repartition Exchange
-                              │     │  │     Partition by: {ps_partkey}
-                              │     │  └─ Filter
-                              │     │     │     Condition: Runtime Filters: {ps_partkey}
-                              │     │     └─ TableScan tpch1000.partsupp
-                              │     │              Where: Runtime Filters: {ps_partkey}
-                              │     │              Outputs: [ps_partkey, ps_suppkey]
-                              │     └─ Repartition Exchange
-                              │        │     Partition by: {p_partkey}
-                              │        └─ Filter
-                              │           │     Condition: (p_brand != 'Brand#45') AND (p_size IN (3, 9, 14, 19, 23, 36, 45, 49)) AND (p_type NOT LIKE 'MEDIUM POLISHED%')
-                              │           └─ TableScan tpch1000.part
-                              │                    Where: (p_brand != 'Brand#45') AND (p_size IN (3, 9, 14, 19, 23, 36, 45, 49)) AND (p_type NOT LIKE 'MEDIUM POLISHED%')
-                              │                    Outputs: [p_partkey, p_brand, p_type, p_size]
-                              └─ Projection
-                                 │     Expressions: [s_suppkey], build_side_non_null_symbol:=1
-                                 └─ MergingAggregated
-                                    └─ Repartition Exchange
-                                       │     Partition by: {s_suppkey}
-                                       └─ Aggregating
-                                          │     Group by: {s_suppkey}
-                                          └─ Projection
-                                             │     Expressions: [s_suppkey]
-                                             └─ Filter
-                                                │     Condition: s_comment LIKE '%Customer%Complaints%'
-                                                └─ TableScan tpch1000.supplier
-                                                         Where: s_comment LIKE '%Customer%Complaints%'
-                                                         Outputs: [s_suppkey, s_comment]
+                     └─ Left Anti Join
+                        │     Condition: ps_suppkey == s_suppkey
+                        ├─ Repartition Exchange
+                        │  │     Partition by: {ps_suppkey}
+                        │  └─ Inner (PARALLEL_HASH) Join
+                        │     │     Condition: ps_partkey == p_partkey
+                        │     │     Runtime Filters Builder: {p_partkey}
+                        │     ├─ Filter
+                        │     │  │     Condition: Runtime Filters: {ps_partkey}
+                        │     │  └─ TableScan tpch1000.partsupp
+                        │     │           Where: Runtime Filters: {ps_partkey}
+                        │     │           Outputs: [ps_partkey, ps_suppkey]
+                        │     └─ Filter
+                        │        │     Condition: (p_brand != 'Brand#45') AND (p_size IN (3, 9, 14, 19, 23, 36, 45, 49)) AND (p_type NOT LIKE 'MEDIUM POLISHED%')
+                        │        └─ TableScan tpch1000.part
+                        │                 Where: (p_brand != 'Brand#45') AND (p_size IN (3, 9, 14, 19, 23, 36, 45, 49)) AND (p_type NOT LIKE 'MEDIUM POLISHED%')
+                        │                 Outputs: [p_partkey, p_brand, p_type, p_size]
+                        └─ Repartition Exchange
+                           │     Partition by: {s_suppkey}
+                           └─ Projection
+                              │     Expressions: [s_suppkey]
+                              └─ Filter
+                                 │     Condition: s_comment LIKE '%Customer%Complaints%'
+                                 └─ TableScan tpch1000.supplier
+                                          Where: s_comment LIKE '%Customer%Complaints%'
+                                          Outputs: [s_suppkey, s_comment]
 note: Runtime Filter is applied for 1 times.

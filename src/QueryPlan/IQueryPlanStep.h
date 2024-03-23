@@ -163,6 +163,7 @@ public:
     MM(Offset, offset) \
     MM(FinishSorting, finish_sorting) \
     MM(TotalsHaving, totals_having) \
+    MM(LocalExchange, local_exchange) \
     MM(MultiJoin, multi_join)
 
 // macro helpers to convert MM(x, y) to M(x)
@@ -226,7 +227,7 @@ public:
     const DataStreams & getInputStreams() const { return input_streams; }
     virtual void setInputStreams(const DataStreams & input_streams_) = 0;
 
-    void addHints(SqlHints & sql_hints, ContextMutablePtr & context);
+    void addHints(SqlHints & sql_hints, ContextMutablePtr & context, bool check_type = false);
 
     const PlanHints & getHints() const
     {

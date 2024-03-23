@@ -1379,6 +1379,15 @@ StorageSnapshotPtr StorageDistributed::getStorageSnapshotForQuery(
     return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns, std::move(snapshot_data));
 }
 
+ASTPtr
+StorageDistributed::applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr stats) const
+{
+    auto remote_db = getRemoteDatabaseName();
+    auto remote_table_name = getRemoteTableName();
+    auto local_storage = DatabaseCatalog::instance().getTable(StorageID{remote_db, remote_table}, query_context);
+    return local_storage->applyFilter(query_filter, query_info, query_context, stats);
+}
+
 void registerStorageDistributed(StorageFactory & factory)
 {
     factory.registerStorage("Distributed", [](const StorageFactory::Arguments & args)

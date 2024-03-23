@@ -10,72 +10,35 @@ Projection Est. 1 rows
             └─ Aggregating Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#sum(ws_ext_discount_amt):=AggNull(sum)(ws_ext_discount_amt)
-               └─ Inner Join Est. 29661 rows
-                  │     Condition: ws_sold_date_sk == d_date_sk
-                  │     Runtime Filters Builder: {d_date_sk}
-                  ├─ Inner Join Est. 607552 rows
-                  │  │     Condition: ws_item_sk == i_item_sk
-                  │  │     Filter: ws_ext_discount_amt > ('1.3' * `expr#avg(ws_ext_discount_amt)`)
-                  │  │     Runtime Filters Builder: {i_item_sk}
-                  │  ├─ Filter Est. 720000376 rows
-                  │  │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                  │  │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
-                  │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                  │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_ext_discount_amt]
-                  │  └─ Broadcast Exchange Est. 264 rows
-                  │     └─ Inner Join Est. 264 rows
-                  │        │     Condition: i_item_sk == ws_item_sk_1
-                  │        │     Runtime Filters Builder: {ws_item_sk_1}
-                  │        ├─ Repartition Exchange Est. 264 rows
-                  │        │  │     Partition by: {i_item_sk}
-                  │        │  └─ Filter Est. 264 rows
-                  │        │     │     Condition: i_manufact_id = 350 Runtime Filters: {i_item_sk}
-                  │        │     └─ TableScan tpcds1000_sample.item Est. 300000 rows
-                  │        │              Where: i_manufact_id = 350 Runtime Filters: {i_item_sk}
-                  │        │              Outputs: [i_item_sk, i_manufact_id]
-                  │        └─ MergingAggregated Est. 253 rows
-                  │           └─ Repartition Exchange Est. 253 rows
-                  │              │     Partition by: {ws_item_sk_1}
-                  │              └─ Aggregating Est. 253 rows
-                  │                 │     Group by: {ws_item_sk_1}
-                  │                 │     Aggregates: expr#avg(ws_ext_discount_amt):=AggNull(avgIf)(ws_ext_discount_amt_1,build_side_non_null_symbol)
-                  │                 └─ Projection Est. 29661 rows
-                  │                    │     Expressions: [ws_ext_discount_amt_1, ws_item_sk_1], build_side_non_null_symbol:=1
-                  │                    └─ Inner Join Est. 29661 rows
-                  │                       │     Condition: ws_sold_date_sk_1 == d_date_sk_1
-                  │                       │     Runtime Filters Builder: {d_date_sk_1}
-                  │                       ├─ Inner Join Est. 607552 rows
-                  │                       │  │     Condition: ws_item_sk_1 == i_item_sk_1
-                  │                       │  │     Runtime Filters Builder: {i_item_sk_1}
-                  │                       │  ├─ Filter Est. 720000376 rows
-                  │                       │  │  │     Condition: Runtime Filters: {ws_item_sk_1, ws_sold_date_sk_1}
-                  │                       │  │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
-                  │                       │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                  │                       │  │           Outputs: ws_sold_date_sk_1:=ws_sold_date_sk, ws_item_sk_1:=ws_item_sk, ws_ext_discount_amt_1:=ws_ext_discount_amt
-                  │                       │  └─ Broadcast Exchange Est. 253 rows
-                  │                       │     └─ MergingAggregated Est. 253 rows
-                  │                       │        └─ Repartition Exchange Est. 253 rows
-                  │                       │           │     Partition by: {i_item_sk_1}
-                  │                       │           └─ Aggregating Est. 253 rows
-                  │                       │              │     Group by: {i_item_sk_1}
-                  │                       │              └─ Projection Est. 264 rows
-                  │                       │                 │     Expressions: i_item_sk_1:=i_item_sk
-                  │                       │                 └─ Filter Est. 264 rows
-                  │                       │                    │     Condition: i_manufact_id = 350
-                  │                       │                    └─ TableScan tpcds1000_sample.item Est. 300000 rows
-                  │                       │                             Where: i_manufact_id = 350
-                  │                       │                             Outputs: [i_item_sk, i_manufact_id]
-                  │                       └─ Broadcast Exchange Est. 90 rows
-                  │                          └─ Filter Est. 90 rows
-                  │                             │     Condition: (d_date_1 >= cast(10983, 'Date')) AND (d_date_1 <= cast(11073, 'Date'))
-                  │                             └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                  │                                      Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-                  │                                      Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date
-                  └─ Broadcast Exchange Est. 90 rows
-                     └─ Filter Est. 90 rows
-                        │     Condition: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-                        └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                 Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
-                                 Outputs: [d_date_sk, d_date]
-note: Magic Set is applied for 1 parts.
-note: Runtime Filter is applied for 5 times.
+               └─ Projection Est. 7415 rows
+                  │     Expressions: [ws_ext_discount_amt]
+                  └─ Filter Est. 7415 rows
+                     │     Condition: ws_ext_discount_amt > ('1.3' * `expr#avg(ws_ext_discount_amt)`)
+                     └─ Window Est. 29661 rows
+                        └─ Inner Join Est. 29661 rows
+                           │     Condition: ws_sold_date_sk == d_date_sk
+                           │     Runtime Filters Builder: {d_date_sk}
+                           ├─ Inner Join Est. 607552 rows
+                           │  │     Condition: ws_item_sk == i_item_sk
+                           │  │     Runtime Filters Builder: {i_item_sk}
+                           │  ├─ Filter Est. 720000376 rows
+                           │  │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                           │  │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
+                           │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                           │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_ext_discount_amt]
+                           │  └─ Projection Est. 264 rows
+                           │     │     Expressions: [i_item_sk]
+                           │     └─ Filter Est. 264 rows
+                           │        │     Condition: i_manufact_id = 350
+                           │        └─ TableScan tpcds1000_sample.item Est. 300000 rows
+                           │                 Where: i_manufact_id = 350
+                           │                 Outputs: [i_item_sk, i_manufact_id]
+                           └─ Broadcast Exchange Est. 90 rows
+                              └─ Projection Est. 90 rows
+                                 │     Expressions: [d_date_sk]
+                                 └─ Filter Est. 90 rows
+                                    │     Condition: (d_date >= cast(10983, 'Date32')) AND (d_date <= cast(11073, 'Date32'))
+                                    └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                             Where: (d_date >= cast(10983, 'Date32')) AND (d_date <= cast(11073, 'Date32'))
+                                             Outputs: [d_date_sk, d_date]
+note: Runtime Filter is applied for 2 times.

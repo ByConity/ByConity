@@ -216,7 +216,7 @@ Pipe StorageSystemCnchViewTables::read(
             if (refresh_schedule.async())
             {
                 ContextMutablePtr query_context = Context::createCopy(context);
-                mv->validateMv(query_context);
+                mv->validatePartitionBased(query_context);
                 auto table_ids = mv->getDependBaseTables();
                 for (auto & table_id : table_ids)
                 {
@@ -332,14 +332,7 @@ Pipe StorageSystemCnchViewTables::read(
             String start_time = "";
             if (refresh_schedule.async())
             {
-                auto in_time_t = std::chrono::system_clock::to_time_t(refresh_schedule.start_time);
-                std::stringstream ss;
-                auto * tm = std::localtime(&in_time_t);
-                if (tm)
-                {
-                    ss << std::put_time(tm, "%Y-%m-%d %X");
-                    start_time = ss.str();
-                }
+                start_time = refresh_schedule.getStartTime();
             }
             res_columns[col_num++]->insert(start_time);
         }

@@ -77,21 +77,22 @@ protected:
     Void visitCTERefNode(CTERefNode & node, Void & context) override
     {
         const auto * cte = dynamic_cast<const CTERefStep *>(node.getStep().get());
-        return cte_helper.accept(cte->getId(), *this, context);
+        cte_helper.accept(cte->getId(), *this, context);
+        return Void{};
     }
 private:
     explicit TableFinder(CTEInfo & cte_info_) : cte_helper(cte_info_) { }
     std::set<QualifiedTableName> tables;
-    SimpleCTEVisitHelper<Void> cte_helper;
+    SimpleCTEVisitHelper<void> cte_helper;
 };
 
-WorkloadQueryPtr WorkloadQuery::build(const std::string & query, const ContextPtr & from_context)
+WorkloadQueryPtr WorkloadQuery::build(const std::string & query_id, const std::string & query, const ContextPtr & from_context)
 {
     ContextMutablePtr context = Context::createCopy(from_context);
     context->applySettingsChanges(
         {DB::SettingChange("enable_sharding_optimize", "true"), // for colocated join
-         DB::SettingChange("print_graphviz", "0"), // print graphviz is not thread-safe
-         DB::SettingChange("enable_runtime_filter", "false")}); // for calculating signature
+         DB::SettingChange("enable_runtime_filter", "false"), // for calculating signature
+         DB::SettingChange("enable_optimzier", "true")});
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
     context->createOptimizerMetrics();
@@ -100,7 +101,7 @@ WorkloadQueryPtr WorkloadQuery::build(const std::string & query, const ContextPt
     // parse and plan
     const char * begin = query.data();
     const char * end = begin + query.size();
-    ParserQuery parser(end, ParserSettings::valueOf(context->getSettingsRef().dialect_type.value));
+    ParserQuery parser(end, ParserSettings::valueOf(context->getSettingsRef()));
     auto ast = parseQuery(parser, begin, end, "", context->getSettingsRef().max_query_size, context->getSettingsRef().max_parser_depth);
     ast = QueryRewriter().rewrite(ast, context);
     AnalysisPtr analysis = QueryAnalyzer::analyze(ast, context);
@@ -110,17 +111,7 @@ WorkloadQueryPtr WorkloadQuery::build(const std::string & query, const ContextPt
 
     // before cascades
     PlanOptimizer::optimize(*query_plan, context, before_cascades);
-
-    // initialize memo for memo-based advisor rules
-    auto cascades_plan = query_plan->copy(context);
-    auto cascades_context = std::make_shared<CascadesContext>(
-        context,
-        cascades_plan->getCTEInfo(),
-        WorkerSizeFinder::find(*cascades_plan, *context),
-        PlanPattern::maxJoinSize(*cascades_plan, context),
-        true);
-    cascades_context->setEnableWhatIfMode(true);
-    auto root_group = cascades_context->initMemo(cascades_plan->getPlanNode());
+    auto plan_before_cascades = query_plan->copy(context);
 
     // complete optimization
     PlanOptimizer::optimize(*query_plan, context, after_cascades);
@@ -130,14 +121,7 @@ WorkloadQueryPtr WorkloadQuery::build(const std::string & query, const ContextPt
     CardinalityEstimator::estimate(*query_plan, context);
     PlanCostMap costs = calculateCost(*query_plan, *context);
     return std::make_unique<WorkloadQuery>(
-        context,
-        query,
-        std::move(query_plan),
-        std::move(cascades_plan),
-        std::move(cascades_context),
-        std::move(root_group),
-        std::move(query_tables),
-        std::move(costs));
+        context, query_id, query, std::move(query_plan), std::move(plan_before_cascades), std::move(query_tables), std::move(costs));
 }
 
 WorkloadQueries WorkloadQuery::build(const std::vector<std::string> & queries, const ContextPtr & from_context, ThreadPool & query_thread_pool)
@@ -154,7 +138,7 @@ WorkloadQueries WorkloadQuery::build(const std::vector<std::string> & queries, c
             const auto & query = queries[i];
             try
             {
-                WorkloadQueryPtr workload_query = build(query, from_context);
+                WorkloadQueryPtr workload_query = build("q" + std::to_string(i), query, from_context);
                 res[i] = std::move(workload_query);
             } catch (Exception & e)
             {
@@ -172,6 +156,17 @@ WorkloadQueries WorkloadQuery::build(const std::vector<std::string> & queries, c
 
 double WorkloadQuery::getOptimalCost(const TableLayout & table_layout)
 {
+if (!root_group)
+    {
+        cascades_context = std::make_shared<CascadesContext>(
+            query_context,
+            plan_before_cascades->getCTEInfo(),
+            WorkerSizeFinder::find(*plan_before_cascades, *query_context),
+            PlanPattern::maxJoinSize(*plan_before_cascades, query_context),
+            true);
+        root_group = cascades_context->initMemo(plan_before_cascades->getPlanNode());
+    }
+
     TableLayout relevant_table_layout;
 
     for (const auto & entry : table_layout)
@@ -184,7 +179,9 @@ double WorkloadQuery::getOptimalCost(const TableLayout & table_layout)
     required_property.setTableLayout(std::move(relevant_table_layout));
     GroupId root_group_id = root_group->getGroupId();
     CascadesOptimizer::optimize(root_group_id, *cascades_context, required_property);
-    return cascades_context->getMemo().getGroupById(root_group_id)->getBestExpression(required_property)->getCost();
+    auto res = cascades_context->getMemo().getGroupById(root_group_id)->getBestExpression(required_property)->getCost();
+    GraphvizPrinter::printMemo(cascades_context->getMemo(), root_group_id, query_context, "CascadesOptimizer-Memo-Graph");
+    return res;
 }
 
 }

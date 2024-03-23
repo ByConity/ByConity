@@ -580,8 +580,6 @@ struct ContextSharedPart
 
             global_binding_cache_manager.reset();
 
-            access_control_manager.stopBgJobForKVStorage();
-
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -794,16 +792,17 @@ ReadSettings Context::getReadSettings() const
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
     res.enable_io_pfra = settings.enable_io_pfra;
-    res.buffer_size = settings.max_read_buffer_size;
-    res.remote_fs_buffer_size = settings.remote_fs_buffer_size;
+    res.local_fs_buffer_size
+        = settings.max_read_buffer_size_local_fs ? settings.max_read_buffer_size_local_fs : settings.max_read_buffer_size;
+    res.remote_fs_buffer_size
+        = settings.max_read_buffer_size_remote_fs ? settings.max_read_buffer_size_remote_fs : settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
     res.mmap_cache = getMMappedFileCache().get();
     res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
     res.disk_cache_mode = settings.disk_cache_mode;
     res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
-    res.parquet_parallel_read= settings.parquet_parallel_read;
-    res.parquet_decode_threads = settings.max_download_thread;
+    res.parquet_decode_threads = settings.max_download_threads;
     res.filtered_ratio_to_use_skip_read = settings.filtered_ratio_to_use_skip_read;
     return res;
 }
@@ -2171,7 +2170,7 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
         for (const auto & change : changes)
         {
             if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
-                throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name + 
+                throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
                     "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
         }
@@ -2597,16 +2596,6 @@ void Context::setProgressCallback(ProgressCallback callback)
 ProgressCallback Context::getProgressCallback() const
 {
     return progress_callback;
-}
-
-void Context::setInternalProgressCallback(ProgressCallback callback)
-{
-    internal_progress_callback = callback;
-}
-
-ProgressCallback Context::getInternalProgressCallback() const
-{
-    return internal_progress_callback;
 }
 
 void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)
@@ -5844,11 +5833,13 @@ AsynchronousReaderPtr Context::getThreadPoolReader() const
 {
     auto lock = getLock();
 
-    const Poco::Util::AbstractConfiguration & config = getConfigRef();
-    auto pool_size = config.getUInt(".threadpool_remote_fs_reader_pool_size", 250);
-    auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
     if (!shared->asynchronous_remote_fs_reader)
+    {
+        const Poco::Util::AbstractConfiguration & config = getConfigRef();
+        auto pool_size = config.getUInt(".threadpool_remote_fs_reader_pool_size", 250);
+        auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
         shared->asynchronous_remote_fs_reader = std::make_shared<ThreadPoolRemoteFSReader>(pool_size, queue_size);
+    }
 
     return shared->asynchronous_remote_fs_reader;
 }

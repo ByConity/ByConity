@@ -215,6 +215,7 @@ public:
     size_t getHierarchySize() const;
     Names getOriginColumns() const;
     NameSet getNamesSet() const;
+    String toString() const;
 
 private:
     template <typename T, bool check_ambiguous>

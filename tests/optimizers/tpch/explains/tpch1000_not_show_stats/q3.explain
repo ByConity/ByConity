@@ -19,11 +19,13 @@ Projection
                      │     Runtime Filters Builder: {o_orderkey}
                      ├─ Repartition Exchange
                      │  │     Partition by: {l_orderkey}
-                     │  └─ Filter
-                     │     │     Condition: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
-                     │     └─ TableScan tpch1000.lineitem
-                     │              Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
-                     │              Outputs: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
+                     │  └─ Projection
+                     │     │     Expressions: [l_discount, l_extendedprice, l_orderkey]
+                     │     └─ Filter
+                     │        │     Condition: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
+                     │        └─ TableScan tpch1000.lineitem
+                     │                 Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
+                     │                 Outputs: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
                      └─ Repartition Exchange
                         │     Partition by: {o_orderkey}
                         └─ Inner (PARALLEL_HASH) Join
@@ -38,9 +40,11 @@ Projection
                            │              Outputs: [o_orderkey, o_custkey, o_orderdate, o_shippriority]
                            └─ Repartition Exchange
                               │     Partition by: {c_custkey}
-                              └─ Filter
-                                 │     Condition: c_mktsegment = 'BUILDING'
-                                 └─ TableScan tpch1000.customer
-                                          Where: c_mktsegment = 'BUILDING'
-                                          Outputs: [c_custkey, c_mktsegment]
+                              └─ Projection
+                                 │     Expressions: [c_custkey]
+                                 └─ Filter
+                                    │     Condition: c_mktsegment = 'BUILDING'
+                                    └─ TableScan tpch1000.customer
+                                             Where: c_mktsegment = 'BUILDING'
+                                             Outputs: [c_custkey, c_mktsegment]
 note: Runtime Filter is applied for 2 times.

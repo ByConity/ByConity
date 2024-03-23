@@ -17,6 +17,8 @@
 
 #include <QueryPlan/CTEVisitHelper.h>
 
+#include <algorithm>
+
 namespace DB
 {
 class CTEInfo::ReferenceCountsVisitor : public PlanNodeVisitor<Void, std::unordered_map<CTEId, UInt64>>
@@ -39,7 +41,7 @@ public:
         return Void{};
     }
 private:
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<void> cte_helper;
 };
 
 std::unordered_map<CTEId, UInt64> CTEInfo::collectCTEReferenceCounts(PlanNodePtr & root)
@@ -50,16 +52,29 @@ std::unordered_map<CTEId, UInt64> CTEInfo::collectCTEReferenceCounts(PlanNodePtr
     return reference_counts;
 }
 
-void CTEInfo::checkNotExists(CTEId id) const
+std::set<CTEId> CTEInfo::getCTEIds() const
 {
-    if (contains(id))
-        throw Exception("CTE " + std::to_string(id) + " already exists", ErrorCodes::LOGICAL_ERROR);
+    std::set<CTEId> cte_ids;
+    for (const auto & item : common_table_expressions)
+        cte_ids.emplace(item.first);
+    return cte_ids;
 }
 
-void CTEInfo::checkExists(CTEId id) const
+void CTEInfo::update(CTEId id, PlanNodePtr plan)
 {
     if (!contains(id))
         throw Exception("CTE " + std::to_string(id) + " don't exists", ErrorCodes::LOGICAL_ERROR);
+
+    common_table_expressions[id] = std::move(plan);
+}
+
+void CTEInfo::add(CTEId id, PlanNodePtr plan)
+{
+    if (contains(id))
+        throw Exception("CTE " + std::to_string(id) + " already exists", ErrorCodes::LOGICAL_ERROR);
+
+    common_table_expressions[id] = std::move(plan);
+    next_cte_id = std::max(id, next_cte_id);
 }
 }
 

@@ -616,6 +616,8 @@ void removeUnneededColumnsFromSelectClause(const ASTSelectQuery * select_query, 
         }
         else if (select_query->distinct || hasArrayJoin(elem))
         {
+            /// ARRAY JOIN cannot be optimized out since it may change number of rows,
+            /// so as DISTINCT.
             new_elements.push_back(elem);
         }
         else

@@ -28,6 +28,7 @@
 #include <Optimizer/MaterializedView/ExpressionSubstitution.h>
 #include <Optimizer/MaterializedView/InnerJoinCollector.h>
 #include <Optimizer/MaterializedView/MaterializedViewChecker.h>
+#include <Optimizer/MaterializedView/MaterializedViewJoinHyperGraph.h>
 #include <Optimizer/MaterializedView/MaterializedViewMemoryCache.h>
 #include <Optimizer/MaterializedView/MaterializedViewStructure.h>
 #include <Optimizer/MaterializedView/PartitionConsistencyChecker.h>
@@ -51,7 +52,9 @@
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/FilterStep.h>
+#include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/PlanNode.h>
 #include <QueryPlan/PlanSymbolReallocator.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/SimplePlanRewriter.h>
@@ -65,7 +68,7 @@
 #include "Common/LinkedHashMap.h"
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
-#include "Optimizer/MaterializedView/MaterializedViewJoinHyperGraph.h"
+#include "QueryPlan/CTEVisitHelper.h"
 
 #include <algorithm>
 #include <map>
@@ -192,6 +195,7 @@ using ExpressionEquivalences = Equivalences<ConstASTPtr, EqualityASTMap>;
 struct BaseTables
 {
     std::unordered_set<StorageID> base_tables;
+    PlanNodePtr inlined;
 };
 
 /**
@@ -206,7 +210,7 @@ public:
         LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> & materialized_views,
         bool verbose)
     {
-        CandidatesExplorer explorer{context, materialized_views, verbose};
+        CandidatesExplorer explorer{query.getCTEInfo(), context, materialized_views, verbose};
         std::unordered_set<String> required_columns;
         VisitorUtil::accept(query.getPlanNode(), explorer, required_columns);
 
@@ -234,21 +238,36 @@ public:
 
 protected:
     CandidatesExplorer(
+        CTEInfo & cte_info,
         ContextMutablePtr context_,
         LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> & materialized_views_,
         bool verbose_)
-        : context(context_), materialized_views(materialized_views_), verbose(verbose_)
+        : context(context_), materialized_views(materialized_views_), verbose(verbose_), cte_helper(cte_info)
     {
     }
 
-    BaseTables visitPlanNode(PlanNodeBase & node, std::unordered_set<String> & required_columns) override { return process(node, required_columns); }
+    BaseTables visitPlanNode(PlanNodeBase & node, std::unordered_set<String> & required_columns) override
+    {
+        return process(node, required_columns);
+    }
 
     BaseTables visitTableScanNode(TableScanNode & node, std::unordered_set<String> &) override
     {
         auto & step = node.getStep();
-        BaseTables res;
-        res.base_tables.emplace(step->getStorageID());
-        return res;
+        std::unordered_set<StorageID> base_tables;
+        base_tables.emplace(step->getStorageID());
+        return BaseTables{
+            .base_tables = base_tables,
+            .inlined = node.shared_from_this(),
+        };
+    }
+
+    BaseTables visitCTERefNode(CTERefNode & node, std::unordered_set<String> & required_columns) override
+    {
+        auto cte_id = node.getStep()->getId();
+        auto res = cte_helper.accept(cte_id, *this, required_columns);
+
+        return BaseTables{.base_tables = res.base_tables, .inlined = node.getStep()->toInlinedPlanNode(cte_helper.getCTEInfo(), context)};
     }
 
     BaseTables process(PlanNodeBase & node, const std::unordered_set<String> & required_columns)
@@ -267,6 +286,7 @@ protected:
         }
 
         std::unordered_set<StorageID> base_tables;
+        PlanNodes children;
         for (auto & child : node.getChildren())
         {
             auto res = VisitorUtil::accept(child, *this, child_required_columns);
@@ -274,18 +294,20 @@ protected:
                 supported = false;
             else
                 base_tables.insert(res.base_tables.begin(), res.base_tables.end());
+            children.emplace_back(res.inlined);
         }
         if (!supported)
             return {};
 
-        matches(node.shared_from_this(), base_tables, required_columns);
-        return BaseTables{.base_tables = base_tables};
+        auto inlined = PlanNodeBase::createPlanNode(node.getId(), node.getStep(), children);
+        matches(inlined, node.shared_from_this(), base_tables, required_columns);
+        return BaseTables{.base_tables = base_tables, .inlined = inlined};
     }
 
     /**
      * matches plan node using all related materialized view.
      */
-    void matches(PlanNodePtr query, const std::unordered_set<StorageID> & tables, const std::unordered_set<String> & query_required_columns)
+    void matches(PlanNodePtr query, PlanNodePtr origin, const std::unordered_set<StorageID> & tables, const std::unordered_set<String> & query_required_columns)
     {
         if (tables.size() > JoinHyperGraph::MAX_NODE)
             return;
@@ -305,12 +327,19 @@ protected:
             return;
 
         std::optional<SymbolTransformMap> query_map = SymbolTransformMap::buildFrom(*query);
+        if (!query_map)
+        {
+            LOG_ERROR(logger, "skip plan node {}: duplicate symbol name.", query->getId(), ErrorCodes::LOGICAL_ERROR);
+            return;
+        }
 
         std::unordered_set<IQueryPlanStep::Type> skip_nodes;
         skip_nodes.emplace(IQueryPlanStep::Type::Aggregating);
         skip_nodes.emplace(IQueryPlanStep::Type::Sorting);
         JoinHyperGraph query_join_hyper_graph = JoinHyperGraph::build(query, *query_map, context, skip_nodes);
-        PlanNodes query_inner_sources = InnerJoinCollector::collect(query);
+        InnerJoinCollector inner_join_collector;
+        inner_join_collector.collect(query);
+        PlanNodes query_inner_sources = inner_join_collector.getInnerSources();
         // get all predicates from join graph
         auto query_predicates = extractPredicates(query_join_hyper_graph, query_join_hyper_graph.getNodeSet(query_inner_sources));
 
@@ -331,10 +360,11 @@ protected:
                     view->output_columns_to_table_columns_map,
                     view->output_columns_to_query_columns_map,
                     view->top_aggregating_step,
+                    view->async_materialized_view,
                     materialized_views[view],
                     view->view_storage_id,
                     view->target_storage_id))
-                candidates[query].emplace_back(*result);
+                candidates[origin].emplace_back(*result);
     }
 
 
@@ -357,6 +387,7 @@ protected:
         const std::unordered_map<String, String> & view_outputs_to_table_columns_map,
         std::unordered_map<String, String> output_columns_to_query_columns_map,
         const std::shared_ptr<const AggregatingStep> & view_aggregate,
+        const bool & async_materialized_view,
         const PartitionCheckResult & partition_check_result,
         const StorageID view_storage_id,
         const StorageID target_storage_id)
@@ -572,12 +603,6 @@ protected:
                     continue; // bail out
                 }
 
-                if (query_aggregate && query->getType() != IQueryPlanStep::Type::Aggregating)
-                {
-                    add_failure_message("union rewrite for aggregating only supports query with aggregates on the top");
-                    continue; // bail out
-                }
-
                 auto union_domain = view_based_query_domain.subtract(view_domain);
                 if (!union_domain)
                 {
@@ -629,8 +654,9 @@ protected:
 
             // 3. check need rollup
             // Note: aggregate always need rollup for aggregating merge tree in clickhouse,
-            //  but code here is not removed for future features.
-            bool need_rollup = query_aggregate.get();
+            bool need_rollup = query_aggregate
+                && (!async_materialized_view || !view_aggregate || query_aggregate->getKeys().size() < view_aggregate->getKeys().size()
+                    || !PredicateUtils::isFalsePredicate(union_predicate));
 
             // 3-1. query aggregate has default result if group by has empty set. not supported yet.
             bool empty_groupings = query_aggregate && query_aggregate->getKeys().empty() &&
@@ -749,6 +775,12 @@ protected:
             // 6. rewrite union predicate
             if (!PredicateUtils::isFalsePredicate(union_predicate))
             {
+                if (query_aggregate && query->getType() != IQueryPlanStep::Type::Aggregating)
+                {
+                    add_failure_message("union rewrite for aggregating only supports query with aggregates on the top");
+                    continue; // bail out
+                }
+
                 EqualityASTMap<ConstASTPtr> query_output_columns_map;
                 NameSet outputs;
                 for (const auto & plan_node : query_inner_sources)
@@ -1189,6 +1221,7 @@ public:
     std::unordered_map<PlanNodePtr, RewriterFailureMessages> failure_messages;
     std::map<String, std::optional<PlanNodeStatisticsPtr>> materialized_views_stats;
     const bool verbose;
+    SimpleCTEVisitHelper<BaseTables> cte_helper;
     Poco::Logger * logger = &Poco::Logger::get("CandidatesExplorer");
 };
 
@@ -1272,7 +1305,7 @@ protected:
             if (!PredicateUtils::isFalsePredicate(candidate.union_predicate))
                 plan = planUnion(plan, query, candidate.union_predicate);
 
-            // reallocate symbols
+                        // reallocate symbols
             PlanNodeAndMappings plan_node_and_mappings = PlanSymbolReallocator::reallocate(plan, context);
             plan = plan_node_and_mappings.plan_node;
 
@@ -1387,7 +1420,7 @@ protected:
     planUnionBeforeAggragte(const PlanNodePtr & view, PlanNodePtr query, ASTPtr union_predicate, const Assignments & assignments)
     {
         if (query->getStep()->getType() != IQueryPlanStep::Type::Aggregating || view->getStep()->getType() != IQueryPlanStep::Type::Aggregating)
-            throw Exception("view & query root node expectes as aggregate", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("union rewrite failed: view & query root node expectes as aggregate", ErrorCodes::LOGICAL_ERROR);
 
         const auto & view_step = dynamic_cast<const AggregatingStep &>(*view->getStep().get());
         const auto & query_step = dynamic_cast<const AggregatingStep &>(*query->getStep().get());
@@ -1397,7 +1430,7 @@ protected:
         {
             const auto & view_key = assignments.at(key);
             if (view_key->getType() != ASTType::ASTIdentifier)
-                throw Exception("view & query root node expectes as aggregate", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("union rewrite failed: view_key expected as identifier", ErrorCodes::LOGICAL_ERROR);
             const auto & view_key_name = view_key->as<ASTIdentifier>()->name();
 
             auto & inputs = output_to_inputs[view_key_name];
@@ -1414,7 +1447,7 @@ protected:
         {
             const auto & view_aggregate_output = assignments.at(aggregate.column_name);
             if (view_aggregate_output->getType() != ASTType::ASTIdentifier)
-                throw Exception("view & query root node expectes as aggregate", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("union rewrite failed: view_aggregate_output expected as identifier", ErrorCodes::LOGICAL_ERROR);
             const auto & view_aggregate_output_name = view_aggregate_output->as<ASTIdentifier>()->name();
             const auto * view_aggreagte = view_name_to_aggreagte.at(view_aggregate_output_name);
             if (view_aggreagte->argument_names.size() != 1)
@@ -1720,7 +1753,7 @@ void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr conte
     plan.update(res.plan_node);
 }
 
-LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context)
+LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context) const
 {
     std::vector<MaterializedViewStructurePtr> materialized_views;
     auto & cache = MaterializedViewMemoryCache::instance();
@@ -1738,11 +1771,22 @@ LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedVi
             materialized_views.push_back(*structure);
     }
 
+    if (log->debug())
+    {
+        std::stringstream ss;
+        for (const auto & materialized_view : materialized_views)
+            ss << materialized_view->view_storage_id.getFullTableName() << ", ";
+        LOG_DEBUG(log, "related {} materialized views: {}", materialized_views.size(), ss.str());
+    }
+
+
     LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> res;
     for (const auto & materialized_view : materialized_views)
     {
         if (auto partition_check_result = checkMaterializedViewPartitionConsistency(materialized_view, context))
             res.emplace(materialized_view, *partition_check_result);
+        else
+            LOG_DEBUG(log, "skip materialized view {}: check consistency failed", materialized_view->view_storage_id.getFullTableName());
     }
     return res;
 }

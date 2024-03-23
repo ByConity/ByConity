@@ -62,6 +62,7 @@
 #include <bthread/mutex.h>
 #include <fmt/format.h>
 #include <incubator-brpc/src/brpc/controller.h>
+#include <sys/types.h>
 #include <Poco/Exception.h>
 #include <Poco/Logger.h>
 #include <Common/Brpc/BrpcAsyncResultHolder.h>
@@ -358,29 +359,37 @@ bool DiskExchangeDataManager::cleanupPreviousSegmentInstance(UInt64 query_unique
         instance_id.segment_id,
         instance_id.parallel_id);
     std::vector<DiskPartitionWriterPtr> cancel_tasks;
+    std::vector<ssize_t> write_bytes;
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
         if (alive_queries.find(query_unique_id) != alive_queries.end())
         {
-            const auto & alive_query = alive_queries[query_unique_id];
+            auto & alive_query = alive_queries[query_unique_id];
             auto iter = alive_query.segment_write_task_keys.find(instance_id);
             auto end = alive_query.segment_write_task_keys.end();
             if (iter != end)
             {
                 auto w_iter = write_tasks.find(iter->second);
                 if (w_iter != write_tasks.end())
+                {
                     cancel_tasks.emplace_back(w_iter->second);
+                    write_bytes.emplace_back(alive_query.segment_instance_write_bytes[w_iter->second->getKey()]);
+                    alive_query.segment_instance_write_bytes[w_iter->second->getKey()] = 0;
+                }
             }
         }
     }
     if (!cancelWriteTasks(cancel_tasks))
         return false;
-    for (const auto & writer : cancel_tasks)
+    for (size_t i = 0; i < cancel_tasks.size(); i++)
     {
+        auto write_byte = write_bytes[i];
+        auto writer = cancel_tasks[i];
         if (!is_shutdown.load(std::memory_order_acquire))
         {
             disk->removeFileIfExists(getFileName(*writer->getKey()));
             disk->removeFileIfExists(getTemporaryFileName(*writer->getKey()));
+            global_disk_written_bytes.fetch_sub(write_byte, std::memory_order_relaxed);
             LOG_INFO(logger, "try removing file for key:{}", *writer->getKey());
         }
     }
@@ -489,7 +498,7 @@ void DiskExchangeDataManager::cleanup(uint64_t query_unique_id)
     if (wait_succ && !is_shutdown.load(std::memory_order_acquire) && disk->exists(file_path))
     {
         removed = true;
-        disk->removeRecursive(file_path);
+        removeWriteTaskDirectory(query_unique_id);
     }
     LOG_INFO(logger, "cleanup for query_unique_id:{} removed:{} file_path:{}", query_unique_id, removed, file_path.string());
 }
@@ -648,7 +657,6 @@ void DiskExchangeDataManager::gc()
         for (const auto & not_alive_query : not_alive_queries)
         {
             delete_files.push_back(not_alive_query.query_unique_id());
-            alive_queries.erase(not_alive_query.query_unique_id());
             LOG_INFO(
                 logger,
                 fmt::format(
@@ -665,6 +673,12 @@ void DiskExchangeDataManager::gc()
     /// delete all files need to delete
     for (const auto & delete_file : delete_files)
         removeWriteTaskDirectory(delete_file);
+    /// finally remove from alive_queries
+    std::unique_lock<bthread::Mutex> lock(mutex);
+    for (const auto & not_alive_query : not_alive_queries)
+    {
+        alive_queries.erase(not_alive_query.query_unique_id());
+    }
 }
 
 void DiskExchangeDataManager::runGC()
@@ -848,13 +862,16 @@ void DiskExchangeDataManager::shutdown()
     }
 }
 
-void DiskExchangeDataManager::updateWrittenBytes(UInt64 query_unique_id, ssize_t disk_written_bytes)
+void DiskExchangeDataManager::updateWrittenBytes(UInt64 query_unique_id, ExchangeDataKeyPtr key, ssize_t disk_written_bytes)
 {
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
         auto it = alive_queries.find(query_unique_id);
         if (it != alive_queries.end())
+        {
             it->second.disk_written_bytes += disk_written_bytes;
+            it->second.segment_instance_write_bytes[key] += disk_written_bytes;
+        }
         else
         {
             LOG_WARNING(

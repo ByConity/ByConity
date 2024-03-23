@@ -319,3 +319,23 @@ inline void trim(std::string_view & str, char c = ' ')
     trimLeft(str, c);
     trimRight(str, c);
 }
+
+namespace compatibility
+{
+namespace v1
+{
+    /// Due to undetermin result of std::hash
+    /// Here we introduce gcc9's implementation of std::hash for backward compatibility
+    /// Implementation is copied from gcc/include/c++/9.3.0/bits/hash_bytes.h
+    size_t hash(const std::string & s);
+}
+
+namespace v2
+{
+    /// Due to undetermin result of std::hash
+    /// Here we introduce libcxx's implementation of std::hash for backward compatibility
+    /// Implementation is copied from contrib/libcxx/include/utility
+    size_t hash(const std::string & s);   
+}
+
+}

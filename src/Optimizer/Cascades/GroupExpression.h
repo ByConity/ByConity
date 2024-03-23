@@ -136,6 +136,11 @@ public:
      */
     void setRuleExplored(RuleType type) { rule_mask.set(static_cast<UInt32>(type), true); }
 
+    bool isCostDerived() const { return cost_derived; }
+    double getCost() const { return cost; }
+
+    void setCost(double cost_) { this->cost = cost_; }
+
     /**
      * Hashes GroupExpression
      * @returns hash code of GroupExpression
@@ -169,6 +174,9 @@ private:
     std::bitset<static_cast<UInt32>(RuleType::NUM_RULES)> rule_mask;
 
     bool deleted = false;
+
+    bool cost_derived = false;
+    double cost;
 
     RuleType produce_rule;
 };

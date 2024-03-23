@@ -557,7 +557,7 @@ TEST_F(CacheManagerTest, RawStorageCacheRenameTest)
 {
     // init storage cache
     auto context = getContext().context;
-    CnchStorageCachePtr storageCachePtr = std::make_shared<CnchStorageCache>(1000);
+    CnchStorageCachePtr storage_cache_ptr = std::make_shared<CnchStorageCache>(1000);
 
     String create_query_1 = "create table db_test.test UUID '00000000-0000-0000-0000-000000000001' (id Int32) ENGINE=CnchMergeTree order by id";
     String create_query_2 = "create table db_test.test UUID '00000000-0000-0000-0000-000000000002' (id Int32) ENGINE=CnchMergeTree order by id";
@@ -567,9 +567,9 @@ TEST_F(CacheManagerTest, RawStorageCacheRenameTest)
     StoragePtr get_by_name = nullptr, get_by_uuid = nullptr;
 
     // test insert into storage cache and get
-    storageCachePtr->insert(storage1->getStorageID(), TxnTimestamp{UInt64{1}}, storage1);
-    get_by_name = storageCachePtr->get("db_test", "test");
-    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
+    storage_cache_ptr->insert(storage1->getStorageID(), TxnTimestamp{UInt64{1}}, storage1);
+    get_by_name = storage_cache_ptr->get("db_test", "test");
+    get_by_uuid = storage_cache_ptr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
     EXPECT_NE(get_by_name, nullptr);
     EXPECT_NE(get_by_uuid, nullptr);
     EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
@@ -577,9 +577,9 @@ TEST_F(CacheManagerTest, RawStorageCacheRenameTest)
     EXPECT_EQ(get_by_uuid->getStorageID().table_name, "test");
 
     // test insert storage with different uuid but the same table name (mock rename).
-    storageCachePtr->insert(storage2->getStorageID(), TxnTimestamp{UInt64{2}}, storage2);
-    get_by_name = storageCachePtr->get("db_test", "test");
-    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
+    storage_cache_ptr->insert(storage2->getStorageID(), TxnTimestamp{UInt64{2}}, storage2);
+    get_by_name = storage_cache_ptr->get("db_test", "test");
+    get_by_uuid = storage_cache_ptr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
     EXPECT_NE(get_by_name, nullptr);
     EXPECT_NE(get_by_uuid, nullptr);
     EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
@@ -587,9 +587,9 @@ TEST_F(CacheManagerTest, RawStorageCacheRenameTest)
     EXPECT_EQ(get_by_uuid->getStorageID().table_name, "test");
 
     // test insert old storage again. should fail to update cache.
-    storageCachePtr->insert(storage1->getStorageID(), TxnTimestamp{UInt64{1}}, storage1);
-    get_by_name = storageCachePtr->get("db_test", "test");
-    get_by_uuid = storageCachePtr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
+    storage_cache_ptr->insert(storage1->getStorageID(), TxnTimestamp{UInt64{1}}, storage1);
+    get_by_name = storage_cache_ptr->get("db_test", "test");
+    get_by_uuid = storage_cache_ptr->get(UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000001"));
     EXPECT_EQ(get_by_uuid, nullptr);
     EXPECT_NE(get_by_name, nullptr);
     EXPECT_EQ(get_by_name->getStorageUUID(), UUIDHelpers::toUUID("00000000-0000-0000-0000-000000000002"));
@@ -611,9 +611,11 @@ TEST_F(CacheManagerTest, DeleteBitmapsWithExtraPartitionMinmax) {
     /// It is because we need extra info for partition_info to build,
     /// and partition_info is responsible to index delete bitmaps when querys come.
     bool load_from_func = false;
-    auto load_func = [&](const Strings &, const Strings &) -> DeleteBitmapMetaPtrVector {
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelDeleteBitmapPtrVector {
         load_from_func = true;
-        return bitmaps;
+        DataModelDeleteBitmapPtrVector ret;
+        std::transform(bitmaps.begin(), bitmaps.end(), std::back_inserter(ret), [](DeleteBitmapMetaPtr meta) { return meta->getModel(); });
+        return ret;
     };
 
     auto bitmaps_from_cache
@@ -636,4 +638,50 @@ TEST_F(CacheManagerTest, DeleteBitmapsWithExtraPartitionMinmax) {
         = cache_manager->getOrSetDeleteBitmapInPartitions(*storage, {"123"}, load_func, TxnTimestamp::maxTS(), topology_version);
 
     EXPECT_EQ(bitmaps_from_cache.size(), 5);
+}
+
+TEST_F(CacheManagerTest, DeleteBitmapsCacheShouldBeImmutable) {
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
+    String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
+    StoragePtr storage = CacheTestMock::createTable(query, getContext().context);
+    const auto & merge_tree = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+    String storage_uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+    auto topology_version = PairInt64{1, 1};
+    cache_manager->mayUpdateTableMeta(*storage, topology_version);
+    auto entry = cache_manager->getTableMeta(storage->getStorageUUID());
+    auto it_p0 = entry->partitions.emplace("123", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "123")).first;
+
+    auto bitmaps = CacheTestMock::createDeleteBitmaps(merge_tree, "123");
+
+    bool load_from_func = false;
+    auto load_func = [&](const Strings &, const Strings &) -> DataModelDeleteBitmapPtrVector {
+        load_from_func = true;
+        DataModelDeleteBitmapPtrVector ret;
+        std::transform(bitmaps.begin(), bitmaps.end(), std::back_inserter(ret), [](DeleteBitmapMetaPtr meta) { return meta->getModel(); });
+        return ret;
+    };
+    auto parts = CacheTestMock::createPartBatch("123", 5);
+
+    (*it_p0)->delete_bitmap_cache_status = CacheStatus::LOADING;
+    cache_manager->insertDeleteBitmapsIntoCache(*storage, bitmaps, topology_version, parts);
+    (*it_p0)->delete_bitmap_cache_status = CacheStatus::LOADED;
+
+    auto bitmaps_from_cache
+        = cache_manager->getOrSetDeleteBitmapInPartitions(*storage, {"123"}, load_func, TxnTimestamp::maxTS(), topology_version);
+
+    EXPECT_EQ(bitmaps_from_cache.size(), 5);
+    EXPECT_EQ(load_from_func, false);
+
+    bitmaps_from_cache[0]->setPrevious(bitmaps_from_cache[1]);
+    bitmaps_from_cache[1]->setPrevious(bitmaps_from_cache[2]);
+    bitmaps_from_cache[2]->setPrevious(bitmaps_from_cache[3]);
+
+    bitmaps_from_cache
+        = cache_manager->getOrSetDeleteBitmapInPartitions(*storage, {"123"}, load_func, TxnTimestamp::maxTS(), topology_version);
+    EXPECT_EQ(bitmaps_from_cache.size(), 5);
+    EXPECT_EQ(load_from_func, false);
+
+    EXPECT_EQ(bitmaps_from_cache[0]->tryGetPrevious(), nullptr);
+    EXPECT_EQ(bitmaps_from_cache[1]->tryGetPrevious(), nullptr);
+    EXPECT_EQ(bitmaps_from_cache[2]->tryGetPrevious(), nullptr);
 }

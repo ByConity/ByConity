@@ -290,9 +290,10 @@ splitCnchParts(const ContextPtr & context, const IStorage & storage, const Serve
     auto & bucket_parts = res.first;
     auto & leftover_parts = res.second;
 
+    auto table_definition_hash = storage.getTableHashForClusterBy();
     std::for_each(parts.begin(), parts.end(), [&](auto part)
     {
-        bool is_clustered = part->part_model().table_definition_hash() == storage.getTableHashForClusterBy() && part->part_model().bucket_number() != -1;
+        bool is_clustered = table_definition_hash.match(part->part_model().table_definition_hash()) && part->part_model().bucket_number() != -1;
         if (is_clustered)
             bucket_parts.emplace_back(part);
         else
@@ -302,11 +303,17 @@ splitCnchParts(const ContextPtr & context, const IStorage & storage, const Serve
     return res;
 }
 
-void moveBucketTablePartsToAssignedParts(std::unordered_map<String, ServerDataPartsVector> & assigned_map, ServerDataPartsVector & bucket_parts, const WorkerList & workers, std::set<Int64> required_bucket_numbers)
+void moveBucketTablePartsToAssignedParts(
+    std::unordered_map<String, ServerDataPartsVector> & assigned_map,
+    ServerDataPartsVector & bucket_parts,
+    const WorkerList & workers,
+    std::set<Int64> required_bucket_numbers,
+    bool replicated)
 {
     if(bucket_parts.empty())
         return;
-    auto bucket_parts_assignment_map = assignCnchPartsForBucketTable(bucket_parts, workers, required_bucket_numbers).parts_assignment_map;
+    auto bucket_parts_assignment_map
+        = assignCnchPartsForBucketTable(bucket_parts, workers, required_bucket_numbers, replicated).parts_assignment_map;
     for (auto & [worker_id, bucket_assigned_parts]: bucket_parts_assignment_map ) {
         auto & assigned_parts = assigned_map[worker_id];
         std::move(bucket_assigned_parts.begin(), bucket_assigned_parts.end(), std::back_inserter(assigned_parts));
@@ -314,8 +321,8 @@ void moveBucketTablePartsToAssignedParts(std::unordered_map<String, ServerDataPa
 }
 
 
-
-BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers)
+BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(
+    const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers, bool replicated)
 {
     std::sort(workers.begin(), workers.end());
     BucketNumberAndServerPartsAssignment assignment;
@@ -330,12 +337,31 @@ BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerD
         // if required_bucket_numbers is empty, assign parts as per normal
         if (required_bucket_numbers_set.empty() || required_bucket_numbers_set.contains(bucket_number))
         {
-            auto index = bucket_number % workers.size();
-            assignment.parts_assignment_map[workers[index]].emplace_back(part);
-            assignment.bucket_number_assignment_map[workers[index]].insert(bucket_number);
+            if (replicated)
+            {
+                for (size_t i = 0; i < workers.size(); ++i)
+                {
+                    assignment.parts_assignment_map[workers[i]].emplace_back(part);
+                    assignment.bucket_number_assignment_map[workers[i]].insert(bucket_number);
+                }
+            }
+            else
+            {
+                auto index = bucket_number % workers.size();
+                assignment.parts_assignment_map[workers[index]].emplace_back(part);
+                assignment.bucket_number_assignment_map[workers[index]].insert(bucket_number);
+            }
         }
     }
     return assignment;
+}
+
+bool satisfyBucketWorkerRelation(const StoragePtr & storage, const Context & query_context)
+{
+    if (const auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+        merge_tree && merge_tree->isBucketTable() && merge_tree->getInMemoryMetadataPtr()->getBucketNumberFromClusterByKey() % query_context.getCurrentWorkerGroup()->size() == 0)
+        return true;
+    return false;
 }
 
 }

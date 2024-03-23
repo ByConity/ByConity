@@ -17,6 +17,7 @@
 
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/QueryRewriter.h>
+#include <Interpreters/Context.h>
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/MaterializedView/InnerJoinCollector.h>
 #include <Optimizer/MaterializedView/MaterializedViewChecker.h>
@@ -33,6 +34,7 @@
 #include <QueryPlan/QueryPlanner.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <Common/Exception.h>
+#include <Core/Field.h>
 
 #include <unordered_map>
 
@@ -45,23 +47,22 @@ namespace ErrorCodes
 }
 
 MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
-    const StorageID & view_storage_id, const StorageID & target_storage_id, ASTPtr query, ContextMutablePtr context)
+    const StorageID & view_storage_id, const StorageID & target_storage_id, ASTPtr query, bool async_materialized_view_, ContextPtr context)
 {
-    // TODO@kaixi: fix query context
-    if (!context->getSymbolAllocator())
-        context->createSymbolAllocator();
-    if (!context->getPlanNodeIdAllocator())
-        context->createPlanNodeIdAllocator();
-    context->setQueryContext(context);
-    context->setSetting("prefer_global_in_and_join", true);
+    ContextMutablePtr query_context = Context::createCopy(context);
+    query_context->createSymbolAllocator();
+    query_context->createPlanNodeIdAllocator();
+    query_context->setQueryContext(query_context);
+    query_context->setSetting("prefer_global_in_and_join", true); // for dialect_type='CLICKHOUSE'
+    query_context->setSetting("cte_mode", Field{"INLINED"}); // support with clause
 
-    auto query_ptr = QueryRewriter().rewrite(query, context, false);
-    AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
+    auto query_ptr = QueryRewriter().rewrite(query, query_context, false);
+    AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, query_context);
 
     if (!analysis->non_deterministic_functions.empty())
         throw Exception(ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW, "materialized view query contains non deterministic functions");
 
-    QueryPlanPtr query_plan = QueryPlanner().plan(query_ptr, *analysis, context);
+    QueryPlanPtr query_plan = QueryPlanner().plan(query_ptr, *analysis, query_context);
 
     auto wrap_rewriter_name = [&](const String & name) -> String {
         return "MV_" + name + "_" + view_storage_id.getDatabaseName() + "." + view_storage_id.getTableName();
@@ -78,14 +79,14 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
            std::make_shared<UnifyNullableType>()};
 
     for (auto & rewriter : rewriters)
-        rewriter->rewritePlan(*query_plan, context);
+        rewriter->rewritePlan(*query_plan, query_context);
 
-    GraphvizPrinter::printLogicalPlan(*query_plan, context, "MaterializedViewPlan_" + std::to_string(context->nextNodeId()));
-    return buildFrom(view_storage_id, target_storage_id, query_plan->getPlanNode(), context);
+    GraphvizPrinter::printLogicalPlan(*query_plan, query_context, "MaterializedViewPlan_" + std::to_string(query_context->nextNodeId()));
+    return buildFrom(view_storage_id, target_storage_id, query_plan->getPlanNode(), async_materialized_view_, query_context);
 }
 
 MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
-    const StorageID & view_storage_id, const StorageID & target_storage_id, PlanNodePtr query, ContextMutablePtr context)
+    const StorageID & view_storage_id, const StorageID & target_storage_id, PlanNodePtr query, bool async_materialized_view_, ContextPtr context)
 {
     PlanNodePtr root = query;
     if (root->getType() != IQueryPlanStep::Type::Projection)
@@ -119,8 +120,9 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
     auto symbol_map = SymbolTransformMap::buildFrom(*query);
     if (!symbol_map)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "materialized view query plan node contains duplicate symbol");
-    
-    PlanNodes inner_sources = InnerJoinCollector::collect(query);
+
+    InnerJoinCollector inner_join_collector;
+    inner_join_collector.collect(query);
 
     std::unordered_set<IQueryPlanStep::Type> skip_nodes;
     skip_nodes.emplace(IQueryPlanStep::Type::Aggregating);
@@ -145,7 +147,7 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
     }
 
     ExpressionEquivalences expression_equivalences;
-    auto inner_sources_node_set = join_hyper_graph.getNodeSet(inner_sources);
+    auto inner_sources_node_set = join_hyper_graph.getNodeSet(inner_join_collector.getInnerSources());
     for (const auto & join_clause : join_hyper_graph.getJoinConditions())
     {
         if ((inner_sources_node_set & join_clause.first) == join_clause.first)
@@ -178,9 +180,15 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
             break;
         const auto & query_column = root->getCurrentDataStream().header.getByPosition(index++);
         if (!removeNullable(removeLowCardinality(query_column.type))->equals(*removeNullable(removeLowCardinality(table_column.type))))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, 
-                "materialized view physical columns type is inconsistent with select outputs for column " + table_column.name + " in "
-                    + target_storage_id.getFullTableName());
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "materialized view query output type is inconsistent with target table columns type: {} (type: {}) in query, "
+                "{}(type: {}) in {}",
+                query_column.name,
+                query_column.type->getName(),
+                table_column.name,
+                table_column.type->getName(),
+                target_storage_id.getFullTableName());
 
         auto query_column_name = output_columns_to_query_columns_map.at(query_column.name);
         output_columns.emplace(query_column_name);
@@ -197,13 +205,15 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
         std::move(target_table),
         std::move(base_tables),
         std::move(join_hyper_graph),
-        std::move(inner_sources),
+        inner_join_collector.getInnerSources(),
+        inner_join_collector.getOuterSources(),
         std::move(aggregating_step),
         has_having_filter,
         std::move(*symbol_map),
         std::move(output_columns),
         std::move(output_columns_to_table_columns_map),
         std::move(output_columns_to_query_columns_map),
-        std::move(expression_equivalences));
+        std::move(expression_equivalences),
+        async_materialized_view_);
 }
 }

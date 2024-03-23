@@ -73,7 +73,7 @@ public:
                                              ContextPtr query_context);
 
     CancellationCode
-    cancelPlanSegmentsFromCoordinator(const String query_id, const Int32 & code, const String & exception, ContextPtr query_context);
+    cancelPlanSegmentsFromCoordinator(const String & query_id, const Int32 & code, const String & exception, ContextPtr query_context);
     CancellationCode cancelPlanSegments(
         const String & query_id,
         const Int32 & code,
@@ -82,7 +82,7 @@ public:
         ContextPtr query_context,
         std::shared_ptr<DAGGraph> dag_graph_ptr = nullptr);
 
-    void cancelWorkerPlanSegments(const String & query_id, const DAGGraphPtr dag_ptr, ContextPtr query_context);
+    void cancelWorkerPlanSegments(const String & query_id, DAGGraphPtr dag_ptr, ContextPtr query_context);
 
     bool finishPlanSegments(const String & query_id);
 
@@ -99,6 +99,8 @@ public:
     bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
     void onSegmentFinished(const RuntimeSegmentsStatus & status);
     std::shared_ptr<BSPScheduler> getBSPScheduler(const String & query_id);
+
+    PlanSegmentSet getIOPlanSegmentInstanceIDs(const String & query_id) const;
 
 private:
     // Protect `query_map`.
@@ -124,7 +126,12 @@ private:
     void scheduleV2(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr);
 
 protected:
-    virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph, std::vector<size_t> rank_worker_ids);
+    AddressInfos sendPlanSegment(
+        PlanSegment * plan_segment_ptr,
+        bool is_source,
+        ContextPtr query_context,
+        std::shared_ptr<DAGGraph> dag_graph,
+        std::vector<size_t> rank_worker_ids);
 };
 
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;

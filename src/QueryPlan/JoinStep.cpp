@@ -121,7 +121,7 @@ JoinPtr JoinStep::makeJoin(
         strictness = ASTTableJoin::Strictness::RightAny;
     }
 
-    table_join->table_join.strictness = strictness;
+    table_join->table_join.strictness = isCrossJoin() ? ASTTableJoin::Strictness::Unspecified : strictness;
     table_join->table_join.kind = isCrossJoin() ? ASTTableJoin::Kind::Cross : kind;
 
     if (enforceNestLoopJoin())
@@ -134,7 +134,9 @@ JoinPtr JoinStep::makeJoin(
     }
 
     bool allow_merge_join = table_join->allowMergeJoin();
-
+    bool allow_grace_hash_join = true;
+    if (context->getSettingsRef().use_grace_hash_only_repartition && distribution_type != DistributionType::REPARTITION)
+        allow_grace_hash_join = false;
     /// HashJoin with Dictionary optimisation
     auto l_sample_block = input_streams[0].header;
     auto r_sample_block = input_streams[1].header;
@@ -165,7 +167,7 @@ JoinPtr JoinStep::makeJoin(
             return std::make_shared<ConcurrentHashJoin>(table_join, num_streams, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
 
         }
-        else if (join_algorithm == JoinAlgorithm::GRACE_HASH && distribution_type == DistributionType::REPARTITION)
+        else if (join_algorithm == JoinAlgorithm::GRACE_HASH && allow_grace_hash_join)
         {
             table_join->join_algorithm = JoinAlgorithm::GRACE_HASH;
             // todo aron let optimizer decide this(parallel)
@@ -175,8 +177,8 @@ JoinPtr JoinStep::makeJoin(
         return std::make_shared<HashJoin>(table_join, r_sample_block);
     }
     else if (table_join->forceMergeJoin() || (table_join->preferMergeJoin() && allow_merge_join))
-        return std::make_shared<MergeJoin>(table_join, r_sample_block);
-    else if ((table_join->forceGraceHashLoopJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH) && distribution_type == DistributionType::REPARTITION)
+        return {std::make_shared<MergeJoin>(table_join, r_sample_block)};
+    else if ((table_join->forceGraceHashLoopJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH) && allow_grace_hash_join)
     {
         auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
         return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel);
@@ -245,6 +247,11 @@ JoinStep::JoinStep(
     , simple_reordered(simple_reordered_)
     , runtime_filter_builders(std::move(runtime_filter_builders_))
 {
+    assert(!isComma(kind));
+    assert(left_keys.size() == right_keys.size());
+    // fixme@kaixi
+    // assert(!isCross(kind) || isUnspecified(strictness)); // CROSS JOIN must use Unspecified strictness
+
     input_streams = std::move(input_streams_);
     output_stream = std::move(output_stream_);
     hints = std::move(hints_);
@@ -255,12 +262,18 @@ void JoinStep::setInputStreams(const DataStreams & input_streams_)
     input_streams = input_streams_;
 }
 
+void JoinStep::setOutputStream(DataStream output_stream_)
+{
+    output_stream = std::move(output_stream_);
+}
+
 QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & settings)
 {
     if (pipelines.size() != 2)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input steps");
 
     bool need_build_runtime_filter = false;
+
     ExpressionActionsPtr filter_action;
     if (!join)
     {
@@ -281,7 +294,6 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         if (!runtime_filter_builders.empty() && settings.distributed_settings.is_distributed)
         {
             auto builder = createRuntimeFilterBuilder(settings.context);
-            
             std::shared_ptr<RuntimeFilterConsumer> consumer = std::make_shared<RuntimeFilterConsumer>(
                 builder,
                 settings.context->getInitialQueryId(),
@@ -375,16 +387,18 @@ void JoinStep::describePipeline(FormatSettings & settings) const
 
 void JoinStep::toProto(Protos::JoinStep & proto, bool for_hash_equals) const
 {
-    // skip input/output streams when comparing plan
-    if (!for_hash_equals)
+    if (for_hash_equals)
     {
-        if (!output_stream.has_value() || input_streams.empty())
-            throw Exception("required to have input/output stream", ErrorCodes::PROTOBUF_BAD_CAST);
-
+        // skip
+    }
+    else if (output_stream.has_value())
+            {
         for (const auto & element : input_streams)
             element.toProto(*proto.add_input_streams());
         output_stream->toProto(*proto.mutable_output_stream());
     }
+    else
+        throw Exception("required to have output stream", ErrorCodes::PROTOBUF_BAD_CAST);
 
     proto.set_step_description(step_description);
     proto.set_kind(ASTTableJoin::KindConverter::toProto(kind));
@@ -408,7 +422,7 @@ void JoinStep::toProto(Protos::JoinStep & proto, bool for_hash_equals) const
     proto.set_is_ordered(is_ordered);
     for (const auto & [k, v] : runtime_filter_builders)
     {
-        auto proto_element = proto.add_runtime_filter_builders();
+        auto * proto_element = proto.add_runtime_filter_builders();
         proto_element->set_key(k);
         v.toProto(*proto_element->mutable_value());
     }
@@ -428,7 +442,7 @@ std::shared_ptr<JoinStep> JoinStep::fromProto(const Protos::JoinStep & proto, Co
         output_stream.fillFromProto(proto.output_stream());
     else
         throw Exception("required to have output stream", ErrorCodes::PROTOBUF_BAD_CAST);
-    auto step_description = proto.step_description();
+    const auto & step_description = proto.step_description();
     auto kind = ASTTableJoin::KindConverter::fromProto(proto.kind());
     auto strictness = ASTTableJoin::StrictnessConverter::fromProto(proto.strictness());
     auto max_streams = proto.max_streams();
@@ -457,7 +471,6 @@ std::shared_ptr<JoinStep> JoinStep::fromProto(const Protos::JoinStep & proto, Co
         auto value = RuntimeFilterBuildInfos::fromProto(element.value());
         runtime_filter_builders.emplace(key, value);
     }
-    auto simple_reordered = false;
     auto step = std::make_shared<JoinStep>(
         input_streams,
         output_stream,
@@ -475,7 +488,7 @@ std::shared_ptr<JoinStep> JoinStep::fromProto(const Protos::JoinStep & proto, Co
         join_algorithm,
         is_magic,
         is_ordered,
-        simple_reordered,
+        is_ordered,
         runtime_filter_builders);
     step->setStepDescription(step_description);
     return step;
@@ -572,7 +585,6 @@ bool JoinStep::mustRepartition() const
 {
     return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full;
 }
-
 
 std::shared_ptr<IQueryPlanStep> FilledJoinStep::copy(ContextPtr) const
 {

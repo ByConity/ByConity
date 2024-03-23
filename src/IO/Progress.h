@@ -26,6 +26,7 @@
 #include <common/types.h>
 
 #include <Core/ProtocolDefines.h>
+#include <Protos/plan_segment_manager.pb.h>
 #include <Common/Stopwatch.h>
 
 
@@ -53,6 +54,13 @@ struct ProgressValues
     void read(ReadBuffer & in, UInt64 server_revision);
     void write(WriteBuffer & out, UInt64 client_revision) const;
     void writeJSON(WriteBuffer & out) const;
+    Protos::Progress toProto() const;
+    void fromProto(const Protos::Progress & progress);
+    bool empty() const;
+    ProgressValues operator-(const ProgressValues & other) const;
+    ProgressValues operator+(const ProgressValues & other) const;
+    bool operator==(const ProgressValues & other) const;
+    String toString() const;
 };
 
 struct ReadProgress
@@ -122,6 +130,18 @@ struct Progress
         , written_elapsed_milliseconds(written_elapsed_milliseconds_)
         , disk_cache_read_bytes(disk_cache_read_bytes_) {}
 
+    explicit Progress(const ProgressValues & v)
+        : read_rows(v.read_rows)
+        , read_bytes(v.read_bytes)
+        , read_raw_bytes(v.read_raw_bytes)
+        , total_rows_to_read(v.total_rows_to_read)
+        , total_raw_bytes_to_read(v.total_raw_bytes_to_read)
+        , written_rows(v.written_rows)
+        , written_bytes(v.written_bytes)
+        , disk_cache_read_bytes(v.disk_cache_read_bytes)
+    {
+    }
+
     explicit Progress(ReadProgress read_progress)
         : read_rows(read_progress.read_rows)
         , read_bytes(read_progress.read_bytes)
@@ -140,6 +160,10 @@ struct Progress
 
     /// Progress in JSON format (single line, without whitespaces) is used in HTTP headers.
     void writeJSON(WriteBuffer & out) const;
+
+    Protos::Progress toProto() const;
+    void fromProto(const Protos::Progress & progress);
+    bool empty() const;
 
     /// Each value separately is changed atomically (but not whole object).
     bool incrementPiecewiseAtomically(const Progress & rhs);

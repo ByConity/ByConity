@@ -32,11 +32,13 @@ Projection Est. 100 rows
                            │  │  │  │           Where: Runtime Filters: {cs_ship_date_sk}
                            │  │  │  │           Outputs: [cs_sold_date_sk, cs_ship_date_sk, cs_call_center_sk, cs_ship_mode_sk, cs_warehouse_sk]
                            │  │  │  └─ Broadcast Exchange Est. 334 rows
-                           │  │  │     └─ Filter Est. 334 rows
-                           │  │  │        │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                           │  │  │        └─ TableScan tpcds100.date_dim Est. 73049 rows
-                           │  │  │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                           │  │  │                 Outputs: [d_date_sk, d_month_seq]
+                           │  │  │     └─ Projection Est. 334 rows
+                           │  │  │        │     Expressions: [d_date_sk]
+                           │  │  │        └─ Filter Est. 334 rows
+                           │  │  │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                           │  │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+                           │  │  │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                           │  │  │                    Outputs: [d_date_sk, d_month_seq]
                            │  │  └─ Broadcast Exchange Est. 20 rows
                            │  │     └─ TableScan tpcds100.ship_mode Est. 20 rows
                            │  │              Outputs: [sm_ship_mode_sk, sm_type]

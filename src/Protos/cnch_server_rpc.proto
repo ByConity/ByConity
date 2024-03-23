@@ -184,6 +184,7 @@ message FetchDataPartsReq {
   required uint64 table_commit_time = 4;
   repeated string partitions = 5;
   required uint64 timestamp = 6;
+  repeated int64 bucket_numbers = 7;
 }
 
 message FetchDataPartsResp {

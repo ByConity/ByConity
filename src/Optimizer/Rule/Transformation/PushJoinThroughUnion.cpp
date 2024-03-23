@@ -15,9 +15,11 @@
 
 #include <Optimizer/Rule/Transformation/PushJoinThroughUnion.h>
 
+#include <Core/Names.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/PlanSymbolReallocator.h>
+#include <QueryPlan/SymbolAllocator.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/SymbolAllocator.h>
@@ -50,7 +52,7 @@ TransformResult PushJoinThroughUnion::transformImpl(PlanNodePtr node, const Capt
     {
         // reallocate
         auto plan_node_and_mappings = PlanSymbolReallocator::reallocate(node->getChildren()[1], context);
-
+        
         // copy join
         SymbolMapper symbol_mapper{[&, i](const std::string & symbol) {
             if (unionn.getOutToInputs().contains(symbol))

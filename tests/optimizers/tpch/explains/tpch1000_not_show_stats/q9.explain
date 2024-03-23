@@ -14,36 +14,42 @@ Projection
                   └─ Projection
                      │     Expressions: [n_name], expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)):=(l_extendedprice * (1 - l_discount)) - (ps_supplycost * l_quantity), expr#toYear(o_orderdate):=toYear(o_orderdate)
                      └─ Inner (PARALLEL_HASH) Join
-                        │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
+                        │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
                         ├─ Repartition Exchange
                         │  │     Partition by: {l_suppkey}
                         │  └─ Inner (PARALLEL_HASH) Join
-                        │     │     Condition: l_orderkey == o_orderkey
+                        │     │     Condition: o_orderkey == l_orderkey
                         │     ├─ Repartition Exchange
-                        │     │  │     Partition by: {l_orderkey}
-                        │     │  └─ TableScan tpch1000.lineitem
-                        │     │           Outputs: [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
+                        │     │  │     Partition by: {o_orderkey}
+                        │     │  └─ TableScan tpch1000.orders
+                        │     │           Outputs: [o_orderkey, o_orderdate]
                         │     └─ Repartition Exchange
-                        │        │     Partition by: {o_orderkey}
-                        │        └─ TableScan tpch1000.orders
-                        │                 Outputs: [o_orderkey, o_orderdate]
+                        │        │     Partition by: {l_orderkey}
+                        │        └─ Inner (PARALLEL_HASH) Join
+                        │           │     Condition: l_partkey == p_partkey
+                        │           │     Runtime Filters Builder: {p_partkey}
+                        │           ├─ Repartition Exchange
+                        │           │  │     Partition by: {l_partkey}
+                        │           │  └─ Filter
+                        │           │     │     Condition: Runtime Filters: {l_partkey}
+                        │           │     └─ TableScan tpch1000.lineitem
+                        │           │              Where: Runtime Filters: {l_partkey}
+                        │           │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
+                        │           └─ Repartition Exchange
+                        │              │     Partition by: {p_partkey}
+                        │              └─ Projection
+                        │                 │     Expressions: [p_partkey]
+                        │                 └─ Filter
+                        │                    │     Condition: p_name LIKE '%green%'
+                        │                    └─ TableScan tpch1000.part
+                        │                             Where: p_name LIKE '%green%'
+                        │                             Outputs: [p_partkey, p_name]
                         └─ Inner (PARALLEL_HASH) Join
                            │     Condition: ps_suppkey == s_suppkey
                            ├─ Repartition Exchange
                            │  │     Partition by: {ps_suppkey}
-                           │  └─ Inner (PARALLEL_HASH) Join
-                           │     │     Condition: ps_partkey == p_partkey
-                           │     ├─ Repartition Exchange
-                           │     │  │     Partition by: {ps_partkey}
-                           │     │  └─ TableScan tpch1000.partsupp
-                           │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-                           │     └─ Repartition Exchange
-                           │        │     Partition by: {p_partkey}
-                           │        └─ Filter
-                           │           │     Condition: p_name LIKE '%green%'
-                           │           └─ TableScan tpch1000.part
-                           │                    Where: p_name LIKE '%green%'
-                           │                    Outputs: [p_partkey, p_name]
+                           │  └─ TableScan tpch1000.partsupp
+                           │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
                            └─ Repartition Exchange
                               │     Partition by: {s_suppkey}
                               └─ Inner Join
@@ -53,3 +59,4 @@ Projection
                                  └─ Broadcast Exchange
                                     └─ TableScan tpch1000.nation
                                              Outputs: [n_nationkey, n_name]
+note: Runtime Filter is applied for 1 times.

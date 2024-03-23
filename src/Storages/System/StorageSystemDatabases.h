@@ -15,6 +15,13 @@ class Context;
 class StorageSystemDatabases final : public shared_ptr_helper<StorageSystemDatabases>, public IStorageSystemOneBlock<StorageSystemDatabases>
 {
     friend struct shared_ptr_helper<StorageSystemDatabases>;
+    static inline std::unordered_set<String> visible_systemDB =
+    {
+        DatabaseCatalog::SYSTEM_DATABASE,
+        DatabaseCatalog::INFORMATION_SCHEMA,
+        DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE
+    };
+
 public:
     std::string getName() const override
     {

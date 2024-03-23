@@ -69,6 +69,8 @@ public:
     void setReadUntilPosition(size_t position) override;
     void setReadUntilEnd() override;
 
+    bool isSeekCheap() override { return false; }
+
 private:
     std::unique_ptr<ReadBufferFromIStream> initialize();
 

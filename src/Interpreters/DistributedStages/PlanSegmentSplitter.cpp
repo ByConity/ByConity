@@ -132,7 +132,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
         is_add_totals |= child_context.is_add_totals;
         is_add_extremes |= child_context.is_add_extremes;
         auto input = std::make_shared<PlanSegmentInput>(step->getHeader(), PlanSegmentType::EXCHANGE);
-        input->setShufflekeys(step->getSchema().getPartitioningColumns());
+        input->setShufflekeys(step->getSchema().getColumns());
         input->setPlanSegmentId(plan_segment->getPlanSegmentId());
         input->setExchangeMode(step->getExchangeMode());
         // TODO: Not support one ExchangeStep with multi children yet(multi children can't share one exchange id), we may need to support it later.
@@ -188,7 +188,7 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
     input->setExchangeId(plan_segment->getPlanSegmentOutputs().back()->getExchangeId());
     if (exchange_step)
     {
-        input->setShufflekeys(exchange_step->getSchema().getPartitioningColumns());
+        input->setShufflekeys(exchange_step->getSchema().getColumns());
         input->setExchangeMode(exchange_step->getExchangeMode());
     }
     else
@@ -448,17 +448,13 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitReadStorageRowCountNo
     return Partitioning::Handle::COORDINATOR;
 }
 
-std::optional<Partitioning::Handle> SourceNodeFinder::visitTableScanNode(QueryPlan::Node * node, const Context & context)
+std::optional<Partitioning::Handle> SourceNodeFinder::visitTableScanNode(QueryPlan::Node * node, const Context &)
 {
     auto * source_step = dynamic_cast<TableScanStep *>(node->step.get());
     // check is bucket table instead of cnch table?
     if (source_step->getStorage()->supportsDistributedRead())
         return Partitioning::Handle::FIXED_HASH;
-
-    // hack for unittest
-    else if (context.getSettingsRef().enable_memory_catalog)
-        if (auto memory_tree = dynamic_pointer_cast<StorageMemory>(source_step->getStorage()))
-            return Partitioning::Handle::FIXED_HASH;
+   
     // if source node is not cnch table, schedule to coordinator. eg, system tables.
     return Partitioning::Handle::COORDINATOR;
 }

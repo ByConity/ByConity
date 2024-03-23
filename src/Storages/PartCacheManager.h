@@ -106,7 +106,7 @@ public:
     std::vector<Protos::LastModificationTimeHint>
     getLastModificationTimeHints(const ConstStoragePtr & storage, bool allow_regression = false);
     bool getPartitionList(
-        const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const PairInt64 & topology_version);
+        const IStorage & table, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const PairInt64 & topology_version);
 
     bool getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids, const PairInt64 & topology_version);
 
@@ -156,7 +156,7 @@ public:
 
 
     using LoadPartsFunc = std::function<DataModelPartWrapperVector(const Strings &, const Strings &)>;
-    using LoadDeleteBitmapsFunc = std::function<DeleteBitmapMetaPtrVector(const Strings &, const Strings &)>;
+    using LoadDeleteBitmapsFunc = std::function<DataModelDeleteBitmapPtrVector(const Strings &, const Strings &)>;
 
     ServerDataPartsVector getOrSetServerDataPartsInPartitions(
         const IStorage & table,
@@ -256,7 +256,8 @@ private:
 
     inline static bool isVisible(const DB::DataModelPartWrapperPtr & part_wrapper_ptr, const UInt64 & ts);
     inline static bool isVisible(const ServerDataPartPtr & data_part, const UInt64 & ts);
-    inline static bool isVisible(const DB::DeleteBitmapMetaPtr & part_wrapper_ptr, const UInt64 & ts);
+    inline static bool isVisible(const DB::DeleteBitmapMetaPtr & bitmap, const UInt64 & ts);
+    inline static bool isVisible(const DB::DataModelDeleteBitmapPtr & bitmap, const UInt64 & ts);
 
     template <
         typename CachePtr,

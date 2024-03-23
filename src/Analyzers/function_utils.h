@@ -40,5 +40,7 @@ ASTPtr getLambdaExpressionBody(ASTFunction & lambda);
 
 bool isComparisonFunction(const ASTFunction & function);
 bool functionIsInSubquery(const ASTFunction & function);
+// exists, not exists
+bool functionIsExistsSubquery(const ASTFunction & function);
 
 }

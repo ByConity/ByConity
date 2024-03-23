@@ -49,6 +49,7 @@ std::optional<PlanNodeStatisticsPtr> CardinalityEstimator::estimate(
     ContextMutablePtr context,
     bool simple_children,
     std::vector<bool> children_are_table_scan,
+    std::vector<double> children_filter_selectivity,
     const InclusionDependency & inclusion_dependency)
 {
     static CardinalityVisitor visitor;
@@ -58,6 +59,7 @@ std::optional<PlanNodeStatisticsPtr> CardinalityEstimator::estimate(
         .children_stats = std::move(children_stats),
         .simple_children = simple_children,
         .children_are_table_scan = std::move(children_are_table_scan),
+        .children_filter_selectivity = std::move(children_filter_selectivity),
         .inclusion_dependency = inclusion_dependency};
     auto stats = VisitorUtil::accept(step, visitor, cardinality_context);
     return stats ? std::make_optional(stats) : std::nullopt;
@@ -134,6 +136,11 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitTableWriteStep(const TableWriteSt
     return child_stats;
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitLocalExchangeStep(const LocalExchangeStep &, CardinalityContext & context)
+{
+    return context.children_stats[0];
+}
+
 PlanNodeStatisticsPtr CardinalityVisitor::visitProjectionStep(const ProjectionStep & step, CardinalityContext & context)
 {
     if (context.children_stats.empty())
@@ -149,7 +156,8 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitProjectionStep(const ProjectionSt
 PlanNodeStatisticsPtr CardinalityVisitor::visitFilterStep(const FilterStep & step, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
-    PlanNodeStatisticsPtr stats = FilterEstimator::estimate(child_stats, step, context.context, context.simple_children);
+    PlanNodeStatisticsPtr stats = FilterEstimator::estimate(
+        child_stats, step.getFilter(), step.getInputStreams()[0].header.getNamesToTypes(), context.context, context.simple_children);
     return stats;
 }
 
@@ -161,9 +169,10 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitJoinStep(const JoinStep & step, C
         left_child_stats,
         right_child_stats,
         step,
-        *context.context,
+        context.context,
         context.children_are_table_scan[0],
         context.children_are_table_scan[1],
+        context.children_filter_selectivity,
         context.inclusion_dependency);
     return stats;
 }
@@ -363,11 +372,6 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitAssignUniqueIdStep(const AssignUn
     return stats;
 }
 
-// PlanNodeStatisticsPtr CardinalityVisitor::visitGlobalDecodeStep(const GlobalDecodeStep &, CardinalityContext & context)
-// {
-//     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
-//     return child_stats;
-// }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitExplainAnalyzeStep(const ExplainAnalyzeStep &, CardinalityContext & context)
 {
@@ -417,9 +421,9 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitPlanNode(PlanNodeBase & node,
         // ignore runtime filter 
         if (node.getStep()->getType() == IQueryPlanStep::Type::Filter)
         {
-            const FilterStep * step = dynamic_cast<const FilterStep *>(node.getStep().get());
+            const FilterStep & step = dynamic_cast<FilterStep &>(*node.getStep());
             bool all_runtime_filters = true;
-            for (auto & conjunct : PredicateUtils::extractConjuncts(step->getFilter()))
+            for (auto & conjunct : PredicateUtils::extractConjuncts(step.getFilter()))
             {
                 // $runtimeFilter(1265, `ws_sold_date_sk`, 0.8028399781540142)
                 if (conjunct->getColumnName().find(InternalFunctionRuntimeFilter::name) == std::string::npos)
@@ -466,10 +470,13 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitCTERefNode(CTERefNode & node,
     if (!result)
         return nullptr;
 
-    const auto & stats = result.value();
+    const auto & cte_ref_stats = result.value();
     std::unordered_map<String, SymbolStatisticsPtr> calculated_symbol_statistics;
     for (const auto & item : step->getOutputColumns())
-        calculated_symbol_statistics[item.first] = stats->getSymbolStatistics(item.second);
-    return std::make_shared<PlanNodeStatistics>(stats->getRowCount(), calculated_symbol_statistics);
+        calculated_symbol_statistics[item.first] = cte_ref_stats->getSymbolStatistics(item.second);
+    auto stats = std::make_shared<PlanNodeStatistics>(cte_ref_stats->getRowCount(), calculated_symbol_statistics);
+node.setStatistics(stats ? std::make_optional(stats) : std::nullopt);
+    return stats;
 }
+
 }

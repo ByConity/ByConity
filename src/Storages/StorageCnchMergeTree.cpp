@@ -933,6 +933,8 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(
 
         if (auto * mv = dynamic_cast<StorageMaterializedView *>(table.get()))
         {
+            if (mv->async())
+                continue;
             auto target_table = mv->tryGetTargetTable();
             if (!target_table)
             {
@@ -1419,7 +1421,7 @@ ServerDataPartsWithDBM StorageCnchMergeTree::selectPartsToReadWithDBM(
     return parts;
 }
 
-MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimestamp ts, const Strings & input_partitions, bool force_bitmap)
+MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimestamp ts, const Strings & input_partitions, bool force_bitmap, const std::set<Int64> & bucket_numbers)
 {
     auto catalog = getContext()->getCnchCatalog();
     auto storage = shared_from_this();
@@ -1430,7 +1432,7 @@ MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimesta
     else
         partitions = catalog->getPartitionIDs(storage, nullptr);
 
-    auto cnch_parts_with_dbm = catalog->getServerDataPartsInPartitionsWithDBM(storage, partitions, ts, nullptr);
+    auto cnch_parts_with_dbm = catalog->getServerDataPartsInPartitionsWithDBM(storage, partitions, ts, nullptr, Catalog::VisibilityLevel::Visible, bucket_numbers);
     auto parts = CnchPartsHelper::calcVisibleParts(cnch_parts_with_dbm.first, /*collect_on_chain=*/false);
 
     MergeTreeDataPartsCNCHVector res;
@@ -2580,7 +2582,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
 {
     if (!command.part)
     {
-        /// 1. aquire partition lock
+        /// 1. acquire partition lock
         auto cur_txn = local_context->getCurrentTransaction();
         TxnTimestamp txn_id = cur_txn->getTransactionID();
         LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
@@ -2710,7 +2712,7 @@ void StorageCnchMergeTree::dropPartsImpl(
                     data_part->enumeratePreviousParts(write_undo_callback);
                 }
                 local_context->getCnchCatalog()->writeUndoBuffer(
-                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
+                    getCnchStorageID(), txn->getTransactionID(), undo_resources);
 
                 if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
                     getDeleteBitmapMetaForParts(parts_to_drop, svr_parts_to_drop_with_dbm.second, /*force_found*/ false);
@@ -2779,7 +2781,7 @@ void StorageCnchMergeTree::dropPartsImpl(
 
                 // Write undo buffer first
                 local_context->getCnchCatalog()->writeUndoBuffer(
-                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), resources);
+                    getCnchStorageID(), txn->getTransactionID(), resources);
 
                 DeleteBitmapMetaPtrVector bitmap_metas = dumpDeleteBitmaps(*this, new_bitmaps);
                 ActionPtr action;
@@ -3157,8 +3159,8 @@ StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & sourc
                 "table_definition hash [{}]",
                 src_data->getDatabaseName(),
                 src_data->getTableName(),
-                src_data->getTableHashForClusterBy(),
-                getTableHashForClusterBy()));
+                src_data->getTableHashForClusterBy().toString(),
+                getTableHashForClusterBy().toString()));
         throw Exception(
             "Source table is not a bucket table or has a different CLUSTER BY definition from the target table. ",
             ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);

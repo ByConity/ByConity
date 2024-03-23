@@ -27,6 +27,11 @@
 namespace DB
 {
 std::atomic<UInt64> MinimumDataPart::increment = 0;
+
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
 }
 
 namespace DB::CnchPartsHelper
@@ -58,6 +63,8 @@ namespace
 {
     struct ServerDataPartOperation
     {
+        static String getName(const ServerDataPartPtr & part) { return part->name(); }
+
         static Int64 getMaxBlockNumber(const ServerDataPartPtr & part) { return part->get_info().max_block; }
 
         static UInt64 getCommitTime(const ServerDataPartPtr & part) { return part->get_commit_time(); }
@@ -93,6 +100,8 @@ namespace
 
     struct MinimumDataPartOperation
     {
+        static String getName(const MinimumDataPartPtr & part) { return part->name; }
+
         static Int64 getMaxBlockNumber(const MinimumDataPartPtr & part) { return part->info.max_block; }
 
         static UInt64 getCommitTime(const MinimumDataPartPtr & part) { return part->commit_time; }
@@ -128,6 +137,8 @@ namespace
 
     struct DeleteBitmapOperation
     {
+        static String getName(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getNameForLogs(); }
+
         static Int64 getMaxBlockNumber(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getModel()->part_max_block(); }
 
         static UInt64 getCommitTime(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getCommitTime(); }
@@ -212,7 +223,12 @@ namespace
         while (prev_it != end)
         {
             auto & prev = *prev_it;
-            chassert(Operation::getCommitTime(prev));
+            if (!Operation::getCommitTime(prev))
+            {
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR, "Unexpected input, object {} doesn't have commit time", Operation::getName(prev));
+            }
+
             bool reach_partition_end = (curr_it == end || !Operation::isSamePartition(prev, *curr_it));
             const auto max_block_number = Operation::getMaxBlockNumber(prev);
 

@@ -32,17 +32,18 @@ Projection
                               │  │  │  └─ TableScan tpcds1000.inventory
                               │  │  │           Where: Runtime Filters: {inv_date_sk, inv_item_sk}
                               │  │  │           Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
-                              │  │  └─ Broadcast Exchange
+                              │  │  └─ Projection
+                              │  │     │     Expressions: [i_item_id, i_item_sk]
                               │  │     └─ Filter
-                              │  │        │     Condition: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
+                              │  │        │     Condition: (i_current_price >= '0.99') AND (i_current_price <= '1.49')
                               │  │        └─ TableScan tpcds1000.item
-                              │  │                 Where: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
+                              │  │                 Where: (i_current_price >= '0.99') AND (i_current_price <= '1.49')
                               │  │                 Outputs: [i_item_sk, i_item_id, i_current_price]
                               │  └─ Broadcast Exchange
                               │     └─ Filter
-                              │        │     Condition: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
+                              │        │     Condition: (d_date >= cast(10997, 'Date32')) AND (d_date <= cast(11057, 'Date32'))
                               │        └─ TableScan tpcds1000.date_dim
-                              │                 Where: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
+                              │                 Where: (d_date >= cast(10997, 'Date32')) AND (d_date <= cast(11057, 'Date32'))
                               │                 Outputs: [d_date_sk, d_date]
                               └─ Broadcast Exchange
                                  └─ TableScan tpcds1000.warehouse

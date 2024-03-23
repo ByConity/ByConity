@@ -22,12 +22,16 @@
 #pragma once
 
 #include <Processors/ISource.h>
+#include "Interpreters/Context_fwd.h"
 
 #include <memory>
 
 
 namespace DB
 {
+
+struct SelectQueryInfo;
+
 /// Used to pass info from header between different InputFormats in ParallelParsing
 struct ColumnMapping
 {
@@ -71,6 +75,10 @@ protected:
 public:
     IInputFormat(Block header, ReadBuffer & in_);
 
+    /// If the format is used by a SELECT query, this method may be called.
+    /// The format may use it for filter pushdown.
+    virtual void setQueryInfo(const SelectQueryInfo &, ContextPtr) {}
+
     /** In some usecase (hello Kafka) we need to read a lot of tiny streams in exactly the same format.
      * The recreating of parser for each small stream takes too long, so we introduce a method
      * resetParser() which allow to reset the state of parser to continue reading of
@@ -80,7 +88,7 @@ public:
     virtual void resetParser();
 
     virtual void setReadBuffer(ReadBuffer & in_);
-    
+
     virtual const BlockMissingValues & getMissingValues() const
     {
         static const BlockMissingValues none;

@@ -17,41 +17,43 @@ Projection
                      │     Aggregates: expr#avg(cs_quantity):=AggNull(avg)(cs_quantity), expr#avg(cs_list_price):=AggNull(avg)(cs_list_price), expr#avg(cs_coupon_amt):=AggNull(avg)(cs_coupon_amt), expr#avg(cs_sales_price):=AggNull(avg)(cs_sales_price)
                      └─ Inner Join
                         │     Condition: cs_item_sk == i_item_sk
-                        ├─ Repartition Exchange
-                        │  │     Partition by: {cs_item_sk}
-                        │  └─ Inner Join
-                        │     │     Condition: cs_promo_sk == p_promo_sk
-                        │     ├─ Inner Join
-                        │     │  │     Condition: cs_sold_date_sk == d_date_sk
-                        │     │  │     Runtime Filters Builder: {d_date_sk}
-                        │     │  ├─ Inner Join
-                        │     │  │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
-                        │     │  │  │     Runtime Filters Builder: {cd_demo_sk}
-                        │     │  │  ├─ Filter
-                        │     │  │  │  │     Condition: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
-                        │     │  │  │  └─ TableScan tpcds1000.catalog_sales
-                        │     │  │  │           Where: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
-                        │     │  │  │           Outputs: [cs_sold_date_sk, cs_bill_cdemo_sk, cs_item_sk, cs_promo_sk, cs_quantity, cs_list_price, cs_sales_price, cs_coupon_amt]
-                        │     │  │  └─ Broadcast Exchange
-                        │     │  │     └─ Filter
-                        │     │  │        │     Condition: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
-                        │     │  │        └─ TableScan tpcds1000.customer_demographics
-                        │     │  │                 Where: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
-                        │     │  │                 Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status]
-                        │     │  └─ Broadcast Exchange
-                        │     │     └─ Filter
-                        │     │        │     Condition: d_year = 2000
-                        │     │        └─ TableScan tpcds1000.date_dim
-                        │     │                 Where: d_year = 2000
-                        │     │                 Outputs: [d_date_sk, d_year]
-                        │     └─ Broadcast Exchange
+                        ├─ Inner Join
+                        │  │     Condition: cs_promo_sk == p_promo_sk
+                        │  ├─ Inner Join
+                        │  │  │     Condition: cs_sold_date_sk == d_date_sk
+                        │  │  │     Runtime Filters Builder: {d_date_sk}
+                        │  │  ├─ Inner Join
+                        │  │  │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
+                        │  │  │  │     Runtime Filters Builder: {cd_demo_sk}
+                        │  │  │  ├─ Filter
+                        │  │  │  │  │     Condition: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
+                        │  │  │  │  └─ TableScan tpcds1000.catalog_sales
+                        │  │  │  │           Where: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
+                        │  │  │  │           Outputs: [cs_sold_date_sk, cs_bill_cdemo_sk, cs_item_sk, cs_promo_sk, cs_quantity, cs_list_price, cs_sales_price, cs_coupon_amt]
+                        │  │  │  └─ Broadcast Exchange
+                        │  │  │     └─ Projection
+                        │  │  │        │     Expressions: [cd_demo_sk]
+                        │  │  │        └─ Filter
+                        │  │  │           │     Condition: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                        │  │  │           └─ TableScan tpcds1000.customer_demographics
+                        │  │  │                    Where: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                        │  │  │                    Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status]
+                        │  │  └─ Broadcast Exchange
+                        │  │     └─ Projection
+                        │  │        │     Expressions: [d_date_sk]
+                        │  │        └─ Filter
+                        │  │           │     Condition: d_year = 2000
+                        │  │           └─ TableScan tpcds1000.date_dim
+                        │  │                    Where: d_year = 2000
+                        │  │                    Outputs: [d_date_sk, d_year]
+                        │  └─ Broadcast Exchange
+                        │     └─ Projection
+                        │        │     Expressions: [p_promo_sk]
                         │        └─ Filter
                         │           │     Condition: (p_channel_email = 'N') OR (p_channel_event = 'N')
                         │           └─ TableScan tpcds1000.promotion
                         │                    Where: (p_channel_email = 'N') OR (p_channel_event = 'N')
                         │                    Outputs: [p_promo_sk, p_channel_email, p_channel_event]
-                        └─ Repartition Exchange
-                           │     Partition by: {i_item_sk}
-                           └─ TableScan tpcds1000.item
-                                    Outputs: [i_item_sk, i_item_id]
+                        └─ TableScan tpcds1000.item
+                                 Outputs: [i_item_sk, i_item_id]
 note: Runtime Filter is applied for 2 times.

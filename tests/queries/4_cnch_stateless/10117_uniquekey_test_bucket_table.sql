@@ -267,3 +267,19 @@ SYSTEM SYNC DEDUP WORKER u10117_uniquekey_test_bucket;
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
 
 DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
+
+SELECT 'Test fetch right parts when enable_bucket_level_unique_keys=1';
+CREATE TABLE u10117_uniquekey_test_bucket (d Int32, n Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY d UNIQUE KEY n CLUSTER BY EXPRESSION toUInt32(n%2) INTO 2 BUCKETS ORDER BY n SETTINGS partition_level_unique_keys = 1, enable_bucket_level_unique_keys = 1;
+INSERT INTO u10117_uniquekey_test_bucket VALUES (0, 0, 0), (0, 1, 1), (1, 2, 2), (1, 3, 3);
+INSERT INTO u10117_uniquekey_test_bucket SELECT number as d, number as n, number+10 as m FROM numbers(1);
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY n;
+
+DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
+
+SELECT 'Test fetch right parts when enable_bucket_level_unique_keys=0';
+CREATE TABLE u10117_uniquekey_test_bucket (d Int32, n Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY d UNIQUE KEY n CLUSTER BY EXPRESSION toUInt32(m%2) INTO 2 BUCKETS ORDER BY n SETTINGS partition_level_unique_keys = 1, enable_bucket_level_unique_keys = 0;
+INSERT INTO u10117_uniquekey_test_bucket VALUES (0, 0, 0), (0, 1, 1), (1, 2, 2), (1, 3, 3);
+INSERT INTO u10117_uniquekey_test_bucket SELECT number as d, number as n, number+7 as m FROM numbers(1);
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY n;
+
+DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;

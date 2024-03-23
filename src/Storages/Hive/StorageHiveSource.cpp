@@ -1,4 +1,6 @@
 #include "Storages/Hive/StorageHiveSource.h"
+#include <algorithm>
+#include "Core/Names.h"
 #if USE_HIVE
 
 #include "Core/Defines.h"
@@ -16,21 +18,42 @@
 
 namespace DB
 {
-StorageHiveSource::BlockInfo::BlockInfo(const Block & header_, bool need_path_column_, bool need_file_column_, KeyDescription partition_)
+namespace ErrorCodes
+{
+    extern const int THERE_IS_NO_COLUMN;
+}
+
+StorageHiveSource::BlockInfo::BlockInfo(const Block & header_, bool need_path_column_, bool need_file_column_, const StorageMetadataPtr & metadata)
     : header(header_)
     , to_read(header_)
     , need_path_column(need_path_column_)
     , need_file_column(need_file_column_)
-    , partition_description(partition_)
+    , partition_description(metadata->getPartitionKey())
 {
     for (size_t i = 0; i < partition_description.column_names.size(); ++i)
     {
         const auto & name = partition_description.column_names[i];
         if (header.has(name))
-        {
             to_read.erase(name);
-            partition_column_idx.push_back(i);
-        }
+
+        partition_name_to_index[name] = i;
+    }
+
+    if (!to_read)
+    {
+        all_partition_column = true;
+        Names partition_columns = partition_description.expression->getRequiredColumns();
+        NameSet partition_column_set(partition_columns.begin(), partition_columns.end());
+
+        NamesAndTypesList physical = metadata->getColumns().getAllPhysical();
+        physical.remove_if([&] (auto &col) {
+            return partition_column_set.find(col.name) != partition_column_set.end();
+        });
+
+        /// select smallest non partition column
+        String selected = ExpressionActions::getSmallestColumn(physical);
+        auto column = metadata->getColumns().getPhysical(selected);
+        to_read.insert(ColumnWithTypeAndName(column.type, column.name));
     }
 }
 
@@ -88,7 +111,7 @@ Block StorageHiveSource::BlockInfo::getHeader() const
     return sample_block;
 }
 
-StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_)
+StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_, const std::shared_ptr<SelectQueryInfo> &query_info_)
     : SourceWithProgress(info_->getHeader()), WithContext(context_), block_info(info_), allocator(allocator_)
 {
     FormatSettings format_settings = getFormatSettings(context_);
@@ -102,6 +125,7 @@ StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, Al
             .format_settings = std::move(format_settings),
             .context = context_,
             .read_settings = context_->getReadSettings(),
+            .query_info = query_info_
         });
 }
 
@@ -123,24 +147,19 @@ void StorageHiveSource::prepareReader()
         current_file_slice.file, current_file_slice.slice, continue_reading);
 
     /// all blocks are 'virtual' i.e. all columns are partition column
-    if (auto num_rows = hive_file->numRows(); !block_info->to_read.columns() && num_rows)
+    if (auto num_rows = hive_file->numRows(); block_info->all_partition_column && num_rows)
     {
         Columns columns;
-        for (size_t idx : block_info->partition_column_idx)
-        {
-            auto column = block_info->partition_description.data_types[idx]->createColumnConst(*num_rows, hive_file->partition->value.at(idx));
-            columns.emplace_back(column);
-        }
+        auto types = block_info->to_read.getDataTypes();
+        for (const auto & type : types)
+            columns.push_back(type->createColumnConstWithDefaultValue(*num_rows));
 
         Chunk chunk(std::move(columns), *num_rows);
         pipeline = std::make_unique<QueryPipeline>();
         pipeline->init(Pipe(std::make_shared<SourceFromSingleChunk>(block_info->header, std::move(chunk))));
         reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
-        need_partition_columns = false;
         return;
     }
-    else
-        need_partition_columns = true;
 
     if (!continue_reading)
         read_params->read_buf.reset();
@@ -164,8 +183,7 @@ Chunk StorageHiveSource::generate()
             Chunk chunk;
             if (reader->pull(chunk))
             {
-                buildResultChunk(chunk);
-                return chunk;
+                return buildResultChunk(chunk);
             }
 
             reader.reset();
@@ -184,34 +202,42 @@ Chunk StorageHiveSource::generate()
     }
 }
 
-void StorageHiveSource::buildResultChunk(Chunk & chunk) const
+Chunk StorageHiveSource::buildResultChunk(Chunk & chunk) const
 {
     if (current_file_slice.empty())
-        return;
+        return {};
+
+    auto num_rows = chunk.getNumRows();
+    const auto & read_block = block_info->to_read;
+    Columns read_columns = chunk.detachColumns();
 
     const auto & hive_file = allocator->files[current_file_slice.file];
-    auto num_rows = chunk.getNumRows();
+    const auto & output_header = getPort().getHeader();
+    Columns result_columns;
+    result_columns.reserve(output_header.columns());
 
-    if (need_partition_columns)
-    {
-        for (size_t idx : block_info->partition_column_idx)
-        {
-            auto column = block_info->partition_description.data_types[idx]->createColumnConst(num_rows, hive_file->partition->value.at(idx));
-            chunk.addColumn(std::move(column));
+    for (const auto & col : output_header) {
+        if (read_block.has(col.name)) {
+            size_t pos = read_block.getPositionByName(col.name);
+            result_columns.push_back(std::move(read_columns[pos]));
         }
+        else if (col.name == "_path") {
+            result_columns.push_back(DataTypeString().createColumnConst(num_rows, hive_file->file_path)->convertToFullColumnIfConst());
+        }
+        else if (col.name == "_file") {
+            size_t last_slash_pos = hive_file->file_path.find_last_of('/');
+            result_columns.push_back(DataTypeString().createColumnConst(num_rows, hive_file->file_path.substr(last_slash_pos + 1))->convertToFullColumnIfConst());
+        }
+        /// if it is a partition columns
+        else if (auto it = block_info->partition_name_to_index.find(col.name); it != block_info->partition_name_to_index.end()) {
+            size_t idx = it->second;
+            auto column = block_info->partition_description.data_types[idx]->createColumnConst(num_rows, hive_file->partition->value.at(idx));
+            result_columns.push_back(std::move(column));
+        }
+        else
+            throw Exception{ErrorCodes::THERE_IS_NO_COLUMN, "Column '{}' is not presented in input data.", col.name};
     }
-
-    if (block_info->need_path_column)
-    {
-        chunk.addColumn(DataTypeString().createColumnConst(num_rows, hive_file->file_path)->convertToFullColumnIfConst());
-    }
-
-    if (block_info->need_file_column)
-    {
-        size_t last_slash_pos = hive_file->file_path.find_last_of('/');
-        chunk.addColumn(
-            DataTypeString().createColumnConst(num_rows, hive_file->file_path.substr(last_slash_pos + 1))->convertToFullColumnIfConst());
-    }
+    return Chunk(std::move(result_columns), num_rows);
 }
 
 }

@@ -6,10 +6,12 @@
 
 #if USE_ARROW || USE_ORC || USE_PARQUET
 
+#include <Formats/FormatSettings.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromString.h>
-#include <IO/copyData.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <IO/copyData.h>
+
 #include <arrow/util/future.h>
 #include <arrow/buffer.h>
 #include <arrow/io/api.h>
@@ -20,6 +22,11 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int INCORRECT_DATA;
+}
 
 ArrowBufferedOutputStream::ArrowBufferedOutputStream(WriteBuffer & out_) : out{out_}, is_open{true}
 {
@@ -43,14 +50,19 @@ arrow::Status ArrowBufferedOutputStream::Write(const void * data, int64_t length
     return arrow::Status::OK();
 }
 
-RandomAccessFileFromSeekableReadBuffer::RandomAccessFileFromSeekableReadBuffer(SeekableReadBuffer & in_, off_t file_size_, bool avoid_buffering_ = false)
+RandomAccessFileFromSeekableReadBuffer::RandomAccessFileFromSeekableReadBuffer(SeekableReadBuffer & in_, std::optional<off_t> file_size_, bool avoid_buffering_ = false)
     : in{in_}, file_size{file_size_}, is_open{true}, avoid_buffering(avoid_buffering_)
 {
 }
 
 arrow::Result<int64_t> RandomAccessFileFromSeekableReadBuffer::GetSize()
 {
-    return arrow::Result<int64_t>(file_size);
+    if (!file_size)
+    {
+        if (isBufferWithFileSize(in))
+            file_size = getFileSizeFromReadBuffer(in);
+    }
+    return arrow::Result<int64_t>(*file_size);
 }
 
 arrow::Status RandomAccessFileFromSeekableReadBuffer::Close()
@@ -200,12 +212,48 @@ arrow::Result<int64_t> RandomAccessFileFromRandomAccessReadBuffer::Tell() const 
 arrow::Result<int64_t> RandomAccessFileFromRandomAccessReadBuffer::Read(int64_t, void*) { return arrow::Status::NotImplemented(""); }
 arrow::Result<std::shared_ptr<arrow::Buffer>> RandomAccessFileFromRandomAccessReadBuffer::Read(int64_t) { return arrow::Status::NotImplemented(""); }
 
-std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(SeekableReadBuffer & in, size_t file_size, bool avoid_buffering)
+std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(
+    ReadBuffer & in,
+    const FormatSettings & settings,
+    std::atomic<int> & is_cancelled,
+    const std::string & format_name,
+    const std::string & magic_bytes,
+    bool avoid_buffering)
 {
-    if (in.supportsReadAt())
-        return std::make_shared<RandomAccessFileFromRandomAccessReadBuffer>(in, file_size);
-    else
-        return std::make_shared<RandomAccessFileFromSeekableReadBuffer>(in, file_size, avoid_buffering);
+    bool has_file_size = isBufferWithFileSize(in);
+    auto * seekable_in = dynamic_cast<SeekableReadBuffer *>(&in);
+
+    if (has_file_size && seekable_in && settings.seekable_read)
+    {
+        if (avoid_buffering && seekable_in->supportsReadAt() && settings.avoid_buffering)
+            return std::make_shared<RandomAccessFileFromRandomAccessReadBuffer>(*seekable_in, getFileSizeFromReadBuffer(in));
+
+        if (seekable_in->checkIfActuallySeekable())
+            return std::make_shared<RandomAccessFileFromSeekableReadBuffer>(*seekable_in, std::nullopt, avoid_buffering);
+    }
+
+    // fallback to loading the entire file in memory
+    return asArrowFileLoadIntoMemory(in, is_cancelled, format_name, magic_bytes);
+}
+
+std::shared_ptr<arrow::io::RandomAccessFile> asArrowFileLoadIntoMemory(
+    ReadBuffer & in,
+    std::atomic<int> & is_cancelled,
+    const std::string & format_name,
+    const std::string & magic_bytes)
+{
+    std::string file_data(magic_bytes.size(), '\0');
+
+    /// Avoid loading the whole file if it doesn't seem to even be in the correct format.
+    size_t bytes_read = in.read(file_data.data(), magic_bytes.size());
+    if (bytes_read < magic_bytes.size() || file_data != magic_bytes)
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Not a {} file", format_name);
+
+    WriteBufferFromString file_buffer(file_data, AppendModeTag{});
+    copyData(in, file_buffer, is_cancelled);
+    file_buffer.finalize();
+
+    return std::make_shared<arrow::io::BufferReader>(arrow::Buffer::FromString(std::move(file_data)));
 }
 
 }

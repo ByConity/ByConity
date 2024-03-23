@@ -35,18 +35,19 @@ Projection
                                     │  │  │  └─ TableScan tpcds1000.store_sales
                                     │  │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                                     │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
-                                    │  │  └─ Broadcast Exchange
-                                    │  │     └─ Filter
-                                    │  │        │     Condition: ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
-                                    │  │        └─ TableScan tpcds1000.item
-                                    │  │                 Where: ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
-                                    │  │                 Outputs: [i_item_sk, i_brand, i_class, i_category]
+                                    │  │  └─ Filter
+                                    │  │     │     Condition: ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
+                                    │  │     └─ TableScan tpcds1000.item
+                                    │  │              Where: ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
+                                    │  │              Outputs: [i_item_sk, i_brand, i_class, i_category]
                                     │  └─ Broadcast Exchange
-                                    │     └─ Filter
-                                    │        │     Condition: d_year = 1999
-                                    │        └─ TableScan tpcds1000.date_dim
-                                    │                 Where: d_year = 1999
-                                    │                 Outputs: [d_date_sk, d_year, d_moy]
+                                    │     └─ Projection
+                                    │        │     Expressions: [d_date_sk, d_moy]
+                                    │        └─ Filter
+                                    │           │     Condition: d_year = 1999
+                                    │           └─ TableScan tpcds1000.date_dim
+                                    │                    Where: d_year = 1999
+                                    │                    Outputs: [d_date_sk, d_year, d_moy]
                                     └─ Broadcast Exchange
                                        └─ TableScan tpcds1000.store
                                                 Outputs: [s_store_sk, s_store_name, s_company_name]

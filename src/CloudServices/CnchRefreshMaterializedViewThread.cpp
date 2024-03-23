@@ -233,7 +233,7 @@ bool CnchRefreshMaterializedViewThread::constructAndScheduleRefreshTasks(Storage
         }
         else
         {
-            task_ids.emplace_back(executeTaskLocal(istorage, storage, std::move(record)));
+            task_ids.emplace_back(executeTaskLocal(istorage, storage, std::move(record), query_context));
         }
     }
 
@@ -284,9 +284,9 @@ void CnchRefreshMaterializedViewThread::removeTaskImpl(const String & task_id, s
 String CnchRefreshMaterializedViewThread::executeTaskLocal(
     StoragePtr /*istorage*/,
     StorageMaterializedView & storage,
-    TaskRecordPtr record)
+    TaskRecordPtr record, 
+    ContextMutablePtr query_context)
 {
-    auto local_context = getContext();
     String task_id = toString(UUIDHelpers::generateV4());
     auto & mv_refresh_param = record->refresh_param;
 
@@ -297,12 +297,15 @@ String CnchRefreshMaterializedViewThread::executeTaskLocal(
             record->local_execute_thread = ThreadFromGlobalPool([&,
                                 task_id = task_id,
                                 mv_refresh_param = mv_refresh_param,
-                                command_context = Context::createCopy(local_context)]() {
+                                command_context = Context::createCopy(query_context)]() {
                     command_context->setCurrentTransaction(nullptr, false);
                     command_context->setCurrentVW(nullptr);
                     command_context->setCurrentWorkerGroup(nullptr);
                     command_context->makeSessionContext();
                     command_context->makeQueryContext();
+                    auto settings = query_context->getSettings();
+                    command_context->setSettings(settings);
+                    CurrentThread::get().pushTenantId(command_context->getSettingsRef().tenant_id);
 
                     auto user_password = const_cast<const Context &> (*command_context).getCnchInterserverCredentials();
                     command_context->setUser(user_password.first, user_password.second, Poco::Net::SocketAddress{});

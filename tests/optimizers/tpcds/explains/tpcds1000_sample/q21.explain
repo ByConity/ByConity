@@ -5,26 +5,26 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {w_warehouse_name ASC NULLS LAST, i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 141618 rows
+      └─ Gather Exchange Est. 39146 rows
          └─ Sorting Est. 100 rows
             │     Order by: {w_warehouse_name ASC NULLS LAST, i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ Filter Est. 141618 rows
+            └─ Filter Est. 39146 rows
                │     Condition: (multiIf(`expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` > 0, `expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` / `expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))`, NULL) >= '0.666666') AND (multiIf(`expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` > 0, `expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` / `expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))`, NULL) <= '1.5')
-               └─ MergingAggregated Est. 157354 rows
-                  └─ Repartition Exchange Est. 157354 rows
+               └─ MergingAggregated Est. 156584 rows
+                  └─ Repartition Exchange Est. 156584 rows
                      │     Partition by: {w_warehouse_name, i_item_id}
-                     └─ Aggregating Est. 157354 rows
+                     └─ Aggregating Est. 156584 rows
                         │     Group by: {w_warehouse_name, i_item_id}
                         │     Aggregates: expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)):=AggNull(sum)(expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)), expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)):=AggNull(sum)(expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))
-                        └─ Projection Est. 10478225 rows
+                        └─ Projection Est. 10426707 rows
                            │     Expressions: [i_item_id, w_warehouse_name], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), inv_quantity_on_hand, 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), inv_quantity_on_hand, 0)
-                           └─ Inner Join Est. 10478225 rows
+                           └─ Inner Join Est. 10426707 rows
                               │     Condition: inv_warehouse_sk == w_warehouse_sk
-                              ├─ Inner Join Est. 10478225 rows
+                              ├─ Inner Join Est. 10426707 rows
                               │  │     Condition: inv_date_sk == d_date_sk
                               │  │     Runtime Filters Builder: {d_date_sk}
-                              │  ├─ Inner Join Est. 46352828 rows
+                              │  ├─ Inner Join Est. 46124928 rows
                               │  │  │     Condition: inv_item_sk == i_item_sk
                               │  │  │     Runtime Filters Builder: {i_item_sk}
                               │  │  ├─ Filter Est. 783000000 rows
@@ -32,17 +32,18 @@ Projection Est. 100 rows
                               │  │  │  └─ TableScan tpcds1000_sample.inventory Est. 783000000 rows
                               │  │  │           Where: Runtime Filters: {inv_date_sk, inv_item_sk}
                               │  │  │           Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
-                              │  │  └─ Broadcast Exchange Est. 18448 rows
-                              │  │     └─ Filter Est. 18448 rows
-                              │  │        │     Condition: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
+                              │  │  └─ Projection Est. 18358 rows
+                              │  │     │     Expressions: [i_item_id, i_item_sk]
+                              │  │     └─ Filter Est. 18358 rows
+                              │  │        │     Condition: (i_current_price >= '0.99') AND (i_current_price <= '1.49')
                               │  │        └─ TableScan tpcds1000_sample.item Est. 300000 rows
-                              │  │                 Where: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
+                              │  │                 Where: (i_current_price >= '0.99') AND (i_current_price <= '1.49')
                               │  │                 Outputs: [i_item_sk, i_item_id, i_current_price]
                               │  └─ Broadcast Exchange Est. 60 rows
                               │     └─ Filter Est. 60 rows
-                              │        │     Condition: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
+                              │        │     Condition: (d_date >= cast(10997, 'Date32')) AND (d_date <= cast(11057, 'Date32'))
                               │        └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                              │                 Where: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
+                              │                 Where: (d_date >= cast(10997, 'Date32')) AND (d_date <= cast(11057, 'Date32'))
                               │                 Outputs: [d_date_sk, d_date]
                               └─ Broadcast Exchange Est. 20 rows
                                  └─ TableScan tpcds1000_sample.warehouse Est. 20 rows

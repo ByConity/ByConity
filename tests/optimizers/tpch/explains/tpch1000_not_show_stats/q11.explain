@@ -7,7 +7,7 @@ Projection
          │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) DESC NULLS LAST}
          └─ Inner Join
             │     Condition: 
-            │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')`
+            │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')_1`
             ├─ MergingAggregated
             │  └─ Repartition Exchange
             │     │     Partition by: {ps_partkey}
@@ -37,14 +37,16 @@ Projection
             │                    │           Where: Runtime Filters: {s_nationkey}
             │                    │           Outputs: [s_suppkey, s_nationkey]
             │                    └─ Broadcast Exchange
-            │                       └─ Filter
-            │                          │     Condition: n_name = 'GERMANY'
-            │                          └─ TableScan tpch1000.nation
-            │                                   Where: n_name = 'GERMANY'
-            │                                   Outputs: [n_nationkey, n_name]
+            │                       └─ Projection
+            │                          │     Expressions: [n_nationkey]
+            │                          └─ Filter
+            │                             │     Condition: n_name = 'GERMANY'
+            │                             └─ TableScan tpch1000.nation
+            │                                      Where: n_name = 'GERMANY'
+            │                                      Outputs: [n_nationkey, n_name]
             └─ Broadcast Exchange
                └─ Projection
-                  │     Expressions: expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001'):=`expr#sum(multiply(ps_supplycost, ps_availqty))_1` * '0.0001'
+                  │     Expressions: expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')_1:=cast(`expr#sum(multiply(ps_supplycost, ps_availqty))_1` * '0.0001', 'Nullable(Decimal(38, 6))')
                   └─ MergingAggregated
                      └─ Gather Exchange
                         └─ Aggregating
@@ -73,9 +75,11 @@ Projection
                                        │           Where: Runtime Filters: {s_nationkey}
                                        │           Outputs: s_suppkey_1:=s_suppkey, s_nationkey_1:=s_nationkey
                                        └─ Broadcast Exchange
-                                          └─ Filter
-                                             │     Condition: n_name_1 = 'GERMANY'
-                                             └─ TableScan tpch1000.nation
-                                                      Where: n_name = 'GERMANY'
-                                                      Outputs: n_nationkey_1:=n_nationkey, n_name_1:=n_name
+                                          └─ Projection
+                                             │     Expressions: [n_nationkey_1]
+                                             └─ Filter
+                                                │     Condition: n_name_1 = 'GERMANY'
+                                                └─ TableScan tpch1000.nation
+                                                         Where: n_name = 'GERMANY'
+                                                         Outputs: n_nationkey_1:=n_nationkey, n_name_1:=n_name
 note: Runtime Filter is applied for 4 times.

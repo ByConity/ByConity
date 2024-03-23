@@ -65,7 +65,10 @@ void HiveParquetFile::openFile() const
         return;
 
     auto seekable_buffer = readFile(ReadSettings{});
-    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*seekable_buffer, file_size), arrow::default_memory_pool(), &file_reader));
+    std::atomic<int> stopped;
+    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(
+        asArrowFile(*seekable_buffer, FormatSettings{}, stopped, "Parquet", PARQUET_MAGIC_BYTES, /* avoid_buffering */ true),
+        arrow::default_memory_pool(), &file_reader));
     buf = std::move(seekable_buffer);
     metadata = file_reader->parquet_reader()->metadata();
     THROW_ARROW_NOT_OK(file_reader->GetSchema(&schema));
@@ -145,85 +148,19 @@ void HiveParquetFile::loadSplitMinMaxIndex(const NamesAndTypesList & index_names
 
 SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<IHiveFile::ReadParams> & params)
 {
-    if (params->read_settings.parquet_parallel_read)
-    {
-        if (!params->read_buf)
-        {
-            params->read_buf = readFile(params->read_settings);
-        }
-        params->format_settings.parquet.file_size = file_size;
-
-        auto parquet_format = std::make_unique<ParquetBlockInputFormat>(
-            *params->read_buf,
-            block,
-            params->format_settings,
-            params->read_settings.parquet_decode_threads,
-            params->read_settings.remote_read_min_bytes_for_seek);
-
-        return parquet_format;
-    }
-
-    openFile();
-
-    auto arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
-        block,
-        "Parquet",
-        params->format_settings.parquet.import_nested,
-        params->format_settings.parquet.allow_missing_columns,
-        params->format_settings.null_as_default,
-        params->format_settings.parquet.case_insensitive_column_matching);
-
-    std::vector<int> column_indices = ParquetBlockInputFormat::getColumnIndices(schema, block, params->format_settings);
     if (!params->read_buf)
         params->read_buf = readFile(params->read_settings);
 
-    std::unique_ptr<parquet::arrow::FileReader> reader;
-    parquet::ArrowReaderProperties properties;
-    properties.set_use_threads(false);
-    properties.set_pre_buffer(true);
-    auto cache_options = arrow::io::CacheOptions::LazyDefaults();
-    cache_options.hole_size_limit = params->read_settings.remote_read_min_bytes_for_seek;
-    cache_options.range_size_limit = 1l << 40; // reading the whole row group at once is fine
-    properties.set_cache_options(cache_options);
-    parquet::arrow::FileReaderBuilder builder;
+    auto parquet_format = std::make_unique<ParquetBlockInputFormat>(
+        *params->read_buf,
+        block,
+        params->format_settings,
+        params->read_settings.parquet_decode_threads,
+        params->read_settings.remote_read_min_bytes_for_seek);
 
-    THROW_ARROW_NOT_OK(
-        builder.Open(asArrowFile(*params->read_buf, file_size), /* not to be confused with ArrowReaderProperties */ parquet::default_reader_properties(), metadata));
-    builder.properties(properties);
-
-    THROW_ARROW_NOT_OK(builder.Build(&reader));
-
-    return std::make_shared<ParquetSliceSource>(std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
-}
-
-ParquetSliceSource::ParquetSliceSource(
-    std::unique_ptr<parquet::arrow::FileReader> reader_,
-    std::vector<int> column_indices_,
-    std::shared_ptr<IHiveFile::ReadParams> read_params_,
-    std::shared_ptr<ArrowColumnToCHColumn> arrow_column_to_ch_column_)
-    : ISource({})
-    , reader(std::move(reader_))
-    , column_indices(std::move(column_indices_))
-    , read_params(std::move(read_params_))
-    , arrow_column_to_ch_column(std::move(arrow_column_to_ch_column_))
-{
-}
-
-ParquetSliceSource::~ParquetSliceSource() = default;
-
-Chunk ParquetSliceSource::generate()
-{
-    Chunk res;
-    if (!read_params->slice)
-        return res;
-
-    size_t slice_to_read = read_params->slice.value();
-    read_params->slice.reset();
-
-    std::shared_ptr<arrow::Table> table;
-    THROW_ARROW_NOT_OK(reader->ReadRowGroup(slice_to_read, column_indices, &table));
-    arrow_column_to_ch_column->arrowTableToCHChunk(res, table, table->num_rows());
-    return res;
+    if (params->query_info)
+        parquet_format->setQueryInfo(*params->query_info, params->context);
+    return parquet_format;
 }
 
 }

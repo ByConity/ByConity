@@ -25,12 +25,6 @@ private:
     class Rewriter;
 };
 
-struct PlanAndProp
-{
-    PlanNodePtr plan;
-    Property property;
-};
-
 class SortingOrderedSource::Rewriter : public PlanNodeVisitor<PlanAndProp, Void>
 {
 public:
@@ -57,17 +51,13 @@ struct SortInfo
 class PushSortingInfoRewriter : public SimplePlanRewriter<SortInfo>
 {
 public:
-    PushSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_, PlanNodePtr & root)
-        : SimplePlanRewriter(context_, cte_info_), post_order_cte_helper(cte_info_, root)
+    PushSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_)
     {
     }
     PlanNodePtr visitSortingNode(SortingNode &, SortInfo &) override;
     PlanNodePtr visitAggregatingNode(AggregatingNode &, SortInfo &) override;
     PlanNodePtr visitWindowNode(WindowNode &, SortInfo &) override;
     PlanNodePtr visitTableScanNode(TableScanNode &, SortInfo &) override;
-
-private:
-    CTEPostorderVisitHelper post_order_cte_helper;
 };
 
 }

@@ -71,5 +71,4 @@ WorkloadAdvises Advisor::analyze(const std::vector<String> & queries_, WorkloadT
     }
     return res;
 }
-
 }

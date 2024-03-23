@@ -33,7 +33,8 @@ namespace DB
         const auto & refresh = query_ptr->as<ASTRefreshQuery &>();
         if (refresh.settings_ast)
             InterpreterSetQuery(refresh.settings_ast, getContext()).executeForCurrentContext();
-        StoragePtr storage_ptr = DatabaseCatalog::instance().getTable({refresh.database, refresh.table}, getContext());
+        auto database = refresh.database.empty() ? getContext()->getCurrentDatabase() : refresh.database;
+        StoragePtr storage_ptr = DatabaseCatalog::instance().getTable({database, refresh.table}, getContext());
         if (auto * view = dynamic_cast<StorageMaterializedView *>(storage_ptr.get()))
         {
             if (view->async())
@@ -44,7 +45,7 @@ namespace DB
                     if (bg_thread)
                     {
                         auto * refresh_thread = dynamic_cast<CnchRefreshMaterializedViewThread *>(bg_thread.get());
-                        refresh_thread->wakeup();
+                        refresh_thread->start();
                     }
                     else
                     {
@@ -69,11 +70,8 @@ namespace DB
             }
         }
         else
-        {
-            String db_str = refresh.database.empty() ? "" : backQuoteIfNeed(refresh.database) + ".";
-            throw Exception("Table " + db_str + backQuoteIfNeed(refresh.table) +
+            throw Exception("Table " + backQuoteIfNeed(database) + backQuoteIfNeed(refresh.table) +
                             " isn't a materialized view, can't be refreshed.", ErrorCodes::LOGICAL_ERROR);
-        }
         getContext()->getCnchServerResource()->skipCleanWorker();
         return {};
     }

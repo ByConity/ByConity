@@ -6,9 +6,11 @@
 #include <IO/Progress.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Server/HTTP/HTTPServerResponse.h>
 #include <Common/NetException.h>
 #include <Common/Stopwatch.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 
 #include <mutex>
 #include <optional>
@@ -30,6 +32,8 @@ namespace DB
 /// Also this class write and flush special X-ClickHouse-Progress HTTP headers
 ///  if no data was sent at the time of progress notification.
 /// This allows to implement progress bar in HTTP clients.
+class MPPQueryCoordinator;
+using MPPQueryCoordinatorPtr = std::shared_ptr<MPPQueryCoordinator>;
 class WriteBufferFromHTTPServerResponse final : public BufferWithOwnMemory<WriteBuffer>
 {
 private:
@@ -56,6 +60,7 @@ private:
 
     std::mutex mutex;    /// progress callback could be called from different threads.
 
+    MPPQueryCoordinatorPtr coordinator;
 
     /// Must be called under locked mutex.
     /// This method send headers, if this was not done already,
@@ -114,6 +119,8 @@ public:
     {
         send_progress_interval_ms = send_progress_interval_ms_;
     }
+
+    void setMPPCordinator(MPPQueryCoordinatorPtr coordinator_) { coordinator = std::move(coordinator_); }
 
     ~WriteBufferFromHTTPServerResponse() override;
 };
