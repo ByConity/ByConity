@@ -564,7 +564,6 @@ public:
     /**
      * @brief Move specified items into trash.
      *
-     * @param skip_part_cache Evict parts caches if set to `false`.
      * @param is_zombie_with_staging_txn_id If true, just remove items.data_parts' kv entry
      */
     void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool is_zombie_with_staging_txn_id = false);
