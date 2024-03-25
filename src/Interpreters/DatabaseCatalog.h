@@ -228,6 +228,9 @@ public:
 
     void waitTableFinallyDropped(const UUID & uuid);
 
+    // check if the database if vidible for all tenants by default.
+    static bool isDefaultVisibleSystemDatabase(const String & database_name);
+
 private:
     // The global instance of database catalog. unique_ptr is to allow
     // deferred initialization. Thought I'd use std::optional, but I can't
