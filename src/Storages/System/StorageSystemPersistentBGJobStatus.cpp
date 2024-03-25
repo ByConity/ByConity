@@ -46,7 +46,8 @@ namespace DB
             CnchBGThreadType::Consumer,
             CnchBGThreadType::DedupWorker,
             CnchBGThreadType::ObjectSchemaAssemble,
-            CnchBGThreadType::CnchRefreshMaterializedView
+            CnchBGThreadType::CnchRefreshMaterializedView,
+            CnchBGThreadType::PartMover
         };
 
         std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();

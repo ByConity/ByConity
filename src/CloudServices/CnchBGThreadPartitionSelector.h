@@ -108,7 +108,7 @@ class CnchBGThreadPartitionSelector : public WithMutableContext
     enum Type
     {
         MergeType,
-        GCType,
+        GCType
     };
 
     struct RoundRobinState

@@ -61,21 +61,7 @@ class ASTStorage;
     M(UInt64, max_block_bytes_size, 20ull * 1024 * 1024 * 1024, "The maximum block bytes size per consumer for Kafka engine.", 0) \
     M(UInt64, max_partition_fetch_bytes, 10485760, "Max bytes of each partition read from kafka", 0) \
     M(String, unique_group_prefix, "", "Only used as prefix for storing offsets in bytekv to ensure uniqueness for tob", 0) \
-    M(String, leader_priority, "0", "The priority in leader election", 0) \
-    M(Int64, max_delay_to_yield_leadership, 600, "Minimal absolute delay to yield leadership.", 0) \
-    M(String, partition_num, "-1", "Kafka partition number", 0) \
-    M(String, shard_count, "1", "The number of shards in ClickHouse cluster", 0) \
     M(Bool, enable_memory_tracker, false, "Enable memory tracker while consuming", 0) \
-    M(Bool, enable_transaction, false, "Enable transaction while consuming", 0) \
-    M(Bool, enable_memory_table, false, "Enable memory table", 0) \
-    M(UInt64, memory_table_min_time, 60, "Memory table minimum time", 0) \
-    M(UInt64, memory_table_max_time, 300,"Memory table maximum time", 0) \
-    M(UInt64, memory_table_min_rows, 200000,"Memory table minimum rows", 0) \
-    M(UInt64, memory_table_max_rows, 10000000,"Memory table maximum rows", 0) \
-    M(UInt64, memory_table_min_bytes, 209715200,"Memory table minimum bytes default value 200M", 0) \
-    M(UInt64, memory_table_max_bytes, 838860800,"Memory table maximum bytes default value 800M", 0) \
-    M(String, memory_table_read_mode, "ALL", "Memory table read mode valid values: ALL, PART, SKIP", 0) \
-    M(UInt64, memory_table_queue_size, 2, "Memory table write block queue size", 0) \
     M(Bool, json_aggregate_function_type_base64_encode, false, "Indicate whether the json data of aggregate function type is encoded by base64.", 0) \
     M(Bool, protobuf_enable_multiple_message, true, "Same as 'input_format_protobuf_enable_multiple_message' in settings", 0) \
     M(Bool, protobuf_default_length_parser, false, "Same as 'input_format_protobuf_default_length_parser' in settings", 0) \
@@ -89,12 +75,28 @@ class ASTStorage;
     M(Bool, librdkafka_enable_debug_log, false, "Enable librdkafka debug level logs", 0) \
     M(String, cnch_vw_write, "vw_write", "VW group name for Kafka consumer task", 0) \
     M(String, cnch_schedule_mode, "random", "Schedule mode for Kafka comsume manager", 0) \
+    M(String, sample_consuming_params, "", "Enable sample consuming function by JSON format; supported params include: sample_partitions_list, sample_partitions_ratio, sample_partitions_count", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     M(Bool, enable_staging_area, false, "Enable staging area for unique table", 0) \
     M(Bool, enable_check_staging_area_status, false, "Enable check staging area status for unique table, block consume if there has too old part.", 0) \
 
-
+/** Unused settings for CnchKafka now; they are here for compatible or some historical reasons; remove them later */
+#define OBSOLETE_KAFKA_SETTINGS(M) \
+    MAKE_OBSOLETE(M, String, leader_priority, "") \
+    MAKE_OBSOLETE(M, String, partition_num, "-1") \
+    MAKE_OBSOLETE(M, String, shard_count, "1") \
+    MAKE_OBSOLETE(M, Int64, max_delay_to_yield_leadership, 600) \
+    MAKE_OBSOLETE(M, Bool, enable_transaction, false) \
+    MAKE_OBSOLETE(M, Bool, enable_memory_table, false) \
+    MAKE_OBSOLETE(M, UInt64, memory_table_min_time, 60) \
+    MAKE_OBSOLETE(M, UInt64, memory_table_max_time, 300) \
+    MAKE_OBSOLETE(M, UInt64, memory_table_min_rows, 200000) \
+    MAKE_OBSOLETE(M, UInt64, memory_table_max_rows, 10000000) \
+    MAKE_OBSOLETE(M, UInt64, memory_table_min_bytes, 209715200) \
+    MAKE_OBSOLETE(M, UInt64, memory_table_max_bytes, 838860800) \
+    MAKE_OBSOLETE(M, UInt64, memory_table_queue_size, 2) \
+    MAKE_OBSOLETE(M, String, memory_table_read_mode, "ALL") \
 
     /** TODO: */
     /* https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md */
@@ -102,6 +104,7 @@ class ASTStorage;
 
 #define LIST_OF_KAFKA_SETTINGS(M) \
     KAFKA_RELATED_SETTINGS(M) \
+    OBSOLETE_KAFKA_SETTINGS(M) \
     FORMAT_FACTORY_SETTINGS(M)
 
 DECLARE_SETTINGS_TRAITS(KafkaSettingsTraits, LIST_OF_KAFKA_SETTINGS)

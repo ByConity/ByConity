@@ -126,6 +126,9 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
             case DataDestinationType::VOLUME:
                 res.move_destination_type = PartitionCommand::MoveDestinationType::VOLUME;
                 break;
+            case DataDestinationType::BYTECOOL:
+                res.move_destination_type = PartitionCommand::MoveDestinationType::BYTECOOL;
+                break;
             case DataDestinationType::TABLE:
                 res.move_destination_type = PartitionCommand::MoveDestinationType::TABLE;
                 res.to_database = command_ast->to_database;
