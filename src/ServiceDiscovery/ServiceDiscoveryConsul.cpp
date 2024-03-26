@@ -50,8 +50,6 @@ namespace ErrorCodes
 }
 
 static ConsulAddrType consul_addr_type;
-static std::mutex client_init_mutex;
-static bool client_inited = false;
 
 String addrTypeString(ConsulAddrType type)
 {

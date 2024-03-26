@@ -105,7 +105,7 @@ static ColumnPtr getFilteredDatabases(const SelectQueryInfo & query_info, Contex
             if (startsWith(database_name, tenant_id + "."))
                 database_strip_tenantid = getOriginalDatabaseName(database_name, tenant_id);
             // Will skip database of other tenants.
-            else if (database_name.find(".") != std::string::npos)
+            else if (database_name.find(".") != std::string::npos || !DatabaseCatalog::isDefaultVisibleSystemDatabase(database_name))
                 continue;
         }
         column->insert(database_strip_tenantid);
@@ -300,7 +300,7 @@ protected:
                 return Chunk(std::move(res_columns), num_rows);
             }
 
-            const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, database_name);
+            const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, formatTenantDatabaseName(database_name));
 
             const bool need_lock_structure = needLockStructure(database, getPort().getHeader());
 
@@ -325,7 +325,7 @@ protected:
             for (; rows_count < max_block_size && tables_it->isValid(); tables_it->next())
             {
                 auto table_name = tables_it->name();
-                if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, database_name, table_name))
+                if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, formatTenantDatabaseName(database_name), table_name))
                     continue;
 
                 StoragePtr table = nullptr;
