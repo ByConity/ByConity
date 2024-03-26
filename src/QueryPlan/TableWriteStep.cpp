@@ -14,6 +14,7 @@
 #include <Common/RpcClientPool.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Processors/Transforms/SquashingChunksTransform.h>
 
 namespace DB
 {
@@ -47,14 +48,17 @@ BlockOutputStreams TableWriteStep::createOutputStream(
     Block & header,
     size_t max_threads,
     bool no_destination,
-    bool no_squash,
     ASTPtr query)
 {
     BlockOutputStreams out_streams;
     size_t out_streams_size = 1;
     auto query_settings = settings.context->getSettingsRef();
     if (target_table->supportsParallelInsert() && query_settings.max_insert_threads > 1)
+    {
+        LOG_INFO(&Poco::Logger::get("TableWriteStep"),
+                 fmt::format("createOutputStream support parallel insert, max threads:{}, max insert threads.size:{}", max_threads, query_settings.max_insert_threads));
         out_streams_size = std::min(size_t(query_settings.max_insert_threads), max_threads);
+    }
 
     for (size_t i = 0; i < out_streams_size; ++i)
     {
@@ -101,22 +105,6 @@ BlockOutputStreams TableWriteStep::createOutputStream(
         out = std::make_shared<AddingDefaultBlockOutputStream>(
             out, header, metadata_snapshot->getColumns(), settings.context, null_as_default);
 
-        /// It's important to squash blocks as early as possible (before other transforms),
-        ///  because other transforms may work inefficient if block size is small.
-
-        /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
-        /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
-        if (!(query_settings.insert_distributed_sync && target_table->isRemote()) && !no_squash)
-        {
-            bool table_prefers_large_blocks = target_table->prefersLargeBlocks();
-
-            out = std::make_shared<SquashingBlockOutputStream>(
-                out,
-                out->getHeader(),
-                table_prefers_large_blocks ? query_settings.min_insert_block_size_rows : query_settings.max_block_size,
-                table_prefers_large_blocks ? query_settings.min_insert_block_size_bytes : 0);
-        }
-
         auto out_wrapper = std::make_shared<CountingBlockOutputStream>(out);
         out_wrapper->setProcessListElement(settings.context->getProcessListElement());
         out_streams.emplace_back(std::move(out_wrapper));
@@ -135,7 +123,7 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
             
             auto insert_target_header = getHeader(insert_target->getColumns());
             auto out_streams = createOutputStream(
-                target_storage, settings, insert_target_header, pipeline.getNumThreads(), false, false, insert_target->getQuery());
+                target_storage, settings, insert_target_header, settings.context->getSettingsRef().max_threads, false, insert_target->getQuery());
 
             if (out_streams.empty())
                 throw Exception("No output stream when transfrom TableWriteStep", ErrorCodes::LOGICAL_ERROR);
@@ -151,15 +139,31 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
             pipeline.addSimpleTransform(
                 [&](const Block & in_header) -> ProcessorPtr { return std::make_shared<ExpressionTransform>(in_header, actions); });
 
-            pipeline.resize(out_streams.size());
-            //LOG_DEBUG(&Poco::Logger::get("TableWriteStep"), fmt::format("pipeline size: {}, threads {}", pipeline.getNumStreams(), pipeline.getNumThreads()));
+            size_t min_insert_block_size_rows = settings.context->getSettingsRef().min_insert_block_size_rows;
+            size_t min_insert_block_size_bytes = settings.context->getSettingsRef().min_insert_block_size_bytes;
+            /// It's important to squash blocks as early as possible (before other transforms),
+            ///  because other transforms may work inefficient if block size is small.
 
-            auto stream = std::move(out_streams.back());
-            out_streams.pop_back();
-
+            /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
+            /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
+            if (!(settings.context->getSettingsRef().insert_distributed_sync && target_storage->isRemote()) && settings.context->getSettingsRef().enable_insert_squashing)
+            {
+                pipeline.addSimpleTransform(
+                    [&](const Block & current_header) -> ProcessorPtr {
+                        return std::make_shared<SimpleSquashingChunksTransform>(current_header, min_insert_block_size_rows, min_insert_block_size_bytes);}
+                );
+                LOG_INFO(&Poco::Logger::get("TableWriteStep"), fmt::format("squash min insert block size rows:{}, min insert block size bytes:{}", min_insert_block_size_rows, min_insert_block_size_bytes));
+            }
             //LOG_DEBUG(&Poco::Logger::get("TableWriteStep"), fmt::format("output header: {}", stream->getHeader().dumpStructure()));
-            pipeline.addTransform(std::make_shared<TableWriteTransform>(
-                std::move(stream), insert_target_header, insert_target->getStorage(), settings.context));
+            pipeline.resize(out_streams.size());
+            LOG_INFO(&Poco::Logger::get("TableWriteStep"), fmt::format("pipeline size: {}, out streams size {}", pipeline.getNumStreams(), out_streams.size()));
+
+            pipeline.addSimpleTransform(
+                [&]([[maybe_unused]] const Block & in_header) -> ProcessorPtr {
+                    auto stream = std::move(out_streams.back());
+                    out_streams.pop_back();
+                    return std::make_shared<TableWriteTransform>(stream, insert_target_header, insert_target->getStorage(), settings.context);}
+                );
             break;
         }
     }
