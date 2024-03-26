@@ -55,7 +55,6 @@ private:
         Block & header,
         size_t max_threads,
         bool no_destination,
-        bool no_squash,
         ASTPtr query);
 
     TargetPtr target;
