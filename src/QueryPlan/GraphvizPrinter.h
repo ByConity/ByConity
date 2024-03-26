@@ -53,6 +53,7 @@ public:
     ~PlanNodePrinter() override = default;
     Void visitPlanNode(PlanNodeBase &, PrinterContext &) override;
     Void visitProjectionNode(ProjectionNode & node, PrinterContext & context) override;
+    Void visitExpandNode(ExpandNode & node, PrinterContext & context) override;
     Void visitFilterNode(FilterNode & node, PrinterContext & context) override;
     Void visitJoinNode(JoinNode & node, PrinterContext & context) override;
     Void visitArrayJoinNode(ArrayJoinNode & node, PrinterContext & context) override;
@@ -128,6 +129,7 @@ public:
     ~PlanSegmentNodePrinter() override = default;
     Void visitNode(QueryPlan::Node *, PrinterContext &) override;
     Void visitProjectionNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitExpandNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitFilterNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitJoinNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitArrayJoinNode(QueryPlan::Node * node, PrinterContext & context) override;
@@ -190,6 +192,7 @@ class StepPrinter
 public:
     static String printStep(const IQueryPlanStep & step, bool include_output = true);
     static String printProjectionStep(const ProjectionStep & step, bool include_output = true);
+    static String printExpandStep(const ExpandStep & step, bool include_output = true);
     static String printFilterStep(const FilterStep & step, bool include_output = true);
     static String printJoinStep(const JoinStep & step);
     static String printArrayJoinStep(const ArrayJoinStep & step);

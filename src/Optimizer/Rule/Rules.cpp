@@ -24,6 +24,7 @@
 #include <Optimizer/Rule/Rewrite/InlineProjections.h>
 #include <Optimizer/Rule/Rewrite/MergeSetOperationRules.h>
 #include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToMarkDistinct.h>
+#include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToExpandAggregate.h>
 #include <Optimizer/Rule/Rewrite/OptimizeAggregateRules.h>
 #include <Optimizer/Rule/Rewrite/PullProjectionOnJoinThroughJoin.h>
 #include <Optimizer/Rule/Rewrite/PushAggThroughJoinRules.h>
@@ -137,7 +138,9 @@ std::vector<RulePtr> Rules::distinctToAggregateRules()
     return {
         // std::make_shared<DistinctToAggregate>(),
         std::make_shared<SingleDistinctAggregationToGroupBy>(),
-        std::make_shared<MultipleDistinctAggregationToMarkDistinct>()};
+        std::make_shared<MultipleDistinctAggregationToMarkDistinct>(),
+        std::make_shared<MultipleDistinctAggregationToExpandAggregate>(),
+        };
 }
 
 std::vector<RulePtr> Rules::pushIntoTableScanRules()

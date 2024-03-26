@@ -27,6 +27,8 @@
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <Common/Exception.h>
+#include <QueryPlan/ExpandStep.h>
 
 namespace DB
 {
@@ -398,6 +400,16 @@ SortDescription SymbolMapper::map(const SortDescription & sort_desc)
 {
     SortDescription res;
     std::transform(sort_desc.begin(), sort_desc.end(), std::back_inserter(res), [this](const auto & param) { return this->map(param); });
+    return res;
+}
+
+std::map<Int32, Names> SymbolMapper::map(const std::map<Int32, Names> & group_id_non_null_symbol) 
+{
+    std::map<Int32, Names> res;
+    for(const auto & entry : group_id_non_null_symbol)
+    {
+        res[entry.first] = map(entry.second);
+    }
     return res;
 }
 
@@ -776,6 +788,18 @@ std::shared_ptr<MultiJoinStep> SymbolMapper::map(const MultiJoinStep & step)
 std::shared_ptr<TotalsHavingStep> SymbolMapper::map(const TotalsHavingStep & step)
 {
     return std::make_shared<TotalsHavingStep>(map(step.getInputStreams()[0]), step.isOverflowRow(), map(step.getHavingFilter()), step.getTotalsMode(), step.getAutoIncludeThreshols(), step.isFinal());
+}
+
+std::shared_ptr<ExpandStep> SymbolMapper::map(const ExpandStep & step)
+{
+    return std::make_shared<ExpandStep>(
+        map(step.getOutputStream()), 
+        map(step.getAssignments()),
+        map(step.getNameToType()), 
+        map(step.getGroupIdSymbol()),
+        step.getGroupIdValue(),
+        map(step.getGroupIdNonNullSymbol())
+        );
 }
 
 class SymbolMapper::SymbolMapperVisitor : public StepVisitor<QueryPlanStepPtr, SymbolMapper>

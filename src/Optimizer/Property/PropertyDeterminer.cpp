@@ -267,14 +267,15 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     {
         for (const auto & sub_keys : Utils::powerSet(keys))
         {
-            Property prop{Partitioning{Partitioning::Handle::FIXED_HASH, sub_keys}, Partitioning{Partitioning::Handle::FIXED_HASH, sub_keys}};
+            Property prop{
+                Partitioning{Partitioning::Handle::FIXED_HASH, sub_keys}, Partitioning{Partitioning::Handle::FIXED_HASH, sub_keys}};
             sets.emplace_back(PropertySet{prop});
         }
     }
     else
     {
-        sets.emplace_back(
-            PropertySet{Property{Partitioning{Partitioning::Handle::FIXED_HASH, keys}, Partitioning{Partitioning::Handle::FIXED_HASH, keys}}});
+        sets.emplace_back(PropertySet{
+            Property{Partitioning{Partitioning::Handle::FIXED_HASH, keys}, Partitioning{Partitioning::Handle::FIXED_HASH, keys}}});
     }
 
     if (step.isGroupingSet())
@@ -565,4 +566,10 @@ PropertySets DeterminerVisitor::visitTableFinishStep(const TableFinishStep &, De
     node.setComponent(Partitioning::Component::WORKER);
     return {{Property{node}}};
 }
+
+PropertySets DeterminerVisitor::visitExpandStep(const ExpandStep &, DeterminerContext &)
+{
+    return {{Property{Partitioning{Partitioning::Handle::ARBITRARY}}}};
+}
+
 }

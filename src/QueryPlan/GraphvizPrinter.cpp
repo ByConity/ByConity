@@ -66,6 +66,7 @@ const String GraphvizPrinter::PIPELINE_PATH = "5000_pipeline";
 static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     // NOLINT(cert-err58-cpp)
     {IQueryPlanStep::Type::Projection, "bisque"},
+    {IQueryPlanStep::Type::Expand, "RosyBrown"},
     {IQueryPlanStep::Type::Filter, "yellow"},
     {IQueryPlanStep::Type::Join, "orange"},
     {IQueryPlanStep::Type::ArrayJoin, "orange"},
@@ -153,6 +154,15 @@ Void PlanNodePrinter::visitProjectionNode(ProjectionNode & node, PrinterContext 
     auto step = *node.getStep();
     String color{NODE_COLORS[step.getType()]};
     printNode(node, label, StepPrinter::printProjectionStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitExpandNode(ExpandNode & node, PrinterContext & context)
+{
+    String label{"ExpandNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printExpandStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -675,6 +685,16 @@ Void PlanSegmentNodePrinter::visitProjectionNode(QueryPlan::Node * node, Printer
     const auto & step = dynamic_cast<const ProjectionStep &>(*step_ptr);
     String color{NODE_COLORS[step_ptr->getType()]};
     printNode(node, label, StepPrinter::printProjectionStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanSegmentNodePrinter::visitExpandNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    String label{"ExpandNode"};
+    const auto & step = dynamic_cast<const ExpandStep &>(*step_ptr);
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printExpandStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1217,6 +1237,42 @@ String StepPrinter::printProjectionStep(const ProjectionStep & step, bool includ
 
     return details.str();
 }
+
+String StepPrinter::printExpandStep(const ExpandStep & step, bool)
+{
+    std::stringstream details;
+
+    std::stringstream ss;
+    for (const auto & element : step.getGroupIdValue())
+    {
+        ss << element << " ";
+    }
+    std::string result = ss.str();
+
+    details << step.getGroupIdSymbol() << "[" << result <<  "]";
+    details << "|";
+    details << "Groups";
+    details << "|";
+    for (const auto & assignments_pre_group : step.generateAssignmentsGroups())
+    {
+        for (const auto & project : assignments_pre_group)
+        {
+            String sql = serializeAST(*project.second);
+            details << project.first << ": " << sql << "\\n";
+        }
+        details << "|";
+    }
+
+    details << "Output \\n";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+
+    return details.str();
+}
+
 String StepPrinter::printFilterStep(const FilterStep & step, bool include_output)
 {
     std::stringstream details;

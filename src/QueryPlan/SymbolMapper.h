@@ -104,6 +104,7 @@ public:
     ArrayJoinActionPtr map(const ArrayJoinActionPtr & array_join_action);
     GroupingDescription map(const GroupingDescription & desc);
     SortDescription map(const SortDescription & sort_desc);
+    std::map<Int32, Names> map(const std::map<Int32, Names> & group_id_non_null_symbol);
 
     LinkedHashMap<String, RuntimeFilterBuildInfos> map(const LinkedHashMap<String, RuntimeFilterBuildInfos> & infos);
     PlanNodeStatisticsEstimate map(const PlanNodeStatisticsEstimate & estimate);

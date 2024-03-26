@@ -251,6 +251,15 @@ enum class CTEMode
 
 DECLARE_SETTING_ENUM(CTEMode)
 
+enum class ExpandMode
+{
+    EXPAND,
+    UNION,
+    CTE,
+};
+
+DECLARE_SETTING_ENUM(ExpandMode)
+
 enum class StatisticsAccurateSampleNdvMode
 {
     NEVER,

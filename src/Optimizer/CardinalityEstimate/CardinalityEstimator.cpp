@@ -101,12 +101,6 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitOffsetStep(const OffsetStep & ste
     return stats;
 }
 
-PlanNodeStatisticsPtr CardinalityVisitor::visitTotalsHavingStep(const TotalsHavingStep &, CardinalityContext & context)
-{
-    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
-    return child_stats;
-}
-
 PlanNodeStatisticsPtr CardinalityVisitor::visitTableFinishStep(const TableFinishStep &, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
@@ -477,6 +471,21 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitCTERefNode(CTERefNode & node,
     auto stats = std::make_shared<PlanNodeStatistics>(cte_ref_stats->getRowCount(), calculated_symbol_statistics);
 node.setStatistics(stats ? std::make_optional(stats) : std::nullopt);
     return stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitTotalsHavingStep(const TotalsHavingStep & step, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr stats = context.children_stats[0];
+    if (const auto & having = step.getHavingFilter())
+        stats = FilterEstimator::estimate(
+            stats, having, step.getInputStreams()[0].header.getNamesToTypes(), context.context, context.simple_children);
+    return stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitExpandStep(const ExpandStep & , CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
 }
 
 }

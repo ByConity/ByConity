@@ -663,4 +663,10 @@ Property DeriverVisitor::visitMultiJoinStep(const MultiJoinStep &, DeriverContex
 {
     return context.getInput()[0];
 }
+
+Property DeriverVisitor::visitExpandStep(const ExpandStep&, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
 }

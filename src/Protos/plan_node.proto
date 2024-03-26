@@ -375,6 +375,21 @@ message MultiJoinStep {
   required Graph graph = 1;
 }
 
+message SampleRatioStep {
+  required ITransformingStep query_plan_base = 1;
+  required float sample_ratio = 2;
+}
+
+message ExpandStep {
+  required ITransformingStep query_plan_base = 1;
+  required Assignments assignments = 2;
+  map<string, DataType> name_to_type = 3;
+  required string group_id_symbol = 4;
+  repeated uint32 group_id_value = 5;
+  map<uint32, StringVec> group_id_non_null_symbol = 6;
+
+}
+
 // this must be identical to APPLY_STEP_PROTOBUF_TYPES_AND_NAMES
 //    with Step/_step postfix
 //    in src/QueryPlan/IQueryPlanStep.h
@@ -426,6 +441,8 @@ message QueryPlanStep {
     TotalsHavingStep totals_having_step = 50;
     LocalExchangeStep local_exchange_step = 54;
     MultiJoinStep multi_join_step = 55;
+    SampleRatioStep sample_ratio_step = 56;
+    ExpandStep expand_step = 57;
   }
 }
 

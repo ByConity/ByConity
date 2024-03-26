@@ -62,6 +62,7 @@
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/MultiJoinStep.h>
+#include <QueryPlan/ExpandStep.h>
 #include <QueryPlan/OffsetStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
