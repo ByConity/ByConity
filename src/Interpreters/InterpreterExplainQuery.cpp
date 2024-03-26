@@ -720,7 +720,7 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
     if (settings.json)
     {
         auto plan_cost = CostCalculator::calculatePlanCost(plan, *contextptr);
-        buffer << PlanPrinter::jsonLogicalPlan(plan, settings.stats, true, plan_cost);
+        buffer << PlanPrinter::jsonLogicalPlan(plan, plan_cost, {}, costs, settings);
     }
     else if (settings.pb_json)
     {
@@ -736,7 +736,7 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
         buffer << json_msg;
     }
     else
-        buffer << PlanPrinter::textLogicalPlan(plan, contextptr, settings.stats, settings.verbose, costs);
+        buffer << PlanPrinter::textLogicalPlan(plan, contextptr, costs, {}, settings);
 }
 
 void InterpreterExplainQuery::explainDistributedWithOptimizer(
@@ -761,7 +761,7 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(
     if (settings.json)
         buffer << PlanPrinter::jsonDistributedPlan(plan_segment_descriptions, {});
     else
-        buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, settings.stats, settings.verbose, costs, {}, plan);
+        buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, contextptr, costs, {}, plan, settings);
 }
 
 BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)

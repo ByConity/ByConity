@@ -28,6 +28,7 @@
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Poco/JSON/Object.h>
+#include <magic_enum.hpp>
 
 #include <utility>
 
@@ -78,7 +79,7 @@ String PlanPrinter::textPlanNode(PlanNodeBase & node)
 {
     PlanCostMap costs;
     StepAggregatedOperatorProfiles profiles;
-    TextPrinter printer{true, true, costs};
+    TextPrinter printer{costs};
     bool has_children = node.getChildren().empty();
     return printer.printLogicalPlan(node, TextPrinterIntent{0, has_children}, profiles);
 }
@@ -86,13 +87,11 @@ String PlanPrinter::textPlanNode(PlanNodeBase & node)
 String PlanPrinter::textLogicalPlan(
     QueryPlan & plan,
     ContextMutablePtr context,
-    bool print_stats,
-    bool verbose,
     PlanCostMap costs,
     const StepAggregatedOperatorProfiles & profiles,
-    bool print_profile)
+    const QueryPlanSettings & settings)
 {
-    TextPrinter printer{print_stats, verbose, costs, false, {}, print_profile};
+    TextPrinter printer{costs, context, false, {}, settings};
     bool has_children = !plan.getPlanNode()->getChildren().empty();
     auto output = printer.printLogicalPlan(*plan.getPlanNode(), TextPrinterIntent{0, has_children}, profiles);
 
@@ -151,7 +150,7 @@ String PlanPrinter::textLogicalPlan(
     return output;
 }
 
-String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool, std::optional<PlanNodeCost> plan_cost, const StepAggregatedOperatorProfiles & profiles)
+String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, std::optional<PlanNodeCost> plan_cost, const StepAggregatedOperatorProfiles & profiles, const PlanCostMap & costs, const QueryPlanSettings & settings)
 {
     std::ostringstream os;
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
@@ -166,14 +165,14 @@ String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool, st
         json->set("men_cost_value", cost.getMenValue());
     }
 
-    json->set("plan", plannode_desc->jsonNodeDescription(profiles, print_stats));
+    json->set("plan", plannode_desc->jsonNodeDescription(profiles, settings.stats, costs));
     if (!plan.getCTEInfo().getCTEs().empty())
     {
         Poco::JSON::Array ctes;
         for (auto & item : plan.getCTEInfo().getCTEs())
         {
             auto cte_desc = NodeDescription::getPlanDescription(item.second);
-            ctes.add(cte_desc->jsonNodeDescription(profiles, print_stats));
+            ctes.add(cte_desc->jsonNodeDescription(profiles, settings.stats, costs));
         }
         json->set("CTEs", ctes);
     }
@@ -210,25 +209,14 @@ String PlanPrinter::getPlanSegmentHeaderText(PlanSegmentDescriptionPtr & segment
     ExchangeMode mode = segment_desc->mode;
     String exchange = (segment_id == 0) ? "Output" : f(mode);
     os << "   Output Exchange: " << exchange;
-    if (exchange == "REPARTITION") // print shuffle keys
-    {
-        os << "[";
-        bool first = true;
-        for (auto & key : segment_desc->shuffle_keys)
-        {
-            if (first)
-            {
-                os << key;
-            }
-            os << ", " << key;
-        }
-        os << "]";
-    }
+    if (exchange == "REPARTITION" && !segment_desc->shuffle_keys.empty()) // print shuffle keys
+        os << " Shufflekeys: " << join(segment_desc->shuffle_keys, ", ");
     os << "\n";
 
     os << "   Parallel Size: " << segment_desc->parallel;
     os << ", Cluster Name: " << (segment_desc->cluster_name.empty() ? "server" : segment_desc->cluster_name);
     os << ", Exchange Parallel Size: " << segment_desc->exchange_parallel_size  << "\n";
+
     if (!segment_desc->outputs_desc.empty())
     {
         os << "   Outputs: [";
@@ -237,8 +225,29 @@ String PlanPrinter::getPlanSegmentHeaderText(PlanSegmentDescriptionPtr & segment
         {
             if (!first)
                 os << "\n             ";
-            os << "( SegmentID:" << output->segment_id << " PlanSegmentType:" << output->plan_segment_type
-                << " ParallelSize:" << output->parallel_size << ")";
+            os << "(SegmentId:" << output->segment_id 
+                << " ExchangeId:" << output->exchange_id
+                << " ExchangeMode:" << magic_enum::enum_name(output->mode)
+                << " ParallelSize:" << output->parallel_size
+                << " KeepOrder:" << output->keep_order << ")";
+            first = false;
+        }
+        os << "]\n";
+    }
+
+    if (!segment_desc->inputs_desc.empty())
+    {
+        os << "   Inputs: [";
+        bool first = true;
+        for (auto & input : segment_desc->inputs_desc)
+        {
+            if (!first)
+                os << "\n             ";
+            os << "(SegmentId:" << input->segment_id 
+                << " ExchangeId:" << input->exchange_id
+                << " ExchangeMode:" << magic_enum::enum_name(input->mode)
+                << " ExchangeParallelSize:" << input->exchange_parallel_size
+                << " KeepOrder:" << input->keep_order << ")";
             first = false;
         }
         os << "]\n";
@@ -248,13 +257,11 @@ String PlanPrinter::getPlanSegmentHeaderText(PlanSegmentDescriptionPtr & segment
 
 String PlanPrinter::textDistributedPlan(
     PlanSegmentDescriptions & segments_desc,
-    bool print_stats,
-    bool verbose,
+    ContextMutablePtr context,
     const std::unordered_map<PlanNodeId, double> & costs,
     const StepAggregatedOperatorProfiles & profiles,
     const QueryPlan & query_plan,
-    bool print_profile
-)
+    const QueryPlanSettings & settings)
 {
     auto id_to_node = getPlanNodeMap(query_plan);
     for (auto & segment_desc : segments_desc)
@@ -296,7 +303,7 @@ String PlanPrinter::textDistributedPlan(
         if (analyze_node)
         {
             os << TextPrinter::printOutputColumns(*analyze_node.value()->getChildren()[0], TextPrinterIntent{3, false});
-            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment, print_profile};
+            TextPrinter printer{costs, context, true, segment_ptr->exchange_to_segment, settings};
             bool has_children = !analyze_node.value()->getChildren().empty();
             if ((analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::CTERef
                  || analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::Exchange))
@@ -309,7 +316,7 @@ String PlanPrinter::textDistributedPlan(
         {
             auto plan_root = segment_ptr->plan_node;
             os << TextPrinter::printOutputColumns(*segment_ptr->plan_node, TextPrinterIntent{3, false});
-            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment, print_profile};
+            TextPrinter printer{costs, context, true, segment_ptr->exchange_to_segment, settings};
             bool has_children = !plan_root->getChildren().empty();
             if ((plan_root->getStep()->getType() == IQueryPlanStep::Type::CTERef
                  || plan_root->getStep()->getType() == IQueryPlanStep::Type::Exchange))
@@ -346,7 +353,7 @@ String PlanPrinter::textPipelineProfile(PlanSegmentDescriptions & segment_descs,
                 continue;
             TextPrinterIntent print{3, false};
             os << print.print() << address << "\n";
-            TextPrinter printer{false, false, {}};
+            TextPrinter printer{{}};
             bool has_children = !segment_profile->children.empty();
             auto output = printer.printPipelineProfile(segment_profile, TextPrinterIntent{3, has_children});
             os << output;
@@ -487,32 +494,20 @@ String PlanPrinter::TextPrinter::printLogicalPlan(
 
     if (profiles.empty())
     {
-        if (print_stats)
+        if (settings.stats)
             out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan) << " " << printStatistics(plan, intent)
                 << printDetail(plan.getStep(), intent) << "\n";
         else
-            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan) << printDetail(plan.getStep(), intent)
-                << "\n";
+            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan) << printDetail(plan.getStep(), intent) << "\n";
     }
     else
     {
-        if (print_profile)
-        {
-            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan);
-            if (print_stats)
-                out << intent.detailIntent() << printStatistics(plan, intent);
-            out << printOperatorProfiles(plan, intent, profiles);
-            if (profiles.count(plan.getId()))
-                out << intent.detailIntent() << printQError(plan, intent, profiles);
-            out << printDetail(plan.getStep(), intent) << "\n";
-        }
-        else
-        {
-            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan);
-            if (print_stats)
-                out << intent.detailIntent() << printStatistics(plan, intent);
-            out << printDetail(plan.getStep(), intent) << "\n";
-}
+        out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan);
+        if (settings.stats)
+            out << intent.detailIntent() << printStatistics(plan, intent);
+        if (settings.profile && profiles.count(plan.getId()))
+            out << printOperatorProfiles(plan, intent, profiles) << intent.detailIntent() << printQError(plan, profiles);
+        out << printDetail(plan.getStep(), intent) << "\n";
 
     }
 
@@ -552,15 +547,23 @@ String PlanPrinter::TextPrinter::printPipelineProfile(GroupedProcessorProfilePtr
 String PlanPrinter::TextPrinter::printProcessorDetail(GroupedProcessorProfilePtr profile, const TextPrinterIntent & intent)
 {
     std::stringstream out;
-    out << profile->processor_name <<"  x" << profile->parallel_size << " ElapsedTime:" << prettySeconds(profile->grouped_elapsed_us);
-    out << intent.detailIntent() << "(Input:[WaitTime:" << prettySeconds(profile->grouped_input_wait_elapsed_us) << " Rows:" << prettyNum(profile->grouped_input_rows) << " (" << prettyBytes(profile->grouped_input_bytes) << ")]"
-        << " Output:[WaitTime:" << prettySeconds(profile->grouped_input_wait_elapsed_us) << " Rows:" << prettyNum(profile->grouped_output_rows) << " (" << prettyBytes(profile->grouped_output_bytes) << ")])";
+    out << profile->processor_name <<" x" << profile->parallel_size << " ElapsedTime:" << prettySeconds(profile->grouped_elapsed_us/profile->worker_cnt);
+    if (profile->worker_cnt > 1)
+        out<< "[max=" << prettySeconds(profile->max_grouped_elapsed_us) << ", min=" << prettySeconds(profile->min_grouped_elapsed_us) << "]";
+    out << intent.detailIntent() << "Input: WaitTime:" << prettySeconds(profile->grouped_input_wait_elapsed_us/profile->worker_cnt);
+    if (profile->worker_cnt > 1)
+        out<< "[max=" << prettySeconds(profile->max_grouped_input_wait_elapsed_us) << ", min=" << prettySeconds(profile->min_grouped_input_wait_elapsed_us) << "]";
+    out << " Rows:" << prettyNum(profile->grouped_input_rows) << " (" << prettyBytes(profile->grouped_input_bytes) << ")";
+    out << intent.detailIntent() << " Output: WaitTime:" << prettySeconds(profile->grouped_output_wait_elapsed_us/profile->worker_cnt);
+    if (profile->worker_cnt > 1)
+        out<< "[max=" << prettySeconds(profile->max_grouped_output_wait_elapsed_us) << ", min=" << prettySeconds(profile->min_grouped_output_wait_elapsed_us) << "]";
+    out << " Rows:" << prettyNum(profile->grouped_output_rows) << " (" << prettyBytes(profile->grouped_output_bytes) << ")";
     return out.str();
 }
 
 String PlanPrinter::TextPrinter::printStatistics(const PlanNodeBase & plan, const TextPrinterIntent &) const
 {
-    if (!print_stats)
+    if (!settings.stats)
         return "";
     std::stringstream out;
     const auto & stats = plan.getStatistics();
@@ -578,10 +581,13 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(
     {
         const auto & profile = profiles.at(step_id);
         std::stringstream out;
-        out << intent.detailIntent() << "Act. Output " << prettyNum(profile->output_rows) << " rows (" << prettyBytes(profile->output_bytes)
-            << ")";
-        out << ", Output wait Time: " << prettySeconds(profile->max_output_wait_elapsed_us);
-        out << ", Wall Time: " << prettySeconds(profile->max_elapsed_us);
+        out << intent.detailIntent() << "Act. WallTime: " << prettySeconds(profile->sum_elapsed_us/profile->worker_cnt);
+        if (profile->worker_cnt > 1)
+            out << "[max= " << prettySeconds(profile->max_elapsed_us) << ", min=" << prettySeconds(profile->min_elapsed_us) << "]";
+        out << intent.detailIntent() << "     Output: " << prettyNum(profile->output_rows) << " rows(" << prettyBytes(profile->output_bytes) << ")";
+        out << ", WaitTime: " << prettySeconds(profile->sum_output_wait_elapsed_us/profile->worker_cnt);
+        if (profile->worker_cnt > 1)
+            out << "[max=" << prettySeconds(profile->max_output_wait_elapsed_us) << ", min=" << prettySeconds(profile->min_output_wait_elapsed_us) << "]";
 
         int num = 1;
         if (!plan.getChildren().empty() && profile->inputs_profile.contains(plan.getChildren()[0]->getId()))
@@ -590,15 +596,17 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(
             {
                 auto input_profile = profile->inputs_profile[child->getId()];
                 if (num == 1)
-                    out << intent.detailIntent() << "Input. ";
+                    out << intent.detailIntent() << "     Input: ";
                 else
                     out << intent.detailIntent() << "            ";
 
                 if (plan.getChildren().size() > 1)
-                    out << "source [" << num << "] : ";
+                    out << "source[" << num << "] : ";
 
-                out << prettyNum(input_profile.input_rows) << " rows (" << prettyBytes(input_profile.input_bytes) << ")";
-                out << ", Input wait Time: " << prettySeconds(input_profile.input_wait_elapsed_us);
+                out << prettyNum(input_profile.input_rows) << " rows(" << prettyBytes(input_profile.input_bytes) << ")";
+                out << ", WaitTime: " << prettySeconds(input_profile.input_wait_elapsed_us/profile->worker_cnt);
+                if (profile->worker_cnt > 1)
+                    out << "[max=" << prettySeconds(input_profile.max_input_wait_elapsed_us) << ", min=" << prettySeconds(input_profile.min_input_wait_elapsed_us) << "]";
                 ++num;
             }
         }
@@ -607,14 +615,16 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(
             for (auto & [id, input_metrics] : profile->inputs_profile)
             {
                 if (num == 1)
-                    out << intent.detailIntent() << "Input. ";
+                    out << intent.detailIntent() << "     Input: ";
                 else
                     out << intent.detailIntent() << "            ";
 
                 if (plan.getChildren().size() > 1)
                     out << "source [" << num << "] : ";
 
-                out << "Wait Time: " << prettySeconds(input_metrics.input_wait_elapsed_us);
+                out << "WaitTime: " << prettySeconds(input_metrics.input_wait_elapsed_us/profile->worker_cnt);
+                if (profile->worker_cnt > 1)
+                    out << "[max=" << prettySeconds(input_metrics.max_input_wait_elapsed_us) << ", min=" << prettySeconds(input_metrics.min_input_wait_elapsed_us) << "]";
                 ++num;
             }
         }
@@ -645,7 +655,7 @@ String PlanPrinter::TextPrinter::prettyNum(size_t num)
 
 String PlanPrinter::TextPrinter::prettySeconds(size_t us)
 {
-    std::vector<std::string> suffixes{" us", " ms", " s"};
+    std::vector<std::string> suffixes{"us", "ms", "s"};
     size_t idx = 0;
     auto count = static_cast<double>(us);
     while (count >= 1000 && idx < suffixes.size() - 1)
@@ -675,8 +685,7 @@ String PlanPrinter::TextPrinter::prettyBytes(size_t bytes)
     return out.str();
 }
 
-String PlanPrinter::TextPrinter::printQError(
-    const PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles)
+String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles)
 {
     const auto & stats = plan.getStatistics();
     std::stringstream out;
@@ -685,7 +694,6 @@ String PlanPrinter::TextPrinter::printQError(
     if (profiles.count(step_id))
     {
         const auto & profile = profiles.at(step_id);
-        out << intent.detailIntent();
         if (plan.getChildren().size() > 1)
         {
             size_t max_input_rows = 0;
@@ -844,8 +852,11 @@ String PlanPrinter::TextPrinter::printSuffix(PlanNodeBase & plan)
 
 String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const
 {
+    if (!settings.verbose)
+        return "";
+
     std::stringstream out;
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Union)
+    if (plan->getType() == IQueryPlanStep::Type::Union)
     {
         const auto * union_step = dynamic_cast<const UnionStep *>(plan.get());
         out << intent.detailIntent() << "OutputToInputs: ";
@@ -860,7 +871,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         }
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Join)
+    if (plan->getType() == IQueryPlanStep::Type::Join)
     {
         const auto * join_step = dynamic_cast<const JoinStep *>(plan.get());
         out << intent.detailIntent() << "Condition: ";
@@ -883,7 +894,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         }
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Sorting)
+    if (plan->getType() == IQueryPlanStep::Type::Sorting)
     {
         const auto * sort = dynamic_cast<const SortingStep *>(plan.get());
         std::vector<String> sort_columns;
@@ -901,7 +912,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             sort->getLimit());
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Limit)
+    if (plan->getType() == IQueryPlanStep::Type::Limit)
     {
         const auto * limit = dynamic_cast<const LimitStep *>(plan.get());
         out << intent.detailIntent();
@@ -923,7 +934,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             limit->getOffset());
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Offset)
+    if (plan->getType() == IQueryPlanStep::Type::Offset)
     {
         const auto * offset = dynamic_cast<const OffsetStep *>(plan.get());
         out << intent.detailIntent();
@@ -931,7 +942,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << " Offset: " << offset->getOffset();
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Aggregating)
+    if (plan->getType() == IQueryPlanStep::Type::Aggregating)
     {
         const auto * agg = dynamic_cast<const AggregatingStep *>(plan.get());
         auto keys = agg->getKeys();
@@ -960,24 +971,24 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << intent.detailIntent() << "Aggregates: " << join(aggregates, ", ");
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Exchange)
+    if (plan->getType() == IQueryPlanStep::Type::Exchange)
     {
         const auto * exchange = dynamic_cast<const ExchangeStep *>(plan.get());
-        if (exchange->getExchangeMode() == ExchangeMode::REPARTITION)
+        if (!exchange->getSchema().getColumns().empty())
         {
             auto keys = exchange->getSchema().getColumns();
             out << intent.detailIntent() << "Partition by: " << join(keys, ", ", "{", "}");
         }
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Filter)
+    if (plan->getType() == IQueryPlanStep::Type::Filter)
     {
         const auto * filter = dynamic_cast<const FilterStep *>(plan.get());
         auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter->getFilter());
         out << intent.detailIntent() << "Condition: " << printFilter(filter->getFilter());
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::Projection)
+    if (plan->getType() == IQueryPlanStep::Type::Projection)
     {
         const auto * projection = dynamic_cast<const ProjectionStep *>(plan.get());
 
@@ -1002,7 +1013,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         out << intent.detailIntent() << "Expressions: " << join(assignments, ", ");
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::TableScan)
+    if (plan->getType() == IQueryPlanStep::Type::TableScan)
     {
         const auto * table_scan = dynamic_cast<const TableScanStep *>(plan.get());
         std::vector<String> identities;
@@ -1059,7 +1070,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << printDetail(table_scan->getPushdownAggregation(), intent);
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::TopNFiltering)
+    if (plan->getType() == IQueryPlanStep::Type::TopNFiltering)
     {
         const auto *topn_filter = dynamic_cast<const TopNFilteringStep *>(plan.get());
         std::vector<String> sort_columns;
@@ -1070,7 +1081,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         out << intent.detailIntent() << "Algorithm: " << TopNFilteringAlgorithmConverter::toString(topn_filter->getAlgorithm());
     }
 
-    if (verbose && plan->getType() == IQueryPlanStep::Type::TableWrite)
+    if (plan->getType() == IQueryPlanStep::Type::TableWrite)
     {
         const auto * table_write = dynamic_cast<const TableWriteStep *>(plan.get());
         if (table_write->getTarget())
@@ -1432,7 +1443,7 @@ void NodeDescription::setStepStatistic(PlanNodePtr node)
     }
 }
 
-Poco::JSON::Object::Ptr NodeDescription::jsonNodeDescription(const StepAggregatedOperatorProfiles & node_profiles, bool print_stats)
+Poco::JSON::Object::Ptr NodeDescription::jsonNodeDescription(const StepAggregatedOperatorProfiles & node_profiles, bool print_stats, const PlanCostMap & costs)
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
     json->set("NodeId", node_id);
@@ -1458,19 +1469,43 @@ Poco::JSON::Object::Ptr NodeDescription::jsonNodeDescription(const StepAggregate
     {
         const auto & profile_detail = node_profiles.at(node_id);
         Poco::JSON::Object::Ptr profiles = new Poco::JSON::Object(true);
-        profiles->set("WallTimeMs", profile_detail->max_elapsed_us/1000);
+        profiles->set("WallTimeMs", profile_detail->sum_elapsed_us/profile_detail->worker_cnt/1000);
+        profiles->set("MaxWallTimeMs", profile_detail->max_elapsed_us/1000);
+        profiles->set("MinWallTimeMs", profile_detail->min_elapsed_us/1000);
         profiles->set("OutputRows", profile_detail->output_rows);
         profiles->set("OutputBytes", profile_detail->output_bytes);
-        profiles->set("OutputWaitTimeMs", profile_detail->max_output_wait_elapsed_us/1000);
+        profiles->set("OutputWaitTimeMs", profile_detail->sum_output_wait_elapsed_us/profile_detail->worker_cnt/1000);
+        profiles->set("MaxOutputWaitTimeMs", profile_detail->max_output_wait_elapsed_us/1000);
+        profiles->set("MinOutputWaitTimeMs", profile_detail->min_output_wait_elapsed_us/1000);
         Poco::JSON::Array inputs_profile;
-        for (auto input_profile : profile_detail->inputs_profile)
+        if (!children.empty() && profile_detail->inputs_profile.contains(children[0]->node_id))
         {
-            Poco::JSON::Object::Ptr input = new Poco::JSON::Object(true);
-            input->set("InputNodeId", input_profile.first);
-            input->set("InputRows", input_profile.second.input_rows);
-            input->set("InputBytes", input_profile.second.input_bytes);
-            input->set("InputWaitTimeMs", input_profile.second.input_wait_elapsed_us/1000);
-            inputs_profile.add(input);
+            for (auto & child : children)
+            {
+                auto input_profile = profile_detail->inputs_profile[child->node_id];
+                Poco::JSON::Object::Ptr input = new Poco::JSON::Object(true);
+                input->set("InputNodeId", child->node_id);
+                input->set("InputRows", input_profile.input_rows);
+                input->set("InputBytes", input_profile.input_bytes);
+                input->set("InputWaitTimeMs", input_profile.input_wait_elapsed_us/profile_detail->worker_cnt/1000);
+                input->set("MaxInputWaitTimeMs", input_profile.max_input_wait_elapsed_us/1000);
+                input->set("MinInputWaitTimeMs", input_profile.min_input_wait_elapsed_us/1000);
+                inputs_profile.add(input);
+            }
+        }
+        else
+        {
+            for (auto input_profile : profile_detail->inputs_profile)
+            {
+                Poco::JSON::Object::Ptr input = new Poco::JSON::Object(true);
+                input->set("InputNodeId", input_profile.first);
+                input->set("InputRows", input_profile.second.input_rows);
+                input->set("InputBytes", input_profile.second.input_bytes);
+                input->set("InputWaitTimeMs", input_profile.second.input_wait_elapsed_us/profile_detail->worker_cnt/1000);
+                input->set("MaxInputWaitTimeMs", input_profile.second.max_input_wait_elapsed_us/1000);
+                input->set("MinInputWaitTimeMs", input_profile.second.min_input_wait_elapsed_us/1000);
+                inputs_profile.add(input);
+            }
         }
         profiles->set("Inputs", inputs_profile);
 
@@ -1506,13 +1541,13 @@ Poco::JSON::Object::Ptr NodeDescription::jsonNodeDescription(const StepAggregate
     {
         Poco::JSON::Object::Ptr descriptions = new Poco::JSON::Object(true);
         for (auto & desc : descriptions_in_step)
-            descriptions->set(desc.first, desc.second->jsonNodeDescription(node_profiles, print_stats));
+            descriptions->set(desc.first, desc.second->jsonNodeDescription(node_profiles, print_stats, costs));
         json->set("StepDescriptions", descriptions);
     }
 
     Poco::JSON::Array children_array;
     for (auto & child : children)
-        children_array.add(child->jsonNodeDescription(node_profiles, print_stats));
+        children_array.add(child->jsonNodeDescription(node_profiles, print_stats, costs));
 
     if (!children.empty())
         json->set("Children", children_array);
@@ -1604,12 +1639,31 @@ Poco::JSON::Object::Ptr PlanSegmentDescription::jsonPlanSegmentDescription(const
         for (auto & output : outputs_desc)
         {
             Poco::JSON::Object::Ptr output_json = new Poco::JSON::Object(true);
-            output_json->set("SegmentID",output->segment_id);
+            output_json->set("SegmentID", output->segment_id);
             output_json->set("PlanSegmentType",output->plan_segment_type);
-            output_json->set("ParallelSize",output->parallel_size);
+            output_json->set("ExchangeId", output->exchange_id);
+            output_json->set("ExchangeMode", f(output->mode));
+            output_json->set("ParallelSize", output->parallel_size);
+            output_json->set("KeepOrder", output->keep_order);
             outputs.add(output_json);
         }
         json->set("Outputs", outputs);
+    }
+
+    if (!inputs_desc.empty())
+    {
+        Poco::JSON::Array inputs;
+        for (auto & input : inputs_desc)
+        {
+            Poco::JSON::Object::Ptr input_json = new Poco::JSON::Object(true);
+            input_json->set("SegmentID", input->segment_id);
+            input_json->set("ExchangeId", input->exchange_id);
+            input_json->set("ExchangeMode", f(input->mode));
+            input_json->set("ExchangeParallelSize", input->exchange_parallel_size);
+            input_json->set("KeepOrder", input->keep_order);
+            inputs.add(input_json);
+        }
+        json->set("Inputs", inputs);
     }
 
     if (node_description && !is_pipeline)
@@ -1641,16 +1695,36 @@ PlanSegmentDescriptionPtr PlanSegmentDescription::getPlanSegmentDescription(Plan
     else
         plan_segment_desc->segment_type = "PROCESS";
 
-    if (segment->getPlanSegmentId() != 0)
+    if (plan_segment_desc->segment_id != 0 && !segment->getPlanSegmentOutputs().empty())
     {
         for (auto & output : segment->getPlanSegmentOutputs())
         {
             PlanSegmentDescription::OutputInfo output_desc;
             output_desc.segment_id = output->getPlanSegmentId();
             output_desc.plan_segment_type = planSegmentTypeToString(output->getPlanSegmentType());
+            output_desc.exchange_id = output->getExchangeId();
+            output_desc.mode = output->getExchangeMode();
             output_desc.parallel_size = output->getParallelSize();
+            output_desc.keep_order = output->needKeepOrder();
             auto output_desc_ptr = std::make_shared<PlanSegmentDescription::OutputInfo>(output_desc);
             plan_segment_desc->outputs_desc.emplace_back(output_desc_ptr);
+        }
+    }
+
+    if (!segment->getPlanSegmentInputs().empty())
+    {
+        for (auto & input : segment->getPlanSegmentInputs())
+        {
+            if (input->getPlanSegmentType() == PlanSegmentType::SOURCE)
+                continue;
+            PlanSegmentDescription::InputInfo input_desc;
+            input_desc.segment_id = input->getPlanSegmentId();
+            input_desc.exchange_id = input->getExchangeId();
+            input_desc.mode = input->getExchangeMode();
+            input_desc.exchange_parallel_size = input->getExchangeParallelSize();
+            input_desc.keep_order = input->needKeepOrder();
+            auto input_desc_ptr = std::make_shared<PlanSegmentDescription::InputInfo>(input_desc);
+            plan_segment_desc->inputs_desc.emplace_back(input_desc_ptr);
         }
     }
 

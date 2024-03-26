@@ -101,7 +101,8 @@ public:
     MaterializedViewRewriteTester & checkingThatResultContains(const T &... expected_results)
     {
         return withChecker([&](QueryPlan & plan) {
-            auto explain = PlanPrinter::textLogicalPlan(plan, tester->createQueryContext(), false, true);
+            QueryPlanSettings settings{.stats = false};
+            auto explain = PlanPrinter::textLogicalPlan(plan, tester->createQueryContext(), {}, {}, settings);
             for (auto & expected_result : std::vector<String>{expected_results...})
             {
                 bool contains = explain.find(expected_result) != std::string::npos;

@@ -24,6 +24,7 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Local Exchange Est. ? rows
+         │     Partition by: {id_2}
          └─ Union Est. ? rows
             │     OutputToInputs: id_2 = [id,id_1]
             ├─ Aggregating Est. ? rows

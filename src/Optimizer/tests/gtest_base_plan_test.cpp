@@ -233,7 +233,8 @@ std::string AbstractPlanTestSuite::explain(const std::string & name)
             auto query_plan = plan(sql.first, context);
 
             CardinalityEstimator::estimate(*query_plan, context);
-            explain += DB::PlanPrinter::textLogicalPlan(*query_plan, session_context, show_statistics, true);
+            QueryPlanSettings settings{.stats = show_statistics};
+            explain += DB::PlanPrinter::textLogicalPlan(*query_plan, context, {}, {}, settings);
         }
         else
             execute(sql.first, context);
