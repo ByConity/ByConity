@@ -68,6 +68,7 @@ public:
         mutable std::mutex mutex;
         size_t index;
         cppkafka::TopicPartitionList partitions;
+        std::set<cppkafka::TopicPartition> sample_partitions;
         CnchWorkerClientPtr worker_client;
         bool is_running{false};
         String table_suffix;

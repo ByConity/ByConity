@@ -256,7 +256,8 @@ public:
         const Strings & partitions,
         const TxnTimestamp & ts,
         const Context * session_context,
-        VisibilityLevel visibility = VisibilityLevel::Visible);
+        VisibilityLevel visibility = VisibilityLevel::Visible,
+        const std::set<Int64> & bucket_numbers = {});
 
     ServerDataPartsVector getServerDataPartsInPartitions(
         const ConstStoragePtr & storage,
@@ -264,7 +265,8 @@ public:
         const TxnTimestamp & ts,
         const Context * session_context,
         VisibilityLevel visibility = VisibilityLevel::Visible,
-        bool execute_filter = true);
+        bool execute_filter = true,
+        const std::set<Int64> & bucket_numbers = {});
 
     ServerDataPartsWithDBM getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
 
@@ -562,7 +564,6 @@ public:
     /**
      * @brief Move specified items into trash.
      *
-     * @param skip_part_cache Evict parts caches if set to `false`.
      * @param is_zombie_with_staging_txn_id If true, just remove items.data_parts' kv entry
      */
     void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool is_zombie_with_staging_txn_id = false);
@@ -655,7 +656,8 @@ public:
      * @brief Recalculate the trash items metrics (table level) data of a table from metastore.
      * This is designed to be called when recalculation happens.
      */
-    TableMetrics::TableMetricsData getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, TxnTimestamp ts);
+    TableMetrics::TableMetricsData
+    getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, TxnTimestamp ts, std::function<bool()> need_abort);
     /**
      * @brief load a trash items (table level) snapshot from metastore.
      * It's designed to initialize trash items metrics.

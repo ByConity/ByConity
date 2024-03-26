@@ -2900,6 +2900,7 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_to_disk("TO DISK");
     ParserKeyword s_to_volume("TO VOLUME");
+    ParserKeyword s_to_bytecool("TO BYTECOOL");
     ParserKeyword s_delete("DELETE");
     ParserKeyword s_where("WHERE");
     ParserKeyword s_group_by("GROUP BY");
@@ -2935,6 +2936,11 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         mode = TTLMode::MOVE;
         destination_type = DataDestinationType::VOLUME;
+    }
+    else if (s_to_bytecool.ignore(pos))
+    {
+        mode = TTLMode::MOVE;
+        destination_type = DataDestinationType::BYTECOOL;
     }
     else if (s_group_by.ignore(pos))
     {

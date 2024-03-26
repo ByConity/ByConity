@@ -317,7 +317,6 @@ Strings CnchBGThreadPartitionSelector::selectForGC(const StoragePtr & storage)
     return res;
 }
 
-
 void CnchBGThreadPartitionSelector::addInsertParts(UUID uuid, const String & partition, size_t num, time_t ts)
 {
     std::lock_guard lock(mutex);

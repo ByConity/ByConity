@@ -74,6 +74,7 @@ public:
     void unsubscribe(); // Unsubscribe internal consumer in case of failure.
     void assign(const cppkafka::TopicPartitionList & topic_partition_list);
     void unassign();
+    void setSampleConsumingPartitionList(const std::set<cppkafka::TopicPartition> & sample_partitions_);
 
     auto pollTimeout() const { return poll_timeout; }
 
@@ -87,6 +88,7 @@ public:
     size_t getReadMessages() const { return read_messages; }
     size_t getReadBytes() const { return read_bytes; }
     size_t getEmptyMessages() const { return empty_messages; }
+    size_t getSkippedMessagesBySampling() const { return skip_messages_by_sample; }
     size_t getCreateTime() const { return create_time; }
     size_t getAliveTime() const { return alive_time; }
 
@@ -115,6 +117,9 @@ private:
 
     Message current;
 
+    bool enable_sample_consuming{false};
+    std::set<cppkafka::TopicPartition> sample_partitions;
+
     /// skip the holes in the kafka if enabled
     bool enable_skip_offsets_hole = false;
     size_t skipped_msgs_in_holes{0};
@@ -123,6 +128,7 @@ private:
     size_t read_messages {0};
     size_t empty_messages {0};
     size_t read_bytes {0};
+    size_t skip_messages_by_sample{0};
 
     std::unordered_map<
         std::pair<std::string, std::uint64_t>,

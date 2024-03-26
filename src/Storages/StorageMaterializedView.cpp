@@ -510,8 +510,8 @@ void StorageMaterializedView::executeByDropInsert(AsyncRefreshParamPtr param, Co
         command_context->setCurrentTransaction(nullptr, false);
         command_context->setCurrentVW(nullptr);
         command_context->setCurrentWorkerGroup(nullptr);
-        command_context->setSessionContext(local_context);
-        command_context->setQueryContext(command_context);
+        command_context->makeSessionContext();
+        command_context->makeQueryContext();
         String query_id = fmt::format("{}_{}", command_context->getCurrentQueryId(), sub_id);
         command_context->setCurrentQueryId(query_id);
         auto settings = local_context->getSettings();
@@ -658,6 +658,9 @@ void StorageMaterializedView::executeByInsertOverwrite(AsyncRefreshParamPtr para
 
     auto create_command_context = [local_context](std::string sub_id) {
         auto command_context = Context::createCopy(local_context);
+        command_context->setCurrentTransaction(nullptr, false);
+        command_context->setCurrentVW(nullptr);
+        command_context->setCurrentWorkerGroup(nullptr);
         command_context->makeSessionContext();
         command_context->makeQueryContext();
         String query_id = fmt::format("{}_{}", command_context->getCurrentQueryId(), sub_id);

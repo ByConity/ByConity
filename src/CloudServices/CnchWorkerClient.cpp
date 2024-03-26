@@ -550,6 +550,13 @@ void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
         cur_tpl->set_partition(tpl.get_partition());
         cur_tpl->set_offset(tpl.get_offset());
     }
+    for (const auto & tpl : command.sample_partitions)
+    {
+        auto * cur_tpl = request.add_sample_partitions();
+        cur_tpl->set_topic(toString(tpl.get_topic()));
+        cur_tpl->set_partition(tpl.get_partition());
+        cur_tpl->set_offset(tpl.get_offset());
+    }
 
     stub->submitKafkaConsumeTask(&cntl, &request, &response, nullptr);
 
