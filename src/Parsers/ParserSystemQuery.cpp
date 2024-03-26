@@ -363,6 +363,17 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::DEDUP_WITH_HIGH_PRIORITY:
+        {
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            if (!ParserKeyword{"PARTITION"}.ignore(pos, expected))
+                return false;
+            if (!parser_partition.parse(pos, res->partition, expected))
+                return false;
+            break;
+        }
+
         case Type::DEDUP:
         {
             if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))

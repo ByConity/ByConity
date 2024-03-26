@@ -39,6 +39,11 @@ namespace CurrentMetrics
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int CNCH_LOCK_ACQUIRE_FAILED;
+}
+
 CloudMergeTreeDedupWorker::CloudMergeTreeDedupWorker(StorageCloudMergeTree & storage_)
     : storage(storage_)
     , context(storage.getContext())
@@ -56,6 +61,12 @@ CloudMergeTreeDedupWorker::CloudMergeTreeDedupWorker(StorageCloudMergeTree & sto
         interval_scheduler.staged_part_max_life_time_ms -= tso_windows_ms;
 
     status.create_time = time(nullptr);
+
+    {
+        /// init current_deduper before iterate
+        std::lock_guard lock(current_deduper_mutex);
+        current_deduper = std::make_unique<MergeTreeDataDeduper>(storage, context);
+    }
 }
 
 CloudMergeTreeDedupWorker::~CloudMergeTreeDedupWorker()
@@ -83,6 +94,7 @@ void CloudMergeTreeDedupWorker::run()
 
     if (!isActive())
         return;
+
     try
     {
         Stopwatch timer;
@@ -120,7 +132,7 @@ void CloudMergeTreeDedupWorker::iterate()
     auto catalog = context->getCnchCatalog();
     TxnTimestamp ts = context->getTimestamp();
     /// must use cnch table to construct staged parts
-    auto table = catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(storage.getStorageUUID()), ts);
+    auto table = catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(storage.getCnchStorageUUID()), ts);
     if (!table)
     {
         LOG_INFO(log, "table have been dropped, skip");
@@ -145,8 +157,20 @@ void CloudMergeTreeDedupWorker::iterate()
     }
 
     /// get all the partitions of committed staged parts
-    auto staged_parts = cnch_table->getStagedParts(ts);
-    if (staged_parts.empty())
+    auto pre_check_staged_parts = cnch_table->getStagedParts(ts);
+
+    IMergeTreeDataPartsVector preload_parts{};
+    /// Filter using hash with max_dedup_worker_number & index
+    for (const auto & part : pre_check_staged_parts)
+    {
+        String hash_str = part->info.partition_id + "." + std::to_string(part->bucket_number);
+        SipHash hash_state;
+        hash_state.update(hash_str.data(), hash_str.size());
+        if (hash_state.get64() % storage.getSettings()->max_dedup_worker_number == index)
+            preload_parts.push_back(part);
+    }
+
+    if (preload_parts.empty())
     {
         LOG_TRACE(log, "no more staged parts to process, skip");
         return;
@@ -164,6 +188,7 @@ void CloudMergeTreeDedupWorker::iterate()
     {
         txn = std::make_shared<CnchWorkerTransaction>(dedup_context, server_client);
         dedup_context->setCurrentTransaction(txn);
+        txn->setMainTableUUID(storage.getCnchStorageUUID());
     }
     catch (...)
     {
@@ -171,65 +196,122 @@ void CloudMergeTreeDedupWorker::iterate()
         throw;
     }
 
-    /// acquire all the locks
-    NameOrderedSet sorted_partitions;
-    for (auto & part : staged_parts)
-        sorted_partitions.insert(part->info.partition_id);
+    CnchLockHolderPtr cnch_lock;
+    MergeTreeDataPartsCNCHVector visible_parts, staged_parts;
+    bool force_normal_dedup = false;
+    Stopwatch lock_watch;
+    do
+    {
+        CnchDedupHelper::DedupScope scope = CnchDedupHelper::getDedupScope(*cnch_table, preload_parts, force_normal_dedup);
 
-    CnchDedupHelper::DedupScope scope = storage.getSettings()->partition_level_unique_keys
-        ? CnchDedupHelper::DedupScope::PartitionDedup(sorted_partitions)
-        : CnchDedupHelper::DedupScope::TableDedup();
+        /// XXX: May acquire more locks as we will filter by max_staged_part_number_per_task & max_staged_part_rows_per_task
+        std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
+            scope, txn->getTransactionID(), *cnch_table, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
+        lock_watch.restart();
+        cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
+        if (!cnch_lock->tryLock())
+            throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
 
-    Stopwatch watch;
-    auto cnch_lock = txn->createLockHolder(
-        CnchDedupHelper::getLocksToAcquire(
-            scope, txn->getTransactionID(), storage, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
+        lock_watch.restart();
+        ts = context->getTimestamp(); /// must get a new ts after locks are acquired
+        visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
+        staged_parts = CnchDedupHelper::getStagedPartsToDedup(scope, *cnch_table, ts);
 
-    cnch_lock->lock();
+        /// In some case, visible parts or staged parts doesn't have same bucket definition or not a bucket part, we need to convert bucket lock to normal lock.
+        /// Otherwise, it may lead to duplicated data.
+        if (scope.isBucketLock() && !cnch_table->getSettings()->enable_bucket_level_unique_keys
+            && !CnchDedupHelper::checkBucketParts(*cnch_table, visible_parts, staged_parts))
+        {
+            force_normal_dedup = true;
+            cnch_lock->unlock();
+            LOG_TRACE(log, "Check bucket parts failed, switch to normal lock to dedup.");
+            continue;
+        }
+        else
+        {
+            /// Filter staged parts if lock scope is bucket level
+            scope.filterParts(staged_parts);
+            break;
+        }
+    } while (true);
 
-    /// get staged parts again after acquired the locks
-    ts = context->getTimestamp(); /// must get a new ts after locks are acquired
-    staged_parts = CnchDedupHelper::getStagedPartsToDedup(scope, *cnch_table, ts);
     if (staged_parts.empty())
     {
         LOG_INFO(log, "no more staged parts after acquired the locks, they may have been processed by other thread");
         return;
     }
 
-    sorted_partitions.clear();
+    /// Sorts by commit time
+    std::sort(staged_parts.begin(), staged_parts.end(), [](auto & lhs, auto & rhs) {
+        return lhs->commit_time < rhs->commit_time;
+    });
+
+    MergeTreeDataPartsCNCHVector current_staged_parts;
     UInt64 min_staged_part_timestamp{UINT64_MAX};
-    for (auto & part : staged_parts)
+    UInt64 current_part_number{0};
+    UInt64 current_part_row_count{0};
+
+    NameSet current_high_priority_dedup_partition;
     {
-        sorted_partitions.insert(part->info.partition_id);
+        std::lock_guard lock(high_priority_dedup_partition_mutex);
+        current_high_priority_dedup_partition = high_priority_dedup_partition;
+    }
+
+    auto add_current_staged_parts = [&](MergeTreeDataPartCNCHPtr & part) -> void {
+        current_part_number++;
+        current_part_row_count += part->rows_count;
         min_staged_part_timestamp = std::min(min_staged_part_timestamp, part->commit_time.toUInt64());
         LOG_DEBUG(log, "Dedup staged part: {}, commit time: {} ms.", part->name, part->commit_time.toMillisecond());
-    }
+        current_staged_parts.push_back(part);
+    };
 
-    if (!scope.isTableDedup())
+    bool need_second_found_filter = true;
+    /// Pick current_staged_parts in two rounds
+    /// First round by current_high_priority_dedup_partition & commit_time & settings
+    for (auto it = staged_parts.begin(); it != staged_parts.end();)
     {
-        scope = CnchDedupHelper::DedupScope::PartitionDedup(sorted_partitions);
+        if (current_high_priority_dedup_partition.count((*it)->get_info().partition_id))
+        {
+            add_current_staged_parts(*it);
+            if (current_part_number >= storage.getSettings()->max_staged_part_number_per_task || current_part_row_count >= storage.getSettings()->max_staged_part_rows_per_task)
+            {
+                need_second_found_filter = false;
+                break;
+            }
+            it = staged_parts.erase(it);
+        }
+        else
+            it++;
     }
-    MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
+    /// Second round by commit_time & settings
+    if (need_second_found_filter)
+    {
+        for (auto & part : staged_parts)
+        {
+            add_current_staged_parts(part);
+            if (current_part_number >= storage.getSettings()->max_staged_part_number_per_task || current_part_row_count >= storage.getSettings()->max_staged_part_rows_per_task)
+                break;
+        }
+    }
 
-    watch.restart();
-    MergeTreeDataDeduper deduper(storage, context);
-    LocalDeleteBitmaps bitmaps_to_dump = deduper.dedupParts(
+    Stopwatch watch;
+    LocalDeleteBitmaps bitmaps_to_dump = current_deduper->dedupParts(
         txn->getTransactionID(),
         CnchPartsHelper::toIMergeTreeDataPartsVector(visible_parts),
-        CnchPartsHelper::toIMergeTreeDataPartsVector(staged_parts));
+        CnchPartsHelper::toIMergeTreeDataPartsVector(current_staged_parts));
     LOG_DEBUG(
         log,
         "Dedup took {} ms in total, processed {} staged parts with {} parts",
         watch.elapsedMilliseconds(),
-        staged_parts.size(),
+        current_staged_parts.size(),
         visible_parts.size());
 
-    copy_status.last_task_staged_part_cnt = staged_parts.size();
+    copy_status.last_task_staged_part_cnt = current_staged_parts.size();
     copy_status.last_task_visible_part_cnt = visible_parts.size();
     copy_status.last_task_dedup_cost_ms = watch.elapsedMilliseconds();
 
     size_t staged_parts_total_rows = 0, visible_parts_total_rows = 0;
-    for (auto & part : staged_parts)
+    for (auto & part : current_staged_parts)
         staged_parts_total_rows += part->rows_count;
     for (auto & part : visible_parts)
         visible_parts_total_rows += part->rows_count;
@@ -238,12 +320,22 @@ void CloudMergeTreeDedupWorker::iterate()
 
     watch.restart();
     CnchDataWriter cnch_writer(storage, dedup_context, ManipulationType::Insert);
-    cnch_writer.publishStagedParts(staged_parts, bitmaps_to_dump);
-    copy_status.last_task_publish_cost_ms = watch.elapsedMilliseconds();
-    LOG_DEBUG(log, "publishing took {} ms", watch.elapsedMilliseconds());
+
+    if (!current_deduper->isCancelled())
+    {
+        cnch_writer.publishStagedParts(current_staged_parts, bitmaps_to_dump);
+        copy_status.last_task_publish_cost_ms = watch.elapsedMilliseconds();
+        LOG_DEBUG(log, "publishing took {} ms, txn_id: {}", watch.elapsedMilliseconds(), txn->getTransactionID().toUInt64());
+    }
+    else
+    {
+        /// convent to a relative large UInt64 num which indicates that the last iteration has been cancelled
+        copy_status.last_task_publish_cost_ms = -1;
+        LOG_DEBUG(log, "current deduper iterate has been cancelled, commit dedup txn {} without publishStagedParts", txn->getTransactionID().toUInt64());
+    }
 
     txn->commitV2();
-    LOG_INFO(log, "Committed dedup txn {}", txn->getTransactionID().toUInt64());
+    LOG_INFO(log, "Committed dedup txn {} (with {} ms holding lock)", txn->getTransactionID().toUInt64(), lock_watch.elapsedMilliseconds());
 
     interval_scheduler.calNextScheduleTime(min_staged_part_timestamp, context->getTimestamp());
 
@@ -255,10 +347,11 @@ void CloudMergeTreeDedupWorker::iterate()
     status = std::move(copy_status);
 }
 
-void CloudMergeTreeDedupWorker::setServerHostWithPorts(HostWithPorts host_ports)
+void CloudMergeTreeDedupWorker::setServerIndexAndHostPorts(size_t deduper_index, HostWithPorts host_ports)
 {
     {
         std::lock_guard lock(server_mutex);
+        index = deduper_index;
         server_host_ports = std::move(host_ports);
     }
 
@@ -272,10 +365,32 @@ HostWithPorts CloudMergeTreeDedupWorker::getServerHostWithPorts()
     return server_host_ports;
 }
 
+void CloudMergeTreeDedupWorker::assignHighPriorityDedupPartition(const NameSet & high_priority_dedup_partition_)
+{
+    std::lock_guard lock(high_priority_dedup_partition_mutex);
+    high_priority_dedup_partition = std::move(high_priority_dedup_partition_);
+}
+
 DedupWorkerStatus CloudMergeTreeDedupWorker::getDedupWorkerStatus()
 {
-    std::lock_guard lock(status_mutex);
-    return status;
+    DedupWorkerStatus res;
+    {
+        std::lock_guard lock(status_mutex);
+        res = status;
+    }
+    {
+        std::lock_guard lock(current_deduper_mutex);
+        if (current_deduper)
+            res.dedup_tasks_progress = current_deduper->getTasksProgress();
+    }
+    return res;
+}
+
+void CloudMergeTreeDedupWorker::cancelDedupTasks()
+{
+    std::lock_guard lock(current_deduper_mutex);
+    if (current_deduper)
+        current_deduper->setCancelled();
 }
 
 void CloudMergeTreeDedupWorker::heartbeat()

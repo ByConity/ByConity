@@ -13,7 +13,8 @@ INSERT INTO u10113_rename VALUES (3, 103, 1, 'b', 1), (4, 104, 2, 'b', 1), (5, 1
 
 SELECT '-- before rename --';
 system sync dedup worker u10113_rename;
-SELECT 'dedup worker status:', table, is_active from system.cnch_dedup_workers where database=currentDatabase() and table='u10113_rename';
+-- Currently, cnch_dedup_workers can only query the DedupWorkerManager on the current server. Consider aligning with cnch-1.4 in the future
+SELECT 'dedup worker status:', table, is_active from cnch(server, system.cnch_dedup_workers) where table='u10113_rename';
 SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10113_rename' and to_publish;
 SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase() and table='u10113_rename' and active;
 SELECT * FROM u10113_rename order by k1, k2;

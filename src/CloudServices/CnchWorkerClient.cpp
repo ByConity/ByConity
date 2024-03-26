@@ -439,7 +439,7 @@ void CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id)
     RPCHelpers::checkResponse(response);
 }
 
-void CnchWorkerClient::createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports_)
+void CnchWorkerClient::createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports_, const size_t & deduper_index)
 {
     brpc::Controller cntl;
     Protos::CreateDedupWorkerReq request;
@@ -448,8 +448,24 @@ void CnchWorkerClient::createDedupWorker(const StorageID & storage_id, const Str
     RPCHelpers::fillStorageID(storage_id, *request.mutable_table());
     request.set_create_table_query(create_table_query);
     RPCHelpers::fillHostWithPorts(host_ports_, *request.mutable_host_ports());
+    request.set_deduper_index(deduper_index);
 
     stub->createDedupWorker(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchWorkerClient::assignHighPriorityDedupPartition(const StorageID & storage_id, const Names & high_priority_partition)
+{
+    brpc::Controller cntl;
+    Protos::AssignHighPriorityDedupPartitionReq request;
+    Protos::AssignHighPriorityDedupPartitionResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_table());
+    for (const auto & entry : high_priority_partition)
+        request.add_partition_id(entry);
+
+    stub->assignHighPriorityDedupPartition(&cntl, &request, &response, nullptr);
     assertController(cntl);
     RPCHelpers::checkResponse(response);
 }
@@ -493,6 +509,8 @@ DedupWorkerStatus CnchWorkerClient::getDedupWorkerStatus(const StorageID & stora
         status.last_task_visible_part_cnt = response.last_task_visible_part_cnt();
         status.last_task_staged_part_total_rows = response.last_task_staged_part_total_rows();
         status.last_task_visible_part_total_rows = response.last_task_visible_part_total_rows();
+        for (const auto & task_progress : response.dedup_tasks_progress())
+            status.dedup_tasks_progress.emplace_back(task_progress);
         status.last_exception = response.last_exception();
         status.last_exception_time = response.last_exception_time();
     }

@@ -201,7 +201,7 @@ void CnchWorkerServiceImpl::submitMVRefreshTask(
         params.task_id = request->task_id();
         params.rpc_port = static_cast<UInt16>(request->rpc_port());
         params.txn_id = txn_id;
-        params.mv_refresh_param = std::make_shared <AsyncRefreshParam>(); 
+        params.mv_refresh_param = std::make_shared <AsyncRefreshParam>();
         params.mv_refresh_param->drop_partition_query = request->drop_partition_query();
         params.mv_refresh_param->insert_select_query = request->insert_select_query();
 
@@ -898,12 +898,13 @@ void CnchWorkerServiceImpl::createDedupWorker(
         auto storage_id = RPCHelpers::createStorageID(request->table());
         const auto & query = request->create_table_query();
         auto host_ports = RPCHelpers::createHostWithPorts(request->host_ports());
+        size_t deduper_index = request->deduper_index();
 
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         rpc_context->setSessionContext(rpc_context);
         rpc_context->setCurrentQueryId(toString(UUIDHelpers::generateV4()));
 
-        ThreadFromGlobalPool([log = this->log, storage_id, query, host_ports = std::move(host_ports), context = std::move(rpc_context)] {
+        ThreadFromGlobalPool([log = this->log, storage_id, query, host_ports = std::move(host_ports), deduper_index, context = std::move(rpc_context)] {
             try
             {
                 // CurrentThread::attachQueryContext(*context);
@@ -912,15 +913,13 @@ void CnchWorkerServiceImpl::createDedupWorker(
                 LOG_INFO(log, "Created local table {}", storage_id.getFullTableName());
 
                 auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-                if (!storage)
-                    throw Exception("Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.", ErrorCodes::LOGICAL_ERROR);
                 auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
                 if (!cloud_table)
                     throw Exception(
                         "convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
 
                 auto * deduper = cloud_table->getDedupWorker();
-                deduper->setServerHostWithPorts(host_ports);
+                deduper->setServerIndexAndHostPorts(deduper_index, host_ports);
                 LOG_DEBUG(log, "Success to create deduper table: {}", storage->getStorageID().getNameForLogs());
             }
             catch (...)
@@ -930,6 +929,29 @@ void CnchWorkerServiceImpl::createDedupWorker(
         }).detach();
     })
 }
+
+void CnchWorkerServiceImpl::assignHighPriorityDedupPartition(
+    [[maybe_unused]] google::protobuf::RpcController * ,
+    [[maybe_unused]] const Protos::AssignHighPriorityDedupPartitionReq * request,
+    [[maybe_unused]] Protos::AssignHighPriorityDedupPartitionResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
+{
+    SUBMIT_THREADPOOL({
+        auto storage_id = RPCHelpers::createStorageID(request->table());
+        auto storage = DatabaseCatalog::instance().getTable(storage_id, getContext());
+
+        auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+        if (!cloud_table)
+            throw Exception("convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+
+        auto * deduper = cloud_table->getDedupWorker();
+        NameSet high_priority_dedup_partition;
+        for (const auto & entry : request->partition_id())
+            high_priority_dedup_partition.emplace(entry);
+        deduper->assignHighPriorityDedupPartition(high_priority_dedup_partition);
+    })
+}
+
 void CnchWorkerServiceImpl::dropDedupWorker(
     google::protobuf::RpcController * cntl,
     const Protos::DropDedupWorkerReq * request,
@@ -946,7 +968,6 @@ void CnchWorkerServiceImpl::dropDedupWorker(
         drop_query->if_exists = true;
         drop_query->database = storage_id.database_name;
         drop_query->table = storage_id.table_name;
-        drop_query->uuid = storage_id.uuid;
 
         ThreadFromGlobalPool([log = this->log, storage_id, q = std::move(query), c = std::move(rpc_context)] {
             LOG_DEBUG(log, "Dropping table: {}", storage_id.getNameForLogs());
@@ -969,8 +990,6 @@ void CnchWorkerServiceImpl::getDedupWorkerStatus(
         auto storage_id = RPCHelpers::createStorageID(request->table());
         auto storage = DatabaseCatalog::instance().getTable(storage_id, getContext());
 
-        if (!storage)
-            throw Exception("Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.", ErrorCodes::LOGICAL_ERROR);
         auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
         if (!cloud_table)
             throw Exception(
@@ -992,6 +1011,8 @@ void CnchWorkerServiceImpl::getDedupWorkerStatus(
             response->set_last_task_visible_part_cnt(status.last_task_visible_part_cnt);
             response->set_last_task_staged_part_total_rows(status.last_task_staged_part_total_rows);
             response->set_last_task_visible_part_total_rows(status.last_task_visible_part_total_rows);
+            for (const auto & task_progress : status.dedup_tasks_progress)
+                response->add_dedup_tasks_progress(task_progress);
             response->set_last_exception(status.last_exception);
             response->set_last_exception_time(status.last_exception_time);
         }

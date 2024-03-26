@@ -109,6 +109,12 @@ public:
         Protos::CreateDedupWorkerResp * response,
         google::protobuf::Closure * done) override;
 
+    void assignHighPriorityDedupPartition(
+        google::protobuf::RpcController * ,
+        const Protos::AssignHighPriorityDedupPartitionReq * request,
+        Protos::AssignHighPriorityDedupPartitionResp * response,
+        google::protobuf::Closure * done) override;
+
     void dropDedupWorker(
         google::protobuf::RpcController *,
         const Protos::DropDedupWorkerReq * request,

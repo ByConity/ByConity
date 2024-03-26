@@ -468,10 +468,16 @@ enum StealingCacheMode : UInt64
     M(Seconds, unique_acquire_write_lock_timeout, 300, "", 0) \
     M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
     M(MaxThreads, unique_table_dedup_threads, 8, "", 0) \
+    M(Seconds, dedup_worker_progress_log_interval, 120, "", 0) \
     M(UInt64, max_delete_bitmap_meta_depth, 100, "", 0) \
     M(UInt64, unique_merge_acquire_lock_retry_time, 10, "", 0) \
     M(Bool, enable_bucket_level_unique_keys, false, "", 0) \
     M(MaxThreads, cnch_write_part_threads, 1, "", 0) \
+    M(UInt64, max_dedup_worker_number, 1, "", 0) \
+    M(UInt64, max_staged_part_number_per_task, 100, "", 0) \
+    M(UInt64, max_staged_part_rows_per_task, 15000000, "", 0) \
+    /**Whether block the actual dedup progress, Attention: set this value to true only in ci **/               \
+    M(Bool, disable_dedup_parts, false, "", 0) \
     \
     /* Metastore settings */\
     M(Bool, enable_metastore, false, "Use KV metastore to manage data parts.", 0) \

@@ -1,0 +1,6 @@
+Select before cancel dedup worker
+Sleep 9 seconds for dedup worker iterate
+Get dedup progress
+dedup worker progress:	unique_cancel_dedup	1	['partition 20201029[1/2]']
+Cancel dedup task
+Select after cancel dedup worker

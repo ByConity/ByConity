@@ -121,6 +121,7 @@ public:
     std::pair<UInt64, CnchWorkerClientPtr> pickWorker(const String & worker_group_id, UInt64 sequence, bool skip_busy_worker = true);
     CnchWorkerClientPtr getWorker();
     CnchWorkerClientPtr getWorkerByHash(const String & key);
+    CnchWorkerClientPtr getWorkerByHostWithPorts(const HostWithPorts & host_ports);
     std::vector<CnchWorkerClientPtr> getAllWorkers();
 
 private:

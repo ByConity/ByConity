@@ -394,6 +394,12 @@ CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorkerByHash(const String & k
     return group->getWorkerClient(val, false).second;
 }
 
+CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorkerByHostWithPorts(const HostWithPorts & host_ports)
+{
+    auto wg_handle = randomWorkerGroup();
+    return wg_handle->getWorkerClient(host_ports);
+}
+
 std::vector<CnchWorkerClientPtr> VirtualWarehouseHandleImpl::getAllWorkers()
 {
     tryUpdateWorkerGroups(UpdateMode::TryUpdate);
