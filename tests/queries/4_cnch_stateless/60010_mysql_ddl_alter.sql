@@ -1,8 +1,6 @@
-use test;
 set dialect_type='MYSQL';
 
 drop table if exists tbx;
-drop table if exists tbx1;
 create table tbx (p int NOT NULL, x tinyint, y String, z float) engine=CnchMergeTree() order by p;
 
 select 'add column';
@@ -16,21 +14,21 @@ insert into table tbx(p, x, y, z, z1, z2, z3) select number, number, 'hello', 1.
 select * from tbx limit 3;
 
 select 'modify column';
-alter table tbx modify column x int NULL;
-alter table tbx modify column y String NULL default 'hello';
-alter table tbx modify column z double NULL default 1.2;
+alter table tbx modify column x int;
+alter table tbx modify column y String default 'hello';
+alter table tbx modify column z double default 1.2;
 alter table tbx modify z2 String NULL;
 describe table tbx;
 select * from tbx limit 3;
 
-alter table tbx modify column z float NULL; -- { serverError 70 }
-alter table tbx modify column x decimal(10,3) NULL; -- { serverError 70 }
-alter table tbx modify column x String NULL; -- { serverError 70 }
-alter table tbx modify column x DateTime NULL; -- { serverError 70 }
+alter table tbx modify column z float; -- { serverError 70 }
+alter table tbx modify column x decimal(10,3); -- { serverError 70 }
+alter table tbx modify column x String; -- { serverError 70 }
+alter table tbx modify column x DateTime; -- { serverError 70 }
 
-alter table tbx modify column z4 Array(float) NULL; -- { serverError 70 }
-alter table tbx modify column z4 Array(String) NULL; -- { serverError 70 }
--- alter table tbx modify column x float NOT NULL; -- { serverError 70 }
+alter table tbx modify column z4 Array(float); -- { serverError 70 }
+alter table tbx modify column z4 Array(String); -- { serverError 70 }
+alter table tbx modify column x float NOT NULL; -- { serverError 70 }
 
 select 'alter index';
 alter table tbx add index idx(y); -- { serverError 524 }
@@ -60,18 +58,23 @@ select * from tbx limit 3;
 
 select 'primary key';
 alter table tbx add column z5 int primary key; -- { serverError 524 }
-alter table tbx modify column p bigint NULL; -- { serverError 524 }
+alter table tbx modify column p bigint; -- { serverError 524 }
 alter table tbx drop p; -- { serverError 524 }
 
-create table tbx1 (p int NOT NULL, x tinyint, y String, z float) engine=CnchMergeTree() order by p;
-select 'rename table';
-alter table tbx1 rename tbx11;
-alter table tbx11 rename tbx1;
-alter table test.tbx1 rename test.tbx11;
-alter table test.tbx11 rename test.tbx1;
-use default;
-alter table test.tbx1 rename test.tbx11;
-alter table test.tbx11 rename tbx1; -- { serverError 48 }
-alter table test.tbx11 rename test.tbx1;
 drop table if exists tbx;
-drop table if exists tbx1;
+
+use test;
+drop table if exists tbx_alter_test_old_60010;
+drop table if exists tbx_alter_test_rename_60010;
+create table tbx_alter_test_old_60010 (p int NOT NULL, x tinyint, y String, z float) engine=CnchMergeTree() order by p;
+select 'rename table';
+alter table tbx_alter_test_old_60010 rename tbx_alter_test_rename_60010;
+alter table tbx_alter_test_rename_60010 rename tbx_alter_test_old_60010;
+alter table test.tbx_alter_test_old_60010 rename test.tbx_alter_test_rename_60010;
+alter table test.tbx_alter_test_rename_60010 rename test.tbx_alter_test_old_60010;
+use default;
+alter table test.tbx_alter_test_old_60010 rename test.tbx_alter_test_rename_60010;
+alter table test.tbx_alter_test_rename_60010 rename tbx_alter_test_old_60010; -- { serverError 48 }
+alter table test.tbx_alter_test_rename_60010 rename test.tbx_alter_test_old_60010;
+
+drop table if exists test.tbx_alter_test_old_60010;

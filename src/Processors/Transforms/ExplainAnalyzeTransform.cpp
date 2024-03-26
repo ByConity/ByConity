@@ -52,13 +52,11 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
         for (auto & [address, segment_profile] : segment_profile_in_worker)
         {
             auto input_profile_root = GroupedProcessorProfile::getGroupedProfiles(segment_profile);
-            if (kind == ASTExplainQuery::ExplainKind::PipelineAnalyze)
-            {
-                std::set<ProcessorId> visited;
-                worker_grouped_profiles[segment_id][address] = GroupedProcessorProfile::fillChildren(input_profile_root, visited);
-            }
+            auto output = GroupedProcessorProfile::getOutputRoot(input_profile_root);
+            if (kind == ASTExplainQuery::ExplainKind::PipelineAnalyze && !output->children.empty()) 
+                worker_grouped_profiles[segment_id][address] = output->children[0];
             else
-                segment_grouped_profile[segment_id].emplace_back(input_profile_root);
+                segment_grouped_profile[segment_id].emplace_back(output);
         }
     }
 
@@ -75,7 +73,7 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
             if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
             {
                 auto plan_cost = CostCalculator::calculatePlanCost(*query_plan_ptr, *context);
-                explain = PlanPrinter::jsonLogicalPlan(*query_plan_ptr, settings.stats, true, plan_cost, step_agg_operator_profiles);
+                explain = PlanPrinter::jsonLogicalPlan(*query_plan_ptr, plan_cost, step_agg_operator_profiles, costs, settings);
             }
             else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
                 explain = PlanPrinter::jsonDistributedPlan(segment_descriptions, step_agg_operator_profiles);
@@ -83,9 +81,9 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
         else
         {
             if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
-                explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, settings.stats, settings.verbose, costs, step_agg_operator_profiles, settings.profile);
+                explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, costs, step_agg_operator_profiles, settings);
             else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
-                explain = PlanPrinter::textDistributedPlan(segment_descriptions, settings.stats, settings.verbose, costs, step_agg_operator_profiles, *query_plan_ptr, settings.profile);
+                explain = PlanPrinter::textDistributedPlan(segment_descriptions, context, costs, step_agg_operator_profiles, *query_plan_ptr, settings);
         }
         GraphvizPrinter::printLogicalPlan(*query_plan_ptr, context, "5999_explain_analyze", step_agg_operator_profiles);
     }

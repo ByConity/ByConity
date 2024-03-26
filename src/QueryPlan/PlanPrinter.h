@@ -43,21 +43,23 @@ public:
     static String textLogicalPlan(
         QueryPlan & plan,
         ContextMutablePtr context,
-        bool print_stats,
-        bool verbose,
         PlanCostMap costs = {},
         const StepAggregatedOperatorProfiles & profiles = {},
-        bool print_profile = true);
-    static String jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose, std::optional<PlanNodeCost> plan_cost, const StepAggregatedOperatorProfiles & profiles = {});
+        const QueryPlanSettings & settings = {});
+    static String jsonLogicalPlan(
+        QueryPlan & plan,
+        std::optional<PlanNodeCost> plan_cost,
+        const StepAggregatedOperatorProfiles & profiles = {},
+        const PlanCostMap & costs = {},
+        const QueryPlanSettings & settings = {});
     static String jsonDistributedPlan(PlanSegmentDescriptions & segment_descs, const StepAggregatedOperatorProfiles & profiles);
     static String textDistributedPlan(
         PlanSegmentDescriptions & segments_desc,
-        bool print_stats,
-        bool verbose,
+        ContextMutablePtr context,
         const std::unordered_map<PlanNodeId, double> & costs = {},
         const StepAggregatedOperatorProfiles & profiles = {},
         const QueryPlan & query_plan = {},
-        bool print_profile = true);
+        const QueryPlanSettings & settings = {});
     static String textPipelineProfile(PlanSegmentDescriptions & segment_descs, SegmentAndWorkerToGroupedProfile & worker_grouped_profiles);
     static String jsonPipelineProfile(PlanSegmentDescriptions & segment_descs, SegmentAndWorkerToGroupedProfile & worker_grouped_profiles);
     static void getPlanNodes(const PlanNodePtr & parent, std::unordered_map<PlanNodeId, PlanNodePtr> & id_to_node);
@@ -99,10 +101,18 @@ private:
 class PlanPrinter::TextPrinter
 {
 public:
-    TextPrinter(bool print_stats_, bool verbose_, const std::unordered_map<PlanNodeId, double> & costs_, bool is_distributed_ = false, const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment_ = {}, bool print_profile_ = true)
-        : print_stats(print_stats_), verbose(verbose_), costs(costs_), is_distributed(is_distributed_), exchange_to_segment(exchange_to_segment_), print_profile(print_profile_)
-    {
-    }
+    explicit TextPrinter(
+        const std::unordered_map<PlanNodeId, double> & costs_,
+        ContextMutablePtr context_ = nullptr,
+        bool is_distributed_ = false,
+        const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment_ = {},
+        QueryPlanSettings settings_ = {})
+        : costs(costs_)
+        , is_distributed(is_distributed_)
+        , exchange_to_segment(exchange_to_segment_)
+        , context(context_)
+        , settings(settings_)
+    {}
     static String printOutputColumns(PlanNodeBase & plan_node, const TextPrinterIntent & intent = {});
     String printLogicalPlan(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {});
     String printPipelineProfile(GroupedProcessorProfilePtr & input_root, const TextPrinterIntent & intent = {});
@@ -112,7 +122,7 @@ public:
     static String prettySeconds(size_t seconds);
     static String printPrefix(PlanNodeBase & plan);
     String printSuffix(PlanNodeBase & plan);
-    static String printQError(const PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles);
+    static String printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles);
     static String printFilter(ConstASTPtr filter);
 private:
     String printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
@@ -120,12 +130,11 @@ private:
     String printStatistics(const PlanNodeBase & plan, const TextPrinterIntent & intent = {}) const;
     static String printOperatorProfiles(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {}) ;
 
-    const bool print_stats;
-    const bool verbose;
     const std::unordered_map<PlanNodeId, double> & costs;
     bool is_distributed;
     const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment;
-    const bool print_profile;
+    ContextMutablePtr context;
+    QueryPlanSettings settings;
 };
 
 class NodeDescription;
@@ -152,7 +161,7 @@ public:
 
     void setStepStatistic(PlanNodePtr node);
     void setStepDetail(QueryPlanStepPtr step);
-    Poco::JSON::Object::Ptr jsonNodeDescription(const StepAggregatedOperatorProfiles & profiles, bool print_stats);
+    Poco::JSON::Object::Ptr jsonNodeDescription(const StepAggregatedOperatorProfiles & profiles, bool print_stats, const PlanCostMap & costs = {});
     static NodeDescriptionPtr getPlanDescription(QueryPlan::Node * node);
     static NodeDescriptionPtr getPlanDescription(PlanNodePtr node);
 };
@@ -163,8 +172,18 @@ struct PlanSegmentDescription
     {
         size_t segment_id;
         String plan_segment_type;
+        ExchangeMode mode;
+        size_t exchange_id;
         size_t parallel_size;
-        String shuffle_function_name;
+        bool keep_order;
+    };
+    struct InputInfo
+    {
+        size_t segment_id;
+        ExchangeMode mode;
+        size_t exchange_id;
+        size_t exchange_parallel_size;
+        bool keep_order;
     };
     size_t segment_id;
     String segment_type;
@@ -182,6 +201,8 @@ struct PlanSegmentDescription
     Names shuffle_keys;
     std::unordered_map<PlanNodeId, size_t> exchange_to_segment;
     std::vector<std::shared_ptr<OutputInfo>> outputs_desc;
+    std::vector<std::shared_ptr<InputInfo>> inputs_desc;
+
 
     std::vector<String> output_columns;
 

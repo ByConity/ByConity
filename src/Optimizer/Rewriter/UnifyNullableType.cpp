@@ -254,6 +254,11 @@ PlanNodePtr UnifyNullableVisitor::visitValuesNode(ValuesNode & node, ContextMuta
     return visitPlanNode(node, context);
 }
 
+PlanNodePtr UnifyNullableVisitor::visitExpandNode(ExpandNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
 PlanNodePtr UnifyNullableVisitor::visitProjectionNode(ProjectionNode & node, ContextMutablePtr & context)
 {
     PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, context);

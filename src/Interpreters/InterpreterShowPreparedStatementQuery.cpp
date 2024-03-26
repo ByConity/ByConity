@@ -36,7 +36,8 @@ BlockIO InterpreterShowPreparedStatementQuery::execute()
         for (auto & cte_it : prepared_object.cte_map)
             cte_info.add(cte_it.first, cte_it.second);
         QueryPlan plan(prepared_object.plan_root, cte_info, context->getPlanNodeIdAllocator());
-        out << PlanPrinter::textLogicalPlan(plan, context, false, true, {});
+        QueryPlanSettings settings{.stats = false};
+        out << PlanPrinter::textLogicalPlan(plan, context, {}, {}, settings);
         result_column_name = "Explain";
     }
     // else if (!show_prepared->name.empty())

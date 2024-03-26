@@ -1,6 +1,7 @@
 #include <set>
 #include <string>
 #include <Interpreters/ProcessorProfile.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -130,24 +131,42 @@ void GroupedProcessorProfile::add(ProcessorId processor_id, const ProcessorProfi
     grouped_input_bytes +=  profile->input_bytes;
     grouped_output_rows +=  profile->output_rows;
     grouped_output_bytes +=  profile->output_bytes;
+
+    worker_cnt = 1;
+    max_grouped_elapsed_us = grouped_elapsed_us;
+    min_grouped_elapsed_us = grouped_elapsed_us;
+    max_grouped_input_wait_elapsed_us = grouped_input_wait_elapsed_us;
+    min_grouped_input_wait_elapsed_us = grouped_input_wait_elapsed_us;
+    max_grouped_output_wait_elapsed_us = grouped_output_wait_elapsed_us;
+    min_grouped_output_wait_elapsed_us = grouped_output_wait_elapsed_us;
 }
 
-GroupedProcessorProfilePtr GroupedProcessorProfile::fillChildren(GroupedProcessorProfilePtr & input_processor, std::set<ProcessorId> & visited)
+std::set<GroupedProcessorProfilePtr> GroupedProcessorProfile::fillChildren(GroupedProcessorProfilePtr & input_processor, std::set<ProcessorId> & visited)
 {
     if (input_processor->parents.empty())
-        return input_processor;
+        return {input_processor};
     visited.emplace(input_processor->id);
-    GroupedProcessorProfilePtr output_root;
+    std::set<GroupedProcessorProfilePtr> outputs;
     for (auto & item : input_processor->parents)
     {
         if (input_processor->processor_name != "input_root")
             item.second->children.emplace_back(input_processor);
         if (visited.contains(item.second->id))
             continue;
-        auto new_root = fillChildren(item.second, visited);
-        if (new_root)
-            output_root = new_root;
+        auto roots = fillChildren(item.second, visited);
+        for (const auto & root : roots)
+            outputs.insert(root);
     }
+    return outputs;
+}
+
+GroupedProcessorProfilePtr GroupedProcessorProfile::getOutputRoot(GroupedProcessorProfilePtr & input_root)
+{
+    std::set<ProcessorId> visited;
+    std::set<GroupedProcessorProfilePtr> outputs;
+    outputs = fillChildren(input_root, visited);
+    auto output_root = std::make_shared<GroupedProcessorProfile>(0, "output_root");
+    output_root->children = {outputs.begin(), outputs.end()};
     return output_root;
 }
 
@@ -181,9 +200,16 @@ void GroupedProcessorProfile::addProfileRecursively(GroupedProcessorProfilePtr &
         return;
 
     parallel_size += profile->parallel_size;
-    grouped_elapsed_us = std::max(grouped_elapsed_us, profile->grouped_elapsed_us);
-    grouped_input_wait_elapsed_us = std::max(grouped_input_wait_elapsed_us, profile->grouped_input_wait_elapsed_us);
-    grouped_output_wait_elapsed_us = std::max(grouped_output_wait_elapsed_us, profile->grouped_output_wait_elapsed_us);
+    worker_cnt++;
+    grouped_elapsed_us += profile->grouped_elapsed_us;
+    max_grouped_elapsed_us = std::max(max_grouped_elapsed_us, profile->grouped_elapsed_us);
+    min_grouped_elapsed_us = std::min(min_grouped_elapsed_us, profile->grouped_elapsed_us);
+    grouped_input_wait_elapsed_us += profile->grouped_input_wait_elapsed_us;
+    max_grouped_input_wait_elapsed_us = std::max(max_grouped_input_wait_elapsed_us, profile->grouped_input_wait_elapsed_us);
+    min_grouped_input_wait_elapsed_us = std::min(min_grouped_input_wait_elapsed_us, profile->grouped_input_wait_elapsed_us);
+    grouped_output_wait_elapsed_us += profile->grouped_output_wait_elapsed_us;
+    max_grouped_output_wait_elapsed_us = std::max(max_grouped_output_wait_elapsed_us, profile->grouped_output_wait_elapsed_us);
+    min_grouped_output_wait_elapsed_us = std::min(min_grouped_output_wait_elapsed_us, profile->grouped_output_wait_elapsed_us);
     grouped_input_rows +=  profile->grouped_input_rows;
     grouped_input_bytes +=  profile->grouped_input_bytes;
     grouped_output_rows +=  profile->grouped_output_rows;
@@ -202,9 +228,15 @@ Poco::JSON::Object::Ptr GroupedProcessorProfile::getJsonProfiles()
     json->set("ProcessorName", processor_name);
     json->set("StepId", step_id);
     json->set("ParallelSize", parallel_size);
-    json->set("ElapsedUs", grouped_elapsed_us);
-    json->set("InputWaitElapsedUs", grouped_input_wait_elapsed_us);
-    json->set("OutputWaitElapsedUs", grouped_output_wait_elapsed_us);
+    json->set("ElapsedUs", UInt64(grouped_elapsed_us/worker_cnt));
+    json->set("MaxElapsedUs", max_grouped_elapsed_us);
+    json->set("MinElapsedUs", min_grouped_elapsed_us);
+    json->set("InputWaitElapsedUs", UInt64(grouped_input_wait_elapsed_us/worker_cnt));
+    json->set("MaxInputWaitElapsedUs", max_grouped_input_wait_elapsed_us);
+    json->set("MinInputWaitElapsedUs", min_grouped_input_wait_elapsed_us);
+    json->set("OutputWaitElapsedUs", UInt64(grouped_output_wait_elapsed_us/worker_cnt));
+    json->set("MaxOutputWaitElapsedUs", max_grouped_output_wait_elapsed_us);
+    json->set("MinOutputWaitElapsedUs", min_grouped_output_wait_elapsed_us);
     json->set("InputRows", grouped_input_rows);
     json->set("InputBytes", grouped_input_bytes);
     json->set("OutputRows", grouped_output_rows);
@@ -250,27 +282,31 @@ StepsOperatorProfiles StepOperatorProfile::aggregateOperatorProfileToStepLevel(s
                     auto processor_profile = q.front();
                     q.pop();
                     auto & current_step_id = processor_profile->step_id;
+                    auto & inputs = processor_profile->children;
                     auto & outputs = processor_profile->parents;
 
-                    if (current_step_id == -1 && !outputs.empty() && processor_profile->processor_name != "input_root")
+                    if (current_step_id == -1 && !outputs.empty() && processor_profile->processor_name != "output_root")
                         current_step_id = outputs.begin()->second->step_id;
 
                     step_processor_profiles_at_each_level[current_step_id].profiles_at_each_level[level].push_back(processor_profile);
+
                     if (outputs.empty())
                         step_processor_profiles_at_each_level[current_step_id].output_profiles.push_back(processor_profile);
+                    
+                    if (inputs.empty())
+                        step_processor_profiles_at_each_level[current_step_id].input_profiles[current_step_id] = processor_profile;
 
-                    for (auto & output_profile : outputs)
+                    for (auto & input_profile : inputs)
                     {
-                        if (current_step_id != output_profile.second->step_id)
+                        if (input_profile->step_id != -1 && current_step_id != input_profile->step_id)
                         {
-                            step_processor_profiles_at_each_level[current_step_id].output_profiles.push_back(processor_profile);
-                            step_processor_profiles_at_each_level[output_profile.second->step_id].input_profiles[current_step_id]
-                                = output_profile.second;
+                            step_processor_profiles_at_each_level[current_step_id].input_profiles[input_profile->step_id] = processor_profile;
+                            step_processor_profiles_at_each_level[input_profile->step_id].output_profiles.push_back(input_profile);
                         }
-                        if (!id_set.contains(output_profile.second->id))
+                        if (!id_set.contains(input_profile->id))
                         {
-                            q.push(output_profile.second);
-                            id_set.emplace(output_profile.second->id);
+                            q.push(input_profile);
+                            id_set.emplace(input_profile->id);
                         }
                     }
                 }
@@ -327,13 +363,20 @@ AggregatedStepOperatorProfile::aggregateStepOperatorProfileBetweenWorkers(StepsO
         for (auto & step_profile : step_profiles)
         {
             agg_profile_ptr->max_elapsed_us = std::max(agg_profile_ptr->max_elapsed_us, step_profile->sum_elapsed_us);
+            agg_profile_ptr->min_elapsed_us = std::min(agg_profile_ptr->min_elapsed_us, step_profile->sum_elapsed_us);
+            agg_profile_ptr->sum_elapsed_us += step_profile->sum_elapsed_us;
+            agg_profile_ptr->worker_cnt++;
             agg_profile_ptr->max_output_wait_elapsed_us = std::max(agg_profile_ptr->max_output_wait_elapsed_us, step_profile->output_wait_elapsed_us);
+            agg_profile_ptr->min_output_wait_elapsed_us = std::min(agg_profile_ptr->min_output_wait_elapsed_us, step_profile->output_wait_elapsed_us);
+            agg_profile_ptr->sum_output_wait_elapsed_us += step_profile->output_wait_elapsed_us;
             agg_profile_ptr->output_rows += step_profile->output_rows;
             agg_profile_ptr->output_bytes += step_profile->output_bytes;
 
             for (auto & [id, input_profile] : step_profile->inputs_profile)
             {
-                inputs_profile[id].input_wait_elapsed_us = std::max(inputs_profile[id].input_wait_elapsed_us, input_profile.input_wait_elapsed_us);
+                inputs_profile[id].input_wait_elapsed_us += input_profile.input_wait_elapsed_us;
+                inputs_profile[id].max_input_wait_elapsed_us = std::max(inputs_profile[id].max_input_wait_elapsed_us, input_profile.input_wait_elapsed_us);
+                inputs_profile[id].min_input_wait_elapsed_us = std::min(inputs_profile[id].min_input_wait_elapsed_us, input_profile.input_wait_elapsed_us);
                 inputs_profile[id].input_rows += input_profile.input_rows;
                 inputs_profile[id].input_bytes += input_profile.input_bytes;
             }

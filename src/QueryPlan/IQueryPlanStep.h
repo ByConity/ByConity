@@ -144,6 +144,7 @@ public:
     MM(PartialSorting, partial_sorting) \
     MM(PartitionTopN, partition_top_n) \
     MM(Projection, projection) \
+    MM(Expand, expand) \
     MM(ReadNothing, read_nothing) \
     MM(ReadStorageRowCount, read_storage_row_count) \
     MM(RemoteExchangeSource, remote_exchange_source) \

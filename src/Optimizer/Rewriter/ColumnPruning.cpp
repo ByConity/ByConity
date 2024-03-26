@@ -35,6 +35,7 @@
 #include <QueryPlan/DistinctStep.h>
 #include <QueryPlan/Dummy.h>
 #include <QueryPlan/ExceptStep.h>
+#include <QueryPlan/ExpandStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/IntersectStep.h>
 #include <QueryPlan/JoinStep.h>
@@ -434,6 +435,35 @@ PlanNodePtr ColumnPruningVisitor::visitProjectionNode(ProjectionNode & node, Col
         child->getStep()->getOutputStream(), assignments, name_to_type, step->isFinalProject(), step->isIndexProject());
     PlanNodes children{child};
     auto expr_node = ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
+    return expr_node;
+}
+
+PlanNodePtr ColumnPruningVisitor::visitExpandNode(ExpandNode & node, ColumnPruningContext & column_pruning_context)
+{
+    const auto * step = node.getStep().get();
+    NameSet & require = column_pruning_context.name_set;
+
+    NameSet child_require;
+    for (const auto & column : require)
+    {
+        if (column != step->getGroupIdSymbol())
+        {
+            child_require.emplace(column);
+        }
+    }
+
+    ColumnPruningContext child_column_pruning_context{.name_set = child_require};
+    auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_column_pruning_context);
+
+    auto expr_step = std::make_shared<ExpandStep>(
+        child->getStep()->getOutputStream(),
+        step->getAssignments(),
+        step->getNameToType(),
+        step->getGroupIdSymbol(),
+        step->getGroupIdValue(),
+        step->getGroupIdNonNullSymbol());
+    PlanNodes children{child};
+    auto expr_node = ExpandNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
     return expr_node;
 }
 
