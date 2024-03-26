@@ -164,13 +164,13 @@ private:
     double cost_upper_bound;
 };
 
-class WorkerSizeFinder : public PlanNodeVisitor<std::optional<size_t>, Void>
+class WorkerSizeFinder : public PlanNodeVisitor<std::optional<size_t>, const Context>
 {
 public:
     static size_t find(QueryPlan & query_plan, const Context & context);
-    std::optional<size_t> visitPlanNode(PlanNodeBase & node, Void & context) override;
-    std::optional<size_t> visitTableScanNode(TableScanNode & node, Void & context) override;
-    std::optional<size_t> visitCTERefNode(CTERefNode & node, Void & context) override;
+    std::optional<size_t> visitPlanNode(PlanNodeBase & node, const Context & context) override;
+    std::optional<size_t> visitTableScanNode(TableScanNode & node, const Context & context) override;
+    std::optional<size_t> visitCTERefNode(CTERefNode & node, const Context & context) override;
 
 private:
     explicit WorkerSizeFinder(CTEInfo & cte_info_) : cte_info(cte_info_) { }
