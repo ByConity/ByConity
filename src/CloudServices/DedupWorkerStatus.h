@@ -49,6 +49,7 @@ struct DedupWorkerStatus
 
     String worker_rpc_address;
     String worker_tcp_address;
+    Names  dedup_tasks_progress;
     String last_exception;
     time_t last_exception_time = 0;
 };

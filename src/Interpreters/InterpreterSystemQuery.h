@@ -89,6 +89,8 @@ private:
     void executeMetastoreCmd(ASTSystemQuery & query) const;
     void executeCleanTrashTable(const ASTSystemQuery & query);
     void executeGc(const ASTSystemQuery & query);
+    /// dedup staging parts within the specific partition with high priority
+    void dedupWithHighPriority(const ASTSystemQuery & query);
     void executeDedup(const ASTSystemQuery & query);
 
     void dumpCnchServerStatus();

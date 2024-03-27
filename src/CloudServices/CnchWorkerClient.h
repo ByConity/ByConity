@@ -127,7 +127,8 @@ public:
 
     void removeWorkerResource(TxnTimestamp txn_id);
 
-    void createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports);
+    void createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports, const size_t & deduper_index);
+    void assignHighPriorityDedupPartition(const StorageID & storage_id, const Names & high_priority_partition);
     void dropDedupWorker(const StorageID & storage_id);
     DedupWorkerStatus getDedupWorkerStatus(const StorageID & storage_id);
 

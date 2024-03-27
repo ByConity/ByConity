@@ -194,6 +194,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "METASTORE";
         case Type::CLEAR_BROKEN_TABLES:
             return "CLEAR BROKEN TABLES";
+        case Type::DEDUP_WITH_HIGH_PRIORITY:
+            return "DEDUP WITH HIGH PRIORITY";
         case Type::DEDUP:
             return "DEDUP";
         case Type::SYNC_DEDUP_WORKER:
@@ -368,6 +370,15 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             print_database_table();
     }
     else if (type == Type::GC)
+    {
+        print_database_table();
+        if (partition)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " PARTITION " << (settings.hilite ? hilite_none : "");
+            partition->formatImpl(settings, state, frame);
+        }
+    }
+    else if (type == Type::DEDUP_WITH_HIGH_PRIORITY)
     {
         print_database_table();
         if (partition)
