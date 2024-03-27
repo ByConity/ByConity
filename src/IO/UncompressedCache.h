@@ -32,6 +32,92 @@ struct UncompressedCacheCell
     UInt32 additional_bytes;
 };
 
+/** Reference to a piece of memory area, which contains an array of elements.
+*/
+template <typename T>
+class DataRef {
+public:
+    constexpr DataRef(const T * data_, size_t size_, const std::shared_ptr<UncompressedCacheCell> &cell_holder_) 
+        : size(size_), data(data_), cell_holder(cell_holder_) {}
+
+    bool tryToConcat(const T * data_, size_t size_, const std::shared_ptr<UncompressedCacheCell> &cell_holder_) 
+    {
+        if (data_ == data + size && cell_holder == cell_holder_) {
+            size += size_;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    const T* getData() const 
+    {
+        return data;
+    }
+
+    const std::shared_ptr<UncompressedCacheCell> &getCellHolder() const 
+    {
+        return cell_holder;
+    }
+
+    size_t getSize() const 
+    {
+        return size;
+    }
+
+    size_t size = 0;  // number of T, not byte
+
+private:
+    const T * data = nullptr;
+    std::shared_ptr<UncompressedCacheCell> cell_holder;
+};
+
+
+template <typename T>
+class ZeroCopyBuffer {
+public:
+    void add(const T * data_, size_t size_, const std::shared_ptr<UncompressedCacheCell> &cell_holder) 
+    {
+        if (data_refs.empty() || !data_refs.back().tryToConcat(data_, size_, cell_holder)) {
+            data_refs.emplace_back(data_, size_, cell_holder);
+        }
+        sz += size_;
+    }
+
+    void add(DataRef<T> &o) 
+    {
+        add(o.getData(), o.getSize(), o.getCellHolder());
+    }
+
+    int refCnt() const 
+    {
+        return data_refs.size();
+    }
+
+    const DataRef<T> & getRef(int i) const 
+    {
+        return data_refs[i];
+    }
+    
+
+    const std::vector<DataRef<T>> & refs() const 
+    {
+        return data_refs;
+    }
+
+    void clear() 
+    {
+        data_refs.clear();
+        sz = 0;
+    }
+
+    size_t size() const {return sz;}
+
+private:
+    size_t sz = 0;  // number of T, not byte
+    std::vector<DataRef<T>> data_refs;
+};
+
 struct UncompressedSizeWeightFunction
 {
     size_t operator()(const UncompressedCacheCell & x) const { return x.data.size(); }

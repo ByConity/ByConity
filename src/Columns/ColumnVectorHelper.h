@@ -28,12 +28,14 @@ public:
     template <size_t ELEMENT_SIZE>
     const char * getRawDataBegin() const
     {
+        tryToFlushZeroCopyBuffer();
         return reinterpret_cast<const PODArrayBase<ELEMENT_SIZE, 4096, Allocator<false>, 15, 16> *>(reinterpret_cast<const char *>(this) + sizeof(*this))->raw_data();
     }
 
     template <size_t ELEMENT_SIZE>
     void insertRawData(const char * ptr)
     {
+        tryToFlushZeroCopyBuffer();
         return reinterpret_cast<PODArrayBase<ELEMENT_SIZE, 4096, Allocator<false>, 15, 16> *>(reinterpret_cast<char *>(this) + sizeof(*this))->push_back_raw(ptr);
     }
 };

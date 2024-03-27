@@ -804,6 +804,8 @@ ReadSettings Context::getReadSettings() const
     res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
     res.parquet_decode_threads = settings.max_download_threads;
     res.filtered_ratio_to_use_skip_read = settings.filtered_ratio_to_use_skip_read;
+    res.zero_copy_read_from_cache = settings.enable_zero_copy_read;
+
     return res;
 }
 

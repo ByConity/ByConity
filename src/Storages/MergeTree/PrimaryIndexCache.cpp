@@ -68,7 +68,7 @@ PrimaryIndexCache::MappedPtr PrimaryIndexCache::loadExternal(const Key & key)
                     cols[i] = data_type->createColumn();
                     cols[i]->reserve(row_cnt);
                     auto serializer = data_type->getDefaultSerialization();
-                    serializer->deserializeBinaryBulk(*cols[i], read_buffer, row_cnt, 0);
+                    serializer->deserializeBinaryBulk(*cols[i], read_buffer, row_cnt, 0, false);
                 }
 
                 cell->assign(std::make_move_iterator(cols.begin()), std::make_move_iterator(cols.end()));

@@ -87,6 +87,27 @@ public:
     /// seek inside nextImpl.
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
 
+    template<typename T>
+    size_t readZeroCopy(ZeroCopyBuffer<T> &data_refs, size_t n, bool &mod_not_zero) {
+        size_t bytes_copied = 0;
+        mod_not_zero = false;
+
+        while (bytes_copied < n && !eof())
+        {
+            size_t bytes_to_copy = std::min(static_cast<size_t>(working_buffer.end() - pos), n - bytes_copied);
+            if (bytes_to_copy % sizeof(T)) 
+            {
+                mod_not_zero = true;
+                return bytes_copied;
+            }
+            data_refs.add(reinterpret_cast<const T *>(pos), bytes_to_copy / sizeof(T), owned_cell);
+            pos += bytes_to_copy;
+            bytes_copied += bytes_to_copy;
+        }
+
+        return bytes_copied;
+    }
+
     void setProfileCallback(const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
     {
         profile_callback = profile_callback_;
@@ -109,6 +130,8 @@ public:
     {
         return path;
     }
+
+    UncompressedCache::MappedPtr getOwnedCell() const { return owned_cell; }
 
     size_t getSizeCompressed() const { return owned_cell == nullptr ? 0 : owned_cell->compressed_size; }
 

@@ -80,6 +80,13 @@ public:
     size_t ALWAYS_INLINE offsetAt(size_t i) const {return getOffsets()[i-1];}
     size_t ALWAYS_INLINE sizeAt(size_t i) const {return getOffsets()[i] - getOffsets()[i-1];}
 
+    void tryToFlushZeroCopyBuffer() const override
+    {
+        
+        if (nested)
+            nested->tryToFlushZeroCopyBuffer();
+    }
+
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
 

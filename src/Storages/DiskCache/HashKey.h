@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Functions/FunctionsHashing.h>
 #include <Storages/DiskCache/Buffer.h>
 #include <common/StringRef.h>
 
@@ -28,7 +27,7 @@ public:
 private:
     HashedKey(StringRef key, UInt64 key_hash) : key_ref{key}, hash_key{key_hash} { }
 
-    static UInt64 hashBuffer(StringRef key, UInt64 seed = 0) { return MurmurHash3Impl64WithSeed::apply(key.data, key.size, seed); }
+    static UInt64 hashBuffer(StringRef key, UInt64 seed = 0);
 
     StringRef key_ref;
     UInt64 hash_key{};

@@ -5,6 +5,7 @@
 #include <Storages/DiskCache/BlockCacheReinsertionPolicy.h>
 #include <Storages/DiskCache/NvmCacheConfig.h>
 #include <Common/Exception.h>
+#include <common/scope_guard.h>
 
 namespace DB
 {

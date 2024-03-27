@@ -269,8 +269,10 @@ size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_ma
         const auto& [name, type] = column_from_part;
         size_t pos = res_col_to_idx[name];
 
-        if (res_columns[pos] == nullptr)
+        if (!res_columns[pos]) {
+            type->enable_zero_cpy_read = this->settings.read_settings.zero_copy_read_from_cache;
             res_columns[pos] = type->createColumn();
+        }
 
         /// row number column will be populated at last after `read_rows` is set
         if (name == "_part_row_number")

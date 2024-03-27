@@ -99,6 +99,9 @@ struct ReadSettings
     bool enable_io_pfra = false;
 
     size_t estimated_size = 0;
+    
+    bool zero_copy_read_from_cache = false;
+
     bool byte_hdfs_pread = true;
     size_t filesystem_cache_max_download_size = (128UL * 1024 * 1024 * 1024);
     bool skip_download_if_exceeds_query_cache = true;

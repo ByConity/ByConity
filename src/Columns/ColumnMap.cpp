@@ -663,7 +663,7 @@ void ColumnMap::removeKeys(const NameSet & keys)
     MutableColumnPtr key_res = key_column->cloneEmpty();
     MutableColumnPtr value_res = value_column->cloneEmpty();
     MutableColumnPtr offset_res = offsets->cloneEmpty();
-    Offsets & offset_res_data = static_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
+    Offsets & offset_res_data = typeid_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
 
     size_t offset = 0;
     size_t row_size = offsets_[0];
@@ -709,7 +709,7 @@ void ColumnMap::insertImplicitMapColumns(const std::unordered_map<String, Column
     MutableColumnPtr key_res = key_column->cloneEmpty();
     MutableColumnPtr value_res = value_column->cloneEmpty();
     MutableColumnPtr offset_res = offsets->cloneEmpty();
-    Offsets & offset_res_data = static_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
+    Offsets & offset_res_data = typeid_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
 
     /// Mark whether res has been wrapped nullable explicitly.
     bool add_nullable = needAddNullable(value_column);

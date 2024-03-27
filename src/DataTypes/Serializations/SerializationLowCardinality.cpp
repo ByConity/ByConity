@@ -651,27 +651,27 @@ void SerializationLowCardinality::deserializeBinaryBulkWithMultipleStreams(
 
     KeysSerializationVersion::checkVersion(low_cardinality_state->key_version.value);
 
-    auto read_dictionary = [this, low_cardinality_state, keys_stream]()
+    auto read_dictionary = [this, low_cardinality_state, keys_stream, &settings]()
     {
         UInt64 num_keys;
         readIntBinary(num_keys, *keys_stream);
 
         auto keys_type = removeNullable(dictionary_type);
         auto global_dict_keys = keys_type->createColumn();
-        dict_inner_serialization->deserializeBinaryBulk(*global_dict_keys, *keys_stream, num_keys, 0);
+        dict_inner_serialization->deserializeBinaryBulk(*global_dict_keys, *keys_stream, num_keys, 0, settings.zero_copy_read_from_cache);
 
         auto column_unique = DataTypeLowCardinality::createColumnUnique(*dictionary_type, std::move(global_dict_keys));
         low_cardinality_state->global_dictionary = std::move(column_unique);
     };
 
-    auto read_additional_keys = [this, low_cardinality_state, indexes_stream]()
+    auto read_additional_keys = [this, low_cardinality_state, indexes_stream, &settings]()
     {
         UInt64 num_keys;
         readIntBinary(num_keys, *indexes_stream);
 
         auto keys_type = removeNullable(dictionary_type);
         auto additional_keys = keys_type->createColumn();
-        dict_inner_serialization->deserializeBinaryBulk(*additional_keys, *indexes_stream, num_keys, 0);
+        dict_inner_serialization->deserializeBinaryBulk(*additional_keys, *indexes_stream, num_keys, 0, settings.zero_copy_read_from_cache);
         low_cardinality_state->additional_keys = std::move(additional_keys);
 
         if (!low_cardinality_state->index_type.need_global_dictionary && dictionary_type->isNullable())
@@ -684,11 +684,11 @@ void SerializationLowCardinality::deserializeBinaryBulkWithMultipleStreams(
         }
     };
 
-    auto read_indexes = [this, low_cardinality_state, indexes_stream, &low_cardinality_column](UInt64 num_rows)
+    auto read_indexes = [this, low_cardinality_state, indexes_stream, &low_cardinality_column, &settings](UInt64 num_rows)
     {
         auto indexes_type = low_cardinality_state->index_type.getDataType();
         MutableColumnPtr indexes_column = indexes_type->createColumn();
-        indexes_type->getDefaultSerialization()->deserializeBinaryBulk(*indexes_column, *indexes_stream, num_rows, 0);
+        indexes_type->getDefaultSerialization()->deserializeBinaryBulk(*indexes_column, *indexes_stream, num_rows, 0, settings.zero_copy_read_from_cache);
 
         auto & global_dictionary = low_cardinality_state->global_dictionary;
         const auto & additional_keys = low_cardinality_state->additional_keys;

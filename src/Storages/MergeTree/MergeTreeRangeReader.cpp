@@ -847,6 +847,16 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
         read_result.num_rows = read_result.countBytesInResultFilter(read_result.getFilter()->getData());
     }
 
+    if (last_reader_in_chain)
+    {
+        for(auto &col: read_result.columns)
+        {
+            if (col) {
+                col->tryToFlushZeroCopyBuffer();
+            }
+        }
+    }
+
     return read_result;
 }
 

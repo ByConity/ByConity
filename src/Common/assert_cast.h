@@ -5,7 +5,9 @@
 #include <typeindex>
 #include <string>
 
+
 #include <Common/Exception.h>
+#include <Common/typeid_cast.h>
 #include <common/demangle.h>
 
 
@@ -37,7 +39,10 @@ To assert_cast(From && from)
         {
             if (typeid(from) == typeid(To))
                 return static_cast<To>(from);
-        }
+        } 
+        
+        return typeid_cast<To>(from);
+        
     }
     catch (const std::exception & e)
     {

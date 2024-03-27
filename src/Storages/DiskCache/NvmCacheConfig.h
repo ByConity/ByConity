@@ -16,13 +16,13 @@
 #include <common/types.h>
 #include <common/unit.h>
 
-namespace ErrorCodes
-{
-const extern int BAD_ARGUMENTS;
-}
-
 namespace DB
 {
+namespace ErrorCodes
+{
+    const extern int BAD_ARGUMENTS;
+}
+
 class BlockCacheReinsertionConfig
 {
 public:

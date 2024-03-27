@@ -44,7 +44,12 @@ Field DataTypeNumberBase<T>::getDefault() const
 template <typename T>
 MutableColumnPtr DataTypeNumberBase<T>::createColumn() const
 {
-    return ColumnVector<T>::create();
+    if (enable_zero_cpy_read) {
+        return ColumnVector<T, true>::create();
+    } else {
+        return ColumnVector<T, false>::create();
+    }
+    
 }
 
 template <typename T>

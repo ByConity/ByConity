@@ -389,13 +389,16 @@ protected:
     void setCustomization(DataTypeCustomDescPtr custom_desc_) const;
 
     mutable UInt16 flags = 0;
+    
     mutable DataTypeCustomNamePtr custom_name;
     mutable SerializationPtr custom_serialization;
 
 public:
     const IDataTypeCustomName * getCustomName() const { return custom_name.get(); }
     const ISerialization * getCustomSerialization() const { return custom_serialization.get(); }
-
+    
+    mutable bool enable_zero_cpy_read = false;
+    
 private:
     template <typename Ptr>
     Ptr getForSubcolumn(

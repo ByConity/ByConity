@@ -166,7 +166,9 @@ String DataTypeLowCardinality::stringToVisitorString(const String & ins) const
 
 MutableColumnPtr DataTypeLowCardinality::createColumn() const
 {
-    MutableColumnPtr indexes = DataTypeUInt8().createColumn();
+    DataTypeUInt8 dt_uint8;
+    dt_uint8.enable_zero_cpy_read = enable_zero_cpy_read;
+    MutableColumnPtr indexes = dt_uint8.createColumn();
     MutableColumnPtr dictionary = createColumnUnique(*dictionary_type);
     return ColumnLowCardinality::create(std::move(dictionary), std::move(indexes));
 }

@@ -571,6 +571,8 @@ void IMergeTreeReader::readData(
     {
         return getCompressedIndex(data_part, name_and_type, substream_path);
     };
+    
+    deserialize_settings.zero_copy_read_from_cache = settings.read_settings.zero_copy_read_from_cache;
 
     const auto & name = name_and_type.name;
     const SerializationPtr & serialization = serializations[name];

@@ -231,8 +231,8 @@ protected:
     UInt32 scale;
 };
 
-template <class> class ColumnVector;
-template <class T> struct ColumnVectorOrDecimalT { using Col = ColumnVector<T>; };
+template <class, bool> class ColumnVector;
+template <class T> struct ColumnVectorOrDecimalT { using Col = ColumnVector<T, false>; };
 template <is_decimal T> struct ColumnVectorOrDecimalT<T> { using Col = ColumnDecimal<T>; };
 template <class T> using ColumnVectorOrDecimal = typename ColumnVectorOrDecimalT<T>::Col;
 

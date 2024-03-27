@@ -225,7 +225,7 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         MutableColumnPtr res{result_type->createColumn()};
-        auto & internal_data = dynamic_cast<ColumnVector<Int64> *>(res.get())->getData();
+        auto & internal_data = typeid_cast<ColumnVector<Int64> *>(res.get())->getData();
         internal_data.resize(input_rows_count);
 
         for (size_t r = 0; r < input_rows_count; ++r)
