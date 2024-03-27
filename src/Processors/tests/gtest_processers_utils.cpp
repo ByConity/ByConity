@@ -56,7 +56,7 @@ Block createUInt64Block(size_t row_num, size_t column_num, UInt8 value)
 ExecutableFunctionPtr createRepartitionFunction(ContextPtr context, const ColumnsWithTypeAndName & arguments)
 {
     tryRegisterFunctions();
-    const String repartition_func_name = "cityHash64";
+    const String repartition_func_name = "cityHash64V2";
     auto & factory = FunctionFactory::instance();
     auto res = factory.tryGetImpl(repartition_func_name, context);
     FunctionOverloadResolverPtr func_builder = factory.get(repartition_func_name, context);
