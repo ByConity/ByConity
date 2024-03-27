@@ -178,8 +178,7 @@ static NO_INLINE void deserializeBinarySSE2(ColumnBitMap64::Chars & data, Column
     }
 }
 
-
-void SerializationBitMap64::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
+void SerializationBitMap64::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool /*zero_copy_cache_read*/) const
 {
     ColumnBitMap64 & column_bitmap = typeid_cast<ColumnBitMap64 &>(column);
     ColumnBitMap64::Chars & data = column_bitmap.getChars();

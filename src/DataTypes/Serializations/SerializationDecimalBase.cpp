@@ -79,7 +79,7 @@ void SerializationDecimalBase<T>::deserializeBinary(IColumn & column, ReadBuffer
 }
 
 template <typename T>
-void SerializationDecimalBase<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double) const
+void SerializationDecimalBase<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double, bool /*zero_copy_cache_read*/) const
 {
     typename ColumnType::Container & x = typeid_cast<ColumnType &>(column).getData();
     size_t initial_size = x.size();

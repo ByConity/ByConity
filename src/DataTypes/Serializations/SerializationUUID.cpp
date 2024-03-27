@@ -117,7 +117,7 @@ void SerializationUUID::serializeBinaryBulk(const IColumn & column, WriteBuffer 
         ostr.write(reinterpret_cast<const char *>(&x[offset]), sizeof(UUID) * limit);
 }
 
-void SerializationUUID::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/) const
+void SerializationUUID::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/) const
 {
     typename ColumnVector<UUID>::Container & x = typeid_cast<ColumnVector<UUID> &>(column).getData();
     size_t initial_size = x.size();

@@ -27,7 +27,7 @@
 namespace DB
 {
 
-template <typename T>
+template <typename T, bool has_buf>
 class ColumnVector;
 using ColumnUInt8 = ColumnVector<UInt8>;
 

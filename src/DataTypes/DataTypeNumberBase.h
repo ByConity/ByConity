@@ -28,7 +28,7 @@
 namespace DB
 {
 
-template <typename T>
+template <typename T, bool has_buf>
 class ColumnVector;
 
 /** Implements part of the IDataType interface, common to all numbers and for Date and DateTime.

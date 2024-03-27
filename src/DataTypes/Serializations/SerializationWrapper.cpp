@@ -63,9 +63,9 @@ void SerializationWrapper::serializeBinaryBulk(const IColumn & column, WriteBuff
     nested_serialization->serializeBinaryBulk(column, ostr, offset, limit);
 }
 
-void SerializationWrapper::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
+void SerializationWrapper::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool zero_copy_cache_read) const
 {
-    nested_serialization->deserializeBinaryBulk(column, istr, limit, avg_value_size_hint);
+    nested_serialization->deserializeBinaryBulk(column, istr, limit, avg_value_size_hint, zero_copy_cache_read);
 }
 
 void SerializationWrapper::serializeBinary(const Field & field, WriteBuffer & ostr) const

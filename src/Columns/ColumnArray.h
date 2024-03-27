@@ -136,6 +136,15 @@ public:
     ColumnPtr convertToFullColumnIfConst() const override;
     void getExtremes(Field & min, Field & max) const override;
 
+    void tryToFlushZeroCopyBuffer() const override
+    {
+        
+        if (data)
+            data->tryToFlushZeroCopyBuffer();
+        if (offsets)
+            offsets->tryToFlushZeroCopyBuffer();
+    }
+
     /// Map support array key
     bool canBeInsideNullable() const override { return true; }
 

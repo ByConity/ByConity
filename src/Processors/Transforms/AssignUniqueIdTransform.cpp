@@ -61,7 +61,7 @@ void AssignUniqueIdTransform::transform(Chunk & chunk)
 
     auto type_int = std::make_shared<DataTypeUInt64>();
     MutableColumnPtr column = type_int->createColumn();
-    dynamic_cast<ColumnUInt64 *>(&*column)->getData().assign(value.begin(), value.end());
+    typeid_cast<ColumnUInt64 *>(&*column)->getData().assign(value.begin(), value.end());
     chunk.addColumn(std::move(column));
 }
 

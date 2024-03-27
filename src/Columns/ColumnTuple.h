@@ -75,6 +75,16 @@ public:
     void get(size_t n, Field & res) const override;
     bool isDefaultAt(size_t n) const override;
 
+    void tryToFlushZeroCopyBuffer() const override
+    {
+      
+      for(const auto &col: columns)
+      {
+        if (col)
+          col->tryToFlushZeroCopyBuffer();
+      }   
+    }
+
     StringRef getDataAt(size_t n) const override;
     void insertData(const char * pos, size_t length) override;
     void insert(const Field & x) override;

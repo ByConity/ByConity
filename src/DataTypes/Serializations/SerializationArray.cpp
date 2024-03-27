@@ -333,7 +333,7 @@ void SerializationArray::deserializeBinaryBulkWithMultipleStreams(
         if (settings.position_independent_encoding)
             deserializeArraySizesPositionIndependent(column_array, *stream, limit);
         else
-            SerializationNumber<ColumnArray::Offset>().deserializeBinaryBulk(column_array.getOffsetsColumn(), *stream, limit, 0);
+            SerializationNumber<ColumnArray::Offset>().deserializeBinaryBulk(column_array.getOffsetsColumn(), *stream, limit, 0, settings.zero_copy_read_from_cache);
 
         addToSubstreamsCache(cache, settings.path, arrayOffsetsToSizes(column_array.getOffsetsColumn()));
     }

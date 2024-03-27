@@ -567,7 +567,7 @@ void MergeTreeDataPartWriterWide::validateColumnOfFixedSize(const String & name,
         {
             auto column = type.createColumn();
 
-            serialization->deserializeBinaryBulk(*column, bin_in, 1000000000, 0.0);
+            serialization->deserializeBinaryBulk(*column, bin_in, 1000000000, 0.0, false);
 
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
@@ -604,7 +604,7 @@ void MergeTreeDataPartWriterWide::validateColumnOfFixedSize(const String & name,
 
         auto column = type.createColumn();
 
-        serialization->deserializeBinaryBulk(*column, bin_in, index_granularity_rows, 0.0);
+        serialization->deserializeBinaryBulk(*column, bin_in, index_granularity_rows, 0.0, false);
 
         if (bin_in.eof())
         {
@@ -653,7 +653,7 @@ void MergeTreeDataPartWriterWide::validateColumnOfFixedSize(const String & name,
     {
         auto column = type.createColumn();
 
-        serialization->deserializeBinaryBulk(*column, bin_in, 1000000000, 0.0);
+        serialization->deserializeBinaryBulk(*column, bin_in, 1000000000, 0.0, false);
 
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,

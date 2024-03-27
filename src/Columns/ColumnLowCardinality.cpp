@@ -912,7 +912,7 @@ void ColumnLowCardinality::Index::callForType(Callback && callback, size_t size_
 
 size_t ColumnLowCardinality::Index::getSizeOfIndexType(const IColumn & column, size_t hint)
 {
-    auto check_for = [&](auto type) { return typeid_cast<const ColumnVector<decltype(type)> *>(&column) != nullptr; };
+    auto check_for = [&](auto type) { return typeid_cast<const ColumnVector<decltype(type)> *>(&column, false) != nullptr; };
     auto try_get_size_for = [&](auto type) -> size_t { return check_for(type) ? sizeof(decltype(type)) : 0; };
 
     if (hint)
@@ -1050,7 +1050,7 @@ void ColumnLowCardinality::Index::insertPositionsRange(const IColumn & column, U
     auto insert_for_type = [&](auto type)
     {
         using ColumnType = decltype(type);
-        const auto * column_ptr = typeid_cast<const ColumnVector<ColumnType> *>(&column);
+        const auto * column_ptr = typeid_cast<const ColumnVector<ColumnType> *>(&column, false);
 
         if (!column_ptr)
             return false;
@@ -1066,13 +1066,35 @@ void ColumnLowCardinality::Index::insertPositionsRange(const IColumn & column, U
             {
                 using CurIndexType = decltype(cur_type);
                 auto & positions_data = getPositionsData<CurIndexType>();
+                if (offset) {
+                    column_ptr->tryToFlushZeroCopyBuffer();
+                }
                 const auto & column_data = column_ptr->getData();
 
                 UInt64 size = positions_data.size();
                 positions_data.resize(size + limit);
-
-                for (UInt64 i = 0; i < limit; ++i)
+                UInt64 cur_limit = std::min((limit), static_cast<UInt64>(column_data.size()));
+                for (UInt64 i = 0; i < cur_limit; ++i)
                     positions_data[size + i] = column_data[offset + i];
+
+                limit -= cur_limit;
+                size += cur_limit;
+                if (column_ptr->getZeroCopyBuf().size()) {
+                    // Offset is zero in current branch.
+                    // Becasue if offset is not zero, tryToFlushZeroCopyBuffer() will be called at first, 
+                    // zero-copy buffer will be empty on that case.
+                    assert(offset == 0);
+                    const auto &zero_copy_buf = column_ptr->getZeroCopyBuf();
+                    for(const auto &data_ref: zero_copy_buf.refs()) {
+                        if (limit <= 0)
+                            break;
+                        cur_limit = std::min((limit), static_cast<UInt64>(data_ref.getSize()));
+                        for (UInt64 i = 0; i < cur_limit; ++i)
+                            positions_data[size + i] = column_data[i];
+                        limit -= cur_limit;
+                        size += cur_limit;
+                    }
+                }
             };
 
             callForType(std::move(copy), size_of_type);

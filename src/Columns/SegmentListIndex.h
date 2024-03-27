@@ -725,8 +725,8 @@ void SegmentBitmapColumnListIndexes<VIDTYPE>::appendColumnData(ColumnPtr col, st
         constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, dynamic_cast<const ColumnArray *>(col.get()));
     else if (dynamic_cast<const ColumnString *>(col.get()))
         constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, dynamic_cast<const ColumnString *>(col.get()));
-    else if (dynamic_cast<const ColumnVector<VIDTYPE> *>(col.get()))
-        constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, dynamic_cast<const ColumnVector<VIDTYPE> *>(col.get()));
+    else if (typeid_cast<const ColumnVector<VIDTYPE> *>(col.get()))
+        constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, typeid_cast<const ColumnVector<VIDTYPE> *>(col.get()));
     else if (dynamic_cast<const ColumnNullable *>(col.get()))
         constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, dynamic_cast<const ColumnNullable *>(col.get()));
     else

@@ -2042,6 +2042,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, output_format_orc_string_as_string, false, "Use ORC String type instead of Binary for String columns", 0) \
     M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
     M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
+    M(Bool, enable_zero_copy_read, false, "Whether enable zero copy read from cache, it requires uncompressed-cache to be enabled.", 0) \
     M(String, skip_shard_list, "", "Set slow shards that query want to skip, shard num is split by comma", 0) \
     \
     M(UInt64, cnch_background_task_part_load_max_seconds, 600, "Maximum seconds of part load for background tasks", 0)\

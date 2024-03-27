@@ -156,7 +156,7 @@ void SerializationNullable::deserializeBinaryBulkWithMultipleStreams(
     }
     else if (auto * stream = settings.getter(settings.path))
     {
-        SerializationNumber<UInt8>().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0);
+        SerializationNumber<UInt8>().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0, settings.zero_copy_read_from_cache);
         addToSubstreamsCache(cache, settings.path, col.getNullMapColumnPtr());
     }
 

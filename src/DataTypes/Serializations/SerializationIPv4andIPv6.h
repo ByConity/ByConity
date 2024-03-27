@@ -112,7 +112,7 @@ public:
         if (limit)
             ostr.write(reinterpret_cast<const char *>(&x[offset]), sizeof(IPv) * limit);
     }
-    void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/) const override
+    void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/) const override
     {
         typename ColumnVector<IPv>::Container & x = typeid_cast<ColumnVector<IPv> &>(column).getData();
         size_t initial_size = x.size();
