@@ -53,20 +53,16 @@ Projection Est. ? rows
          │     Group by: {}
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Inner Join Est. ? rows
-            │     Condition: __m__\'foo\'_3 == mapElement(m_6, \'dd\')
+            │     Condition: __m__\'foo\'_2 == mapElement(m_6, \'dd\')
             ├─ Inner Join Est. ? rows
-            │  │     Condition: __m__\'foo\'_1 == __m__\'cc\'_2
+            │  │     Condition: __m__\'foo\' == __m__\'cc\'_2
             │  ├─ Inner Join Est. ? rows
             │  │  │     Condition: __m__\'aa\' == __m__\'bb\'
-            │  │  ├─ Projection Est. ? rows
-            │  │  │  │     Expressions: [__m__\'aa\'], __m__\'foo\'_1:=`__m__\'foo\'`
-            │  │  │  └─ TableScan test.t40075_subcol_cte Est. ? rows
-            │  │  │           Outputs: [__m__\'aa\', __m__\'foo\']
+            │  │  ├─ TableScan test.t40075_subcol_cte Est. ? rows
+            │  │  │        Outputs: [__m__\'aa\', __m__\'foo\']
             │  │  └─ Broadcast Exchange Est. ? rows
-            │  │     └─ Projection Est. ? rows
-            │  │        │     Expressions: [__m__\'bb\'], __m__\'foo\'_3:=`__m__\'foo\'_2`
-            │  │        └─ TableScan test.t40075_subcol_cte Est. ? rows
-            │  │                 Outputs: [__m__\'bb\'], __m__\'foo\'_2:=__m__\'foo\'
+            │  │     └─ TableScan test.t40075_subcol_cte Est. ? rows
+            │  │              Outputs: [__m__\'bb\'], __m__\'foo\'_2:=__m__\'foo\'
             │  └─ Broadcast Exchange Est. ? rows
             │     └─ Union Est. ? rows
             │        │     OutputToInputs: __m__\'cc\'_2 = [__m__\'cc\',__m__\'cc\'_1]

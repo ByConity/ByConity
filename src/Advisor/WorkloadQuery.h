@@ -43,7 +43,10 @@ public:
     {
     }
 
-    const std::string & getQueryId() const { return query_id; }
+    const std::string & getQueryId() const
+    {
+        return query_id;
+    }
     const std::string & getSQL() const { return sql; }
     const QueryPlanPtr & getPlan() const { return plan; }
     const PlanCostMap & getCosts() const { return costs; }

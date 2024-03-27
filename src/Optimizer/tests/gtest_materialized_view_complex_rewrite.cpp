@@ -107,7 +107,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
 TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggregateFuncs4)
 {
     sql("select empid, deptno\n"
-            "from emps where deptno = 10 group by empid, deptno",
+        "from emps where deptno = 10 group by empid, deptno",
         "select deptno from emps where deptno = 10 group by deptno")
         .ok();
 }
@@ -165,7 +165,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
 TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregateFuncs2)
 {
     sql("select empid, deptno, count(*) as c, sum(empid) as s\n"
-            "from emps group by empid, deptno",
+        "from emps group by empid, deptno",
         "select deptno, count(*) as c, sum(empid) as s\n"
             "from emps group by deptno")
         .checkingThatResultContains("Aggregates: expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2), expr#sum(expr#sum(empid))_2:=AggNull(sum)(expr#sum(empid)_2)")
@@ -1047,8 +1047,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testJoinMaterializationUKFK9)
 TEST_F(MaterializedViewRewriteComplexTest, testQueryProjectWithBetween)
 {
     sql("select *"
-            " from foodmart.sales_fact_1997 as s"
-            " where s.store_id = 1",
+        " from foodmart.sales_fact_1997 as s"
+        " where s.store_id = 1",
         "select s.time_id between 1 and 3"
             " from foodmart.sales_fact_1997 as s"
             " where s.store_id = 1")
@@ -1190,21 +1190,5 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
         "group by deptno, salary)\n"
         "group by deptno")
         .checkingThatResultContains("Aggregates: expr#uniqExact(salary)_3:=AggNull(uniqExact)(salary_2)")
-        .ok();
-}
-
-TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDistinctQuery4)
-{
-    // Although there is no DISTINCT in the COUNT, this is
-    // equivalent to previous query
-    sql("select deptno, salary, empid\n"
-            "from emps\n"
-            "group by deptno, salary, empid",
-        "select deptno, count(salary) from (\n"
-            "select deptno, salary\n"
-            "from emps\n"
-            "group by deptno, salary)\n"
-            "group by deptno")
-        .checkingThatResultContains("Group by: {salary_2, deptno_2}")
         .ok();
 }

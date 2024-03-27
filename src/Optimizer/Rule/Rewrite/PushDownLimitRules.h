@@ -147,4 +147,16 @@ public:
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
+
+class PushLimitThroughBuffer: public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::PUSH_LIMIT_THROUGH_BUFFER; }
+    String getName() const override { return "PUSH_LIMIT_THROUGH_BUFFER"; }
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_limit_through_buffer; }    
+    PatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
 }

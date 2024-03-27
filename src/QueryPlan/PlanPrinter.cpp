@@ -31,6 +31,7 @@
 #include <magic_enum.hpp>
 
 #include <utility>
+#include <vector>
 
 namespace DB
 {

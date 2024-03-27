@@ -19,6 +19,7 @@
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SimplePlanRewriter.h>
+#include "QueryPlan/PlanNode.h"
 
 namespace DB
 {
