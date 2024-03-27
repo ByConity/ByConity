@@ -32,6 +32,7 @@ REGISTER_FUNCTION(Hashing)
 #if USE_SSL
     factory.registerFunction<FunctionMD4>();
     factory.registerFunction<FunctionHalfMD5>();
+    factory.registerFunction<FunctionHalfMD5>("halfMD5V2");
     factory.registerFunction<FunctionMD5>();
     factory.registerFunction<FunctionSHA1>();
     factory.registerFunction<FunctionSHA224>();
@@ -55,10 +56,15 @@ REGISTER_FUNCTION(Hashing)
         Documentation::Categories{"Hash"}
     });
     factory.registerFunction<FunctionCityHash64>();
+    factory.registerFunction<FunctionCityHash64V2>("cityHash64V2");
     factory.registerFunction<FunctionHiveCityHash64>();
+    factory.registerFunction<FunctionHiveCityHash64V2>("hiveCityHash64V2");
     factory.registerFunction<FunctionFarmFingerprint64>();
+    factory.registerFunction<FunctionFarmFingerprint64V2>("farmFingerprint64V2");
     factory.registerFunction<FunctionFarmHash64>();
+    factory.registerFunction<FunctionFarmHash64V2>("farmHash64V2");
     factory.registerFunction<FunctionMetroHash64>();
+    factory.registerFunction<FunctionMetroHash64V2>("metroHash64V2");
     factory.registerFunction<FunctionIntHash32>();
     factory.registerFunction<FunctionIntHash64>();
     factory.registerFunction<FunctionURLHash>();
@@ -67,12 +73,29 @@ REGISTER_FUNCTION(Hashing)
     factory.registerFunction<FunctionHiveHash>();
     factory.registerFunction<FunctionFNV1aHash>();
     factory.registerFunction<FunctionFlinkFieldHash>();
+
+    factory.registerFunction<FunctionJavaHashV2>("javaHashV2");
+    factory.registerFunction<FunctionJavaHashUTF16LEV2>("javaHashUTF16LEV2");
+    factory.registerFunction<FunctionHiveHashV2>("hiveHashV2");
+
 #if !defined(ARCADIA_BUILD)
     factory.registerFunction<FunctionMurmurHash2_32WithSeed>();
     factory.registerFunction<FunctionMurmurHash2_64WithSeed>();
     factory.registerFunction<FunctionMurmurHash3_32WithSeed>();
     factory.registerFunction<FunctionMurmurHash3_64WithSeed>();
     factory.registerFunction<FunctionMurmurHash3_128WithSeed>();
+
+    factory.registerFunction<FunctionMurmurHash2_32V2>("murmurHash2_32V2");
+    factory.registerFunction<FunctionMurmurHash2_64V2>("murmurHash2_64V2");
+    factory.registerFunction<FunctionMurmurHash3_32V2>("murmurHash3_32V2");
+    factory.registerFunction<FunctionMurmurHash3_64V2>("murmurHash3_64V2");
+    factory.registerFunction<FunctionGccMurmurHashV2>("gccMurmurHashV2");
+    factory.registerFunction<FunctionMurmurHash2_32WithSeedV2>("murmurHash2_32WithSeedV2");
+    factory.registerFunction<FunctionMurmurHash2_64WithSeedV2>("murmurHash2_64WithSeedV2");
+    factory.registerFunction<FunctionMurmurHash3_32WithSeedV2>("murmurHash3_32WithSeedV2");
+    factory.registerFunction<FunctionMurmurHash3_64WithSeedV2>("murmurHash3_64WithSeedV2");
+
+    factory.registerFunction<FunctionSparkHashSimple>();
 #endif
 
     factory.registerFunction<FunctionXxHash32>();
