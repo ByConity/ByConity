@@ -76,7 +76,7 @@ CTEDef [1]
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from c1 t1 join (select t2.x as x from c1 t2 join c2 t3 on t2.x = t3.x) j1 on t1.x = j1.x;
 Projection Est. ? rows
-│     Expressions: j1.x:=`expr#rand(1)_2`
+│     Expressions: j1.x:=`expr#rand(1)_1`
 └─ Inner Join Est. ? rows
    │     Condition: expr#rand(1)_1 == expr#rand(1)_2
    ├─ Buffer Est. 1 rows
@@ -99,7 +99,7 @@ CTEDef [1]
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from c2 t1 join (select t2.x as x from c1 t2 join c2 t3 on t2.x = t3.x) j1 on t1.x = j1.x;
 Projection Est. ? rows
-│     Expressions: j1.x:=`expr#rand(1)_1`
+│     Expressions: j1.x:=`expr#rand(2)_1`
 └─ Inner Join Est. ? rows
    │     Condition: expr#rand(2)_1 == expr#rand(1)_1
    ├─ Buffer Est. 1 rows
@@ -175,7 +175,7 @@ explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from
 Projection Est. ? rows
 │     Expressions: x:=`expr#rand(1)_1`
 └─ Inner Join Est. ? rows
-   │     Condition: expr#rand(1)_1 == expr#rand(1)_2
+   │     Condition: expr#rand(1)_1 == expr#rand(2)_2
    ├─ Inner Join Est. ? rows
    │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ Buffer Est. 1 rows

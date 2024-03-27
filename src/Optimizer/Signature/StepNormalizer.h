@@ -39,9 +39,9 @@ class StepNormalizer;
 /**
  * @class StepAndOutputOrder is the outcome of normalizing a step
  *
- * normal_step is the normalized step for each original step, which is in index_ref and can be used to calculate hash etc.
+ * @param normal_step is the normalized step for each original step, which is in index_ref and can be used to calculate hash etc.
  * All normal_steps implicitly formulate a tree, whose structure is implied by the original plan. Handling this is left to PlanNormalizer
- * reordered_header is an reordering of the original output header.
+ * @param reordered_header is an reordering of the original output header.
  * It is the same as the header of original step if no reordering take place.
  * It is different from normal_step->getOutputStream().header, as the symbols in reordered_header are still the original symbols.
  * The parent must use this information to normalize.
@@ -67,6 +67,8 @@ protected:
     StepAndOutputOrder visitProjectionStep(const ProjectionStep & step, StepsAndOutputOrders & inputs) override;
     StepAndOutputOrder visitAggregatingStep(const AggregatingStep & step, StepsAndOutputOrders & inputs) override;
     StepAndOutputOrder visitCTERefStep(const CTERefStep & step, StepsAndOutputOrders & inputs) override;
+    StepAndOutputOrder visitJoinStep(const JoinStep & step, StepsAndOutputOrders & inputs) override;
+
 private:
     ContextPtr context;
     Poco::Logger * log = &Poco::Logger::get("StepNormalizer");

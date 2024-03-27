@@ -321,4 +321,17 @@ TransformResult PushLimitIntoSorting::transformImpl(PlanNodePtr node, const Capt
     node->replaceChildren({new_sorting});
     return TransformResult{node};
 }
+
+PatternPtr PushLimitThroughBuffer::getPattern() const
+{
+    return Patterns::limit().withSingle(Patterns::buffer()).result();
+}
+
+TransformResult PushLimitThroughBuffer::transformImpl(PlanNodePtr node, const Captures & /*captures*/, RuleContext & /*context*/)
+{
+    auto buffer = node->getChildren()[0];
+    node->replaceChildren({buffer->getChildren()[0]});
+    buffer->replaceChildren({node});
+    return buffer;
+}
 }

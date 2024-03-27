@@ -55,15 +55,7 @@ Projection
                   │           │           │     └─ TableScan tpcds1000.item
                   │           │           │              Where: Runtime Filters: {i_item_id}
                   │           │           │              Outputs: [i_item_sk, i_item_id]
-                  │           │           └─ Repartition Exchange
-                  │           │              │     Partition by: {i_item_id_1}
-                  │           │              └─ Projection
-                  │           │                 │     Expressions: [i_item_id_1]
-                  │           │                 └─ Filter
-                  │           │                    │     Condition: i_category = 'Music'
-                  │           │                    └─ TableScan tpcds1000.item
-                  │           │                             Where: i_category = 'Music'
-                  │           │                             Outputs: [i_category], i_item_id_1:=i_item_id
+                  │           │           └─ CTERef[1]
                   │           └─ Repartition Exchange
                   │              │     Partition by: {ca_address_sk}
                   │              └─ Projection
@@ -114,15 +106,7 @@ Projection
                   │           │           │     └─ TableScan tpcds1000.item
                   │           │           │              Where: Runtime Filters: {i_item_id}
                   │           │           │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
-                  │           │           └─ Repartition Exchange
-                  │           │              │     Partition by: {i_item_id_3}
-                  │           │              └─ Projection
-                  │           │                 │     Expressions: [i_item_id_3]
-                  │           │                 └─ Filter
-                  │           │                    │     Condition: i_category_1 = 'Music'
-                  │           │                    └─ TableScan tpcds1000.item
-                  │           │                             Where: i_category = 'Music'
-                  │           │                             Outputs: i_item_id_3:=i_item_id, i_category_1:=i_category
+                  │           │           └─ CTERef[1]
                   │           └─ Repartition Exchange
                   │              │     Partition by: {ca_address_sk_1}
                   │              └─ Projection
@@ -173,15 +157,7 @@ Projection
                               │           │     └─ TableScan tpcds1000.item
                               │           │              Where: Runtime Filters: {i_item_id}
                               │           │              Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
-                              │           └─ Repartition Exchange
-                              │              │     Partition by: {i_item_id_5}
-                              │              └─ Projection
-                              │                 │     Expressions: [i_item_id_5]
-                              │                 └─ Filter
-                              │                    │     Condition: i_category_2 = 'Music'
-                              │                    └─ TableScan tpcds1000.item
-                              │                             Where: i_category = 'Music'
-                              │                             Outputs: i_item_id_5:=i_item_id, i_category_2:=i_category
+                              │           └─ CTERef[1]
                               └─ Repartition Exchange
                                  │     Partition by: {ca_address_sk_2}
                                  └─ Projection
@@ -191,4 +167,15 @@ Projection
                                        └─ TableScan tpcds1000.customer_address
                                                 Where: ca_gmt_offset = -5.
                                                 Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
+CTEDef [1]
+   Repartition Exchange
+   │     Partition by: {i_item_id_1}
+   └─ Projection
+      │     Expressions: [i_item_id_1]
+      └─ Filter
+         │     Condition: i_category = 'Music'
+         └─ TableScan tpcds1000.item
+                  Where: i_category = 'Music'
+                  Outputs: [i_category], i_item_id_1:=i_item_id
 note: Runtime Filter is applied for 12 times.
+note: CTE(Common Table Expression) is applied for 3 times.

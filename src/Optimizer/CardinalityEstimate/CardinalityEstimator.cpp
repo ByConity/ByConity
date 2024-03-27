@@ -469,7 +469,7 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitCTERefNode(CTERefNode & node,
     for (const auto & item : step->getOutputColumns())
         calculated_symbol_statistics[item.first] = cte_ref_stats->getSymbolStatistics(item.second);
     auto stats = std::make_shared<PlanNodeStatistics>(cte_ref_stats->getRowCount(), calculated_symbol_statistics);
-node.setStatistics(stats ? std::make_optional(stats) : std::nullopt);
+    node.setStatistics(stats ? std::make_optional(stats) : std::nullopt);
     return stats;
 }
 

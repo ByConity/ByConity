@@ -6,15 +6,15 @@ Projection
       └─ Sorting
          │     Order by: {s_name ASC NULLS LAST}
          └─ Right Semi Join
-            │     Condition: ps_suppkey == s_suppkey
+            │     Condition: l_suppkey == s_suppkey
             │     Runtime Filters Builder: {s_suppkey}
             ├─ Repartition Exchange
-            │  │     Partition by: {ps_suppkey}
+            │  │     Partition by: {l_suppkey}
             │  └─ Left Semi (PARALLEL_HASH) Join
-            │     │     Condition: ps_partkey == p_partkey
+            │     │     Condition: l_partkey == p_partkey
             │     │     Runtime Filters Builder: {p_partkey}
             │     ├─ Repartition Exchange
-            │     │  │     Partition by: {ps_partkey}
+            │     │  │     Partition by: {l_partkey}
             │     │  └─ Inner (PARALLEL_HASH) Join
             │     │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
             │     │     │     Filter: ps_availqty > cast('0.5' * `expr#sum(l_quantity)`, 'Nullable(Decimal(38, 3))')

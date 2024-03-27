@@ -39,5 +39,7 @@ private:
      * create a row with all columns set null, if input don't have any results.
      */
     Port::Data createNullSingleRow() const;
+
+    Port::Data makeOutputNullable(Chunk && input_data) const;
 };
 }

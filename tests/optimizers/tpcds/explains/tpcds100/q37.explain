@@ -15,8 +15,8 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 5948 rows
                      │     Group by: {i_item_id, i_item_desc, i_current_price}
                      └─ Inner Join Est. 6752201 rows
-                        │     Condition: cs_item_sk == i_item_sk
-                        │     Runtime Filters Builder: {i_item_sk}
+                        │     Condition: cs_item_sk == inv_item_sk
+                        │     Runtime Filters Builder: {inv_item_sk}
                         ├─ Filter Est. 143997065 rows
                         │  │     Condition: Runtime Filters: {cs_item_sk}
                         │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
