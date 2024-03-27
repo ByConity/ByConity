@@ -8,9 +8,6 @@ CREATE TABLE test_query_cache_non_transactional (d Date, id UInt64, a String)
 --- miss, hit, hit, hit, hit, hit ---
 INSERT INTO test_query_cache_non_transactional values ('2019-01-01', 1, 'a');
 
---- sleep to make sure insert transaction is commited ---
-SELECT sleepEachRow(3) FROM numbers(2) FORMAT Null;
-
 sELECT * FROM test_query_cache_non_transactional ORDER BY id SETTINGS use_query_cache = 1, enable_transactional_query_cache = 0; 
 
 SeLECT * FROM test_query_cache_non_transactional ORDER BY id SETTINGS use_query_cache = 1, enable_transactional_query_cache = 0; 
@@ -18,8 +15,6 @@ SeLECT * FROM test_query_cache_non_transactional ORDER BY id SETTINGS use_query_
 SElECT * FROM test_query_cache_non_transactional ORDER BY id SETTINGS use_query_cache = 1, enable_transactional_query_cache = 0; 
 
 INSERT INTO test_query_cache_non_transactional values ('2019-01-01', 2, 'a')
---- sleep to make sure insert transaction is commited ---
-SELECT sleepEachRow(3) FROM numbers(2) FORMAT Null;
 SELeCT * FROM test_query_cache_non_transactional ORDER BY id SETTINGS use_query_cache = 1, enable_transactional_query_cache = 0; 
 
 SELEcT * FROM test_query_cache_non_transactional ORDER BY id SETTINGS use_query_cache = 1, enable_transactional_query_cache = 0; 
