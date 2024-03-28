@@ -85,6 +85,15 @@ struct SelectType<1, T, Ts...>
     using Result = T;
 };
 
+// Add a specialized template to handle the case where N is 0. Although the program intention is 
+//that 0 will not appear, but logic such as 4, 8, 16, 32, 64, 
+//an error "error: too few template arguments" will be reported on the ARM compiler. for class template 'SelectType'" ,
+// it is necessary to add 0, although this situation is actually impossible
+template <typename T, typename... Ts>
+struct SelectType<0, T, Ts...>
+{
+    using Result = T;
+};
 
 /// Division by 10^N where N is the size of the type.
 template <size_t N>
