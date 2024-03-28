@@ -63,7 +63,7 @@ TransformResult InlineCTEWithFilter::transformImpl(PlanNodePtr node, const Captu
 
 PlanNodePtr InlineCTE::reoptimize(CTEId cte_id, const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context)
 {
-    if (context->getSettingsRef().print_graphviz)
+if (context->getSettingsRef().print_graphviz)
         GraphvizPrinter::printLogicalPlan(
             *node, context, std::to_string(context->getRuleId()) + "_cte_" + std::to_string(cte_id) + "_inlined");
 

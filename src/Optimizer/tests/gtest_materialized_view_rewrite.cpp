@@ -558,7 +558,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregateGroupSets2)
 TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
 {
     sql("select empid, deptno, count(*) as c, sum(empid) as s\n"
-        "from emps group by empid, deptno",
+            "from emps group by empid, deptno",
         "select count(*) + 1 as c, deptno from emps group by deptno")
         .checkingThatResultContains("Expressions: [deptno_2], expr#plus(count(), 1)_1:=`expr#sum(expr#count())_2` + 1")
         .ok();
@@ -570,9 +570,9 @@ TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
 TEST_F(MaterializedViewRewriteTest, testAggregateRollUp2)
 {
     String mv = ""
-                "select empid, stddev_pop(deptno) "
-                "from emps "
-                "group by empid, deptno";
+        "select empid, stddev_pop(deptno) "
+        "from emps "
+        "group by empid, deptno";
     String query = ""
         "select empid, stddev_pop(deptno) "
         "from emps "

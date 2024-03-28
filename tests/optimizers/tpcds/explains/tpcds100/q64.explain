@@ -1,10 +1,10 @@
 Projection Est. 13564051 rows
-│     Expressions: b_city:=ca_city_2, b_street_name:=ca_street_name_2, b_street_number:=ca_street_number_2, b_zip:=ca_zip_2, c_city:=ca_city_3, c_street_name:=ca_street_name_3, c_street_number:=ca_street_number_3, c_zip:=ca_zip_3, cnt:=`expr#count()_1`, cnt_1:=`expr#count()_2`, product_name:=i_product_name_1, s11:=`expr#sum(ss_wholesale_cost)_1`, s12:=`expr#sum(ss_wholesale_cost)_2`, s21:=`expr#sum(ss_list_price)_1`, s22:=`expr#sum(ss_list_price)_2`, s31:=`expr#sum(ss_coupon_amt)_1`, s32:=`expr#sum(ss_coupon_amt)_2`, store_name:=s_store_name_2, store_zip:=s_zip_2, syear:=d_year_3, syear_1:=d_year_6
+│     Expressions: b_city:=ca_city_2, b_street_name:=ca_street_name_2, b_street_number:=ca_street_number_2, b_zip:=ca_zip_2, c_city:=ca_city_3, c_street_name:=ca_street_name_3, c_street_number:=ca_street_number_3, c_zip:=ca_zip_3, cnt:=`expr#count()_1`, cnt_1:=`expr#count()_2`, product_name:=i_product_name_1, s11:=`expr#sum(ss_wholesale_cost)_1`, s12:=`expr#sum(ss_wholesale_cost)_2`, s21:=`expr#sum(ss_list_price)_1`, s22:=`expr#sum(ss_list_price)_2`, s31:=`expr#sum(ss_coupon_amt)_1`, s32:=`expr#sum(ss_coupon_amt)_2`, store_name:=s_store_name_1, store_zip:=s_zip_1, syear:=d_year_3, syear_1:=d_year_6
 └─ Sorting Est. 13564051 rows
-   │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_2 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
+   │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
    └─ Gather Exchange Est. 13564051 rows
       └─ Sorting Est. 13564051 rows
-         │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_2 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
+         │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
          └─ Inner Join Est. 13564051 rows
             │     Condition: i_item_sk_2 == i_item_sk_1, s_store_name_2 == s_store_name_1, s_zip_2 == s_zip_1
             │     Filter: `expr#count()_2` <= `expr#count()_1`
@@ -22,12 +22,12 @@ Projection Est. 13564051 rows
                      └─ CTERef[0] Est. 74517 rows
 CTEDef [0]
    Projection Est. 74517 rows
-   │     Expressions: [ca_city, ca_city_1, ca_street_name, ca_street_name_1, ca_street_number, ca_street_number_1, ca_zip, ca_zip_1, d_year, expr#count(), expr#sum(ss_coupon_amt), expr#sum(ss_list_price), expr#sum(ss_wholesale_cost), i_product_name, s_store_name, s_zip], i_item_sk:=ss_item_sk
+   │     Expressions: [ca_city, ca_city_1, ca_street_name, ca_street_name_1, ca_street_number, ca_street_number_1, ca_zip, ca_zip_1, d_year, expr#count(), expr#sum(ss_coupon_amt), expr#sum(ss_list_price), expr#sum(ss_wholesale_cost), i_item_sk, i_product_name, s_store_name, s_zip]
    └─ MergingAggregated Est. 74517 rows
       └─ Repartition Exchange Est. 74517 rows
-         │     Partition by: {i_product_name, ss_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
+         │     Partition by: {i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
          └─ Aggregating Est. 74517 rows
-            │     Group by: {i_product_name, ss_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
+            │     Group by: {i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
             │     Group by keys not hashed: {i_product_name}
             │     Aggregates: expr#count():=AggNull(count)(), expr#sum(ss_wholesale_cost):=AggNull(sum)(ss_wholesale_cost), expr#sum(ss_list_price):=AggNull(sum)(ss_list_price), expr#sum(ss_coupon_amt):=AggNull(sum)(ss_coupon_amt)
             └─ Inner Join Est. 74517 rows
@@ -115,8 +115,8 @@ CTEDef [0]
                            │     │     │  │                 │  │           │     Condition: ss_sold_date_sk == d_date_sk
                            │     │     │  │                 │  │           │     Runtime Filters Builder: {d_date_sk}
                            │     │     │  │                 │  │           ├─ Inner Join Est. 178444 rows
-                           │     │     │  │                 │  │           │  │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
-                           │     │     │  │                 │  │           │  │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
+                           │     │     │  │                 │  │           │  │     Condition: ss_item_sk == cs_item_sk, ss_ticket_number == sr_ticket_number
+                           │     │     │  │                 │  │           │  │     Runtime Filters Builder: {cs_item_sk,sr_ticket_number}
                            │     │     │  │                 │  │           │  ├─ Projection Est. 275042936 rows
                            │     │     │  │                 │  │           │  │  │     Expressions: [ss_addr_sk, ss_cdemo_sk, ss_coupon_amt, ss_customer_sk, ss_hdemo_sk, ss_item_sk, ss_list_price, ss_sold_date_sk, ss_store_sk, ss_ticket_number, ss_wholesale_cost]
                            │     │     │  │                 │  │           │  │  └─ Filter Est. 275042936 rows

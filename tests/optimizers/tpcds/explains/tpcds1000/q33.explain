@@ -66,7 +66,15 @@ Projection Est. 100 rows
                   │                 │     └─ TableScan tpcds1000.item Est. 300000 rows
                   │                 │              Where: Runtime Filters: {i_manufact_id}
                   │                 │              Outputs: [i_item_sk, i_manufact_id]
-                  │                 └─ CTERef[1] Est. 29887 rows
+                  │                 └─ Repartition Exchange Est. 29887 rows
+                  │                    │     Partition by: {i_manufact_id_1}
+                  │                    └─ Projection Est. 29887 rows
+                  │                       │     Expressions: [i_manufact_id_1]
+                  │                       └─ Filter Est. 29887 rows
+                  │                          │     Condition: i_category = 'Electronics'
+                  │                          └─ TableScan tpcds1000.item Est. 300000 rows
+                  │                                   Where: i_category = 'Electronics'
+                  │                                   Outputs: [i_category], i_manufact_id_1:=i_manufact_id
                   ├─ MergingAggregated Est. 99 rows
                   │  └─ Repartition Exchange Est. 99 rows
                   │     │     Partition by: {i_manufact_id_2}
@@ -119,7 +127,15 @@ Projection Est. 100 rows
                   │                 │     └─ TableScan tpcds1000.item Est. 300000 rows
                   │                 │              Where: Runtime Filters: {i_manufact_id}
                   │                 │              Outputs: i_item_sk_1:=i_item_sk, i_manufact_id_2:=i_manufact_id
-                  │                 └─ CTERef[1] Est. 29887 rows
+                  │                 └─ Repartition Exchange Est. 29887 rows
+                  │                    │     Partition by: {i_manufact_id_3}
+                  │                    └─ Projection Est. 29887 rows
+                  │                       │     Expressions: [i_manufact_id_3]
+                  │                       └─ Filter Est. 29887 rows
+                  │                          │     Condition: i_category_1 = 'Electronics'
+                  │                          └─ TableScan tpcds1000.item Est. 300000 rows
+                  │                                   Where: i_category = 'Electronics'
+                  │                                   Outputs: i_category_1:=i_category, i_manufact_id_3:=i_manufact_id
                   └─ MergingAggregated Est. 99 rows
                      └─ Repartition Exchange Est. 99 rows
                         │     Partition by: {i_manufact_id_4}
@@ -172,16 +188,13 @@ Projection Est. 100 rows
                                     │     └─ TableScan tpcds1000.item Est. 300000 rows
                                     │              Where: Runtime Filters: {i_manufact_id}
                                     │              Outputs: i_item_sk_2:=i_item_sk, i_manufact_id_4:=i_manufact_id
-                                    └─ CTERef[1] Est. 29887 rows
-CTEDef [1]
-   Repartition Exchange Est. 29887 rows
-   │     Partition by: {i_manufact_id_1}
-   └─ Projection Est. 29887 rows
-      │     Expressions: [i_manufact_id_1]
-      └─ Filter Est. 29887 rows
-         │     Condition: i_category = 'Electronics'
-         └─ TableScan tpcds1000.item Est. 300000 rows
-                  Where: i_category = 'Electronics'
-                  Outputs: [i_category], i_manufact_id_1:=i_manufact_id
+                                    └─ Repartition Exchange Est. 29887 rows
+                                       │     Partition by: {i_manufact_id_5}
+                                       └─ Projection Est. 29887 rows
+                                          │     Expressions: [i_manufact_id_5]
+                                          └─ Filter Est. 29887 rows
+                                             │     Condition: i_category_2 = 'Electronics'
+                                             └─ TableScan tpcds1000.item Est. 300000 rows
+                                                      Where: i_category = 'Electronics'
+                                                      Outputs: i_category_2:=i_category, i_manufact_id_5:=i_manufact_id
 note: Runtime Filter is applied for 9 times.
-note: CTE(Common Table Expression) is applied for 3 times.

@@ -2,16 +2,16 @@
 
 #include <Advisor/AdvisorContext.h>
 #include <Advisor/Rules/ClusterKeyAdvise.h>
-#include <Advisor/Rules/MaterializedViewAdvise.h>
 #include <Advisor/Rules/PartitionKeyAdvise.h>
+#include <Advisor/Rules/MaterializedViewAdvise.h>
 #include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Advisor/WorkloadQuery.h>
 #include <Advisor/WorkloadTable.h>
-#include <Core/Types.h>
 #include <Interpreters/Context.h>
-#include <Poco/Logger.h>
+#include <Core/Types.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadPool.h>
+#include <Poco/Logger.h>
 
 #include <algorithm>
 #include <chrono>
@@ -20,36 +20,40 @@
 namespace DB
 {
 
-WorkloadAdvisors Advisor::getAdvisors(ASTAdviseQuery::AdvisorType type)
+Advisor::Advisor(ASTAdviseQuery::AdvisorType type)
 {
     switch (type)
     {
         case ASTAdviseQuery::AdvisorType::ALL:
-            return {
+            advisors = {
                 std::make_shared<ClusterKeyAdvisor>(),
                 std::make_shared<PartitionKeyAdvisor>(),
-                std::make_shared<MaterializedViewAdvisor>(MaterializedViewAdvisor::OutputType::PROJECTION, true, true),
-                std::make_shared<MaterializedViewAdvisor>(MaterializedViewAdvisor::OutputType::MATERIALIZED_VIEW, true, false)};
+                std::make_shared<MaterializedViewAdvisor>(false)
+            };
+            break;
         case ASTAdviseQuery::AdvisorType::ORDER_BY:
-            return {std::make_shared<ClusterKeyAdvisor>()};
-        case ASTAdviseQuery::AdvisorType::DISTRIBUTED_BY:
-            return {std::make_shared<PartitionKeyAdvisor>()};
+            advisors = {std::make_shared<ClusterKeyAdvisor>()};
+            break;
+        case ASTAdviseQuery::AdvisorType::CLUSTER_BY:
+            advisors = {std::make_shared<PartitionKeyAdvisor>()};
+            break;
         case ASTAdviseQuery::AdvisorType::MATERIALIZED_VIEW:
-            return {std::make_shared<MaterializedViewAdvisor>(MaterializedViewAdvisor::OutputType::MATERIALIZED_VIEW, true, false)};
-        case ASTAdviseQuery::AdvisorType::PROJECTION:
-            return {std::make_shared<MaterializedViewAdvisor>(MaterializedViewAdvisor::OutputType::PROJECTION, true, true)};
-            }
+            advisors = {std::make_shared<MaterializedViewAdvisor>(false)};
+            break;
+        case ASTAdviseQuery::AdvisorType::AGGREGATION_VIEW:
+            advisors = {std::make_shared<MaterializedViewAdvisor>(true)};
+            break;
+    }
 }
 
-WorkloadAdvises Advisor::analyze(const std::vector<String> & queries_, ContextPtr context_)
+WorkloadAdvises Advisor::analyze(const std::vector<String> & queries_, WorkloadTables & tables, ContextPtr context_)
 {
     auto context = Context::createCopy(context_);
 
-    ThreadPool query_thread_pool{std::min(static_cast<size_t>(context->getSettingsRef().max_threads), queries_.size())};
+    ThreadPool query_thread_pool{std::min(size_t(context->getSettingsRef().max_threads), queries_.size())};
 
     Stopwatch stop_watch;
     stop_watch.start();
-    WorkloadTables tables{context};
     WorkloadQueries queries = WorkloadQuery::build(queries_, context, query_thread_pool);
     LOG_DEBUG(log, "Build workload queries time: {} ms", stop_watch.elapsedMillisecondsAsDouble());
 
@@ -58,7 +62,7 @@ WorkloadAdvises Advisor::analyze(const std::vector<String> & queries_, ContextPt
     LOG_DEBUG(log, "Build advisor context time: {} ms", stop_watch.elapsedMillisecondsAsDouble());
 
     WorkloadAdvises res;
-    for (const auto & advisor : getAdvisors(type))
+    for (const auto & advisor : advisors)
     {
         stop_watch.restart();
         auto advises = advisor->analyze(advisor_context);

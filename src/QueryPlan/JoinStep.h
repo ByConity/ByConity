@@ -155,7 +155,7 @@ public:
         if (require_right_keys || has_using)
             return false;
 
-        return true;
+        return !isMagic();
     }
 
     void setJoinAlgorithm(JoinAlgorithm join_algorithm_) { join_algorithm = join_algorithm_; }

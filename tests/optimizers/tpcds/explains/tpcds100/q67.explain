@@ -14,9 +14,9 @@ Projection Est. 100 rows
                └─ Window Est. 52607245 rows
                   └─ Repartition Exchange Est. 52607245 rows
                      │     Partition by: {i_category}
-                     └─ Projection Est. 52607245 rows
-                        │     Expressions: [d_moy, d_qoy, d_year, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)), i_brand, i_category, i_class, i_product_name, s_store_id]
-                        └─ PartitionTopN Est. 52607245 rows
+                     └─ PartitionTopN Est. 52607245 rows
+                        └─ Projection Est. 52607245 rows
+                           │     Expressions: [d_moy, d_qoy, d_year, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)), i_brand, i_category, i_class, i_product_name, s_store_id]
                            └─ MergingAggregated Est. 52607245 rows
                               └─ Repartition Exchange Est. 52607245 rows
                                  │     Partition by: {i_category, i_class, i_brand, i_product_name, d_year, d_qoy, d_moy, s_store_id, __grouping_set}

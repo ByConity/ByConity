@@ -18,8 +18,8 @@ Projection Est. 100 rows
                         │     Group by: {i_item_id, i_item_desc, s_state}
                         │     Aggregates: expr#count(ss_quantity):=AggNull(count)(ss_quantity), expr#avg(ss_quantity):=AggNull(avg)(ss_quantity), expr#stddevSamp(ss_quantity):=AggNull(stddevSamp)(ss_quantity), expr#count(sr_return_quantity):=AggNull(count)(sr_return_quantity), expr#avg(sr_return_quantity):=AggNull(avg)(sr_return_quantity), expr#stddevSamp(sr_return_quantity):=AggNull(stddevSamp)(sr_return_quantity), expr#count(cs_quantity):=AggNull(count)(cs_quantity), expr#avg(cs_quantity):=AggNull(avg)(cs_quantity), expr#stddevSamp(cs_quantity):=AggNull(stddevSamp)(cs_quantity)
                         └─ Inner (PARALLEL_HASH) Join Est. 347924909 rows
-                           │     Condition: cs_bill_customer_sk == ss_customer_sk, cs_item_sk == ss_item_sk
-                           │     Runtime Filters Builder: {ss_item_sk}
+                           │     Condition: cs_bill_customer_sk == sr_customer_sk, cs_item_sk == i_item_sk
+                           │     Runtime Filters Builder: {i_item_sk}
                            ├─ Inner Join Est. 214114735 rows
                            │  │     Condition: cs_sold_date_sk == d_date_sk_2
                            │  │     Runtime Filters Builder: {d_date_sk_2}
@@ -37,7 +37,7 @@ Projection Est. 100 rows
                            │                    Where: d_quarter_name IN ('2001Q1', '2001Q2', '2001Q3')
                            │                    Outputs: d_date_sk_2:=d_date_sk, d_quarter_name_2:=d_quarter_name
                            └─ Inner (PARALLEL_HASH) Join Est. 25121940 rows
-                              │     Condition: ss_item_sk == sr_item_sk, ss_customer_sk == sr_customer_sk, ss_ticket_number == sr_ticket_number
+                              │     Condition: i_item_sk == sr_item_sk, ss_customer_sk == sr_customer_sk, ss_ticket_number == sr_ticket_number
                               │     Runtime Filters Builder: {sr_ticket_number}
                               ├─ Inner Join Est. 143762428 rows
                               │  │     Condition: ss_item_sk == i_item_sk

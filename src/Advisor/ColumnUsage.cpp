@@ -106,7 +106,7 @@ protected:
         ColumnUsages & column_usages,
         const std::string & symbol,
         ColumnUsageType type,
-        PlanNodePtr node,
+        const PlanNodeBase & node,
         ConstASTPtr expression = nullptr);
 
     void processChildren(PlanNodeBase & node, ColumnUsages & column_usages);
@@ -170,13 +170,13 @@ std::vector<ColumnUsage> ColumnUsageInfo::getUsages(ColumnUsageType type, bool o
 }
 
 void ColumnUsageVisitor::addUsage(
-    ColumnUsages & column_usages, const std::string & symbol, ColumnUsageType type, PlanNodePtr node, ConstASTPtr expression)
+    ColumnUsages & column_usages, const std::string & symbol, ColumnUsageType type, const PlanNodeBase & node, ConstASTPtr expression)
 {
     auto it = symbol_to_table_column_map.find(symbol);
     if (it == symbol_to_table_column_map.end()) // no matching column
         return;
     const auto & [column, is_source_table] = it->second;
-    column_usages[column].update(ColumnUsage{type, node, column, expression}, is_source_table);
+    column_usages[column].update(ColumnUsage{type, node.shared_from_this(), column, expression}, is_source_table);
 }
 
 void ColumnUsageVisitor::processChildren(PlanNodeBase & node, ColumnUsages & column_usages)
@@ -199,7 +199,7 @@ void ColumnUsageVisitor::visitTableScanNode(TableScanNode & node, ColumnUsages &
     {
         QualifiedColumnName column{storage_id.getDatabaseName(), storage_id.getTableName(), column_name};
         symbol_to_table_column_map.emplace(alias, ColumnNameWithSourceTableFlag{column, true});
-        addUsage(column_usages, alias, ColumnUsageType::SCANNED, node.shared_from_this());
+        addUsage(column_usages, alias, ColumnUsageType::SCANNED, node);
     }
 }
 
@@ -211,7 +211,7 @@ void ColumnUsageVisitor::visitFilterNode(FilterNode & node, ColumnUsages & colum
     {
         auto usage_opt = extractPredicateUsage(expression);
         if (usage_opt.has_value())
-            addUsage(column_usages, usage_opt.value().first, usage_opt.value().second, node.shared_from_this(), expression);
+            addUsage(column_usages, usage_opt.value().first, usage_opt.value().second, node, expression);
     }
 }
 
@@ -221,9 +221,9 @@ void ColumnUsageVisitor::visitJoinNode(JoinNode & node, ColumnUsages & column_us
     auto join_step = dynamic_pointer_cast<JoinStep>(node.getStep());
 
     for (const std::string & name : join_step->getLeftKeys())
-        addUsage(column_usages, name, ColumnUsageType::EQUI_JOIN, node.shared_from_this());
+        addUsage(column_usages, name, ColumnUsageType::EQUI_JOIN, node);
     for (const std::string & name : join_step->getRightKeys())
-        addUsage(column_usages, name, ColumnUsageType::EQUI_JOIN, node.shared_from_this());
+        addUsage(column_usages, name, ColumnUsageType::EQUI_JOIN, node);
 
     if (join_step->getFilter())
     {
@@ -232,8 +232,8 @@ void ColumnUsageVisitor::visitJoinNode(JoinNode & node, ColumnUsages & column_us
             auto usage_opt = extractNonEquiJoinUsage(expression);
             if (usage_opt.has_value())
             {
-                addUsage(column_usages, usage_opt.value().first, ColumnUsageType::NON_EQUI_JOIN, node.shared_from_this(), expression);
-                addUsage(column_usages, usage_opt.value().second, ColumnUsageType::NON_EQUI_JOIN, node.shared_from_this(), expression);
+                addUsage(column_usages, usage_opt.value().first, ColumnUsageType::NON_EQUI_JOIN, node, expression);
+                addUsage(column_usages, usage_opt.value().second, ColumnUsageType::NON_EQUI_JOIN, node, expression);
             }
         }
     }
@@ -266,7 +266,7 @@ void ColumnUsageVisitor::visitAggregatingNode(AggregatingNode & node, ColumnUsag
     processChildren(node, column_usages);
     auto agg_step = dynamic_pointer_cast<AggregatingStep>(node.getStep());
     for (const auto & grouping_key : agg_step->getKeys())
-        addUsage(column_usages, grouping_key, ColumnUsageType::GROUP_BY, node.shared_from_this());
+        addUsage(column_usages, grouping_key, ColumnUsageType::GROUP_BY, node);
     // after agg, the symbols are not considered source-table
     const auto & outputs = agg_step->getOutputStream().header;
     for (auto & symbol_column_flag : symbol_to_table_column_map)

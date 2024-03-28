@@ -19,9 +19,9 @@ public:
     {
         ALL,
         ORDER_BY,
-        DISTRIBUTED_BY,
+        CLUSTER_BY,
         MATERIALIZED_VIEW,
-        PROJECTION
+        AGGREGATION_VIEW
     };
     AdvisorType type = AdvisorType::ALL;
     ASTPtr tables;

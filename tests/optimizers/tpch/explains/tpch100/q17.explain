@@ -13,7 +13,7 @@ Projection Est. 1 rows
                   │     Condition: l_quantity < cast('0.2' * `expr#avg(l_quantity)`, 'Nullable(Float64)')
                   └─ Window Est. 601371 rows
                      └─ Repartition Exchange Est. 601371 rows
-                        │     Partition by: {l_partkey}
+                        │     Partition by: {p_partkey}
                         └─ Inner Join Est. 601371 rows
                            │     Condition: l_partkey == p_partkey
                            │     Runtime Filters Builder: {p_partkey}

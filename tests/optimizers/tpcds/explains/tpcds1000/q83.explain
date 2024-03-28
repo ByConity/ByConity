@@ -1,18 +1,18 @@
 Projection Est. 100 rows
-│     Expressions: average:=`expr#divide(plus(plus(sr_item_qty, cr_item_qty), wr_item_qty), '3')`, cr_dev:=`expr#multiply(divide(divide(cr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, cr_item_qty:=`expr#sum(cr_return_quantity)`, item_id:=i_item_id_1, sr_dev:=`expr#multiply(divide(divide(sr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, sr_item_qty:=`expr#sum(sr_return_quantity)`, wr_dev:=`expr#multiply(divide(divide(wr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, wr_item_qty:=`expr#sum(wr_return_quantity)`
+│     Expressions: average:=`expr#divide(plus(plus(sr_item_qty, cr_item_qty), wr_item_qty), '3')`, cr_dev:=`expr#multiply(divide(divide(cr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, cr_item_qty:=`expr#sum(cr_return_quantity)`, item_id:=i_item_id, sr_dev:=`expr#multiply(divide(divide(sr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, sr_item_qty:=`expr#sum(sr_return_quantity)`, wr_dev:=`expr#multiply(divide(divide(wr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, wr_item_qty:=`expr#sum(wr_return_quantity)`
 └─ Projection Est. 100 rows
-   │     Expressions: [expr#sum(cr_return_quantity), expr#sum(sr_return_quantity), expr#sum(wr_return_quantity), i_item_id_1], expr#divide(plus(plus(sr_item_qty, cr_item_qty), wr_item_qty), '3'):=((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`) / '3', expr#multiply(divide(divide(cr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(cr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100, expr#multiply(divide(divide(sr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(sr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100, expr#multiply(divide(divide(wr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(wr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100
+   │     Expressions: [expr#sum(cr_return_quantity), expr#sum(sr_return_quantity), expr#sum(wr_return_quantity), i_item_id], expr#divide(plus(plus(sr_item_qty, cr_item_qty), wr_item_qty), '3'):=((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`) / '3', expr#multiply(divide(divide(cr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(cr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100, expr#multiply(divide(divide(sr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(sr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100, expr#multiply(divide(divide(wr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(wr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100
    └─ Limit Est. 100 rows
       │     Limit: 100
       └─ Sorting Est. 100 rows
-         │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
+         │     Order by: {i_item_id ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
          │     Limit: 100
          └─ Gather Exchange Est. 149640 rows
             └─ Sorting Est. 100 rows
-               │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
+               │     Order by: {i_item_id ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
                │     Limit: 100
                └─ Inner Join Est. 149640 rows
-                  │     Condition: i_item_id_1 == i_item_id_2
+                  │     Condition: i_item_id == i_item_id_2
                   │     Runtime Filters Builder: {i_item_id_2}
                   ├─ Inner Join Est. 149640 rows
                   │  │     Condition: i_item_id_1 == i_item_id
@@ -52,7 +52,13 @@ Projection Est. 100 rows
                   │  │           │              │           Where: Runtime Filters: {d_week_seq}
                   │  │           │              │           Outputs: d_date_4:=d_date, d_week_seq_2:=d_week_seq
                   │  │           │              └─ Broadcast Exchange Est. 3 rows
-                  │  │           │                 └─ CTERef[1] Est. 3 rows
+                  │  │           │                 └─ Projection Est. 3 rows
+                  │  │           │                    │     Expressions: [d_week_seq_3]
+                  │  │           │                    └─ Filter Est. 3 rows
+                  │  │           │                       │     Condition: d_date_5 IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
+                  │  │           │                       └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                  │  │           │                                Where: d_date IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
+                  │  │           │                                Outputs: d_date_5:=d_date, d_week_seq_3:=d_week_seq
                   │  │           └─ Filter Est. 300000 rows
                   │  │              │     Condition: Runtime Filters: {i_item_id_1}
                   │  │              └─ TableScan tpcds1000.item Est. 300000 rows
@@ -93,7 +99,13 @@ Projection Est. 100 rows
                   │              │              │           Where: Runtime Filters: {d_week_seq}
                   │              │              │           Outputs: [d_week_seq], d_date_1:=d_date
                   │              │              └─ Broadcast Exchange Est. 3 rows
-                  │              │                 └─ CTERef[1] Est. 3 rows
+                  │              │                 └─ Projection Est. 3 rows
+                  │              │                    │     Expressions: [d_week_seq_1]
+                  │              │                    └─ Filter Est. 3 rows
+                  │              │                       │     Condition: d_date_2 IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
+                  │              │                       └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                  │              │                                Where: d_date IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
+                  │              │                                Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
                   │              └─ Filter Est. 300000 rows
                   │                 │     Condition: Runtime Filters: {i_item_id}
                   │                 └─ TableScan tpcds1000.item Est. 300000 rows
@@ -134,18 +146,13 @@ Projection Est. 100 rows
                               │              │           Where: Runtime Filters: {d_week_seq}
                               │              │           Outputs: d_date_7:=d_date, d_week_seq_4:=d_week_seq
                               │              └─ Broadcast Exchange Est. 3 rows
-                              │                 └─ CTERef[1] Est. 3 rows
+                              │                 └─ Projection Est. 3 rows
+                              │                    │     Expressions: [d_week_seq_5]
+                              │                    └─ Filter Est. 3 rows
+                              │                       │     Condition: d_date_8 IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
+                              │                       └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                              │                                Where: d_date IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
+                              │                                Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
                               └─ TableScan tpcds1000.item Est. 300000 rows
                                        Outputs: i_item_sk_2:=i_item_sk, i_item_id_2:=i_item_id
-CTEDef [1]
-   Repartition Exchange Est. 3 rows
-   │     Partition by: {d_week_seq_1}
-   └─ Projection Est. 3 rows
-      │     Expressions: [d_week_seq_1]
-      └─ Filter Est. 3 rows
-         │     Condition: d_date_2 IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
-         └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                  Where: d_date IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
-                  Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
 note: Runtime Filter is applied for 12 times.
-note: CTE(Common Table Expression) is applied for 3 times.

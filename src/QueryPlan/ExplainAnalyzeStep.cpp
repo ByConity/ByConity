@@ -12,7 +12,7 @@ namespace DB
 
 ExplainAnalyzeStep::ExplainAnalyzeStep(
     const DataStream & input_stream_,
-    const String & output_name_,
+const String & output_name_,
     ASTExplainQuery::ExplainKind kind_,
     ContextMutablePtr context_,
     std::shared_ptr<QueryPlan> query_plan_ptr_,
@@ -36,7 +36,7 @@ void ExplainAnalyzeStep::transformPipeline(QueryPipeline & pipeline, const Build
 void ExplainAnalyzeStep::setInputStreams(const DataStreams & input_streams_)
 {
     input_streams = input_streams_;
-}
+    }
 
 std::shared_ptr<IQueryPlanStep> ExplainAnalyzeStep::copy(ContextPtr) const
 {

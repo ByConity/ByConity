@@ -18,7 +18,6 @@
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Rule/Patterns.h>
-#include <Optimizer/Rule/Rule.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/AnyStep.h>
 #include <QueryPlan/CTEInfo.h>
