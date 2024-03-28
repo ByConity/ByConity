@@ -11,8 +11,8 @@ unset (_current_dir_name)
 
 # Third-party libraries may have substandard code.
 # Also remove a possible source of nondeterminism.
-set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w -D__DATE__= -D__TIME__= -D__TIMESTAMP__=")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w -D__DATE__= -D__TIME__= -D__TIMESTAMP__=")
+set (CMAKE_C_FLAGS "-w -Wno-implicit-function-declaration ${CMAKE_C_FLAGS} -D__DATE__= -D__TIME__= -D__TIMESTAMP__=")
+set (CMAKE_CXX_FLAGS "-w -Wno-implicit-function-declaration ${CMAKE_CXX_FLAGS} -D__DATE__= -D__TIME__= -D__TIMESTAMP__=")
 
 # add_contrib cmake_folder[ base_folder1[, ...base_folderN]]
 function(add_contrib cmake_folder)
