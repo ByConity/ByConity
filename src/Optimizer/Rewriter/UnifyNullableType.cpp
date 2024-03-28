@@ -13,7 +13,6 @@
  * limitations under the License.
  */
 
-#include <memory>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
@@ -642,4 +641,5 @@ PlanNodePtr UnifyNullableVisitor::visitCTERefNode(CTERefNode & node, ContextMuta
     auto cte_ref_node = CTERefNode::createPlanNode(context->nextNodeId(), std::move(cte_ref_step), PlanNodes{}, node.getStatistics());
     return cte_ref_node;
 }
+
 }

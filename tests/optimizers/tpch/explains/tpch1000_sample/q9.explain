@@ -18,8 +18,8 @@ Projection Est. 54134 rows
                         ├─ Repartition Exchange Est. 3075113647 rows
                         │  │     Partition by: {l_orderkey}
                         │  └─ Inner (PARALLEL_HASH) Join Est. 3075113647 rows
-                        │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-                        │     │     Runtime Filters Builder: {ps_partkey}
+                        │     │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
+                        │     │     Runtime Filters Builder: {p_partkey}
                         │     ├─ Repartition Exchange Est. 5999989709 rows
                         │     │  │     Partition by: {l_suppkey}
                         │     │  └─ Filter Est. 5999989709 rows

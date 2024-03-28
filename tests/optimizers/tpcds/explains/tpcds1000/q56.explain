@@ -55,7 +55,15 @@ Projection Est. 100 rows
                   │           │           │     └─ TableScan tpcds1000.item Est. 300000 rows
                   │           │           │              Where: Runtime Filters: {i_item_id}
                   │           │           │              Outputs: [i_item_sk, i_item_id]
-                  │           │           └─ CTERef[1] Est. 8050 rows
+                  │           │           └─ Repartition Exchange Est. 8050 rows
+                  │           │              │     Partition by: {i_item_id_1}
+                  │           │              └─ Projection Est. 8050 rows
+                  │           │                 │     Expressions: [i_item_id_1]
+                  │           │                 └─ Filter Est. 8050 rows
+                  │           │                    │     Condition: i_color IN ('blanched', 'burnished', 'slate')
+                  │           │                    └─ TableScan tpcds1000.item Est. 300000 rows
+                  │           │                             Where: i_color IN ('blanched', 'burnished', 'slate')
+                  │           │                             Outputs: [i_color], i_item_id_1:=i_item_id
                   │           └─ Repartition Exchange Est. 2189168 rows
                   │              │     Partition by: {ca_address_sk}
                   │              └─ Projection Est. 2189168 rows
@@ -115,7 +123,15 @@ Projection Est. 100 rows
                   │                       │     └─ TableScan tpcds1000.item Est. 300000 rows
                   │                       │              Where: Runtime Filters: {i_item_id}
                   │                       │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
-                  │                       └─ CTERef[1] Est. 8050 rows
+                  │                       └─ Repartition Exchange Est. 8050 rows
+                  │                          │     Partition by: {i_item_id_3}
+                  │                          └─ Projection Est. 8050 rows
+                  │                             │     Expressions: [i_item_id_3]
+                  │                             └─ Filter Est. 8050 rows
+                  │                                │     Condition: i_color_1 IN ('blanched', 'burnished', 'slate')
+                  │                                └─ TableScan tpcds1000.item Est. 300000 rows
+                  │                                         Where: i_color IN ('blanched', 'burnished', 'slate')
+                  │                                         Outputs: i_item_id_3:=i_item_id, i_color_1:=i_color
                   └─ MergingAggregated Est. 4015 rows
                      └─ Repartition Exchange Est. 4015 rows
                         │     Partition by: {i_item_id_4}
@@ -166,16 +182,13 @@ Projection Est. 100 rows
                                           │     └─ TableScan tpcds1000.item Est. 300000 rows
                                           │              Where: Runtime Filters: {i_item_id}
                                           │              Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
-                                          └─ CTERef[1] Est. 8050 rows
-CTEDef [1]
-   Repartition Exchange Est. 8050 rows
-   │     Partition by: {i_item_id_1}
-   └─ Projection Est. 8050 rows
-      │     Expressions: [i_item_id_1]
-      └─ Filter Est. 8050 rows
-         │     Condition: i_color IN ('blanched', 'burnished', 'slate')
-         └─ TableScan tpcds1000.item Est. 300000 rows
-                  Where: i_color IN ('blanched', 'burnished', 'slate')
-                  Outputs: [i_color], i_item_id_1:=i_item_id
+                                          └─ Repartition Exchange Est. 8050 rows
+                                             │     Partition by: {i_item_id_5}
+                                             └─ Projection Est. 8050 rows
+                                                │     Expressions: [i_item_id_5]
+                                                └─ Filter Est. 8050 rows
+                                                   │     Condition: i_color_2 IN ('blanched', 'burnished', 'slate')
+                                                   └─ TableScan tpcds1000.item Est. 300000 rows
+                                                            Where: i_color IN ('blanched', 'burnished', 'slate')
+                                                            Outputs: i_item_id_5:=i_item_id, i_color_2:=i_color
 note: Runtime Filter is applied for 12 times.
-note: CTE(Common Table Expression) is applied for 3 times.

@@ -113,10 +113,25 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping3)
         .ok();
 }
 
+TEST_F(MaterializedViewRewriteAdditionalTest, testSimpleAggregate)
+{
+    String q = "select count(*) from emps";
+    sql(q, q).checkingThatResultContains("Aggregates: expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2)").ok();
+}
+
 TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping)
 {
     String mv = "select deptno, empid, count(commission) as count from emps group by deptno, empid";
     String query = "select count(commission) from emps";
+    sql(mv, query)
+        .checkingThatResultContains("Expressions: expr#count(commission)_3:=coalesce(`expr#sum(expr#count(commission))_2`, 0)")
+        .ok();
+}
+
+TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping2)
+{
+    String mv = "select deptno, empid, count(commission) as count from emps group by deptno, empid";
+    String query = "select count(commission) from emps where deptno = 1 and empid = 2";
     sql(mv, query)
         .checkingThatResultContains("Expressions: expr#count(commission)_3:=coalesce(`expr#sum(expr#count(commission))_2`, 0)")
         .ok();

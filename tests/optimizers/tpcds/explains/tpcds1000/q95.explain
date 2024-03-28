@@ -20,10 +20,10 @@ Projection Est. 1 rows
                            │     Aggregates: expr#sum(ws_ext_ship_cost):=AggNull(sum)(ws_ext_ship_cost), expr#sum(ws_net_profit):=AggNull(sum)(ws_net_profit)
                            └─ Expand Est. 99984 rows
                               └─ Right Semi Join Est. 99984 rows
-                                 │     Condition: ws_order_number_6 == ws_order_number
+                                 │     Condition: wr_order_number == ws_order_number
                                  │     Runtime Filters Builder: {ws_order_number}
                                  ├─ Inner (PARALLEL_HASH) Join Est. 7379484997 rows
-                                 │  │     Condition: ws_order_number_6 == ws_order_number_5
+                                 │  │     Condition: wr_order_number == ws_order_number_5
                                  │  │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
                                  │  ├─ Inner (PARALLEL_HASH) Join Est. 863369119 rows
                                  │  │  │     Condition: ws_order_number_6 == wr_order_number

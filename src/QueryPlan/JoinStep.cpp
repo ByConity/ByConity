@@ -375,9 +375,9 @@ bool JoinStep::supportReorder(bool support_filter, bool support_cross) const
         return false;
 
     if (support_cross && cross_join)
-        return true;
+        return !is_magic;
 
-    return kind == ASTTableJoin::Kind::Inner && !left_keys.empty();
+    return kind == ASTTableJoin::Kind::Inner && !left_keys.empty() && !is_magic;
 }
 
 void JoinStep::describePipeline(FormatSettings & settings) const

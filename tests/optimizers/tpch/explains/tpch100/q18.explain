@@ -1,5 +1,5 @@
 Projection Est. 100 rows
-│     Expressions: [c_name, o_orderdate, o_totalprice], c_custkey:=o_custkey, o_orderkey:=l_orderkey, sum(l_quantity):=`expr#sum(l_quantity)_1`
+│     Expressions: [c_custkey, c_name, o_orderdate, o_orderkey, o_totalprice], sum(l_quantity):=`expr#sum(l_quantity)_1`
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
@@ -10,7 +10,7 @@ Projection Est. 100 rows
             │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 100
             └─ Aggregating Est. 150009474 rows
-               │     Group by: {c_name, o_custkey, l_orderkey, o_orderdate, o_totalprice}
+               │     Group by: {c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
                └─ Inner (PARALLEL_HASH) Join Est. 150009474 rows
                   │     Condition: o_custkey == c_custkey

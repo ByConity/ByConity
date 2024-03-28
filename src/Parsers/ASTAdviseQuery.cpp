@@ -3,17 +3,15 @@
 
 namespace DB
 {
-
 const char * ASTAdviseQuery::getTypeString(ASTAdviseQuery::AdvisorType adviseType)
 {
     switch (adviseType)
     {
         case AdvisorType::ALL: return "ALL";
         case AdvisorType::ORDER_BY: return "ORDER_BY";
-        case AdvisorType::DISTRIBUTED_BY: return "DISTRIBUTED_BY";
+        case AdvisorType::CLUSTER_BY: return "CLUSTER_BY";
         case AdvisorType::MATERIALIZED_VIEW: return "MATERIALIZED_VIEW";
-        case AdvisorType::PROJECTION:
-            return "PROJECTION";
+        case AdvisorType::AGGREGATION_VIEW: return "AGGREGATION_VIEW";
     }
 }
 
@@ -36,6 +34,5 @@ void ASTAdviseQuery::formatImpl(const FormatSettings & settings, FormatState &, 
                       << (settings.hilite ? hilite_none : "");
     settings.ostr << ";";
 }
-
 
 }

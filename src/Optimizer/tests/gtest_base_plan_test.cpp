@@ -20,7 +20,6 @@
 #include <Databases/DatabaseCnch.h>
 #include <Databases/DatabaseMemory.h>
 #include <IO/ReadBufferFromString.h>
-#include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
@@ -33,7 +32,6 @@
 #include <Optimizer/Dump/PlanReproducer.h>
 #include <Optimizer/PlanOptimizer.h>
 #include <Optimizer/tests/gtest_storage_mock_distirbuted.h>
-#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 #include <QueryPlan/PlanPrinter.h>

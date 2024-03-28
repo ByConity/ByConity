@@ -16,15 +16,12 @@ namespace DB
 
 enum class WorkloadExtendedStatsType
 {
-    COUNT_TO_UINT32_OR_NULL = 0,
-    COUNT_TO_FLOAT32_OR_NULL = 1,
-    COUNT_TO_DATE_OR_NULL = 2,
-    COUNT_TO_DATE_TIME_OR_NULL = 3,
+    HLL_STATS = 0,
+    COUNT_DISTINCT_STATS = 1
 };
 
 /* column -> (type -> value) */
-using WorkloadExtendedStat = std::unordered_map<WorkloadExtendedStatsType, Field>;
-using WorkloadExtendedStats = std::unordered_map<String, WorkloadExtendedStat>;
+using WorkloadExtendedStats = std::unordered_map<String, std::unordered_map<WorkloadExtendedStatsType, Field>>;
 using WorkloadExtendedStatsPtr = std::shared_ptr<WorkloadExtendedStats>;
 
 class WorkloadTableStats
@@ -51,10 +48,8 @@ private:
     {
         switch (type)
         {
-            case WorkloadExtendedStatsType::COUNT_TO_UINT32_OR_NULL: return "count(toUInt32OrNull({}))";
-            case WorkloadExtendedStatsType::COUNT_TO_FLOAT32_OR_NULL: return "count(toFloat32OrNull({}))";
-            case WorkloadExtendedStatsType::COUNT_TO_DATE_OR_NULL: return "count(toDateOrNull({}))";
-            case WorkloadExtendedStatsType::COUNT_TO_DATE_TIME_OR_NULL: return "count(toDateTimeOrNull({}))";
+            case WorkloadExtendedStatsType::HLL_STATS: return "uniqHLL12({})";
+            case WorkloadExtendedStatsType::COUNT_DISTINCT_STATS: return "count(distinct {})";
         }
     }
 

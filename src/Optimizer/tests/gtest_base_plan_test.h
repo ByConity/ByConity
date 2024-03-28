@@ -24,7 +24,6 @@
 
 #include <filesystem>
 #include <memory>
-#include <unordered_map>
 
 namespace DB
 {
@@ -40,10 +39,7 @@ public:
 
     QueryPlanPtr plan(const String & query, ContextMutablePtr query_context);
 
-    QueryPlanPtr plan(const String & query, const std::unordered_map<String, Field> & settings = {})
-    {
-        return plan(query, createQueryContext(settings));
-    }
+    QueryPlanPtr plan(const String & query) { return plan(query, createQueryContext()); }
 
     PlanSegmentTreePtr planSegment(const String & query, ContextMutablePtr query_context);
 
@@ -59,6 +55,7 @@ public:
 
     ContextMutablePtr getSessionContext() { return session_context; }
     std::string getDatabaseName() { return database_name; }
+
 
 protected:
     String database_name;

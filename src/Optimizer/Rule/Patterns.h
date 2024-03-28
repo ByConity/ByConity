@@ -139,7 +139,6 @@ inline PatternBuilder apply() { return typeOf(IQueryPlanStep::Type::Apply); }
 inline PatternBuilder enforceSingleRow() { return typeOf(IQueryPlanStep::Type::EnforceSingleRow); }
 inline PatternBuilder assignUniqueId() { return typeOf(IQueryPlanStep::Type::AssignUniqueId); }
 inline PatternBuilder cte() { return typeOf(IQueryPlanStep::Type::CTERef); }
-inline PatternBuilder buffer() { return typeOf(IQueryPlanStep::Type::Buffer); }
 PatternBuilder topN();
 inline PatternBuilder topNFiltering() { return typeOf(IQueryPlanStep::Type::TopNFiltering); }
 inline PatternBuilder explainAnalyze() { return typeOf(IQueryPlanStep::Type::ExplainAnalyze); }

@@ -9,13 +9,15 @@ Projection Est. ? rows
             └─ Aggregating Est. ? rows
                │     Group by: {item_id}
                │     Aggregates: expr#count():=AggNull(count)()
-               └─ MergingAggregated Est. ? rows
-                  └─ Repartition Exchange Est. ? rows
-                     │     Partition by: {item_id, name}
-                     └─ Aggregating Est. ? rows
-                        │     Group by: {item_id, name}
-                        └─ TableScan zx_test.customer Est. ? rows
-                                 Outputs: [item_id, name]
+               └─ Projection Est. ? rows
+                  │     Expressions: [item_id]
+                  └─ MergingAggregated Est. ? rows
+                     └─ Repartition Exchange Est. ? rows
+                        │     Partition by: {item_id, name}
+                        └─ Aggregating Est. ? rows
+                           │     Group by: {item_id, name}
+                           └─ TableScan zx_test.customer Est. ? rows
+                                    Outputs: [item_id, name]
 Projection Est. ? rows
 │     Expressions: count():=`expr#count()`
 └─ MergingAggregated Est. ? rows

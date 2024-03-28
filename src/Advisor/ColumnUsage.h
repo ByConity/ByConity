@@ -29,7 +29,7 @@ enum class ColumnUsageType
 struct ColumnUsage
 {
     ColumnUsageType type;
-    PlanNodePtr node; // the node where the usage appears
+    std::shared_ptr<const PlanNodeBase> node; // the node where the usage appears
     QualifiedColumnName column;
     ConstASTPtr expression; // the direct expression of usage, will be set for predicates
 };

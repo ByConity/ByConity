@@ -66,7 +66,15 @@ Projection
                   │                 │     └─ TableScan tpcds1000.item
                   │                 │              Where: Runtime Filters: {i_manufact_id}
                   │                 │              Outputs: [i_item_sk, i_manufact_id]
-                  │                 └─ CTERef[1]
+                  │                 └─ Repartition Exchange
+                  │                    │     Partition by: {i_manufact_id_1}
+                  │                    └─ Projection
+                  │                       │     Expressions: [i_manufact_id_1]
+                  │                       └─ Filter
+                  │                          │     Condition: i_category = 'Electronics'
+                  │                          └─ TableScan tpcds1000.item
+                  │                                   Where: i_category = 'Electronics'
+                  │                                   Outputs: [i_category], i_manufact_id_1:=i_manufact_id
                   ├─ MergingAggregated
                   │  └─ Repartition Exchange
                   │     │     Partition by: {i_manufact_id_2}
@@ -119,7 +127,15 @@ Projection
                   │                 │     └─ TableScan tpcds1000.item
                   │                 │              Where: Runtime Filters: {i_manufact_id}
                   │                 │              Outputs: i_item_sk_1:=i_item_sk, i_manufact_id_2:=i_manufact_id
-                  │                 └─ CTERef[1]
+                  │                 └─ Repartition Exchange
+                  │                    │     Partition by: {i_manufact_id_3}
+                  │                    └─ Projection
+                  │                       │     Expressions: [i_manufact_id_3]
+                  │                       └─ Filter
+                  │                          │     Condition: i_category_1 = 'Electronics'
+                  │                          └─ TableScan tpcds1000.item
+                  │                                   Where: i_category = 'Electronics'
+                  │                                   Outputs: i_category_1:=i_category, i_manufact_id_3:=i_manufact_id
                   └─ MergingAggregated
                      └─ Repartition Exchange
                         │     Partition by: {i_manufact_id_4}
@@ -172,16 +188,13 @@ Projection
                                     │     └─ TableScan tpcds1000.item
                                     │              Where: Runtime Filters: {i_manufact_id}
                                     │              Outputs: i_item_sk_2:=i_item_sk, i_manufact_id_4:=i_manufact_id
-                                    └─ CTERef[1]
-CTEDef [1]
-   Repartition Exchange
-   │     Partition by: {i_manufact_id_1}
-   └─ Projection
-      │     Expressions: [i_manufact_id_1]
-      └─ Filter
-         │     Condition: i_category = 'Electronics'
-         └─ TableScan tpcds1000.item
-                  Where: i_category = 'Electronics'
-                  Outputs: [i_category], i_manufact_id_1:=i_manufact_id
+                                    └─ Repartition Exchange
+                                       │     Partition by: {i_manufact_id_5}
+                                       └─ Projection
+                                          │     Expressions: [i_manufact_id_5]
+                                          └─ Filter
+                                             │     Condition: i_category_2 = 'Electronics'
+                                             └─ TableScan tpcds1000.item
+                                                      Where: i_category = 'Electronics'
+                                                      Outputs: i_category_2:=i_category, i_manufact_id_5:=i_manufact_id
 note: Runtime Filter is applied for 9 times.
-note: CTE(Common Table Expression) is applied for 3 times.

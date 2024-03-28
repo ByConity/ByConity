@@ -1575,7 +1575,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_limit_zero_to_read_nothing, true, "Whether to enable LimitZeroToReadNothing rule", 0) \
     M(Bool, enable_push_down_limit_into_window, true, "Whether to enable PushdownLimitIntoWindow rule", 0) \
     M(Bool, enable_push_limit_into_sorting_rule, true, "Whether to enable PushLimitIntoSorting rule", 0) \
-    M(Bool, enable_push_limit_through_buffer, true, "Whether to enable PushLimitThroughBuffer rule", 0) \
     M(Bool, enable_push_down_apply_through_join, true, "Whether to enable PushDownApplyThroughJoin rule", 0) \
     M(Bool, enable_push_storage_filter, true, "Whether to enable PushStorageFilter rule", 0) \
     M(Bool, enable_push_limit_into_table_scan, true, "Whether to enable PushLimitIntoTableScan rule", 0) \
@@ -1590,6 +1589,10 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cardinality_based_join_reorder, true, "Whether to enable CardinalityBasedJoinReorder rule", 0) \
     M(Bool, enable_selectivity_based_join_reorder, true, "Whether to enable SelectivityBasedJoinReorder rule", 0) \
     M(Bool, enable_left_join_to_right_join, true, "Whether to enable LeftJoinToRightJoin rule", 0) \
+    M(Bool, enable_magic_set_push_through_projection, true, "Whether to enable MagicSetPushThroughProject rule", 0) \
+    M(Bool, enable_magic_set_push_through_join, true, "Whether to enable MagicSetPushThroughJoin rule", 0) \
+    M(Bool, enable_magic_set_push_through_filter, true, "Whether to enable MagicSetPushThroughFilter rule", 0) \
+    M(Bool, enable_magic_set_push_through_aggregating, true, "Whether to enable MagicSetPushThroughAggregating rule", 0) \
     M(Bool, enable_pull_outer_join, true, "Whether to enable PullOuterJoin rule", 0) \
     M(Bool, enable_push_join_through_union, true, "Whether to enable PushJoinThroughUnion rule", 0) \
     M(Bool, enable_semi_join_push_down, true, "Whether to enable SemiJoinPushDown rule", 0) \

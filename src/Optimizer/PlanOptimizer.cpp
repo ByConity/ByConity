@@ -33,10 +33,8 @@
 #include <Optimizer/Rewriter/RemoveRedundantSort.h>
 #include <Optimizer/Rewriter/RemoveUnusedCTE.h>
 #include <Optimizer/Rewriter/ShareCommonExpression.h>
-#include <Optimizer/Rewriter/ShareCommonPlanNode.h>
 #include <Optimizer/Rewriter/SimpleReorderJoin.h>
 #include <Optimizer/Rewriter/SimplifyCrossJoin.h>
-#include <Optimizer/Rewriter/UnaliasSymbolReferences.h>
 #include <Optimizer/Rewriter/UnifyJoinOutputs.h>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 #include <Optimizer/Rewriter/UseSortingProperty.h>
@@ -86,7 +84,6 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // normalize plan after predicate push down
         std::make_shared<WindowToSortPruning>(),
         std::make_shared<RemoveRedundantDistinct>(),
-        std::make_shared<UnaliasSymbolReferences>(),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
@@ -122,7 +119,6 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<SortingOrderedSource>(),
 
         std::make_shared<OptimizeTrivialCount>(),
-        std::make_shared<UnaliasSymbolReferences>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
@@ -182,7 +178,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<ColumnPruning>(),
 
         // rules after subquery removed, DO NOT change !!!.
-        std::make_shared<ShareCommonPlanNode>(),
+
         std::make_shared<RemoveRedundantSort>(),
 
         // subquery remove may generate outer join, make sure data type is correct.
@@ -262,6 +258,9 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // Cost-based optimizer
         std::make_shared<CascadesOptimizer>(),
 
+        // remove not inlined CTEs
+        std::make_shared<RemoveUnusedCTE>(),
+
         // add runtime filters
         std::make_shared<AddRuntimeFilters>(),
 
@@ -282,7 +281,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         std::make_shared<OptimizeTrivialCount>(),
         // push predicate into storage
-        std::make_shared<UnaliasSymbolReferences>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         // TODO cost-based projection push down

@@ -32,7 +32,7 @@ class CascadesContext;
  * see more
  * - Cost-Based Optimization for Magic: Algebra and Implementation
  * - Sideways Information Passing for Push-Style Query Processing
- */
+  */
 class MagicSetRule : public Rule
 {
 public:

@@ -14,9 +14,9 @@ Projection Est. 25 rows
                   └─ Projection Est. 14399585 rows
                      │     Expressions: [n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
                      └─ Inner (PARALLEL_HASH) Join Est. 14399585 rows
-                        │     Condition: s_nationkey == c_nationkey, o_custkey == c_custkey
+                        │     Condition: n_nationkey == c_nationkey, o_custkey == c_custkey
                         ├─ Repartition Exchange Est. 17999481 rows
-                        │  │     Partition by: {o_custkey, s_nationkey}
+                        │  │     Partition by: {o_custkey, n_nationkey}
                         │  └─ Inner Join Est. 17999481 rows
                         │     │     Condition: l_suppkey == s_suppkey
                         │     │     Runtime Filters Builder: {s_suppkey}

@@ -7,7 +7,6 @@
 #include <Core/Types.h>
 
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 namespace DB
@@ -78,7 +77,6 @@ public:
     virtual String getOriginalValue() = 0;
     virtual String getOptimizedValue() = 0;
     virtual double getBenefit() { return 0.0; }
-    virtual std::vector<String> getRelatedQueries() { return {}; }
 };
 
 }
