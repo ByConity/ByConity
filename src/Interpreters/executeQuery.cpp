@@ -119,6 +119,7 @@
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/QueryPipeline.h>
+#include <Processors/NullSink.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
@@ -2182,6 +2183,23 @@ void executeQuery(
 
             auto executor = pipeline.execute();
             executor->execute(pipeline.getNumThreads());
+        }
+        else if (context->getSettingsRef().enable_distributed_output)
+        {
+            if (pipeline.initialized())
+            {
+                if (!pipeline.isCompleted())
+                {
+                    /// There should be no data in executor, just setSinks to complete pipeline.
+                    pipeline.setSinks([](const Block & header, QueryPipeline::StreamType) -> ProcessorPtr
+                    {
+                        return std::make_shared<EmptySink>(header);
+                    });
+                }
+
+                auto executor = pipeline.execute();
+                executor->execute(pipeline.getNumThreads());
+            }
         }
         else if (streams.in)
         {

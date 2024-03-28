@@ -64,6 +64,8 @@
 #include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/ExpandStep.h>
 #include <QueryPlan/OffsetStep.h>
+#include <QueryPlan/OutfileWriteStep.h>
+#include <QueryPlan/OutfileFinishStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
 #include <QueryPlan/PlanSegmentSourceStep.h>

@@ -22,6 +22,7 @@
 #pragma once
 
 #include <Parsers/ASTQueryWithOutput.h>
+#include "Parsers/ASTSelectWithUnionQuery.h"
 
 
 namespace DB
@@ -83,7 +84,13 @@ public:
         ast_settings = std::move(settings_);
     }
 
-    const ASTPtr & getExplainedQuery() const { return query; }
+    const ASTPtr & getExplainedQuery() const
+    {
+        auto * select_query = query->as<ASTSelectWithUnionQuery>();
+        if (select_query && !select_query->out_file && out_file)
+            cloneOutputOptions(*select_query);
+        return query;
+    }
     ASTPtr & getExplainedQuery() { return query; }
     const ASTPtr & getSettings() const { return ast_settings; }
 

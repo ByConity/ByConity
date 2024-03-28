@@ -764,6 +764,16 @@ std::shared_ptr<TableWriteStep> SymbolMapper::map(const TableWriteStep & step)
     return std::make_shared<TableWriteStep>(map(step.getInputStreams()[0]), step.getTarget());
 }
 
+std::shared_ptr<OutfileWriteStep> SymbolMapper::map(const OutfileWriteStep & step)
+{
+    return std::make_shared<OutfileWriteStep>(map(step.getInputStreams()[0]), step.outfile_target);
+}
+
+std::shared_ptr<OutfileFinishStep> SymbolMapper::map(const OutfileFinishStep & step)
+{
+    return std::make_shared<OutfileFinishStep>(map(step.getInputStreams()[0]));
+}
+
 std::shared_ptr<ReadStorageRowCountStep> SymbolMapper::map(const ReadStorageRowCountStep & step)
 {
     return std::make_shared<ReadStorageRowCountStep>(

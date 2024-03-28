@@ -203,6 +203,7 @@ void RemoteQueryExecutor::sendQuery()
     auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
     ClientInfo modified_client_info = context->getClientInfo();
     
+    // change query kind to secondary query here
     if (!is_server_forwarding)
         modified_client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
 

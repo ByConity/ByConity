@@ -164,6 +164,8 @@ public:
     MM(Offset, offset) \
     MM(FinishSorting, finish_sorting) \
     MM(TotalsHaving, totals_having) \
+    MM(OutfileWrite, outfile_write) \
+    MM(OutfileFinish, outfile_finish) \
     MM(LocalExchange, local_exchange) \
     MM(MultiJoin, multi_join)
 

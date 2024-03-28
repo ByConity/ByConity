@@ -328,48 +328,15 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(UInt64, parallel_replicas_count, 0, "", 0) \
     M(UInt64, parallel_replica_offset, 0, "", 0) \
-\
-    M(Bool, \
-      skip_unavailable_shards, \
-      false, \
-      "If 1, ClickHouse silently skips unavailable shards and nodes unresolvable through DNS. Shard is marked as unavailable when none " \
-      "of the replicas can be reached.", \
-      0) \
-\
-    M(UInt64, \
-      parallel_distributed_insert_select, \
-      0, \
-      "Process distributed INSERT SELECT query in the same cluster on local tables on every shard, if 1 SELECT is executed on each " \
-      "shard, if 2 SELECT and INSERT is executed on each shard", \
-      0) \
-    M(UInt64, \
-      distributed_group_by_no_merge, \
-      0, \
-      "If 1, Do not merge aggregation states from different servers for distributed queries (shards will process query up to the " \
-      "Complete stage, initiator just proxies the data from the shards). If 2 the initiator will apply ORDER BY and LIMIT stages (it is " \
-      "not in case when shard process query up to the Complete stage)", \
-      0) \
-    M(UInt64, \
-      distributed_push_down_limit, \
-      0, \
-      "If 1, LIMIT will be applied on each shard separatelly. Usually you don't need to use it, since this will be done automatically if " \
-      "it is possible, i.e. for simple query SELECT FROM LIMIT.", \
-      0) \
-    M(Bool, \
-      optimize_distributed_group_by_sharding_key, \
-      false, \
-      "Optimize GROUP BY sharding_key queries (by avoiding costly aggregation on the initiator server).", \
-      0) \
-    M(UInt64, \
-      optimize_skip_unused_shards_limit, \
-      1000, \
-      "Limit for number of sharding key values, turns off optimize_skip_unused_shards if the limit is reached", \
-      0) \
-    M(Bool, \
-      distributed_perfect_shard, \
-      false, \
-      "Whether to enalbe aggregation finished in worker side, to avoid merge aggregation states in coordinator", \
-      0) \
+    \
+    M(Bool, skip_unavailable_shards, false, "If 1, ClickHouse silently skips unavailable shards and nodes unresolvable through DNS. Shard is marked as unavailable when none of the replicas can be reached.", 0) \
+    \
+    M(UInt64, parallel_distributed_insert_select, 0, "Process distributed INSERT SELECT query in the same cluster on local tables on every shard, if 1 SELECT is executed on each shard, if 2 SELECT and INSERT is executed on each shard", 0) \
+    M(UInt64, distributed_group_by_no_merge, 0, "If 1, Do not merge aggregation states from different servers for distributed queries (shards will process query up to the Complete stage, initiator just proxies the data from the shards). If 2 the initiator will apply ORDER BY and LIMIT stages (it is not in case when shard process query up to the Complete stage)", 0) \
+    M(UInt64, distributed_push_down_limit, 0, "If 1, LIMIT will be applied on each shard separateoly. Usually you don't need to use it, since this will be done automatically if it is possible, i.e. for simple query SELECT FROM LIMIT.", 0) \
+    M(Bool, optimize_distributed_group_by_sharding_key, false, "Optimize GROUP BY sharding_key queries (by avoiding costly aggregation on the initiator server).", 0) \
+    M(UInt64, optimize_skip_unused_shards_limit, 1000, "Limit for number of sharding key values, turns off optimize_skip_unused_shards if the limit is reached", 0) \
+    M(Bool, distributed_perfect_shard, false, "Whether to enable aggregation finished in worker side, to avoid merge aggregation states in coordinator", 0) \
     M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
     M(Bool, optimize_skip_unused_shards, false, "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", 0) \
     M(Bool, optimize_skip_unused_shards_rewrite_in, true, "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", 0) \
@@ -1834,6 +1801,7 @@ enum PreloadLevelSettings : UInt64
     /* Outfile related Settings */ \
     M(UInt64, split_file_size_in_mb, 0, "Threshold to split the out data in 'INTO OUTFILE' clause", 0) \
     M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
+    M(Bool, enable_distributed_output, false, "Each worker is allowed to output query results to a file separately", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
     M(UInt64, fuzzy_max_files, 100, "The max number of files when insert with fuzzy names.", 0) \
     /** OSS related settings */ \

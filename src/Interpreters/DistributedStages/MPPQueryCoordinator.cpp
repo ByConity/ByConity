@@ -187,8 +187,8 @@ BlockIO MPPQueryCoordinator::execute()
 {
     state_machine->start();
 
-    auto this_coodinator = shared_from_this();
-    MPPQueryManager::instance().registerQuery(query_id, this_coodinator);
+    auto this_coordinator = shared_from_this();
+    MPPQueryManager::instance().registerQuery(query_id, this_coordinator);
 
     PlanSegmentsStatusPtr scheduler_status;
 
@@ -227,15 +227,15 @@ BlockIO MPPQueryCoordinator::execute()
     final_segment->update(query_context);
     LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
 
-    auto final_semgent_instance = std::make_unique<PlanSegmentInstance>();
-    final_semgent_instance->info = PlanSegmentExecutionInfo{.parallel_id = 0};
-    final_semgent_instance->info.execution_address = getLocalAddress(*query_context);
-    final_semgent_instance->plan_segment = std::make_unique<PlanSegment>(std::move(*final_segment));
+    auto final_segment_instance = std::make_unique<PlanSegmentInstance>();
+    final_segment_instance->info = PlanSegmentExecutionInfo{.parallel_id = 0};
+    final_segment_instance->info.execution_address = getLocalAddress(*query_context);
+    final_segment_instance->plan_segment = std::make_unique<PlanSegment>(std::move(*final_segment));
 
     try
     {
-        auto res = DB::lazyExecutePlanSegmentLocally(std::move(final_semgent_instance), query_context);
-        res.coordinator = this_coodinator;
+        auto res = DB::lazyExecutePlanSegmentLocally(std::move(final_segment_instance), query_context);
+        res.coordinator = this_coordinator;
         return res;
     }
     catch (const Exception & e)

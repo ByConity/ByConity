@@ -2222,6 +2222,11 @@ private:
         }
     }
 
+    bool isOutfileInOtherPlace(const Settings & settings) const
+    {
+        return settings.outfile_in_server_with_tcp || settings.enable_distributed_output;
+    }
+
     void initBlockOutputStream(const Block & block)
     {
         if (!output_format)
@@ -2251,7 +2256,7 @@ private:
             /// The query can specify output format or output file.
             /// FIXME: try to prettify this cast using `as<>()`
             if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(parsed_query.get());
-                query_with_output && !context->getSettingsRef().outfile_in_server_with_tcp)
+                query_with_output && !isOutfileInOtherPlace(context->getSettingsRef()))
             {
                 if (query_with_output->format != nullptr)
                 {

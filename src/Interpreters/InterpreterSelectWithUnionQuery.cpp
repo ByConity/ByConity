@@ -162,6 +162,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
         const Names & current_required_result_column_names
             = query_num == 0 ? required_result_column_names : required_result_column_names_for_other_selects[query_num];
 
+        // only select related ast is added here
         nested_interpreters.emplace_back(
             buildCurrentChildInterpreter(ast->list_of_selects->children.at(query_num), require_full_header ? Names() : current_required_result_column_names));
     }

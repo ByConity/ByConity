@@ -77,26 +77,30 @@
 #include <Parsers/ASTUpdateQuery.h>
 
 #include <Interpreters/InterpreterAdviseQuery.h>
+#include <Interpreters/InterpreterAlterDiskCacheQuery.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterAlterWarehouseQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
+#include <Interpreters/InterpreterCreateBinding.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterCreateQuotaQuery.h>
 #include <Interpreters/InterpreterCreateRoleQuery.h>
 #include <Interpreters/InterpreterCreateRowPolicyQuery.h>
 #include <Interpreters/InterpreterCreateSettingsProfileQuery.h>
 #include <Interpreters/InterpreterCreateSnapshotQuery.h>
+#include <Interpreters/InterpreterCreateStatsQuery.h>
 #include <Interpreters/InterpreterCreateUserQuery.h>
 #include <Interpreters/InterpreterCreateWarehouseQuery.h>
 #include <Interpreters/InterpreterCreateWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDeleteQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropAccessEntityQuery.h>
-#include <Interpreters/InterpreterDropWarehouseQuery.h>
-#include <Interpreters/InterpreterDropWorkerGroupQuery.h>
+#include <Interpreters/InterpreterDropBinding.h>
 #include <Interpreters/InterpreterDropPreparedStatementQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
-#include <Interpreters/InterpreterUndropQuery.h>
+#include <Interpreters/InterpreterDropStatsQuery.h>
+#include <Interpreters/InterpreterDropWarehouseQuery.h>
+#include <Interpreters/InterpreterDropWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDumpQuery.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterExplainQuery.h>
@@ -109,14 +113,15 @@
 #include <Interpreters/InterpreterRefreshQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterReproduceQuery.h>
+#include <Interpreters/InterpreterSelectIntersectExceptQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
-#include <Interpreters/InterpreterSelectIntersectExceptQuery.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterSetRoleQuery.h>
 #include <Interpreters/InterpreterShowAccessEntitiesQuery.h>
 #include <Interpreters/InterpreterShowAccessQuery.h>
+#include <Interpreters/InterpreterShowBindings.h>
 #include <Interpreters/InterpreterShowColumnsQuery.h>
 #include <Interpreters/InterpreterShowCreateAccessEntityQuery.h>
 #include <Interpreters/InterpreterShowCreateQuery.h>
@@ -124,25 +129,18 @@
 #include <Interpreters/InterpreterShowPreparedStatementQuery.h>
 #include <Interpreters/InterpreterShowPrivilegesQuery.h>
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
+#include <Interpreters/InterpreterShowSettingQuery.h>
+#include <Interpreters/InterpreterShowStatsQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
 #include <Interpreters/InterpreterShowWarehousesQuery.h>
-#include <Interpreters/InterpreterShowSettingQuery.h>
 #include <Interpreters/InterpreterSystemQuery.h>
-#include <Interpreters/InterpreterReproduceQuery.h>
+#include <Interpreters/InterpreterUndropQuery.h>
+#include <Interpreters/InterpreterUpdateQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
-#include <Interpreters/InterpreterUpdateQuery.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
-#include <Interpreters/InterpreterCreateStatsQuery.h>
-#include <Interpreters/InterpreterDropStatsQuery.h>
-#include <Interpreters/InterpreterShowStatsQuery.h>
-#include <Interpreters/PlanSegmentHelper.h>
 #include <Parsers/ASTAlterDiskCacheQuery.h>
-#include <Interpreters/InterpreterAlterDiskCacheQuery.h>
-#include <Interpreters/InterpreterCreateBinding.h>
-#include <Interpreters/InterpreterShowBindings.h>
-#include <Interpreters/InterpreterDropBinding.h>
 
 #include <Interpreters/MySQL/InterpretersAnalyticalMySQLDDLQuery.h>
 
@@ -211,9 +209,9 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     }
     else if (query->as<ASTSelectWithUnionQuery>())
     {
-        if (QueryUseOptimizerChecker::check(query, context)) {
+        if (QueryUseOptimizerChecker::check(query, context))
             return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
-        }
+
         ProfileEvents::increment(ProfileEvents::SelectQuery);
         return std::make_unique<InterpreterSelectWithUnionQuery>(query, context, options);
     }

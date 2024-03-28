@@ -130,6 +130,18 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitTableWriteStep(const TableWriteSt
     return child_stats;
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitOutfileWriteStep(const OutfileWriteStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitOutfileFinishStep(const OutfileFinishStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
 PlanNodeStatisticsPtr CardinalityVisitor::visitLocalExchangeStep(const LocalExchangeStep &, CardinalityContext & context)
 {
     return context.children_stats[0];
