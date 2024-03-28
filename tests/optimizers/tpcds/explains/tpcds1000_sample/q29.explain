@@ -19,8 +19,8 @@ Projection Est. 100 rows
                         │     Condition: cs_sold_date_sk == d_date_sk_2
                         │     Runtime Filters Builder: {d_date_sk_2}
                         ├─ Inner (PARALLEL_HASH) Join Est. 222579499 rows
-                        │  │     Condition: cs_bill_customer_sk == sr_customer_sk, cs_item_sk == i_item_sk
-                        │  │     Runtime Filters Builder: {sr_customer_sk}
+                        │  │     Condition: cs_bill_customer_sk == ss_customer_sk, cs_item_sk == ss_item_sk
+                        │  │     Runtime Filters Builder: {ss_customer_sk}
                         │  ├─ Filter Est. 1439980416 rows
                         │  │  │     Condition: Runtime Filters: {cs_bill_customer_sk, cs_sold_date_sk}
                         │  │  └─ TableScan tpcds1000_sample.catalog_sales Est. 1439980416 rows
@@ -32,7 +32,7 @@ Projection Est. 100 rows
                         │     │  │     Condition: ss_sold_date_sk == d_date_sk
                         │     │  │     Runtime Filters Builder: {d_date_sk}
                         │     │  ├─ Inner (PARALLEL_HASH) Join Est. 142214640 rows
-                        │     │  │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == i_item_sk, ss_ticket_number == sr_ticket_number
+                        │     │  │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                         │     │  │  │     Runtime Filters Builder: {sr_ticket_number}
                         │     │  │  ├─ Filter Est. 2879987999 rows
                         │     │  │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_ticket_number}

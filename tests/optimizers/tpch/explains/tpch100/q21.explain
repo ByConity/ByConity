@@ -16,9 +16,9 @@ Projection Est. 100 rows
                      │     Group by: {s_name}
                      │     Aggregates: expr#count():=AggNull(count)()
                      └─ Right Anti (PARALLEL_HASH) Join Est. 1753850 rows
-                        │     Condition: l_orderkey_2 == l_orderkey
+                        │     Condition: l_orderkey_2 == o_orderkey
                         │     Filter: l_suppkey_2 != l_suppkey
-                        │     Runtime Filters Builder: {l_orderkey}
+                        │     Runtime Filters Builder: {o_orderkey}
                         ├─ Repartition Exchange Est. 150009475 rows
                         │  │     Partition by: {l_orderkey_2}
                         │  └─ Projection Est. 150009475 rows
@@ -29,11 +29,11 @@ Projection Est. 100 rows
                         │                 Where: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey}
                         │                 Outputs: l_orderkey_2:=l_orderkey, l_suppkey_2:=l_suppkey, l_commitdate_2:=l_commitdate, l_receiptdate_2:=l_receiptdate
                         └─ Repartition Exchange Est. 2923084 rows
-                           │     Partition by: {l_orderkey}
+                           │     Partition by: {o_orderkey}
                            └─ Right Semi (PARALLEL_HASH) Join Est. 2923084 rows
-                              │     Condition: l_orderkey_1 == l_orderkey
+                              │     Condition: l_orderkey_1 == o_orderkey
                               │     Filter: l_suppkey_1 != l_suppkey
-                              │     Runtime Filters Builder: {l_orderkey}
+                              │     Runtime Filters Builder: {o_orderkey}
                               ├─ Filter Est. 600037902 rows
                               │  │     Condition: Runtime Filters: {l_orderkey_1}
                               │  └─ TableScan tpch100.lineitem Est. 600037902 rows

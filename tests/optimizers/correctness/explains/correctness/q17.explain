@@ -1,5 +1,5 @@
 Projection Est. ? rows
-│     Expressions: [a, a_1, a_2, b, b_1, b_2]
+│     Expressions: [a, b, b_1, b_2], a_1:=a, a_2:=a
 └─ Gather Exchange Est. ? rows
    └─ Inner (GRACE_HASH) Join Est. ? rows
       │     Condition: a == a_2
@@ -14,7 +14,7 @@ Projection Est. ? rows
          └─ TableScan correctness.q17_t3 Est. ? rows
                   Outputs: a_2:=a, b_2:=b
 Projection Est. ? rows
-│     Expressions: a:=a_3, a_1:=a_4, a_2:=a_5, b:=b_3, b_1:=b_4, b_2:=b_5
+│     Expressions: a:=a_3, a_1:=a_3, a_2:=a_3, b:=b_3, b_1:=b_4, b_2:=b_5
 └─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: a_3 == a_5

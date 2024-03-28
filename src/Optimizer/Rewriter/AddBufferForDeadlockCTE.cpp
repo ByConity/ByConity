@@ -1,4 +1,6 @@
+#include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/Rewriter/AddBufferForDeadlockCTE.h>
+#include <Optimizer/Rule/Rewrite/PushDownLimitRules.h>
 #include <QueryPlan/BufferStep.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/PlanNode.h>
@@ -249,6 +251,10 @@ void AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr contex
 
     AddBufferVisitor add_buffer_visitor{find_deadlock_cte_visitor.deadlock_ctes, context, plan.getCTEInfo()};
     VisitorUtil::accept(plan.getPlanNode(), add_buffer_visitor, {});
+
+    RewriterPtr push_limit_through_buffer = std::make_shared<IterativeRewriter>(
+        std::vector<RulePtr>{std::make_shared<PushLimitThroughBuffer>()}, "PushDownLimitThroughBuffer");
+    push_limit_through_buffer->rewritePlan(plan, context);
 }
 
 }

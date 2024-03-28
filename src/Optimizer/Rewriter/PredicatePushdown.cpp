@@ -897,8 +897,9 @@ PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContex
                 auto mapped_filter = mapper.map(cte_ref.second);
                 common_filters.emplace_back(mapped_filter);
             }
-            auto optimized_expression = ExpressionInterpreter::optimizePredicate(
-                PredicateUtils::combineDisjuncts(common_filters), cte_def->getStep()->getOutputStream().header.getNamesToTypes(), context);
+            auto optimized_expression = CommonPredicatesRewriter::rewrite(PredicateUtils::combineDisjuncts(common_filters), context);
+            optimized_expression = ExpressionInterpreter::optimizePredicate(
+                optimized_expression, cte_def->getStep()->getOutputStream().header.getNamesToTypes(), context);
             PredicateContext cte_predicate_context{
                 .predicate = optimized_expression,
                 .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE,

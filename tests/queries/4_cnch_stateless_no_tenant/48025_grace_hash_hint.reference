@@ -11,7 +11,7 @@
 4	a5	4	b3
 4	a5	4	b4
 Projection Est. ? rows
-│     Expressions: [s, x], t2.s:=s_1, t2.x:=x_1
+│     Expressions: [s, x], t2.s:=s_1, t2.x:=x
 └─ Sorting Est. ? rows
    │     Order by: {x ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
@@ -45,7 +45,7 @@ Projection Est. ? rows
 4	a5	4	b3	4	a5
 4	a5	4	b4	4	a5
 Projection Est. ? rows
-│     Expressions: t1.s:=s, t1.x:=x, t2.s:=s_1, t2.x:=x_1, t3.s:=s_2, t3.x:=x_2
+│     Expressions: t1.s:=s, t1.x:=x, t2.s:=s_1, t2.x:=x, t3.s:=s_2, t3.x:=x
 └─ Sorting Est. ? rows
    │     Order by: {x ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows

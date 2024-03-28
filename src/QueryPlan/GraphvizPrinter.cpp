@@ -193,6 +193,7 @@ Void PlanNodePrinter::visitJoinNode(JoinNode & node, PrinterContext & context)
         VisitorUtil::accept(*node.getChildren()[0], *this, context);
         VisitorUtil::accept(*node.getChildren()[1], *this, context);
     }
+
     return Void{};
 }
 
