@@ -126,7 +126,7 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
                 target_storage, settings, insert_target_header, settings.context->getSettingsRef().max_threads, false, insert_target->getQuery());
 
             if (out_streams.empty())
-                throw Exception("No output stream when transfrom TableWriteStep", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("No output stream when transform TableWriteStep", ErrorCodes::LOGICAL_ERROR);
 
             const auto & header = out_streams[0]->getHeader();
             auto actions_dag = ActionsDAG::makeConvertingActions(

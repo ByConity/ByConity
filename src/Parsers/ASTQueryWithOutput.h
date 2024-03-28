@@ -40,6 +40,8 @@ public:
     ASTPtr compression_method;
     ASTPtr compression_level;
 
+    void formatOutput(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const;
+    
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const final;
 
     ASTType getType() const override { return ASTType::ASTQueryWithOutput; }

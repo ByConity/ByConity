@@ -103,6 +103,8 @@ public:
     ExchangeResult visitTopNFilteringNode(TopNFilteringNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitTableWriteNode(TableWriteNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitTableFinishNode(TableFinishNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitOutfileWriteNode(OutfileWriteNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitOutfileFinishNode(OutfileFinishNode & node, ExchangeContext & cxt) override;
 
 private:
     /**

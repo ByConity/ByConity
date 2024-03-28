@@ -55,10 +55,8 @@ void ASTQueryWithOutput::cloneOutputOptions(ASTQueryWithOutput & cloned) const
     }
 }
 
-void ASTQueryWithOutput::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
+void ASTQueryWithOutput::formatOutput(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
 {
-    formatQueryImpl(s, state, frame);
-
     std::string indent_str = s.one_line ? "" : std::string(4u * frame.indent, ' ');
 
     if (out_file)
@@ -90,6 +88,13 @@ void ASTQueryWithOutput::formatImpl(const FormatSettings & s, FormatState & stat
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SETTINGS " << (s.hilite ? hilite_none : "");
         settings_ast->formatImpl(s, state, frame);
     }
+}
+
+void ASTQueryWithOutput::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
+{
+    formatQueryImpl(s, state, frame);
+
+    formatOutput(s, state, frame);
 }
 
 bool ASTQueryWithOutput::resetOutputASTIfExist(IAST & ast)

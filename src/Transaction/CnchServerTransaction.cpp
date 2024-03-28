@@ -451,11 +451,11 @@ TxnTimestamp CnchServerTransaction::abort()
         // Don't abort committed txn, treat committed
         if (txn_record.status() == CnchTransactionStatus::Finished)
         {
-            LOG_WARNING(log, "Transaction {} has been committed\n", txn_record.txnID().toUInt64());
+            LOG_WARNING(log, "Transaction {} has been committed\n", txn_record.toString());
         }
         else if (txn_record.status() == CnchTransactionStatus::Aborted)
         {
-            LOG_WARNING(log, "Transaction {} has been aborted\n", txn_record.txnID().toUInt64());
+            LOG_WARNING(log, "Transaction {} has been aborted\n", txn_record.toString());
         }
         else
         {

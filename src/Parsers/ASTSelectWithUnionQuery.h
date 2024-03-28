@@ -41,6 +41,8 @@ public:
 
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 
+    String formatOutputTree();
+
     void resetTEALimit();
 
     using  Mode = SelectUnionMode;

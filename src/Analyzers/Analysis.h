@@ -213,6 +213,14 @@ struct InsertAnalysis
     NamesAndTypes columns;
 };
 
+struct OutfileAnalysis
+{
+    String out_file;
+    String format;
+    String compression_method;
+    size_t compression_level;
+};
+
 struct ColumnWithType
 {
     DataTypePtr type;
@@ -422,6 +430,10 @@ struct Analysis
     /// record hints info
     HintAnalysis hint_analysis;
     HintAnalysis & getHintInfo() { return hint_analysis; }
+
+    /// outfile info
+    std::optional<OutfileAnalysis> outfile_analysis;
+    std::optional<OutfileAnalysis> & getOutfileInfo() { return outfile_analysis; }
 
     std::unordered_map<ASTSelectQuery *, ArrayJoinAnalysis> array_join_analysis;
     ArrayJoinAnalysis & getArrayJoinAnalysis(ASTSelectQuery & select_query);
