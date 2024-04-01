@@ -6,6 +6,8 @@
 #include <Columns/ColumnConst.h>
 #include <algorithm>
 
+#include <common/logger_useful.h>
+
 namespace DB
 {
 
@@ -240,6 +242,16 @@ MaskInfo extractMaskImpl(
     }
 
     MaskInfo mask_info;
+
+    if (column->getName() == "ColumnLowCardinality") {
+        // Force forward logic evaluation for low cardinality columns. Fill the mask with zeros as the functions logic passes
+        // masked execution if the mask contains only zeros: https://github.com/edgedelta/ByConity/blob/577fe977b94187a0d5ec753f30aee21824f36bca/src/Functions/FunctionsLogical.cpp#L586
+        LOG_DEBUG(&Poco::Logger::get("mask-operations-test"), "Force forward logic evaluation for low cardinality column name: {}, family name: {}, data type: {}", column->getName(), column->getFamilyName(), column->getDataType());
+        mask_info.has_ones = false;
+        mask_info.has_zeros = true;
+        std::fill(mask.begin(), mask.end(), 0);
+        return mask_info;
+    }
 
     if (!(extractMaskNumeric<inverted, UInt8>(mask, column, null_value, null_bytemap, nulls, mask_info)
           || extractMaskNumeric<inverted, UInt16>(mask, column, null_value, null_bytemap, nulls, mask_info)
