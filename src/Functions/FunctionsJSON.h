@@ -18,6 +18,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
+#include <Columns/ColumnMap.h>
 #include <Columns/ColumnObject.h>
 #include <DataTypes/Serializations/SerializationDecimal.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -30,6 +31,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeMap.h>
 #include <Interpreters/Context.h>
 #include <common/range.h>
 #include <DataTypes/DataTypeNothing.h>
@@ -1967,6 +1969,93 @@ struct JSONExtractTree
 
     using TupleNode = std::conditional_t<IsObjectIterator<Iterator>, TupleNodeObject, TupleNodeString>;
 
+
+    class MapNodeBase : public Node
+    {
+    protected:
+        MapNodeBase(std::unique_ptr<Node> key_, std::unique_ptr<Node> value_) : key(std::move(key_)), value(std::move(value_)) { }
+
+        std::unique_ptr<Node> key;
+        std::unique_ptr<Node> value;
+    };
+
+    class MapNodeString : public MapNodeBase
+    {
+    public:
+        MapNodeString(std::unique_ptr<Node> key_, std::unique_ptr<Node> value_) : MapNodeBase(std::move(key_), std::move(value_)) { }
+
+        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        {
+            const auto & element = iterator.getElement();
+            if (!element.isObject())
+                return false;
+
+            ColumnMap & map_col = assert_cast<ColumnMap &>(dest);
+            auto & offsets = map_col.getOffsets();
+            auto & key_col = map_col.getKey();
+            auto & value_col = map_col.getValue();
+            size_t old_size = map_col.size();
+
+            auto object = element.getObject();
+            auto it = object.begin();
+            for (; it != object.end(); ++it)
+            {
+                auto pair = *it;
+
+                /// Insert key (only string type is supported in map key)
+                key_col.insertData(pair.first.data(), pair.first.size());
+
+                /// Insert value
+                if (!this->value->insertResultToColumn(value_col, Iterator{pair.second}))
+                    value_col.insertDefault();
+            }
+
+            offsets.push_back(old_size + object.size());
+            return true;
+        }
+    };
+
+    class MapNodeObject : public MapNodeBase
+    {
+    public:
+        MapNodeObject(std::unique_ptr<Node> key_, std::unique_ptr<Node> value_) : MapNodeBase(std::move(key_), std::move(value_)) { }
+
+        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        {
+            const auto * from_tuple_type = typeid_cast<const DataTypeTuple *>(iterator.getType().get());
+            if (!from_tuple_type)
+                return false;
+
+            const auto & from_tuple = assert_cast<const ColumnTuple &>(*iterator.getColumn());
+            const auto & from_elements = from_tuple_type->getElements();
+
+            ColumnMap & map_col = assert_cast<ColumnMap &>(dest);
+            auto & offsets = map_col.getOffsets();
+            auto & key_col = map_col.getKey();
+            auto & value_col = map_col.getValue();
+            size_t old_size = map_col.size();
+
+            const auto & from_names = from_tuple_type->getElementNames();
+            for (size_t i = 0 ; i < from_names.size(); ++i)
+            {
+                /// Insert key (only string type is supported in map key)
+                key_col.insert(from_names[i]);
+
+                /// Insert value
+                Iterator elem_iter(from_elements[i], from_tuple.getColumnPtr(i), iterator.getRow());
+                if(!this->value->insertResultToColumn(value_col, elem_iter))
+                    value_col.insertDefault();
+            }
+
+            offsets.push_back(old_size + from_names.size());
+
+            return true;
+        }
+    };
+
+    using MapNode = std::conditional_t<IsObjectIterator<Iterator>, MapNodeObject, MapNodeString>;
+
+
     static std::unique_ptr<Node> build(const char * function_name, const DataTypePtr & type)
     {
         switch (type->getTypeId())
@@ -2014,6 +2103,19 @@ struct JSONExtractTree
                 for (const auto & tuple_element : tuple_elements)
                     elements.emplace_back(build(function_name, tuple_element));
                 return std::make_unique<TupleNode>(std::move(elements), tuple.haveExplicitNames() ? tuple.getElementNames() : Strings{});
+            }
+            case TypeIndex::Map:
+            {
+                const auto & map_type = static_cast<const DataTypeMap &>(*type);
+                const auto & key_type = map_type.getKeyType();
+                if (!isString(removeLowCardinality(key_type)))
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Function {} doesn't support the return type schema: {} with key type not String",
+                        String(function_name),
+                        type->getName());
+                const auto & value_type = map_type.getValueType();
+                return std::make_unique<MapNode>(build(function_name, key_type), build(function_name, value_type));
             }
             default:
                 throw Exception{"Function " + String(function_name) + " doesn't support the return type schema: " + type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};

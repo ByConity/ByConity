@@ -36,6 +36,17 @@ select JSONExtractString('{"abc":"\\n\\u0000"}'::Object('json'), 'abc');
 select JSONExtractString('{"abc":"\\u263a"}'::Object('json'), 'abc');
 
 SELECT '--JSONExtract (generic)--';
+SELECT JSONExtract('{"a": "hello", "b": "world"}'::Object('json'), 'Map(String, String)');
+SELECT JSONExtract('{"a": "hello", "b": "world"}'::Object('json'), 'Map(LowCardinality(String), String)');
+-- SELECT JSONExtract('{"a": ["hello", 100.0], "b": ["world", 200]}'::Object('json'), 'Map(String, Tuple(String, Float64))');
+-- expect {'a':('hello',100),'b':('world',200)}
+SELECT JSONExtract('{"a": [100.0, 200], "b": [-100, 200.0, 300]}'::Object('json'), 'Map(String, Array(Float64))');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}'::Object('json'), 'Map(String, String)');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}'::Object('json'), 'Map(String, UInt8)');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}'::Object('json'), 'Map(UInt8, String)'); -- { serverError 43 }
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}'::Object('json'), 'Map(String, Map(String, String))');
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}'::Object('json'), 'a',  'Map(String, String)');
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}'::Object('json'), 'Map(String, String)');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}'::Object('json'), 'Tuple(String, Array(Float64))');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}'::Object('json'), 'Tuple(a String, b Array(Float64))');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}'::Object('json'), 'Tuple(b Array(Float64), a String)');
