@@ -921,14 +921,21 @@ void MetastoreProxy::setNonHostUpdateTimeStamp(const String & name_space, const 
     metastore_ptr->put(nonHostUpdateKey(name_space, table_uuid), toString(pts));
 }
 
-void MetastoreProxy::prepareAddDataParts(const String & name_space, const String & table_uuid, const Strings & current_partitions,
-        const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, BatchCommitRequest & batch_write,
-        const std::vector<String> & expected_parts, bool update_sync_list)
+void MetastoreProxy::prepareAddDataParts(
+    const String & name_space,
+    const String & table_uuid,
+    const Strings & current_partitions,
+    std::unordered_set<String> & deleting_partitions,
+    const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
+    BatchCommitRequest & batch_write,
+    const std::vector<String> & expected_parts,
+    bool update_sync_list)
 {
     if (parts.empty())
         return;
 
     std::unordered_set<String> existing_partitions{current_partitions.begin(), current_partitions.end()};
+    std::unordered_set<String> partitions_found_in_deleting_set;
     std::unordered_map<String, String > partition_map;
 
     UInt64 commit_time = 0;
@@ -947,6 +954,12 @@ void MetastoreProxy::prepareAddDataParts(const String & name_space, const String
 
         batch_write.AddPut(SinglePutRequest(dataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_parts[it - parts.begin()]));
 
+        if (deleting_partitions.count(info_ptr->partition_id) && !partitions_found_in_deleting_set.count(info_ptr->partition_id))
+        {
+            partitions_found_in_deleting_set.emplace(info_ptr->partition_id);
+            partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
+        }
+
         if (!existing_partitions.count(info_ptr->partition_id) && !partition_map.count(info_ptr->partition_id))
             partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
     }
@@ -957,15 +970,13 @@ void MetastoreProxy::prepareAddDataParts(const String & name_space, const String
     Protos::PartitionMeta partition_model;
     for (auto it = partition_map.begin(); it != partition_map.end(); it++)
     {
-        std::stringstream ss;
-        /// To keep the partitions have the same order as data parts in bytekv, we add an extra "_" in the key of partition meta
-        ss << tablePartitionInfoPrefix(name_space, table_uuid) << it->first << '_';
-
         partition_model.set_id(it->first);
         partition_model.set_partition_minmax(it->second);
 
-        batch_write.AddPut(SinglePutRequest(ss.str(), partition_model.SerializeAsString()));
+        batch_write.AddPut(SinglePutRequest(tablePartitionInfoKey(name_space, table_uuid, it->first), partition_model.SerializeAsString()));
     }
+
+    partitions_found_in_deleting_set.swap(deleting_partitions);
 }
 
 void MetastoreProxy::prepareAddStagedParts(
@@ -2659,7 +2670,7 @@ void MetastoreProxy::attachDetachedParts(
         Protos::PartitionMeta partition_model;
         for (const auto& [partition_id, partition_minmax] : partition_map)
         {
-            String partition_key = tablePartitionInfoPrefix(name_space, to_uuid) + partition_id + "_";
+            String partition_key = tablePartitionInfoKey(name_space, to_uuid, partition_id);
             partition_model.set_id(partition_id);
             partition_model.set_partition_minmax(partition_minmax);
 
@@ -3158,11 +3169,70 @@ String MetastoreProxy::getTableTrashItemsSnapshot(const String & name_space, con
     return value;
 }
 
+Strings MetastoreProxy::removePartitions(const String & name_space, const String & table_uuid, const PartitionWithGCStatus & partitions)
+{
+    Strings request_keys;
+    for (const auto & p : partitions)
+        request_keys.emplace_back(tablePartitionInfoKey(name_space, table_uuid, p.first));
+
+    auto partitions_meta = metastore_ptr->multiGet(request_keys);
+
+    Poco::Logger * log = &Poco::Logger::get(__func__);
+
+    Strings res;
+    // try commit all partitions with CAS in one batch
+    BatchCommitRequest batch_write;
+    for (const auto & metadata : partitions_meta)
+    {
+        Protos::PartitionMeta partition_meta;
+        partition_meta.ParseFromString(metadata.first);
+
+        if (auto it = partitions.find(partition_meta.id()); it!=partitions.end() && partition_meta.gctime() == it->second)
+        {
+            res.push_back(partition_meta.id());
+            batch_write.AddDelete(tablePartitionInfoKey(name_space, table_uuid, partition_meta.id()), metadata.first, metadata.second);
+        }
+    }
+
+    BatchCommitResponse resp;
+    auto cas_commit_success = metastore_ptr->batchWrite(batch_write, resp);
+
+    // try again with deleting one by one if fails to commit in batch
+    if (!cas_commit_success)
+    {
+        LOG_WARNING(log, "CAS remove {} partitions failed. Will try to delete them one by one." , res.size());
+        res.clear();
+        for (const auto & metadata : partitions_meta)
+        {
+            Protos::PartitionMeta partition_meta;
+            partition_meta.ParseFromString(metadata.first);
+            try
+            {
+                if (auto it = partitions.find(partition_meta.id()); it!=partitions.end() && partition_meta.gctime() == it->second)
+                {
+                    metastore_ptr->drop(tablePartitionInfoKey(name_space, table_uuid, partition_meta.id()), metadata.first);
+                }
+                res.push_back(partition_meta.id());
+            }
+            catch (const Exception & e)
+            {
+                throw e;
+            }
+        }
+    }
+    return res;
+}
+
 String MetastoreProxy::getByKey(const String & key)
 {
     String meta_str;
     metastore_ptr->get(key, meta_str);
     return meta_str;
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getByPrefix(const String & prefix, size_t limit)
+{
+    return metastore_ptr->getByPrefix(prefix, limit);
 }
 
 // Access Entities

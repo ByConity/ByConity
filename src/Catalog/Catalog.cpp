@@ -1745,9 +1745,10 @@ namespace Catalog
                         source = "KV(cannot reach target server)";
                     }
                 }
-
+                size_t visibility_filtered = 0;
                 if (execute_filter && ts && visibility != VisibilityLevel::All)
                 {
+                    visibility_filtered = res.size();
                     LOG_TRACE(
                         log,
                         "{} Start handle intermediate parts. Total number of parts is {}, timestamp: {}"
@@ -1766,8 +1767,10 @@ namespace Catalog
                         ,storage->getStorageID().getNameForLogs()
                         ,res.size()
                         ,ts.toString());
+                    visibility_filtered -= res.size();
                 }
 
+                size_t bucket_filtered = 0;
                 /// Filter parts by bucket_numbers if it is bucket table and cluster ready
                 if (!res.empty() && !filter_bucket_numbers && !bucket_numbers.empty() && storage->isBucketTable() && isTableClustered(storage->getStorageUUID()))
                 {
@@ -1780,17 +1783,20 @@ namespace Catalog
                         ,bucket_numbers.size()
                         ,old_part_size
                         ,res.size());
+                    bucket_filtered = old_part_size - res.size();
                 }
 
                 LOG_DEBUG(
                     log,
-                    "Elapsed {}ms to get {} parts in {} partitions for table : {} , source : {}, ts : {}"
+                    "Elapsed {}ms to get {} parts in {} partitions for table : {} , source : {}, ts : {}, visibility filtered {} parts, bucket filtered {} parts."
                     ,watch.elapsedMilliseconds()
                     ,res.size()
                     ,partitions.size()
                     ,storage->getStorageID().getNameForLogs()
                     ,source
-                    ,ts.toString());
+                    ,ts.toString()
+                    ,visibility_filtered
+                    ,bucket_filtered);
             },
             ProfileEvents::GetServerDataPartsInPartitionsSuccess,
             ProfileEvents::GetServerDataPartsInPartitionsFailed);
@@ -1982,6 +1988,16 @@ namespace Catalog
             ProfileEvents::GetServerDataPartsInPartitionsFailed);
 
         return res;
+    }
+
+    bool Catalog::hasTrashedPartsInPartition(const ConstStoragePtr & storage, const String & partition)
+    {
+        String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+        String trash_part_prefix = MetastoreProxy::trashItemsPrefix(name_space, uuid) + PART_STORE_PREFIX + partition;
+
+        auto it = meta_proxy->getByPrefix(trash_part_prefix, 10);
+
+        return it->next();
     }
 
     ServerDataPartsVector Catalog::getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
@@ -2408,14 +2424,25 @@ namespace Catalog
         if (!parts.empty())
         {
             Strings current_partitions = getPartitionIDs(storage, nullptr);
+            std::unordered_set<String> deleting_partitions;
+            if (context.getPartCacheManager())
+                deleting_partitions = context.getPartCacheManager()->getDeletingPartitions(storage);
             meta_proxy->prepareAddDataParts(
                 name_space,
                 UUIDHelpers::UUIDToString(storage->getStorageID().uuid),
                 current_partitions,
+                deleting_partitions,
                 parts,
                 batch_writes,
                 expected_parts,
                 preallocate_mode);
+
+            // reset partition GC status if new data inserted into the deleting partition
+            if (!deleting_partitions.empty())
+            {
+                Strings partition_to_reset{deleting_partitions.begin(), deleting_partitions.end()};
+                context.getPartCacheManager()->updatePartitionGCTime(storage, partition_to_reset, 0);
+            }
         }
         meta_proxy->prepareAddDeleteBitmaps(
             name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), delete_bitmaps, batch_writes, expected_bitmaps);
@@ -2517,6 +2544,33 @@ namespace Catalog
         return partition_list;
     }
 
+    PartitionWithGCStatus Catalog::getPartitionsWithGCStatus(const StoragePtr & storage, const Strings & required_partitions)
+    {
+        PartitionWithGCStatus res;
+        if (required_partitions.empty())
+            return res;
+        if (auto * cnch_table = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
+        {
+            PartitionMap partitions;
+            if (auto cache_manager = context.getPartCacheManager(); cache_manager)
+            {
+                const auto host_port = context.getCnchTopologyMaster()->getTargetServer(
+                    UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+                if (!host_port.empty() && isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()))
+                    && cache_manager->getPartitionInfo(*cnch_table, partitions, host_port.topology_version, required_partitions))
+                {
+                    for (const auto & p : partitions)
+                    {
+                        if (!p.second->part_cache_status.isLoaded() || p.second->metrics_ptr->read().total_parts_number!=0)
+                            continue;
+                        res.emplace(p.first, p.second->gctime);
+                    }
+                }
+            }
+        }
+        return res;
+    }
+
     Strings Catalog::getPartitionIDs(const ConstStoragePtr & storage, const Context * /*session_context*/)
     {
         Strings partition_ids;
@@ -2590,8 +2644,10 @@ namespace Catalog
                     Protos::PartitionMeta partition_meta;
                     partition_meta.ParseFromString(it->value());
                     auto partition_ptr = createPartitionFromMetaModel(table, partition_meta);
-                    partition_list.emplace(
-                        partition_meta.id(), std::make_shared<CnchPartitionInfo>(table_uuid, partition_ptr, partition_meta.id()));
+                    auto partition_info = std::make_shared<CnchPartitionInfo>(table_uuid, partition_ptr, partition_meta.id());
+                    if (partition_meta.has_gctime())
+                        partition_info->gctime = partition_meta.gctime();
+                    partition_list.emplace(partition_meta.id(), std::move(partition_info));
                 }
             },
             ProfileEvents::GetPartitionsFromMetastoreSuccess,
@@ -4502,6 +4558,47 @@ namespace Catalog
         return res;
     }
 
+    void Catalog::markPartitionDeleted(const StoragePtr & table, const Strings & partitions)
+    {
+        if (partitions.empty() || !context.getPartCacheManager())
+            return;
+
+        StorageCnchMergeTree & merge_tree = dynamic_cast<StorageCnchMergeTree &>(*table);
+        String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
+        auto current_ts = UInt32(time(nullptr));
+        // firstly, change the in-memory partition GC status into deleting
+        auto deleting_partitions = context.getPartCacheManager()->updatePartitionGCTime(table, partitions, UInt32(current_ts));
+        if (deleting_partitions.empty())
+            return;
+        // then, update the partition metadata
+
+        BatchCommitRequest batch_write;
+        for (auto it = deleting_partitions.begin(); it != deleting_partitions.end(); it++)
+        {
+            Protos::PartitionMeta partition_model;
+            partition_model.set_id(it->first);
+            partition_model.set_gctime(current_ts);
+            WriteBufferFromString buffer(*partition_model.mutable_partition_minmax());
+            it->second->partition_ptr->store(merge_tree, buffer);
+            batch_write.AddPut(SinglePutRequest(MetastoreProxy::tablePartitionInfoKey(name_space, table_uuid, it->first), partition_model.SerializeAsString()));
+        }
+
+        BatchCommitResponse resp;
+        meta_proxy->batchWrite(batch_write, resp);
+        LOG_DEBUG(log, "Deleting {} partition records in table {} with gc time {}", deleting_partitions.size(), table->getStorageID().getNameForLogs(), current_ts);
+    }
+
+    void Catalog::deletePartitionsMetadata(const StoragePtr & table, const PartitionWithGCStatus & partitions)
+    {
+        if (partitions.empty() || !context.getPartCacheManager())
+            return;
+
+        // remove the partition metadata with CAS
+        Strings deleted_partitions = meta_proxy->removePartitions(name_space, UUIDHelpers::UUIDToString(table->getStorageUUID()), partitions);
+        LOG_DEBUG(log, "Removed {} partition records in table {} from metastore. Now remove them from cache.", deleted_partitions.size(), table->getStorageID().getNameForLogs());
+        context.getPartCacheManager()->removeDeletedPartitions(table, deleted_partitions);
+    }
+
     void Catalog::moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool is_zombie_with_staging_txn_id)
     {
         if (items.empty())
@@ -4523,7 +4620,6 @@ namespace Catalog
         String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
         String part_meta_prefix = MetastoreProxy::dataPartPrefix(name_space, table_uuid);
         String staged_part_meta_prefix = MetastoreProxy::stagedDataPartPrefix(name_space, table_uuid);
-        String trash_item_prefix = MetastoreProxy::trashItemsPrefix(name_space, table_uuid);
 
         bool need_invalid_part_cache = context.getPartCacheManager() != nullptr;
 

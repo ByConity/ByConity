@@ -133,6 +133,8 @@ enum StealingCacheMode : UInt64
       0) \
     M(UInt64, gc_remove_bitmap_batch_size, 1000, "Submit a batch of bitmaps to a background thread", 0) \
     M(UInt64, gc_remove_bitmap_thread_pool_size, 16, "Turn up the thread pool size to speed up GC processing of bitmaps", 0) \
+    M(UInt64, gc_partition_batch_size, 100, "The batch size for partition meta GC", 0) \
+    M(Seconds, gc_partition_lifetime_before_remove, 30 * 60, "The duration between mark partition deleted and remove from metastore finally", 0) \
     \
     M(UInt64, max_refresh_materialized_view_task_num, 10, "Max threads to refresh for each materialized view.", 0) \
     \

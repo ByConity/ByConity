@@ -27,6 +27,14 @@ hello
 \n\0
 ☺
 --JSONExtract (generic)--
+{'a':'hello','b':'world'}
+{'a':'hello','b':'world'}
+{'a':[100,200],'b':[-100,200,300]}
+{'a':'hello','b':'[-100,200,300]'}
+{'a':0,'b':0}
+{'a':{'c':'hello'},'b':{'d':'world'}}
+{'c':'hello'}
+{'a':'{"c":"hello"}','b':'{"d":"world"}'}
 ('hello',[-100,200,300])
 ('hello',[-100,200,300])
 ([-100,200,300],'hello')

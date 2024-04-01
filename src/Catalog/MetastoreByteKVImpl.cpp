@@ -202,7 +202,7 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
         DeleteRequest del_req;
         del_req.table = this->table_name;
         del_req.key = Slice(delete_key.key);
-        // del_req.expected_version = expected_version;
+        del_req.expected_version = delete_key.expected_version;
         wb_req.AddDelete(del_req);
     }
 

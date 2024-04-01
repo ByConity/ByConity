@@ -138,6 +138,8 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
 {
     if (key.starts_with("TB_"))
         std::cout << formatDataModel<DB::Protos::DataModelTable>(metadata) << std::endl;
+    else if (key.starts_with("TP_"))
+        std::cout << formatDataModel<DB::Protos::PartitionMeta>(metadata) << std::endl;
     else if (key.starts_with("PT_"))
         std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
     else if (key.starts_with("DLB_") || key.starts_with("DDLB_"))

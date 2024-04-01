@@ -46,8 +46,8 @@ struct SingleRequest
         : key(key_), value(value_), if_not_exists(if_not_exists_)
     {
     }
-    SingleRequest(const std::string & key_, const std::string & value_, const std::string & expected_)
-        : key(key_), value(value_)
+    SingleRequest(const std::string & key_, const std::string & value_, const std::string & expected_, const uint64_t & expected_version_ = 0)
+        : key(key_), value(value_), expected_version(expected_version_)
     {
         if (!expected_.empty())
             expected_value = expected_;
@@ -64,6 +64,7 @@ struct SingleRequest
     std::string value;
     bool if_not_exists = false;
     std::optional<std::string> expected_value;
+    uint64_t expected_version = 0;
     // the inserted key will be expired after n seconds.
     // no effect when set to 0
     uint64_t ttl{0};
@@ -96,9 +97,9 @@ struct BatchCommitRequest
         deletes.emplace_back(del);
         request_size_in_bytes += del.size();
     }
-    void AddDelete(const std::string & delkey, const std::string & expected)
+    void AddDelete(const std::string & delkey, const std::string & expected, const uint64_t & expected_version=0)
     {
-        deletes.emplace_back(delkey, "", expected);
+        deletes.emplace_back(delkey, "", expected, expected_version);
         request_size_in_bytes += delkey.size() + expected.size();
     }
     void SetTimeout(uint32_t time_out) { commit_timeout_ms = time_out; }

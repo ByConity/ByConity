@@ -14,6 +14,7 @@ message PartitionMeta {
   required string id = 1;
   required bytes partition_minmax = 2;
   optional uint32 meta_version = 3;
+  optional uint32 gctime = 4; // the timestamp that partition meta marked as deleting; it will be delete from metastore after a while
 }
 
 message TableIdentifier {
