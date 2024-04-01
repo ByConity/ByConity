@@ -37,6 +37,20 @@ Catalog::PartitionMap TableMetaEntry::getPartitions(const Strings & wanted_parti
     return res;
 }
 
+std::unordered_set<String> TableMetaEntry::getDeletingPartitions()
+{
+    std::unordered_set<String> res;
+
+    for (auto it = partitions.begin(); it != partitions.end(); it++)
+    {
+        auto & partition_info_ptr = *it;
+        if (partition_info_ptr->gctime > 0)
+            res.emplace(partition_info_ptr->partition_id);
+    }
+
+    return res;
+}
+
 Strings TableMetaEntry::getPartitionIDs()
 {
     Strings partition_ids;

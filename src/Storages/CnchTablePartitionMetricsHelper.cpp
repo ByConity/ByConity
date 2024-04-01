@@ -263,12 +263,10 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
 
     for (auto & partition : table_meta_ptr->partitions)
     {
-        if (partition == nullptr)
+        if (partition == nullptr || partition->metrics_ptr == nullptr)
             continue;
 
         LOG_TRACE(log, "recalculateOrSnapshotPartitionsMetrics {} {}", table_meta_ptr->table, partition->partition_id);
-        if (partition->metrics_ptr == nullptr)
-            continue;
 
         auto task = [this, partition, current_time, table_meta_ptr, force]() {
             CurrentMetrics::Increment metric_increment(CurrentMetrics::SystemCnchPartsInfoRecalculationTasksSize);

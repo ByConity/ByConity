@@ -86,6 +86,7 @@ void CnchPartGCThread::stop()
 
 void CnchPartGCThread::doPhaseOneGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions)
 {
+    Strings may_empty_partitions;
     auto storage_settings = storage.getSettings();
     bool in_wakeup = inWakeup() || static_cast<bool>(storage_settings->gc_ignore_running_transactions_for_test);
     /// Only inspect the parts small than gc_timestamp
@@ -98,10 +99,17 @@ void CnchPartGCThread::doPhaseOneGC(const StoragePtr & istorage, StorageCnchMerg
     {
         /// Do GC partition by partition to avoid holding too many ServerParts.
         for (const auto & p : partitions)
-            doPhaseOnePartitionGC(istorage, storage, p, in_wakeup, gc_timestamp);
+        {
+            size_t items_in_partition = doPhaseOnePartitionGC(istorage, storage, p, in_wakeup, gc_timestamp);
+            if (items_in_partition == 0)
+                may_empty_partitions.emplace_back(p);
+        }
 
         last_gc_timestamp = gc_timestamp;
     }
+
+    if (!may_empty_partitions.empty())
+        clearEmptyPartitions(istorage, storage, may_empty_partitions);
 
     clearOldInsertionLabels(istorage, storage);
 }
@@ -602,14 +610,16 @@ std::pair<ServerDataPartsVector, ServerDataPartsVector> CnchPartGCThread::proces
     return {zombie_metadata_only_parts, zombie_parts};
 }
 
-void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
+size_t CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
 {
+    size_t items_count_in_partition = 0;
     auto storage_settings = storage.getSettings();
     auto now = time(nullptr);
 
     Stopwatch watch;
     // for gc thread, intermediate parts are required in case that TransactionCleaner fails to clean them.
     auto all_parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, gc_timestamp, nullptr, Catalog::VisibilityLevel::All);
+    items_count_in_partition += all_parts.size();
     LOG_TRACE(log, "Get {} parts for {} from Catalog cost {} us", all_parts.size(), partition_id, watch.elapsedMicroseconds());
     watch.restart();
 
@@ -692,6 +702,7 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
         watch.restart();
         /// TODO: handle zombie intermediate bitmaps
         DeleteBitmapMetaPtrVector all_bitmaps = catalog->getDeleteBitmapsInPartitionsFromMetastore(istorage, {partition_id}, gc_timestamp);
+        items_count_in_partition += all_bitmaps.size();
         DeleteBitmapMetaPtrVector bitmaps_to_gc;
         CnchPartsHelper::calcBitmapsForGC(all_bitmaps, &bitmaps_to_gc, nullptr);
         LOG_DEBUG(
@@ -719,6 +730,7 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
         TxnTimestamp ts = storage.getContext()->getTimestamp();
         /// TODO: handle zombie staged parts
         ServerDataPartsVector all_staged_parts = catalog->getStagedServerDataParts(istorage, ts, &partition_filter);
+        items_count_in_partition += all_staged_parts.size();
         ServerDataPartsVector staged_parts_to_gc;
         CnchPartsHelper::calcPartsForGC(all_staged_parts, &staged_parts_to_gc, nullptr);
         LOG_DEBUG(
@@ -738,6 +750,78 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
         movePartsToTrash(istorage, staged_parts_to_gc, /*is_staged*/ true, "staged parts",
             storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size);
     }
+
+    return items_count_in_partition;
+}
+
+void CnchPartGCThread::clearEmptyPartitions(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions)
+{
+    if (partitions.empty())
+        return;
+
+    auto now = time(nullptr);
+
+    Strings empty_partitions;
+    for (const auto & p : partitions)
+    {
+        // double check if the partition is truely empty. Get parts here should be lightweight since most of the partitions should be empty;
+        auto data_parts_in_partition = catalog->getServerDataPartsInPartitions(istorage, {p}, 0, nullptr, Catalog::VisibilityLevel::All);
+        NameSet partition_filter{p};
+        auto staged_parts_in_partition = catalog->getStagedServerDataParts(istorage, 0, &partition_filter);
+        if (data_parts_in_partition.empty() && staged_parts_in_partition.empty())
+            empty_partitions.push_back(p);
+    }
+
+    Catalog::PartitionWithGCStatus partitions_with_gctime = catalog->getPartitionsWithGCStatus(istorage, empty_partitions);
+
+    if (partitions_with_gctime.empty())
+        return;
+    
+    UInt64 batch_size = storage.getSettings()->gc_partition_batch_size;
+    // lifetime of deleting partitions should be more than ttl for trash items since it may be still referenced by a snapshot.
+    UInt64 partition_life_time = std::max(storage.getSettings()->ttl_for_trash_items.totalSeconds() * 2, storage.getSettings()->gc_partition_lifetime_before_remove.totalSeconds());
+    Strings partitions_to_mark_delete;
+    size_t counter_mark=0, counter_delete=0;
+    Catalog::PartitionWithGCStatus partitions_to_remove;
+    for (const auto & p : empty_partitions)
+    {
+        if (auto it = partitions_with_gctime.find(p); it!=partitions_with_gctime.end())
+        {
+            if (it->second == 0)
+            {
+                counter_mark++;
+                partitions_to_mark_delete.emplace_back(it->first);
+            }
+            else if (it->second + partition_life_time < UInt64(now))
+            {
+                if (!catalog->hasTrashedPartsInPartition(istorage, p))
+                {
+                    counter_delete++;
+                    partitions_to_remove.emplace(it->first, it->second);
+                }
+            }
+        }
+
+        if (partitions_to_mark_delete.size() >= batch_size)
+        {
+            catalog->markPartitionDeleted(istorage, partitions_to_mark_delete);
+            partitions_to_mark_delete.clear();
+        }
+        if (partitions_to_remove.size() >= batch_size)
+        {
+            catalog->deletePartitionsMetadata(istorage, partitions_to_remove);
+            partitions_to_remove.clear();
+        }
+    }
+
+    if (partitions_to_mark_delete.size())
+        catalog->markPartitionDeleted(istorage, partitions_to_mark_delete);
+
+    if (partitions_to_remove.size())
+        catalog->deletePartitionsMetadata(istorage, partitions_to_remove);
+
+    if (counter_mark || counter_delete)
+        LOG_DEBUG(log, "Partition GC marked {} partitions as deleting and removed {} partitions from metastore.", counter_mark, counter_delete);
 }
 
 }

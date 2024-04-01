@@ -75,6 +75,7 @@ struct partition_comparator
 };
 
 using PartitionMap = std::map<String, PartitionInfoPtr>;
+using PartitionWithGCStatus = std::map<String, UInt32>;
 
 inline String normalizePath(const String & path)
 {

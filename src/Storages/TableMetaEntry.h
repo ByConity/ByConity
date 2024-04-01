@@ -78,6 +78,7 @@ struct TableMetaEntry
     String server_vw_name;
 
     Catalog::PartitionMap getPartitions(const Strings & wanted_partition_ids);
+    std::unordered_set<String> getDeletingPartitions();
     Strings getPartitionIDs();
     std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList();
 

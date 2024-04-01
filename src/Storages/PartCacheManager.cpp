@@ -468,6 +468,66 @@ bool PartCacheManager::getPartsInfoMetrics(
     return table_partition_metrics.getPartsInfoMetrics(i_storage, partitions, require_partition_info);
 }
 
+Catalog::PartitionMap PartCacheManager::updatePartitionGCTime(const StoragePtr table, const Strings & partitions, UInt32 ts)
+{
+    TableMetaEntryPtr meta_ptr = getTableMeta(table->getStorageUUID());
+
+    // return directly if the table has not been loaded
+    if (!meta_ptr)
+        return {};
+
+    Catalog::PartitionMap res;
+
+    auto partition_map = meta_ptr->getPartitions(partitions);
+    for (const auto & p : partitions)
+    {
+        if (auto it = partition_map.find(p); it != partition_map.end())
+        {
+            // mark partition as deleted
+            if (ts)
+            {
+                UInt64 expected = 0;
+                if (it->second->gctime.compare_exchange_strong(expected, ts, std::memory_order_relaxed))
+                    res.emplace(it->first, it->second);
+            }
+            else
+            {
+                // reset deleting status if ts=0
+                it->second->gctime = 0;
+            }
+        }
+    }
+    return res;
+}
+
+void PartCacheManager::removeDeletedPartitions(const StoragePtr table, const Strings & partitions)
+{
+    TableMetaEntryPtr meta_ptr = getTableMeta(table->getStorageUUID());
+    // return directly if the table has not been loaded
+    if (!meta_ptr)
+        return;
+
+    Strings keys_to_remove;
+    auto partition_map = meta_ptr->getPartitions(partitions);
+    for (const String & partition : partitions)
+    {
+        if (auto it = partition_map.find(partition); it != partition_map.end() && it->second->gctime != 0)
+            keys_to_remove.emplace_back(partition);
+    }
+
+    meta_ptr->partitions.erase_if(keys_to_remove, [](PartitionInfoPtr & info){ return info->gctime > 0;});
+}
+
+std::unordered_set<String> PartCacheManager::getDeletingPartitions(const StoragePtr table)
+{
+    TableMetaEntryPtr meta_ptr = getTableMeta(table->getStorageUUID());
+    // return directly if the table has not been loaded
+    if (!meta_ptr)
+        return {};
+    else
+        return meta_ptr->getDeletingPartitions();
+}
+
 bool PartCacheManager::getPartitionList(
     const IStorage & table,
     std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
@@ -480,6 +540,20 @@ bool PartCacheManager::getPartitionList(
         partition_list = meta_ptr->getPartitionList();
         return true;
     }
+    return false;
+}
+
+bool PartCacheManager::getPartitionInfo(const IStorage & storage, Catalog::PartitionMap & partitions, const PairInt64 & topology_version, const Strings & required_partitions)
+{
+    mayUpdateTableMeta(storage, topology_version);
+    TableMetaEntryPtr meta_ptr = getTableMeta(storage.getStorageUUID());
+
+    if (meta_ptr)
+    {
+        partitions = meta_ptr->getPartitions(required_partitions);
+        return true;
+    }
+
     return false;
 }
 

@@ -105,8 +105,30 @@ public:
 
     std::vector<Protos::LastModificationTimeHint>
     getLastModificationTimeHints(const ConstStoragePtr & storage, bool allow_regression = false);
+
+    /**
+     * @brief update the GC time for partitions; mark/unmark deleted
+     *
+     * @param table
+     * @param partitions partitions to update
+     * @param ts GC time to update
+     * @return partitions which have been successfully updated
+     */
+    Catalog::PartitionMap updatePartitionGCTime(const StoragePtr table, const Strings & partitions, UInt32 ts);
+    /**
+     * remove deleting partitions entry from table meta entry.
+     *
+     * @param table
+     * @param partitions partitions to be removed
+     */
+    void removeDeletedPartitions(const StoragePtr table, const Strings & partitions);
+
+    std::unordered_set<String> getDeletingPartitions(const StoragePtr table);
+
     bool getPartitionList(
         const IStorage & table, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const PairInt64 & topology_version);
+
+    bool getPartitionInfo(const IStorage & storage, Catalog::PartitionMap & partitions, const PairInt64 & topology_version, const Strings & required_partitions);
 
     bool getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids, const PairInt64 & topology_version);
 
