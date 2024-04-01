@@ -24,6 +24,7 @@
 
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 // #include <Transaction/ICnchTransaction.h>
+#include <algorithm>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -541,14 +542,23 @@ public:
         return ss.str();
     }
 
-    static std::string undoBufferKey(const std::string & name_space, const UInt64 & txn)
+    static std::string undoBufferKey(const std::string & name_space, const UInt64 & txn, bool write_undo_buffer_new_key)
     {
+        if (write_undo_buffer_new_key)
+        {
+            /* Not make increment key to avoid ByteKV partition server performance issue
+            * Reverse transaction_id with a `R` suffix to make sure it will not conflict with old way
+            */
+            String txn_str = toString(txn);
+            std::reverse(txn_str.begin(), txn_str.end());
+            return escapeString(name_space) + '_' + UNDO_BUFFER_PREFIX + txn_str + "R";
+        }
         return escapeString(name_space) + '_' + UNDO_BUFFER_PREFIX + toString(txn);
     }
 
-    static std::string undoBufferStoreKey(const std::string & name_space, const UInt64 & txn, const String & rpc_address, const UndoResource & resource)
+    static std::string undoBufferStoreKey(const std::string & name_space, const UInt64 & txn, const String & rpc_address, const UndoResource & resource, bool write_undo_buffer_new_key)
     {
-        return undoBufferKey(name_space, txn) + '_' + escapeString(rpc_address) + '_' + escapeString(toString(resource.id));
+        return undoBufferKey(name_space, txn, write_undo_buffer_new_key) + '_' + escapeString(rpc_address) + '_' + escapeString(toString(resource.id));
     }
 
     static std::string kvLockKey(const std::string & name_space, const std::string & uuid, const std::string & part_name)
@@ -1040,10 +1050,10 @@ public:
     Strings getAllMutations(const String & name_space, const String & uuid);
     std::multimap<String, String> getAllMutations(const String & name_space);
 
-    void writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & rpc_address, const String & uuid, UndoResources & resources);
+    void writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & rpc_address, const String & uuid, UndoResources & resources, bool write_undo_buffer_new_key);
 
     void clearUndoBuffer(const String & name_space, const UInt64 & txnID);
-    IMetaStore::IteratorPtr getUndoBuffer(const String & name_space, UInt64 txnID);
+    IMetaStore::IteratorPtr getUndoBuffer(const String & name_space, UInt64 txnID, bool write_undo_buffer_new_key);
     IMetaStore::IteratorPtr getAllUndoBuffer(const String & name_space);
 
     void multiDrop(const Strings & keys);

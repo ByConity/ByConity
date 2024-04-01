@@ -1300,7 +1300,7 @@ enum PreloadLevelSettings : UInt64
     M(Milliseconds, topology_retry_interval_ms, 100, "Interval of topology background task to retry.", 0) \
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
     M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
-    M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
+    M(UInt64, catalog_max_commit_size, 500, "Max record number to be committed in one batch.", 0) \
     M(Bool, catalog_enable_multiple_threads, false, "Whether leverage multiple threads to handle metadata.", 0) \
     M(UInt64, catalog_multiple_threads_min_parts, 10000, "Minimum parts number to enable multi-thread in calc visible parts.", 0) \
     M(Bool, server_write_ha, false, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
