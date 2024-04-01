@@ -16,6 +16,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -24,9 +25,11 @@
 #include <Common/HostWithPorts.h>
 #include <Core/Types.h>
 #include <Core/UUID.h>
+#include <Core/SettingsEnums.h>
 #include <ResourceManagement/VirtualWarehouseType.h>
 #include <ResourceManagement/VWScheduleAlgo.h>
 #include <ResourceManagement/WorkerGroupType.h>
+#include <Protos/data_models.pb.h>
 
 namespace DB
 {
@@ -49,6 +52,31 @@ namespace DB::Protos
 
 namespace DB::ResourceManagement
 {
+
+struct QueueRule
+{
+    std::string rule_name;
+    std::vector<std::string> databases;
+    std::vector<std::string> tables;
+    std::string query_id;
+    std::string user;
+    std::string ip;
+    std::string fingerprint;
+
+    void fillProto(Protos::QueueRule & queue_rule) const;
+    void parseFromProto(const Protos::QueueRule & queue_rule);
+};
+
+struct QueueData
+{
+    std::string queue_name;
+    size_t max_concurrency{100};
+    size_t query_queue_size{200};
+    std::vector<QueueRule> queue_rules;
+
+    void fillProto(Protos::QueueData & queue_data) const;
+    void parseFromProto(const Protos::QueueData & queue_data);
+};
 
 struct VirtualWarehouseSettings
 {
@@ -85,6 +113,8 @@ struct VirtualWarehouseSettings
     size_t cooldown_seconds_after_scaleup{300};
     size_t cooldown_seconds_after_scaledown{300};
 
+    std::vector<QueueData> queue_datas;
+
     void fillProto(Protos::VirtualWarehouseSettings & pb_settings) const;
     void parseFromProto(const Protos::VirtualWarehouseSettings & pb_settings);
 
@@ -119,6 +149,22 @@ struct VirtualWarehouseAlterSettings
     std::optional<size_t> cooldown_seconds_after_scaleup;
     std::optional<size_t> cooldown_seconds_after_scaledown;
 
+    Protos::QueueAlterType queue_alter_type {Protos::QueueAlterType::UNKNOWN};
+    std::optional<size_t> max_concurrency;
+    std::optional<size_t> query_queue_size;
+    std::optional<String> query_id;
+    std::optional<String> user;
+    std::optional<String> ip;
+    std::optional<String> rule_name;
+    std::optional<String> fingerprint;
+    std::optional<String> queue_name;
+    bool has_table {false};
+    bool has_database {false};
+    std::vector<String> tables;
+    std::vector<String> databases;
+
+    std::optional<QueueData> queue_data;
+
     void fillProto(Protos::VirtualWarehouseAlterSettings & pb_settings) const;
     void parseFromProto(const Protos::VirtualWarehouseAlterSettings & pb_settings);
 
@@ -129,7 +175,6 @@ struct VirtualWarehouseAlterSettings
         return vw_settings;
     }
 };
-
 struct VirtualWarehouseData
 {
     /// constants

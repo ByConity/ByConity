@@ -391,6 +391,33 @@ message VirtualWarehouseSettings {
 
   optional uint32 cooldown_seconds_after_scaleup = 20;
   optional uint32 cooldown_seconds_after_scaledown = 21;
+
+  repeated QueueData queue_datas = 22;
+};
+
+enum QueueAlterType {
+  UNKNOWN = 0;
+  ADD_RULE = 1;
+  DELETE_RULE = 2;
+  MODIFY_RULE = 3;
+};
+
+message QueueRule {
+  optional string rule_name = 1;
+  repeated string databases = 2;
+  repeated string tables = 3;
+  optional string query_id = 4;
+  optional string user = 5;
+  optional string ip = 6;
+  optional string fingerprint = 7;
+};
+
+message QueueData {
+  //  highest = 0;  high = 1;   normal = 2;   low = 3;   lowest = 4;
+  optional string queue_name = 1;
+  optional uint32 max_concurrency = 2;
+  optional uint32 query_queue_size = 3;
+  repeated QueueRule queue_rules = 4;
 };
 
 message VirtualWarehouseAlterSettings {
@@ -417,7 +444,22 @@ message VirtualWarehouseAlterSettings {
   optional uint32 mem_threshold_for_recall = 19;
   optional uint32 cooldown_seconds_after_scaleup = 20;
   optional uint32 cooldown_seconds_after_scaledown = 21;
+  optional QueueAlterType queue_alter_type = 22;
+  optional QueueData queue_data = 23; 
+  optional uint32 max_concurrency = 24;
+  optional uint32 query_queue_size = 25;
+  optional string query_id = 26;
+  optional string user = 27;
+  optional string ip = 28;
+  optional string rule_name = 29;
+  optional bool has_table = 30;
+  repeated string tables = 31;
+  optional bool has_database = 32;
+  repeated string databases = 33;
+  optional string fingerprint = 34;
+  optional string queue_name = 35;
 };
+
 
 message VirtualWarehouseData {
   required string name = 1;
@@ -432,6 +474,8 @@ message VirtualWarehouseData {
 
   optional double cpu_usage_1min = 17;
   optional double memory_usage_1min = 18;
+
+  repeated QueueData queue_datas = 19;
 };
 
 // WorkNodeCatalogData

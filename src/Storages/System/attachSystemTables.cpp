@@ -74,6 +74,7 @@
 #include <Storages/System/StorageSystemKafkaTables.h>
 #include <Storages/System/StorageSystemCnchKafkaTables.h>
 #endif
+#include <Storages/System/StorageSystemVirtualWarehouseQueryQueue.h>
 #include <Storages/System/StorageSystemCnchTransactions.h>
 #include <Storages/System/StorageSystemCnchFilesystemLock.h>
 #include "Storages/System/StorageSystemExternalTables.h"
@@ -223,6 +224,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemStoragePolicies>(system_database, "storage_policies");
     attach<StorageSystemProcesses>(system_database, "processes");
     attach<StorageSystemQueryQueue>(system_database, "query_queue");
+    attach<StorageSystemVirtualWarehouseQueryQueue>(system_database, "virtual_warehouse_queue");
     attach<StorageSystemMetrics>(system_database, "metrics");
     attach<StorageSystemMerges>(system_database, "merges");
     attach<StorageSystemMutations>(system_database, "mutations");

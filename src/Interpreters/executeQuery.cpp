@@ -279,8 +279,15 @@ void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr 
     }
 }
 
-void tryQueueQuery(ContextMutablePtr context, ASTType ast_type)
+void tryQueueQuery(ContextMutablePtr context, ASTPtr & query_ast)
 {
+    ASTType ast_type;
+    try {
+        ast_type = query_ast->getType();
+    } catch (...) {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "only queue dml query");
+        return;
+    }
     auto worker_group_handler = context->tryGetCurrentWorkerGroup();
     if (ast_type != ASTType::ASTSelectQuery && ast_type != ASTType::ASTSelectWithUnionQuery && ast_type != ASTType::ASTInsertQuery
         && ast_type != ASTType::ASTDeleteQuery && ast_type != ASTType::ASTUpdateQuery)
@@ -1018,7 +1025,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 applyCustomSetting(context, ast);
             context->initCnchServerResource(txn->getTransactionID());
             if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
-                tryQueueQuery(context, ast->getType());
+                tryQueueQuery(context, ast);
+            
+            if (!internal && !ast->as<ASTShowProcesslistQuery>())
+                enqueueVirtualWarehouseQueue(context, ast);
         }
     }
 
@@ -1070,6 +1080,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         ProcessList::EntryPtr process_list_entry;
         if (!internal && !ast->as<ASTShowProcesslistQuery>())
         {
+            LOG_TRACE(&Poco::Logger::get("executeQuery"), "enqueue process list query :{}", query_for_logging);
             /// processlist also has query masked now, to avoid secrets leaks though SHOW PROCESSLIST by other users.
             process_list_entry = context->getProcessList().insert(query_for_logging, ast.get(), context);
             QueryStatus & process_list_elem = process_list_entry->get();

@@ -172,6 +172,20 @@ IMPLEMENT_SETTING_ENUM(BackupVWMode, ErrorCodes::BAD_ARGUMENTS,
      {"round_robin", BackupVWMode::ROUND_ROBIN},
      {"backup_only", BackupVWMode::BACKUP_ONLY}})
 
+IMPLEMENT_SETTING_ENUM(QueueName, ErrorCodes::BAD_ARGUMENTS,
+    {{"highest", QueueName::Highest},
+     {"high", QueueName::High},
+     {"normal", QueueName::Normal},
+     {"low", QueueName::Low},
+     {"lowest", QueueName::Lowest},
+     {"count", QueueName::Count},
+     {"auto", QueueName::Auto}})
+
+IMPLEMENT_SETTING_ENUM(VWQueueMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"skip", VWQueueMode::Skip},
+     {"match", VWQueueMode::Match},
+     {"force", VWQueueMode::Force}})
+
 IMPLEMENT_SETTING_ENUM(StatisticsCachePolicy, ErrorCodes::BAD_ARGUMENTS,
     {{"default", StatisticsCachePolicy::Default},
      {"cache", StatisticsCachePolicy::Cache},
