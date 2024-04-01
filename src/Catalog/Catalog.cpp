@@ -2561,7 +2561,7 @@ namespace Catalog
                 {
                     for (const auto & p : partitions)
                     {
-                        if (p.second->cache_status!=CacheStatus::LOADED || p.second->metrics_ptr->read().total_parts_number!=0)
+                        if (!p.second->part_cache_status.isLoaded() || p.second->metrics_ptr->read().total_parts_number!=0)
                             continue;
                         res.emplace(p.first, p.second->gctime);
                     }
