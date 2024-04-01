@@ -1745,9 +1745,10 @@ namespace Catalog
                         source = "KV(cannot reach target server)";
                     }
                 }
-
+                size_t visibility_filtered = 0;
                 if (execute_filter && ts && visibility != VisibilityLevel::All)
                 {
+                    visibility_filtered = res.size();
                     LOG_TRACE(
                         log,
                         "{} Start handle intermediate parts. Total number of parts is {}, timestamp: {}"
@@ -1766,8 +1767,10 @@ namespace Catalog
                         ,storage->getStorageID().getNameForLogs()
                         ,res.size()
                         ,ts.toString());
+                    visibility_filtered -= res.size();
                 }
 
+                size_t bucket_filtered = 0;
                 /// Filter parts by bucket_numbers if it is bucket table and cluster ready
                 if (!res.empty() && !filter_bucket_numbers && !bucket_numbers.empty() && storage->isBucketTable() && isTableClustered(storage->getStorageUUID()))
                 {
@@ -1780,17 +1783,20 @@ namespace Catalog
                         ,bucket_numbers.size()
                         ,old_part_size
                         ,res.size());
+                    bucket_filtered = old_part_size - res.size();
                 }
 
                 LOG_DEBUG(
                     log,
-                    "Elapsed {}ms to get {} parts in {} partitions for table : {} , source : {}, ts : {}"
+                    "Elapsed {}ms to get {} parts in {} partitions for table : {} , source : {}, ts : {}, visibility filtered {} parts, bucket filtered {} parts."
                     ,watch.elapsedMilliseconds()
                     ,res.size()
                     ,partitions.size()
                     ,storage->getStorageID().getNameForLogs()
                     ,source
-                    ,ts.toString());
+                    ,ts.toString()
+                    ,visibility_filtered
+                    ,bucket_filtered);
             },
             ProfileEvents::GetServerDataPartsInPartitionsSuccess,
             ProfileEvents::GetServerDataPartsInPartitionsFailed);
