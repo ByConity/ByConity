@@ -1499,14 +1499,14 @@ namespace Catalog
     ServerDataPartsWithDBM Catalog::getStagedServerDataPartsWithDBM(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
         ServerDataPartsWithDBM res;
-        res.first = getStagedServerDataParts(table, ts, partitions, /*execute_filter=*/false);
+        res.first = getStagedServerDataParts(table, ts, partitions, VisibilityLevel::All);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = table->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+            res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, VisibilityLevel::All);
 
         if (ts)
         {
@@ -1538,7 +1538,7 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions, bool execute_filter)
+    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions, VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1589,7 +1589,7 @@ namespace Catalog
                     res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(*storage, std::move(*model))));
                 }
 
-                if (ts && execute_filter)
+                if (ts && visibility != VisibilityLevel::All)
                 {
                     getVisibleServerDataParts(res, ts, this, nullptr);
                 }
@@ -1603,14 +1603,14 @@ namespace Catalog
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility, const std::set<Int64> & bucket_numbers)
     {
         ServerDataPartsWithDBM res;
-        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, visibility, /*execute_filter=*/false, bucket_numbers);
+        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, VisibilityLevel::All, bucket_numbers);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+            res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, VisibilityLevel::All);
 
         /// Make sure they use the same records of transactions list.
         if (ts && visibility != VisibilityLevel::All)
@@ -1656,7 +1656,6 @@ namespace Catalog
         const TxnTimestamp & ts,
         const Context * session_context,
         VisibilityLevel visibility,
-        bool execute_filter,
         const std::set<Int64> & bucket_numbers)
     {
         ServerDataPartsVector res;
@@ -1746,7 +1745,7 @@ namespace Catalog
                     }
                 }
                 size_t visibility_filtered = 0;
-                if (execute_filter && ts && visibility != VisibilityLevel::All)
+                if (ts && visibility != VisibilityLevel::All)
                 {
                     visibility_filtered = res.size();
                     LOG_TRACE(
@@ -1810,7 +1809,7 @@ namespace Catalog
         const Strings & partitions,
         const TxnTimestamp & ts,
         const Context * session_context,
-        bool execute_filter)
+        VisibilityLevel visibility)
     {
         DeleteBitmapMetaPtrVector res;
         String source;
@@ -1893,7 +1892,7 @@ namespace Catalog
                 }
 
                 /// filter out invisible bitmaps (uncommitted or invisible to current txn)
-                if (execute_filter)
+                if (visibility != VisibilityLevel::All)
                     getVisibleBitmaps(res, ts, this, nullptr);
                 LOG_DEBUG(
                     log,
@@ -1913,14 +1912,14 @@ namespace Catalog
     ServerDataPartsWithDBM Catalog::getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
         ServerDataPartsWithDBM res;
-        res.first = getTrashedPartsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+        res.first = getTrashedPartsInPartitions(storage, partitions, ts, VisibilityLevel::All);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+            res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, VisibilityLevel::All);
 
         if (ts)
         {
@@ -1951,7 +1950,7 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1972,7 +1971,7 @@ namespace Catalog
                 size_t size_before = res.size();
 
                 // TODO: should we remove the visibility check logic for trashed parts?
-                if (ts && execute_filter)
+                if (ts && visibility != VisibilityLevel::All)
                     getVisibleServerDataParts(res, ts, this, nullptr);
 
                 LOG_DEBUG(
@@ -5720,18 +5719,18 @@ namespace Catalog
         return res;
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false, execute_filter);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false, visibility);
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true, execute_filter);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true, visibility);
     }
 
     DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash, bool execute_filter)
+    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash, VisibilityLevel visibility)
     {
         DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
@@ -5760,7 +5759,7 @@ namespace Catalog
                     create_func,
                     ts);
 
-                if (execute_filter)
+                if (visibility != VisibilityLevel::All)
                 {
                     /// filter out invisible bitmaps (uncommitted or invisible to current txn)
                     getVisibleBitmaps(res, ts, this, nullptr);
