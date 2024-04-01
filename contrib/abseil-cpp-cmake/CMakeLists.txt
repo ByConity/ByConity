@@ -28,6 +28,6 @@ set(ABSL_FORMAT_SRC
 )
 
 add_library(_abseil_str_format ${ABSL_FORMAT_SRC})
-target_include_directories(_abseil_str_format PUBLIC ${ABSL_ROOT_DIR})
+target_include_directories(_abseil_str_format SYSTEM PUBLIC ${ABSL_ROOT_DIR})
 
 add_library(ch_contrib::abseil_str_format ALIAS _abseil_str_format)
