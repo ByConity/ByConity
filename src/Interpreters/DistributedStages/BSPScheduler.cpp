@@ -32,6 +32,7 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
         std::unique_lock<std::mutex> lock(node_selector_result_mutex);
         selector_info = node_selector_result[task.task_id];
     }
+    LOG_INFO(log, "Submit {} tasks for segment {}", selector_info.worker_nodes.size(), task.task_id);
     std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_count_on_workers;
     for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
     {

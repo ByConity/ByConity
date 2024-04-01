@@ -152,7 +152,7 @@ void Scheduler::schedule()
         {
             for (auto task : *batch_task)
             {
-                LOG_DEBUG(log, "Schedule segment {}", task.task_id);
+                LOG_INFO(log, "Schedule segment {}", task.task_id);
                 if (task.task_id == 0)
                 {
                     prepareFinalTask();
@@ -203,7 +203,7 @@ void Scheduler::genTopology()
             }
             auto depend_id = plan_segment_input->getPlanSegmentId();
             current.emplace(depend_id);
-            LOG_TRACE(log, "{} depends on {} by exchange_id:{}", id, depend_id, plan_segment_input->getExchangeId());
+            LOG_INFO(log, "Segment {} depends on {} by exchange_id {}", id, depend_id, plan_segment_input->getExchangeId());
         }
     }
 }
@@ -242,12 +242,12 @@ void Scheduler::removeDepsAndEnqueueTask(const SegmentTask & task)
     std::lock_guard<std::mutex> guard(plansegment_topology_mutex);
     auto batch_task = std::make_shared<BatchTask>();
     const auto & task_id = task.task_id;
-    LOG_TRACE(log, "Remove dependency {} for segments", task_id);
+    LOG_INFO(log, "Remove dependency {} for segments", task_id);
 
     for (auto & [id, dependencies] : plansegment_topology)
     {
         if (dependencies.erase(task_id))
-            LOG_TRACE(log, "Erase dependency {} for segment {}", task_id, id);
+            LOG_INFO(log, "Erase dependency {} for segment {}", task_id, id);
         if (dependencies.empty())
         {
             batch_task->emplace_back(id);
