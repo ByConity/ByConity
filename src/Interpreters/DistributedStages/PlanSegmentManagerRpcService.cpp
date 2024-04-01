@@ -69,7 +69,8 @@ void PlanSegmentManagerRpcService::executeQuery(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
-        LOG_DEBUG(log, "execute plan segment: {}_{}", request->query_id(), request->plan_segment_id());
+        LOG_INFO(
+            log, "execute plan segment: {}_{} parallel index {}", request->query_id(), request->plan_segment_id(), request->parallel_id());
         if (request->brpc_protocol_major_revision() != DBMS_BRPC_PROTOCOL_MAJOR_VERSION)
             throw Exception(
                 "brpc protocol major version different - current is " + std::to_string(request->has_brpc_protocol_major_revision())
@@ -264,6 +265,16 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
 {
     brpc::ClosureGuard done_guard(done);
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
+
+    LOG_INFO(
+        log,
+        "Received status of query {}, segment {}, parallel index {}, succeed: {}, cancelled: {}, code is {}",
+        request->query_id(),
+        request->segment_id(),
+        request->parallel_index(),
+        request->is_succeed(),
+        request->is_canceled(),
+        request->code());
 
     try
     {
@@ -504,6 +515,13 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
 
         if (!res)
             throw Exception("Fail to parse Protos::QueryCommon! ", ErrorCodes::LOGICAL_ERROR);
+
+        LOG_INFO(
+            log,
+            "execute plan segment: {}_{}, parallel index {}",
+            query_common->query_id(),
+            request->plan_segment_id(),
+            request->parallel_id());
 
         /// Create context.
         ContextMutablePtr query_context;
