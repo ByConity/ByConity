@@ -1447,7 +1447,7 @@ public:
     int sub_query_id = 0;
     int incAndGetSubQueryId() { return ++sub_query_id; }
 
-    SymbolAllocatorPtr & getSymbolAllocator() { return symbol_allocator; }
+    const SymbolAllocatorPtr & getSymbolAllocator() { return symbol_allocator; }
     ExcludedRulesMap & getExcludedRulesMap() { return exclude_rules_map; }
 
     void createSymbolAllocator();
