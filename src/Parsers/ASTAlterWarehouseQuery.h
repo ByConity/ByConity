@@ -26,8 +26,19 @@ class ASTAlterWarehouseQuery: public IAST
 {
 public:
 
+    enum Type 
+    {
+        UNKNOWN,
+        ADD_RULE,
+        DELETE_RULE,
+        MODIFY_RULE
+    };
+
     String name;
     String rename_to;
+    Type type {Type::UNKNOWN};
+    ASTPtr predicate;
+    ASTPtr assignment_list;
     String getID(char) const override { return "AlterWarehouseQuery"; }
 
     ASTSetQuery * settings = nullptr;
@@ -35,6 +46,8 @@ public:
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+
+    ASTType getType() const override { return ASTType::ASTAlterCommand; }
 
 };
 }

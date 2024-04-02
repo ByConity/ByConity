@@ -309,6 +309,28 @@ enum class BackupVWMode
 
 DECLARE_SETTING_ENUM(BackupVWMode)
 
+enum class QueueName : uint32_t
+{
+    Highest = 0,
+    High,
+    Normal,
+    Low,
+    Lowest,
+    Count,
+    Auto
+};
+
+DECLARE_SETTING_ENUM(QueueName);
+
+enum class VWQueueMode : uint32_t
+{
+    Skip = 0,
+    Match,
+    Force 
+};
+
+DECLARE_SETTING_ENUM(VWQueueMode);
+
 enum class SpanHierarchy : int
 {
     TRACE = 0,

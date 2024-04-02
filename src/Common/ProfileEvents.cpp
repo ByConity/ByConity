@@ -880,6 +880,8 @@
 \
     M(PartsToAttach, "") \
     M(NumOfRowsToAttach, "") \
+    M(VWQueueMilliseconds, "Total time spent to wait in virtual warehouse queue") \
+    M(VWQueueType, "Which type of virtual warehouse queue") \
     M(ScheduleTimeMilliseconds, "Total time spent to schedule plan segment") \
     \
     M(ScheduledDedupTaskNumber, "Total number of scheduled dedup task") \

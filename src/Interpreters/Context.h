@@ -303,6 +303,9 @@ using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
 struct QeueueThrottlerDeleter;
 using QueueThrottlerDeleterPtr = std::shared_ptr<QeueueThrottlerDeleter>;
 
+struct DequeueRelease;
+using DequeueReleasePtr = std::shared_ptr<DequeueRelease>;
+
 class BindingCacheManager;
 using BindingCacheManagerPtr = std::shared_ptr<BindingCacheManager>;
 
@@ -602,6 +605,7 @@ private:
     mutable WorkerGroupHandle current_worker_group;
     mutable WorkerGroupHandle health_worker_group;
 
+    DequeueReleasePtr dequeue_ptr;
     /// Transaction for each query, query level
     TransactionCnchPtr current_cnch_txn;
 
@@ -1121,6 +1125,17 @@ public:
     {
         queue_throttler_ptr = ptr;
     }
+
+    void setDequeuePtr(DequeueReleasePtr ptr)
+    {
+        dequeue_ptr = ptr;
+    }
+
+    DequeueReleasePtr & getDequeuePtr()
+    {
+        return dequeue_ptr;
+    }
+
     ManipulationList & getManipulationList();
     const ManipulationList & getManipulationList() const;
 

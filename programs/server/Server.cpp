@@ -1059,6 +1059,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
                 global_context->setVWCustomizedSettings(std::make_shared<VWCustomizedSettings>(config));
             }
+
+            if (auto catalog = global_context->tryGetCnchCatalog())
+                catalog->loadFromConfig("catalog_service", *config);
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 

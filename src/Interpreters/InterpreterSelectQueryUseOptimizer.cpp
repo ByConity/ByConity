@@ -548,13 +548,13 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
         //     return executeDDLQueryOnCluster(query_ptr, context);
         return executeCreatePreparedStatementQuery();
     }
-
     if (!plan_segment_tree_ptr)
     {
         std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
         plan_segment_tree_ptr = std::move(plan_segment_tree_and_used_storage_ids.first);
     }
     size_t plan_segment_num = plan_segment_tree_ptr->getNodes().size();
+
     UInt64 max_plan_segment_num = context->getSettingsRef().max_plan_segment_num;
     if (max_plan_segment_num != 0 && plan_segment_num > max_plan_segment_num)
         throw Exception(

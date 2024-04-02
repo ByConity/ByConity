@@ -89,6 +89,7 @@
 #include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueueManager.h>
+#include <Interpreters/VirtualWarehouseQueue.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/SynonymsExtensions.h>
 #include <Interpreters/SystemLog.h>

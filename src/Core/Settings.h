@@ -1300,7 +1300,7 @@ enum PreloadLevelSettings : UInt64
     M(Milliseconds, topology_retry_interval_ms, 100, "Interval of topology background task to retry.", 0) \
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
     M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
-    M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
+    M(UInt64, catalog_max_commit_size, 500, "Max record number to be committed in one batch.", 0) \
     M(Bool, catalog_enable_multiple_threads, false, "Whether leverage multiple threads to handle metadata.", 0) \
     M(UInt64, catalog_multiple_threads_min_parts, 10000, "Minimum parts number to enable multi-thread in calc visible parts.", 0) \
     M(Bool, server_write_ha, false, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
@@ -1434,6 +1434,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_early_stop_metric, 0, "Whether output metrics of early stop", 0) \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
+    M(VWQueueMode, vw_queue_mode, VWQueueMode::Force, "Whether enqueue virtual warehouse queue: skip/match/force", 0) \
+    M(QueueName, queue_name, QueueName::Auto, "the name of vw queue: highest/high/normal/low/lowest/auto", 0) \
+    M(UInt64, vw_query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(Bool, enable_concurrency_control, false, "Whether enable concurrency control", 0) \
     M(UInt64, operator_profile_receive_timeout, 3000, "Max waiting time for operator profile in ms", 0) \

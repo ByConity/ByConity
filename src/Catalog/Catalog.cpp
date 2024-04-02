@@ -517,6 +517,13 @@ namespace Catalog
         return parseQuery(parser, begin, end, "", 0, 0);
     }
 
+    void Catalog::loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config)
+    {
+        if (!config.has(config_elem))
+            return;
+        settings.loadFromConfig(config_elem + ".settings", config);
+    }
+
     Catalog::Catalog(Context & _context, const MetastoreConfig & config, String _name_space) : context(_context), name_space(_name_space)
     {
         runWithMetricSupport(
@@ -535,7 +542,6 @@ namespace Catalog
                 }
 
                 meta_proxy = std::make_shared<MetastoreProxy>(config);
-                max_commit_size_one_batch = context.getSettingsRef().catalog_max_commit_size;
                 /// Support set a custom topology key
                 if (config.topology_key.empty())
                     topology_key = name_space;
@@ -1499,14 +1505,14 @@ namespace Catalog
     ServerDataPartsWithDBM Catalog::getStagedServerDataPartsWithDBM(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
         ServerDataPartsWithDBM res;
-        res.first = getStagedServerDataParts(table, ts, partitions, /*execute_filter=*/false);
+        res.first = getStagedServerDataParts(table, ts, partitions, VisibilityLevel::All);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = table->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+            res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, VisibilityLevel::All);
 
         if (ts)
         {
@@ -1538,7 +1544,7 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions, bool execute_filter)
+    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions, VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1589,7 +1595,7 @@ namespace Catalog
                     res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(*storage, std::move(*model))));
                 }
 
-                if (ts && execute_filter)
+                if (ts && visibility != VisibilityLevel::All)
                 {
                     getVisibleServerDataParts(res, ts, this, nullptr);
                 }
@@ -1603,14 +1609,14 @@ namespace Catalog
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility, const std::set<Int64> & bucket_numbers)
     {
         ServerDataPartsWithDBM res;
-        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, visibility, /*execute_filter=*/false, bucket_numbers);
+        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, VisibilityLevel::All, bucket_numbers);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+            res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, VisibilityLevel::All);
 
         /// Make sure they use the same records of transactions list.
         if (ts && visibility != VisibilityLevel::All)
@@ -1656,7 +1662,6 @@ namespace Catalog
         const TxnTimestamp & ts,
         const Context * session_context,
         VisibilityLevel visibility,
-        bool execute_filter,
         const std::set<Int64> & bucket_numbers)
     {
         ServerDataPartsVector res;
@@ -1746,7 +1751,7 @@ namespace Catalog
                     }
                 }
                 size_t visibility_filtered = 0;
-                if (execute_filter && ts && visibility != VisibilityLevel::All)
+                if (ts && visibility != VisibilityLevel::All)
                 {
                     visibility_filtered = res.size();
                     LOG_TRACE(
@@ -1810,7 +1815,7 @@ namespace Catalog
         const Strings & partitions,
         const TxnTimestamp & ts,
         const Context * session_context,
-        bool execute_filter)
+        VisibilityLevel visibility)
     {
         DeleteBitmapMetaPtrVector res;
         String source;
@@ -1893,7 +1898,7 @@ namespace Catalog
                 }
 
                 /// filter out invisible bitmaps (uncommitted or invisible to current txn)
-                if (execute_filter)
+                if (visibility != VisibilityLevel::All)
                     getVisibleBitmaps(res, ts, this, nullptr);
                 LOG_DEBUG(
                     log,
@@ -1913,14 +1918,14 @@ namespace Catalog
     ServerDataPartsWithDBM Catalog::getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
         ServerDataPartsWithDBM res;
-        res.first = getTrashedPartsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+        res.first = getTrashedPartsInPartitions(storage, partitions, ts, VisibilityLevel::All);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+            res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, VisibilityLevel::All);
 
         if (ts)
         {
@@ -1951,7 +1956,7 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1972,7 +1977,7 @@ namespace Catalog
                 size_t size_before = res.size();
 
                 // TODO: should we remove the visibility check logic for trashed parts?
-                if (ts && execute_filter)
+                if (ts && visibility != VisibilityLevel::All)
                     getVisibleServerDataParts(res, ts, this, nullptr);
 
                 LOG_DEBUG(
@@ -2299,7 +2304,7 @@ namespace Catalog
             assertLocalServerThrowIfNot(storage);
 
         // commit parts and delete bitmaps in one batch if the size is small.
-        if (total_parts_number + delete_bitmaps.size() + total_staged_parts_num < max_commit_size_one_batch)
+        if (total_parts_number + delete_bitmaps.size() + total_staged_parts_num < settings.max_commit_size_one_batch)
         {
             commit_in_batch(
                 {0,
@@ -2319,49 +2324,49 @@ namespace Catalog
         {
             // commit data parts first
             size_t batch_count{0};
-            while (batch_count + max_commit_size_one_batch < total_parts_number)
+            while (batch_count + settings.max_commit_size_one_batch < total_parts_number)
             {
                 commit_in_batch(
                     {batch_count,
-                     batch_count + max_commit_size_one_batch,
+                     batch_count + settings.max_commit_size_one_batch,
                      0,
                      0,
                      0,
                      0,
                      batch_count,
-                     batch_count + max_commit_size_one_batch,
+                     batch_count + settings.max_commit_size_one_batch,
                      0,
                      0,
                      0,
                      0});
-                batch_count += max_commit_size_one_batch;
+                batch_count += settings.max_commit_size_one_batch;
             }
             commit_in_batch({batch_count, total_parts_number, 0, 0, 0, 0, batch_count, total_parts_number, 0, 0, 0, 0});
 
             // then commit delete bitmap
             batch_count = 0;
-            while (batch_count + max_commit_size_one_batch < delete_bitmaps.size())
+            while (batch_count + settings.max_commit_size_one_batch < delete_bitmaps.size())
             {
                 commit_in_batch(
                     {0,
                      0,
                      batch_count,
-                     batch_count + max_commit_size_one_batch,
+                     batch_count + settings.max_commit_size_one_batch,
                      0,
                      0,
                      0,
                      0,
                      batch_count,
-                     batch_count + max_commit_size_one_batch,
+                     batch_count + settings.max_commit_size_one_batch,
                      0,
                      0});
-                batch_count += max_commit_size_one_batch;
+                batch_count += settings.max_commit_size_one_batch;
             }
             commit_in_batch({0, 0, batch_count, total_deleted_bitmaps_number, 0, 0, 0, 0, batch_count, total_deleted_bitmaps_number, 0, 0});
 
             // then commit staged parts
             batch_count = 0;
-            while (batch_count + max_commit_size_one_batch < total_staged_parts_num)
+            while (batch_count + settings.max_commit_size_one_batch < total_staged_parts_num)
             {
                 commit_in_batch(
                     {0,
@@ -2369,14 +2374,14 @@ namespace Catalog
                      0,
                      0,
                      batch_count,
-                     batch_count + max_commit_size_one_batch,
+                     batch_count + settings.max_commit_size_one_batch,
                      0,
                      0,
                      0,
                      0,
                      batch_count,
-                     batch_count + max_commit_size_one_batch});
-                batch_count += max_commit_size_one_batch;
+                     batch_count + settings.max_commit_size_one_batch});
+                batch_count += settings.max_commit_size_one_batch;
             }
             commit_in_batch({0, 0, 0, 0, batch_count, total_staged_parts_num, 0, 0, 0, 0, batch_count, total_staged_parts_num});
         }
@@ -3506,7 +3511,7 @@ namespace Catalog
                 bool need_invalid_part_cache = context.getPartCacheManager() && !commit_data.data_parts.empty();
                 bool need_invalid_bitmap_cache = context.getPartCacheManager() && !commit_data.delete_bitmaps.empty();
                 /// drop in batch if the number of drop keys greater than max_drop_size_one_batch
-                if (drop_keys.size() > max_drop_size_one_batch)
+                if (drop_keys.size() > settings.max_drop_size_one_batch)
                 {
                     size_t batch_count{0};
                     const size_t mark1 = commit_data.data_parts.size();
@@ -3516,9 +3521,9 @@ namespace Catalog
                     {
                         meta_proxy->multiDrop(Strings{
                             drop_keys.begin() + batch_count,
-                            drop_keys.begin() + std::min(batch_count + max_drop_size_one_batch, drop_keys.size())});
+                            drop_keys.begin() + std::min(batch_count + settings.max_drop_size_one_batch, drop_keys.size())});
 
-                        const size_t batch_count_end = batch_count + max_drop_size_one_batch;
+                        const size_t batch_count_end = batch_count + settings.max_drop_size_one_batch;
                         /// clear part cache immediately after drop from metastore
                         if (need_invalid_part_cache)
                         {
@@ -3555,7 +3560,7 @@ namespace Catalog
                                         commit_data.delete_bitmaps.begin() + right_bound - mark1});
                             }
                         }
-                        batch_count += max_drop_size_one_batch;
+                        batch_count += settings.max_drop_size_one_batch;
                     }
                 }
                 else
@@ -3589,13 +3594,13 @@ namespace Catalog
                 String uuid_str = UUIDHelpers::UUIDToString(storage_id.uuid);
 
                 /// write resources in batch, max batch size is max_commit_size_one_batch
-                auto begin = resources.begin(), end = std::min(resources.end(), begin + max_commit_size_one_batch);
+                auto begin = resources.begin(), end = std::min(resources.end(), begin + settings.max_commit_size_one_batch);
                 while (begin < end)
                 {
                     UndoResources tmp{begin, end};
-                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid_str, tmp);
+                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid_str, tmp, settings.write_undo_buffer_new_key);
                     begin = end;
-                    end = std::min(resources.end(), begin + max_commit_size_one_batch);
+                    end = std::min(resources.end(), begin + settings.max_commit_size_one_batch);
                 }
             },
             ProfileEvents::WriteUndoBufferConstResourceSuccess,
@@ -3610,13 +3615,13 @@ namespace Catalog
                     throw Exception(ErrorCodes::BAD_ARGUMENTS, "Storage uuid of table {} can't be empty", storage_id.getNameForLogs());
                 String uuid_str = UUIDHelpers::UUIDToString(storage_id.uuid);
 
-                auto begin = resources.begin(), end = std::min(resources.end(), begin + max_commit_size_one_batch);
+                auto begin = resources.begin(), end = std::min(resources.end(), begin + settings.max_commit_size_one_batch);
                 while (begin < end)
                 {
                     UndoResources tmp{std::make_move_iterator(begin), std::make_move_iterator(end)};
-                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid_str, tmp);
+                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid_str, tmp, settings.write_undo_buffer_new_key);
                     begin = end;
-                    end = std::min(resources.end(), begin + max_commit_size_one_batch);
+                    end = std::min(resources.end(), begin + settings.max_commit_size_one_batch);
                 }
             },
             ProfileEvents::WriteUndoBufferNoConstResourceSuccess,
@@ -3640,13 +3645,18 @@ namespace Catalog
         std::unordered_map<String, UndoResources> res;
         runWithMetricSupport(
             [&] {
-                auto it = meta_proxy->getUndoBuffer(name_space, txnID.toUInt64());
-                while (it->next())
-                {
-                    UndoResource resource = UndoResource::deserialize(it->value());
-                    resource.txn_id = txnID;
-                    res[resource.uuid()].emplace_back(std::move(resource));
-                }
+                auto get_func = [&](bool write_undo_buffer_new_key) {
+                    auto it = meta_proxy->getUndoBuffer(name_space, txnID.toUInt64(), write_undo_buffer_new_key);
+                    while (it->next())
+                    {
+                        UndoResource resource = UndoResource::deserialize(it->value());
+                        resource.txn_id = txnID;
+                        res[resource.uuid()].emplace_back(std::move(resource));
+                    }
+                };
+                /// Get both old and new undo buffer keys;
+                get_func(true);
+                get_func(false);
             },
             ProfileEvents::GetUndoBufferSuccess,
             ProfileEvents::GetUndoBufferFailed);
@@ -4451,9 +4461,9 @@ namespace Catalog
                 String table_uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
                 String key_prefix = MetastoreProxy::stagedDataPartPrefix(name_space, table_uuid);
 
-                for (size_t beg = 0; beg < parts.size(); beg += max_drop_size_one_batch)
+                for (size_t beg = 0; beg < parts.size(); beg += settings.max_drop_size_one_batch)
                 {
-                    size_t end = std::min(beg + max_drop_size_one_batch, parts.size());
+                    size_t end = std::min(beg + settings.max_drop_size_one_batch, parts.size());
 
                     Strings drop_keys;
                     for (auto it = parts.begin() + beg; it != parts.begin() + end; ++it)
@@ -5720,18 +5730,18 @@ namespace Catalog
         return res;
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false, execute_filter);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false, visibility);
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true, execute_filter);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true, visibility);
     }
 
     DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash, bool execute_filter)
+    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash, VisibilityLevel visibility)
     {
         DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
@@ -5760,7 +5770,7 @@ namespace Catalog
                     create_func,
                     ts);
 
-                if (execute_filter)
+                if (visibility != VisibilityLevel::All)
                 {
                     /// filter out invisible bitmaps (uncommitted or invisible to current txn)
                     getVisibleBitmaps(res, ts, this, nullptr);
@@ -6398,8 +6408,8 @@ namespace Catalog
             getPartitionIDs(to_tbl, nullptr),
             detached_bitmaps,
             bitmaps,
-            max_commit_size_one_batch,
-            max_drop_size_one_batch);
+            settings.max_commit_size_one_batch,
+            settings.max_drop_size_one_batch);
 
         if (context.getPartCacheManager())
         {
@@ -6508,8 +6518,8 @@ namespace Catalog
             commit_parts,
             attached_bitmaps,
             bitmaps,
-            max_commit_size_one_batch,
-            max_drop_size_one_batch);
+            settings.max_commit_size_one_batch,
+            settings.max_drop_size_one_batch);
 
         if (context.getPartCacheManager())
         {
@@ -6586,8 +6596,8 @@ namespace Catalog
             detached_visible_part_size,
             detached_staged_part_size,
             bitmap_names,
-            max_commit_size_one_batch,
-            max_drop_size_one_batch);
+            settings.max_commit_size_one_batch,
+            settings.max_drop_size_one_batch);
 
         Protos::DataModelPartVector attached_parts;
         for (const auto& [meta, version] : attached_metas)
@@ -6667,8 +6677,8 @@ namespace Catalog
             detached_part_metas,
             attached_bitmap_names,
             detached_bitmap_metas,
-            max_commit_size_one_batch,
-            max_drop_size_one_batch);
+            settings.max_commit_size_one_batch,
+            settings.max_drop_size_one_batch);
 
         if (context.getPartCacheManager())
         {

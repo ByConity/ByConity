@@ -170,7 +170,7 @@ void ResourceManagerServiceImpl::updateVirtualWarehouse(
     {
         if (!checkForLeader(response))
             return;
-
+        LOG_TRACE(log, "get update req : {}", request->ShortDebugString());
         const auto & vw_name = request->vw_name();
         auto vw_settings = VirtualWarehouseAlterSettings::createFromProto(request->vw_settings());
 
@@ -338,11 +338,19 @@ void ResourceManagerServiceImpl::getWorkerGroups(
         if (!checkForLeader(response))
             return;
 
-        auto groups = vw_manager.getVirtualWarehouse(request->vw_name())->getAllWorkerGroups();
+        auto vw = vw_manager.getVirtualWarehouse(request->vw_name());
+        auto groups = vw->getAllWorkerGroups();
         LOG_TRACE(log, "Got {} worker groups of {}", groups.size(), request->vw_name());
         for (const auto & group : groups)
             group->getData(/*with_metrics*/true, /*only_running_state*/true)
                 .fillProto(*response->add_worker_group_data(), /*with_host_ports*/true, /*with_metrics*/true);
+
+        auto timestamp = vw->getLastSettingsTimestamp();
+        if (timestamp != request->last_settings_timestamp())
+        {
+            vw->getSettings().fillProto(*response->mutable_vw_settings());
+            response->set_last_settings_timestamp(timestamp);
+        }
     }
     catch (...)
     {

@@ -587,8 +587,7 @@ void CnchServerServiceImpl::fetchDataParts(
                 partition_list,
                 TxnTimestamp{request->timestamp()},
                 nullptr,
-                /*visibility=*/Catalog::VisibilityLevel::All,
-                /*execute_filter=*/false);
+                /*visibility=*/Catalog::VisibilityLevel::All);
 
             /// Filter parts by bucket numbers if table is bucket table and cluster ready
             if (!parts.empty() && !request->bucket_numbers().empty() && storage->isBucketTable() && gc->getCnchCatalog()->isTableClustered(storage->getStorageUUID()))
@@ -651,7 +650,7 @@ void CnchServerServiceImpl::fetchDeleteBitmaps(
                 partition_list.emplace_back(partition);
 
             auto bitmaps = gc->getCnchCatalog()->getDeleteBitmapsInPartitions(
-                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, /*execute_filter=*/false);
+                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, Catalog::VisibilityLevel::All);
             auto & mutable_parts = *response->mutable_delete_bitmaps();
             for (const auto & bitmap : bitmaps)
                 *mutable_parts.Add() = *bitmap->getModel();
