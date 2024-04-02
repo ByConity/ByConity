@@ -729,6 +729,7 @@ public:
     void setUsersConfig(const ConfigurationPtr & config);
     ConfigurationPtr getUsersConfig();
 
+    String formatUserName(const String & name);
     /// Sets the current user, checks the credentials and that the specified host is allowed.
     /// Must be called before getClientInfo() can be called.
     void setUser(const Credentials & credentials, const Poco::Net::SocketAddress & address);
