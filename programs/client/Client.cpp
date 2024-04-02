@@ -191,6 +191,7 @@ private:
                            "йгшеж", "дщпщгеж", "q",      "й",    "\\q",  "\\Q",    "\\й",   "\\Й",   ":q",      "Жй"};
     bool is_interactive = true; /// Use either interactive line editing interface or batch mode.
     bool echo_queries = false; /// Print queries before execution in batch mode.
+    bool echo_pretty = false; /// Print queries with indention
     bool ignore_error
         = false; /// In case of errors, don't print error message, continue to next query. Only applicable for non-interactive mode.
     bool print_time_to_stderr = false; /// Output execution time to stderr in batch mode.
@@ -594,6 +595,7 @@ private:
         {
             need_render_progress = config().getBool("progress", false);
             echo_queries = config().getBool("echo", false);
+            echo_pretty = config().getBool("echo-pretty", false);
             ignore_error = config().getBool("ignore-error", false);
         }
 
@@ -1640,7 +1642,10 @@ private:
 
         if (echo_query.value_or(echo_queries))
         {
-            writeString(full_query, std_out);
+            if (echo_pretty)
+                writeString(serializeAST(*parsed_query, false), std_out);
+            else
+                writeString(full_query, std_out);
             writeChar('\n', std_out);
             std_out.next();
         }
@@ -2620,6 +2625,7 @@ public:
             ("version,V", "print version information and exit")
             ("version-clean", "print version in machine-readable format and exit")
             ("echo", "in batch mode, print query before execution")
+            ("echo-pretty", "in batch mode, print queries with indention")
             ("max_client_network_bandwidth", po::value<int>(), "the maximum speed of data exchange over the network for the client in bytes per second.")
             ("compression", po::value<bool>(), "enable or disable compression")
             ("highlight", po::value<bool>()->default_value(true), "enable or disable basic syntax highlight in interactive command line")
@@ -2779,6 +2785,8 @@ public:
             config().setBool("progress", true);
         if (options.count("echo"))
             config().setBool("echo", true);
+        if (options.count("echo-pretty"))
+            config().setBool("echo-pretty", true);
         if (options.count("time"))
             print_time_to_stderr = true;
         if (options.count("max_client_network_bandwidth"))
