@@ -9,9 +9,10 @@
 #include <unordered_map>
 #include <atomic>
 
-#include <llvm/IR/LLVMContext.h> // Y_IGNORE
-#include <llvm/IR/Module.h> // Y_IGNORE
-#include <llvm/Target/TargetMachine.h> // Y_IGNORE
+#    include <Interpreters/JIT/JITContext.h>
+#    include <llvm/IR/LLVMContext.h> // Y_IGNORE
+#    include <llvm/IR/Module.h> // Y_IGNORE
+#    include <llvm/Target/TargetMachine.h> // Y_IGNORE
 
 namespace DB
 {
@@ -65,6 +66,7 @@ public:
         /// After call to deleteCompiledModule compiled functions from module become invalid.
         std::unordered_map<std::string, void *> function_name_to_symbol;
 
+        std::shared_ptr<JITContext> context;
     };
 
     /** Compile module. In compile function client responsibility is to fill module with necessary

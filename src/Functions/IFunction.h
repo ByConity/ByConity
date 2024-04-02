@@ -26,6 +26,7 @@
 #include <Core/Names.h>
 #include <Common/MySqlEnums.h>
 #include <DataTypes/IDataType.h>
+#include <Interpreters/JIT/JITContext.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -176,7 +177,7 @@ public:
       *       templates with default arguments is impossible and including LLVM in such a generic header
       *       as this one is a major pain.
       */
-    virtual llvm::Value * compile(llvm::IRBuilderBase & /*builder*/, Values /*values*/) const
+    virtual llvm::Value * compile(llvm::IRBuilderBase & /*builder*/, Values /*values*/, JITContext & /*jit_context*/) const
     {
         throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -525,7 +526,7 @@ public:
 
     bool isCompilable(const DataTypes & arguments) const;
 
-    llvm::Value * compile(llvm::IRBuilderBase &, const DataTypes & arguments, Values values) const;
+    llvm::Value * compile(llvm::IRBuilderBase &, const DataTypes & arguments, Values values, JITContext & jit_context) const;
 
 #endif
 
@@ -535,7 +536,7 @@ protected:
 
     virtual bool isCompilableImpl(const DataTypes &) const { return false; }
 
-    virtual llvm::Value * compileImpl(llvm::IRBuilderBase &, const DataTypes &, Values) const
+    virtual llvm::Value * compileImpl(llvm::IRBuilderBase &, const DataTypes &, Values, JITContext & ) const
     {
         throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
     }

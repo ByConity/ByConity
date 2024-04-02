@@ -2007,7 +2007,7 @@ public:
         return result;
     }
 
-    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values) const override
+    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values, JITContext & ) const override
     {
         if (allow_decimal_promote_storage)
             return compileImplTemplate<true>(builder, types, values);

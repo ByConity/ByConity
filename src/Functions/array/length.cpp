@@ -24,6 +24,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionStringOrArrayToT.h>
 #include <common/map.h>
+#include <llvm/llvm/include/llvm/IR/IRBuilder.h>
 
 namespace DB
 {
@@ -74,6 +75,36 @@ struct LengthImpl
     [[noreturn]] static void ipv4(const ColumnIPv4::Container &, size_t &, PaddedPODArray<UInt64> &)
     {
         throw Exception("Cannot apply function length to IPv4 argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    
+    static bool isCompilable(const DataTypes & types)
+    {
+        WhichDataType which_data_type(types[0]);
+        return which_data_type.isString();
+    }
+    static llvm::Value * compileString(llvm::IRBuilderBase & b, const DataTypes & , Values & values)
+    {
+        /// struct{data, start_offset, end_offset}
+        auto * string_value = values[0];
+        auto * start_offset = b.CreateExtractValue(string_value, {1});
+        auto * end_offset = b.CreateExtractValue(string_value, {2});
+        return b.CreateSub(b.CreateSub(end_offset, start_offset), b.getInt64(1));
+    }
+    static llvm::Value * compileFixedString(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileArray(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileMap(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
+    }
+    static llvm::Value * compileUuid(llvm::IRBuilderBase & , const DataTypes & , Values &  )
+    {
+        return nullptr;
     }
 };
 

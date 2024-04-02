@@ -21,7 +21,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-llvm::Value * CompileDAG::compile(llvm::IRBuilderBase & builder, Values input_nodes_values) const
+llvm::Value * CompileDAG::compile(llvm::IRBuilderBase & builder, Values input_nodes_values, JITContext & jit_context) const
 {
     assert(input_nodes_values.size() == getInputNodesCount());
 
@@ -43,7 +43,7 @@ llvm::Value * CompileDAG::compile(llvm::IRBuilderBase & builder, Values input_no
         {
             case CompileType::CONSTANT:
             {
-                auto * native_value = getColumnNativeValue(b, node.result_type, *node.column, 0);
+                auto * native_value = getColumnNativeValue(b, node.result_type, *node.column, 0, jit_context);
                 if (!native_value)
                     throw Exception(ErrorCodes::LOGICAL_ERROR,
                     "Cannot find native value for constant column with type {}",
@@ -63,7 +63,7 @@ llvm::Value * CompileDAG::compile(llvm::IRBuilderBase & builder, Values input_no
                     temporary_values.emplace_back(compiled_values[argument_index]);
                 }
 
-                compiled_values[compiled_values_index] = node.function->compile(builder, temporary_values);
+                compiled_values[compiled_values_index] = node.function->compile(builder, temporary_values, jit_context);
                 break;
             }
             case CompileType::INPUT:
