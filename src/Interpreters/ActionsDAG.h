@@ -126,7 +126,9 @@ public:
         bool has_function;
 
         void serialize(WriteBuffer & buf) const;
-        static Node deserialize(ReadBuffer & buf, ContextPtr context); 
+        static Node deserialize(ReadBuffer & buf, ContextPtr context);
+
+        std::string dump() const;
     };
 
     /// NOTE: std::list is an implementation detail.

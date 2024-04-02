@@ -31,6 +31,7 @@
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -183,6 +184,7 @@ void StorageSystemCnchDedupWorkers::fillDataOnWorker(
 
 void StorageSystemCnchDedupWorkers::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
+    DISABLE_VISIT_FOR_TENANTS();
     std::map<UUID, StoragePtr> tables;
     UUIDToBGThreads uuid_to_threads;
     if (context->getServerType() == ServerType::cnch_server)

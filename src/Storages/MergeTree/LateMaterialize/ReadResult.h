@@ -50,6 +50,7 @@ namespace LateMaterialize
         size_t num_rows = 0;
         bool need_filter = false;
         int last_filter_column_pos = -1;
+        DataTypePtr filter_type;
 
     private:
         /// Started ranges

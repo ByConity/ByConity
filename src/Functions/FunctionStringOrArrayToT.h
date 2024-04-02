@@ -148,6 +148,41 @@ public:
             throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}",
                 arguments[0].column->getName(), getName());
     }
+
+
+#ifdef USE_EMBEDDED_COMPILER
+protected:
+    bool isCompilableImpl(const DataTypes & types) const override
+    {
+        return Impl::isCompilable(types);
+    }
+
+    llvm::Value * compileImpl(llvm::IRBuilderBase & b, const DataTypes & types, Values values, JITContext & ) const override
+    {
+        WhichDataType which_data_type(types[0]);
+        if (which_data_type.isString())
+        {
+            return Impl::compileString(b, types, values);
+        }
+        else if (which_data_type.isFixedString())
+        {
+            return Impl::compileFixedString(b, types, values);
+        }
+        else if (which_data_type.isArray())
+        {
+            return Impl::compileArray(b, types, values);
+        }
+        else if (which_data_type.isMap())
+        {
+            return Impl::compileMap(b, types, values);
+        }
+        else if (which_data_type.isUUID())
+        {
+            return Impl::compileUuid(b, types, values);
+        }
+        throw Exception("Illegal type " + types[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+#endif
 };
 
 }

@@ -29,8 +29,23 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE;
+}
+
+
 SerializationTime::SerializationTime(UInt32 scale_)
     : SerializationDecimalBase<Decimal64>(DecimalUtils::max_precision<Decimal64>, scale_){}
+
+void SerializationTime::checkNumberOverflow(const FormatSettings & settings)
+{
+    if (!settings.check_data_overflow || !current_thread || !current_thread->getOverflow(ThreadStatus::OverflowFlag::Time))
+        return;
+
+    throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "Under MYSQL dialect or check_data_overflow = 1, the Time value should be within [00:00:00, 23:59:59]");
+}
+
 
 void SerializationTime::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & /*settings*/) const
 {
@@ -38,10 +53,11 @@ void SerializationTime::serializeText(const IColumn & column, size_t row_num, Wr
     writeTimeText(value, scale, ostr);
 }
 
-void SerializationTime::deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationTime::deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     Decimal64 result = 0;
     readTimeText(result, scale, istr);
+    checkNumberOverflow(settings);
     assert_cast<ColumnType &>(column).getData().push_back(result);
 }
 
@@ -64,6 +80,7 @@ void SerializationTime::deserializeTextEscaped(IColumn & column, ReadBuffer & is
 {
     Decimal64 x = 0;
     readText(x, scale, istr, settings);
+    checkNumberOverflow(settings);
     assert_cast<ColumnType &>(column).getData().push_back(x);
 }
 
@@ -79,6 +96,7 @@ void SerializationTime::deserializeTextQuoted(IColumn & column, ReadBuffer & ist
     Decimal64 x = 0;
     assertChar('\'', istr);
     readText(x, scale, istr, settings);
+    checkNumberOverflow(settings);
     assertChar('\'', istr);
     assert_cast<ColumnType &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
 }
@@ -95,6 +113,7 @@ void SerializationTime::deserializeTextJSON(IColumn & column, ReadBuffer & istr,
     Decimal64 x = 0;
     assertChar('"', istr);
     readText(x, scale, istr, settings);
+    checkNumberOverflow(settings);
     assertChar('"', istr);
     assert_cast<ColumnType &>(column).getData().push_back(x);
 }
@@ -119,6 +138,7 @@ void SerializationTime::deserializeTextCSV(IColumn & column, ReadBuffer & istr, 
         ++istr.position();
 
     readText(x, scale, istr, settings);
+    checkNumberOverflow(settings);
 
     if (isQuoted(maybe_quote))
         assertChar(maybe_quote, istr);

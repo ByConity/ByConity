@@ -518,15 +518,78 @@ template <template <typename, typename> typename Op> struct CompileOp;
 
 template <> struct CompileOp<EqualsOp>
 {
-    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool /*is_signed*/)
+    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool /*is_signed*/, const DataTypes & arg_types, DataTypePtr & /*return_type*/, JITContext & jit_context)
     {
-        return x->getType()->isIntegerTy() ? b.CreateICmpEQ(x, y) : b.CreateFCmpOEQ(x, y); /// qNaNs always compare false
+        if (arg_types.size() != 2)
+            throw Exception();
+        auto & left_type = arg_types[0];
+        auto & right_type = arg_types[1];
+
+        auto is_string = [](const DataTypePtr & data_type)
+        {
+            WhichDataType type(data_type);
+            return type.isString();
+        };
+        if (is_string(left_type) && is_string(right_type))
+        {
+            auto * current_module = jit_context.current_module;
+            auto * memcmp_func_type = llvm::FunctionType::get(b.getInt32Ty(), { b.getInt8PtrTy(), b.getInt8PtrTy(), b.getInt64Ty() }, false);
+            auto memcmp_func = current_module->getOrInsertFunction("memcmp", memcmp_func_type);
+            auto * curr = b.GetInsertBlock();
+            llvm::Value * left_value = x;
+            llvm::Value * right_value = y;
+
+            /// return block
+            auto * ret = llvm::BasicBlock::Create(b.getContext(), "", curr->getParent());
+            auto * check_length = llvm::BasicBlock::Create(b.getContext(), "", curr->getParent());
+            auto * check_content = llvm::BasicBlock::Create(b.getContext(), "", curr->getParent());
+            std::vector<std::pair<llvm::BasicBlock *, llvm::Value *>> returns;
+            b.CreateBr(check_length);
+
+            /// check length
+            b.SetInsertPoint(check_length);
+            auto * left_offset = b.CreateExtractValue(left_value, {1});
+            auto * left_next_offset = b.CreateExtractValue(left_value, {2});
+            auto * right_offset = b.CreateExtractValue(right_value, {1});
+            auto * right_next_offset = b.CreateExtractValue(right_value, {2});
+            auto * left_length = b.CreateSub(left_next_offset, left_offset);
+            auto * right_length = b.CreateSub(right_next_offset, right_offset);
+            {
+                auto * res_value = b.CreateICmpEQ(left_length, right_length);
+                returns.emplace_back(b.GetInsertBlock(), res_value);
+                b.CreateCondBr(res_value, check_content, ret);
+            }
+            /// check content
+            b.SetInsertPoint(check_content);
+            auto * left_data = b.CreateExtractValue(left_value, {0});
+            auto * right_data = b.CreateExtractValue(right_value, {0});
+            left_data = b.CreateCast(llvm::Instruction::IntToPtr, b.CreateAdd(b.CreateCast(llvm::Instruction::PtrToInt, left_data, b.getInt64Ty()), left_offset), b.getInt8PtrTy());
+            right_data = b.CreateCast(llvm::Instruction::IntToPtr, b.CreateAdd(b.CreateCast(llvm::Instruction::PtrToInt, right_data, b.getInt64Ty()), right_offset), b.getInt8PtrTy());
+            {
+                auto * res_value = b.CreateICmpEQ(b.CreateCall(memcmp_func, { left_data, right_data, left_length}) , b.getInt32(0));
+                returns.emplace_back(b.GetInsertBlock(), res_value);
+                b.CreateBr(ret);
+            }
+
+            /// ret
+            b.SetInsertPoint(ret);
+            auto * phi = b.CreatePHI(b.getInt1Ty(), returns.size());
+            for (auto & return_ele : returns)
+                phi->addIncoming(return_ele.second, return_ele.first);
+
+            /// reset insert block
+            return phi;
+        }
+        else
+        {
+            return x->getType()->isIntegerTy() ? b.CreateICmpEQ(x, y) : b.CreateFCmpOEQ(x, y); /// qNaNs always compare false
+        }
     }
 };
 
 template <> struct CompileOp<NotEqualsOp>
 {
-    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool /*is_signed*/)
+    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool /*is_signed*/, const DataTypes & /*arg_types*/, DataTypePtr & /*return_type*/, JITContext & /*jit_context*/)
     {
         return x->getType()->isIntegerTy() ? b.CreateICmpNE(x, y) : b.CreateFCmpONE(x, y);
     }
@@ -534,7 +597,7 @@ template <> struct CompileOp<NotEqualsOp>
 
 template <> struct CompileOp<LessOp>
 {
-    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool is_signed)
+    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool is_signed, const DataTypes & /*arg_types*/, DataTypePtr & /*return_type*/, JITContext & /*jit_context*/)
     {
         return x->getType()->isIntegerTy() ? (is_signed ? b.CreateICmpSLT(x, y) : b.CreateICmpULT(x, y)) : b.CreateFCmpOLT(x, y);
     }
@@ -542,7 +605,7 @@ template <> struct CompileOp<LessOp>
 
 template <> struct CompileOp<GreaterOp>
 {
-    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool is_signed)
+    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool is_signed, const DataTypes & /*arg_types*/, DataTypePtr & /*return_type*/, JITContext & /*jit_context*/)
     {
         return x->getType()->isIntegerTy() ? (is_signed ? b.CreateICmpSGT(x, y) : b.CreateICmpUGT(x, y)) : b.CreateFCmpOGT(x, y);
     }
@@ -550,7 +613,7 @@ template <> struct CompileOp<GreaterOp>
 
 template <> struct CompileOp<LessOrEqualsOp>
 {
-    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool is_signed)
+    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool is_signed, const DataTypes & /*arg_types*/, DataTypePtr & /*return_type*/, JITContext & /*jit_context*/)
     {
         return x->getType()->isIntegerTy() ? (is_signed ? b.CreateICmpSLE(x, y) : b.CreateICmpULE(x, y)) : b.CreateFCmpOLE(x, y);
     }
@@ -558,7 +621,7 @@ template <> struct CompileOp<LessOrEqualsOp>
 
 template <> struct CompileOp<GreaterOrEqualsOp>
 {
-    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool is_signed)
+    static llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * x, llvm::Value * y, bool is_signed, const DataTypes & /*arg_types*/, DataTypePtr & /*return_type*/, JITContext & /*jit_context*/)
     {
         return x->getType()->isIntegerTy() ? (is_signed ? b.CreateICmpSGE(x, y) : b.CreateICmpUGE(x, y)) : b.CreateFCmpOGE(x, y);
     }
@@ -1421,16 +1484,39 @@ public:
             || (data_type_rhs.isDate() && data_type_lhs.isDateTime()))
             return false; /// TODO: implement (double, int_N where N > double's mantissa width)
 
+        if (NameEquals::name == name && data_type_lhs.isString() && data_type_rhs.isString())
+        {
+            return true;
+        }
+
         return isCompilableType(types[0]) && isCompilableType(types[1]);
     }
 
-    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values) const override
+    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values, JITContext & jit_context) const override
     {
         assert(2 == types.size() && 2 == values.size());
+        auto return_type = getReturnTypeImpl(types);
 
         auto & b = static_cast<llvm::IRBuilder<> &>(builder);
-        auto [x, y] = nativeCastToCommon(b, types[0], values[0], types[1], values[1]);
-        auto * result = CompileOp<Op>::compile(b, x, y, typeIsSigned(*types[0]) || typeIsSigned(*types[1]));
+        auto is_string = [](const DataTypePtr & data_type)
+        {
+            WhichDataType type(data_type);
+            return type.isString();
+        };
+        llvm::Value * x = nullptr;
+        llvm::Value * y = nullptr;
+        if (is_string(types[0]) && is_string(types[1]))
+        {
+            x = values[0];
+            y = values[1];
+        }
+        else
+        {
+            auto [tmp_x, tmp_y] = nativeCastToCommon(b, types[0], values[0], types[1], values[1]);
+            x = tmp_x;
+            y = tmp_y;
+        }
+        auto * result = CompileOp<Op>::compile(b, x, y, typeIsSigned(*types[0]) || typeIsSigned(*types[1]), types, return_type, jit_context);
         return b.CreateSelect(result, b.getInt8(1), b.getInt8(0));
     }
 #endif

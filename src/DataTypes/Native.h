@@ -7,10 +7,13 @@
 #if USE_EMBEDDED_COMPILER
 #    include <Common/Exception.h>
 
-#    include <DataTypes/IDataType.h>
-#    include <DataTypes/DataTypeNullable.h>
+#    include <string>
 #    include <Columns/ColumnConst.h>
 #    include <Columns/ColumnNullable.h>
+#    include <Columns/ColumnString.h>
+#    include <DataTypes/DataTypeNullable.h>
+#    include <DataTypes/IDataType.h>
+#    include <Interpreters/JIT/JITContext.h>
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wunused-parameter"
 
@@ -32,8 +35,57 @@ static inline bool typeIsSigned(const IDataType & type)
     return data_type.isNativeInt() || data_type.isFloat();
 }
 
+static inline String toNativeTypeName(const IDataType & type)
+{
+    WhichDataType data_type(type);
+
+    if (data_type.isNullable())
+    {
+        const auto & data_type_nullable = static_cast<const DataTypeNullable&>(type);
+        const auto wrapped_name = toNativeTypeName(*data_type_nullable.getNestedType());
+        if (wrapped_name.empty())
+            return "";
+        return "Nullable"+wrapped_name;
+    }
+
+    if (data_type.isInt8() || data_type.isUInt8())
+    {
+        return "Int8";
+    }
+    else if (data_type.isInt16() || data_type.isUInt16() || data_type.isDate())
+    {
+        return "Int16";
+    }
+    else if (data_type.isInt32() || data_type.isUInt32() || data_type.isDateTime())
+    {
+        return "Int32";
+    }
+    else if (data_type.isInt64() || data_type.isUInt64())
+    {
+        return "Int64";
+    }
+    else if (data_type.isFloat32())
+    {
+        return "Float32";
+    }
+    else if (data_type.isFloat64())
+    {
+        return "Float64";
+    }
+    else if (data_type.isString())
+    {
+        /// {data_ptr, start_offset, end_offset}
+        return "String";
+    }
+    return "";
+}
+
 static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const IDataType & type)
 {
+    String native_type_name = toNativeTypeName(type);
+    if (native_type_name.empty())
+        return nullptr;
+
     WhichDataType data_type(type);
 
     if (data_type.isNullable())
@@ -41,22 +93,53 @@ static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const IDa
         const auto & data_type_nullable = static_cast<const DataTypeNullable&>(type);
         auto * wrapped = toNativeType(builder, *data_type_nullable.getNestedType());
         auto * is_null_type = builder.getInt1Ty();
-        return wrapped ? llvm::StructType::get(wrapped, is_null_type) : nullptr;
+        if (wrapped == nullptr)
+            return nullptr;
+        auto * struct_type = llvm::StructType::getTypeByName(builder.getContext(), native_type_name);
+        if (struct_type == nullptr)
+        {
+            struct_type = llvm::StructType::create(builder.getContext(), native_type_name);
+            struct_type->setBody({wrapped, is_null_type});
+        }
+        return struct_type;
     }
 
     /// LLVM doesn't have unsigned types, it has unsigned instructions.
     if (data_type.isInt8() || data_type.isUInt8())
+    {
         return builder.getInt8Ty();
+    }
     else if (data_type.isInt16() || data_type.isUInt16() || data_type.isDate())
+    {
         return builder.getInt16Ty();
+    }
     else if (data_type.isInt32() || data_type.isUInt32() || data_type.isDateTime())
+    {
         return builder.getInt32Ty();
+    }
     else if (data_type.isInt64() || data_type.isUInt64())
+    {
         return builder.getInt64Ty();
+    }
     else if (data_type.isFloat32())
+    {
         return builder.getFloatTy();
+    }
     else if (data_type.isFloat64())
+    {
         return builder.getDoubleTy();
+    }
+    else if (data_type.isString())
+    {
+        auto * struct_type = llvm::StructType::getTypeByName(builder.getContext(), native_type_name);
+        if (struct_type == nullptr)
+        {
+            struct_type = llvm::StructType::create(builder.getContext(), native_type_name);
+            struct_type->setBody({builder.getInt8PtrTy(), builder.getInt64Ty(), builder.getInt64Ty()});
+        }
+        /// {data_ptr, start_offset, end_offset}
+        return struct_type;
+    }
 
     return nullptr;
 }
@@ -109,7 +192,7 @@ static inline bool canBeNativeType(const IDataType & type)
         return canBeNativeType(*data_type_nullable.getNestedType());
     }
 
-    return data_type.isNativeInt() || data_type.isNativeUInt() || data_type.isFloat() || data_type.isDate();
+    return data_type.isNativeInt() || data_type.isNativeUInt() || data_type.isFloat() || data_type.isDate() || data_type.isString();
 }
 
 static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const DataTypePtr & type)
@@ -230,11 +313,11 @@ static inline std::pair<llvm::Value *, llvm::Value *> nativeCastToCommon(llvm::I
     return std::make_pair(cast_lhs_to_common, cast_rhs_to_common);
 }
 
-static inline llvm::Constant * getColumnNativeValue(llvm::IRBuilderBase & builder, const DataTypePtr & column_type, const IColumn & column, size_t index)
+static inline llvm::Constant * getColumnNativeValue(llvm::IRBuilderBase & builder, const DataTypePtr & column_type, const IColumn & column, size_t index, JITContext & jit_context)
 {
     if (const auto * constant = typeid_cast<const ColumnConst *>(&column))
     {
-        return getColumnNativeValue(builder, column_type, constant->getDataColumn(), 0);
+        return getColumnNativeValue(builder, column_type, constant->getDataColumn(), 0, jit_context);
     }
 
     WhichDataType column_data_type(column_type);
@@ -249,7 +332,7 @@ static inline llvm::Constant * getColumnNativeValue(llvm::IRBuilderBase & builde
         const auto & nullable_data_type = assert_cast<const DataTypeNullable &>(*column_type);
         const auto & nullable_column = assert_cast<const ColumnNullable &>(column);
 
-        auto * value = getColumnNativeValue(builder, nullable_data_type.getNestedType(), nullable_column.getNestedColumn(), index);
+        auto * value = getColumnNativeValue(builder, nullable_data_type.getNestedType(), nullable_column.getNestedColumn(), index, jit_context);
         auto * is_null = llvm::ConstantInt::get(type->getContainedType(1), nullable_column.isNullAt(index));
 
         return value ? llvm::ConstantStruct::get(static_cast<llvm::StructType *>(type), value, is_null) : nullptr;
@@ -269,6 +352,23 @@ static inline llvm::Constant * getColumnNativeValue(llvm::IRBuilderBase & builde
     else if (column_data_type.isNativeInt())
     {
         return llvm::ConstantInt::get(type, column.getInt(index));
+    }
+    else if (column_data_type.isString())
+    {
+        const auto & column_string = assert_cast<const ColumnString &>(column);
+        const auto & offsets = column_string.getOffsets();
+        const auto & chars_data = column_string.getChars().raw_data();
+        auto offset = offsets[index-1];
+        auto next_offset = offsets[index];
+        auto length = next_offset-offset;
+        char * string_constant_ptr = static_cast<char *>(malloc(length));
+        memcpy(string_constant_ptr, chars_data+offset, length);
+        /// register to jit context for free
+        jit_context.jit_constant_pool.constant_pool.push_back(static_cast<void *>(string_constant_ptr));
+        return llvm::ConstantStruct::get(static_cast<llvm::StructType *>(type),
+                                  llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(builder.getInt64Ty(), reinterpret_cast<intptr_t>(string_constant_ptr)), llvm::PointerType::getUnqual(builder.getInt8Ty())),
+                                  llvm::ConstantInt::get(type->getContainedType(1), 0),
+                                  llvm::ConstantInt::get(type->getContainedType(1), length));
     }
 
     return nullptr;

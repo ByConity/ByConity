@@ -22,6 +22,7 @@
 #include <Storages/System/StorageSystemMetastore.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -79,6 +80,7 @@ NamesAndTypesList StorageSystemMetastore::getNamesAndTypes()
 void StorageSystemMetastore::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
 
+    DISABLE_VISIT_FOR_TENANTS();
     std::map<String, String> conditions;
     evaluateWhereCondition(query_info.query->as<ASTSelectQuery>()->where(), conditions);
 

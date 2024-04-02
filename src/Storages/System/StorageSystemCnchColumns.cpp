@@ -25,6 +25,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Poco/Logger.h>
 #include <Storages/System/CollectWhereClausePredicate.h>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -120,6 +121,7 @@ static bool matchAnyPredicate(const std::optional<std::vector<std::map<String, S
 
 void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
+    DISABLE_VISIT_FOR_TENANTS();
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
 
     if (context->getServerType() == ServerType::cnch_server && cnch_catalog)

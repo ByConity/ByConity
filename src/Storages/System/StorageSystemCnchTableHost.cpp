@@ -25,6 +25,7 @@
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <common/logger_useful.h>
 #include <Protos/DataModelHelpers.h>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -44,6 +45,7 @@ NamesAndTypesList StorageSystemCnchTableHost::getNamesAndTypes()
 
 void StorageSystemCnchTableHost::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
+    DISABLE_VISIT_FOR_TENANTS();
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
     std::map<String, String> columnToValue;
 

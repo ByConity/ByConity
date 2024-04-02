@@ -1142,6 +1142,54 @@ std::string ActionsDAG::dumpDAG() const
     return out.str();
 }
 
+std::string ActionsDAG::Node::dump() const
+{
+    WriteBufferFromOwnString out;
+    switch (type)
+    {
+        case ActionsDAG::ActionType::COLUMN:
+            out << "COLUMN ";
+            break;
+
+        case ActionsDAG::ActionType::ALIAS:
+            out << "ALIAS ";
+            break;
+
+        case ActionsDAG::ActionType::FUNCTION:
+            out << "FUNCTION ";
+            break;
+
+        case ActionsDAG::ActionType::ARRAY_JOIN:
+            out << "ARRAY JOIN ";
+            break;
+
+        case ActionsDAG::ActionType::INPUT:
+            out << "INPUT ";
+            break;
+        
+        case ActionsDAG::ActionType::PREPARED_COLUMN:
+            out << "PREPARED_COLUMN ";
+            break;
+    }
+
+    out << "(";
+    out << children.size();
+    out << ")";
+
+    out << " " << (column ? column->getName() : "(no column)");
+    out << " " << (result_type ? result_type->getName() : "(no type)");
+    out << " " << (!result_name.empty() ? result_name : "(no name)");
+
+    if (function_base)
+        out << " [" << function_base->getName() << "]";
+
+    if (is_function_compiled)
+        out << " [compiled]";
+
+    out << "\n";
+    return out.str();
+}
+
 bool ActionsDAG::hasArrayJoin() const
 {
     for (const auto & node : nodes)
@@ -2071,6 +2119,7 @@ ActionsDAGPtr ActionsDAG::cloneActionsForFilterPushDown(
 
                 predicate->function_builder = func_builder_cast;
                 predicate->function_base = predicate->function_builder->build(arguments);
+                predicate->result_type = predicate->function_base->getResultType();
                 predicate->function = predicate->function_base->prepare(arguments);
             }
         }
@@ -2082,6 +2131,7 @@ ActionsDAGPtr ActionsDAG::cloneActionsForFilterPushDown(
             auto arguments = prepareFunctionArguments(predicate->children);
 
             predicate->function_base = predicate->function_builder->build(arguments);
+            predicate->result_type = predicate->function_base->getResultType();
             predicate->function = predicate->function_base->prepare(arguments);
         }
 

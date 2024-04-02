@@ -1040,7 +1040,7 @@ ReturnType readDateTimeTextFallbackMySQL(time_t & datetime, ReadBuffer & buf, co
     if (unlikely(local_date.year() == 0)) {
         datetime = 0;
         if (current_thread)
-            current_thread->has_truncated_date = true;
+            current_thread->setOverflow(ThreadStatus::OverflowFlag::Date);
         return ReturnType(true);
     }
 
@@ -1061,7 +1061,7 @@ ReturnType readDateTimeTextFallbackMySQL(time_t & datetime, ReadBuffer & buf, co
         }
         const DateLUTImpl & utc_lut = DateLUT::instance("UTC");
         datetime = utc_lut.makeDateTime(local_date.year(), local_date.month(), local_date.day(), 0, 0, 0) + time + timezone_offset;
-    } 
+    }
     else
         datetime = date_lut.makeDateTime(local_date.year(), local_date.month(), local_date.day(), 0, 0, 0) + time;
 

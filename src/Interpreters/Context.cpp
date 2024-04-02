@@ -457,6 +457,7 @@ struct ContextSharedPart
 
     bool shutdown_called = false;
     bool restrict_tenanted_users_to_whitelist_settings = false;
+    bool restrict_tenanted_users_to_system_tables = true;
 
     Stopwatch uptime_watch;
 
@@ -2174,7 +2175,7 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
         {
             if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
                 throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
-                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    " for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
         }
     }
@@ -4335,6 +4336,17 @@ void Context::setIsRestrictSettingsToWhitelist(bool is_restrict)
 {
     /// Lock isn't required, you should set it at start
     shared->restrict_tenanted_users_to_whitelist_settings = is_restrict;
+}
+
+bool Context::getIsRestrictSystemTables() const
+{
+    return shared->restrict_tenanted_users_to_system_tables;
+}
+
+void Context::setIsRestrictSystemTables(bool is_restrict)
+{
+    /// Lock isn't required, you should set it at start
+    shared->restrict_tenanted_users_to_system_tables = is_restrict;
 }
 
 void Context::addRestrictSettingsToWhitelist(const std::vector<String>& setting_names) const

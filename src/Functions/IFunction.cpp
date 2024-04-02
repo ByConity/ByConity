@@ -491,7 +491,7 @@ bool IFunction::isCompilable(const DataTypes & arguments) const
     return isCompilableImpl(arguments);
 }
 
-llvm::Value * IFunction::compile(llvm::IRBuilderBase & builder, const DataTypes & arguments, Values values) const
+llvm::Value * IFunction::compile(llvm::IRBuilderBase & builder, const DataTypes & arguments, Values values, JITContext & jit_context) const
 {
     auto denulled_arguments = removeNullables(arguments);
     if (useDefaultImplementationForNulls() && denulled_arguments)
@@ -520,7 +520,7 @@ llvm::Value * IFunction::compile(llvm::IRBuilderBase & builder, const DataTypes 
             }
         }
 
-        auto * result = compileImpl(builder, *denulled_arguments, unwrapped_values);
+        auto * result = compileImpl(builder, *denulled_arguments, unwrapped_values, jit_context);
 
         auto * nullable_structure_type = toNativeType(b, makeNullable(getReturnTypeImpl(*denulled_arguments)));
         auto * nullable_structure_value = llvm::Constant::getNullValue(nullable_structure_type);
@@ -534,7 +534,7 @@ llvm::Value * IFunction::compile(llvm::IRBuilderBase & builder, const DataTypes 
         return b.CreateInsertValue(nullable_structure_with_result_value, nullable_structure_result_null, {1});
     }
 
-    return compileImpl(builder, arguments, std::move(values));
+    return compileImpl(builder, arguments, std::move(values), jit_context);
 }
 
 #endif
