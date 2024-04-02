@@ -21,7 +21,10 @@ Projection
             │                    Outputs: [a]
             └─ Repartition Exchange
                │     Partition by: {x}
-               └─ TableScan test.t40088_2
-                        Outputs: [x]
+               └─ Filter
+                  │     Condition: x > 1
+                  └─ TableScan test.t40088_2
+                           Where: x > 1
+                           Outputs: [x]
 note: Runtime Filter is applied for 1 times.
 7
