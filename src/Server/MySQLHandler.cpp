@@ -235,6 +235,7 @@ void MySQLHandler::run()
         if (!(client_capabilities & CLIENT_PROTOCOL_41))
             throw Exception("Required capability: CLIENT_PROTOCOL_41.", ErrorCodes::MYSQL_CLIENT_INSUFFICIENT_CAPABILITIES);
 
+        handshake_response.username = connection_context->formatUserName(handshake_response.username);
         authenticate(handshake_response.username, handshake_response.auth_plugin_name, handshake_response.auth_response);
 
         connection_context->getClientInfo().initial_user = handshake_response.username;

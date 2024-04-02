@@ -1585,7 +1585,7 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     applySettingsChanges(default_profile_info->settings);
 }
 
-void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
+String Context::formatUserName(const String & name)
 {
     //CNCH multi-tenant user name pattern from gateway client: {tenant_id}`{user_name}
     String user = name;
@@ -1601,9 +1601,12 @@ void Context::setUser(const String & name, const String & password, const Poco::
         else
             user = std::move(sub_user); ///{tenant_id}`default=>default
     }
-    setUser(BasicCredentials(user, password), address);
-    if (pushed)
-        popTenantId();
+    return user;
+}
+
+void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
+{
+    setUser(BasicCredentials(formatUserName(name), password), address);
 }
 
 void Context::setUserWithoutCheckingPassword(const String & name, const Poco::Net::SocketAddress & address)

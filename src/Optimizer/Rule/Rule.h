@@ -161,6 +161,8 @@ enum class RuleType : UInt32
     EXISTS_TO_SEMI_JOIN,
     IN_TO_SEMI_JOIN,
 
+    EAGER_AGGREGATION,
+
     // Implementation
     SET_JOIN_DISTRIBUTION,
 

@@ -96,9 +96,9 @@ InterpreterInsertQuery::InterpreterInsertQuery(
     checkStackSize();
 }
 
-static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local_context)
+static NameSet genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local_context)
 {
-    Names create_view_sqls;
+    NameSet create_view_sqls;
     std::set<StorageID> view_dependencies;
     auto start_time = local_context->getTimestamp();
 
@@ -143,8 +143,8 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
             }
             auto create_target_query = target_table->getCreateTableSql();
             auto create_local_target_query = target_cnch_merge->getCreateQueryForCloudTable(create_target_query, target_cnch_merge->getTableName());
-            create_view_sqls.emplace_back(create_local_target_query);
-            create_view_sqls.emplace_back(mv->getCreateTableSql());
+            create_view_sqls.insert(create_local_target_query);
+            create_view_sqls.insert(mv->getCreateTableSql());
         }
     }
 
@@ -177,13 +177,13 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
                 query.table_id.database_name);
             LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}", create_query);
 
-            Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
+            NameSet view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
             if (!view_create_sqls.empty())
             {
                 ContextMutablePtr mutable_context = const_pointer_cast<Context>(getContext());
                 if (!mutable_context->tryGetCnchWorkerResource())
                     mutable_context->initCnchWorkerResource();
-                view_create_sqls.emplace_back(create_query);
+                view_create_sqls.insert(create_query);
                 for (const auto & create_sql : view_create_sqls)
                     mutable_context->getCnchWorkerResource()->executeCreateQuery(mutable_context, create_sql);
                 if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(mutable_context->getCurrentTransaction()); worker_txn)
