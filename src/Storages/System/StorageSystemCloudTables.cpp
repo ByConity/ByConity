@@ -16,6 +16,7 @@
 #include <Parsers/queryToString.h>
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/Pipe.h>
+#include <Storages/System/TenantController.h>
 
 
 namespace DB
@@ -227,6 +228,7 @@ Pipe StorageSystemCloudTables::read(
     const size_t max_block_size,
     const unsigned /*num_streams*/)
 {
+    DISABLE_VISIT_FOR_TENANTS();
     storage_snapshot->check(column_names);
 
     /// Create a mask of what columns are needed in the result.

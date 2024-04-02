@@ -13,6 +13,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Storages/VirtualColumnUtils.h>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -55,6 +56,7 @@ Pipe StorageSystemMaterializedMySQL::read(
     const size_t /*max_block_size*/,
     const unsigned /*num_streams*/)
 {
+    DISABLE_VISIT_FOR_TENANTS();
     auto strings_2_array = [] (Strings & elem_list) -> Array {
         Array arr;
         for (const auto & elem : elem_list)

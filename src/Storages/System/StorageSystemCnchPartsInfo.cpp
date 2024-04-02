@@ -27,6 +27,7 @@
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Storages/System/StorageSystemCnchPartsInfo.h>
 #include <boost/algorithm/string/join.hpp>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -71,6 +72,7 @@ Pipe StorageSystemCnchPartsInfo::read(
     const size_t /*max_block_size*/,
     const unsigned /*max_block_size*/)
 {
+    DISABLE_VISIT_FOR_TENANTS();
     if (context->getServerType() != ServerType::cnch_server)
         throw Exception("Table system.cnch_parts_info only support cnch_server", ErrorCodes::NOT_IMPLEMENTED);
 
