@@ -903,10 +903,10 @@ static std::pair<String, ASTPtr> replaceMaterializedViewQuery(StorageMaterialize
     return {getTableDefinitionFromCreateQuery(ast, false), select_query.clone()};
 }
 
-Names StorageCnchMergeTree::genViewDependencyCreateQueries(
+NameSet StorageCnchMergeTree::genViewDependencyCreateQueries(
     const StorageID & storage_id, ContextPtr local_context, const String & table_suffix, std::set<String> & cnch_table_create_queries)
 {
-    Names create_view_sqls;
+    NameSet create_view_sqls;
     std::set<StorageID> view_dependencies;
     auto storage = DatabaseCatalog::instance().getTable(storage_id, local_context);
     auto start_time = local_context->getTimestamp();
@@ -958,12 +958,12 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(
                 local_context,
                 enable_staging_area,
                 cnch_merge->getStorageID());
-            create_view_sqls.emplace_back(create_local_target_query);
+            create_view_sqls.insert(create_local_target_query);
 
             ASTPtr rewrite_inner_ast;
             String rewrite_mv_sql;
             std::tie(rewrite_mv_sql, rewrite_inner_ast) = replaceMaterializedViewQuery(mv, table_suffix);
-            create_view_sqls.emplace_back(rewrite_mv_sql);
+            create_view_sqls.insert(rewrite_mv_sql);
 
             /// After rewrite try to analyze materialized view inner query and extract cnch tables which need be dispatched to worker
             ASTs related_tables;
@@ -1059,12 +1059,13 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
 
         auto table_suffix = extractTableSuffix(generated_tb_name);
         std::set<String> cnch_table_create_queries;
-        Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write", cnch_table_create_queries);
+        NameSet dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write", cnch_table_create_queries);
         for (const auto & dependency_create_query : dependency_create_queries)
             LOG_DEBUG(log, "send local table (for view write) create query {}", dependency_create_query);
         for (const auto & cnch_table_query : cnch_table_create_queries)
             LOG_DEBUG(log, "send cnch table (for view subquery join) create query {}", cnch_table_query);
-        worker_client->sendCreateQueries(local_context, dependency_create_queries, cnch_table_create_queries);
+        std::vector<String> dependency_create_queries_vec(dependency_create_queries.begin(), dependency_create_queries.end());
+        worker_client->sendCreateQueries(local_context, dependency_create_queries_vec, cnch_table_create_queries);
     }
 
     if (send_query_in_normal_mode)

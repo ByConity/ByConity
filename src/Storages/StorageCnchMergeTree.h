@@ -293,7 +293,8 @@ private:
     ServerDataPartsVector filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const;
 
     /// Generate view dependency create queries for materialized view writing
-    Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix, std::set<String> & cnch_table_create_queries);
+    NameSet genViewDependencyCreateQueries(
+        const StorageID & storage_id, ContextPtr local_context, const String & table_suffix, std::set<String> & cnch_table_create_queries);
 
     Pipe ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);
 
