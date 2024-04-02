@@ -40,7 +40,7 @@ void onSettingChanged(Settings *s)
     s->decimal_arithmetic_promote_storage = ansi_like;
     s->allow_extended_type_conversion = ansi_like;
     s->parse_literal_as_decimal = ansi_like;
-    s->check_date_overflow = ansi_like;
+    s->check_data_overflow = mysql;
     s->text_case_option= mysql ? TextCaseOption::LOWERCASE : TextCaseOption::MIXED;
     s->enable_implicit_arg_type_convert = mysql;
     s->handle_division_by_zero = mysql;
