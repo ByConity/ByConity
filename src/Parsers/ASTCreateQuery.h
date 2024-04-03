@@ -50,7 +50,6 @@ public:
     IAST * unique_key = nullptr;
     IAST * sample_by = nullptr;
     IAST * ttl_table = nullptr;
-    IAST * comment = nullptr;
     ASTSetQuery * settings = nullptr;
 
 
