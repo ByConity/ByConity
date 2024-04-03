@@ -1,4 +1,5 @@
 set handle_division_by_zero = true;
+use test;
 -- simple decimal
 SELECT 1 / CAST(0, 'Nullable(Decimal(7, 2))');
 SELECT materialize(1) / CAST(0, 'Nullable(Decimal(7, 2))');
