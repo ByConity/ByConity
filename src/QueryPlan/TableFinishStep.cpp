@@ -55,10 +55,8 @@ std::shared_ptr<TableFinishStep> TableFinishStep::fromProto(const Protos::TableF
     auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     auto target = TableWriteStep::Target::fromProto(proto.target(), context);
     auto output_affected_row_count_symbol = proto.output_affected_row_count_symbol();
-    auto step = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol);
+    auto step = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol, proto.has_query() ? deserializeASTFromProto(proto.query()) : nullptr);
     step->setStepDescription(step_description);
-    if (proto.has_query())
-        step->setQuery(deserializeASTFromProto(proto.query()));
     return step;
 }
 }

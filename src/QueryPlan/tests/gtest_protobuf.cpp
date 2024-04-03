@@ -700,7 +700,7 @@ TEST_F(ProtobufTest, TableFinishStep)
         auto base_input_stream = generateDataStream(eng);
         auto target = generateTableWriteStepInsertTarget(eng);
         auto output_affected_row_count_symbol = fmt::format("text{}", eng() % 100);
-        auto s = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol);
+        auto s = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol, nullptr);
         s->setStepDescription(step_description);
         return s;
     }();
