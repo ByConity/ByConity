@@ -1,5 +1,4 @@
 use test;
-set text_case_option='LOWERCASE';
 set dialect_type='MYSQL';
 DROP TABLE IF EXISTS test_insert_CASE1;
 
