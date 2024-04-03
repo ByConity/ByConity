@@ -70,3 +70,5 @@ consistent_hash_ring:
   num_probes: 21
   load_factor: 1.3
 cnch_config: /config/cnch-config.yml
+additional_services:
+  FullTextSearch: true
