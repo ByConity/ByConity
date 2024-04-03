@@ -1589,7 +1589,6 @@ String Context::formatUserName(const String & name)
 {
     //CNCH multi-tenant user name pattern from gateway client: {tenant_id}`{user_name}
     String user = name;
-    bool pushed = false;
     if (auto pos = user.find('`'); pos != String::npos)
     {
         auto tenant_id = String(user.c_str(), pos);
