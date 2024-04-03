@@ -423,11 +423,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     // create merge prefetcher if necessary
     if (context->getSettingsRef().cnch_enable_merge_prefetch)
     {
-        if (std::any_of(merging_columns.begin(), merging_columns.end(), [](auto & c) { return c.type->isMap(); }))
-        {
-            LOG_DEBUG(log, "Prefetcher is disabled as there is some Map column in merging_columns");
-        }
-        else if (std::any_of(gathering_columns.cbegin(), gathering_columns.cend(), [](auto & c) { return isBitEngineDataType(c.type); }))
+        if (std::any_of(gathering_columns.cbegin(), gathering_columns.cend(), [](auto & c) { return isBitEngineDataType(c.type); }))
         {
             LOG_DEBUG(log, "Prefetcher is disabled as there is some BitEngine column in gathering_columns");
         }
