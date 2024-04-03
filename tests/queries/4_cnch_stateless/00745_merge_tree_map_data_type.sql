@@ -105,3 +105,18 @@ DROP TABLE 00745_merge_tree_map_data_type;
 -- unsupported key types
 CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(Array(String), String)) ENGINE = CnchMergeTree ORDER BY a; -- { serverError 36 }
 CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(Array(String), String) KV) ENGINE = CnchMergeTree ORDER BY a; -- { serverError 36 }
+
+select '';
+select 'unsupported value types in kv map :';
+CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(String, Array(Tuple(String, String)))) ENGINE = CnchMergeTree ORDER BY a; -- { serverError 36 }
+CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(String, LowCardinality(String))) ENGINE = CnchMergeTree ORDER BY a; -- { serverError 36 }
+
+CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(String, Array(Tuple(String, String))) KV) ENGINE = CnchMergeTree ORDER BY a SETTINGS index_granularity = 2;
+INSERT INTO 00745_merge_tree_map_data_type VALUES (0, {'k1': [('k', 'v')]}) (1, {'k2': [('k', 'v')]}) (2, {'k3': [('k', 'v')]});
+SELECT * FROM 00745_merge_tree_map_data_type ORDER BY a;
+DROP TABLE 00745_merge_tree_map_data_type;
+
+CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(String, LowCardinality(String)) KV) ENGINE = CnchMergeTree ORDER BY a;
+INSERT INTO 00745_merge_tree_map_data_type VALUES (0, {'k1': 'v1'}) (1, {'k2': 'v2'}) (2, {'k3': 'v3'});
+SELECT * FROM 00745_merge_tree_map_data_type ORDER BY a;
+DROP TABLE 00745_merge_tree_map_data_type;

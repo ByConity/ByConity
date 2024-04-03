@@ -19,7 +19,7 @@ struct PlanSegmentInstanceId
         if (segment_id < other.segment_id)
             return true;
         else if (segment_id > other.segment_id)
-            return true;
+            return false;
         else
             return parallel_id < other.parallel_id;
     }

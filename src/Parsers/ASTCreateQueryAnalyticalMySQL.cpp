@@ -178,11 +178,6 @@ void ASTStorageAnalyticalMySQL::formatImpl(const FormatSettings & s, FormatState
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "SETTINGS " << (s.hilite ? hilite_none : "");
         settings->formatImpl(s, state, frame);
     }
-    if (comment)
-    {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "COMMENT " << (s.hilite ? hilite_none : "");
-        comment->formatImpl(s, state, frame);
-    }
 
 }
 
@@ -215,6 +210,9 @@ ASTPtr ASTCreateQueryAnalyticalMySQL::clone() const
         res->set(res->dictionary_attributes_list, dictionary_attributes_list->clone());
         res->set(res->dictionary, dictionary->clone());
     }
+
+    if (comment)
+        res->set(res->comment, comment->clone());
 
     cloneOutputOptions(*res);
 
@@ -262,6 +260,13 @@ void ASTCreateQueryAnalyticalMySQL::formatQueryImpl(const FormatSettings & setti
             settings.ostr << settings.nl_or_ws;
             table_overrides->formatImpl(settings, state, frame);
         }
+
+        if (comment)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << "COMMENT " << (settings.hilite ? hilite_none : "");
+            comment->formatImpl(settings, state, frame);
+        }
+
         return;
     }
 
@@ -424,6 +429,12 @@ void ASTCreateQueryAnalyticalMySQL::formatQueryImpl(const FormatSettings & setti
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " WITH " << (settings.hilite ? hilite_none : "");
         tables->formatImpl(settings, state, frame);
+    }
+
+    if (comment)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << "COMMENT " << (settings.hilite ? hilite_none : "");
+        comment->formatImpl(settings, state, frame);
     }
 }
 

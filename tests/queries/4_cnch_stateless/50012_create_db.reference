@@ -1,0 +1,4 @@
+CREATE DATABASE db_comment\nENGINE = Cnch
+CREATE DATABASE db_engine\nENGINE = Memory()
+CREATE DATABASE db_nothing\nENGINE = Cnch
+CREATE TABLE db_nothing.check_query_comment_column\n(\n    `first_column` UInt8 COMMENT \'comment 1\',\n    `second_column` UInt8 COMMENT \'comment 2\',\n    `third_column` UInt8 COMMENT \'comment 3\'\n)\nENGINE = CnchMergeTree\nORDER BY first_column\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
