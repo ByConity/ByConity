@@ -187,17 +187,18 @@ void StorageMaterializedView::syncBaseTablePartitions(
     {
         /// get current versioned partitions
         auto current_partitions = local_context->getCnchCatalog()->getLastModificationTimeHints(storage);
-
-// #ifndef NDEBUG
-        LOG_TRACE(log, "list version partition snapshot of table-{}", storage->getStorageID().getNameForLogs());
-        LOG_TRACE(log, "-----------current snapshot-----------------");
-        for (auto & current : current_partitions)
+        if (local_context->getSettingsRef().enable_async_mv_debug)
         {
-            LOG_TRACE(log, "partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, current.partition_id()),
-                std::to_string(current.last_modification_time()));
+            LOG_TRACE(log, "list version partition snapshot of table-{}", storage->getStorageID().getNameForLogs());
+            LOG_TRACE(log, "-----------current snapshot-----------------");
+            for (auto & current : current_partitions)
+            {
+                LOG_TRACE(log, "partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, current.partition_id()),
+                    std::to_string(current.last_modification_time()));
+            }
+            LOG_TRACE(log, "--------------------------------------------");
         }
-        LOG_TRACE(log, "--------------------------------------------");
-// #endif
+
         std::shared_ptr<Protos::VersionedPartitions> current_snapshot(new Protos::VersionedPartitions());
         RPCHelpers::fillStorageID(storage->getStorageID(), *current_snapshot->mutable_storage_id());
         for (const auto & current_part : current_partitions)
@@ -215,25 +216,25 @@ void StorageMaterializedView::syncBaseTablePartitions(
             return storage_id == storage->getStorageID();
         });
 
-// #ifndef NDEBUG
-        if (iter != previous_partitions.end())
+        if (local_context->getSettingsRef().enable_async_mv_debug)
         {
-            LOG_TRACE(log, "-----------previous snapshot-----------------");
-            for (auto & previous : previous_partitions)
+            if (iter != previous_partitions.end())
             {
-                StorageID storage_id = RPCHelpers::createStorageID(previous->storage_id());
-                if (storage_id == storage->getStorageID())
+                LOG_TRACE(log, "-----------previous snapshot-----------------");
+                for (auto & previous : previous_partitions)
                 {
-                    for (const auto & previous_part : previous->versioned_partition())
+                    StorageID storage_id = RPCHelpers::createStorageID(previous->storage_id());
+                    if (storage_id == storage->getStorageID())
                     {
-                        LOG_TRACE(log,"partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, previous_part.partition()),
-                            std::to_string(previous_part.last_update_time()));
+                        for (const auto & previous_part : previous->versioned_partition())
+                            LOG_TRACE(log, "partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, previous_part.partition()),
+                                std::to_string(previous_part.last_update_time()));
                     }
                 }
+                LOG_TRACE(log, "-----------------------------------------------");
             }
-            LOG_TRACE(log, "-----------------------------------------------");
         }
-// #endif
+
         /// previous not exist and current is empty skip calculate diff
         if (iter == previous_partitions.end() && current_partitions.empty())
             continue;
@@ -257,10 +258,11 @@ void StorageMaterializedView::syncBaseTablePartitions(
                 {
                     partition_diff->add_partitions.emplace_back(PartitionTransformer::convert(storage, current_part));
                     updated_storage_set.insert(storage->getStorageID());
-// #ifndef NDEBUG
-                    LOG_TRACE(log,"add partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, current_part.partition_id()),
+                    if (local_context->getSettingsRef().enable_async_mv_debug)
+                    {
+                        LOG_TRACE(log, "add partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, current_part.partition_id()),
                             std::to_string(current_part.last_modification_time()));
-// #endif
+                    }
                 }
             }
 
@@ -274,10 +276,11 @@ void StorageMaterializedView::syncBaseTablePartitions(
                 {
                     partition_diff->drop_partitions.emplace_back(std::make_shared<Protos::VersionedPartition>(previous_part));
                     updated_storage_set.insert(storage->getStorageID());
-// #ifndef NDEBUG
-                    LOG_TRACE(log,"drop partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, previous_part.partition()),
+                    if (local_context->getSettingsRef().enable_async_mv_debug)
+                    {
+                        LOG_TRACE(log,"drop partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, previous_part.partition()),
                             std::to_string(previous_part.last_update_time()));
-// #endif
+                    }
                 }
             }
         }
@@ -286,13 +289,11 @@ void StorageMaterializedView::syncBaseTablePartitions(
             for (auto & part : current_partitions)
             {
                 partition_diff->add_partitions.emplace_back(PartitionTransformer::convert(storage, part));
-// #ifndef NDEBUG
-                LOG_TRACE(
-                    log,
-                    "add partition-{}, updated_time-{}",
-                    PartitionTransformer::parsePartitionKey(storage, part.partition_id()),
-                    std::to_string(part.last_modification_time()));
-// #endif
+                if (local_context->getSettingsRef().enable_async_mv_debug)
+                {
+                    LOG_TRACE(log, "add partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, part.partition_id()),
+                        std::to_string(part.last_modification_time()));
+                }
             }
             updated_storage_set.insert(storage->getStorageID());
         }
@@ -395,11 +396,13 @@ AsyncRefreshParamPtrs StorageMaterializedView::getAsyncRefreshParams(ContextMuta
             }
         }
 
-// #ifndef NDEBUG
-        LOG_TRACE(log, "after merge partition mapping:");
-        for (const auto & item : overwrite_part_map)
-            LOG_TRACE(log, "target <{}> -> source <{}>", item.first, fmt::format("{}", fmt::join(item.second, ", ")));
-// #endif
+        if (local_context->getSettingsRef().enable_async_mv_debug)
+        {
+            LOG_TRACE(log, "after merge partition mapping:");
+            for (const auto & item : overwrite_part_map)
+                LOG_TRACE(log, "target <{}> -> source <{}>", item.first, fmt::format("{}", fmt::join(item.second, ", ")));
+        }
+
         refersh_params = partition_transformer->constructRefreshParams(overwrite_part_map, partition_diff, combine_params,
                         partition_diff->paritition_based_refresh, local_context);
     }
