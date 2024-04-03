@@ -1312,7 +1312,10 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
     else if (analyzed_join->forceNestedLoopJoin())
         return std::make_shared<NestedLoopJoin>(analyzed_join, r_sample_block, context);
     else if (analyzed_join->forceGraceHashLoopJoin())
-        return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), 0);
+    {
+        auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: context->getSettings().max_threads);
+        return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel);
+    }
     return std::make_shared<JoinSwitcher>(analyzed_join, r_sample_block);
 }
 
