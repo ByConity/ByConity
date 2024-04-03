@@ -62,6 +62,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
+#include "Common/LinkedHashMap.h"
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 #include "Optimizer/MaterializedView/MaterializedViewJoinHyperGraph.h"
@@ -202,7 +203,7 @@ public:
     static std::unordered_map<PlanNodePtr, RewriterCandidates> explore(
         QueryPlan & query,
         ContextMutablePtr context,
-        std::vector<MaterializedViewStructurePtr> & materialized_views,
+        LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> & materialized_views,
         bool verbose)
     {
         CandidatesExplorer explorer{context, materialized_views, verbose};
@@ -214,13 +215,13 @@ public:
             static auto * log = &Poco::Logger::get("CandidatesExplorer");
             for (auto & item : explorer.failure_messages)
                 for (auto & message : item.second)
-                    LOG_WARNING(
+                    LOG_DEBUG(
                         log,
                         "rewrite fail: plan node id: " + std::to_string(item.first->getId()) + ", type: " + item.first->getStep()->getName()
                         + ", mview: " + message.storage.getFullTableName() + ", cause: " + message.message);
             for (auto & item : explorer.candidates)
                 for (auto & candidate : item.second)
-                    LOG_WARNING(
+                    LOG_DEBUG(
                         log,
                         "rewrite success: plan node id: " + std::to_string(item.first->getId())
                         + ", type: " + item.first->getStep()->getName() + ", mview: " +
@@ -234,7 +235,7 @@ public:
 protected:
     CandidatesExplorer(
         ContextMutablePtr context_,
-        std::vector<MaterializedViewStructurePtr> & materialized_views_,
+        LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> & materialized_views_,
         bool verbose_)
         : context(context_), materialized_views(materialized_views_), verbose(verbose_)
     {
@@ -294,10 +295,10 @@ protected:
 
         for (const auto & materialized_view : materialized_views)
         {
-            if (materialized_view->top_aggregating_step.get() && !query_aggregate)
+            if (materialized_view.first->top_aggregating_step.get() && !query_aggregate)
                 continue;
-            if (tables == materialized_view->base_storage_ids)
-                related_materialized_views.emplace_back(materialized_view);
+            if (tables == materialized_view.first->base_storage_ids)
+                related_materialized_views.emplace_back(materialized_view.first);
         }
 
         if (related_materialized_views.empty())
@@ -330,6 +331,7 @@ protected:
                     view->output_columns_to_table_columns_map,
                     view->output_columns_to_query_columns_map,
                     view->top_aggregating_step,
+                    materialized_views[view],
                     view->view_storage_id,
                     view->target_storage_id))
                 candidates[query].emplace_back(*result);
@@ -355,6 +357,7 @@ protected:
         const std::unordered_map<String, String> & view_outputs_to_table_columns_map,
         std::unordered_map<String, String> output_columns_to_query_columns_map,
         const std::shared_ptr<const AggregatingStep> & view_aggregate,
+        const PartitionCheckResult & partition_check_result,
         const StorageID view_storage_id,
         const StorageID target_storage_id)
     {
@@ -367,19 +370,6 @@ protected:
         // 0. pre-check
         if (view_aggregate.get() && !query_aggregate)
             return {};
-
-        // 0. check materialized view partition
-        auto mv = DatabaseCatalog::instance().tryGetTable(view_storage_id, context);
-        if (!mv)
-            return {};
-
-        auto materialized_view = dynamic_pointer_cast<StorageMaterializedView>(mv);
-        auto partition_check_result = checkMaterializedViewPartitionConsistency(materialized_view.get(), context);
-        if (!partition_check_result)
-        {
-            add_failure_message("view partition check failed.");
-            return {};
-        }
 
         // 1. check join nodes
         auto join_graph_match_result = matchJoinSet(query_join_hyper_graph, view_join_hyper_graph, context);
@@ -501,15 +491,15 @@ protected:
 
             // 2-3. rewrite partition-predicates
             auto mv_partition_prediate = normalizeExpression(
-                SymbolMapper::simpleMapper(output_columns_to_query_columns_map).map(partition_check_result->mview_partition_predicate),
+                SymbolMapper::simpleMapper(output_columns_to_query_columns_map).map(partition_check_result.mview_partition_predicate),
                 *query_map,
                 query_to_view_table_mappings);
             compensation_predicates.emplace_back(mv_partition_prediate);
 
-            if (!PredicateUtils::isFalsePredicate(partition_check_result->union_query_partition_predicate))
+            if (!PredicateUtils::isFalsePredicate(partition_check_result.union_query_partition_predicate))
             {
                 auto it = std::find_if(query_to_view_table_mappings.begin(), query_to_view_table_mappings.end(), [&](const auto & item) {
-                    return item.first.storage == partition_check_result->depend_storage;
+                    return item.first.storage == partition_check_result.depend_storage;
                 });
                 if (it == query_to_view_table_mappings.end())
                 {
@@ -517,9 +507,9 @@ protected:
                     continue; // bail out
                 }
                 union_predicate = IdentifierToColumnReference::rewrite(
-                    partition_check_result->depend_storage.get(),
+                    partition_check_result.depend_storage.get(),
                     it->first.unique_id,
-                    partition_check_result->union_query_partition_predicate);
+                    partition_check_result.union_query_partition_predicate);
             }
 
             // 2-4. range-predicates
@@ -576,7 +566,7 @@ protected:
                     continue; // bail out
                 }
 
-                if (!PredicateUtils::isFalsePredicate(partition_check_result->union_query_partition_predicate))
+                if (!PredicateUtils::isFalsePredicate(partition_check_result.union_query_partition_predicate))
                 {
                     add_failure_message("union predicate is not false");
                     continue; // bail out
@@ -1183,7 +1173,7 @@ protected:
 
 public:
     ContextMutablePtr context;
-    std::vector<MaterializedViewStructurePtr> & materialized_views;
+    LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> & materialized_views;
     std::unordered_map<PlanNodePtr, RewriterCandidates> candidates;
     std::unordered_map<PlanNodePtr, RewriterFailureMessages> failure_messages;
     std::map<String, std::optional<PlanNodeStatisticsPtr>> materialized_views_stats;
@@ -1692,7 +1682,7 @@ private:
 void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     bool enforce = context->getSettingsRef().enforce_materialized_view_rewrite;
-    bool verbose = enforce || context->getSettingsRef().enable_materialized_view_rewrite_verbose_log;
+    bool verbose = context->getSettingsRef().enable_materialized_view_rewrite_verbose_log;
 
     auto materialized_views = getRelatedMaterializedViews(plan, context);
     if (materialized_views.empty())
@@ -1719,7 +1709,7 @@ void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr conte
     plan.update(res.plan_node);
 }
 
-std::vector<MaterializedViewStructurePtr> MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context)
+LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context)
 {
     std::vector<MaterializedViewStructurePtr> materialized_views;
     auto & cache = MaterializedViewMemoryCache::instance();
@@ -1736,6 +1726,13 @@ std::vector<MaterializedViewStructurePtr> MaterializedViewRewriter::getRelatedMa
         if (auto structure = cache.getMaterializedViewStructure(view, context, true, result.local_table_to_distributed_table))
             materialized_views.push_back(*structure);
     }
-    return materialized_views;
+
+    LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> res;
+    for (const auto & materialized_view : materialized_views)
+    {
+        if (auto partition_check_result = checkMaterializedViewPartitionConsistency(materialized_view, context))
+            res.emplace(materialized_view, *partition_check_result);
+    }
+    return res;
 }
 }

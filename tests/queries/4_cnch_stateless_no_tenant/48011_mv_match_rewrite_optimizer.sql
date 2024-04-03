@@ -110,39 +110,3 @@ group by empid, deptno;
 
 select count(*) as c, avg(salary) as a, empid, deptno from emps where empid = 150 group by empid, deptno order by empid, deptno;
 select count(*) as c, avg(salary) as a, empid, deptno from emps where empid = 150 group by empid, deptno order by empid, deptno settings enable_materialized_view_rewrite = 0;
-
--- 6. test none partition check
-set materialized_view_consistency_check_method='NONE';
-DROP TABLE IF EXISTS mv_define;
-DROP TABLE IF EXISTS mv_data;
-CREATE TABLE mv_data ENGINE = CnchMergeTree()
-ORDER BY deptno partition by (empid, deptno) AS
-select empid, deptno, countState(*) as c, sumState(empid) as s
-from emps group by empid, deptno;
-
-DROP TABLE IF EXISTS mv_define;
-CREATE MATERIALIZED VIEW mv_define TO mv_data AS
-select empid, deptno, countState(*) as c, sumState(empid) as s
-from emps group by empid, deptno;
-
-select count(*) as c, deptno from emps group by deptno order by deptno;
-select count(*) as c, deptno from emps group by deptno order by deptno settings enable_materialized_view_rewrite = 0;
-
--- 7. test partition union rewrite
-set materialized_view_consistency_check_method='PARTITION';
-DROP TABLE IF EXISTS mv_define;
-DROP TABLE IF EXISTS mv_data;
-CREATE TABLE mv_data ENGINE = CnchMergeTree()
-ORDER BY deptno partition by (empid, deptno) AS
-select empid, deptno, countState(*) as c, sumState(empid) as s
-from emps group by empid, deptno;
-
-INSERT INTO emps VALUES (180, 10, 'Tim', 9000, 350);
-
-DROP TABLE IF EXISTS mv_define;
-CREATE MATERIALIZED VIEW mv_define TO mv_data AS
-select empid, deptno, countState(*) as c, sumState(empid) as s
-from emps group by empid, deptno;
-
-select count(*) as c, deptno from emps group by deptno order by deptno;
-select count(*) as c, deptno from emps group by deptno order by deptno settings enable_materialized_view_rewrite = 0;

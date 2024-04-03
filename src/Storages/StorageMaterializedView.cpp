@@ -175,15 +175,17 @@ StorageMaterializedView::StorageMaterializedView(
 }
 
 void StorageMaterializedView::syncBaseTablePartitions(
-    PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context, bool for_rewrite)
+    PartitionDiffPtr & partition_diff,
+    VersionPartContainerPtrs & latest_versioned_partitions,
+    const std::unordered_set<StoragePtr> & base_tables,
+    const std::unordered_set<StorageID> & non_depend_base_tables,
+    ContextMutablePtr local_context,
+    bool for_rewrite)
 {
-    if (!partition_transformer)
-        return;
-
     /// get all based table version partitions according to mv storage uuid
     VersionPartContainerPtrs previous_partitions = local_context->getCnchCatalog()->getMvBaseTables(UUIDHelpers::UUIDToString(this->getStorageUUID()));
     std::unordered_set<StorageID> updated_storage_set;
-    for (const auto & storage : partition_transformer->getBaseTables())
+    for (const auto & storage : base_tables)
     {
         /// get current versioned partitions
         auto current_partitions = local_context->getCnchCatalog()->getLastModificationTimeHints(storage);
@@ -331,8 +333,7 @@ void StorageMaterializedView::syncBaseTablePartitions(
     /// 1. when there is non depend base table has any partition update, refresh all
     /// 2. when the number of updated based table is not equal to one ,refresh all
     /// 3. when only on depend base table has partition updated ,refesh partition
-    std::unordered_set<StorageID> & non_base_table_ids = partition_transformer->getNonDependBaseTables();
-    auto exist_non_depend_storage = std::any_of(non_base_table_ids.begin(), non_base_table_ids.end(), [&](const auto & storage_id) {
+    auto exist_non_depend_storage = std::any_of(non_depend_base_tables.begin(), non_depend_base_tables.end(), [&](const auto & storage_id) {
         return updated_storage_set.find(storage_id) != updated_storage_set.end();
     });
 
@@ -377,7 +378,12 @@ AsyncRefreshParamPtrs StorageMaterializedView::getAsyncRefreshParams(ContextMuta
     /// 3. get snapshot of based tables partition version and calculate partition diff
     PartitionDiffPtr partition_diff = std::make_shared<PartitionDiff>();
     VersionPartContainerPtrs latest_versioned_partitions;
-    syncBaseTablePartitions(partition_diff, latest_versioned_partitions, local_context);
+    syncBaseTablePartitions(
+        partition_diff,
+        latest_versioned_partitions,
+        partition_transformer->getBaseTables(),
+        partition_transformer->getNonDependBaseTables(),
+        local_context);
 
     if (partition_diff->add_partitions.empty() && partition_diff->drop_partitions.empty())
     {
@@ -1589,7 +1595,13 @@ void StorageMaterializedView::validateAndSyncBaseTablePartitions(
 
     partition_transformer->validate(local_context);
 
-    syncBaseTablePartitions(partition_diff, latest_versioned_partitions, local_context, for_rewrite);
+    syncBaseTablePartitions(
+        partition_diff,
+        latest_versioned_partitions,
+        partition_transformer->getBaseTables(),
+        partition_transformer->getNonDependBaseTables(),
+        local_context,
+        for_rewrite);
 
     if (partition_diff->add_partitions.empty() && partition_diff->drop_partitions.empty())
     {

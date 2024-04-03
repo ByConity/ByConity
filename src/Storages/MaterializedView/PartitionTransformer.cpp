@@ -125,15 +125,32 @@ void PartitionTransformer::validate(ContextMutablePtr local_context)
     if (validated)
         return;
 
-    using namespace MaterializedView;
     MaterializedViewStructurePtr structure
         = MaterializedViewStructure::buildFrom(target_table_id, target_table_id, mv_query->clone(), local_context);
+    validate(local_context, structure);
+}
+
+void PartitionTransformer::validate(ContextMutablePtr local_context, MaterializedViewStructurePtr structure)
+{
+    if (validated)
+        return;
+
+    using namespace MaterializedView;
 
     target_table = structure->target_storage;
 
     /// get target table partition key required column names
     if (!target_table->getInMemoryMetadataPtr()->hasPartitionKey())
-        throw Exception(ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW, "target table has no partition key");
+    {
+        bool enable_non_partition_throw = local_context->getSettingsRef().enable_non_partitioned_base_refresh_throw_exception;
+        if (enable_non_partition_throw)
+            throw Exception(
+                ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW,
+                "materializd view query not support partition based async refresh: target table has no partition key");
+        always_non_partition_based = true;
+        validated = true;
+        return;
+    }
 
     const KeyDescription & target_partition_key_desc = target_table->getInMemoryMetadataPtr()->getPartitionKey();
     target_partition_key_ast = target_partition_key_desc.definition_ast->clone();
