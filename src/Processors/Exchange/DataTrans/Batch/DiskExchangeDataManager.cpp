@@ -195,7 +195,6 @@ void DiskExchangeDataManager::submitReadTask(
         value = std::make_shared<ReadTask>(query_id, key, std::move(processors));
         task = value;
     }
-
     try
     {
         ThreadFromGlobalPool thread([&, task_cp = task, addr_cp = addr]() mutable {
@@ -206,10 +205,12 @@ void DiskExchangeDataManager::submitReadTask(
                 LOG_TRACE(logger, "query:{} key:{} read task starts execution", task_cp->query_id, *task_cp->key);
                 task_cp->executor->execute(2);
                 LOG_TRACE(logger, "query:{} key:{} read task execution done", task_cp->query_id, *task_cp->key);
+                if (task_cp->executor->isCancelled())
+                    code = BroadcastStatusCode::SEND_CANCELLED;
+                finishSenders(task_cp, code, msg);
             }
-            catch (...)
+            catch (const Exception & e)
             {
-                code = BroadcastStatusCode::SEND_UNKNOWN_ERROR;
                 msg = fmt::format(
                     "query:{} key:{} read task execution exception {}",
                     task_cp->query_id,
@@ -217,32 +218,31 @@ void DiskExchangeDataManager::submitReadTask(
                     getCurrentExceptionMessage(false));
                 tryLogCurrentException(logger, msg);
                 if (!addr_cp.empty())
-                    reportError(task_cp->query_id, addr_cp, code, msg);
+                    reportError(task_cp->query_id, addr_cp, e.code(), msg);
             }
 
-            finishSenders(task_cp, code, msg);
             {
                 std::unique_lock<bthread::Mutex> lock(mutex);
                 read_tasks.erase(task_cp->key);
             }
             // release sender proxy before setDone
-            task_cp->executor = nullptr;
-            task_cp->processors = {};
             task_cp->setDone();
             all_task_done_cv.notify_all();
         });
         thread.detach();
     }
-    catch (...)
+    catch (const Exception & e)
     {
+        auto error_msg = fmt::format("query:{} key:{} read task schedule exception", task->query_id, *task->key);
+        tryLogCurrentException(logger, error_msg);
+        if (!addr.empty())
+            reportError(task->query_id, addr, e.code(), error_msg);
         {
             std::unique_lock<bthread::Mutex> lock(mutex);
             read_tasks.erase(task->key);
+            task->setDone();
             all_task_done_cv.notify_all();
         }
-        auto error_msg = fmt::format("query:{} key:{} read task schedule exception", task->query_id, *task->key);
-        tryLogCurrentException(logger, error_msg);
-        finishSenders(task, BroadcastStatusCode::SEND_UNKNOWN_ERROR, error_msg);
     }
 }
 
@@ -475,7 +475,9 @@ void DiskExchangeDataManager::cleanup(uint64_t query_unique_id)
             write_tasks.erase(wbegin, wend);
     }
     for (auto & task : read_on_the_run)
+    {
         task->executor->cancel();
+    }
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
         auto rbegin = read_tasks.lower_bound(from);
