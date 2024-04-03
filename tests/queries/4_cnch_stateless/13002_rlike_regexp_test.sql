@@ -57,3 +57,5 @@ DROP TABLE IF EXISTS test.regexp_table;
 SET dialect_type='MYSQL';
 SELECT 'new*\n*line' RLIKE 'new\\*.\\*line';
 SELECT 'new*\n*line' REGEXP 'new\\*.\\*line';
+SELECT toDecimal32(12.345, 3) REGEXP '.*';   
+SELECT 123456 REGEXP '.*';
