@@ -5706,9 +5706,9 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
     }
 }
 
-void Context::createPlanNodeIdAllocator()
+void Context::createPlanNodeIdAllocator(int max_id)
 {
-    id_allocator = std::make_shared<PlanNodeIdAllocator>();
+    id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id);
 }
 
 void Context::createSymbolAllocator()

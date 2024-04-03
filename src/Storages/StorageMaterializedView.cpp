@@ -275,6 +275,17 @@ void StorageMaterializedView::syncBaseTablePartitions(
                     LOG_TRACE(log,"add partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, current_part.partition_id()),
                             std::to_string(current_part.last_modification_time()));
                 }
+
+                bool zero_in_current = (current_part.last_modification_time() == 0);
+
+                if (for_rewrite && zero_in_current)
+                {
+                    partition_diff->add_partitions.emplace_back(PartitionTransformer::convert(storage, current_part));
+                    updated_storage_set.insert(storage->getStorageID());
+// #ifndef NDEBUG
+                    LOG_TRACE(log,"add partition-{}, updated_time-{}", PartitionTransformer::parsePartitionKey(storage, current_part.partition_id()),
+                            std::to_string(current_part.last_modification_time()));
+                }
             }
 
             /// traverse previous snapshot record partition diff on dropped partitions

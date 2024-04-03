@@ -24,8 +24,11 @@ namespace DB
 class ColumnPruning : public Rewriter
 {
 public:
-    explicit ColumnPruning(bool distinct_to_aggregate_ = false) 
-        : distinct_to_aggregate(distinct_to_aggregate_) { }
+    explicit ColumnPruning(
+        bool distinct_to_aggregate_ = false,
+        bool filter_window_to_sort_limit_ = false) 
+        : distinct_to_aggregate(distinct_to_aggregate_)
+        , filter_window_to_sort_limit(filter_window_to_sort_limit_) { }
     String name() const override { return "ColumnPruning"; }
     static String selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage);
 
@@ -33,13 +36,22 @@ private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_column_pruning; }
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool distinct_to_aggregate;
+    bool filter_window_to_sort_limit;
 };
 
 class ColumnPruningVisitor : public PlanNodeVisitor<PlanNodePtr, NameSet>
 {
 public:
-    explicit ColumnPruningVisitor(ContextMutablePtr context_, CTEInfo & cte_info_, PlanNodePtr & root, bool distinct_to_aggregate_)
-        : context(std::move(context_)), post_order_cte_helper(cte_info_, root), distinct_to_aggregate(distinct_to_aggregate_)
+    explicit ColumnPruningVisitor(
+        ContextMutablePtr context_,
+        CTEInfo & cte_info_,
+        PlanNodePtr & root,
+        bool distinct_to_aggregate_,
+        bool filter_window_to_sort_limit_)
+        : context(std::move(context_))
+        , post_order_cte_helper(cte_info_, root)
+        , distinct_to_aggregate(distinct_to_aggregate_)
+        , filter_window_to_sort_limit(filter_window_to_sort_limit_)
     {
     }
 
@@ -56,10 +68,13 @@ private:
 
     static PlanNodePtr convertDistinctToGroupBy(PlanNodePtr node, ContextMutablePtr context);
 
+    static PlanNodePtr convertFilterWindowToSortingLimit(PlanNodePtr node, NameSet & require, ContextMutablePtr & context);
+
     ContextMutablePtr context;
     CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, NameSet> cte_require_columns{};
     bool distinct_to_aggregate;
+    bool filter_window_to_sort_limit;
 };
 
 }

@@ -1405,7 +1405,7 @@ public:
 
     PlanNodeIdAllocatorPtr & getPlanNodeIdAllocator() { return id_allocator; }
     UInt32 nextNodeId() { return id_allocator->nextId(); }
-    void createPlanNodeIdAllocator();
+    void createPlanNodeIdAllocator(int max_id = 1);
 
     int step_id = 2000;
     int getStepId() const { return step_id; }
