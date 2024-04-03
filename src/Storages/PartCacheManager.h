@@ -109,7 +109,6 @@ public:
     /**
      * @brief update the GC time for partitions; mark/unmark deleted
      *
-     * @param table
      * @param partitions partitions to update
      * @param ts GC time to update
      * @return partitions which have been successfully updated
@@ -118,7 +117,6 @@ public:
     /**
      * remove deleting partitions entry from table meta entry.
      *
-     * @param table
      * @param partitions partitions to be removed
      */
     void removeDeletedPartitions(const StoragePtr table, const Strings & partitions);

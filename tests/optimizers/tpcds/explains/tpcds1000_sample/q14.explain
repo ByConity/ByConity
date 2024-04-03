@@ -94,9 +94,9 @@ Projection Est. 100 rows
                         │        │              │     │     └─ Projection Est. 29 rows
                         │        │              │     │        │     Expressions: [d_date_sk_7]
                         │        │              │     │        └─ Filter Est. 29 rows
-                        │        │              │     │           │     Condition: (d_moy_1 = 11) AND (d_year_7 = cast(2001, 'UInt32'))
+                        │        │              │     │           │     Condition: (d_year_7 = cast(2001, 'UInt32')) AND (d_moy_1 = 11)
                         │        │              │     │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                        │        │              │     │                    Where: (d_moy = 11) AND (d_year = cast(2001, 'UInt32'))
+                        │        │              │     │                    Where: (d_year = cast(2001, 'UInt32')) AND (d_moy = 11)
                         │        │              │     │                    Outputs: d_date_sk_7:=d_date_sk, d_year_7:=d_year, d_moy_1:=d_moy
                         │        │              │     └─ TableScan tpcds1000_sample.item Est. 300000 rows
                         │        │              │              Outputs: i_item_sk_6:=i_item_sk, i_brand_id_7:=i_brand_id, i_class_id_7:=i_class_id, i_category_id_7:=i_category_id
@@ -138,9 +138,9 @@ Projection Est. 100 rows
                                  │              │     │     └─ Projection Est. 29 rows
                                  │              │     │        │     Expressions: [d_date_sk_8]
                                  │              │     │        └─ Filter Est. 29 rows
-                                 │              │     │           │     Condition: (d_moy_2 = 11) AND (d_year_8 = cast(2001, 'UInt32'))
+                                 │              │     │           │     Condition: (d_year_8 = cast(2001, 'UInt32')) AND (d_moy_2 = 11)
                                  │              │     │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                 │              │     │                    Where: (d_moy = 11) AND (d_year = cast(2001, 'UInt32'))
+                                 │              │     │                    Where: (d_year = cast(2001, 'UInt32')) AND (d_moy = 11)
                                  │              │     │                    Outputs: d_date_sk_8:=d_date_sk, d_year_8:=d_year, d_moy_2:=d_moy
                                  │              │     └─ TableScan tpcds1000_sample.item Est. 300000 rows
                                  │              │              Outputs: i_item_sk_8:=i_item_sk, i_brand_id_8:=i_brand_id, i_class_id_8:=i_class_id, i_category_id_8:=i_category_id

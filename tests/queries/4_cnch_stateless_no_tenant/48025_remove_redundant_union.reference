@@ -15,31 +15,8 @@ Projection Est. ? rows
                │     └─ Left Join Est. ? rows
                │        │     Condition: expr#cast(expr#888, \'Nullable(Int64)\') == v2v2v2_2
                │        ├─ ReadNothing Est. 0 rows
-               │        └─ Broadcast Exchange Est. ? rows
-               │           └─ MergingAggregated Est. ? rows
-               │              └─ Repartition Exchange Est. ? rows
-               │                 │     Partition by: {v2v2v2_2}
-               │                 └─ Aggregating Est. ? rows
-               │                    │     Group by: {v2v2v2_2}
-               │                    └─ Inner Join Est. ? rows
-               │                       │     Condition: vvv1_2 == expr#max(vvv1)_3
-               │                       ├─ Projection Est. ? rows
-               │                       │  │     Expressions: [v2v2v2_2, vvv1_2]
-               │                       │  └─ Filter Est. ? rows
-               │                       │     │     Condition: (status_1 = \'1\') AND (v2v2v2_2 = 888)
-               │                       │     └─ TableScan zx_test.table6 Est. ? rows
-               │                       │              Where: (status = \'1\') AND (v2v2v2 = 888)
-               │                       │              Outputs: status_1:=status, v2v2v2_2:=v2v2v2, vvv1_2:=vvv1
-               │                       └─ Broadcast Exchange Est. ? rows
-               │                          └─ Projection Est. ? rows
-               │                             │     Expressions: expr#max(vvv1)_3:=cast(`expr#max(vvv1)_2`, \'Nullable(String)\')
-               │                             └─ MergingAggregated Est. ? rows
-               │                                └─ Gather Exchange Est. ? rows
-               │                                   └─ Aggregating Est. ? rows
-               │                                      │     Group by: {}
-               │                                      │     Aggregates: expr#max(vvv1)_2:=AggNull(max)(vvv1_3)
-               │                                      └─ TableScan zx_test.table6 Est. ? rows
-               │                                               Outputs: vvv1_3:=vvv1
+               │        └─ Broadcast Exchange Est. 0 rows
+               │           └─ ReadNothing Est. 0 rows
                └─ Broadcast Exchange Est. ? rows
                   └─ Projection Est. ? rows
                      │     Expressions: [k1k1k1, k4k4k4]
