@@ -65,14 +65,14 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
     triggerDispatch(cluster_nodes.rank_workers);
 }
 
-void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled)
+void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed, bool /*is_canceled*/)
 {
     if (is_succeed)
     {
         removeDepsAndEnqueueTask(SegmentTask{segment_id});
     }
     // on exception
-    if (!is_succeed && !is_canceled)
+    if (!is_succeed)
     {
         stopped.store(true, std::memory_order_relaxed);
         // emplace a fake task.

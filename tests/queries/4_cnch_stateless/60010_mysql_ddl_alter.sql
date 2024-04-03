@@ -69,5 +69,9 @@ alter table tbx1 rename tbx11;
 alter table tbx11 rename tbx1;
 alter table test.tbx1 rename test.tbx11;
 alter table test.tbx11 rename test.tbx1;
+use default;
+alter table test.tbx1 rename test.tbx11;
+alter table test.tbx11 rename tbx1; -- { serverError 48 }
+alter table test.tbx11 rename test.tbx1;
 drop table if exists tbx;
 drop table if exists tbx1;
