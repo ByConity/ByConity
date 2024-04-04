@@ -2966,6 +2966,9 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         ASTPtr ast_space_name;
         if (!parser_string_literal.parse(pos, ast_space_name, expected))
             return false;
+        
+        if(s_where.ignore(pos) && !parser_exp.parse(pos, where_expr, expected))
+            return false;
 
         destination_name = ast_space_name->as<ASTLiteral &>().value.get<const String &>();
     }
