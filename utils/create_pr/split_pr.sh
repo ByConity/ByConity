@@ -11,7 +11,7 @@ fi
 if [ -z "$1" ]; then
     TARGET_BRANCH=master
 else
-    TARGET_BRANCH=$2
+    TARGET_BRANCH=$1
 fi
 
 ABBREVIATED_TOP_COMMIT_HASH=$(git log refs/heads/${BRANCH}^! --format=%h)
