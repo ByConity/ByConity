@@ -1,5 +1,3 @@
-use test;
-
 drop table if exists ary;
 
 set dialect_type = 'MYSQL';
@@ -80,7 +78,9 @@ select contains(c, NULL) from ary order by a;
 select contains(d, NULL) from ary order by a;  
 
 -- TODO adb diffs 1.2 and 1.20 for implicit convert to/from string
--- cnch stores 1.2 as 1.20000005 => 1.2 is not in d
+-- cnch parses 1.2 into 1.20000005 for d due to the fast parsing method in readFloatText.h 
+-- shift10() returns a double 0.200000000000000000003. when added into a float 1, 
+-- it becomes 1.20000005; therefore all following sqls return 0
 select contains(d, 1.2) from ary order by a;  
 select contains(d, '1.2') from ary order by a;
 select contains(d, 1.20) from ary order by a;
@@ -188,7 +188,6 @@ select array_remove([NULL, NULL], NULL);
 select array_remove(c, NULL) from ary order by a; 
 select array_remove(c, 1) from ary order by a; -- { serverError 386 }
 
--- TODO wrong results due to bitEqual and equal for arrays
 select array_remove(c, [1]) from ary order by a; 
 
 
@@ -283,6 +282,10 @@ select array_intersect([], []);
 select '"array_max/min"';
 select array_min(b), array_min(c), array_min(d), array_min(e), array_min(f), array_min(h) from ary order by a;
 select array_max(b), array_max(c), array_max(d), array_max(e), array_max(f), array_max(h) from ary order by a;
+
+select '"reverse"';
+select reverse(c[2]) from ary order by a;
+select reverse(b), reverse(d), reverse(e), reverse(f), reverse(h) from ary order by a;
 
 select '"shuffle"';
 select shuffle(b), shuffle(c), shuffle(d), shuffle(e), shuffle(f) from ary format Null; 
