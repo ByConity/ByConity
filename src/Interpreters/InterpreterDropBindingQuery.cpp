@@ -1,5 +1,5 @@
 #include <Catalog/Catalog.h>
-#include <Interpreters/InterpreterDropBinding.h>
+#include <Interpreters/InterpreterDropBindingQuery.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Interpreters/SQLBinding/SQLBindingCatalog.h>
 #include <Parsers/ASTSQLBinding.h>
@@ -7,7 +7,7 @@
 
 namespace DB
 {
-BlockIO InterpreterDropBinding::execute()
+BlockIO InterpreterDropBindingQuery::execute()
 {
     const auto * drop = query_ptr->as<const ASTDropBinding>();
     if (!drop)
@@ -26,7 +26,10 @@ BlockIO InterpreterDropBinding::execute()
             if (binding_cache_manager->hasSqlBinding(pattern_uuid))
                 binding_cache_manager->removeSqlBinding(pattern_uuid);
             else if (binding_cache_manager->hasReBinding(pattern_uuid))
+            {
                 binding_cache_manager->removeReBinding(pattern_uuid);
+                is_re_binding = true;
+            }
             else
             {
                 if (!drop->if_exists)
@@ -82,21 +85,13 @@ BlockIO InterpreterDropBinding::execute()
     {
         BindingCatalogManager catalog(context);
         catalog.removeSQLBinding(pattern_uuid, is_re_binding);
-        for (int i = 0; i < 3; ++i)
+        try
         {
-            try
-            {
-                catalog.updateGlobalBindingCache(context);
-            }
-            catch (...)
-            {
-                if (i == 2)
-                    throw Exception(
-                        "The global binding is successfully removed from catalog and the current server cache, But can't sync to some other server's cache",
-                        ErrorCodes::LOGICAL_ERROR);
-                continue;
-            }
-            break;
+            catalog.updateGlobalBindingCache(context);
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "Drop SQL Binding succeeded, But some nodes failed to refresh sql binding cache.");
         }
     }
 

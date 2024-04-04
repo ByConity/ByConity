@@ -900,6 +900,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             /// TODO Parser should fail early when max_query_size limit is reached.
             ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+            applyCustomSetting(context, ast);
             if (settings.use_sql_binding && !internal)
             {
                 try
@@ -917,8 +918,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         else
         {
             ast = input_ast;
+            applyCustomSetting(context, ast);
         }
-        applyCustomSetting(context, ast);
         bool in_interactive_txn = isQueryInInteractiveSession(context, ast);
         if (in_interactive_txn && isDDLQuery(context, ast))
         {
