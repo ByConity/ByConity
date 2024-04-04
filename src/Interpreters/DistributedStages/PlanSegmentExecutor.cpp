@@ -768,7 +768,7 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
                 *res.request);
             continue;
         }
-        res.channel->assertController(*res.cntl);
+        res.channel->assertController(*res.cntl, ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
         LOG_TRACE(
             &Poco::Logger::get("PlanSegmentExecutor"),
             "Receiver register sender successfully, host: {}, request: {}",
