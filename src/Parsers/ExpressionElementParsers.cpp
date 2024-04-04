@@ -1139,6 +1139,17 @@ bool ParserCastAsExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         return true;
     }
 
+    if (ParserKeyword("CONVERT").ignore(pos, expected)
+        && ParserToken(TokenType::OpeningRoundBracket).ignore(pos, expected)
+        && ParserExpression(dt).parse(pos, expr_node, expected)
+        && ParserToken(TokenType::Comma).ignore(pos, expected)
+        && ParserDataType(dt).parse(pos, type_node, expected)
+        && ParserToken(TokenType::ClosingRoundBracket).ignore(pos, expected))
+    {
+        node = createFunctionCast(expr_node, type_node);
+        return true;
+    }
+
     return false;
 }
 
@@ -2965,6 +2976,9 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         ASTPtr ast_space_name;
         if (!parser_string_literal.parse(pos, ast_space_name, expected))
+            return false;
+        
+        if(s_where.ignore(pos) && !parser_exp.parse(pos, where_expr, expected))
             return false;
 
         destination_name = ast_space_name->as<ASTLiteral &>().value.get<const String &>();

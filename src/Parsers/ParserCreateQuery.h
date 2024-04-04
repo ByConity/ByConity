@@ -32,6 +32,7 @@
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserDataType.h>
 #include <Poco/String.h>
+#include "Parsers/IAST_fwd.h"
 
 
 namespace DB
@@ -175,6 +176,15 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserCodec codec_parser;
     ParserExpression expression_parser(ParserSettings::CLICKHOUSE); /* Use CK dialect to parse TTL */
 
+    /// Dummy MySQL keywords
+    ParserKeyword s_on_update("ON UPDATE");
+    ParserKeyword s_charset1("CHARSET");
+    ParserKeyword s_default_charset1("DEFAULT CHARSET");
+    ParserKeyword s_charset2("CHARACTER SET");
+    ParserKeyword s_default_charset2("DEFAULT CHARACTER SET");
+    ParserKeyword s_collate("COLLATE");
+    ParserKeyword s_default_collate("DEFAULT COLLATE");
+
     /// mandatory column name
     ASTPtr name;
     if (!name_parser.parse(pos, name, expected))
@@ -208,6 +218,9 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ASTPtr comment_expression;
     ASTPtr codec_expression;
     ASTPtr ttl_expression;
+    ASTPtr charset_expression;
+    ASTPtr collate_expression;
+    ASTPtr on_update_expression;
 
     auto null_check_without_moving = [&]() -> bool
     {
@@ -249,6 +262,19 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             null_modifier.emplace(true);
     }
 
+    if (s_charset1.ignore(pos, expected) || s_default_charset1.ignore(pos, expected) || s_charset2.ignore(pos, expected)
+        || s_default_charset2.ignore(pos, expected))
+    {
+        if (!expression_parser.parse(pos, charset_expression, expected))
+            return false;
+    }
+
+    if (s_collate.ignore(pos, expected) || s_default_collate.ignore(pos, expected))
+    {
+        if (!expression_parser.parse(pos, charset_expression, expected))
+            return false;
+    }
+
     Pos pos_before_specifier = pos;
     if (s_default.ignore(pos, expected) || s_materialized.ignore(pos, expected) || s_alias.ignore(pos, expected))
     {
@@ -275,6 +301,12 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         }
         else if (s_null.ignore(pos, expected))
             null_modifier.emplace(true);
+    }
+
+    if (s_on_update.ignore(pos, expected))
+    {
+        if (!expression_parser.parse(pos, on_update_expression, expected))
+            return false;
     }
 
     if (s_pk.ignore(pos, expected))

@@ -67,9 +67,10 @@ namespace
 ASTPtr parseComment(IParser::Pos & pos, Expected & expected)
 {
     ParserKeyword s_comment("COMMENT");
+    ParserToken s_eq(TokenType::Equals);
     ParserStringLiteral string_literal_parser;
     ASTPtr comment;
-
+    s_eq.ignore(pos, expected);
     s_comment.ignore(pos, expected) && string_literal_parser.parse(pos, comment, expected);
 
     return comment;
@@ -689,6 +690,14 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_ttl("TTL");
     ParserKeyword s_settings("SETTINGS");
 
+    ParserKeyword s_charset1("CHARSET");
+    ParserKeyword s_default_charset1("DEFAULT CHARSET");
+    ParserKeyword s_charset2("CHARACTER SET");
+    ParserKeyword s_default_charset2("DEFAULT CHARACTER SET");
+    ParserKeyword s_collate("COLLATE");
+    ParserKeyword s_default_collate("DEFAULT COLLATE");
+    ParserKeyword s_auto_increment("AUTO_INCREMENT");
+
     ParserIdentifierWithOptionalParameters ident_with_optional_params_p(dt);
     ParserExpression expression_p(dt);
     ParserClusterByElement cluster_p;
@@ -716,6 +725,9 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ASTPtr table_properties;
     ASTPtr mysql_partition_by;
     ASTPtr life_cycle;
+    ASTPtr charset;
+    ASTPtr collate;
+    ASTPtr auto_increment;
     bool broadcast = false;
 
     // optional engine
@@ -812,6 +824,34 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             if (!s_eq.ignore(pos, expected))
                 return false;
             if (string_literal_parser.parse(pos, table_properties, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (s_charset1.ignore(pos, expected) || s_default_charset1.ignore(pos, expected) || s_charset2.ignore(pos, expected)
+            || s_default_charset2.ignore(pos, expected))
+        {
+            s_eq.ignore(pos, expected);
+            if (expression_p.parse(pos, charset, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (s_collate.ignore(pos, expected) || s_default_collate.ignore(pos, expected))
+        {
+            s_eq.ignore(pos, expected);
+            if (expression_p.parse(pos, collate, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (s_auto_increment.ignore(pos, expected))
+        {
+            s_eq.ignore(pos, expected);
+            if (expression_p.parse(pos, auto_increment, expected))
                 continue;
             else
                 return false;
