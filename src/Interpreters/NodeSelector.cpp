@@ -15,6 +15,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int BAD_QUERY_PARAMETER;
 }
 
 bool isLocal(PlanSegment * plan_segment_ptr)
@@ -116,7 +117,18 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
 {
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
-    if (plan_segment_ptr->getParallelSize() > cluster_nodes.rank_workers.size())
+    // The one worker excluded is server itself.
+    const auto worker_number = cluster_nodes.rank_workers.size() - 1;
+    if (plan_segment_ptr->getParallelSize() > worker_number && !query_context->getSettingsRef().bsp_mode)
+    {
+        throw Exception(
+            ErrorCodes::BAD_QUERY_PARAMETER,
+            "Logical error: distributed_max_parallel_size({}) of table scan can not be greater than worker number({})",
+            plan_segment_ptr->getParallelSize(),
+            worker_number);
+    }
+    // If parallelism is greater than the worker number, we split the parts according to the input size.
+    if (plan_segment_ptr->getParallelSize() > worker_number)
     {
         std::unordered_map<HostWithPorts, size_t> size_per_worker;
         for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
@@ -145,11 +157,19 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
         size_t avg = sum / plan_segment_ptr->getParallelSize();
         for (const auto & [h, s] : size_per_worker)
         {
-            size_t p = s / avg;
-            if (s % avg * 5 > avg)
-                p++;
-            if (p == 0 && s > 0)
+            size_t p = 0;
+            if (avg == 0)
+            {
                 p = 1;
+            }
+            else
+            {
+                p = s / avg;
+                if (s % avg * 5 > avg)
+                    p++;
+                if (p == 0 && s > 0)
+                    p = 1;
+            }
             for (size_t i = 0; i < p; i++)
             {
                 auto worker_address = getRemoteAddress(h, query_context);
@@ -160,12 +180,14 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
     else
     {
         size_t parallel_index = 0;
+        auto local_address = getLocalAddress(*query_context);
         for (const auto & worker : cluster_nodes.rank_workers)
         {
             parallel_index++;
             if (parallel_index > plan_segment_ptr->getParallelSize())
                 break;
-            result.worker_nodes.emplace_back(worker);
+            if (worker.address != local_address)
+                result.worker_nodes.emplace_back(worker);
         }
     }
     return result;
