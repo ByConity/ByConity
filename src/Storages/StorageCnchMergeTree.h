@@ -123,8 +123,8 @@ public:
     /**
      * @param snapshot_ts If not zero, specify the snapshot to use
      */
-    ServerDataPartsVector
-    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0, bool staging_area = false) const;
+    ServerDataPartsWithDBM
+    selectPartsToReadWithDBM(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0, bool staging_area = false) const;
 
     /// Return all base parts and delete bitmap metas in the given partitions.
     /// If `partitions` is empty, return meta for all partitions.
@@ -137,13 +137,10 @@ public:
 
     /**
      * @param parts input parts, must be sorted in PartComparator order
-     * @param snapshot_ts If not zero, specify the snapshot to use
      */
-    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, ContextPtr local_context, UInt64 snapshot_ts = 0) const;
-    /// TODO: unify into one methods
-    void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time, bool force_found = true);
-    void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time, bool force_found = true);
-    /// For staged parts, delete bitmap represents delete_flag info which is optional, it's valid if it doesn't have delete_bitmap metadata.
+    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas) const;
+    void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
+    void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
     void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
 
     /// Used by the "SYSTEM DEDUP" command to repair unique table by removing duplicate keys in visible parts.
@@ -177,7 +174,7 @@ public:
         ContextPtr /* local_context */,
         TableExclusiveLockHolder &) override;
 
-    ServerDataPartsVector selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
+    ServerDataPartsWithDBM selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
     void overwritePartitions(const ASTPtr & overwrite_partition, ContextPtr local_context, CnchLockHolderPtrs * lock_holders);
     void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
         IMergeTreeDataPartsVector* dropped_parts = nullptr, bool do_commit = true, CnchLockHolderPtrs * lock_holders = nullptr, size_t max_threads = 16);
@@ -252,7 +249,7 @@ private:
     /**
      * @param snapshot_ts If not zero, specify the snapshot to use
      */
-    ServerDataPartsVector getAllPartsInPartitions(
+    ServerDataPartsWithDBM getAllPartsInPartitionsWithDBM(
         const Names & column_names_to_return,
         ContextPtr local_context,
         const SelectQueryInfo & query_info,
@@ -271,9 +268,14 @@ private:
         const SelectQueryInfo & query_info,
         const Names & column_names_to_return) const;
 
-    void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context,
-        bool do_commit, size_t max_threads, bool staging_area = false);
+    void dropPartsImpl(
+        ServerDataPartsWithDBM & svr_parts_to_drop,
+        IMergeTreeDataPartsVector & parts_to_drop,
+        bool detach,
+        ContextPtr local_context,
+        bool do_commit,
+        size_t max_threads,
+        bool staging_area = false);
 
     void collectResource(
         ContextPtr local_context,

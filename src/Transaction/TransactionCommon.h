@@ -399,4 +399,6 @@ struct TransactionRecord
     bool isInactive() const { return pb_model.status() == CnchTransactionStatus::Inactive; }
 };
 
+using TransactionRecords = std::vector<TransactionRecord>;
+
 }

@@ -44,6 +44,8 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/StorageSnapshot.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Transaction/TransactionCommon.h>
 #include <Core/Types.h>
 // #include <Access/MaskingPolicyDataModel.h>
 // #include <Access/MaskingPolicyCommon.h>
@@ -1492,7 +1494,42 @@ namespace Catalog
         return CnchPartsHelper::toMergeTreeDataPartsCNCHVector(createPartVectorFromServerParts(*storage, staged_server_parts));
     }
 
-    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    ServerDataPartsWithDBM Catalog::getStagedServerDataPartsWithDBM(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    {
+        ServerDataPartsWithDBM res;
+        res.first = getStagedServerDataParts(table, ts, partitions, /*execute_filter=*/false);
+        res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+
+        if (ts)
+        {
+            LOG_DEBUG(
+                log,
+                "{} Start handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas is {}, timestamp: {}",
+                table->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+
+            /// Make sure they use the same records of transactions list.
+            auto txn_records = getTransactionRecords(res.first, res.second);
+            getVisibleServerDataParts(res.first, ts, this, &txn_records);
+            getVisibleBitmaps(res.second, ts, this, &txn_records);
+
+            LOG_DEBUG(
+                log,
+                "{} Finish handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas of {}, timestamp: {}",
+                table->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+        }
+
+        return res;
+    }
+
+    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions, bool execute_filter)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1543,9 +1580,9 @@ namespace Catalog
                     res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(*storage, std::move(*model))));
                 }
 
-                if (ts)
+                if (ts && execute_filter)
                 {
-                    getVisibleServerDataParts(res, ts, this);
+                    getVisibleServerDataParts(res, ts, this, nullptr);
                 }
             },
             ProfileEvents::GetStagedPartsSuccess,
@@ -1553,8 +1590,56 @@ namespace Catalog
         return res;
     }
 
-    DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
+    DB::ServerDataPartsWithDBM Catalog::getServerDataPartsInPartitionsWithDBM(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
+    {
+        ServerDataPartsWithDBM res;
+        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, visibility, /*execute_filter=*/false);
+        res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+
+        /// Make sure they use the same records of transactions list.
+        if (ts && visibility != VisibilityLevel::All)
+        {
+            LOG_DEBUG(
+                log,
+                "{} Start handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas is {}, timestamp: {}",
+                storage->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+
+             auto txn_records = getTransactionRecords(res.first, res.second);
+            if (visibility == VisibilityLevel::Visible)
+            {
+                getVisibleServerDataParts(res.first, ts, this, &txn_records);
+                getVisibleBitmaps(res.second, ts, this, &txn_records);
+            }
+            else
+            {
+                getCommittedServerDataParts(res.first, ts, this, &txn_records);
+                getCommittedBitmaps(res.second, ts, this, &txn_records);
+            }
+
+            LOG_DEBUG(
+                log,
+                "{} Finish handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas of {}, timestamp: {}",
+                storage->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+        }
+        return res;
+    }
+
+    DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        VisibilityLevel visibility,
+        bool execute_filter)
     {
         ServerDataPartsVector res;
         String source;
@@ -1641,7 +1726,7 @@ namespace Catalog
                     }
                 }
 
-                if (ts && visibility != VisibilityLevel::All)
+                if (execute_filter && ts && visibility != VisibilityLevel::All)
                 {
                     LOG_TRACE(
                         log,
@@ -1651,9 +1736,9 @@ namespace Catalog
                         ,ts.toString());
 
                     if (visibility == VisibilityLevel::Visible)
-                        getVisibleServerDataParts(res, ts, this);
+                        getVisibleServerDataParts(res, ts, this, nullptr);
                     else
-                        getCommittedServerDataParts(res, ts, this);
+                        getCommittedServerDataParts(res, ts, this, nullptr);
 
                     LOG_TRACE(
                         log,
@@ -1681,7 +1766,11 @@ namespace Catalog
     }
 
     DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitions(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        bool execute_filter)
     {
         DeleteBitmapMetaPtrVector res;
         String source;
@@ -1757,7 +1846,8 @@ namespace Catalog
                 }
 
                 /// filter out invisible bitmaps (uncommitted or invisible to current txn)
-                getVisibleBitmaps(res, ts, this);
+                if (execute_filter)
+                    getVisibleBitmaps(res, ts, this, nullptr);
                 LOG_DEBUG(
                     log,
                     "Elapsed {}ms to get {} delete bitmaps in {} partitions for table : {} , source : {}, ts : {}"
@@ -1773,7 +1863,40 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    ServerDataPartsWithDBM Catalog::getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    {
+        ServerDataPartsWithDBM res;
+        res.first = getTrashedPartsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+        res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+        if (ts)
+        {
+            LOG_DEBUG(
+                log,
+                "{} Start handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas is {}, timestamp: {}",
+                storage->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+
+            /// Make sure they use the same records of transactions list.
+            auto txn_records = getTransactionRecords(res.first, res.second);
+            getVisibleServerDataParts(res.first, ts, this, &txn_records);
+            getVisibleBitmaps(res.second, ts, this, &txn_records);
+
+            LOG_DEBUG(
+                log,
+                "{} Finish handle intermediate parts and delete bitmap metas. Total number of parts is {}, total number of delete bitmap "
+                "metas of {}, timestamp: {}",
+                storage->getStorageID().getNameForLogs(),
+                res.first.size(),
+                res.second.size(),
+                ts.toString());
+        }
+        return res;
+    }
+
+    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1794,8 +1917,8 @@ namespace Catalog
                 size_t size_before = res.size();
 
                 // TODO: should we remove the visibility check logic for trashed parts?
-                if (ts)
-                    getVisibleServerDataParts(res, ts, this);
+                if (ts && execute_filter)
+                    getVisibleServerDataParts(res, ts, this, nullptr);
 
                 LOG_DEBUG(
                     log,
@@ -2268,7 +2391,6 @@ namespace Catalog
                 ", total: " + toString(resp.puts.size()), ErrorCodes::CATALOG_COMMIT_PART_ERROR);
         }
     }
-
 
     void Catalog::dropAllPart(const StoragePtr & storage, const TxnTimestamp & txnID, const TxnTimestamp & ts)
     {
@@ -3566,6 +3688,28 @@ namespace Catalog
             ProfileEvents::GetTransactionRecordsTxnIdsSuccess,
             ProfileEvents::GetTransactionRecordsTxnIdsFailed);
         return records;
+    }
+
+    TransactionRecords Catalog::getTransactionRecords(const ServerDataPartsVector & parts, const DeleteBitmapMetaPtrVector & bitmaps)
+    {
+        std::set<TxnTimestamp> txn_ids;
+        for (const auto & part : parts)
+        {
+            UInt64 commit_time = detail::ServerDataPartOperation::getCommitTime(part);
+            UInt64 txn_id = detail::ServerDataPartOperation::getTxnID(part);
+
+            if (commit_time == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+                txn_ids.insert(txn_id);
+        }
+        for (const auto & bitmap: bitmaps)
+        {
+            UInt64 commit_time = detail::BitmapOperation::getCommitTime(bitmap);
+            UInt64 txn_id = detail::BitmapOperation::getTxnID(bitmap);
+
+            if (commit_time == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+                txn_ids.insert(txn_id);
+        }
+        return getTransactionRecords(std::vector<TxnTimestamp>(txn_ids.begin(), txn_ids.end()), 100000);
     }
 
     std::vector<TransactionRecord> Catalog::getTransactionRecordsForGC(size_t max_result_number)
@@ -5386,20 +5530,18 @@ namespace Catalog
         return res;
     }
 
-    DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false, execute_filter);
     }
 
-
-    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true, execute_filter);
     }
 
     DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash)
+    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash, bool execute_filter)
     {
         DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
@@ -5428,8 +5570,11 @@ namespace Catalog
                     create_func,
                     ts);
 
-                /// filter out invisible bitmaps (uncommitted or invisible to current txn)
-                getVisibleBitmaps(res, ts, this);
+                if (execute_filter)
+                {
+                    /// filter out invisible bitmaps (uncommitted or invisible to current txn)
+                    getVisibleBitmaps(res, ts, this, nullptr);
+                }
             },
             ProfileEvents::GetDeleteBitmapsInPartitionsSuccess,
             ProfileEvents::GetDeleteBitmapsInPartitionsFailed);

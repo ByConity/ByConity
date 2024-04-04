@@ -72,7 +72,7 @@ enum class VisibilityLevel
 {
     // all items visible to xid (commit_ts <= xid && end_ts > xid)
     Visible,
-    // all items committed before xid, including unvisible items (end_ts <= xid)
+    // all items committed before xid, including invisible items (end_ts <= xid)
     Committed,
     // all items written before xid, including intermediate uncommitted items
     All
@@ -246,9 +246,29 @@ public:
     /// Data parts API
     /////////////////////////////
 
-    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
+    /**
+     * @brief Get the Server Data Parts In Partitions With Delete Bitmap Metas.
+     * For data consistency, data parts and delete bitmap metas must use the same transaction records to filter out. Otherwise it will get incorrect result.
+     * Please see more detail in doc: https://bytedance.larkoffice.com/docx/Xo52dhoMnofCROxvXUUceyK9nQd
+     */
+    ServerDataPartsWithDBM getServerDataPartsInPartitionsWithDBM(
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        VisibilityLevel visibility = VisibilityLevel::Visible);
 
-    ServerDataPartsVector getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
+    ServerDataPartsVector getServerDataPartsInPartitions(
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        VisibilityLevel visibility = VisibilityLevel::Visible,
+        bool execute_filter = true);
+
+    ServerDataPartsWithDBM getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
+
+    ServerDataPartsVector getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter = true);
 
     ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
@@ -257,7 +277,9 @@ public:
 
     // return table's committed staged parts. if partitions != null, ignore staged parts not belong to `partitions`.
     DataPartsVector getStagedParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
-    ServerDataPartsVector getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
+
+    ServerDataPartsWithDBM getStagedServerDataPartsWithDBM(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
+    ServerDataPartsVector getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool execute_filter = true);
 
     /////////////////////////////
     /// Delete bitmaps API (UNIQUE KEY)
@@ -265,10 +287,15 @@ public:
 
     /// fetch all delete bitmaps <= ts in the given partitions
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitions(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context = nullptr);
-    DeleteBitmapMetaPtrVector
-    getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
-    DeleteBitmapMetaPtrVector getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context = nullptr,
+        bool execute_filter = true);
+    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsFromMetastore(
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter = true);
+    DeleteBitmapMetaPtrVector getTrashedDeleteBitmapsInPartitions(
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter = true);
 
     /// get bitmaps by keys
     DeleteBitmapMetaPtrVector getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys);
@@ -449,6 +476,7 @@ public:
     /// clean zombie records. If the total transaction record number is too large, it may be impossible to get all of them. We can
     /// pass a max_result_number to only get part of them and clean zombie records repeatedlly
     std::vector<TransactionRecord> getTransactionRecordsForGC(size_t max_result_number);
+    TransactionRecords getTransactionRecords(const ServerDataPartsVector & parts, const DeleteBitmapMetaPtrVector & bitmaps);
 
     /// Clear intents written by zombie transaction.
     void clearZombieIntent(const TxnTimestamp & txnID);
@@ -822,7 +850,7 @@ private:
     DataModelPartWithNameVector getDataPartsMetaFromMetastore(
         const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash = false);
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false);
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false, bool execute_filter = true);
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
         const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts);
 
