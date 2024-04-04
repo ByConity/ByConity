@@ -243,6 +243,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_DATABASE;
     extern const int UNKNOWN_CATALOG;
     extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_SETTING;
     extern const int TABLE_ALREADY_EXISTS;
     extern const int THERE_IS_NO_SESSION;
     extern const int THERE_IS_NO_QUERY;
@@ -321,6 +322,7 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
+    AdditionalServices additional_services;
 
     VETosConnectionParams vetos_connection_params;
     OSSConnectionParams oss_connection_params;
@@ -453,6 +455,7 @@ struct ContextSharedPart
     std::map<String, UInt16> server_ports;
 
     bool shutdown_called = false;
+    bool restrict_tenanted_users_to_whitelist_settings = false;
 
     Stopwatch uptime_watch;
 
@@ -1421,6 +1424,24 @@ std::unique_ptr<GSSAcceptorContext> Context::makeGSSAcceptorContext() const
     return std::make_unique<GSSAcceptorContext>(shared->access_control_manager.getExternalAuthenticators().getKerberosParams());
 }
 
+bool Context::mustEnableAdditionalService(AdditionalService::Value svc, bool need_throw) const
+{
+    if (need_throw)
+    {
+         shared->additional_services.throwIfDisabled(svc);
+         return true;
+    }
+    else
+    {
+         return shared->additional_services.enabled(svc);
+    }
+}
+
+void Context::updateAdditionalServices(const Poco::Util::AbstractConfiguration & config)
+{
+    shared->additional_services.parseAdditionalServicesFromConfig(config);
+}
+
 void Context::setUsersConfig(const ConfigurationPtr & config)
 {
     auto lock = getLock();
@@ -2142,6 +2163,19 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
             }
         }
     };
+
+    // NOTE: tenanted users connect to server using tenant id given in connection info.
+    // allow only whitelisted settings for tenanted users
+    if (this->getIsRestrictSettingsToWhitelist() && !this->getTenantId().empty())
+    {
+        for (const auto & change : changes)
+        {
+            if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
+                throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name + 
+                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    " in configuration");
+        }
+    }
 
     find_dialect_type_if_any(changes);
 
@@ -4293,6 +4327,23 @@ void Context::setApplicationType(ApplicationType type)
 {
     /// Lock isn't required, you should set it at start
     shared->application_type = type;
+}
+
+bool Context::getIsRestrictSettingsToWhitelist() const
+{
+    return shared->restrict_tenanted_users_to_whitelist_settings;
+}
+
+void Context::setIsRestrictSettingsToWhitelist(bool is_restrict)
+{
+    /// Lock isn't required, you should set it at start
+    shared->restrict_tenanted_users_to_whitelist_settings = is_restrict;
+}
+
+void Context::addRestrictSettingsToWhitelist(const std::vector<String>& setting_names) const
+{
+    for (auto & name : setting_names)
+        SettingsChanges::WHITELIST_SETTINGS.emplace(name);
 }
 
 void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)

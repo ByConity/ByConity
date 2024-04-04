@@ -2368,8 +2368,17 @@ namespace Catalog
         }
         meta_proxy->prepareAddDeleteBitmaps(
             name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), delete_bitmaps, batch_writes, expected_bitmaps);
-        meta_proxy->prepareAddStagedParts(
-            name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), staged_parts, batch_writes, expected_staged_parts);
+        if (!staged_parts.empty())
+        {
+            Strings current_partitions = getPartitionIDs(storage, nullptr);
+            meta_proxy->prepareAddStagedParts(
+                name_space,
+                UUIDHelpers::UUIDToString(storage->getStorageID().uuid),
+                current_partitions,
+                staged_parts,
+                batch_writes,
+                expected_staged_parts);
+        }
 
         if (batch_writes.isEmpty())
         {

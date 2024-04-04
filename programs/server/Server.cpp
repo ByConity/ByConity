@@ -575,6 +575,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setServerType(config().getString("cnch_type", "standalone"));
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->setIsRestrictSettingsToWhitelist(config().getBool("restrict_tenanted_users_to_whitelist_settings", false));
+    if (global_context->getIsRestrictSettingsToWhitelist())
+    {
+        auto setting_names = getMultipleValuesFromConfig(config(), "tenant_whitelist_settings", "name");
+        global_context->addRestrictSettingsToWhitelist(setting_names);
+    }
 
     global_context->initCnchConfig(config());
     global_context->initRootConfig(config());
@@ -1041,6 +1047,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #if USE_JEMALLOC
             JeprofControl::instance().loadFromConfig(*config);
 #endif
+            global_context->updateAdditionalServices(*config);
             if (global_context->getServerType() == ServerType::cnch_server)
             {
                 global_context->updateQueueManagerConfig();

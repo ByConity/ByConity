@@ -141,7 +141,7 @@ checkMaterializedViewPartitionConsistency(StorageMaterializedView * mview, Conte
 {
     PartitionDiffPtr partition_diff = std::make_shared<PartitionDiff>();
     VersionPartContainerPtrs latest_versioned_partitions;
-    mview->validateAndSyncBaseTablePartitions(partition_diff, latest_versioned_partitions, context);
+    mview->validateAndSyncBaseTablePartitions(partition_diff, latest_versioned_partitions, context, true);
 
     if (!partition_diff->paritition_based_refresh)
         return {};
