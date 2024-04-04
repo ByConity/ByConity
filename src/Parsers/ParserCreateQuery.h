@@ -343,15 +343,6 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
 
     if (type)
     {
-        /// under mysql dialect, every column is altered to nullable by default
-        /// if it is not defined as Nullable(T)
-        // if (dt.parse_mysql_ddl && !null_modifier.has_value())
-        // {
-        //     const auto * ast_type = type->as<ASTDataType>();
-        //     if (!ast_type || !ast_type->getNullable())
-        //         null_modifier.emplace(true);
-        // }
-
         column_declaration->type = type;
         column_declaration->children.push_back(std::move(type));
     }
