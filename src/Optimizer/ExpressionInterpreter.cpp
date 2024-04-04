@@ -19,6 +19,7 @@
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnSet.h>
+#include <Columns/ColumnTuple.h>
 #include <Columns/IColumn.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
@@ -458,11 +459,16 @@ bool InterpretIMResult::isNull() const
     return false;
 }
 
-bool InterpretIMResult::isSuitablyRepresentedByValue() const
+static ALWAYS_INLINE bool checkAndUpdateByteSize(size_t & max_byte_size, size_t byte_size)
 {
-    assert(isValue());
+    bool res = max_byte_size >= byte_size;
+    max_byte_size -= byte_size;
+    return res;
+}
 
-    ColumnPtr column = value;
+static bool isColumnSuitablyRepresentedByValue(ColumnPtr column, size_t offset, size_t & max_byte_size)
+{
+    assert(offset < column->size());
 
     if (const auto * column_const = checkAndGetColumn<ColumnConst>(*column))
         column = column_const->getDataColumnPtr();
@@ -471,19 +477,51 @@ bool InterpretIMResult::isSuitablyRepresentedByValue() const
     if (const auto * column_null = checkAndGetColumn<ColumnNullable>(*column))
         column = column_null->getNestedColumnPtr();
 
-    if (checkColumn<ColumnAggregateFunction>(*column))
-        return false;
-
-    if (checkColumn<ColumnSet>(*column))
-        return false;
-
     if (const auto * column_array = checkAndGetColumn<ColumnArray>(*column))
-        return column_array->sizeAt(0) <= 100;
+    {
+        auto data_ptr = column_array->getDataPtr();
+        size_t elem_offset = column_array->offsetAt(offset);
+        size_t end_offset = elem_offset + column_array->sizeAt(offset);
+
+        for (; elem_offset < end_offset; ++elem_offset)
+            if (!isColumnSuitablyRepresentedByValue(data_ptr, elem_offset, max_byte_size))
+                return false;
+
+        return true;
+    }
 
     if (const auto * column_map = checkAndGetColumn<ColumnMap>(*column))
-        return column_map->byteSizeAt(0) <= 1000;
+    {
+        auto data_ptr = column_map->getNestedColumn().getDataPtr();
+        size_t elem_offset = column_map->offsetAt(offset);
+        size_t end_offset = elem_offset + column_map->sizeAt(offset);
 
-    return true;
+        for (; elem_offset < end_offset; ++elem_offset)
+            if (!isColumnSuitablyRepresentedByValue(data_ptr, elem_offset, max_byte_size))
+                return false;
+
+        return true;
+    }
+
+    if (const auto * column_tuple = checkAndGetColumn<ColumnTuple>(*column))
+    {
+        for (size_t elem_id = 0; elem_id < column_tuple->tupleSize(); ++elem_id)
+            if (!isColumnSuitablyRepresentedByValue(column_tuple->getColumnPtr(elem_id), offset, max_byte_size))
+                return false;
+
+        return true;
+    }
+
+    // primitive types
+    return column->getDataType() < TypeIndex::Array && checkAndUpdateByteSize(max_byte_size, column->byteSizeAt(offset));
+}
+
+bool InterpretIMResult::isSuitablyRepresentedByValue() const
+{
+    assert(isValue());
+
+    size_t max_byte_size = 100;
+    return isColumnSuitablyRepresentedByValue(value, 0, max_byte_size);
 }
 
 ASTPtr InterpretIMResult::convertToAST(const ContextPtr & ctx) const
