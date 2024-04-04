@@ -1222,7 +1222,9 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         throw Exception("Temporary tables cannot be inside a database. You should not specify a database for a temporary table.",
             ErrorCodes::BAD_DATABASE_FOR_TEMPORARY_TABLE);
 
-    if (create.storage && create.storage->unique_key && create.columns_list->projections)
+    /// Need to judge create.columns_list to avoid possible core caused by:
+    ///     CREATE TABLE u10104_t2 Engine=CnchMergeTree UNIQUE KEY(a) AS SELECT * FROM u10104_t1;
+    if (create.storage && create.storage->unique_key && create.columns_list && create.columns_list->projections)
         throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 
     String current_database = getContext()->getCurrentDatabase();
