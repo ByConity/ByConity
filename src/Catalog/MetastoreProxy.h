@@ -963,8 +963,13 @@ public:
     void prepareAddDataParts(const String & name_space, const String & table_uuid, const Strings & current_partitions,
                              const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, BatchCommitRequest & batch_write,
                              const std::vector<String> & expected_parts, bool update_sync_list = false);
-    void prepareAddStagedParts(const String & name_space, const String & table_uuid, const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
-                               BatchCommitRequest & batch_write, const std::vector<String> & expected_staged_parts);
+    void prepareAddStagedParts(
+        const String & name_space,
+        const String & table_uuid,
+        const Strings & current_partitions,
+        const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
+        BatchCommitRequest & batch_write,
+        const std::vector<String> & expected_staged_parts);
 
     /// mvcc version drop part
     void dropDataPart(const String & name_space, const String & table_uuid, const String & part_name, const String & part_info);

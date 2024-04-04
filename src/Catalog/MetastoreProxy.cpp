@@ -944,7 +944,9 @@ void MetastoreProxy::prepareAddDataParts(const String & name_space, const String
 }
 
 void MetastoreProxy::prepareAddStagedParts(
-    const String & name_space, const String & table_uuid,
+    const String & name_space,
+    const String & table_uuid,
+    const Strings & current_partitions,
     const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
     BatchCommitRequest & batch_write,
     const std::vector<String> & expected_staged_parts)
@@ -952,6 +954,8 @@ void MetastoreProxy::prepareAddStagedParts(
     if (parts.empty())
         return;
 
+    std::unordered_set<String> existing_partitions{current_partitions.begin(), current_partitions.end()};
+    std::unordered_map<String, String> partition_map;
     size_t expected_staged_part_size = expected_staged_parts.size();
     if (expected_staged_part_size != static_cast<size_t>(parts.size()))
         throw Exception("Staged part size wants to write does not match the expected staged part size.", ErrorCodes::LOGICAL_ERROR);
@@ -961,6 +965,22 @@ void MetastoreProxy::prepareAddStagedParts(
         auto info_ptr = createPartInfoFromModel(it->part_info());
         String part_meta = it->SerializeAsString();
         batch_write.AddPut(SinglePutRequest(stagedDataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_staged_parts[it - parts.begin()]));
+
+        if (!existing_partitions.count(info_ptr->partition_id) && !partition_map.count(info_ptr->partition_id))
+            partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
+    }
+
+    Protos::PartitionMeta partition_model;
+    for (auto & it : partition_map)
+    {
+        std::stringstream ss;
+        /// To keep the partitions have the same order as data parts in bytekv, we add an extra "_" in the key of partition meta
+        ss << tablePartitionInfoPrefix(name_space, table_uuid) << it.first << '_';
+
+        partition_model.set_id(it.first);
+        partition_model.set_partition_minmax(it.second);
+
+        batch_write.AddPut(SinglePutRequest(ss.str(), partition_model.SerializeAsString()));
     }
 }
 
