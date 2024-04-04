@@ -31,7 +31,7 @@ else
     SAMPLE=''
 fi
 
-./clickhouse-test --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_external_table --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/external_table_output/test_result.txt
+./clickhouse-test --use-skip-list --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_external_table --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/external_table_output/test_result.txt
 
 ./process_functional_tests_result.py --in-results-dir $WORK_DIR/external_table_output/ --out-results-file $TEST_OUTPUT/external_table_test_results.txt --out-status-file $TEST_OUTPUT/check_status.tsv || echo -e "failure\tCannot parse results" > $TEST_OUTPUT/check_status.tsv
 mv $WORK_DIR/external_table_output/test_result.txt $TEST_OUTPUT/external_table.log
@@ -49,7 +49,7 @@ else
     SAMPLE=''
 fi
 
-./clickhouse-test --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/wo_optimizer/test_result.txt
+./clickhouse-test --use-skip-list --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/wo_optimizer/test_result.txt
 
 ./process_functional_tests_result.py --in-results-dir $WORK_DIR/wo_optimizer/ --out-results-file $TEST_OUTPUT/wo_optimizer_test_results.txt --out-status-file $TEST_OUTPUT/check_status.tsv || echo -e "failure\tCannot parse results" > $TEST_OUTPUT/check_status.tsv
 
@@ -67,7 +67,7 @@ else
     SAMPLE=''
 fi
 
-./clickhouse-test --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless_no_tenant --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/no_tenant_wo_optimizer/test_result.txt
+./clickhouse-test --use-skip-list --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless_no_tenant --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/no_tenant_wo_optimizer/test_result.txt
 
 ./process_functional_tests_result.py --in-results-dir $WORK_DIR/no_tenant_wo_optimizer/ --out-results-file $TEST_OUTPUT/no_tenant_wo_optimizer_test_results.txt --out-status-file $TEST_OUTPUT/check_status.tsv || echo -e "failure\tCannot parse results" > $TEST_OUTPUT/check_status.tsv
 
@@ -85,7 +85,7 @@ else
     SAMPLE=''
 fi
 
-./clickhouse-test --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/w_optimizer/test_result.txt
+./clickhouse-test --use-skip-list --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/w_optimizer/test_result.txt
 
 ./process_functional_tests_result.py --in-results-dir $WORK_DIR/w_optimizer/ --out-results-file $TEST_OUTPUT/w_optimizer.txt --out-status-file $TEST_OUTPUT/check_status.tsv || echo -e "failure\tCannot parse results" > $TEST_OUTPUT/check_status.tsv
 
@@ -103,7 +103,7 @@ else
     SAMPLE=''
 fi
 
-./clickhouse-test --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless --client-option ${EXTRA_OPTIONS} --skip 00956_join_use_nulls_with_array_column --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/w_optimizer_bsp/test_result.txt
+./clickhouse-test --use-skip-list --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless --client-option ${EXTRA_OPTIONS} --skip 00956_join_use_nulls_with_array_column --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/w_optimizer_bsp/test_result.txt
 
 ./process_functional_tests_result.py --in-results-dir $WORK_DIR/w_optimizer_bsp/ --out-results-file $TEST_OUTPUT/w_optimizer_bsp_test_results.txt --out-status-file $TEST_OUTPUT/check_status.tsv || echo -e "failure\tCannot parse results" > $TEST_OUTPUT/check_status.tsv
 
@@ -121,7 +121,7 @@ else
     SAMPLE=''
 fi
 
-./clickhouse-test --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless_no_tenant --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/no_tenant_w_optimizer/test_result.txt
+./clickhouse-test --use-skip-list --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless_no_tenant --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/no_tenant_w_optimizer/test_result.txt
 
 ./process_functional_tests_result.py --in-results-dir $WORK_DIR/no_tenant_w_optimizer/ --out-results-file $TEST_OUTPUT/no_tenant_w_optimizer_test_results.txt --out-status-file $TEST_OUTPUT/check_status.tsv || echo -e "failure\tCannot parse results" > $TEST_OUTPUT/check_status.tsv
 
@@ -139,7 +139,7 @@ else
     SAMPLE=''
 fi
 
-./clickhouse-test --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless_no_tenant --client-option ${EXTRA_OPTIONS} --skip 00956_join_use_nulls_with_array_column --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/no_tenant_w_optimizer_bsp/test_result.txt
+./clickhouse-test --use-skip-list --stop --hung-check --jobs 4 --order asc -q ./queries --run cnch_stateless_no_tenant --client-option ${EXTRA_OPTIONS} --skip 00956_join_use_nulls_with_array_column --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/no_tenant_w_optimizer_bsp/test_result.txt
 
 ./process_functional_tests_result.py --in-results-dir $WORK_DIR/no_tenant_w_optimizer_bsp/ --out-results-file $TEST_OUTPUT/no_tenant_w_optimizer_bsp_test_results.txt --out-status-file $TEST_OUTPUT/check_status.tsv || echo -e "failure\tCannot parse results" > $TEST_OUTPUT/check_status.tsv
 
@@ -157,7 +157,7 @@ else
     SAMPLE=''
 fi
 
-./clickhouse-test --stop --hung-check --jobs 4 --order asc -q ./queries --run clickhouse_sql --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/ck_sql/test_result.txt
+./clickhouse-test --use-skip-list --stop --hung-check --jobs 4 --order asc -q ./queries --run clickhouse_sql --client-option ${EXTRA_OPTIONS} --print-time $SAMPLE 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a $WORK_DIR/ck_sql/test_result.txt
 
 ./process_functional_tests_result.py --in-results-dir $WORK_DIR/ck_sql/ --out-results-file $TEST_OUTPUT/ck_sql_test_results.txt --out-status-file $TEST_OUTPUT/check_status.tsv || echo -e "failure\tCannot parse results" > $TEST_OUTPUT/check_status.tsv
 
