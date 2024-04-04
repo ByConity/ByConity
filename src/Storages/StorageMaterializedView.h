@@ -132,7 +132,7 @@ public:
     AsyncRefreshParamPtrs getAsyncRefreshParams(ContextMutablePtr local_context, bool combine_params);
     void validateMv(ContextMutablePtr local_context);
     void validateAndSyncBaseTablePartitions(
-        PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context);
+        PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context, bool for_rewrite = false);
     String versionPartitionToString(const VersionPart & part);
     RefreshSchedule & getRefreshSchedule() { return refresh_schedule; }
     PartitionTransformerPtr getPartitionTransformer() const { return partition_transformer; }
@@ -157,7 +157,7 @@ private:
     void executeByInsertOverwrite(AsyncRefreshParamPtr param, ContextMutablePtr local_context);
 
     void syncBaseTablePartitions(
-        PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context);
+        PartitionDiffPtr & partition_diff, VersionPartContainerPtrs & latest_versioned_partitions, ContextMutablePtr local_context, bool for_rewrite = false);
 
     void insertRefreshTaskLog(AsyncRefreshParamPtr param, RefreshViewTaskStatus status,
           bool is_insert_overwrite, std::chrono::time_point<std::chrono::system_clock> start_time, ContextMutablePtr local_context);
