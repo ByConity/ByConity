@@ -68,7 +68,7 @@ Block InterpreterDescribeQuery::getSampleBlock(ContextPtr context_, bool include
     col.name = "type";
     block.insert(col);
 
-    if (context_->getSettingsRef().dialect_type == DialectType::ANSI)
+    if (context_->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
     {
         col.name = "nullable";
         block.insert(col);
@@ -148,7 +148,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
         res_columns[i++]->insert(column.name);
         if (extend_object_types)
             res_columns[i++]->insert(storage_snapshot->getConcreteType(column.name)->getName());
-        else if (dialect_type == DialectType::ANSI)
+        else if (dialect_type != DialectType::CLICKHOUSE)
         {
             /// Under ANSI mode, data type will be parsed by ANSI type parser, which converts Nullable to
             /// null modifiers. And the nullability of root type will be demonstrated in the separate
