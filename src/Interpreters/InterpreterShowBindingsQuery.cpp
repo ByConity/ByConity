@@ -2,7 +2,7 @@
 #include <Catalog/Catalog.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/InterpreterExplainQuery.h>
-#include <Interpreters/InterpreterShowBindings.h>
+#include <Interpreters/InterpreterShowBindingsQuery.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Parsers/ASTSQLBinding.h>
 #include <Interpreters/SQLBinding/SQLBindingUtils.h>
@@ -11,7 +11,7 @@
 
 namespace DB
 {
-BlockIO InterpreterShowBindings::execute()
+BlockIO InterpreterShowBindingsQuery::execute()
 {
     const auto * show = query_ptr->as<const ASTShowBindings>();
     if (!show)

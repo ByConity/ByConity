@@ -1435,7 +1435,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_early_stop_metric, 0, "Whether output metrics of early stop", 0) \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
-    M(VWQueueMode, vw_queue_mode, VWQueueMode::Force, "Whether enqueue virtual warehouse queue: skip/match/force", 0) \
+    M(VWQueueMode, vw_queue_mode, VWQueueMode::Skip, "Whether enqueue virtual warehouse queue: Skip/Match/Force", 0) \
     M(QueueName, queue_name, QueueName::Auto, "the name of vw queue: highest/high/normal/low/lowest/auto", 0) \
     M(UInt64, vw_query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \

@@ -19,28 +19,38 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
     if (!context->hasSessionContext() || !BindingCacheManager::getSessionBindingCacheManager(context))
         return nullptr;
 
+    auto session_binding_cache_manager = BindingCacheManager::getSessionBindingCacheManager(context);
+    auto global_binding_cache_manager = context->getGlobalBindingCacheManager();
+
+    bool has_re_binding = (!session_binding_cache_manager->isReBindingEmpty()) || (global_binding_cache_manager && !global_binding_cache_manager->isReBindingEmpty());
+    bool has_sql_binding = (!session_binding_cache_manager->isSqlBindingEmpty()) || (global_binding_cache_manager && !global_binding_cache_manager->isSqlBindingEmpty());
+
+    if (!has_re_binding && !has_sql_binding)
+        return nullptr;
+
     const char * new_begin = begin;
     const char * new_end = end;
 
     // get query hash
     UUID query_hash = UUIDHelpers::Nil;
-    if (ast)
+    if (ast && has_sql_binding)
         query_hash = getQueryASTHash(ast);
 
-    if (ast && query_hash == UUIDHelpers::Nil)
-        return nullptr;
-
+    String query;
     // normalize query remove meaningless symbols
-    String query = getNormalizedQuery(new_begin, new_end);
+    if (has_re_binding)
+        query = getNormalizedQuery(new_begin, new_end);
 
-    // check session sql binding cache
-    auto session_binding_cache_manager = BindingCacheManager::getSessionBindingCacheManager(context);
-    auto & session_sql_cache = session_binding_cache_manager->getSqlCacheInstance();
-    auto sql_binding_ptr = session_sql_cache.get(query_hash);
-    if (sql_binding_ptr && sql_binding_ptr->target_ast)
+    if (!session_binding_cache_manager->isSqlBindingEmpty() && query_hash != UUIDHelpers::Nil)
     {
-        LOG_INFO(&Poco::Logger::get("SQL Binding"), "Session SQL Binding Hit");
-        return sql_binding_ptr->target_ast->clone();
+        // check session sql binding cache
+        auto & session_sql_cache = session_binding_cache_manager->getSqlCacheInstance();
+        auto sql_binding_ptr = session_sql_cache.get(query_hash);
+        if (sql_binding_ptr && sql_binding_ptr->target_ast)
+        {
+            LOG_INFO(&Poco::Logger::get("SQL Binding"), "Session SQL Binding Hit");
+            return sql_binding_ptr->target_ast->clone();
+        }
     }
 
     std::function<bool(std::list<UUID> &, BindingCacheManager::CacheType &)> is_match_re_bindings
@@ -52,21 +62,23 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
                       && isMatchBinding(query.data(), query.data() + query.size(), *session_re_binding_ptr))
                   {
                       InterpreterSetQuery(session_re_binding_ptr->settings->clone(), context).executeForCurrentContext();
-                      LOG_INFO(&Poco::Logger::get("SQL Binding"), "Session Regular Expression Binding Hit");
+                      LOG_INFO(&Poco::Logger::get("SQL Binding"), "Regular Expression Binding Hit : {}", session_re_binding_ptr->pattern);
                       return true;
                   }
               }
               return false;
           };
 
-    // check session re binding cache
-    auto session_re_keys = session_binding_cache_manager->getReKeys();
-    if (is_match_re_bindings(session_re_keys, session_binding_cache_manager->getReCacheInstance()))
-        return nullptr;
-    if (!context->getGlobalBindingCacheManager())
-        return nullptr;
+    if (!session_binding_cache_manager->isReBindingEmpty())
+    {
+        // check session re binding cache
+        auto session_re_keys = session_binding_cache_manager->getReKeys();
+        if (is_match_re_bindings(session_re_keys, session_binding_cache_manager->getReCacheInstance()))
+            return nullptr;
+        if (!context->getGlobalBindingCacheManager())
+            return nullptr;
+    }
 
-    auto global_binding_cache_manager = context->getGlobalBindingCacheManager();
     // if (current time_stamp - last update time_stamp) > global_bindings_update_time update global bindings cache from catalog
     auto time_stamp = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     if ((time_stamp - global_binding_cache_manager->getTimeStamp()) > static_cast<long>(context->getSettingsRef().global_bindings_update_time))
@@ -81,18 +93,24 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
         }
     }
 
-    // check global sql bindings cache
-    auto & global_sql_cache = global_binding_cache_manager->getSqlCacheInstance();
-    auto global_sql_binding_ptr = global_sql_cache.get(query_hash);
-    if (global_sql_binding_ptr && global_sql_binding_ptr->target_ast)
+    if (!global_binding_cache_manager->isSqlBindingEmpty() && query_hash != UUIDHelpers::Nil)
     {
-        LOG_INFO(&Poco::Logger::get("SQL Binding"), "Global SQL Binding Hit");
-        return global_sql_binding_ptr->target_ast->clone();
+        // check global sql bindings cache
+        auto & global_sql_cache = global_binding_cache_manager->getSqlCacheInstance();
+        auto global_sql_binding_ptr = global_sql_cache.get(query_hash);
+        if (global_sql_binding_ptr && global_sql_binding_ptr->target_ast)
+        {
+            LOG_INFO(&Poco::Logger::get("SQL Binding"), "Global SQL Binding Hit");
+            return global_sql_binding_ptr->target_ast->clone();
+        }
     }
 
-    // check global re bindings cache
-    auto global_re_keys = global_binding_cache_manager->getReKeys();
-    is_match_re_bindings(global_re_keys, global_binding_cache_manager->getReCacheInstance());
+    if (!global_binding_cache_manager->isReBindingEmpty())
+    {
+        // check global re bindings cache
+        auto global_re_keys = global_binding_cache_manager->getReKeys();
+        is_match_re_bindings(global_re_keys, global_binding_cache_manager->getReCacheInstance());
+    }
     return nullptr;
 }
 

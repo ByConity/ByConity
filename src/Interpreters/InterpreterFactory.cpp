@@ -81,7 +81,7 @@
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterAlterWarehouseQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
-#include <Interpreters/InterpreterCreateBinding.h>
+#include <Interpreters/InterpreterCreateBindingQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterCreateQuotaQuery.h>
 #include <Interpreters/InterpreterCreateRoleQuery.h>
@@ -95,7 +95,7 @@
 #include <Interpreters/InterpreterDeleteQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropAccessEntityQuery.h>
-#include <Interpreters/InterpreterDropBinding.h>
+#include <Interpreters/InterpreterDropBindingQuery.h>
 #include <Interpreters/InterpreterDropPreparedStatementQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterDropStatsQuery.h>
@@ -121,7 +121,7 @@
 #include <Interpreters/InterpreterSetRoleQuery.h>
 #include <Interpreters/InterpreterShowAccessEntitiesQuery.h>
 #include <Interpreters/InterpreterShowAccessQuery.h>
-#include <Interpreters/InterpreterShowBindings.h>
+#include <Interpreters/InterpreterShowBindingsQuery.h>
 #include <Interpreters/InterpreterShowColumnsQuery.h>
 #include <Interpreters/InterpreterShowCreateAccessEntityQuery.h>
 #include <Interpreters/InterpreterShowCreateQuery.h>
@@ -506,15 +506,15 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     }
     else if (query->as<ASTCreateBinding>())
     {
-        return std::make_unique<InterpreterCreateBinding>(query, context);
+        return std::make_unique<InterpreterCreateBindingQuery>(query, context);
     }
     else if (query->as<ASTShowBindings>())
     {
-        return std::make_unique<InterpreterShowBindings>(query, context);
+        return std::make_unique<InterpreterShowBindingsQuery>(query, context);
     }
     else if (query->as<ASTDropBinding>())
     {
-        return std::make_unique<InterpreterDropBinding>(query, context);
+        return std::make_unique<InterpreterDropBindingQuery>(query, context);
     }
     else if (query->as<ASTCreatePreparedStatementQuery>())
     {
