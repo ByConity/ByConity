@@ -105,7 +105,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries/
           mkdir -p test_output
-          ./clickhouse-test --s3 --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test --s3 --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_s3_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/wo_optimizer_s3_test_result.txt
           cd ..
@@ -151,7 +151,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_external_table queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/external_table_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/external_table_test_result.txt
           cd ..
@@ -168,7 +168,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/wo_optimizer_test_result.txt
           cd ..
@@ -185,7 +185,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_no_tenant_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/wo_optimizer_no_tenant_test_result.txt
           cd ..
@@ -202,7 +202,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/w_optimizer_test_result.txt
           cd ..
@@ -219,7 +219,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_bsp_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/w_optimizer_bsp_test_result.txt
           cd ..
@@ -237,7 +237,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/w_optimizer_test_result.txt
           cd ..
@@ -257,7 +257,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_bsp_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/no_tenant_w_optimizer_bsp_test_result.txt
           cd ..
@@ -275,7 +275,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           echo "Running test without optimizer"
           mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 1 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 1 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/clickhouse_sql_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/ChSQL_tenant_wo_optimizer_test_result.txt
           cd ..
