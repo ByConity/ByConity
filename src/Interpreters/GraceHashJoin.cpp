@@ -290,6 +290,7 @@ private:
     size_t read_result_block_size;
 
     Poco::Logger * log;
+
 };
 
 namespace
@@ -469,7 +470,16 @@ void GraceHashJoin::addBuckets(const size_t bucket_count)
     for (size_t i = 0; i < bucket_count; ++i)
         try
         {
-            addBucket(tmp_buckets);
+            std::shared_ptr<TemporaryFileStreams> left_files = std::make_shared<TemporaryFileStreams>();
+            for (int j = 0; j < left_side_parallel; j++)
+            {
+                std::shared_ptr<TemporaryFileStream> left_file = tmp_data->createStreamPtrToRegularFile(left_sample_block);
+                left_files->push_back(left_file);
+            }
+            std::shared_ptr<TemporaryFileStream> right_file = tmp_data->createStreamPtrToRegularFile(prepareRightBlock(right_sample_block));
+            auto read_result_block_size = context->getSettingsRef().grace_hash_join_read_result_block_size;
+            BucketPtr new_bucket = std::make_shared<FileBucket>(current_size + i, left_files, right_file, log, read_result_block_size);
+            tmp_buckets.emplace_back(std::move(new_bucket));
         }
         catch (...)
         {
@@ -484,20 +494,6 @@ void GraceHashJoin::addBuckets(const size_t bucket_count)
     buckets.reserve(buckets.size() + bucket_count);
     for (auto & bucket : tmp_buckets)
         buckets.emplace_back(std::move(bucket));
-}
-
-void GraceHashJoin::addBucket(Buckets & destination)
-{
-    std::shared_ptr<TemporaryFileStreams> left_files = std::make_shared<TemporaryFileStreams>();
-    for (int i = 0; i < left_side_parallel; i++)
-    {
-        std::shared_ptr<TemporaryFileStream> left_file = tmp_data->createStreamPtrToRegularFile(left_sample_block);
-        left_files->push_back(left_file);
-    }
-    std::shared_ptr<TemporaryFileStream> right_file = tmp_data->createStreamPtrToRegularFile(prepareRightBlock(right_sample_block));
-    auto read_result_block_size = context->getSettingsRef().grace_hash_join_read_result_block_size;
-    BucketPtr new_bucket = std::make_shared<FileBucket>(destination.size(), left_files, right_file, log, read_result_block_size);
-    destination.emplace_back(std::move(new_bucket));
 }
 
 // void GraceHashJoin::checkTypesOfKeys(const Block & block) const

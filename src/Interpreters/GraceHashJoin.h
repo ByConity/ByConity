@@ -108,9 +108,6 @@ private:
     /// Throws if a bucket creation fails
     void addBuckets(size_t bucket_count);
 
-    /// Create new bucket at the end of @destination.
-    void addBucket(Buckets & destination);
-
     /// Increase number of buckets to match desired_size.
     /// Called when HashJoin in-memory table for one bucket exceeds the limits.
     ///
