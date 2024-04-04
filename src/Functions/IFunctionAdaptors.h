@@ -26,6 +26,8 @@ protected:
         return function->executeImplDryRun(arguments, result_type, input_rows_count);
     }
 
+    bool isPreviledgedFunction() const final { return function->isPreviledgedFunction(); }
+
     bool useDefaultImplementationForNulls() const final { return function->useDefaultImplementationForNulls(); }
     bool useDefaultImplementationForNothing() const final
     {

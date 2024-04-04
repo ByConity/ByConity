@@ -20,6 +20,7 @@ private:
     StoragePtr executeImpl(const ASTPtr & ast_function, ContextPtr context, const std::string & table_name, ColumnsDescription cached_columns) const override;
     const char * getStorageTypeName() const override { return "Merge"; }
 
+    bool isPreviledgedFunction() const override { return true; }
     using TableSet = std::set<String>;
     using DbToTableSetMap = std::map<String, TableSet>;
     const DbToTableSetMap & getSourceDatabasesAndTables(ContextPtr context) const;

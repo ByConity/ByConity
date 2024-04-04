@@ -52,10 +52,10 @@ public:
     static constexpr auto name = "hasColumnInTable";
     static FunctionPtr create(ContextPtr context_)
     {
-        return std::make_shared<FunctionHasColumnInTable>(context_->getGlobalContext());
+        return std::make_shared<FunctionHasColumnInTable>(context_);
     }
 
-    explicit FunctionHasColumnInTable(ContextPtr global_context_) : WithContext(global_context_)
+    explicit FunctionHasColumnInTable(ContextPtr context_) : WithContext(context_)
     {
     }
 
@@ -72,6 +72,8 @@ public:
     {
         return name;
     }
+
+    bool isPreviledgedFunction() const override { return getContext()->shouldBlockPrivilegedOperations(); }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
 

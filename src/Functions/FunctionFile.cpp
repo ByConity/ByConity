@@ -34,6 +34,7 @@ public:
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionFile>(context_); }
     explicit FunctionFile(ContextPtr context_) : WithContext(context_) {}
 
+    bool isPreviledgedFunction() const override { return getContext()->shouldBlockPrivilegedOperations(); }
     bool isVariadic() const override { return true; }
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 0; }
