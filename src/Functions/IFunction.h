@@ -79,6 +79,8 @@ protected:
         return executeImpl(arguments, result_type, input_rows_count);
     }
 
+    virtual bool isPreviledgedFunction() const { return false; }
+
     /** Default implementation in presence of Nullable arguments or NULL constants as arguments is the following:
       *  if some of arguments are NULL constants then return NULL constant,
       *  if some of arguments are Nullable, then execute function as usual for columns,
@@ -429,6 +431,7 @@ public:
         return executeImpl(arguments, result_type, input_rows_count);
     }
 
+    virtual bool isPreviledgedFunction() const { return false; }
     /** Default implementation in presence of Nullable arguments or NULL constants as arguments is the following:
       *  if some of arguments are NULL constants then return NULL constant,
       *  if some of arguments are Nullable, then execute function as usual for columns,

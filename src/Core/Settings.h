@@ -1802,15 +1802,17 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, grf_ndv_enlarge_size, 8, "The times to enlarge the grf ndv, optimal value is the number workers ", 0) \
     \
     /** ip2geo settings */ \
-    M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0) \
-    M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0) \
-    M(Bool, ip2geo_update_from_hdfs, 0, "Whether to update db file from hdfs", 0) \
-    M(String, ipv4_file, "ipv4_pro", "IPDB file for ipv4", 0) \
-    M(String, ipv6_file, "ipv6_pro", "IPDB file for ipv6", 0) \
-    M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0) \
-    M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0) \
-    M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0) \
-\
+    M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0)\
+    M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0)\
+    M(Bool, ip2geo_update_from_hdfs, 0, "Whether to update db file from hdfs", 0)\
+    M(String, ipv4_file, "ipv4_pro", "IPDB file for ipv4", 0)\
+    M(String, ipv6_file, "ipv6_pro", "IPDB file for ipv6", 0)\
+    M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0)\
+    M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0)\
+    M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0)\
+    \
+    /** gateway simplication settings*/ \
+    M(Bool, block_privileged_operations, 0, "Whether to disable tenant to access specific functions or not", 0)\
     /** Sample setttings */ \
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \

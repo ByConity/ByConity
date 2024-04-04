@@ -29,6 +29,7 @@ public:
     std::string getName() const override {return name;}
     ColumnsDescription getActualTableStructure(ContextPtr context) const override;
     bool needStructureConversion() const override { return false; }
+    bool isPreviledgedFunction() const override { return true; }
 
 private:
     StoragePtr executeImpl(const ASTPtr & ast_function, ContextPtr context, const std::string & table_name, ColumnsDescription cached_columns) const override;

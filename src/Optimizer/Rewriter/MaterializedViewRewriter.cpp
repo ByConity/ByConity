@@ -673,7 +673,7 @@ protected:
             //         makeASTIdentifier(missing_table_column.first));
 
             // 5-3. check select columns (contains aggregates)
-            NameSet required_columns_set;
+            NameOrderedSet required_columns_set;
             Assignments assignments;
             NameToType name_to_type;
             bool enforce_agg_node = false;
