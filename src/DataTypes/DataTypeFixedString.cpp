@@ -95,6 +95,7 @@ void registerDataTypeFixedString(DataTypeFactory & factory)
 
     /// Compatibility alias.
     factory.registerAlias("BINARY", "FixedString", DataTypeFactory::CaseInsensitive);
+    factory.registerAlias("BIT", "FixedString", DataTypeFactory::CaseInsensitive);
 }
 
 Field DataTypeFixedString::stringToVisitorField(const String & ins) const

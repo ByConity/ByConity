@@ -224,7 +224,12 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, NameS
 
             /// flatten
             if (startsWith(declare_index->index_type, "KEY_") || startsWith(declare_index->index_type, "INDEX_"))
-                throw Exception("MySQL index not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+            {
+                if (context->getSettingsRef().exception_on_unsupported_mysql_syntax)
+                {
+                    throw Exception("MySQL index not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+                }
+            }
             else if (startsWith(declare_index->index_type, "UNIQUE_"))
                 unique_keys->arguments->children.insert(unique_keys->arguments->children.end(),
                     index_columns->children.begin(), index_columns->children.end());
@@ -242,8 +247,18 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, NameS
         const auto & column = column_ast->as<ASTColumnDeclaration>();
         if (column->mysql_primary_key)
             primary_keys->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(column->name));
-        if (column->auto_increment)
+        if (column->auto_increment && context->getSettingsRef().exception_on_unsupported_mysql_syntax)
+        {
             throw Exception("auto_increment not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+        }
+        if (column->default_expression)
+        {
+            auto default_id = column->default_expression->as<ASTIdentifier>();
+            if (default_id && Poco::toUpper(default_id->name()) == "CURRENT_TIMESTAMP")
+            {
+                column->default_expression = makeASTFunction("now");
+            }
+        }
     }
 
     const auto & primary_keys_names_and_types = getNames(*primary_keys, context, columns);
@@ -530,16 +545,39 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
     bool has_table_definition = create_defines && create_defines->columns && !create_defines->columns->children.empty();
     bool create_as = !create_query.as_table.empty() || create_query.as_table_function;
     bool has_unique_key = false;
+    const std::unordered_set<String> engine_names
+        = {"XUANWU",
+           "PERFORMANCE_SCHEMA",
+           "INNODB",
+           "BLACKHOLE",
+           "MYISAM",
+           "MRG_MYISAM",
+           "CSV",
+           "ARCHIVE",
+           "NDB",
+           "MERGE",
+           "FEDERATED",
+           "EXAMPLE",
+           "MEMORY"};
 
     // ck definitions, just return raw ast
+    String engine_name = "";
     if (storage->engine)
     {
-        auto upper_name = Poco::toUpper(storage->engine->name);
-        if (!startsWith(upper_name, "XUANWU"))
+        engine_name = Poco::toUpper(storage->engine->name);
+        if (engine_names.find(engine_name) == engine_names.end())
         {
             if (mysql_storage->mysql_partition_by)
                 storage->set(storage->partition_by, mysql_storage->mysql_partition_by->clone());
             return ASTs{query};
+        }
+    }
+    else if (mysql_storage->mysql_engine)
+    {
+        engine_name = Poco::toUpper(mysql_storage->mysql_engine->as<ASTLiteral>()->value.get<String>());
+        if (engine_names.find(engine_name) == engine_names.end())
+        {
+            throw Exception ("Unsupported String Engine Name, please remove quotes", ErrorCodes::MYSQL_SYNTAX_ERROR);
         }
     }
 
@@ -582,7 +620,7 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
         rewritten_query->columns_list->mysql_indices = nullptr;
     }
 
-    if (!storage->engine)
+    if (!storage->engine || engine_names.find(Poco::toUpper(storage->engine->name)) != engine_names.end())
         storage->set(storage->engine, makeASTFunction("CnchMergeTree"));
     if (!storage->order_by)
         storage->set(storage->order_by, makeASTFunction("tuple"));

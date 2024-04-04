@@ -161,9 +161,47 @@ TABLE_PROPERTIES = '{"format":"columnstore"}'
 TTL toDateTime(val1) + 1
 COMMENT 'a';
 
--- DROP TABLE IF EXISTS hive_table;
--- CREATE TABLE hive_table ENGINE = CnchHive('data.olap.catalogservice.service.lf', 'ecom', 'dwd_product_comment_info_df');
--- DROP TABLE IF EXISTS hive_table;
+DROP TABLE IF EXISTS record_60000;
+DROP TABLE IF EXISTS test_bits_60000;
+CREATE TABLE `record_60000` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `uid` bigint(20) DEFAULT NULL,
+  `room_uid` bigint(20) DEFAULT NULL,
+  `event_type` tinyint(4) DEFAULT NULL,
+  `create_time` datetime DEFAULT NULL,
+  `source` tinyint(4) DEFAULT NULL,
+  `idd` varchar(255) CHARACTER SET utf8 DEFAULT NULL,
+  PRIMARY KEY (`id`) USING BTREE,
+  KEY `idx_create_time` (`create_time`),
+  KEY `idx_uid` (`uid`),
+  KEY `idx_room_uid` (`room_uid`,`source`) USING BTREE
+) ENGINE=InnoDB AUTO_INCREMENT=75253185 DEFAULT CHARSET=utf8;
+
+CREATE TABLE test_bits_60000 (a Int32, b bit(1));
+INSERT INTO test_bits_60000 VALUES (0, 0), (1, true), (2, '0'), (3, false);
+SELECT * FROM test_bits_60000 where b = 1;
+
+DROP TABLE IF EXISTS t1_60000;
+DROP TABLE IF EXISTS t2_60000;
+DROP TABLE IF EXISTS t3_60000;
+DROP TABLE IF EXISTS t4_60000;
+DROP TABLE IF EXISTS t5_60000;
+CREATE TABLE t1_60000(a VARCHAR(10)) CHARACTER SET filename;
+CREATE TABLE t2_60000(a VARCHAR(10)) COLLATE filename;
+CREATE TABLE t3_60000(a VARCHAR(10) CHARACTER SET filename);
+CREATE TABLE t4_60000(a VARCHAR(10) CHARACTER SET utf8) CHARACTER SET latin1;
+CREATE TABLE t5_60000 (a char(16)) character set cp1250 collate cp1250_czech_cs;
+INSERT INTO t1_60000 VALUES ('');
+SELECT a, length(a), a='', a=' ', a='  ' FROM t1_60000;
+DROP TABLE IF EXISTS t1_60000;
+DROP TABLE IF EXISTS t2_60000;
+DROP TABLE IF EXISTS t3_60000;
+DROP TABLE IF EXISTS t4_60000;
+DROP TABLE IF EXISTS t5_60000;
+
+DROP TABLE IF EXISTS users_60000;
+CREATE TABLE `users_60000` ( `uid` bigint(20) NOT NULL,`update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+DROP TABLE IF EXISTS users_60000;
 
 SHOW CREATE TABLE test_create_table_unique2;
 SHOW CREATE TABLE mysql_create_ddl7;
@@ -171,3 +209,5 @@ SHOW CREATE TABLE mysql_create_ddl7;
 DROP TABLE IF EXISTS mysql_create_ddl7;
 DROP TABLE IF EXISTS test_create_table_unique1;
 DROP TABLE IF EXISTS test_create_table_unique2;
+DROP TABLE IF EXISTS record_60000;
+DROP TABLE IF EXISTS test_bits_60000;
