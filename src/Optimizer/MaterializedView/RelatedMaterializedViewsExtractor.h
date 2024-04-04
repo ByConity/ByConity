@@ -1,16 +1,18 @@
 #pragma once
 
+#include <unordered_set>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/SimplePlanVisitor.h>
+#include "Interpreters/StorageID.h"
 
 namespace DB
 {
 
 struct RelatedMaterializedViews
 {
-    std::set<StorageID> materialized_views;
-    std::set<StorageID> local_materialized_views;
+    std::vector<StorageID> materialized_views;
+    std::vector<StorageID> local_materialized_views;
     std::map<String, StorageID> local_table_to_distributed_table;
 };
 
@@ -30,6 +32,7 @@ protected:
 private:
     ContextMutablePtr context;
     RelatedMaterializedViews result;
+    std::unordered_set<StorageID> visited_materialized_views;
 };
 
 }

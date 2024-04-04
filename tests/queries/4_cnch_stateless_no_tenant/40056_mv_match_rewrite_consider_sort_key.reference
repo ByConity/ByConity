@@ -11,7 +11,7 @@ Projection
                │     Condition: a_4 = 1
                └─ TableScan test.t40056_target1
                         Where: a = 1
-                        Outputs: expr#sumState(c)_3:=sum_c, b_4:=b, a_4:=a
+                        Outputs: a_4:=a, b_4:=b, expr#sumState(c)_3:=sum_c
 note: Materialized Views is applied for 1 times: test.t40056_mv1.
 Projection
 │     Expressions: a:=a_4, b:=b_4, sum(c):=`expr#sumMerge(expr#sumState(c))_2`
@@ -26,5 +26,5 @@ Projection
                │     Condition: b_4 = 1
                └─ TableScan test.t40056_target1
                         Where: b = 1
-                        Outputs: expr#sumState(c)_3:=sum_c, b_4:=b, a_4:=a
+                        Outputs: a_4:=a, b_4:=b, expr#sumState(c)_3:=sum_c
 note: Materialized Views is applied for 1 times: test.t40056_mv1.
