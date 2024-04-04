@@ -29,6 +29,12 @@ public:
     BSPScheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
         : Scheduler(query_id_, query_context_, dag_graph_ptr_)
     {
+        ResourceOption option;
+        if (!option.table_ids.empty())
+        {
+            query_context->getCnchServerResource()->setSendMutations(true);
+            query_context->getCnchServerResource()->sendResources(query_context, option);
+        }
     }
 
     void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) override;
