@@ -49,6 +49,7 @@ public:
     static TypeAnalyzer create(ContextPtr context, const NameToType & input_types);
     static TypeAnalyzer create(ContextPtr context, const NamesAndTypes & input_types);
     DataTypePtr getType(const ConstASTPtr & expr) const;
+    DataTypePtr getTypeWithoutCheck(const ConstASTPtr & expr) const;
     ExpressionTypes getExpressionTypes(const ConstASTPtr & expr) const;
 
     TypeAnalyzer(TypeAnalyzer && other) = default;

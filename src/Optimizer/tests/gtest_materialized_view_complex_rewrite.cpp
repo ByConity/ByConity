@@ -80,7 +80,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateProject)
     sql("select deptno, count(*) as c, empid + 2, sum(empid) as s "
         "from emps group by empid, deptno",
         "select count(*) + 1 as c, deptno from emps group by deptno")
-        .checkingThatResultContains("Aggregates: expr#sum(expr#count()_1)_2:=AggNull(sum)(expr#count()_3)")
+        .checkingThatResultContains("Aggregates: expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2)")
         .ok();
 }
 
@@ -168,7 +168,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
             "from emps group by empid, deptno",
         "select deptno, count(*) as c, sum(empid) as s\n"
             "from emps group by deptno")
-        .checkingThatResultContains("Aggregates: expr#sum(expr#count()_1)_2:=AggNull(sum)(expr#count()_3), expr#sum(expr#sum(empid)_1)_2:=AggNull(sum)(expr#sum(empid)_3)")
+        .checkingThatResultContains("Aggregates: expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2), expr#sum(expr#sum(empid))_2:=AggNull(sum)(expr#sum(empid)_2)")
         .ok();
 }
 
@@ -178,7 +178,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
         "from emps group by empid, deptno",
         "select deptno, empid, sum(empid) as s, count(*) as c\n"
         "from emps group by empid, deptno")
-        .checkingThatResultContains("Aggregates: expr#sum(expr#sum(empid)_1)_2:=AggNull(sum)(expr#sum(empid)_3), expr#sum(expr#count()_1)_2:=AggNull(sum)(expr#count()_3)")
+        .checkingThatResultContains("Aggregates: expr#sum(expr#sum(empid))_2:=AggNull(sum)(expr#sum(empid)_2), expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2)")
         .ok();
 }
 
@@ -542,7 +542,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testJoinAggregateMaterializationAggre
         "select depts.deptno, count(*) as c, sum(empid) as s\n"
             "from emps join depts on emps.deptno = depts.deptno\n"
             "group by depts.deptno")
-        .checkingThatResultContains("Aggregates: expr#sum(expr#count()_1)_2:=AggNull(sum)(expr#count()_3), expr#sum(expr#sum(empid)_1)_2:=AggNull(sum)(expr#sum(empid)_3)")
+        .checkingThatResultContains("Aggregates: expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2), expr#sum(expr#sum(empid))_2:=AggNull(sum)(expr#sum(empid)_2)")
         .ok();
 }
 
@@ -1189,7 +1189,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
         "from emps\n"
         "group by deptno, salary)\n"
         "group by deptno")
-        .checkingThatResultContains("Aggregates: expr#uniqExact(salary_")
+        .checkingThatResultContains("Aggregates: expr#uniqExact(salary)_3:=AggNull(uniqExact)(salary_2)")
         .ok();
 }
 
@@ -1205,6 +1205,6 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
             "from emps\n"
             "group by deptno, salary)\n"
             "group by deptno")
-        .checkingThatResultContains("Aggregates: expr#count(salary)_1:=AggNull(count)(salary_3)")
+        .checkingThatResultContains("Group by: {salary_2, deptno_2}")
         .ok();
 }

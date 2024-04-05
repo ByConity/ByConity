@@ -66,8 +66,8 @@ using BaseTableInfoPtr = std::shared_ptr<BaseTableInfo>;
 class PartitionTransformer
 {
 public:
-    explicit PartitionTransformer(ASTPtr mv_query_, const StorageID & target_id)
-        : mv_query(mv_query_), target_table_id(target_id), log(&Poco::Logger::get("PartitionTransformer")) {}
+    explicit PartitionTransformer(ASTPtr mv_query_, const StorageID & target_id, bool async_materialized_view_)
+        : mv_query(mv_query_), target_table_id(target_id), async_materialized_view(async_materialized_view_), log(&Poco::Logger::get("PartitionTransformer")) {}
 
     void validate(ContextMutablePtr local_context);
     void validate(ContextMutablePtr local_context, MaterializedViewStructurePtr structure);
@@ -86,6 +86,7 @@ public:
 private:
     ASTPtr mv_query;
     StorageID target_table_id = StorageID::createEmpty();
+    bool async_materialized_view = false;
     StoragePtr target_table;
     ASTPtr target_partition_key_ast;
 
