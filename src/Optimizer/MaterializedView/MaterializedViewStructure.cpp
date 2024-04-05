@@ -17,6 +17,7 @@
 
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/QueryRewriter.h>
+#include <Interpreters/Context.h>
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/MaterializedView/InnerJoinCollector.h>
 #include <Optimizer/MaterializedView/MaterializedViewChecker.h>
@@ -33,6 +34,7 @@
 #include <QueryPlan/QueryPlanner.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <Common/Exception.h>
+#include "Core/Field.h"
 
 #include <unordered_map>
 
@@ -45,23 +47,22 @@ namespace ErrorCodes
 }
 
 MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
-    const StorageID & view_storage_id, const StorageID & target_storage_id, ASTPtr query, ContextMutablePtr context)
+    const StorageID & view_storage_id, const StorageID & target_storage_id, ASTPtr query, bool async_materialized_view_, ContextPtr context)
 {
-    // TODO@kaixi: fix query context
-    if (!context->getSymbolAllocator())
-        context->createSymbolAllocator();
-    if (!context->getPlanNodeIdAllocator())
-        context->createPlanNodeIdAllocator();
-    context->setQueryContext(context);
-    context->setSetting("prefer_global_in_and_join", true);
+    ContextMutablePtr query_context = Context::createCopy(context);
+    query_context->createSymbolAllocator();
+    query_context->createPlanNodeIdAllocator();
+    query_context->setQueryContext(query_context);
+    query_context->setSetting("prefer_global_in_and_join", true); // for dialect_type='CLICKHOUSE'
+    query_context->setSetting("cte_mode", Field{"INLINED"}); // support with clause
 
-    auto query_ptr = QueryRewriter().rewrite(query, context, false);
-    AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
+    auto query_ptr = QueryRewriter().rewrite(query, query_context, false);
+    AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, query_context);
 
     if (!analysis->non_deterministic_functions.empty())
         throw Exception(ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW, "materialized view query contains non deterministic functions");
 
-    QueryPlanPtr query_plan = QueryPlanner().plan(query_ptr, *analysis, context);
+    QueryPlanPtr query_plan = QueryPlanner().plan(query_ptr, *analysis, query_context);
 
     auto wrap_rewriter_name = [&](const String & name) -> String {
         return "MV_" + name + "_" + view_storage_id.getDatabaseName() + "." + view_storage_id.getTableName();
@@ -78,14 +79,14 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
            std::make_shared<UnifyNullableType>()};
 
     for (auto & rewriter : rewriters)
-        rewriter->rewritePlan(*query_plan, context);
+        rewriter->rewritePlan(*query_plan, query_context);
 
-    GraphvizPrinter::printLogicalPlan(*query_plan, context, "MaterializedViewPlan_" + std::to_string(context->nextNodeId()));
-    return buildFrom(view_storage_id, target_storage_id, query_plan->getPlanNode(), context);
+    GraphvizPrinter::printLogicalPlan(*query_plan, query_context, "MaterializedViewPlan_" + std::to_string(query_context->nextNodeId()));
+    return buildFrom(view_storage_id, target_storage_id, query_plan->getPlanNode(), async_materialized_view_, query_context);
 }
 
 MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
-    const StorageID & view_storage_id, const StorageID & target_storage_id, PlanNodePtr query, ContextMutablePtr context)
+    const StorageID & view_storage_id, const StorageID & target_storage_id, PlanNodePtr query, bool async_materialized_view_, ContextPtr context)
 {
     PlanNodePtr root = query;
     if (root->getType() != IQueryPlanStep::Type::Projection)
@@ -204,6 +205,7 @@ MaterializedViewStructurePtr MaterializedViewStructure::buildFrom(
         std::move(output_columns),
         std::move(output_columns_to_table_columns_map),
         std::move(output_columns_to_query_columns_map),
-        std::move(expression_equivalences));
+        std::move(expression_equivalences),
+        async_materialized_view_);
 }
 }

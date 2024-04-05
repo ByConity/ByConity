@@ -107,7 +107,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitAggregatingNode(AggregatingNod
         flag_distinct = (flag_distinct || isDistinctNames(keys, distinct_set));
     }
     //when distinct columns keys contains all the distinct keys of child nodes and func is empty, equivalent distinct node, remove
-    if (flag_distinct && descs.empty())
+    if (flag_distinct && descs.empty() && !step->isPartial())
     {
         ctx.distincts = std::move(child_context.distincts);
         return child;

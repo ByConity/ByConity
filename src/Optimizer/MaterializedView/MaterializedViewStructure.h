@@ -47,7 +47,7 @@ struct MaterializedViewStructure
      * @return structure info if it support materialized view rewriting, empty otherwise.
      */
     static MaterializedViewStructurePtr
-    buildFrom(const StorageID & view_storage_id, const StorageID & target_storage_id, ASTPtr query, ContextMutablePtr context);
+    buildFrom(const StorageID & view_storage_id, const StorageID & target_storage_id, ASTPtr query, bool async_materialized_view, ContextPtr context);
 
     /**
      * @param view_storage_id name of materialized view
@@ -56,7 +56,7 @@ struct MaterializedViewStructure
      * @return structure info if it support materialized view rewriting, empty otherwise.
      */
     static MaterializedViewStructurePtr
-    buildFrom(const StorageID & view_storage_id, const StorageID & target_storage_id, PlanNodePtr query, ContextMutablePtr context);
+    buildFrom(const StorageID & view_storage_id, const StorageID & target_storage_id, PlanNodePtr query, bool async_materialized_view, ContextPtr context);
 
     const StorageID view_storage_id;
     const StorageID target_storage_id;
@@ -75,6 +75,8 @@ struct MaterializedViewStructure
     const std::unordered_map<String, String> output_columns_to_query_columns_map;
     const ExpressionEquivalences expression_equivalences;
 
+    bool async_materialized_view;
+
     MaterializedViewStructure(
         StorageID view_storage_id_,
         StorageID target_storage_id_,
@@ -88,7 +90,8 @@ struct MaterializedViewStructure
         std::unordered_set<String> output_columns_,
         std::unordered_map<String, String> output_columns_to_table_columns_map_,
         std::unordered_map<String, String> output_columns_to_query_columns_map_,
-        ExpressionEquivalences expression_equivalences_)
+        ExpressionEquivalences expression_equivalences_,
+        bool async_materialized_view_)
         : view_storage_id(std::move(view_storage_id_))
         , target_storage_id(std::move(target_storage_id_))
         , target_storage(std::move(target_storage_))
@@ -102,6 +105,7 @@ struct MaterializedViewStructure
         , output_columns_to_table_columns_map(std::move(output_columns_to_table_columns_map_))
         , output_columns_to_query_columns_map(std::move(output_columns_to_query_columns_map_))
         , expression_equivalences(std::move(expression_equivalences_))
+        , async_materialized_view(async_materialized_view_)
     {
     }
 };

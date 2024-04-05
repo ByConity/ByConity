@@ -8,6 +8,7 @@
 #include <Optimizer/EqualityASTMap.h>
 #include <Optimizer/SymbolTransformMap.h>
 #include <Parsers/ASTTableColumnReference.h>
+#include <Parsers/IAST_fwd.h>
 #include <QueryPlan/PlanNode.h>
 
 #include <unordered_map>
@@ -34,6 +35,26 @@ namespace MaterializedView
             if (it != context.end())
                 return it->second->clone();
             return SimpleExpressionRewriter::visitNode(node, context);
+        }
+    };
+
+    class ExpressionNormalizer : public SimpleExpressionRewriter<const Void>
+    {
+    public:
+        static ASTPtr normalize(ASTPtr expression)
+        {
+            ExpressionNormalizer normalizer;
+            const Void c;
+            return ASTVisitorUtil::accept(expression, normalizer, c);
+        }
+
+        ASTPtr visitASTFunction(ASTPtr & node, const Void & c) override
+        {
+            auto res = visitNode(node, c);
+            auto & function = res->as<ASTFunction &>();
+            if (function.name.ends_with("SimpleState"))
+                function.name = function.name.substr(0, function.name.size() - 11);
+            return res;
         }
     };
 
@@ -66,6 +87,7 @@ namespace MaterializedView
         const ExpressionEquivalences & expression_equivalences)
     {
         auto lineage = symbol_transform_map.inlineReferences(expression);
+        lineage = ExpressionNormalizer::normalize(lineage);
         lineage = SwapTableInputRefRewriter::rewrite(lineage, table_mapping);
         lineage = EquivalencesRewriter::rewrite(lineage, expression_equivalences);
         return lineage;
@@ -80,24 +102,30 @@ namespace MaterializedView
         const ExpressionEquivalences & expression_equivalences)
     {
         auto lineage = symbol_transform_map.inlineReferences(expression);
+        lineage = ExpressionNormalizer::normalize(lineage);
         lineage = EquivalencesRewriter::rewrite(lineage, expression_equivalences);
         return lineage;
     }
 
     ASTPtr normalizeExpression(const ConstASTPtr & expression, const ExpressionEquivalences & expression_equivalences)
     {
-        auto lineage = expression->clone();
-        return EquivalencesRewriter::rewrite(lineage, expression_equivalences);
+        auto expr = expression->clone();
+        expr = ExpressionNormalizer::normalize(expr);
+        expr = EquivalencesRewriter::rewrite(expr, expression_equivalences);
+        return expr;
     }
 
     ASTPtr normalizeExpression(const ConstASTPtr & expression, const SymbolTransformMap & symbol_transform_map)
     {
-        return symbol_transform_map.inlineReferences(expression);
+        auto lineage = symbol_transform_map.inlineReferences(expression);
+        lineage = ExpressionNormalizer::normalize(lineage);
+        return lineage;
     }
 
     ASTPtr normalizeExpression(const ConstASTPtr & expression, const TableInputRefMap & table_mapping)
     {
         auto expr = expression->clone();
+        expr = ExpressionNormalizer::normalize(expr);
         return SwapTableInputRefRewriter::rewrite(expr, table_mapping);
     }
 
@@ -105,6 +133,7 @@ namespace MaterializedView
         const ConstASTPtr & expression, const SymbolTransformMap & symbol_transform_map, const TableInputRefMap & table_mapping)
     {
         auto lineage = symbol_transform_map.inlineReferences(expression);
+        lineage = ExpressionNormalizer::normalize(lineage);
         lineage = SwapTableInputRefRewriter::rewrite(lineage, table_mapping);
         return lineage;
     }
@@ -294,20 +323,6 @@ namespace MaterializedView
                         rewritten_function->parameters = function->parameters;
                         return rewritten_function;
                     }
-                    
-                    state_function->as<ASTFunction &>().name = function->name + "SimpleState";
-                    rewrite_expression = rewriteExpression(state_function, view_output_columns_map, output_columns);
-                    if (rewrite_expression)
-                    {
-                        auto rewritten_function = std::make_shared<ASTFunction>();
-                        rewritten_function->name = function->name;
-                        rewritten_function->arguments = std::make_shared<ASTExpressionList>();
-                        rewritten_function->children.emplace_back(rewritten_function->arguments);
-                        rewritten_function->arguments->children.push_back(*rewrite_expression);
-                        rewritten_function->parameters = function->parameters;
-                        return rewritten_function;
-                    }
-
                 }
 
                 // 2. rewrite with direct match
@@ -435,21 +450,5 @@ namespace MaterializedView
 
         std::optional<UInt32> belonging;
     };
-
-    std::unordered_map<UInt32, ASTs>
-    splitPredicatesByTable(const std::vector<ConstASTPtr> & predicates, const SymbolTransformMap & query_transform_map)
-    {
-        std::unordered_map<UInt32, ASTs> predicates_by_table;
-        
-        for (const auto & pred : predicates)
-        {
-            ColumnReferenceRewriter rewriter;
-            auto rewritten = ASTVisitorUtil::accept(query_transform_map.inlineReferences(pred), rewriter, {});
-            if (rewriter.belonging.has_value())
-                predicates_by_table[*rewriter.belonging].emplace_back(rewritten);
-        }
-        return predicates_by_table;
-    }
-
 }
 }

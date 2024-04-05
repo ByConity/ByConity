@@ -69,7 +69,7 @@ static bool joinsAreRightAsscom(JoinStepPtr first, JoinStepPtr second)
 JoinHyperGraph JoinHyperGraph::build(
     const PlanNodePtr & plan,
     const SymbolTransformMap & symbol_transform_map,
-    ContextMutablePtr & context,
+    ContextPtr context,
     std::unordered_set<IQueryPlanStep::Type> skip_nodes)
 {
     JoinHyperGraphContext join_hyper_graph_context{

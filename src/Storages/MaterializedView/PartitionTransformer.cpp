@@ -126,7 +126,7 @@ void PartitionTransformer::validate(ContextMutablePtr local_context)
         return;
 
     MaterializedViewStructurePtr structure
-        = MaterializedViewStructure::buildFrom(target_table_id, target_table_id, mv_query->clone(), local_context);
+        = MaterializedViewStructure::buildFrom(target_table_id, target_table_id, mv_query->clone(), async_materialized_view, local_context);
     validate(local_context, structure);
 }
 
