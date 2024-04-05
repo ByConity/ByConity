@@ -14,10 +14,12 @@ Projection Est. 11186 rows
             │     └─ Aggregating Est. 18816299 rows
             │        │     Group by: {c_last_name_1, c_first_name_1, s_store_name_1}
             │        │     Aggregates: expr#sum(netpaid):=AggNull(sum)(expr#sum(ss_net_paid)_1)
-            │        └─ Filter Est. 355223730 rows
-            │           │     Condition: i_color_1 = 'peach'
-            │           └─ Buffer Est. 394693034 rows
-            │              └─ CTERef[0] Est. 394693034 rows
+            │        └─ Projection Est. 355223730 rows
+            │           │     Expressions: [c_first_name_1, c_last_name_1, expr#sum(ss_net_paid)_1, s_store_name_1]
+            │           └─ Filter Est. 355223730 rows
+            │              │     Condition: i_color_1 = 'peach'
+            │              └─ Buffer Est. 394693034 rows
+            │                 └─ CTERef[0] Est. 394693034 rows
             └─ Broadcast Exchange Est. 1 rows
                └─ Projection Est. 1 rows
                   │     Expressions: expr#multiply('0.05', avg(netpaid)):='0.05' * `expr#avg(netpaid)`
@@ -54,11 +56,13 @@ CTEDef [0]
                │     │     │           Where: Runtime Filters: {ss_store_sk}
                │     │     │           Outputs: [ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_net_paid]
                │     │     └─ Broadcast Exchange Est. 84 rows
-               │     │        └─ Filter Est. 84 rows
-               │     │           │     Condition: s_market_id = 8
-               │     │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
-               │     │                    Where: s_market_id = 8
-               │     │                    Outputs: [s_store_sk, s_store_name, s_market_id, s_state, s_zip]
+               │     │        └─ Projection Est. 84 rows
+               │     │           │     Expressions: [s_state, s_store_name, s_store_sk, s_zip]
+               │     │           └─ Filter Est. 84 rows
+               │     │              │     Condition: s_market_id = 8
+               │     │              └─ TableScan tpcds1000_sample.store Est. 1002 rows
+               │     │                       Where: s_market_id = 8
+               │     │                       Outputs: [s_store_sk, s_store_name, s_market_id, s_state, s_zip]
                │     └─ Inner Join Est. 287999764 rows
                │        │     Condition: sr_item_sk == i_item_sk
                │        ├─ Repartition Exchange Est. 287999764 rows
@@ -100,10 +104,12 @@ Projection Est. 11285 rows
             │     └─ Aggregating Est. 18816299 rows
             │        │     Group by: {c_last_name_6, c_first_name_6, s_store_name_6}
             │        │     Aggregates: expr#sum(netpaid)_1:=AggNull(sum)(expr#sum(ss_net_paid)_6)
-            │        └─ Filter Est. 355223730 rows
-            │           │     Condition: i_color_6 = 'saddle'
-            │           └─ Buffer Est. 394693034 rows
-            │              └─ CTERef[0] Est. 394693034 rows
+            │        └─ Projection Est. 355223730 rows
+            │           │     Expressions: [c_first_name_6, c_last_name_6, expr#sum(ss_net_paid)_6, s_store_name_6]
+            │           └─ Filter Est. 355223730 rows
+            │              │     Condition: i_color_6 = 'saddle'
+            │              └─ Buffer Est. 394693034 rows
+            │                 └─ CTERef[0] Est. 394693034 rows
             └─ Broadcast Exchange Est. 1 rows
                └─ Projection Est. 1 rows
                   │     Expressions: expr#multiply('0.05', avg(netpaid))_1:='0.05' * `expr#avg(netpaid)_1`
@@ -140,11 +146,13 @@ CTEDef [0]
                │     │     │           Where: Runtime Filters: {ss_store_sk}
                │     │     │           Outputs: ss_item_sk_11:=ss_item_sk, ss_customer_sk_5:=ss_customer_sk, ss_store_sk_9:=ss_store_sk, ss_ticket_number_11:=ss_ticket_number, ss_net_paid_3:=ss_net_paid
                │     │     └─ Broadcast Exchange Est. 84 rows
-               │     │        └─ Filter Est. 84 rows
-               │     │           │     Condition: s_market_id_9 = 8
-               │     │           └─ TableScan tpcds1000_sample.store Est. 1002 rows
-               │     │                    Where: s_market_id = 8
-               │     │                    Outputs: s_store_sk_9:=s_store_sk, s_store_name_5:=s_store_name, s_market_id_9:=s_market_id, s_state_5:=s_state, s_zip_3:=s_zip
+               │     │        └─ Projection Est. 84 rows
+               │     │           │     Expressions: [s_state_5, s_store_name_5, s_store_sk_9, s_zip_3]
+               │     │           └─ Filter Est. 84 rows
+               │     │              │     Condition: s_market_id_9 = 8
+               │     │              └─ TableScan tpcds1000_sample.store Est. 1002 rows
+               │     │                       Where: s_market_id = 8
+               │     │                       Outputs: s_store_sk_9:=s_store_sk, s_store_name_5:=s_store_name, s_market_id_9:=s_market_id, s_state_5:=s_state, s_zip_3:=s_zip
                │     └─ Inner Join Est. 287999764 rows
                │        │     Condition: sr_item_sk_7 == i_item_sk_7
                │        ├─ Repartition Exchange Est. 287999764 rows

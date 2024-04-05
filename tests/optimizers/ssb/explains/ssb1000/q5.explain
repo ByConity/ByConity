@@ -29,11 +29,13 @@ Projection Est. 2165399 rows
                         │     │              Outputs: [LO_PARTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                         │     └─ Repartition Exchange Est. 400039 rows
                         │        │     Partition by: {S_SUPPKEY}
-                        │        └─ Filter Est. 400039 rows
-                        │           │     Condition: S_REGION = 'ASIA'
-                        │           └─ TableScan ssb1000.supplier Est. 2000000 rows
-                        │                    Where: S_REGION = 'ASIA'
-                        │                    Outputs: [S_SUPPKEY, S_REGION]
+                        │        └─ Projection Est. 400039 rows
+                        │           │     Expressions: [S_SUPPKEY]
+                        │           └─ Filter Est. 400039 rows
+                        │              │     Condition: S_REGION = 'ASIA'
+                        │              └─ TableScan ssb1000.supplier Est. 2000000 rows
+                        │                       Where: S_REGION = 'ASIA'
+                        │                       Outputs: [S_SUPPKEY, S_REGION]
                         └─ Repartition Exchange Est. 2000000 rows
                            │     Partition by: {P_PARTKEY}
                            └─ Filter Est. 2000000 rows

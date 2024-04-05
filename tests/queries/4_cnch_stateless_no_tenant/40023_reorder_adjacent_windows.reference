@@ -6,12 +6,14 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {major ASC NULLS LAST, id ASC NULLS LAST}
-         └─ Window Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: [expr#avg(age) OVER (PARTITION BY major ORDER BY id ASC), expr#count(major) OVER (PARTITION BY major ORDER BY id ASC), expr#rank() OVER (PARTITION BY major, id ORDER BY age ASC), id, major]
             └─ Window Est. ? rows
-               └─ Repartition Exchange Est. ? rows
-                  │     Partition by: {major}
-                  └─ TableScan test.students Est. ? rows
-                           Outputs: [id, major, age]
+               └─ Window Est. ? rows
+                  └─ Repartition Exchange Est. ? rows
+                     │     Partition by: {major}
+                     └─ TableScan test.students Est. ? rows
+                              Outputs: [id, major, age]
 ----test no swap to adjacent windows
 Projection Est. ? rows
 │     Expressions: [id, major], avg(age) OVER (PARTITION BY major ORDER BY id ASC):=`expr#avg(age) OVER (PARTITION BY major ORDER BY id ASC)`, count(major) OVER (PARTITION BY major ORDER BY id ASC):=`expr#count(major) OVER (PARTITION BY major ORDER BY id ASC)`, rank() OVER (PARTITION BY major, id ORDER BY age ASC):=`expr#rank() OVER (PARTITION BY major, id ORDER BY age ASC)`
@@ -20,11 +22,13 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {major ASC NULLS LAST, id ASC NULLS LAST}
-         └─ Window Est. ? rows
-            └─ Repartition Exchange Est. ? rows
-               │     Partition by: {major}
-               └─ Window Est. ? rows
-                  └─ Repartition Exchange Est. ? rows
-                     │     Partition by: {major, id}
-                     └─ TableScan test.students Est. ? rows
-                              Outputs: [id, major, age]
+         └─ Projection Est. ? rows
+            │     Expressions: [expr#avg(age) OVER (PARTITION BY major ORDER BY id ASC), expr#count(major) OVER (PARTITION BY major ORDER BY id ASC), expr#rank() OVER (PARTITION BY major, id ORDER BY age ASC), id, major]
+            └─ Window Est. ? rows
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {major}
+                  └─ Window Est. ? rows
+                     └─ Repartition Exchange Est. ? rows
+                        │     Partition by: {major, id}
+                        └─ TableScan test.students Est. ? rows
+                                 Outputs: [id, major, age]

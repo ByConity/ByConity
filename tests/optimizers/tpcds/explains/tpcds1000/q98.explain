@@ -28,11 +28,13 @@ Projection Est. 13256517 rows
                               │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                               │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ext_sales_price]
                               │  └─ Broadcast Exchange Est. 29 rows
-                              │     └─ Filter Est. 29 rows
-                              │        │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                              │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                              │                 Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                              │                 Outputs: [d_date_sk, d_date]
+                              │     └─ Projection Est. 29 rows
+                              │        │     Expressions: [d_date_sk]
+                              │        └─ Filter Est. 29 rows
+                              │           │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                              │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                              │                    Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                              │                    Outputs: [d_date_sk, d_date]
                               └─ Broadcast Exchange Est. 89906 rows
                                  └─ Filter Est. 89906 rows
                                     │     Condition: i_category IN ('Books', 'Home', 'Sports')

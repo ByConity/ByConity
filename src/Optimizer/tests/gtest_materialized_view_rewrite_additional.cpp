@@ -99,7 +99,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping2)
     String query = "select count(deptno), max(empid) from emps";
     sql(mv, query)
         .checkingThatResultContains(
-            "Expressions: [expr#max(empid_1)_2], expr#count(deptno)_4:=coalesce(`expr#sum(expr#count(deptno)_1)_2`, 0)")
+            "Expressions: [expr#max(empid)_3], expr#count(deptno)_3:=coalesce(`expr#sum(expr#count(deptno))_2`, 0)")
         .ok();
 }
 
@@ -109,14 +109,14 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping3)
     String query = "select count(deptno), max(empid) from emps where empid = 5";
     sql(mv, query)
         .checkingThatResultContains(
-            "Expressions: [expr#max(empid_1)_2], expr#count(deptno)_4:=coalesce(`expr#sum(expr#count(deptno)_1)_2`, 0)")
+            "Expressions: [expr#max(empid)_3], expr#count(deptno)_3:=coalesce(`expr#sum(expr#count(deptno))_2`, 0)")
         .ok();
 }
 
 TEST_F(MaterializedViewRewriteAdditionalTest, testSimpleAggregate)
 {
     String q = "select count(*) from emps";
-    sql(q, q).checkingThatResultContains("Aggregates: expr#sum(expr#count()_1)_2:=AggNull(sum)(expr#count()_3)").ok();
+    sql(q, q).checkingThatResultContains("Aggregates: expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2)").ok();
 }
 
 TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping)
@@ -124,7 +124,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping)
     String mv = "select deptno, empid, count(commission) as count from emps group by deptno, empid";
     String query = "select count(commission) from emps";
     sql(mv, query)
-        .checkingThatResultContains("Expressions: expr#count(commission)_4:=coalesce(`expr#sum(expr#count(commission)_1)_2`, 0)")
+        .checkingThatResultContains("Expressions: expr#count(commission)_3:=coalesce(`expr#sum(expr#count(commission))_2`, 0)")
         .ok();
 }
 
@@ -133,7 +133,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping2)
     String mv = "select deptno, empid, count(commission) as count from emps group by deptno, empid";
     String query = "select count(commission) from emps where deptno = 1 and empid = 2";
     sql(mv, query)
-        .checkingThatResultContains("Expressions: expr#count(commission)_4:=coalesce(`expr#sum(expr#count(commission)_1)_2`, 0)")
+        .checkingThatResultContains("Expressions: expr#count(commission)_3:=coalesce(`expr#sum(expr#count(commission))_2`, 0)")
         .ok();
 }
 

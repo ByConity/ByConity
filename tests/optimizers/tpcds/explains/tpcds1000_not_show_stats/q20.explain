@@ -32,11 +32,13 @@ Projection
                                  │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                                  │  │           Outputs: [cs_sold_date_sk, cs_item_sk, cs_ext_sales_price]
                                  │  └─ Broadcast Exchange
-                                 │     └─ Filter
-                                 │        │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │        └─ TableScan tpcds1000.date_dim
-                                 │                 Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │                 Outputs: [d_date_sk, d_date]
+                                 │     └─ Projection
+                                 │        │     Expressions: [d_date_sk]
+                                 │        └─ Filter
+                                 │           │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                 │           └─ TableScan tpcds1000.date_dim
+                                 │                    Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                 │                    Outputs: [d_date_sk, d_date]
                                  └─ Broadcast Exchange
                                     └─ Filter
                                        │     Condition: i_category IN ('Books', 'Home', 'Sports')

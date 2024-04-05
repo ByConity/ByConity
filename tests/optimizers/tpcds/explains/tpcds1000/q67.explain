@@ -40,11 +40,13 @@ Projection Est. 100 rows
                                           │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
                                           │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_quantity, ss_sales_price]
                                           │     │  └─ Broadcast Exchange Est. 334 rows
-                                          │     │     └─ Filter Est. 334 rows
-                                          │     │        │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                          │     │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                          │     │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                          │     │                 Outputs: [d_date_sk, d_month_seq, d_year, d_moy, d_qoy]
+                                          │     │     └─ Projection Est. 334 rows
+                                          │     │        │     Expressions: [d_date_sk, d_moy, d_qoy, d_year]
+                                          │     │        └─ Filter Est. 334 rows
+                                          │     │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                          │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                                          │     │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                          │     │                    Outputs: [d_date_sk, d_month_seq, d_year, d_moy, d_qoy]
                                           │     └─ Broadcast Exchange Est. 1002 rows
                                           │        └─ TableScan tpcds1000.store Est. 1002 rows
                                           │                 Outputs: [s_store_sk, s_store_id]

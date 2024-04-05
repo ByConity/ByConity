@@ -40,11 +40,13 @@ Projection
                            │        │           Where: Runtime Filters: {sr_returned_date_sk}
                            │        │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number]
                            │        └─ Broadcast Exchange
-                           │           └─ Filter
-                           │              │     Condition: (d_moy = 8) AND (d_year = 2001)
-                           │              └─ TableScan tpcds1000.date_dim
-                           │                       Where: (d_moy = 8) AND (d_year = 2001)
-                           │                       Outputs: [d_year, d_moy], d_date_sk_1:=d_date_sk
+                           │           └─ Projection
+                           │              │     Expressions: [d_date_sk_1]
+                           │              └─ Filter
+                           │                 │     Condition: (d_moy = 8) AND (d_year = 2001)
+                           │                 └─ TableScan tpcds1000.date_dim
+                           │                          Where: (d_moy = 8) AND (d_year = 2001)
+                           │                          Outputs: [d_year, d_moy], d_date_sk_1:=d_date_sk
                            └─ Broadcast Exchange
                               └─ TableScan tpcds1000.store
                                        Outputs: [s_store_sk, s_store_name, s_company_id, s_street_number, s_street_name, s_street_type, s_suite_number, s_city, s_county, s_state, s_zip]

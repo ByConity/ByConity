@@ -173,7 +173,7 @@ private:
 
     DataTypePtr getType(const ConstASTPtr & node) const
     {
-        return type_analyzer.getType(node);
+        return type_analyzer.getTypeWithoutCheck(node);
     }
 
     InterpretIMResult originalNode(const ConstASTPtr & node) const

@@ -111,7 +111,7 @@ MaterializedViewMemoryCache::getMaterializedViewStructure(
 
     try
     {
-        return MaterializedViewStructure::buildFrom(materialized_view_id, target_table_id.value(), query, context);
+        return MaterializedViewStructure::buildFrom(materialized_view_id, target_table_id.value(), query, materialized_view->async(), context);
     }
     catch (Exception & exception)
     {

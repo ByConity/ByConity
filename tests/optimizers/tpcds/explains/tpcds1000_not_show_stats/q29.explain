@@ -56,11 +56,13 @@ Projection
                         │     │     │  │     │           Where: Runtime Filters: {ss_sold_date_sk}
                         │     │     │  │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_quantity]
                         │     │     │  │     └─ Broadcast Exchange
-                        │     │     │  │        └─ Filter
-                        │     │     │  │           │     Condition: (d_moy = 9) AND (d_year = 1999)
-                        │     │     │  │           └─ TableScan tpcds1000.date_dim
-                        │     │     │  │                    Where: (d_moy = 9) AND (d_year = 1999)
-                        │     │     │  │                    Outputs: [d_date_sk, d_year, d_moy]
+                        │     │     │  │        └─ Projection
+                        │     │     │  │           │     Expressions: [d_date_sk]
+                        │     │     │  │           └─ Filter
+                        │     │     │  │              │     Condition: (d_moy = 9) AND (d_year = 1999)
+                        │     │     │  │              └─ TableScan tpcds1000.date_dim
+                        │     │     │  │                       Where: (d_moy = 9) AND (d_year = 1999)
+                        │     │     │  │                       Outputs: [d_date_sk, d_year, d_moy]
                         │     │     │  └─ Repartition Exchange
                         │     │     │     │     Partition by: {i_item_sk}
                         │     │     │     └─ TableScan tpcds1000.item
@@ -69,15 +71,19 @@ Projection
                         │     │        └─ TableScan tpcds1000.store
                         │     │                 Outputs: [s_store_sk, s_store_id, s_store_name]
                         │     └─ Broadcast Exchange
-                        │        └─ Filter
-                        │           │     Condition: (d_year_1 = 1999) AND (d_moy_1 >= 9) AND (d_moy_1 <= 12)
-                        │           └─ TableScan tpcds1000.date_dim
-                        │                    Where: (d_year = 1999) AND (d_moy >= 9) AND (d_moy <= 12)
-                        │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
+                        │        └─ Projection
+                        │           │     Expressions: [d_date_sk_1]
+                        │           └─ Filter
+                        │              │     Condition: (d_year_1 = 1999) AND (d_moy_1 >= 9) AND (d_moy_1 <= 12)
+                        │              └─ TableScan tpcds1000.date_dim
+                        │                       Where: (d_year = 1999) AND (d_moy >= 9) AND (d_moy <= 12)
+                        │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                         └─ Broadcast Exchange
-                           └─ Filter
-                              │     Condition: d_year_2 IN (1999, 2000, 2001)
-                              └─ TableScan tpcds1000.date_dim
-                                       Where: d_year IN (1999, 2000, 2001)
-                                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                           └─ Projection
+                              │     Expressions: [d_date_sk_2]
+                              └─ Filter
+                                 │     Condition: d_year_2 IN (1999, 2000, 2001)
+                                 └─ TableScan tpcds1000.date_dim
+                                          Where: d_year IN (1999, 2000, 2001)
+                                          Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
 note: Runtime Filter is applied for 5 times.

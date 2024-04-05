@@ -35,7 +35,7 @@ checkMaterializedViewPartitionConsistency(MaterializedViewStructurePtr structure
     auto * mview = dynamic_cast<StorageMaterializedView *>(storage.get());
     if (!mview)
         return {};
-    auto partition_transformer = std::make_shared<PartitionTransformer>(mview->getInnerQuery()->clone(), mview->getTargetTableId());
+    auto partition_transformer = std::make_shared<PartitionTransformer>(mview->getInnerQuery()->clone(), mview->getTargetTableId(), mview->async());
     try
     {
         partition_transformer->validate(context, structure);

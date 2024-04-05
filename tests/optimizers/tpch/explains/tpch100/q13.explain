@@ -20,11 +20,13 @@ Projection Est. 8935337 rows
                            │     Condition: o_custkey == c_custkey
                            ├─ Repartition Exchange Est. 135000000 rows
                            │  │     Partition by: {o_custkey}
-                           │  └─ Filter Est. 135000000 rows
-                           │     │     Condition: o_comment NOT LIKE '%special%requests%'
-                           │     └─ TableScan tpch100.orders Est. 150000000 rows
-                           │              Where: o_comment NOT LIKE '%special%requests%'
-                           │              Outputs: [o_orderkey, o_custkey, o_comment]
+                           │  └─ Projection Est. 135000000 rows
+                           │     │     Expressions: [o_custkey, o_orderkey]
+                           │     └─ Filter Est. 135000000 rows
+                           │        │     Condition: o_comment NOT LIKE '%special%requests%'
+                           │        └─ TableScan tpch100.orders Est. 150000000 rows
+                           │                 Where: o_comment NOT LIKE '%special%requests%'
+                           │                 Outputs: [o_orderkey, o_custkey, o_comment]
                            └─ Repartition Exchange Est. 15000000 rows
                               │     Partition by: {c_custkey}
                               └─ TableScan tpch100.customer Est. 15000000 rows

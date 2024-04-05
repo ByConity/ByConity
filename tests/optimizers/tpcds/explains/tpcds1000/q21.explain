@@ -33,11 +33,13 @@ Projection Est. 100 rows
                               │  │  │           Where: Runtime Filters: {inv_date_sk, inv_item_sk}
                               │  │  │           Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
                               │  │  └─ Broadcast Exchange Est. 18459 rows
-                              │  │     └─ Filter Est. 18459 rows
-                              │  │        │     Condition: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
-                              │  │        └─ TableScan tpcds1000.item Est. 300000 rows
-                              │  │                 Where: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
-                              │  │                 Outputs: [i_item_sk, i_item_id, i_current_price]
+                              │  │     └─ Projection Est. 18459 rows
+                              │  │        │     Expressions: [i_item_id, i_item_sk]
+                              │  │        └─ Filter Est. 18459 rows
+                              │  │           │     Condition: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
+                              │  │           └─ TableScan tpcds1000.item Est. 300000 rows
+                              │  │                    Where: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
+                              │  │                    Outputs: [i_item_sk, i_item_id, i_current_price]
                               │  └─ Broadcast Exchange Est. 60 rows
                               │     └─ Filter Est. 60 rows
                               │        │     Condition: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))

@@ -112,11 +112,11 @@ TEST_F(PlanSignatureTest, testQ1WithRuntimeFilter)
     // with runtime filters, the signature of TableScan(store_returns) are not equal
     // note: in ce, there is a single final Agg on table "store". Here, we have partial - exchange - merging
     // so distinct signatures + 2, total signatures + 4
-    EXPECT_EQ(res.size(), 10); // note: 8 in ce
+    EXPECT_EQ(res.size(), 11); // note: 8 in ce
     size_t total = 0;
     for (const auto & pair : res)
         total += pair.second.size();
-    EXPECT_EQ(total, 22); // note: 18 in ce
+    EXPECT_EQ(total, 24); // note: 18 in ce
 }
 
 TEST_F(PlanSignatureTest, testQ1WithoutRuntimeFilter)

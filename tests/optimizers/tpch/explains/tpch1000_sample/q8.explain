@@ -50,11 +50,13 @@ Projection Est. 729 rows
                               │     │           │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
                               │     │           └─ Repartition Exchange Est. 1331944 rows
                               │     │              │     Partition by: {p_partkey}
-                              │     │              └─ Filter Est. 1331944 rows
-                              │     │                 │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
-                              │     │                 └─ TableScan tpch1000_sample.part Est. 200000000 rows
-                              │     │                          Where: p_type = 'ECONOMY ANODIZED STEEL'
-                              │     │                          Outputs: [p_partkey, p_type]
+                              │     │              └─ Projection Est. 1331944 rows
+                              │     │                 │     Expressions: [p_partkey]
+                              │     │                 └─ Filter Est. 1331944 rows
+                              │     │                    │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
+                              │     │                    └─ TableScan tpch1000_sample.part Est. 200000000 rows
+                              │     │                             Where: p_type = 'ECONOMY ANODIZED STEEL'
+                              │     │                             Outputs: [p_partkey, p_type]
                               │     └─ Repartition Exchange Est. 30000000 rows
                               │        │     Partition by: {c_custkey}
                               │        └─ Inner Join Est. 30000000 rows
@@ -74,11 +76,13 @@ Projection Est. 729 rows
                               │                 │           Outputs: [n_nationkey, n_regionkey]
                               │                 └─ Repartition Exchange Est. 1 rows
                               │                    │     Partition by: {r_regionkey}
-                              │                    └─ Filter Est. 1 rows
-                              │                       │     Condition: r_name = 'AMERICA'
-                              │                       └─ TableScan tpch1000_sample.region Est. 5 rows
-                              │                                Where: r_name = 'AMERICA'
-                              │                                Outputs: [r_regionkey, r_name]
+                              │                    └─ Projection Est. 1 rows
+                              │                       │     Expressions: [r_regionkey]
+                              │                       └─ Filter Est. 1 rows
+                              │                          │     Condition: r_name = 'AMERICA'
+                              │                          └─ TableScan tpch1000_sample.region Est. 5 rows
+                              │                                   Where: r_name = 'AMERICA'
+                              │                                   Outputs: [r_regionkey, r_name]
                               └─ Repartition Exchange Est. 10000000 rows
                                  │     Partition by: {s_suppkey}
                                  └─ Inner Join Est. 10000000 rows

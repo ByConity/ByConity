@@ -22,11 +22,13 @@ Projection
                            │     Runtime Filters Builder: {o_orderkey}
                            ├─ Repartition Exchange
                            │  │     Partition by: {l_orderkey}
-                           │  └─ Filter
-                           │     │     Condition: l_returnflag = 'R' Runtime Filters: {l_orderkey}
-                           │     └─ TableScan tpch1000.lineitem
-                           │              Where: l_returnflag = 'R' Runtime Filters: {l_orderkey}
-                           │              Outputs: [l_orderkey, l_extendedprice, l_discount, l_returnflag]
+                           │  └─ Projection
+                           │     │     Expressions: [l_discount, l_extendedprice, l_orderkey]
+                           │     └─ Filter
+                           │        │     Condition: l_returnflag = 'R' Runtime Filters: {l_orderkey}
+                           │        └─ TableScan tpch1000.lineitem
+                           │                 Where: l_returnflag = 'R' Runtime Filters: {l_orderkey}
+                           │                 Outputs: [l_orderkey, l_extendedprice, l_discount, l_returnflag]
                            └─ Repartition Exchange
                               │     Partition by: {o_orderkey}
                               └─ Inner Join
@@ -43,11 +45,13 @@ Projection
                                  │  │              Outputs: [c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_comment]
                                  │  └─ Repartition Exchange
                                  │     │     Partition by: {o_custkey}
-                                 │     └─ Filter
-                                 │        │     Condition: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
-                                 │        └─ TableScan tpch1000.orders
-                                 │                 Where: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
-                                 │                 Outputs: [o_orderkey, o_custkey, o_orderdate]
+                                 │     └─ Projection
+                                 │        │     Expressions: [o_custkey, o_orderkey]
+                                 │        └─ Filter
+                                 │           │     Condition: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
+                                 │           └─ TableScan tpch1000.orders
+                                 │                    Where: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
+                                 │                    Outputs: [o_orderkey, o_custkey, o_orderdate]
                                  └─ Broadcast Exchange
                                     └─ TableScan tpch1000.nation
                                              Outputs: [n_nationkey, n_name]
