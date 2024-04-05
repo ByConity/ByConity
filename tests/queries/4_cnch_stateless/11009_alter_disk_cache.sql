@@ -1,4 +1,5 @@
 USE test;
+set bsp_max_retry_num=0; -- disable bsp retry
 DROP TABLE IF EXISTS at_dc;
 CREATE TABLE at_dc(a UInt32, p UInt32) ENGINE = CnchMergeTree ORDER BY a PARTITION BY p SETTINGS parts_preload_level = 1;
 INSERT INTO at_dc VALUES (1, 1), (2, 1), (3, 1);

@@ -127,7 +127,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     for (const auto & child : alter.command_list->children)
     {
         auto * command_ast = child->as<ASTAlterCommand>();
-        if (auto alter_command = AlterCommand::parse(command_ast))
+        if (auto alter_command = AlterCommand::parse(command_ast, getContext()))
             alter_commands.emplace_back(std::move(*alter_command));
         else if (auto partition_command = PartitionCommand::parse(command_ast))
         {
@@ -223,7 +223,7 @@ BlockIO InterpreterAlterQuery::executeToDatabase(const ASTAlterQuery & alter)
     for (const auto & child : alter.command_list->children)
     {
         auto * command_ast = child->as<ASTAlterCommand>();
-        if (auto alter_command = AlterCommand::parse(command_ast))
+        if (auto alter_command = AlterCommand::parse(command_ast, getContext()))
             alter_commands.emplace_back(std::move(*alter_command));
         else
             throw Exception("Wrong parameter type in ALTER DATABASE query", ErrorCodes::LOGICAL_ERROR);

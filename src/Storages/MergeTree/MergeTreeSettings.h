@@ -471,6 +471,7 @@ enum StealingCacheMode : UInt64
     M(UInt64, max_delete_bitmap_meta_depth, 100, "", 0) \
     M(UInt64, unique_merge_acquire_lock_retry_time, 10, "", 0) \
     M(Bool, enable_bucket_level_unique_keys, false, "", 0) \
+    M(MaxThreads, cnch_write_part_threads, 1, "", 0) \
     \
     /* Metastore settings */\
     M(Bool, enable_metastore, false, "Use KV metastore to manage data parts.", 0) \

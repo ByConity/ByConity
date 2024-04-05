@@ -3,10 +3,10 @@ drop table if exists ary;
 set dialect_type = 'MYSQL';
 set enable_implicit_arg_type_convert = 1;
 
-create table ary(a Nullable(int), b array(int), c array(array(int)), d array(Nullable(float)), e array(FixedString(3)), f array(LowCardinality(Nullable(String))), g Nullable(int), h Array(DateTime)) engine=CnchMergeTree() order by a;
+create table ary(a Nullable(int), b array(int), c array(array(int)), d array(Nullable(float)), e array(FixedString(3)), f array(LowCardinality(Nullable(String))), g Nullable(int), h Array(DateTime), m Map(int, String) not NULL) engine=CnchMergeTree() order by a;
 
-insert into ary values (1, [1], [[1]], [], ['1.2'], [NULL, NULL], NULL, ['2023-11-11', '2011-11-11', '2025-11-11']);
-insert into ary values (NULL, [1,2,3], [[1], [2,3]], [1.2, NULL], ['1.2', '2'], ['hello', 'world'], NULL, ['2023-11-11 11:11:11', '2023-11-11 11:11:12', '2023-11-11 11:11:10']);
+insert into ary values (1, [1], [[1]], [], ['1.2'], [NULL, NULL], NULL, ['2023-11-11', '2011-11-11', '2025-11-11'], {1:'a'});
+insert into ary values (NULL, [1,2,3], [[1], [2,3]], [1.2, NULL], ['1.2', '2'], ['hello', 'world'], NULL, ['2023-11-11 11:11:11', '2023-11-11 11:11:12', '2023-11-11 11:11:10'], {2:'b'});
 
 select '"array_join"';
 select array_join(b, 'x'), array_join(b, 100), array_join(b, 78.9), array_join(b, toDate('2024-02-12')), array_join(b, NULL), array_join(b, a), array_join(b, g) from ary order by a;
@@ -42,6 +42,8 @@ select element_at([NULL, 1, 2], 1), element_at([NULL, 1, 2], NULL);
 select element_at(b, 0) from ary order by a; -- { serverError 135 }
 select element_at(b, 1.2) from ary order by a; -- { serverError 43 }
 select element_at([1,2,3], 0); -- { serverError 135 }
+
+select element_at(m, 1) from ary order by a;
 
 select '"slice"';
 select slice(b, 1, 1), slice(b, 100, 100) from ary order by a; 
@@ -290,3 +292,4 @@ select reverse(b), reverse(d), reverse(e), reverse(f), reverse(h) from ary order
 select '"shuffle"';
 select shuffle(b), shuffle(c), shuffle(d), shuffle(e), shuffle(f) from ary format Null; 
 select shuffle([1,2,3]), shuffle([NULL, NULL]), shuffle([1.2, 2.3, 3.4]), shuffle([[1], [2,3]]), shuffle(['ab', 'bc', 'de']) format Null;
+
