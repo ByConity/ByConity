@@ -63,9 +63,11 @@ public:
     using Key = TKey;
     using Mapped = TMapped;
     using MappedPtr = std::shared_ptr<Mapped>;
+    using Delay = std::chrono::seconds;
     using Base = LRUCache<TKey, TMapped, HashFunction, WeightFunction>;
 
-    explicit CnchDataCache(size_t max_parts_to_cache) : Base(max_parts_to_cache)
+    explicit CnchDataCache(size_t max_parts_to_cache, const Delay & expiration_delay = Delay::zero()) 
+        : Base(max_parts_to_cache, expiration_delay)
     {
         this->inner_container = std::make_unique<CacheContainer<Key>>();
     }
@@ -154,7 +156,7 @@ private:
 
 public:
     ~CnchDataPartCache() override = default;
-    explicit CnchDataPartCache(size_t max_parts_to_cache) : Base(max_parts_to_cache) { }
+    explicit CnchDataPartCache(size_t max_parts_to_cache, const Delay & expiration_delay) : Base(max_parts_to_cache, expiration_delay) { }
 };
 
 class CnchDeleteBitmapCache
@@ -169,7 +171,7 @@ private:
 
 public:
     ~CnchDeleteBitmapCache() override = default;
-    explicit CnchDeleteBitmapCache(size_t max_parts_to_cache) : Base(max_parts_to_cache) { }
+    explicit CnchDeleteBitmapCache(size_t max_parts_to_cache, const Delay & expiration_delay) : Base(max_parts_to_cache, expiration_delay) { }
 };
 
 using CnchDataPartCachePtr = std::shared_ptr<CnchDataPartCache>;
