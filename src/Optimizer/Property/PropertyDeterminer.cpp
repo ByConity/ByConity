@@ -189,6 +189,24 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
 
 PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext & context)
 {
+    if (!context.getContext().getSettingsRef().enable_shuffle_before_state_func && step.getAggregates().size() > 0)
+    {
+        bool all_state_agg = true;
+        for (const auto & agg : step.getAggregates())
+        {
+            if (!agg.function->getName().ends_with("State"))
+            {
+                all_state_agg = false;
+                break;
+            }
+        }
+        if (all_state_agg)
+        {
+            auto require = context.getRequired();
+            require.setPreferred(true);
+            return {{require}};
+        }
+    }
     //    if (/*step.isTotals() || */)
     //    {
     //        return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
