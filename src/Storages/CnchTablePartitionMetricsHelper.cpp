@@ -395,8 +395,7 @@ void CnchTablePartitionMetricsHelper::updateMetrics(
     auto current_time = getContext()->getTimestamp();
     for (const auto & part : items.data_parts)
         table_metrics_ptr->getDataRef().update(part, current_time, positive);
-    for (const auto & part : items.staged_parts)
-        table_metrics_ptr->getDataRef().update(part, current_time, positive);
+    /// not handling staged parts because we never move them to trash
     for (const auto & bitmap : items.delete_bitmaps)
         table_metrics_ptr->getDataRef().update(bitmap, current_time, positive);
 }

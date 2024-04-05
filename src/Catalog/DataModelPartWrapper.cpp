@@ -163,6 +163,11 @@ UInt64 ServerDataPart::txnID() const
     return part_model_wrapper->txnID();
 }
 
+bool ServerDataPart::hasStagingTxnID() const
+{
+    return part_model().has_staging_txn_id();
+}
+
 MutableMergeTreeDataPartCNCHPtr ServerDataPart::toCNCHDataPart(
     const MergeTreeMetaBase & storage,
     /*const std::unordered_map<UInt32, String> & id_full_paths,*/
