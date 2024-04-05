@@ -3623,25 +3623,31 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
     // winners
 
     auto partition_str = [&](const Partitioning & partitioning) {
+        auto component_str = " ANY";
+        if (partitioning.getComponent() == Partitioning::Component::COORDINATOR)
+            component_str = " COORDINATOR";
+        else if (partitioning.getComponent() == Partitioning::Component::WORKER)
+            component_str = " WORKER";
+
         if (partitioning.getPartitioningHandle() == Partitioning::Handle::SINGLE)
-            return String("SINGLE");
+            return String("SINGLE") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_BROADCAST)
-            return String("BROADCAST");
+            return String("BROADCAST") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
-            return String("ARBITRARY");
+            return String("ARBITRARY") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE)
-            return String("BUCKET_TABLE");
+            return String("BUCKET_TABLE") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_ARBITRARY)
-            return String("FIXED_ARBITRARY");
+            return String("FIXED_ARBITRARY") + component_str;
         else if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_HASH)
         {
             if (partitioning.getPartitioningColumns().empty())
             {
-                return String("[]");
+                return String("FIXED_HASH[]") + component_str;
             }
             else
             {
-                auto result = String("[")
+                auto result = String("FIXED_HASH[")
                     + std::accumulate(
                                   std::next(partitioning.getPartitioningColumns().begin()),
                                   partitioning.getPartitioningColumns().end(),
@@ -3656,11 +3662,11 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
                 {
                     result += " handle";
                 }
-                return result;
+                return result + component_str;
             }
         }
         else
-            return String("UNKNOWN");
+            return String("UNKNOWN") + component_str;
     };
     auto property_str = [&](const Property & property) {
         std::stringstream ss;
