@@ -22,7 +22,9 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
+#include "Optimizer/Property/Property.h"
 #include "QueryPlan/TotalsHavingStep.h"
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -86,7 +88,7 @@ PropertySets DeterminerVisitor::visitFinishSortingStep(const FinishSortingStep &
 
 PropertySets DeterminerVisitor::visitProjectionStep(const ProjectionStep & step, DeterminerContext & ctx)
 {
-    if (step.isFinalProject())
+    if (step.isFinalProject() && ctx.getRequired().getNodePartitioning().getComponent() != Partitioning::Component::WORKER)
         return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
     auto assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
@@ -519,9 +521,17 @@ PropertySets DeterminerVisitor::visitFillingStep(const FillingStep &, Determiner
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
-PropertySets DeterminerVisitor::visitTableWriteStep(const TableWriteStep &, DeterminerContext &)
+PropertySets DeterminerVisitor::visitTableWriteStep(const TableWriteStep & step, DeterminerContext & context)
 {
     auto node = Partitioning{Partitioning::Handle::FIXED_ARBITRARY};
+    if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(step.getTarget()->getStorage().get()))
+    {
+        // unique table can't support do TableWrite in many workers.
+        if (cnch_table->getInMemoryMetadataPtr()->hasUniqueKey() && !context.getContext().getSettingsRef().enable_staging_area_for_write)
+        {
+            node = Partitioning{Partitioning::Handle::SINGLE};
+        }
+    }
     node.setComponent(Partitioning::Component::WORKER);
     return {{Property{node}}};
 }
