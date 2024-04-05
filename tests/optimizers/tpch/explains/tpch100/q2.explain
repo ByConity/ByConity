@@ -14,11 +14,13 @@ Projection Est. 100 rows
                │     Runtime Filters Builder: {ps_partkey}
                ├─ Repartition Exchange Est. 359601 rows
                │  │     Partition by: {p_partkey}
-               │  └─ Filter Est. 359601 rows
-               │     │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
-               │     └─ TableScan tpch100.part Est. 20000000 rows
-               │              Where: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
-               │              Outputs: [p_partkey, p_mfgr, p_type, p_size]
+               │  └─ Projection Est. 359601 rows
+               │     │     Expressions: [p_mfgr, p_partkey]
+               │     └─ Filter Est. 359601 rows
+               │        │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
+               │        └─ TableScan tpch100.part Est. 20000000 rows
+               │                 Where: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
+               │                 Outputs: [p_partkey, p_mfgr, p_type, p_size]
                └─ Repartition Exchange Est. 285851 rows
                   │     Partition by: {ps_partkey}
                   └─ Inner Join Est. 230144 rows
@@ -90,11 +92,13 @@ Projection Est. 100 rows
                      │                                │           Outputs: n_nationkey_1:=n_nationkey, n_regionkey_1:=n_regionkey
                      │                                └─ Repartition Exchange Est. 1 rows
                      │                                   │     Partition by: {r_regionkey_1}
-                     │                                   └─ Filter Est. 1 rows
-                     │                                      │     Condition: r_name_1 = 'EUROPE'
-                     │                                      └─ TableScan tpch100.region Est. 5 rows
-                     │                                               Where: r_name = 'EUROPE'
-                     │                                               Outputs: r_regionkey_1:=r_regionkey, r_name_1:=r_name
+                     │                                   └─ Projection Est. 1 rows
+                     │                                      │     Expressions: [r_regionkey_1]
+                     │                                      └─ Filter Est. 1 rows
+                     │                                         │     Condition: r_name_1 = 'EUROPE'
+                     │                                         └─ TableScan tpch100.region Est. 5 rows
+                     │                                                  Where: r_name = 'EUROPE'
+                     │                                                  Outputs: r_regionkey_1:=r_regionkey, r_name_1:=r_name
                      └─ Repartition Exchange Est. 200000 rows
                         │     Partition by: {s_suppkey}
                         └─ Inner Join Est. 200000 rows
@@ -114,10 +118,12 @@ Projection Est. 100 rows
                                  │           Outputs: [n_nationkey, n_name, n_regionkey]
                                  └─ Repartition Exchange Est. 1 rows
                                     │     Partition by: {r_regionkey}
-                                    └─ Filter Est. 1 rows
-                                       │     Condition: r_name = 'EUROPE'
-                                       └─ TableScan tpch100.region Est. 5 rows
-                                                Where: r_name = 'EUROPE'
-                                                Outputs: [r_regionkey, r_name]
+                                    └─ Projection Est. 1 rows
+                                       │     Expressions: [r_regionkey]
+                                       └─ Filter Est. 1 rows
+                                          │     Condition: r_name = 'EUROPE'
+                                          └─ TableScan tpch100.region Est. 5 rows
+                                                   Where: r_name = 'EUROPE'
+                                                   Outputs: [r_regionkey, r_name]
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 8 times.

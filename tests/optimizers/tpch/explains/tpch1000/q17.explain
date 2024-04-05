@@ -22,11 +22,13 @@ Projection Est. 1 rows
                   │     Runtime Filters Builder: {l_partkey_1}
                   ├─ Repartition Exchange Est. 200140 rows
                   │  │     Partition by: {p_partkey}
-                  │  └─ Filter Est. 200140 rows
-                  │     │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
-                  │     └─ TableScan tpch1000.part Est. 200000000 rows
-                  │              Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
-                  │              Outputs: [p_partkey, p_brand, p_container]
+                  │  └─ Projection Est. 200140 rows
+                  │     │     Expressions: [p_partkey]
+                  │     └─ Filter Est. 200140 rows
+                  │        │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
+                  │        └─ TableScan tpch1000.part Est. 200000000 rows
+                  │                 Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
+                  │                 Outputs: [p_partkey, p_brand, p_container]
                   └─ Aggregating Est. 200140 rows
                      │     Group by: {l_partkey_1}
                      │     Aggregates: expr#avg(l_quantity):=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)

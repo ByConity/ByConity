@@ -57,11 +57,13 @@ Projection Est. 100 rows
                               │     │     │  │     │  │           Where: Runtime Filters: {cs_bill_cdemo_sk, cs_bill_hdemo_sk, cs_sold_date_sk}
                               │     │     │  │     │  │           Outputs: [cs_sold_date_sk, cs_ship_date_sk, cs_bill_cdemo_sk, cs_bill_hdemo_sk, cs_item_sk, cs_promo_sk, cs_order_number, cs_quantity]
                               │     │     │  │     │  └─ Broadcast Exchange Est. 1200 rows
-                              │     │     │  │     │     └─ Filter Est. 1200 rows
-                              │     │     │  │     │        │     Condition: hd_buy_potential = '>10000'
-                              │     │     │  │     │        └─ TableScan tpcds1000.household_demographics Est. 7200 rows
-                              │     │     │  │     │                 Where: hd_buy_potential = '>10000'
-                              │     │     │  │     │                 Outputs: [hd_demo_sk, hd_buy_potential]
+                              │     │     │  │     │     └─ Projection Est. 1200 rows
+                              │     │     │  │     │        │     Expressions: [hd_demo_sk]
+                              │     │     │  │     │        └─ Filter Est. 1200 rows
+                              │     │     │  │     │           │     Condition: hd_buy_potential = '>10000'
+                              │     │     │  │     │           └─ TableScan tpcds1000.household_demographics Est. 7200 rows
+                              │     │     │  │     │                    Where: hd_buy_potential = '>10000'
+                              │     │     │  │     │                    Outputs: [hd_demo_sk, hd_buy_potential]
                               │     │     │  │     └─ Broadcast Exchange Est. 2554 rows
                               │     │     │  │        └─ Inner Join Est. 2554 rows
                               │     │     │  │           │     Condition: d_week_seq_1 == d_week_seq
@@ -72,18 +74,22 @@ Projection Est. 100 rows
                               │     │     │  │           │           Where: Runtime Filters: {d_week_seq}
                               │     │     │  │           │           Outputs: d_date_sk_1:=d_date_sk, d_week_seq_1:=d_week_seq
                               │     │     │  │           └─ Broadcast Exchange Est. 365 rows
-                              │     │     │  │              └─ Filter Est. 365 rows
-                              │     │     │  │                 │     Condition: d_year = 1999
-                              │     │     │  │                 └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                              │     │     │  │                          Where: d_year = 1999
-                              │     │     │  │                          Outputs: [d_date_sk, d_date, d_week_seq, d_year]
+                              │     │     │  │              └─ Projection Est. 365 rows
+                              │     │     │  │                 │     Expressions: [d_date, d_date_sk, d_week_seq]
+                              │     │     │  │                 └─ Filter Est. 365 rows
+                              │     │     │  │                    │     Condition: d_year = 1999
+                              │     │     │  │                    └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                              │     │     │  │                             Where: d_year = 1999
+                              │     │     │  │                             Outputs: [d_date_sk, d_date, d_week_seq, d_year]
                               │     │     │  └─ Repartition Exchange Est. 384160 rows
                               │     │     │     │     Partition by: {cd_demo_sk}
-                              │     │     │     └─ Filter Est. 384160 rows
-                              │     │     │        │     Condition: cd_marital_status = 'D'
-                              │     │     │        └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
-                              │     │     │                 Where: cd_marital_status = 'D'
-                              │     │     │                 Outputs: [cd_demo_sk, cd_marital_status]
+                              │     │     │     └─ Projection Est. 384160 rows
+                              │     │     │        │     Expressions: [cd_demo_sk]
+                              │     │     │        └─ Filter Est. 384160 rows
+                              │     │     │           │     Condition: cd_marital_status = 'D'
+                              │     │     │           └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
+                              │     │     │                    Where: cd_marital_status = 'D'
+                              │     │     │                    Outputs: [cd_demo_sk, cd_marital_status]
                               │     │     └─ Broadcast Exchange Est. 73049 rows
                               │     │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
                               │     │                 Outputs: d_date_sk_2:=d_date_sk, d_date_1:=d_date

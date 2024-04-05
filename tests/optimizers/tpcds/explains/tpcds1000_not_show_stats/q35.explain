@@ -61,11 +61,13 @@ Projection
                               │     │              │           Where: Runtime Filters: {ss_sold_date_sk}
                               │     │              │           Outputs: [ss_sold_date_sk, ss_customer_sk]
                               │     │              └─ Broadcast Exchange
-                              │     │                 └─ Filter
-                              │     │                    │     Condition: (d_year = 2002) AND (d_qoy < 4)
-                              │     │                    └─ TableScan tpcds1000.date_dim
-                              │     │                             Where: (d_year = 2002) AND (d_qoy < 4)
-                              │     │                             Outputs: [d_date_sk, d_year, d_qoy]
+                              │     │                 └─ Projection
+                              │     │                    │     Expressions: [d_date_sk]
+                              │     │                    └─ Filter
+                              │     │                       │     Condition: (d_year = 2002) AND (d_qoy < 4)
+                              │     │                       └─ TableScan tpcds1000.date_dim
+                              │     │                                Where: (d_year = 2002) AND (d_qoy < 4)
+                              │     │                                Outputs: [d_date_sk, d_year, d_qoy]
                               │     └─ Projection
                               │        │     Expressions: [ws_bill_customer_sk], build_side_non_null_symbol_1:=1
                               │        └─ MergingAggregated
@@ -82,11 +84,13 @@ Projection
                               │                    │           Where: Runtime Filters: {ws_sold_date_sk}
                               │                    │           Outputs: [ws_sold_date_sk, ws_bill_customer_sk]
                               │                    └─ Broadcast Exchange
-                              │                       └─ Filter
-                              │                          │     Condition: (d_year_1 = 2002) AND (d_qoy_1 < 4)
-                              │                          └─ TableScan tpcds1000.date_dim
-                              │                                   Where: (d_year = 2002) AND (d_qoy < 4)
-                              │                                   Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_qoy_1:=d_qoy
+                              │                       └─ Projection
+                              │                          │     Expressions: [d_date_sk_1]
+                              │                          └─ Filter
+                              │                             │     Condition: (d_year_1 = 2002) AND (d_qoy_1 < 4)
+                              │                             └─ TableScan tpcds1000.date_dim
+                              │                                      Where: (d_year = 2002) AND (d_qoy < 4)
+                              │                                      Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_qoy_1:=d_qoy
                               └─ Projection
                                  │     Expressions: [cs_ship_customer_sk], build_side_non_null_symbol_2:=1
                                  └─ MergingAggregated
@@ -103,9 +107,11 @@ Projection
                                              │           Where: Runtime Filters: {cs_sold_date_sk}
                                              │           Outputs: [cs_sold_date_sk, cs_ship_customer_sk]
                                              └─ Broadcast Exchange
-                                                └─ Filter
-                                                   │     Condition: (d_year_2 = 2002) AND (d_qoy_2 < 4)
-                                                   └─ TableScan tpcds1000.date_dim
-                                                            Where: (d_year = 2002) AND (d_qoy < 4)
-                                                            Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_qoy_2:=d_qoy
+                                                └─ Projection
+                                                   │     Expressions: [d_date_sk_2]
+                                                   └─ Filter
+                                                      │     Condition: (d_year_2 = 2002) AND (d_qoy_2 < 4)
+                                                      └─ TableScan tpcds1000.date_dim
+                                                               Where: (d_year = 2002) AND (d_qoy < 4)
+                                                               Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_qoy_2:=d_qoy
 note: Runtime Filter is applied for 3 times.

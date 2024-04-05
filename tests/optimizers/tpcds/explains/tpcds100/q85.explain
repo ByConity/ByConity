@@ -27,17 +27,21 @@ Projection Est. 54 rows
                            │  │  └─ Inner Join Est. 14420368 rows
                            │  │     │     Condition: ws_sold_date_sk == d_date_sk
                            │  │     │     Runtime Filters Builder: {d_date_sk}
-                           │  │     ├─ Filter Est. 71983317 rows
-                           │  │     │  │     Condition: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
-                           │  │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
-                           │  │     │           Where: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
-                           │  │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_web_page_sk, ws_order_number, ws_quantity, ws_sales_price, ws_net_profit]
+                           │  │     ├─ Projection Est. 71983317 rows
+                           │  │     │  │     Expressions: [ws_item_sk, ws_net_profit, ws_order_number, ws_quantity, ws_sales_price, ws_sold_date_sk]
+                           │  │     │  └─ Filter Est. 71983317 rows
+                           │  │     │     │     Condition: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
+                           │  │     │     └─ TableScan tpcds100.web_sales Est. 72001237 rows
+                           │  │     │              Where: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
+                           │  │     │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_web_page_sk, ws_order_number, ws_quantity, ws_sales_price, ws_net_profit]
                            │  │     └─ Broadcast Exchange Est. 366 rows
-                           │  │        └─ Filter Est. 366 rows
-                           │  │           │     Condition: d_year = 2000
-                           │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                           │  │                    Where: d_year = 2000
-                           │  │                    Outputs: [d_date_sk, d_year]
+                           │  │        └─ Projection Est. 366 rows
+                           │  │           │     Expressions: [d_date_sk]
+                           │  │           └─ Filter Est. 366 rows
+                           │  │              │     Condition: d_year = 2000
+                           │  │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                           │  │                       Where: d_year = 2000
+                           │  │                       Outputs: [d_date_sk, d_year]
                            │  └─ Repartition Exchange Est. 4606509 rows
                            │     │     Partition by: {wr_item_sk, wr_order_number}
                            │     └─ Inner Join Est. 4606509 rows
@@ -64,11 +68,13 @@ Projection Est. 54 rows
                            │        │                 Outputs: cd_demo_sk_1:=cd_demo_sk, cd_marital_status_1:=cd_marital_status, cd_education_status_1:=cd_education_status
                            │        └─ Repartition Exchange Est. 1000000 rows
                            │           │     Partition by: {ca_address_sk}
-                           │           └─ Filter Est. 1000000 rows
-                           │              │     Condition: ca_country = 'United States'
-                           │              └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                           │                       Where: ca_country = 'United States'
-                           │                       Outputs: [ca_address_sk, ca_state, ca_country]
+                           │           └─ Projection Est. 1000000 rows
+                           │              │     Expressions: [ca_address_sk, ca_state]
+                           │              └─ Filter Est. 1000000 rows
+                           │                 │     Condition: ca_country = 'United States'
+                           │                 └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                           │                          Where: ca_country = 'United States'
+                           │                          Outputs: [ca_address_sk, ca_state, ca_country]
                            └─ Broadcast Exchange Est. 55 rows
                               └─ TableScan tpcds100.reason Est. 55 rows
                                        Outputs: [r_reason_sk, r_reason_desc]

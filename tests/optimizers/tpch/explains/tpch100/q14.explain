@@ -21,9 +21,11 @@ Projection Est. 1 rows
                   │              Outputs: [p_partkey, p_type]
                   └─ Repartition Exchange Est. 7732923 rows
                      │     Partition by: {l_partkey}
-                     └─ Filter Est. 7732923 rows
-                        │     Condition: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
-                        └─ TableScan tpch100.lineitem Est. 600037902 rows
-                                 Where: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
-                                 Outputs: [l_partkey, l_extendedprice, l_discount, l_shipdate]
+                     └─ Projection Est. 7732923 rows
+                        │     Expressions: [l_discount, l_extendedprice, l_partkey]
+                        └─ Filter Est. 7732923 rows
+                           │     Condition: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
+                           └─ TableScan tpch100.lineitem Est. 600037902 rows
+                                    Where: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
+                                    Outputs: [l_partkey, l_extendedprice, l_discount, l_shipdate]
 note: Runtime Filter is applied for 1 times.

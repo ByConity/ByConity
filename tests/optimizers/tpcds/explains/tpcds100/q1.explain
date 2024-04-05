@@ -42,11 +42,13 @@ Projection Est. 100 rows
                │                 │  │           Where: Runtime Filters: {sr_returned_date_sk, sr_store_sk}
                │                 │  │           Outputs: sr_returned_date_sk_1:=sr_returned_date_sk, sr_customer_sk_3:=sr_customer_sk, sr_store_sk_3:=sr_store_sk, sr_return_amt_1:=sr_return_amt
                │                 │  └─ Broadcast Exchange Est. 366 rows
-               │                 │     └─ Filter Est. 366 rows
-               │                 │        │     Condition: d_year_1 = 2000
-               │                 │        └─ TableScan tpcds100.date_dim Est. 73049 rows
-               │                 │                 Where: d_year = 2000
-               │                 │                 Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
+               │                 │     └─ Projection Est. 366 rows
+               │                 │        │     Expressions: [d_date_sk_1]
+               │                 │        └─ Filter Est. 366 rows
+               │                 │           │     Condition: d_year_1 = 2000
+               │                 │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+               │                 │                    Where: d_year = 2000
+               │                 │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                │                 └─ Broadcast Exchange Est. 45 rows
                │                    └─ MergingAggregated Est. 45 rows
                │                       └─ Repartition Exchange Est. 45 rows
@@ -87,11 +89,13 @@ Projection Est. 100 rows
                      │                 │  │           Where: Runtime Filters: {sr_returned_date_sk, sr_store_sk}
                      │                 │  │           Outputs: sr_returned_date_sk_2:=sr_returned_date_sk, sr_customer_sk_4:=sr_customer_sk, sr_store_sk_4:=sr_store_sk, sr_return_amt_2:=sr_return_amt
                      │                 │  └─ Broadcast Exchange Est. 366 rows
-                     │                 │     └─ Filter Est. 366 rows
-                     │                 │        │     Condition: d_year_2 = 2000
-                     │                 │        └─ TableScan tpcds100.date_dim Est. 73049 rows
-                     │                 │                 Where: d_year = 2000
-                     │                 │                 Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                     │                 │     └─ Projection Est. 366 rows
+                     │                 │        │     Expressions: [d_date_sk_2]
+                     │                 │        └─ Filter Est. 366 rows
+                     │                 │           │     Condition: d_year_2 = 2000
+                     │                 │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+                     │                 │                    Where: d_year = 2000
+                     │                 │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
                      │                 └─ Broadcast Exchange Est. 45 rows
                      │                    └─ MergingAggregated Est. 45 rows
                      │                       └─ Repartition Exchange Est. 45 rows
@@ -107,10 +111,12 @@ Projection Est. 100 rows
                      │                                            Outputs: [s_store_sk, s_state]
                      └─ Repartition Exchange Est. 45 rows
                         │     Partition by: {s_store_sk}
-                        └─ Filter Est. 45 rows
-                           │     Condition: s_state = 'TN'
-                           └─ TableScan tpcds100.store Est. 402 rows
-                                    Where: s_state = 'TN'
-                                    Outputs: [s_store_sk, s_state]
+                        └─ Projection Est. 45 rows
+                           │     Expressions: [s_store_sk]
+                           └─ Filter Est. 45 rows
+                              │     Condition: s_state = 'TN'
+                              └─ TableScan tpcds100.store Est. 402 rows
+                                       Where: s_state = 'TN'
+                                       Outputs: [s_store_sk, s_state]
 note: Magic Set is applied for 2 parts.
 note: Runtime Filter is applied for 7 times.

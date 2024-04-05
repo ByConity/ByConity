@@ -55,11 +55,13 @@ Projection
                │                 │                             Where: s_state = 'TN'
                │                 │                             Outputs: [s_store_sk, s_state]
                │                 └─ Broadcast Exchange
-               │                    └─ Filter
-               │                       │     Condition: d_year_1 = 2000
-               │                       └─ TableScan tpcds1000.date_dim
-               │                                Where: d_year = 2000
-               │                                Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
+               │                    └─ Projection
+               │                       │     Expressions: [d_date_sk_1]
+               │                       └─ Filter
+               │                          │     Condition: d_year_1 = 2000
+               │                          └─ TableScan tpcds1000.date_dim
+               │                                   Where: d_year = 2000
+               │                                   Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                └─ Broadcast Exchange
                   └─ Inner Join
                      │     Condition: sr_store_sk_2 == s_store_sk
@@ -100,17 +102,21 @@ Projection
                      │                 │                             Where: s_state = 'TN'
                      │                 │                             Outputs: [s_store_sk, s_state]
                      │                 └─ Broadcast Exchange
-                     │                    └─ Filter
-                     │                       │     Condition: d_year_2 = 2000
-                     │                       └─ TableScan tpcds1000.date_dim
-                     │                                Where: d_year = 2000
-                     │                                Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                     │                    └─ Projection
+                     │                       │     Expressions: [d_date_sk_2]
+                     │                       └─ Filter
+                     │                          │     Condition: d_year_2 = 2000
+                     │                          └─ TableScan tpcds1000.date_dim
+                     │                                   Where: d_year = 2000
+                     │                                   Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
                      └─ Repartition Exchange
                         │     Partition by: {s_store_sk}
-                        └─ Filter
-                           │     Condition: s_state = 'TN'
-                           └─ TableScan tpcds1000.store
-                                    Where: s_state = 'TN'
-                                    Outputs: [s_store_sk, s_state]
+                        └─ Projection
+                           │     Expressions: [s_store_sk]
+                           └─ Filter
+                              │     Condition: s_state = 'TN'
+                              └─ TableScan tpcds1000.store
+                                       Where: s_state = 'TN'
+                                       Outputs: [s_store_sk, s_state]
 note: Magic Set is applied for 2 parts.
 note: Runtime Filter is applied for 7 times.

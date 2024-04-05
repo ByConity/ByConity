@@ -71,11 +71,13 @@ CTEDef [0]
             │     │           Where: Runtime Filters: {cr_returned_date_sk}
             │     │           Outputs: [cr_returned_date_sk, cr_returning_customer_sk, cr_returning_addr_sk, cr_return_amt_inc_tax]
             │     └─ Broadcast Exchange Est. 366 rows
-            │        └─ Filter Est. 366 rows
-            │           │     Condition: d_year = 2000
-            │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-            │                    Where: d_year = 2000
-            │                    Outputs: [d_date_sk, d_year]
+            │        └─ Projection Est. 366 rows
+            │           │     Expressions: [d_date_sk]
+            │           └─ Filter Est. 366 rows
+            │              │     Condition: d_year = 2000
+            │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+            │                       Where: d_year = 2000
+            │                       Outputs: [d_date_sk, d_year]
             └─ Repartition Exchange Est. 1000000 rows
                │     Partition by: {ca_address_sk}
                └─ TableScan tpcds100.customer_address Est. 1000000 rows

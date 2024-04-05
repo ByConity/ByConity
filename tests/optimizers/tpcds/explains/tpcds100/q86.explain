@@ -35,11 +35,13 @@ Projection Est. 100 rows
                                     │     │           Where: Runtime Filters: {ws_sold_date_sk}
                                     │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_net_paid]
                                     │     └─ Broadcast Exchange Est. 334 rows
-                                    │        └─ Filter Est. 334 rows
-                                    │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                    │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                    │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                    │                    Outputs: [d_date_sk, d_month_seq]
+                                    │        └─ Projection Est. 334 rows
+                                    │           │     Expressions: [d_date_sk]
+                                    │           └─ Filter Est. 334 rows
+                                    │              │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                    │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                    │                       Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                    │                       Outputs: [d_date_sk, d_month_seq]
                                     └─ Repartition Exchange Est. 204000 rows
                                        │     Partition by: {i_item_sk}
                                        └─ TableScan tpcds100.item Est. 204000 rows

@@ -56,21 +56,25 @@ Projection Est. 100 rows
                │                 │                             Where: s_state = 'TN'
                │                 │                             Outputs: [s_store_sk, s_state]
                │                 └─ Broadcast Exchange Est. 366 rows
-               │                    └─ Filter Est. 366 rows
-               │                       │     Condition: d_year_1 = 2000
-               │                       └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-               │                                Where: d_year = 2000
-               │                                Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
+               │                    └─ Projection Est. 366 rows
+               │                       │     Expressions: [d_date_sk_1]
+               │                       └─ Filter Est. 366 rows
+               │                          │     Condition: d_year_1 = 2000
+               │                          └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+               │                                   Where: d_year = 2000
+               │                                   Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                └─ Broadcast Exchange Est. 41 rows
                   └─ Inner Join Est. 41 rows
                      │     Condition: s_store_sk == sr_store_sk_2
                      ├─ Repartition Exchange Est. 41 rows
                      │  │     Partition by: {s_store_sk}
-                     │  └─ Filter Est. 41 rows
-                     │     │     Condition: s_state = 'TN'
-                     │     └─ TableScan tpcds1000_sample.store Est. 1002 rows
-                     │              Where: s_state = 'TN'
-                     │              Outputs: [s_store_sk, s_state]
+                     │  └─ Projection Est. 41 rows
+                     │     │     Expressions: [s_store_sk]
+                     │     └─ Filter Est. 41 rows
+                     │        │     Condition: s_state = 'TN'
+                     │        └─ TableScan tpcds1000_sample.store Est. 1002 rows
+                     │                 Where: s_state = 'TN'
+                     │                 Outputs: [s_store_sk, s_state]
                      └─ Aggregating Est. 40 rows
                         │     Group by: {sr_store_sk_2}
                         │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(sr_return_amt)_2,build_side_non_null_symbol)
@@ -107,10 +111,12 @@ Projection Est. 100 rows
                                        │                             Where: s_state = 'TN'
                                        │                             Outputs: [s_store_sk, s_state]
                                        └─ Broadcast Exchange Est. 366 rows
-                                          └─ Filter Est. 366 rows
-                                             │     Condition: d_year_2 = 2000
-                                             └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                                      Where: d_year = 2000
-                                                      Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                                          └─ Projection Est. 366 rows
+                                             │     Expressions: [d_date_sk_2]
+                                             └─ Filter Est. 366 rows
+                                                │     Condition: d_year_2 = 2000
+                                                └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                                         Where: d_year = 2000
+                                                         Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
 note: Magic Set is applied for 2 parts.
 note: Runtime Filter is applied for 6 times.

@@ -16,11 +16,13 @@ Projection
                      │     Runtime Filters Builder: {l_orderkey}
                      ├─ Repartition Exchange
                      │  │     Partition by: {o_orderkey}
-                     │  └─ Filter
-                     │     │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')) Runtime Filters: {o_orderkey}
-                     │     └─ TableScan tpch1000.orders
-                     │              Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')) Runtime Filters: {o_orderkey}
-                     │              Outputs: [o_orderkey, o_orderdate, o_orderpriority]
+                     │  └─ Projection
+                     │     │     Expressions: [o_orderkey, o_orderpriority]
+                     │     └─ Filter
+                     │        │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')) Runtime Filters: {o_orderkey}
+                     │        └─ TableScan tpch1000.orders
+                     │                 Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')) Runtime Filters: {o_orderkey}
+                     │                 Outputs: [o_orderkey, o_orderdate, o_orderpriority]
                      └─ Aggregating
                         │     Group by: {l_orderkey}
                         └─ Inner (PARALLEL_HASH) Join
@@ -28,11 +30,13 @@ Projection
                            │     Runtime Filters Builder: {o_orderkey_1}
                            ├─ Repartition Exchange
                            │  │     Partition by: {l_orderkey}
-                           │  └─ Filter
-                           │     │     Condition: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
-                           │     └─ TableScan tpch1000.lineitem
-                           │              Where: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
-                           │              Outputs: [l_orderkey, l_commitdate, l_receiptdate]
+                           │  └─ Projection
+                           │     │     Expressions: [l_orderkey]
+                           │     └─ Filter
+                           │        │     Condition: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
+                           │        └─ TableScan tpch1000.lineitem
+                           │                 Where: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
+                           │                 Outputs: [l_orderkey, l_commitdate, l_receiptdate]
                            └─ MergingAggregated
                               └─ Repartition Exchange
                                  │     Partition by: {o_orderkey_1}

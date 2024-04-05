@@ -29,11 +29,13 @@ Projection Est. 100 rows
                │  │           │           Where: Runtime Filters: {ss_sold_date_sk}
                │  │           │           Outputs: ss_sold_date_sk_1:=ss_sold_date_sk, ss_item_sk_1:=ss_item_sk, ss_store_sk_1:=ss_store_sk, ss_sales_price_1:=ss_sales_price
                │  │           └─ Broadcast Exchange Est. 333 rows
-               │  │              └─ Filter Est. 333 rows
-               │  │                 │     Condition: (d_month_seq_1 >= 1176) AND (d_month_seq_1 <= 1187)
-               │  │                 └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-               │  │                          Where: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
-               │  │                          Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
+               │  │              └─ Projection Est. 333 rows
+               │  │                 │     Expressions: [d_date_sk_1]
+               │  │                 └─ Filter Est. 333 rows
+               │  │                    │     Condition: (d_month_seq_1 >= 1176) AND (d_month_seq_1 <= 1187)
+               │  │                    └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+               │  │                             Where: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
+               │  │                             Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
                │  └─ Repartition Exchange Est. 300000 rows
                │     │     Partition by: {i_item_sk}
                │     └─ TableScan tpcds1000_sample.item Est. 300000 rows
@@ -65,9 +67,11 @@ Projection Est. 100 rows
                                        │           Where: Runtime Filters: {ss_sold_date_sk}
                                        │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
                                        └─ Broadcast Exchange Est. 333 rows
-                                          └─ Filter Est. 333 rows
-                                             │     Condition: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
-                                             └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                                      Where: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
-                                                      Outputs: [d_date_sk, d_month_seq]
+                                          └─ Projection Est. 333 rows
+                                             │     Expressions: [d_date_sk]
+                                             └─ Filter Est. 333 rows
+                                                │     Condition: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
+                                                └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                                         Where: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
+                                                         Outputs: [d_date_sk, d_month_seq]
 note: Runtime Filter is applied for 2 times.

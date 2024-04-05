@@ -27,17 +27,21 @@ Projection
                            │  │  └─ Inner Join
                            │  │     │     Condition: ws_sold_date_sk == d_date_sk
                            │  │     │     Runtime Filters Builder: {d_date_sk}
-                           │  │     ├─ Filter
-                           │  │     │  │     Condition: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
-                           │  │     │  └─ TableScan tpcds1000.web_sales
-                           │  │     │           Where: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
-                           │  │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_web_page_sk, ws_order_number, ws_quantity, ws_sales_price, ws_net_profit]
+                           │  │     ├─ Projection
+                           │  │     │  │     Expressions: [ws_item_sk, ws_net_profit, ws_order_number, ws_quantity, ws_sales_price, ws_sold_date_sk]
+                           │  │     │  └─ Filter
+                           │  │     │     │     Condition: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
+                           │  │     │     └─ TableScan tpcds1000.web_sales
+                           │  │     │              Where: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
+                           │  │     │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_web_page_sk, ws_order_number, ws_quantity, ws_sales_price, ws_net_profit]
                            │  │     └─ Broadcast Exchange
-                           │  │        └─ Filter
-                           │  │           │     Condition: d_year = 2000
-                           │  │           └─ TableScan tpcds1000.date_dim
-                           │  │                    Where: d_year = 2000
-                           │  │                    Outputs: [d_date_sk, d_year]
+                           │  │        └─ Projection
+                           │  │           │     Expressions: [d_date_sk]
+                           │  │           └─ Filter
+                           │  │              │     Condition: d_year = 2000
+                           │  │              └─ TableScan tpcds1000.date_dim
+                           │  │                       Where: d_year = 2000
+                           │  │                       Outputs: [d_date_sk, d_year]
                            │  └─ Repartition Exchange
                            │     │     Partition by: {wr_item_sk, wr_order_number}
                            │     └─ Inner (PARALLEL_HASH) Join
@@ -64,11 +68,13 @@ Projection
                            │        │                 Outputs: cd_demo_sk_1:=cd_demo_sk, cd_marital_status_1:=cd_marital_status, cd_education_status_1:=cd_education_status
                            │        └─ Repartition Exchange
                            │           │     Partition by: {ca_address_sk}
-                           │           └─ Filter
-                           │              │     Condition: ca_country = 'United States'
-                           │              └─ TableScan tpcds1000.customer_address
-                           │                       Where: ca_country = 'United States'
-                           │                       Outputs: [ca_address_sk, ca_state, ca_country]
+                           │           └─ Projection
+                           │              │     Expressions: [ca_address_sk, ca_state]
+                           │              └─ Filter
+                           │                 │     Condition: ca_country = 'United States'
+                           │                 └─ TableScan tpcds1000.customer_address
+                           │                          Where: ca_country = 'United States'
+                           │                          Outputs: [ca_address_sk, ca_state, ca_country]
                            └─ Broadcast Exchange
                               └─ TableScan tpcds1000.reason
                                        Outputs: [r_reason_sk, r_reason_desc]
