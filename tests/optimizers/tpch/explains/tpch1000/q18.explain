@@ -38,16 +38,18 @@ Projection Est. 100 rows
                      │        │     Partition by: {c_custkey}
                      │        └─ TableScan tpch1000.customer Est. 150000000 rows
                      │                 Outputs: [c_custkey, c_name]
-                     └─ Filter Est. 1077412840 rows
-                        │     Condition: `expr#sum(l_quantity)` > 300.
-                        └─ MergingAggregated Est. 1077412840 rows
-                           └─ Repartition Exchange Est. 1077412840 rows
-                              │     Partition by: {l_orderkey_1}
-                              └─ Aggregating Est. 1077412840 rows
-                                 │     Group by: {l_orderkey_1}
-                                 │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
-                                 └─ Filter Est. 5999989709 rows
-                                    │     Condition: isNotNull(l_orderkey_1)
-                                    └─ TableScan tpch1000.lineitem Est. 5999989709 rows
-                                             Where: isNotNull(l_orderkey)
-                                             Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
+                     └─ Projection Est. 1077412840 rows
+                        │     Expressions: [l_orderkey_1]
+                        └─ Filter Est. 1077412840 rows
+                           │     Condition: `expr#sum(l_quantity)` > 300.
+                           └─ MergingAggregated Est. 1077412840 rows
+                              └─ Repartition Exchange Est. 1077412840 rows
+                                 │     Partition by: {l_orderkey_1}
+                                 └─ Aggregating Est. 1077412840 rows
+                                    │     Group by: {l_orderkey_1}
+                                    │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
+                                    └─ Filter Est. 5999989709 rows
+                                       │     Condition: isNotNull(l_orderkey_1)
+                                       └─ TableScan tpch1000.lineitem Est. 5999989709 rows
+                                                Where: isNotNull(l_orderkey)
+                                                Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity

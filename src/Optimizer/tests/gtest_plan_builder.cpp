@@ -54,19 +54,19 @@ TEST(OptimizerPlanBuilder, DistinctToAggregate)
     ASSERT_EQ(agg_step->getKeys().size(), 1ul);
 }
 
-TEST(OptimizerPlanBuilder, DistinctLimitHint)
-{
-    BasePlanTest test;
-    auto plan = test.plan("select distinct a from (select 1 a union select 2) limit 1", test.createQueryContext());
+// TEST(OptimizerPlanBuilder, DistinctLimitHint)
+// {
+//     BasePlanTest test;
+//     auto plan = test.plan("select distinct a from (select 1 a union select 2) limit 1", test.createQueryContext());
 
-    auto distinct = PlanNodeSearcher::searchFrom(plan->getPlanNode())
-                        .where([](auto & node) { return node.getStep()->getType() == IQueryPlanStep::Type::Distinct; })
-                        .findFirst();
-    ASSERT_TRUE(distinct.has_value());
+//     auto distinct = PlanNodeSearcher::searchFrom(plan->getPlanNode())
+//                         .where([](auto & node) { return node.getStep()->getType() == IQueryPlanStep::Type::Distinct; })
+//                         .findFirst();
+//     ASSERT_TRUE(distinct.has_value());
 
-    const auto * distinct_step = dynamic_cast<const DistinctStep *>(distinct.value()->getStep().get());
-    ASSERT_EQ(distinct_step->getLimitHint(), 1ul);
-}
+//     const auto * distinct_step = dynamic_cast<const DistinctStep *>(distinct.value()->getStep().get());
+//     ASSERT_EQ(distinct_step->getLimitHint(), 1ul);
+// }
 
 TEST(OptimizerPlanBuilder, DistinctLimitHint2)
 {

@@ -42,11 +42,13 @@ Projection Est. 100 rows
                      │  │                    │     │           Where: Runtime Filters: {ss_sold_date_sk}
                      │  │                    │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_ticket_number, ss_quantity, ss_wholesale_cost, ss_sales_price]
                      │  │                    │     └─ Broadcast Exchange Est. 366 rows
-                     │  │                    │        └─ Filter Est. 366 rows
-                     │  │                    │           │     Condition: d_year = 2000
-                     │  │                    │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                     │  │                    │                    Where: d_year = 2000
-                     │  │                    │                    Outputs: [d_date_sk, d_year]
+                     │  │                    │        └─ Projection Est. 366 rows
+                     │  │                    │           │     Expressions: [d_date_sk]
+                     │  │                    │           └─ Filter Est. 366 rows
+                     │  │                    │              │     Condition: d_year = 2000
+                     │  │                    │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                     │  │                    │                       Where: d_year = 2000
+                     │  │                    │                       Outputs: [d_date_sk, d_year]
                      │  │                    └─ Repartition Exchange Est. 287999764 rows
                      │  │                       │     Partition by: {sr_item_sk, sr_ticket_number}
                      │  │                       └─ TableScan tpcds1000_sample.store_returns Est. 287999764 rows
@@ -76,11 +78,13 @@ Projection Est. 100 rows
                      │                       │     │           Where: Runtime Filters: {ws_sold_date_sk}
                      │                       │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_bill_customer_sk, ws_order_number, ws_quantity, ws_wholesale_cost, ws_sales_price]
                      │                       │     └─ Broadcast Exchange Est. 366 rows
-                     │                       │        └─ Filter Est. 366 rows
-                     │                       │           │     Condition: d_year_1 = 2000
-                     │                       │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                     │                       │                    Where: d_year = 2000
-                     │                       │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
+                     │                       │        └─ Projection Est. 366 rows
+                     │                       │           │     Expressions: [d_date_sk_1]
+                     │                       │           └─ Filter Est. 366 rows
+                     │                       │              │     Condition: d_year_1 = 2000
+                     │                       │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                     │                       │                       Where: d_year = 2000
+                     │                       │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                      │                       └─ Repartition Exchange Est. 71997522 rows
                      │                          │     Partition by: {wr_item_sk, wr_order_number}
                      │                          └─ TableScan tpcds1000_sample.web_returns Est. 71997522 rows
@@ -110,11 +114,13 @@ Projection Est. 100 rows
                                           │     │           Where: Runtime Filters: {cs_sold_date_sk}
                                           │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk, cs_order_number, cs_quantity, cs_wholesale_cost, cs_sales_price]
                                           │     └─ Broadcast Exchange Est. 366 rows
-                                          │        └─ Filter Est. 366 rows
-                                          │           │     Condition: d_year_2 = 2000
-                                          │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                          │                    Where: d_year = 2000
-                                          │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                                          │        └─ Projection Est. 366 rows
+                                          │           │     Expressions: [d_date_sk_2]
+                                          │           └─ Filter Est. 366 rows
+                                          │              │     Condition: d_year_2 = 2000
+                                          │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                          │                       Where: d_year = 2000
+                                          │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
                                           └─ Repartition Exchange Est. 143996756 rows
                                              │     Partition by: {cr_item_sk, cr_order_number}
                                              └─ TableScan tpcds1000_sample.catalog_returns Est. 143996756 rows

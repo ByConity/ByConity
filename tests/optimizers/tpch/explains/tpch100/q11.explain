@@ -34,11 +34,13 @@ Projection Est. 3200000 rows
             │                    │           Where: Runtime Filters: {s_nationkey}
             │                    │           Outputs: [s_suppkey, s_nationkey]
             │                    └─ Broadcast Exchange Est. 1 rows
-            │                       └─ Filter Est. 1 rows
-            │                          │     Condition: n_name = 'GERMANY'
-            │                          └─ TableScan tpch100.nation Est. 25 rows
-            │                                   Where: n_name = 'GERMANY'
-            │                                   Outputs: [n_nationkey, n_name]
+            │                       └─ Projection Est. 1 rows
+            │                          │     Expressions: [n_nationkey]
+            │                          └─ Filter Est. 1 rows
+            │                             │     Condition: n_name = 'GERMANY'
+            │                             └─ TableScan tpch100.nation Est. 25 rows
+            │                                      Where: n_name = 'GERMANY'
+            │                                      Outputs: [n_nationkey, n_name]
             └─ Broadcast Exchange Est. 1 rows
                └─ Projection Est. 1 rows
                   │     Expressions: expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001'):=`expr#sum(multiply(ps_supplycost, ps_availqty))_1` * '0.0001'
@@ -67,9 +69,11 @@ Projection Est. 3200000 rows
                                        │           Where: Runtime Filters: {s_nationkey}
                                        │           Outputs: s_suppkey_1:=s_suppkey, s_nationkey_1:=s_nationkey
                                        └─ Broadcast Exchange Est. 1 rows
-                                          └─ Filter Est. 1 rows
-                                             │     Condition: n_name_1 = 'GERMANY'
-                                             └─ TableScan tpch100.nation Est. 25 rows
-                                                      Where: n_name = 'GERMANY'
-                                                      Outputs: n_nationkey_1:=n_nationkey, n_name_1:=n_name
+                                          └─ Projection Est. 1 rows
+                                             │     Expressions: [n_nationkey_1]
+                                             └─ Filter Est. 1 rows
+                                                │     Condition: n_name_1 = 'GERMANY'
+                                                └─ TableScan tpch100.nation Est. 25 rows
+                                                         Where: n_name = 'GERMANY'
+                                                         Outputs: n_nationkey_1:=n_nationkey, n_name_1:=n_name
 note: Runtime Filter is applied for 4 times.

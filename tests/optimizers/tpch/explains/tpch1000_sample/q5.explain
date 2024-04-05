@@ -34,11 +34,13 @@ Projection Est. 25 rows
                         │           │     Runtime Filters Builder: {c_custkey}
                         │           ├─ Repartition Exchange Est. 227572319 rows
                         │           │  │     Partition by: {o_custkey}
-                        │           │  └─ Filter Est. 227572319 rows
-                        │           │     │     Condition: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
-                        │           │     └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
-                        │           │              Where: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
-                        │           │              Outputs: [o_orderkey, o_custkey, o_orderdate]
+                        │           │  └─ Projection Est. 227572319 rows
+                        │           │     │     Expressions: [o_custkey, o_orderkey]
+                        │           │     └─ Filter Est. 227572319 rows
+                        │           │        │     Condition: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
+                        │           │        └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
+                        │           │                 Where: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
+                        │           │                 Outputs: [o_orderkey, o_custkey, o_orderdate]
                         │           └─ Repartition Exchange Est. 30000000 rows
                         │              │     Partition by: {c_custkey}
                         │              └─ Inner Join Est. 30000000 rows
@@ -58,11 +60,13 @@ Projection Est. 25 rows
                         │                       │           Outputs: [n_nationkey, n_name, n_regionkey]
                         │                       └─ Repartition Exchange Est. 1 rows
                         │                          │     Partition by: {r_regionkey}
-                        │                          └─ Filter Est. 1 rows
-                        │                             │     Condition: r_name = 'ASIA'
-                        │                             └─ TableScan tpch1000_sample.region Est. 5 rows
-                        │                                      Where: r_name = 'ASIA'
-                        │                                      Outputs: [r_regionkey, r_name]
+                        │                          └─ Projection Est. 1 rows
+                        │                             │     Expressions: [r_regionkey]
+                        │                             └─ Filter Est. 1 rows
+                        │                                │     Condition: r_name = 'ASIA'
+                        │                                └─ TableScan tpch1000_sample.region Est. 5 rows
+                        │                                         Where: r_name = 'ASIA'
+                        │                                         Outputs: [r_regionkey, r_name]
                         └─ Repartition Exchange Est. 10000000 rows
                            │     Partition by: {s_nationkey, s_suppkey}
                            └─ TableScan tpch1000_sample.supplier Est. 10000000 rows

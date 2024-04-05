@@ -9,11 +9,13 @@ Projection Est. ? rows
             │     Condition: p_date == expr#toDate(hdfs_par)_2
             ├─ Left Join Est. ? rows
             │  │     Condition: p_date == expr#toDate(hdfs_par)_1, user_id == user_id_2
-            │  ├─ Filter Est. ? rows
-            │  │  │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
-            │  │  └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
-            │  │           Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
-            │  │           Outputs: [user_id, channel, p_date]
+            │  ├─ Projection Est. ? rows
+            │  │  │     Expressions: [p_date, user_id]
+            │  │  └─ Filter Est. ? rows
+            │  │     │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
+            │  │     └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
+            │  │              Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
+            │  │              Outputs: [user_id, channel, p_date]
             │  └─ Filter Est. ? rows
             │     │     Condition: `expr#toDate(hdfs_par)_1` >= cast(18359, \'Date\')
             │     └─ CTERef[0] Est. ? rows

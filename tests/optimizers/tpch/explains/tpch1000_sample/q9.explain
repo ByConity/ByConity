@@ -39,11 +39,13 @@ Projection Est. 54134 rows
                            │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
                            │     └─ Repartition Exchange Est. 180000000 rows
                            │        │     Partition by: {p_partkey}
-                           │        └─ Filter Est. 180000000 rows
-                           │           │     Condition: p_name LIKE '%green%'
-                           │           └─ TableScan tpch1000_sample.part Est. 200000000 rows
-                           │                    Where: p_name LIKE '%green%'
-                           │                    Outputs: [p_partkey, p_name]
+                           │        └─ Projection Est. 180000000 rows
+                           │           │     Expressions: [p_partkey]
+                           │           └─ Filter Est. 180000000 rows
+                           │              │     Condition: p_name LIKE '%green%'
+                           │              └─ TableScan tpch1000_sample.part Est. 200000000 rows
+                           │                       Where: p_name LIKE '%green%'
+                           │                       Outputs: [p_partkey, p_name]
                            └─ Repartition Exchange Est. 10000000 rows
                               │     Partition by: {s_suppkey}
                               └─ Inner Join Est. 10000000 rows

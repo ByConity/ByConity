@@ -23,11 +23,13 @@ Projection Est. ? rows
                │                    │     Group by: {v2v2v2_2}
                │                    └─ Inner Join Est. ? rows
                │                       │     Condition: vvv1_2 == expr#max(vvv1)_3
-               │                       ├─ Filter Est. ? rows
-               │                       │  │     Condition: (status_1 = \'1\') AND (v2v2v2_2 = 888)
-               │                       │  └─ TableScan zx_test.table6 Est. ? rows
-               │                       │           Where: (status = \'1\') AND (v2v2v2 = 888)
-               │                       │           Outputs: status_1:=status, v2v2v2_2:=v2v2v2, vvv1_2:=vvv1
+               │                       ├─ Projection Est. ? rows
+               │                       │  │     Expressions: [v2v2v2_2, vvv1_2]
+               │                       │  └─ Filter Est. ? rows
+               │                       │     │     Condition: (status_1 = \'1\') AND (v2v2v2_2 = 888)
+               │                       │     └─ TableScan zx_test.table6 Est. ? rows
+               │                       │              Where: (status = \'1\') AND (v2v2v2 = 888)
+               │                       │              Outputs: status_1:=status, v2v2v2_2:=v2v2v2, vvv1_2:=vvv1
                │                       └─ Broadcast Exchange Est. ? rows
                │                          └─ Projection Est. ? rows
                │                             │     Expressions: expr#max(vvv1)_3:=cast(`expr#max(vvv1)_2`, \'Nullable(String)\')
@@ -39,28 +41,30 @@ Projection Est. ? rows
                │                                      └─ TableScan zx_test.table6 Est. ? rows
                │                                               Outputs: vvv1_3:=vvv1
                └─ Broadcast Exchange Est. ? rows
-                  └─ MergingAggregated Est. ? rows
-                     └─ Repartition Exchange Est. ? rows
-                        │     Partition by: {k1k1k1, k2k2k2, k4k4k4}
-                        └─ Aggregating Est. ? rows
-                           │     Group by: {k1k1k1, k2k2k2, k4k4k4}
-                           └─ Inner Join Est. ? rows
-                              │     Condition: my_date_3 == expr#max(my_date)_2
-                              ├─ Filter Est. ? rows
-                              │  │     Condition: k4k4k4 = \'XXX\'
-                              │  └─ TableScan zx_test.table2 Est. ? rows
-                              │           Where: k4k4k4 = \'XXX\'
-                              │           Outputs: [k1k1k1, k2k2k2, k4k4k4], my_date_3:=my_date
-                              └─ Broadcast Exchange Est. ? rows
-                                 └─ MergingAggregated Est. ? rows
-                                    └─ Repartition Exchange Est. ? rows
-                                       │     Partition by: {expr#max(my_date)_2}
-                                       └─ Aggregating Est. ? rows
-                                          │     Group by: {expr#max(my_date)_2}
-                                          └─ MergingAggregated Est. ? rows
-                                             └─ Gather Exchange Est. ? rows
-                                                └─ Aggregating Est. ? rows
-                                                   │     Group by: {}
-                                                   │     Aggregates: expr#max(my_date)_2:=AggNull(max)(my_date_4)
-                                                   └─ TableScan zx_test.table2 Est. ? rows
-                                                            Outputs: my_date_4:=my_date
+                  └─ Projection Est. ? rows
+                     │     Expressions: [k1k1k1, k4k4k4]
+                     └─ MergingAggregated Est. ? rows
+                        └─ Repartition Exchange Est. ? rows
+                           │     Partition by: {k1k1k1, k2k2k2, k4k4k4}
+                           └─ Aggregating Est. ? rows
+                              │     Group by: {k1k1k1, k2k2k2, k4k4k4}
+                              └─ Inner Join Est. ? rows
+                                 │     Condition: my_date_3 == expr#max(my_date)_2
+                                 ├─ Filter Est. ? rows
+                                 │  │     Condition: k4k4k4 = \'XXX\'
+                                 │  └─ TableScan zx_test.table2 Est. ? rows
+                                 │           Where: k4k4k4 = \'XXX\'
+                                 │           Outputs: [k1k1k1, k2k2k2, k4k4k4], my_date_3:=my_date
+                                 └─ Broadcast Exchange Est. ? rows
+                                    └─ MergingAggregated Est. ? rows
+                                       └─ Repartition Exchange Est. ? rows
+                                          │     Partition by: {expr#max(my_date)_2}
+                                          └─ Aggregating Est. ? rows
+                                             │     Group by: {expr#max(my_date)_2}
+                                             └─ MergingAggregated Est. ? rows
+                                                └─ Gather Exchange Est. ? rows
+                                                   └─ Aggregating Est. ? rows
+                                                      │     Group by: {}
+                                                      │     Aggregates: expr#max(my_date)_2:=AggNull(max)(my_date_4)
+                                                      └─ TableScan zx_test.table2 Est. ? rows
+                                                               Outputs: my_date_4:=my_date

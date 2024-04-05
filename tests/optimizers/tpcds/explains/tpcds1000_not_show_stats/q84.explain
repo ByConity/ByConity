@@ -34,11 +34,13 @@ Projection
                         │     │           Where: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
                         │     │           Outputs: [c_customer_id, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_name, c_last_name]
                         │     └─ Broadcast Exchange
-                        │        └─ Filter
-                        │           │     Condition: ca_city = 'Edgewood'
-                        │           └─ TableScan tpcds1000.customer_address
-                        │                    Where: ca_city = 'Edgewood'
-                        │                    Outputs: [ca_address_sk, ca_city]
+                        │        └─ Projection
+                        │           │     Expressions: [ca_address_sk]
+                        │           └─ Filter
+                        │              │     Condition: ca_city = 'Edgewood'
+                        │              └─ TableScan tpcds1000.customer_address
+                        │                       Where: ca_city = 'Edgewood'
+                        │                       Outputs: [ca_address_sk, ca_city]
                         └─ Repartition Exchange
                            │     Partition by: {hd_demo_sk}
                            └─ Inner Join
@@ -46,9 +48,11 @@ Projection
                               ├─ TableScan tpcds1000.household_demographics
                               │        Outputs: [hd_demo_sk, hd_income_band_sk]
                               └─ Broadcast Exchange
-                                 └─ Filter
-                                    │     Condition: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
-                                    └─ TableScan tpcds1000.income_band
-                                             Where: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
-                                             Outputs: [ib_income_band_sk, ib_lower_bound, ib_upper_bound]
+                                 └─ Projection
+                                    │     Expressions: [ib_income_band_sk]
+                                    └─ Filter
+                                       │     Condition: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
+                                       └─ TableScan tpcds1000.income_band
+                                                Where: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
+                                                Outputs: [ib_income_band_sk, ib_lower_bound, ib_upper_bound]
 note: Runtime Filter is applied for 3 times.

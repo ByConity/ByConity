@@ -25,9 +25,11 @@ Projection
                         │              Outputs: [o_orderkey, o_orderpriority]
                         └─ Repartition Exchange
                            │     Partition by: {l_orderkey}
-                           └─ Filter
-                              │     Condition: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)
-                              └─ TableScan tpch1000.lineitem
-                                       Where: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)
-                                       Outputs: [l_orderkey, l_shipdate, l_commitdate, l_receiptdate, l_shipmode]
+                           └─ Projection
+                              │     Expressions: [l_orderkey, l_shipmode]
+                              └─ Filter
+                                 │     Condition: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)
+                                 └─ TableScan tpch1000.lineitem
+                                          Where: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)
+                                          Outputs: [l_orderkey, l_shipdate, l_commitdate, l_receiptdate, l_shipmode]
 note: Runtime Filter is applied for 1 times.

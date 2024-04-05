@@ -26,15 +26,19 @@ Projection Est. 16 rows
                         │  │           Where: Runtime Filters: {ss_item_sk}
                         │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ext_sales_price]
                         │  └─ Broadcast Exchange Est. 517 rows
-                        │     └─ Filter Est. 517 rows
-                        │        │     Condition: i_manufact_id = 128
-                        │        └─ TableScan tpcds1000.item Est. 300000 rows
-                        │                 Where: i_manufact_id = 128
-                        │                 Outputs: [i_item_sk, i_brand_id, i_brand, i_manufact_id]
+                        │     └─ Projection Est. 517 rows
+                        │        │     Expressions: [i_brand, i_brand_id, i_item_sk]
+                        │        └─ Filter Est. 517 rows
+                        │           │     Condition: i_manufact_id = 128
+                        │           └─ TableScan tpcds1000.item Est. 300000 rows
+                        │                    Where: i_manufact_id = 128
+                        │                    Outputs: [i_item_sk, i_brand_id, i_brand, i_manufact_id]
                         └─ Broadcast Exchange Est. 6000 rows
-                           └─ Filter Est. 6000 rows
-                              │     Condition: d_moy = 11
-                              └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                       Where: d_moy = 11
-                                       Outputs: [d_date_sk, d_year, d_moy]
+                           └─ Projection Est. 6000 rows
+                              │     Expressions: [d_date_sk, d_year]
+                              └─ Filter Est. 6000 rows
+                                 │     Condition: d_moy = 11
+                                 └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                                          Where: d_moy = 11
+                                          Outputs: [d_date_sk, d_year, d_moy]
 note: Runtime Filter is applied for 1 times.

@@ -41,17 +41,21 @@ Projection Est. 100 rows
                      │                                   │  └─ Inner Join Est. 1185154 rows
                      │                                   │     │     Condition: ws_sold_date_sk == d_date_sk
                      │                                   │     │     Runtime Filters Builder: {d_date_sk}
-                     │                                   │     ├─ Filter Est. 27693101 rows
-                     │                                   │     │  │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
-                     │                                   │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
-                     │                                   │     │           Where: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
-                     │                                   │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_order_number, ws_quantity, ws_net_paid, ws_net_profit]
+                     │                                   │     ├─ Projection Est. 27693101 rows
+                     │                                   │     │  │     Expressions: [ws_item_sk, ws_net_paid, ws_order_number, ws_quantity, ws_sold_date_sk]
+                     │                                   │     │  └─ Filter Est. 27693101 rows
+                     │                                   │     │     │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
+                     │                                   │     │     └─ TableScan tpcds100.web_sales Est. 72001237 rows
+                     │                                   │     │              Where: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
+                     │                                   │     │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_order_number, ws_quantity, ws_net_paid, ws_net_profit]
                      │                                   │     └─ Broadcast Exchange Est. 30 rows
-                     │                                   │        └─ Filter Est. 30 rows
-                     │                                   │           │     Condition: (d_moy = 12) AND (d_year = 2001)
-                     │                                   │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                     │                                   │                    Where: (d_moy = 12) AND (d_year = 2001)
-                     │                                   │                    Outputs: [d_date_sk, d_year, d_moy]
+                     │                                   │        └─ Projection Est. 30 rows
+                     │                                   │           │     Expressions: [d_date_sk]
+                     │                                   │           └─ Filter Est. 30 rows
+                     │                                   │              │     Condition: (d_moy = 12) AND (d_year = 2001)
+                     │                                   │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                     │                                   │                       Where: (d_moy = 12) AND (d_year = 2001)
+                     │                                   │                       Outputs: [d_date_sk, d_year, d_moy]
                      │                                   └─ Repartition Exchange Est. 63400 rows
                      │                                      │     Partition by: {wr_item_sk, wr_order_number}
                      │                                      └─ Filter Est. 63400 rows
@@ -86,17 +90,21 @@ Projection Est. 100 rows
                      │                                   │  └─ Inner Join Est. 2353285 rows
                      │                                   │     │     Condition: cs_sold_date_sk == d_date_sk_1
                      │                                   │     │     Runtime Filters Builder: {d_date_sk_1}
-                     │                                   │     ├─ Filter Est. 55380644 rows
-                     │                                   │     │  │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
-                     │                                   │     │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
-                     │                                   │     │           Where: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
-                     │                                   │     │           Outputs: [cs_sold_date_sk, cs_item_sk, cs_order_number, cs_quantity, cs_net_paid, cs_net_profit]
+                     │                                   │     ├─ Projection Est. 55380644 rows
+                     │                                   │     │  │     Expressions: [cs_item_sk, cs_net_paid, cs_order_number, cs_quantity, cs_sold_date_sk]
+                     │                                   │     │  └─ Filter Est. 55380644 rows
+                     │                                   │     │     │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
+                     │                                   │     │     └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
+                     │                                   │     │              Where: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
+                     │                                   │     │              Outputs: [cs_sold_date_sk, cs_item_sk, cs_order_number, cs_quantity, cs_net_paid, cs_net_profit]
                      │                                   │     └─ Broadcast Exchange Est. 30 rows
-                     │                                   │        └─ Filter Est. 30 rows
-                     │                                   │           │     Condition: (d_year_1 = 2001) AND (d_moy_1 = 12)
-                     │                                   │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                     │                                   │                    Where: (d_year = 2001) AND (d_moy = 12)
-                     │                                   │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
+                     │                                   │        └─ Projection Est. 30 rows
+                     │                                   │           │     Expressions: [d_date_sk_1]
+                     │                                   │           └─ Filter Est. 30 rows
+                     │                                   │              │     Condition: (d_year_1 = 2001) AND (d_moy_1 = 12)
+                     │                                   │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                     │                                   │                       Where: (d_year = 2001) AND (d_moy = 12)
+                     │                                   │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                      │                                   └─ Repartition Exchange Est. 128762 rows
                      │                                      │     Partition by: {cr_item_sk, cr_order_number}
                      │                                      └─ Filter Est. 128762 rows
@@ -129,11 +137,13 @@ Projection Est. 100 rows
                                                          ├─ Inner Join Est. 993152 rows
                                                          │  │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                                                          │  │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
-                                                         │  ├─ Filter Est. 73582110 rows
-                                                         │  │  │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
-                                                         │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
-                                                         │  │           Where: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
-                                                         │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ticket_number, ss_quantity, ss_net_paid, ss_net_profit]
+                                                         │  ├─ Projection Est. 73582110 rows
+                                                         │  │  │     Expressions: [ss_item_sk, ss_net_paid, ss_quantity, ss_sold_date_sk, ss_ticket_number]
+                                                         │  │  └─ Filter Est. 73582110 rows
+                                                         │  │     │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                                                         │  │     └─ TableScan tpcds100.store_sales Est. 287997024 rows
+                                                         │  │              Where: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                                                         │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_ticket_number, ss_quantity, ss_net_paid, ss_net_profit]
                                                          │  └─ Broadcast Exchange Est. 102941 rows
                                                          │     └─ Filter Est. 102941 rows
                                                          │        │     Condition: sr_return_amt > 10000.
@@ -141,9 +151,11 @@ Projection Est. 100 rows
                                                          │                 Where: sr_return_amt > 10000.
                                                          │                 Outputs: [sr_item_sk, sr_ticket_number, sr_return_quantity, sr_return_amt]
                                                          └─ Broadcast Exchange Est. 30 rows
-                                                            └─ Filter Est. 30 rows
-                                                               │     Condition: (d_moy_2 = 12) AND (d_year_2 = 2001)
-                                                               └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                                                        Where: (d_moy = 12) AND (d_year = 2001)
-                                                                        Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
+                                                            └─ Projection Est. 30 rows
+                                                               │     Expressions: [d_date_sk_2]
+                                                               └─ Filter Est. 30 rows
+                                                                  │     Condition: (d_moy_2 = 12) AND (d_year_2 = 2001)
+                                                                  └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                                                           Where: (d_moy = 12) AND (d_year = 2001)
+                                                                           Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
 note: Runtime Filter is applied for 9 times.
