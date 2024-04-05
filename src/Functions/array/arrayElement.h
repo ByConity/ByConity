@@ -31,6 +31,11 @@ namespace ArrayImpl
 
 /** arrayElement(arr, i) - get the array element by index. If index is not constant and out of range - return default value of data type.
   * The index begins with 1. Also, the index can be negative - then it is counted from the end of the array.
+  *
+  * under mysql dialect, if the first argument is array
+  * * always returns nullable result
+  * * throw exceptions if the index is 0
+  * * returns NULL if the index is NULL or out of range
   */
 class FunctionArrayElement : public IFunction
 {
@@ -40,14 +45,14 @@ public:
 
     explicit FunctionArrayElement(ContextPtr context)
     {
-        is_mysql = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
+        is_mysql_dialect = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
     }
 
     String getName() const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
-    bool useDefaultImplementationForNulls() const override { return !is_mysql; }
+    bool useDefaultImplementationForNulls() const override { return !is_mysql_dialect; }
     size_t getNumberOfArguments() const override { return 2; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
@@ -55,9 +60,11 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override;
 
 private:
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, bool is_mysql) const;
+
     friend class FunctionMapElement;
 
-    bool is_mysql;
+    bool is_mysql_dialect;
 
     ColumnPtr perform(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type,
                       ArrayImpl::NullMapBuilder & builder, size_t input_rows_count) const;
