@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <mutex>
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 
 #include <CloudServices/CnchDedupHelper.h>
@@ -149,11 +150,77 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     else
         part_blocks = writer.splitBlockIntoParts(block, settings.max_partitions_per_insert_block, metadata_snapshot, context);
 
+    std::mutex parts_mutex;
     IMutableMergeTreeDataPartsVector parts;
-    LOG_DEBUG(storage.getLogger(), "size of part_blocks {}", part_blocks.size());
+    size_t rows_size = 0;
+    LOG_DEBUG(storage.getLogger(), "Size of blocks is {} after split by partition", part_blocks.size());
 
     const auto & txn = context->getCurrentTransaction();
     auto primary_txn_id = txn->getPrimaryTransactionID();
+
+    auto processBlockWithBucket = [&](BlockWithPartition & bucketed_block_with_partition) {
+        Stopwatch watch;
+        auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
+
+        MergeTreeMutableDataPartPtr temp_part
+            = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
+
+        if (txn->isSecondary())
+            temp_part->secondary_txn_id = txn->getTransactionID();
+        if (part_log)
+            part_log->addNewPart(context, temp_part, watch.elapsed());
+        LOG_DEBUG(
+            storage.getLogger(),
+            "Write part {}, {} rows, elapsed {} ms",
+            temp_part->name,
+            bucketed_block_with_partition.block.rows(),
+            watch.elapsedMilliseconds());
+
+        std::lock_guard parts_lock(parts_mutex);
+        parts.push_back(std::move(temp_part));
+        rows_size += bucketed_block_with_partition.block.rows();
+    };
+
+    size_t thread_num = storage.getSettings()->cnch_write_part_threads;
+    bool use_thread_pool = thread_num > 1;
+    ThreadPool write_pool(thread_num);
+    Stopwatch write_pool_watch;
+    auto thread_group = CurrentThread::getGroup();
+    auto processBlockWithPartition = [&](BlockWithPartition & block_with_partition) {
+        Row original_partition{block_with_partition.partition};
+
+        /// We need to dedup in block before split block by cluster key when unique table supports cluster key because cluster key may be different with unique key. Otherwise, we will lost the insert order.
+        if (metadata_snapshot->hasUniqueKey()
+            && (merge_tree_settings->partition_level_unique_keys || storage.merging_params.partitionValueAsVersion()))
+        {
+            FilterInfo filter_info = dedupWithUniqueKey(block_with_partition.block);
+            if (filter_info.num_filtered)
+                block_with_partition.block = CnchDedupHelper::filterBlock(block_with_partition.block, filter_info);
+        }
+
+        auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(
+            block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
+        LOG_TRACE(storage.getLogger(), "Size of blocks is {} after split by bucket", bucketed_part_blocks.size());
+
+        for (auto & bucketed_block_with_partition : bucketed_part_blocks)
+        {
+            bucketed_block_with_partition.partition = Row(original_partition);
+            if (use_thread_pool)
+                write_pool.scheduleOrThrowOnError([&, bucketed_block = std::move(bucketed_block_with_partition), thread_group]() mutable {
+                    SCOPE_EXIT({
+                        if (thread_group)
+                            CurrentThread::detachQueryIfNotDetached();
+                    });
+                    if (thread_group)
+                        CurrentThread::attachToIfDetached(thread_group);
+                    setThreadName("WritePart");
+
+                    processBlockWithBucket(bucketed_block);
+                });
+            else
+                processBlockWithBucket(bucketed_block_with_partition);
+        }
+    };
 
     // Get all blocks of partition by expression
     for (auto & block_with_partition : part_blocks)
@@ -168,43 +235,32 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
             }
         }
 
-        Row original_partition{block_with_partition.partition};
+        if (use_thread_pool)
+            write_pool.scheduleOrThrowOnError([&, block_data = std::move(block_with_partition), thread_group]() mutable {
+                SCOPE_EXIT({
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                });
+                if (thread_group)
+                    CurrentThread::attachToIfDetached(thread_group);
+                setThreadName("WritePart");
 
-        /// We need to dedup in block before split block by cluster key when unique table supports cluster key because cluster key may be different with unique key. Otherwise, we will lost the insert order.
-        if (metadata_snapshot->hasUniqueKey()
-            && (merge_tree_settings->partition_level_unique_keys || storage.merging_params.partitionValueAsVersion()))
-        {
-            FilterInfo filter_info = dedupWithUniqueKey(block_with_partition.block);
-            if (filter_info.num_filtered)
-                block_with_partition.block = CnchDedupHelper::filterBlock(block_with_partition.block, filter_info);
-        }
+                processBlockWithPartition(block_data);
+            });
+        else
+            processBlockWithPartition(block_with_partition);
+    }
 
-        auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(
-            block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
-        LOG_TRACE(storage.getLogger(), "size of bucketed_part_blocks {}", bucketed_part_blocks.size());
-
-        for (auto & bucketed_block_with_partition : bucketed_part_blocks)
-        {
-            Stopwatch watch;
-            bucketed_block_with_partition.partition = Row(original_partition);
-
-            auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
-
-            MergeTreeMutableDataPartPtr temp_part
-                = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
-
-            if (txn->isSecondary())
-                temp_part->secondary_txn_id = txn->getTransactionID();
-            if (part_log)
-                part_log->addNewPart(context, temp_part, watch.elapsed());
-            LOG_DEBUG(
-                storage.getLogger(),
-                "Write part {}, {} rows, elapsed {} ms",
-                temp_part->name,
-                bucketed_block_with_partition.block.rows(),
-                watch.elapsedMilliseconds());
-            parts.push_back(std::move(temp_part));
-        }
+    if (use_thread_pool)
+    {
+        write_pool.wait();
+        LOG_DEBUG(
+            storage.getLogger(),
+            "Write pool totally write {} part, {} rows, pool size {}, elapsed {} ms",
+            parts.size(),
+            rows_size,
+            thread_num,
+            write_pool_watch.elapsedMilliseconds());
     }
 
     return parts;
