@@ -18,7 +18,7 @@ ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQuer
 
     /// Set partition_filter
     auto * merge_tree_data = dynamic_cast<MergeTreeMetaBase *>(storage.get());
-    if (merge_tree_data && settings.enable_partition_filter_push_down)
+    if (merge_tree_data && merge_tree_data->supportsPrewhere() && settings.enable_partition_filter_push_down)
     {
         ASTs push_predicates;
         ASTs remain_predicates;
@@ -95,7 +95,7 @@ ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQuer
     }
 
     /// Set query.prewhere()
-    if (merge_tree_data && select_query->where() && settings.enable_optimizer_early_prewhere_push_down)
+    if (merge_tree_data && merge_tree_data->supportsPrewhere() && select_query->where() && settings.enable_optimizer_early_prewhere_push_down)
     {
         /// PREWHERE optimization: transfer some condition from WHERE to PREWHERE if enabled and viable
         if (const auto & column_sizes = merge_tree_data->getColumnSizes(); !column_sizes.empty())
