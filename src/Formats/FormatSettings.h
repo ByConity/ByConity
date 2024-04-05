@@ -134,6 +134,7 @@ struct FormatSettings
         bool serialize_as_strings = false;
         bool read_bools_as_numbers = true;
         bool quota_json_string = true;
+        bool read_objects_as_strings = false;
     } json;
 
     struct

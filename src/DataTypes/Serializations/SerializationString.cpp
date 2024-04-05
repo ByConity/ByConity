@@ -327,9 +327,16 @@ void SerializationString::serializeTextJSON(const IColumn & column, size_t row_n
 }
 
 
-void SerializationString::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationString::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
-    read(column, [&](ColumnString::Chars & data) { readJSONStringInto(data, istr); });
+    if (settings.json.read_objects_as_strings && !istr.eof() && *istr.position() == '{')
+    {
+        String field;
+        readJSONObjectPossiblyInvalid(field, istr);
+        read(column, [&](ColumnString::Chars & data) { data.insert(field.begin(), field.end()); });
+    }
+    else
+        read(column, [&](ColumnString::Chars & data) { readJSONStringInto(data, istr); });
 }
 
 

@@ -463,7 +463,7 @@ void InterpreterAlterAnalyticalMySQLImpl::validate(const TQuery & query, Context
     }
 }
 
-ASTs InterpreterAlterAnalyticalMySQLImpl::getRewrittenQueries(const TQuery & query, ContextPtr /*context*/)
+ASTs InterpreterAlterAnalyticalMySQLImpl::getRewrittenQueries(const TQuery & query, ContextPtr context)
 {
     auto new_query = std::make_shared<ASTAlterQuery>();
 
@@ -473,8 +473,10 @@ ASTs InterpreterAlterAnalyticalMySQLImpl::getRewrittenQueries(const TQuery & que
         if (command && command->type == ASTAlterCommand::RENAME_TABLE)
         {
             auto replace_query = std::make_shared<ASTRenameQuery>();
+            bool need_database = context->getCurrentDatabase().empty() || context->getCurrentDatabase() == "default";
+            auto to_database = need_database ? command->rename_table_to->as<ASTTableIdentifier>()->getDatabaseName() : "";
             auto to_table = command->rename_table_to->as<ASTTableIdentifier>()->getTableName();
-            replace_query->elements.push_back({{query.database, query.table}, {"", to_table}});
+            replace_query->elements.push_back({{query.database, query.table}, {to_database, to_table}});
             return ASTs{replace_query};
         }
         if (command && command->type == ASTAlterCommand::NO_TYPE)

@@ -48,7 +48,7 @@ HiveWhereOptimizer::HiveWhereOptimizer(
 
     if (metadata_snapshot_->hasClusterByKey())
     {
-        const auto & cluster_key_cols = metadata_snapshot_->getClusterByKey().column_names;
+        const auto & cluster_key_cols = metadata_snapshot_->getColumnsRequiredForClusterByKey();
         cluster_key_names = NameSet(cluster_key_cols.begin(), cluster_key_cols.end());
     }
 

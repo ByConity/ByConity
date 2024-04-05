@@ -93,6 +93,9 @@ MaterializedViewMemoryCache::getMaterializedViewStructure(
     if (!materialized_view)
         return {};
 
+    if (materialized_view->sync() && !context->getSettings().enable_sync_materialized_view_rewrite)
+        return {};
+
     ASTPtr query = materialized_view->getInnerQuery();
     StorageID materialized_view_id = materialized_view->getStorageID();
     std::optional<StorageID> target_table_id = findTargetTable(

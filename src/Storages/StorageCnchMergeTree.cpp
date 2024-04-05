@@ -13,7 +13,6 @@
  * limitations under the License.
  */
 
-#include <optional>
 #include <Storages/StorageCnchMergeTree.h>
 
 #include <Catalog/Catalog.h>

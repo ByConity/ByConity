@@ -733,9 +733,9 @@ struct JavaHashImpl
         return static_cast<Int32>(h);
     }
 
-    static Int32 combineHashes(Int32, Int32)
+    static Int32 combineHashes(Int32 h1, Int32 h2)
     {
-        throw Exception("Java hash is not combinable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
+        return (static_cast<uint64_t>(h1) * 31 + h2) & std::numeric_limits<Int32>::max();
     }
 
     static constexpr bool use_int_hash_for_pods = false;
