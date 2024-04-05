@@ -1,7 +1,6 @@
 set dialect_type='MYSQL';
 
 drop table if exists tbx;
-drop table if exists tbx1;
 create table tbx (p int NOT NULL, x tinyint, y String, z float) engine=CnchMergeTree() order by p;
 
 select 'add column';
@@ -62,16 +61,20 @@ alter table tbx add column z5 int primary key; -- { serverError 524 }
 alter table tbx modify column p bigint; -- { serverError 524 }
 alter table tbx drop p; -- { serverError 524 }
 
-use test;
-create table tbx1 (p int NOT NULL, x tinyint, y String, z float) engine=CnchMergeTree() order by p;
-select 'rename table';
-alter table tbx1 rename tbx11;
-alter table tbx11 rename tbx1;
-alter table test.tbx1 rename test.tbx11;
-alter table test.tbx11 rename test.tbx1;
-use default;
-alter table test.tbx1 rename test.tbx11;
-alter table test.tbx11 rename tbx1; -- { serverError 48 }
-alter table test.tbx11 rename test.tbx1;
 drop table if exists tbx;
-drop table if exists tbx1;
+
+use test;
+drop table if exists tbx_alter_test_old_60010;
+drop table if exists tbx_alter_test_rename_60010;
+create table tbx_alter_test_old_60010 (p int NOT NULL, x tinyint, y String, z float) engine=CnchMergeTree() order by p;
+select 'rename table';
+alter table tbx_alter_test_old_60010 rename tbx_alter_test_rename_60010;
+alter table tbx_alter_test_rename_60010 rename tbx_alter_test_old_60010;
+alter table test.tbx_alter_test_old_60010 rename test.tbx_alter_test_rename_60010;
+alter table test.tbx_alter_test_rename_60010 rename test.tbx_alter_test_old_60010;
+use default;
+alter table test.tbx_alter_test_old_60010 rename test.tbx_alter_test_rename_60010;
+alter table test.tbx_alter_test_rename_60010 rename tbx_alter_test_old_60010; -- { serverError 48 }
+alter table test.tbx_alter_test_rename_60010 rename test.tbx_alter_test_old_60010;
+
+drop table if exists test.tbx_alter_test_old_60010;
