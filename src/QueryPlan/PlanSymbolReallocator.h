@@ -144,6 +144,9 @@ public:
                 mappings[step->getRightKeys()[i]] = step->getLeftKeys()[i];
             }
         }
+
+        step->setOutputStream(symbol_mapper.map(join.getCurrentDataStream()));
+
         auto plan_node = PlanNodeBase::createPlanNode(
             context->nextNodeId(), step, {left.plan_node, right.plan_node}, symbol_mapper.map(join.getStatistics()));
 
