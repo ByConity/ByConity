@@ -633,7 +633,7 @@ MergeTreeDataDeduper::DedupTasks MergeTreeDataDeduper::convertIntoSubDedupTasks(
         if (!valid_bucket || bucket_level_dedup)
             return;
         auto it = std::find_if(all_parts.begin(), all_parts.end(), [&](const auto & part) {
-            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+            return part->bucket_number == -1 || !table_definition_hash.match(part->table_definition_hash);
         });
         if (it != all_parts.end())
             valid_bucket = false;

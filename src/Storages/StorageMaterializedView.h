@@ -28,6 +28,7 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/MaterializedView/RefreshSchedule.h>
 #include <Storages/MaterializedView/PartitionTransformer.h>
+#include <Storages/MaterializedView/MaterializedViewVersionedPartCache.h>
 
 namespace DB
 {
@@ -130,7 +131,7 @@ public:
 
     /// get async refrsh params
     AsyncRefreshParamPtrs getAsyncRefreshParams(ContextMutablePtr local_context, bool combine_params);
-    void validateMv(ContextMutablePtr local_context);
+    void validatePartitionBased(ContextMutablePtr local_context);
     
     void validateAndSyncBaseTablePartitions(
         PartitionDiffPtr & partition_diff,
@@ -169,8 +170,11 @@ private:
 
     void executeByInsertOverwrite(AsyncRefreshParamPtr param, ContextMutablePtr local_context);
 
+    VersionPartContainerPtrs getPreviousPartitions(ContextMutablePtr local_context);
+
     void insertRefreshTaskLog(AsyncRefreshParamPtr param, RefreshViewTaskStatus status,
-          bool is_insert_overwrite, std::chrono::time_point<std::chrono::system_clock> start_time, ContextMutablePtr local_context);
+                            bool is_insert_overwrite, std::chrono::time_point<std::chrono::system_clock> start_time,
+                            ContextMutablePtr local_context, String exception = {});
 
     /// Will be initialized in constructor
     StorageID target_table_id = StorageID::createEmpty();
@@ -180,6 +184,9 @@ private:
     // Async refresh task
     RefreshSchedule refresh_schedule;
     PartitionTransformerPtr partition_transformer;
+
+    // mv meta cache
+    MaterializedViewVersionedPartCache & cache;
 
     Poco::Logger * log;
 

@@ -123,6 +123,8 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
         if (need_close)
         {
             int ec = hdfsCloseFile(fs.get(), fout);
+            // We can only call hdfsCloseFile() once even if it's failed.
+            need_close = false;
             if (ec != 0)
             {
                 ProfileEvents::increment(ProfileEvents::WriteBufferFromHdfsWriteFailed);
@@ -136,7 +138,6 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
                     ec,
                     reason);
             }
-            need_close = false;
         }
     }
 

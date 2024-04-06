@@ -12,6 +12,7 @@ struct RefreshSchedule
     RefreshScheduleKind kind {RefreshScheduleKind::SYNC};
     CalendarTimeInterval time_interval;
     std::chrono::system_clock::time_point start_time;
+    String start_time_string;
 
     explicit RefreshSchedule(const ASTRefreshStrategy * strategy);
     bool operator!=(const RefreshSchedule & rhs) const;
@@ -19,6 +20,8 @@ struct RefreshSchedule
     bool sync() const {return kind == RefreshScheduleKind::SYNC;}
     bool async() const {return kind == RefreshScheduleKind::ASYNC;}
     bool manual() const {return kind == RefreshScheduleKind::MANUAL;}
+
+    String getStartTime() const;
 
     UInt64 prescribeNextElaps() const;
 

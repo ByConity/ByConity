@@ -1141,7 +1141,7 @@ StorageCnchMergeTree::writeInWorker(const ASTPtr & query, const StorageMetadataP
 
 HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, ContextPtr local_context)
 {
-    String vw_name = local_context->getSettingsRef().virtual_warehouse_write;
+    String vw_name = local_context->getSettingsRef().virtual_warehouse;
     if (vw_name.empty())
         vw_name = getSettings()->cnch_vw_write;
 
@@ -2710,7 +2710,7 @@ void StorageCnchMergeTree::dropPartsImpl(
                     data_part->enumeratePreviousParts(write_undo_callback);
                 }
                 local_context->getCnchCatalog()->writeUndoBuffer(
-                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
+                    getCnchStorageID(), txn->getTransactionID(), undo_resources);
 
                 if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
                     getDeleteBitmapMetaForParts(parts_to_drop, svr_parts_to_drop_with_dbm.second, /*force_found*/ false);
@@ -2779,7 +2779,7 @@ void StorageCnchMergeTree::dropPartsImpl(
 
                 // Write undo buffer first
                 local_context->getCnchCatalog()->writeUndoBuffer(
-                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), resources);
+                    getCnchStorageID(), txn->getTransactionID(), resources);
 
                 DeleteBitmapMetaPtrVector bitmap_metas = dumpDeleteBitmaps(*this, new_bitmaps);
                 ActionPtr action;
@@ -3157,8 +3157,8 @@ StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & sourc
                 "table_definition hash [{}]",
                 src_data->getDatabaseName(),
                 src_data->getTableName(),
-                src_data->getTableHashForClusterBy(),
-                getTableHashForClusterBy()));
+                src_data->getTableHashForClusterBy().toString(),
+                getTableHashForClusterBy().toString()));
         throw Exception(
             "Source table is not a bucket table or has a different CLUSTER BY definition from the target table. ",
             ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);

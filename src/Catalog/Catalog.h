@@ -299,8 +299,6 @@ public:
 
     /// get bitmaps by keys
     DeleteBitmapMetaPtrVector getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys);
-    /// remove bitmaps meta from KV, used by GC
-    void removeDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps);
 
     // V1 part commit API
     void finishCommit(
@@ -431,14 +429,11 @@ public:
         const TxnTimestamp & commitTs,
         const UInt64 txn_id = 0);
 
-    void clearParts(
-        const StoragePtr & table,
-        const CommitItems & commit_data,
-        const bool skip_part_cache = false);
+    void clearParts(const StoragePtr & table, const CommitItems & commit_data);
 
     /// write undo buffer before write vfs
-    void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, const UndoResources & resources);
-    void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, UndoResources && resources);
+    void writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, const UndoResources & resources);
+    void writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, UndoResources && resources);
 
     /// clear undo buffer
     void clearUndoBuffer(const TxnTimestamp & txnID);
@@ -558,7 +553,7 @@ public:
     void clearDatabaseMeta(const String & database, const UInt64 & ts);
 
     void clearTableMetaForGC(const String & database, const String & name, const UInt64 & ts);
-    void clearDataPartsMeta(const StoragePtr & storage, const DataPartsVector & parts, const bool skip_part_cache = false);
+    void clearDataPartsMeta(const StoragePtr & storage, const DataPartsVector & parts);
     void clearStagePartsMeta(const StoragePtr & storage, const ServerDataPartsVector & parts);
     void clearDataPartsMetaForTable(const StoragePtr & table);
     void clearMutationEntriesForTable(const StoragePtr & storage);
@@ -570,7 +565,7 @@ public:
      * @param skip_part_cache Evict parts caches if set to `false`.
      * @param is_zombie_with_staging_txn_id If true, just remove items.data_parts' kv entry
      */
-    void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool skip_part_cache = false, bool is_zombie_with_staging_txn_id = false);
+    void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool is_zombie_with_staging_txn_id = false);
 
     /**
      * @brief Delete specified trashed items from catalog.
@@ -678,10 +673,12 @@ public:
 
     // materialized view meta.
     BatchCommitRequest constructMvMetaRequests(const String & uuid,
-            std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions);
+            std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions, String mv_version_ts);
+    String getMvMetaVersion(const String & uuid);
     std::vector<std::shared_ptr<Protos::VersionedPartitions>> getMvBaseTables(const String & uuid);
     void updateMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
     void dropMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+    void cleanMvMeta(const String & uuid);
 
     /// Time Travel relate interfaces
     std::vector<UInt64> getTrashDBVersions(const String & database);
@@ -852,7 +849,7 @@ private:
         const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash = false);
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false, bool execute_filter = true);
-    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
+    DataModelDeleteBitmapPtrVector getDeleteBitmapsInPartitionsImpl(
         const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts);
 
     void detachOrAttachDictionary(const String & db, const String & name, bool is_detach);

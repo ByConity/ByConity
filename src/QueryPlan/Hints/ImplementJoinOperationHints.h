@@ -25,8 +25,7 @@ private:
 class JoinOperationHintsVisitor : public PlanNodeVisitor<void, Void>
 {
 public:
-    explicit JoinOperationHintsVisitor(ContextMutablePtr & context_, CTEInfo & cte_info_, PlanNodePtr & root)
-        : context(context_), post_order_cte_helper(cte_info_, root), cte_info(cte_info_)
+    explicit JoinOperationHintsVisitor(ContextMutablePtr & context_, CTEInfo & cte_info_) : context(context_), cte_helper(cte_info_)
     {
     }
 
@@ -40,8 +39,7 @@ private:
     static void setStepOptions(JoinStepPtr & step, DistributionType distribution_type, bool isOrdered = false);
 
     ContextMutablePtr & context;
-    CTEPostorderVisitHelper post_order_cte_helper;
-    CTEInfo & cte_info;
+    SimpleCTEVisitHelper<void> cte_helper;
 };
 
 struct TableScanContext

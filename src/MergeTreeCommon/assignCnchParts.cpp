@@ -290,9 +290,10 @@ splitCnchParts(const ContextPtr & context, const IStorage & storage, const Serve
     auto & bucket_parts = res.first;
     auto & leftover_parts = res.second;
 
+    auto table_definition_hash = storage.getTableHashForClusterBy();
     std::for_each(parts.begin(), parts.end(), [&](auto part)
     {
-        bool is_clustered = part->part_model().table_definition_hash() == storage.getTableHashForClusterBy() && part->part_model().bucket_number() != -1;
+        bool is_clustered = table_definition_hash.match(part->part_model().table_definition_hash()) && part->part_model().bucket_number() != -1;
         if (is_clustered)
             bucket_parts.emplace_back(part);
         else

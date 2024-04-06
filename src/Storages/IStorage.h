@@ -36,6 +36,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/TableDefinitionHash.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/TableStatistics.h>
 #include <Transaction/TxnTimestamp.h>
@@ -142,6 +143,7 @@ public:
 
     /// The name of the table.
     StorageID getStorageID() const;
+    virtual StorageID getCnchStorageID() const { return getStorageID(); }
     std::string getTableName() const { return storage_id.table_name; }
     std::string getDatabaseName() const { return storage_id.database_name; }
     UUID getStorageUUID() const { return storage_id.uuid; }
@@ -249,7 +251,7 @@ public:
     String getCreateTableSql() const { return create_table_sql; }
 
     virtual bool isBucketTable() const {return false;}
-    virtual UInt64 getTableHashForClusterBy() const {return 0;}
+    virtual TableDefinitionHash getTableHashForClusterBy() const {return {};}
 
     /// Return true if there is at least one part containing lightweight deleted mask.
     virtual bool hasLightweightDeletedMask() const { return false; }

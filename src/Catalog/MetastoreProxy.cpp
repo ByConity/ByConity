@@ -514,9 +514,24 @@ std::vector<std::shared_ptr<Protos::VersionedPartitions>> MetastoreProxy::getMvB
     return res;
 }
 
-BatchCommitRequest MetastoreProxy::constructMvMetaRequests(const String & name_space, const String & uuid,
-    std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions)
+String MetastoreProxy::getMvMetaVersion(const String & name_space, const String & uuid)
 {
+    String mv_meta_version_ts;
+    metastore_ptr->get(matViewVersionKey(name_space, uuid), mv_meta_version_ts);
+    LOG_TRACE(&Poco::Logger::get("MetaStore"), "get mv meta, version {}.", mv_meta_version_ts);
+    if (mv_meta_version_ts.empty())
+        return "";
+
+    return mv_meta_version_ts;
+}
+
+BatchCommitRequest MetastoreProxy::constructMvMetaRequests(const String & name_space, const String & uuid,
+    std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions,
+    std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions,
+    String mv_version_ts)
+{
+    LOG_TRACE(&Poco::Logger::get("MetaStore"), "construct mv meta, version {}.", mv_version_ts);
+
     BatchCommitRequest multi_write;
     for (const auto & add : add_partitions)
     {
@@ -527,6 +542,8 @@ BatchCommitRequest MetastoreProxy::constructMvMetaRequests(const String & name_s
         multi_write.AddPut(SinglePutRequest(key, value));
         LOG_TRACE(&Poco::Logger::get("MetaStore"), "add key {} value size {}.", key, value.size());
     }
+
+    multi_write.AddPut(SinglePutRequest(matViewVersionKey(name_space, uuid), mv_version_ts));
 
     for (const auto & drop : drop_partitions)
     {
@@ -557,6 +574,12 @@ void MetastoreProxy::updateMvMeta(const String & name_space, const String & uuid
             }
         }
     }
+}
+
+void MetastoreProxy::cleanMvMeta(const String & name_space, const String & uuid)
+{
+    metastore_ptr->clean(matViewVersionKey(name_space, uuid));
+    metastore_ptr->clean(matViewBaseTablesPrefix(name_space, uuid));
 }
 
 void MetastoreProxy::dropMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)

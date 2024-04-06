@@ -1,10 +1,12 @@
 #pragma once
 
 #include <map>
+#include <optional>
 
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
 #include <Parsers/IAST.h>
+#include "Parsers/ASTIdentifier.h"
 
 namespace DB
 {
@@ -35,6 +37,7 @@ private:
     static void visit(ASTSelectWithUnionQuery & ast, const Data & data);
     static void visit(ASTTableExpression & table, const Data & data);
     static void visit(ASTFunction & func, const Data & data);
+    // static void visit(ASTIdentifier & identifier, const Data & data);
 
     static ASTPtr constructSubquery(const ASTPtr & table_identifier, const ASTPtr & filter, const String & alias);
 };

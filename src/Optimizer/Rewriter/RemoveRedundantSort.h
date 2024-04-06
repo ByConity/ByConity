@@ -40,8 +40,8 @@ struct RedundantSortContext
 class RedundantSortVisitor : public SimplePlanRewriter<RedundantSortContext>
 {
 public:
-    explicit RedundantSortVisitor(ContextMutablePtr context_, CTEInfo & cte_info_, PlanNodePtr & root)
-        : SimplePlanRewriter(context_, cte_info_), post_order_cte_helper(cte_info_, root)
+    explicit RedundantSortVisitor(ContextMutablePtr context_, CTEInfo & cte_info_)
+        : SimplePlanRewriter(context_, cte_info_)
     {
     }
 
@@ -63,7 +63,6 @@ private:
     PlanNodePtr processChildren(PlanNodeBase & node, RedundantSortContext & sort_context);
     PlanNodePtr resetChild(PlanNodeBase & node, PlanNodes & children, RedundantSortContext & sort_context);
 
-    CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, RedundantSortContext> cte_require_context{};
 };
 

@@ -198,6 +198,9 @@ public:
     /// A global unique id for the storage. If storage UUID is not empty, use the storage UUID. Otherwise, use the address of current object.
     String getStorageUniqueID() const;
 
+    /// If uuid is empty, throw exception
+    UUID getCnchStorageUUID() const;
+
     //// Data parts
     /// Returns a copy of the list so that the caller shouldn't worry about locks.
     DataParts getDataParts(const DataPartStates & affordable_states) const;
@@ -400,7 +403,7 @@ public:
     virtual bool unlockSharedData(const IMergeTreeDataPart &) const { return true; }
 
     bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
-    UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
+    TableDefinitionHash getTableHashForClusterBy() const override; // to compare table engines efficiently
 
     /// Snapshot for MergeTree contains the current set of data parts
     /// at the moment of the start of query.

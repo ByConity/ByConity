@@ -32,6 +32,7 @@
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Interpreters/processColumnTransformers.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTExplainQuery.h>
@@ -237,7 +238,9 @@ Void QueryAnalyzerVisitor::visitASTInsertQuery(ASTPtr & node, const Void &)
     std::unordered_set<String> insert_columns_set;
     if (insert_query.columns)
     {
-        for (auto & column_ast : insert_query.columns->children)
+        const auto columns_ast = processColumnTransformers(context->getCurrentDatabase(), storage, storage_metadata, insert_query.columns);
+
+        for (auto & column_ast : columns_ast->children)
         {
             const auto & column_name = column_ast->as<ASTIdentifier &>().name();
             if (!insert_columns_set.emplace(column_name).second)

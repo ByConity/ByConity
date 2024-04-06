@@ -196,7 +196,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
                 getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
                 meta_loaded = true;
             }
-            meta_ptr->table_definition_hash = storage.getTableHashForClusterBy();
+            meta_ptr->table_definition_hash = storage.getTableHashForClusterBy().getDeterminHash();
             /// Needs make sure no other thread force reload
             UInt32 loading = CacheStatus::LOADING;
             meta_ptr->cache_status.compare_exchange_strong(loading, CacheStatus::LOADED);
@@ -416,7 +416,7 @@ void PartCacheManager::setTableClusterStatus(const UUID & uuid, const bool clust
         table_entry->is_clustered = clustered;
         auto table = getContext()->getCnchCatalog()->getTableByUUID(*getContext(), UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
         if (table)
-            table_entry->table_definition_hash = table->getTableHashForClusterBy();
+            table_entry->table_definition_hash = table->getTableHashForClusterBy().getDeterminHash();
     }
 }
 
@@ -877,9 +877,13 @@ inline bool PartCacheManager::isVisible(const ServerDataPartPtr & data_part, con
 {
     return ts == 0 || (data_part->txnID() <= ts && data_part->getCommitTime() <= ts);
 }
-inline bool PartCacheManager::isVisible(const DB::DeleteBitmapMetaPtr & part_wrapper_ptr, const UInt64 & ts)
+inline bool PartCacheManager::isVisible(const DB::DeleteBitmapMetaPtr & bitmap, const UInt64 & ts)
 {
-    return ts == 0 || (part_wrapper_ptr->getTxnId() <= ts && part_wrapper_ptr->getCommitTime() <= ts);
+    return ts == 0 || (bitmap->getTxnId() <= ts && bitmap->getCommitTime() <= ts);
+}
+inline bool PartCacheManager::isVisible(const DB::DataModelDeleteBitmapPtr & bitmap, const UInt64 & ts)
+{
+    return ts == 0 || (bitmap->txn_id() <= ts && bitmap->commit_time() <= ts);
 }
 
 template <
@@ -907,7 +911,7 @@ RetValueVec PartCacheManager::getOrSetDataInPartitions(
         Vec<FetchedValue> fetched = load_func(partitions, meta_ptr->getPartitionIDs());
         for (auto & ele : fetched)
         {
-            Adapter adapter(ele);
+            Adapter adapter(storage, ele);
             auto part_wrapper_ptr = adapter.getData();
             if (this->isVisible(part_wrapper_ptr, ts))
             {
@@ -1054,7 +1058,7 @@ RetValueVec PartCacheManager::getDataInternal(
                               const auto & part_wrapper_ptr = *it;
                               if (this->isVisible(part_wrapper_ptr, ts))
                               {
-                                  Adapter adapter(part_wrapper_ptr);
+                                  Adapter adapter(storage, part_wrapper_ptr);
                                   parts.push_back(adapter.toData());
                                   //logPartsVector(storage, res);
                               }
@@ -1152,7 +1156,7 @@ RetValueVec PartCacheManager::getDataInternal(
 
         for (auto & ele : fetched)
         {
-            Adapter adapter(std::move(ele));
+            Adapter adapter(storage, std::move(ele));
             // auto part_wrapper_ptr = createPartWrapperFromModel(storage, std::move(*(ele->model)), std::move(ele->name));
             auto part_wrapper_ptr = adapter.getData();
             const auto & partition_id = adapter.getPartitionId();
@@ -1213,10 +1217,10 @@ RetValueVec PartCacheManager::getDataInternal(
                     for (const auto & part_wrapper_ptr : *parts_wrapper_vector)
                     {
                         Adapter adapter(part_wrapper_ptr);
-                        auto it_ = cached->find(adapter.getName());
-                        Adapter it_adapter(*it_);
+                        auto it_inner = cached->find(adapter.getName());
+                        Adapter it_adapter(storage, *it_inner);
                         /// do not update cache if the cached data is newer than kv.
-                        if (it_ == cached->end() || it_adapter.getCommitTime() < adapter.getCommitTime())
+                        if (it_inner == cached->end() || it_adapter.getCommitTime() < adapter.getCommitTime())
                         {
                             cached->update(adapter.getName(), adapter.getData());
                         }
@@ -1319,7 +1323,7 @@ template <
                                 const auto & data_wrapper_ptr = *it;
                                 if (this->isVisible(data_wrapper_ptr, ts))
                                 {
-                                    Adapter adapter(data_wrapper_ptr);
+                                    Adapter adapter(storage, data_wrapper_ptr);
                                     parts.push_back(adapter.toData());
                                     //logPartsVector(storage, res);
                                 }
@@ -1366,7 +1370,7 @@ template <
                             cached = std::make_shared<CacheValueMap>();
                             for (auto & data_wrapper_ptr : fetched)
                             {
-                                Adapter adapter(data_wrapper_ptr);
+                                Adapter adapter(storage, data_wrapper_ptr);
                                 cached->update(adapter.getName(), data_wrapper_ptr);
                             }
                             cache_ptr->insert({uuid, partition_id}, cached);
@@ -1375,9 +1379,9 @@ template <
                         {
                             for (auto & data_wrapper_ptr : fetched)
                             {
-                                Adapter adapter(data_wrapper_ptr);
+                                Adapter adapter(storage, data_wrapper_ptr);
                                 auto it = cached->find(adapter.getName());
-                                Adapter it_adapter(*it);
+                                Adapter it_adapter(storage, *it);
                                 /// do not update cache if the cached data is newer than bytekv.
                                 if (it == cached->end() || it_adapter.getCommitTime() < adapter.getCommitTime())
                                 {
@@ -1401,7 +1405,7 @@ template <
                             /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
                             if (this->isVisible(data_wrapper_ptr, ts))
                             {
-                                Adapter adapter(data_wrapper_ptr);
+                                Adapter adapter(storage, data_wrapper_ptr);
                                 parts.push_back(adapter.toData());
                                 //logPartsVector(storage, res);
                             }
@@ -1447,7 +1451,7 @@ template <
                             /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
                             if (this->isVisible(part_wrapper_ptr, ts))
                             {
-                                Adapter adapter(part_wrapper_ptr);
+                                Adapter adapter(storage, part_wrapper_ptr);
                                 parts.push_back(adapter.toData());
                                 //logPartsVector(storage, res);
                             }
@@ -1638,7 +1642,7 @@ size_t PartCacheManager::cleanTrashedActiveTables() {
         TableMetaEntryPtr cur;
         {
             std::unique_lock<std::mutex> lock(trashed_active_tables_mutex);
-            if (trashed_active_tables.size() == 0)
+            if (trashed_active_tables.empty())
             {
                 return count;
             }
@@ -1875,7 +1879,6 @@ void PartCacheManager::insertDeleteBitmapsIntoCache(
     const Protos::DataModelPartVector & helper_parts,
     const Protos::DataModelPartVector * const helper_staged_parts)
 {
-    auto bitmaps = const_cast<DeleteBitmapMetaPtrVector &>(delete_bitmaps);
     std::unordered_map<String, String> partition_id_to_minmax;
 
     for (const auto & part : helper_parts.parts())
@@ -1900,11 +1903,18 @@ void PartCacheManager::insertDeleteBitmapsIntoCache(
     insertDataIntoCache<
         DeleteBitmapAdapter,
         DeleteBitmapMetaPtrVector,
-        DeleteBitmapMetaPtrVector,
+        DataModelDeleteBitmapPtrVector,
         CnchDeleteBitmapCachePtr,
         DeleteBitmapModelsMap,
-        std::function<String(const DeleteBitmapMetaPtr &)>>(
-        table, bitmaps, false, false, topology_version, delete_bitmap_cache_ptr, dataDeleteBitmapGetKeyFunc, &partition_id_to_minmax);
+        std::function<String(const DataModelDeleteBitmapPtr &)>>(
+        table,
+        delete_bitmaps,
+        false,
+        false,
+        topology_version,
+        delete_bitmap_cache_ptr,
+        dataDeleteBitmapGetKeyFunc,
+        &partition_id_to_minmax);
 }
 
 DeleteBitmapMetaPtrVector PartCacheManager::getOrSetDeleteBitmapInPartitions(
@@ -1918,7 +1928,7 @@ DeleteBitmapMetaPtrVector PartCacheManager::getOrSetDeleteBitmapInPartitions(
         CnchDeleteBitmapCachePtr,
         DeleteBitmapMeta,
         DeleteBitmapModelsMap,
-        DeleteBitmapMeta,
+        DataModelDeleteBitmap,
         DeleteBitmapAdapter,
         LoadDeleteBitmapsFunc,
         Vec<DeleteBitmapMeta>>(table, partitions, std::move(load_func), ts, topology_version);

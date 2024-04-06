@@ -1,0 +1,26 @@
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Aggregating Est. ? rows
+            │     Group by: {a}
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {a}
+               └─ TableScan correctness.q17_t3 Est. ? rows
+                        Outputs: [a]
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()_1`
+└─ Aggregating Est. ? rows
+   │     Group by: {}
+   │     Aggregates: expr#count()_1:=AggNull(count)()
+   └─ Gather Exchange Est. ? rows
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {a_1}
+            └─ Aggregating Est. ? rows
+               │     Group by: {a_1}
+               └─ TableScan correctness.q17_t3 Est. ? rows
+                        Outputs: a_1:=a

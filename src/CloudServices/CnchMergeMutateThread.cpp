@@ -823,7 +823,9 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
             }
         });
 
-    transaction->abort();
+    /// It's safe to use commit() to release the txn as there is no actions to do.
+    /// And finishTransaction in the SCOPE_EXIT make sure the txn is clean by server but not DM.
+    transaction->commit();
     UInt64 milliseconds = watch.elapsedMilliseconds();
     if (milliseconds >= SLOW_THRESHOLD_MS)
         LOG_INFO(log, "removeLockedPartition took {} ms.", milliseconds);
@@ -1338,9 +1340,10 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
             else if (mutation_command.predicate)
             {
                 ServerDataPartsVector parts_to_recluster;
+                auto table_definition_hash = storage.getTableHashForClusterBy();
                 for (const auto & part : visible_parts)
                 {
-                    if (part->part_model().table_definition_hash() != storage.getTableHashForClusterBy())
+                    if (!table_definition_hash.match(part->part_model().table_definition_hash()))
                         parts_to_recluster.push_back(part);
                 }
 

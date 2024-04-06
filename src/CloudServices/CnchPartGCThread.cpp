@@ -265,7 +265,7 @@ void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const Server
 
             try
             {
-                catalog->moveDataItemsToTrash(storage, items, /*skip_part_cache*/false, is_zombie_with_staging_txn_id);
+                catalog->moveDataItemsToTrash(storage, items, is_zombie_with_staging_txn_id);
                 num_moved.fetch_add(is_staged ? items.staged_parts.size() : items.data_parts.size());
                 ServerPartLog::addRemoveParts(local_context, storage_id, parts, is_staged);
             }

@@ -19,10 +19,12 @@ NamesAndTypesList ViewRefreshTaskLogElement::getNamesAndTypes()
     auto status_datatype = std::make_shared<DataTypeEnum8>(DataTypeEnum8::Values{
         {"START", static_cast<Int8>(RefreshViewTaskStatus::START)},
         {"FINISH", static_cast<Int8>(RefreshViewTaskStatus::FINISH)},
-        {"EXCEPTION", static_cast<Int8>(RefreshViewTaskStatus::EXCEPTION)}});
+        {"EXCEPTION_EXECUTE_TASK", static_cast<Int8>(RefreshViewTaskStatus::EXCEPTION_EXECUTE_TASK)},
+        {"EXCEPTION_BEFORE_START", static_cast<Int8>(RefreshViewTaskStatus::EXCEPTION_BEFORE_START)}});
 
 
     auto refresh_type_datatype = std::make_shared<DataTypeEnum8>(DataTypeEnum8::Values{
+        {"NONE", static_cast<Int8>(RefreshViewTaskType::NONE)},
         {"PARTITION_BASED_REFRESH", static_cast<Int8>(RefreshViewTaskType::PARTITION_BASED_REFRESH)},
         {"FULL_REFRESH", static_cast<Int8>(RefreshViewTaskType::FULL_REFRESH)}});
 
@@ -41,7 +43,8 @@ NamesAndTypesList ViewRefreshTaskLogElement::getNamesAndTypes()
         {"query_id", std::make_shared<DataTypeString>()},
         {"drop_query_id", std::make_shared<DataTypeString>()},
         {"insert_select_query_id", std::make_shared<DataTypeString>()},
-        {"insert_overwrite_query_id", std::make_shared<DataTypeString>()}};
+        {"insert_overwrite_query_id", std::make_shared<DataTypeString>()},
+        {"exception", std::make_shared<DataTypeString>()}};
 }
 
 void ViewRefreshTaskLogElement::appendToBlock(MutableColumns & columns) const
@@ -62,6 +65,6 @@ void ViewRefreshTaskLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(drop_query_id);
     columns[i++]->insert(insert_select_query_id);
     columns[i++]->insert(insert_overwrite_query_id);
+    columns[i++]->insert(exception);
 }
-
 }
