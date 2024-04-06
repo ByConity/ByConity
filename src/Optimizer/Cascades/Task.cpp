@@ -464,7 +464,8 @@ void OptimizeInput::execute()
                         auto before_transformed_partition_cols = actual_input_props[actual_prop_index].getNodePartitioning().getPartitioningColumns();
                         auto translated_prop = actual_input_props[actual_prop_index].normalize(*right_equivalences);
                         if (translated_prop.getNodePartitioning().getPartitioningHandle() != first_handle
-                            || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count)
+                            || (translated_prop.getNodePartitioning().getBuckets() != first_bucket_count && !(translated_prop.getNodePartitioning().isSatisfyWorker()
+                            && first_props.getNodePartitioning().isSatisfyWorker())))
                         {
                             match = false;
                             break;

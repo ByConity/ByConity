@@ -142,7 +142,7 @@ Partitioning Partitioning::translate(const std::unordered_map<String, String> & 
         else // note: don't discard column
             translate_columns.emplace_back(column);
     }
-    return Partitioning{handle, translate_columns, require_handle, buckets, enforce_round_robin, component, exactly_match};
+    return Partitioning{handle, translate_columns, require_handle, buckets, enforce_round_robin, component, exactly_match, satisfy_worker};
 }
 
 

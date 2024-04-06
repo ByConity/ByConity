@@ -55,9 +55,16 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
  */
 std::pair<ServerDataPartsVector, ServerDataPartsVector>
 splitCnchParts(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts);
-void moveBucketTablePartsToAssignedParts(std::unordered_map<String, ServerDataPartsVector> & assigned_map, ServerDataPartsVector & bucket_parts, const WorkerList & workers, std::set<Int64> required_bucket_numbers = {});
-BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers = {});
+void moveBucketTablePartsToAssignedParts(
+    std::unordered_map<String, ServerDataPartsVector> & assigned_map,
+    ServerDataPartsVector & bucket_parts,
+    const WorkerList & workers,
+    std::set<Int64> required_bucket_numbers = {},
+    bool replicated = false);
+BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(
+    const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers = {}, bool replicated = false);
 
+bool satisfyBucketWorkerRelation(const StoragePtr & storage, const Context & query_context);
 }
 
 template <class F>
