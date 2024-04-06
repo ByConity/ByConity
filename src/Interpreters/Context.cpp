@@ -580,8 +580,6 @@ struct ContextSharedPart
 
             global_binding_cache_manager.reset();
 
-            access_control_manager.stopBgJobForKVStorage();
-
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -4272,9 +4270,14 @@ BlockOutputStreamPtr Context::getOutputStream(const String & name, WriteBuffer &
     return FormatFactory::instance().getOutputStream(name, buf, sample, shared_from_this());
 }
 
-OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const
+OutputFormatPtr Context::getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample, bool out_to_directory) const
 {
-    return FormatFactory::instance().getOutputFormatParallelIfPossible(name, buf, sample, shared_from_this());
+    return FormatFactory::instance().getOutputFormatParallelIfPossible(name, buf, sample, shared_from_this(), out_to_directory);
+}
+
+OutputFormatPtr Context::getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const
+{
+    return FormatFactory::instance().getOutputFormat(name, buf, sample, shared_from_this());
 }
 
 

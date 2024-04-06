@@ -55,6 +55,11 @@ bool RuntimeFilterUtils::isInternalRuntimeFilter(const ConstASTPtr & expr)
     return expr && expr->getType() == ASTType::ASTFunction && expr->as<ASTFunction &>().name == InternalFunctionRuntimeFilter::name;
 }
 
+bool RuntimeFilterUtils::isInternalRuntimeFilter(const ASTFunction & function)
+{
+    return function.name == InternalFunctionRuntimeFilter::name;
+}
+
 double RuntimeFilterUtils::estimateSelectivity(
     const RuntimeFilterDescription & description,
     const SymbolStatisticsPtr & filter_source,

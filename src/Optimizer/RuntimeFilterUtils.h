@@ -53,6 +53,7 @@ public:
     /* runtime_filters, static_filters */
     static std::pair<std::vector<ConstASTPtr>, std::vector<ConstASTPtr>> extractRuntimeFilters(const ConstASTPtr & conjuncts);
     static bool isInternalRuntimeFilter(const ConstASTPtr & expr);
+    static bool isInternalRuntimeFilter(const ASTFunction & function);
 
     static double estimateSelectivity(
         const RuntimeFilterDescription & description,

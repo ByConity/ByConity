@@ -319,6 +319,12 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     ConstASTPtr right_effective_predicate = EffectivePredicateExtractor::extract(right, context);
     ConstASTPtr join_predicate = PredicateUtils::extractJoinPredicate(node);
 
+    LOG_TRACE(
+        logger,
+        "join node {} has left effective predicate: {} , right effective predicate: {}",
+        node.getId(),
+        left_effective_predicate->formatForErrorMessage(),
+        right_effective_predicate->formatForErrorMessage());
     std::set<String> left_symbols;
     for (const auto & column : left->getStep()->getOutputStream().header)
     {
@@ -914,6 +920,7 @@ PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContex
 
 PlanNodePtr PredicateVisitor::process(PlanNodeBase & node, PredicateContext & predicate_context)
 {
+    LOG_TRACE(logger, "node {} has inherited predicate: {}", node.getId(), predicate_context.predicate->formatForErrorMessage());
     return VisitorUtil::accept(node, *this, predicate_context);
 }
 

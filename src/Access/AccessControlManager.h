@@ -79,7 +79,6 @@ public:
 
     /// Loads access entities from KV
     void addKVStorage(const ContextPtr & context);
-    void stopBgJobForKVStorage();
 
     /// Loads access entities from the directory on the local disk.
     /// Use that directory to keep created users/roles/etc.

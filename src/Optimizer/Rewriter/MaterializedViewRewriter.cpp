@@ -52,6 +52,7 @@
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/FilterStep.h>
+#include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/PlanSymbolReallocator.h>
@@ -653,8 +654,9 @@ protected:
             // Note: aggregate always need rollup for aggregating merge tree in clickhouse,
             if (view_aggregate && !view_aggregate)
                 continue;
-            bool need_rollup
-                = query_aggregate && (!async_materialized_view || query_aggregate->getKeys().size() < view_aggregate->getKeys().size());
+            bool need_rollup = query_aggregate
+                && (!async_materialized_view || query_aggregate->getKeys().size() < view_aggregate->getKeys().size()
+                    || !PredicateUtils::isFalsePredicate(union_predicate));
 
             // 3-1. query aggregate has default result if group by has empty set. not supported yet.
             bool empty_groupings = query_aggregate && query_aggregate->getKeys().empty() &&
@@ -1292,7 +1294,7 @@ protected:
             if (!PredicateUtils::isFalsePredicate(candidate.union_predicate))
                 plan = planUnion(plan, query, candidate.union_predicate);
 
-            // reallocate symbols
+                        // reallocate symbols
             PlanNodeAndMappings plan_node_and_mappings = PlanSymbolReallocator::reallocate(plan, context);
             plan = plan_node_and_mappings.plan_node;
 

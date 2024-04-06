@@ -568,8 +568,9 @@ public:
      * @brief Move specified items into trash.
      *
      * @param skip_part_cache Evict parts caches if set to `false`.
+     * @param is_zombie_with_staging_txn_id If true, just remove items.data_parts' kv entry
      */
-    void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool skip_part_cache = false);
+    void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool skip_part_cache = false, bool is_zombie_with_staging_txn_id = false);
 
     /**
      * @brief Delete specified trashed items from catalog.
@@ -1010,6 +1011,6 @@ void remove_not_exist_items(std::vector<T> & items_to_write, std::vector<size_t>
 }
 
 using CatalogPtr = std::shared_ptr<Catalog>;
-void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & tenanted_name, const UUID & uuid, Poco::Logger * log);
+void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & tenanted_name, const UUID & uuid);
 void fillUUIDForDictionary(DB::Protos::DataModelDictionary &);
 }

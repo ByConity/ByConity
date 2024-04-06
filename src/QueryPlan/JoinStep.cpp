@@ -241,6 +241,11 @@ void JoinStep::setInputStreams(const DataStreams & input_streams_)
     input_streams = input_streams_;
 }
 
+void JoinStep::setOutputStream(DataStream output_stream_)
+{
+    output_stream = std::move(output_stream_);
+}
+
 QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & settings)
 {
     if (pipelines.size() != 2)

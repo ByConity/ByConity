@@ -211,6 +211,15 @@ ASTPtr SymbolTranslationMap::translateImpl(ASTPtr ast) const
         return makeASTFunction(func->name, translated_arguments);
     }
 
+    // for the 4th argument of InternalRuntimeFilter
+    if (const auto * expr_list = ast->as<ASTExpressionList>())
+    {
+        auto new_expr_list = std::make_shared<ASTExpressionList>();
+        for (const auto & arg : expr_list->children)
+            new_expr_list->children.push_back(translateImpl(arg));
+        return new_expr_list;
+    }
+
     // other ast type
     return ast;
 }
