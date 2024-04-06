@@ -1931,8 +1931,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_null_as_default, true, "For text input formats initialize null fields with default values if data type of this field is not nullable", 0) \
     M(Bool, input_format_protobuf_enable_multiple_message, true, "If it is set to true, allows read protobuf messages which separated by a length header consecutively.", 0) \
     M(Bool, input_format_protobuf_default_length_parser, false, "If it is set to true, use variable length header, otherwise a 8 byte fixed length header is used.", 0) \
-    M(Bool, throw_on_date_overflow, false, "When check_date_overflow is on, if the date is illegal or out of legal range, i.e., (1900-01-01, 2299-12-31) for Date32/DateTime64, (1970-01-01, 2149-06-06) for Date, (1970-01-01, 2106-02-07) for DateTime throw error when this setting is true; otherwise, convert it to null for nullable column or convert to the boundary value.", 0) \
-    M(Bool, check_date_overflow, false, "Used together with throw_on_date_overflow; default is false do not check. If dialect is mysql, set it to true automatically.", 0) \
+    M(Bool, check_data_overflow, false, "If true, throw exception when integer/decimal/date overflows; convert float/double to NULL if the column is nullable or +/- inf if the column is not nullable. Turned on automatically when dialect is mysql.", 0) \
     \
     M(DateTimeInputFormat, date_time_input_format, FormatSettings::DateTimeInputFormat::Basic, "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", 0) \
     M(DateTimeOutputFormat, date_time_output_format, FormatSettings::DateTimeOutputFormat::Simple, "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", 0) \

@@ -35,8 +35,11 @@ namespace ErrorCodes
 
 void ThreadStatus::applyQuerySettings()
 {
-    /// reset the truncation flag for every query
-    has_truncated_date = false;
+    /// reset the truncation flag for every query due to overflow check setting could be changed across queries.
+    /// e.g., check_date_overflow could be changed from false to true from q1 to q2.
+    /// for q1, check_date_overflow is false, but there is date overflow -> the bit is on;
+    /// for q2, check_date_overflow is changed to true, but there is no date overflow -> if the bit is not reset, it is still on.
+    resetOverflow();
     auto query_context_ptr = query_context.lock();
     assert(query_context_ptr);
     const Settings & settings = query_context_ptr->getSettingsRef();

@@ -31,49 +31,21 @@ SerializationDateTime64::SerializationDateTime64(
 }
 
 
-void SerializationDateTime64::checkDateOverflow(DateTime64 & x, const FormatSettings & settings) const
+void SerializationDateTime64::checkDataOverflow(const DateTime64 & x, const FormatSettings & settings) const
 {
-    if (!settings.check_date_overflow || !current_thread)
+    if (!settings.check_data_overflow || !current_thread)
         return;
 
     /// y is the seconds since 1970-01-01, negative for date before
     auto y = extractWholePart(x, scale);
     const time_t min_datetime_timestamp = utc_time_zone.makeDateTime(1900, 1, 1, 0, 0, 0);
 
-    /// not overflow
-    /// max side check is done during parsing and it would set has_truncated_date flag
-    if (!current_thread->has_truncated_date && y >= min_datetime_timestamp)
+    /// overflow bit is set if the value is over the max; but min boundary is not yet checked; so check it here
+    if (!current_thread->getOverflow(ThreadStatus::OverflowFlag::Date) && y >= min_datetime_timestamp)
         return;
 
-    /// adjusted seconds
-    time_t z = 0;
-    DateTime64 fraction = 0;
-
-    /// e.g., 1800-01-01 23:59:59 GMT+12 is truncated to 1900-01-01 23:59:59 GMT+12
-    /// the timestamp is min_datetime_timestamp + DATE_SECONDS_PER_DAY * 3/2 - 1.
-    /// here use DATE_SECONDS_PER_DAY * 2 just as a loose upper bound
-    /// y == 0 is a special case when the year==0
-    if (y <= (min_datetime_timestamp + DATE_SECONDS_PER_DAY * 2) || y == 0)
-    {
-        /// for 1900-01-01 00:00:00
-        z = min_datetime_timestamp;
-    }
-    else
-    {
-        z = utc_time_zone.makeDateTime(2299, 12, 31, 23, 59, 59);
-        /// for the fraction, make the time as 2299-12-31 23:59:59.999...
-        fraction = common::exp10_i32(scale + 1) - 1;
-    }
-
-    if (settings.throw_on_date_overflow)
-    {
-        current_thread->has_truncated_date = false;
-        throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "Under MYSQL dialect or check_date_overflow = 1, the Datetime64 value should be within [1900-01-01 00:00:00, 2299-12-31 23:59:59.99...]");
-    }
-
-    DB::DecimalUtils::DecimalComponents<DateTime64> components{static_cast<DateTime64::NativeType>(z), fraction};
-    x = DecimalUtils::decimalFromComponents<DateTime64>(components, scale);
-    current_thread->has_truncated_date = in_serialization_nullable;
+    current_thread->unsetOverflow(ThreadStatus::OverflowFlag::Date);
+    throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "Under MYSQL dialect or check_data_overflow = 1, the Datetime64 value should be within UTC [1900-01-01 00:00:00, 2299-12-31 23:59:59]");
 }
 
 void SerializationDateTime64::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
@@ -97,7 +69,7 @@ void SerializationDateTime64::deserializeText(IColumn & column, ReadBuffer & ist
 {
     DateTime64 result = 0;
     readDateTime64Text(result, scale, istr, time_zone);
-    checkDateOverflow(result, settings);
+    checkDataOverflow(result, settings);
     assert_cast<ColumnType &>(column).getData().push_back(result);
 }
 
@@ -131,7 +103,7 @@ void SerializationDateTime64::deserializeTextEscaped(IColumn & column, ReadBuffe
 {
     DateTime64 x = 0;
     readText(x, scale, istr, settings, time_zone, utc_time_zone);
-    checkDateOverflow(x, settings);
+    checkDataOverflow(x, settings);
     assert_cast<ColumnType &>(column).getData().push_back(x);
 }
 
@@ -154,7 +126,7 @@ void SerializationDateTime64::deserializeTextQuoted(IColumn & column, ReadBuffer
     {
         readIntText(x, istr);
     }
-    checkDateOverflow(x, settings);
+    checkDataOverflow(x, settings);
     assert_cast<ColumnType &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
 }
 
@@ -177,7 +149,7 @@ void SerializationDateTime64::deserializeTextJSON(IColumn & column, ReadBuffer &
     {
         readIntText(x, istr);
     }
-    checkDateOverflow(x, settings);
+    checkDataOverflow(x, settings);
     assert_cast<ColumnType &>(column).getData().push_back(x);
 }
 
@@ -201,7 +173,7 @@ void SerializationDateTime64::deserializeTextCSV(IColumn & column, ReadBuffer & 
         ++istr.position();
 
     readText(x, scale, istr, settings, time_zone, utc_time_zone);
-    checkDateOverflow(x, settings);
+    checkDataOverflow(x, settings);
 
     if (maybe_quote == '\'' || maybe_quote == '\"')
         assertChar(maybe_quote, istr);

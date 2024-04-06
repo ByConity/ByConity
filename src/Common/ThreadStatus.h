@@ -128,11 +128,6 @@ public:
     /// Each thread could new/delete memory in range of (-untracked_memory_limit, untracked_memory_limit) without access to common counters.
     Int64 untracked_memory_limit = 4 * 1024 * 1024;
 
-    /// Set this flag if the date is truncated due to overflow (out of range) during deserialization
-    /// Used under mysql dialect for convert overflow to null
-    /// TODO(fredwang) remove this flag --- return the flag from the date deserialization/parsing functions directly.
-    bool has_truncated_date {false};
-
     /// Statistics of read and write rows/bytes
     Progress progress_in;
     Progress progress_out;
@@ -146,7 +141,38 @@ public:
     // for these changes.
     OpenTelemetryTraceContext thread_trace_context;
 
+    enum OverflowFlag {Date = 1, Float = 2, Integer = 4, Decimal = 8, Time = 16};
+    void setOverflow(OverflowFlag flag)
+    {
+        overflow_bits |= flag;
+    }
+
+    void unsetOverflow(OverflowFlag flag)
+    {
+        overflow_bits &= ~flag;
+    }
+
+    bool getOverflow(OverflowFlag flag) const
+    {
+        return overflow_bits & flag;
+    }
+
+    bool getOverflow() const
+    {
+        return overflow_bits;
+    }
+
+    void resetOverflow()
+    {
+        overflow_bits = 0;
+    }
+
 protected:
+    /// Set the bit if the value is overflow (out of range) during parsing
+    /// Used under mysql dialect for convert overflow to null
+    /// TODO(fredwang) remove this flag --- return the flag from the date deserialization/parsing functions directly.
+    uint8_t overflow_bits = 0;
+
     ThreadGroupStatusPtr thread_group;
 
     std::atomic<int> thread_state{ThreadState::DetachedFromQuery};

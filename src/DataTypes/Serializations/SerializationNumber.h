@@ -53,6 +53,9 @@ public:
     bool supportMemComparableEncoding() const override;
     void serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeMemComparable(IColumn & column, ReadBuffer & istr) const override;
+
+private:
+    void checkNumberOverflow(T & x, const FormatSettings & settings) const;
 };
 
 }

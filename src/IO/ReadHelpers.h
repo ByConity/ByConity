@@ -410,7 +410,12 @@ ReturnType readIntTextImpl(T & x, ReadBuffer & buf)
                             T signed_res = -res;
                             if (common::mulOverflow<T>(signed_res, 10, signed_res) ||
                                 common::subOverflow<T>(signed_res, (*buf.position() - '0'), signed_res))
+                            {
+                                if (current_thread)
+                                    current_thread->setOverflow(ThreadStatus::OverflowFlag::Integer);
+
                                 return ReturnType(false);
+                            }
 
                             res = -static_cast<UnsignedT>(signed_res);
                         }
@@ -419,7 +424,12 @@ ReturnType readIntTextImpl(T & x, ReadBuffer & buf)
                             T signed_res = res;
                             if (common::mulOverflow<T>(signed_res, 10, signed_res) ||
                                 common::addOverflow<T>(signed_res, (*buf.position() - '0'), signed_res))
+                            {
+                                if (current_thread)
+                                    current_thread->setOverflow(ThreadStatus::OverflowFlag::Integer);
+
                                 return ReturnType(false);
+                            }
 
                             res = signed_res;
                         }
@@ -453,7 +463,12 @@ end:
             if constexpr (check_overflow == ReadIntTextCheckOverflow::CHECK_OVERFLOW)
             {
                 if (common::mulOverflow<UnsignedT, Int8, T>(res, -1, x))
+                {
+                    if (current_thread)
+                        current_thread->setOverflow(ThreadStatus::OverflowFlag::Integer);
+
                     return ReturnType(false);
+                }
             }
             else
                 x = -res;
@@ -709,13 +724,13 @@ inline void convertToDayNum(DayNum & date, ExtendedDayNum & from)
     if (unlikely(from < 0))
     {
         if (current_thread)
-            current_thread->has_truncated_date = true;
+            current_thread->setOverflow(ThreadStatus::OverflowFlag::Date);
         date = 0;
     }
     else if (unlikely(from > 0xFFFF))
     {
         if (current_thread)
-            current_thread->has_truncated_date = true;
+            current_thread->setOverflow(ThreadStatus::OverflowFlag::Date);
         date = 0xFFFF;
     }
     else
@@ -999,7 +1014,7 @@ inline ReturnType readDateTimeTzTextImpl(time_t & datetime, ReadBuffer & buf, co
             if (unlikely(year == 0)) {
                 datetime = 0;
                 if (current_thread)
-                    current_thread->has_truncated_date = true;
+                    current_thread->setOverflow(ThreadStatus::OverflowFlag::Date);
                 return ReturnType(true);
             }
             s = buf.position();
@@ -1233,6 +1248,11 @@ inline bool readTimeTextImpl(time_t & t, ReadBuffer & buf)
     }
     else return false;
 
+    if (unlikely(hour >= 24 || minute >= 60 || sec >= 60)) {
+        if (current_thread)
+            current_thread->setOverflow(ThreadStatus::OverflowFlag::Time);
+    }
+
     if (unlikely(hour >= 24 || minute > 60 || sec > 60)) {
         return false;
     }
@@ -1463,7 +1483,13 @@ readBinaryBigEndian(T & x, ReadBuffer & buf)    /// Assuming little endian archi
 /// Generic methods to read value in text tab-separated format.
 template <typename T>
 inline std::enable_if_t<is_integer_v<T>, void>
-readText(T & x, ReadBuffer & buf) { readIntText(x, buf); }
+readText(T & x, ReadBuffer & buf, bool check_overflow = false)
+{
+    if (check_overflow)
+        readIntText<ReadIntTextCheckOverflow::CHECK_OVERFLOW>(x, buf);
+    else
+        readIntText<ReadIntTextCheckOverflow::DO_NOT_CHECK_OVERFLOW>(x, buf);
+}
 
 template <typename T>
 inline std::enable_if_t<is_integer_v<T>, bool>
@@ -1471,7 +1497,7 @@ tryReadText(T & x, ReadBuffer & buf) { return tryReadIntText(x, buf); }
 
 template <typename T>
 inline std::enable_if_t<std::is_floating_point_v<T>, void>
-readText(T & x, ReadBuffer & buf) { readFloatText(x, buf); }
+readText(T & x, ReadBuffer & buf, bool /*check_overflow8*/ = false) { readFloatText(x, buf); }
 
 template <typename T>
 inline std::enable_if_t<std::is_floating_point_v<T>, bool>
@@ -1553,7 +1579,7 @@ inline void readDoubleQuoted(LocalDateTime & x, ReadBuffer & buf)
 
 
 /// CSV, for numbers, dates: quotes are optional, no special escaping rules.
-template <typename T>
+template <typename T, bool check_overflow = false>
 inline void readCSVSimple(T & x, ReadBuffer & buf)
 {
     if (buf.eof())
@@ -1564,7 +1590,10 @@ inline void readCSVSimple(T & x, ReadBuffer & buf)
     if (maybe_quote == '\'' || maybe_quote == '\"')
         ++buf.position();
 
-    readText(x, buf);
+    if constexpr (check_overflow)
+        readText(x, buf, true);
+    else
+        readText(x, buf);
 
     if (maybe_quote == '\'' || maybe_quote == '\"')
         assertChar(maybe_quote, buf);
@@ -1572,7 +1601,13 @@ inline void readCSVSimple(T & x, ReadBuffer & buf)
 
 template <typename T>
 inline std::enable_if_t<is_arithmetic_v<T>, void>
-readCSV(T & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
+readCSV(T & x, ReadBuffer & buf, bool check_overflow = false)
+{
+    if (check_overflow)
+        readCSVSimple<T, true>(x, buf);
+    else
+        readCSVSimple<T, false>(x, buf);
+}
 
 inline void readCSV(String & x, ReadBuffer & buf, const FormatSettings::CSV & settings) { readCSVString(x, buf, settings); }
 inline void readCSV(DayNum & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
@@ -1582,10 +1617,14 @@ inline void readCSV(LocalDateTime & x, ReadBuffer & buf) { readCSVSimple(x, buf)
 inline void readCSV(UUID & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(IPv4 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(IPv6 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
-inline void readCSV(UInt128 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
-inline void readCSV(Int128 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
-inline void readCSV(UInt256 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
-inline void readCSV(Int256 & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
+template void readCSV(Int128 & x, ReadBuffer & buf, bool check_overflow = false);
+template void readCSV(UInt128 & x, ReadBuffer & buf, bool check_overflow = false);
+template void readCSV(Int256 & x, ReadBuffer & buf, bool check_overflow = false);
+template void readCSV(UInt256 & x, ReadBuffer & buf, bool check_overflow = false);
+// inline void readCSV(UInt128 & x, ReadBuffer & buf, bool check_overflow = false) { readCSVSimple(x, buf, check_overflow); }
+// inline void readCSV(Int128 & x, ReadBuffer & buf, bool check_overflow = false) { readCSVSimple(x, buf, check_overflow); }
+// inline void readCSV(UInt256 & x, ReadBuffer & buf, bool check_overflow = false) { readCSVSimple(x, buf, check_overflow); }
+// inline void readCSV(Int256 & x, ReadBuffer & buf, bool check_overflow = false) { readCSVSimple(x, buf, check_overflow); }
 
 template <typename T>
 void readBinary(std::vector<T> & x, ReadBuffer & buf)
