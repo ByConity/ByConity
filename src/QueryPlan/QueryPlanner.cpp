@@ -200,7 +200,7 @@ private:
         String & lhs_symbol,
         RelationPlan & rhs_plan,
         ASTSelectQuery & select_query);
-    void planHint(const QueryPlanStepPtr & step, SqlHints & sql_hints);
+    void addPlanHint(const QueryPlanStepPtr & step, SqlHints & sql_hints, bool check_step_type = false);
     bool needAggregateOverflowRow(ASTSelectQuery & select_query) const;
 };
 
@@ -487,8 +487,7 @@ PlanBuilder QueryPlannerVisitor::planTables(ASTTablesInSelectQuery & tables_in_s
         }
     }
 
-    planHint(builder.plan->getStep(), tables_in_select.hints);
-
+    addPlanHint(builder.plan->getStep(), tables_in_select.hints);
     return builder;
 }
 
@@ -558,7 +557,7 @@ PlanBuilder QueryPlannerVisitor::planTableSubquery(ASTSubquery & subquery, ASTPt
     auto builder = toPlanBuilder(plan, analysis.getScope(subquery));
 
     //set hints
-    planHint(builder.plan->getStep(), hints);
+    addPlanHint(builder.plan->getStep(), hints);
 
     PRINT_PLAN(builder.plan, plan_table_subquery);
     return builder;
@@ -598,7 +597,7 @@ void QueryPlannerVisitor::planCrossJoin(ASTTableJoin & table_join, PlanBuilder &
             context->getSettingsRef().max_threads,
             context->getSettingsRef().optimize_read_in_order);
 
-        planHint(join_step, table_join.hints);
+        addPlanHint(join_step, table_join.hints);
         left_builder.addStep(std::move(join_step), {left_builder.getRoot(), right_builder.getRoot()});
     }
 
@@ -632,7 +631,7 @@ void QueryPlannerVisitor::planJoinUsing(ASTTableJoin & table_join, PlanBuilder &
         true,
         use_ansi_semantic ? std::nullopt : std::make_optional(join_analysis.require_right_keys));
 
-    planHint(join_step, table_join.hints);
+    addPlanHint(join_step, table_join.hints);
     left_builder.addStep(std::move(join_step), {left_builder.getRoot(), right_builder.getRoot()});
     // left_builder.setWithNonJoinStreamIfNecessary(table_join);
 
@@ -757,7 +756,7 @@ void QueryPlannerVisitor::planJoinOn(ASTTableJoin & table_join, PlanBuilder & le
         false,
         std::nullopt,
         asof_inequality);
-    planHint(join_step, table_join.hints);
+    addPlanHint(join_step, table_join.hints);
     left_builder.addStep(std::move(join_step), {left_builder.getRoot(), right_builder.getRoot()});
     // left_builder.setWithNonJoinStreamIfNecessary(table_join);
 
@@ -1081,7 +1080,7 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
     auto table_step
         = std::make_shared<TableScanStep>(context, storage->getStorageID(), columns_with_aliases, query_info, max_block_size, alias);
 
-    planHint(table_step, hints);
+    addPlanHint(table_step, hints);
     auto plan_node = PlanNodeBase::createPlanNode(context->nextNodeId(), table_step);
     return {plan_node, field_symbols};
 }
@@ -1410,6 +1409,7 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
         needAggregateOverflowRow(select_query),
         false);
 
+    addPlanHint(agg_step, select_query.hints, true);
     builder.addStep(std::move(agg_step));
     builder.withAdditionalMappings(mappings_for_aggregate);
 
@@ -1874,7 +1874,7 @@ RelationPlan QueryPlannerVisitor::planFinalSelect(PlanBuilder & builder, ASTSele
     }
 
     auto project = std::make_shared<ProjectionStep>(builder.getCurrentDataStream(), assignments, output_types);
-    planHint(project, select_query.hints);
+    addPlanHint(project, select_query.hints);
     builder.addStep(std::move(project));
 
     return {builder.getRoot(), field_symbol_infos};
@@ -2468,7 +2468,7 @@ void QueryPlannerVisitor::processSubqueryArgs(
     rhs_symbol = rhs_plan.getFirstPrimarySymbol();
 }
 
-void QueryPlannerVisitor::planHint(const QueryPlanStepPtr & step, SqlHints & sql_hints)
+void QueryPlannerVisitor::addPlanHint(const QueryPlanStepPtr & step, SqlHints & sql_hints, bool check_step_type)
 {
     if (sql_hints.empty())
         return;
@@ -2483,7 +2483,7 @@ void QueryPlannerVisitor::planHint(const QueryPlanStepPtr & step, SqlHints & sql
     }
 
     if (!hint_list.empty())
-        step->addHints(hint_list, context);
+        step->addHints(hint_list, context, check_step_type);
 }
 
 bool QueryPlannerVisitor::needAggregateOverflowRow(ASTSelectQuery & select_query) const
