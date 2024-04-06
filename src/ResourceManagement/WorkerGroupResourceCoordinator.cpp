@@ -348,7 +348,7 @@ void WorkerGroupResourceCoordinator::linkEligibleGroups(
                 wg_data.vw_name = vw->getName();
                 wg_data.linked_id = wg->getID();
                 wg_data.is_auto_linked = true;
-                auto linked_group = rm_controller.createWorkerGroup(linked_group_id, false, vw->getName(), wg_data, vw_lock, wg_lock);
+                auto linked_group = rm_controller.createWorkerGroup(linked_group_id, vw->getName(), wg_data, vw_lock, wg_lock);
                 borrowed = true;
                 auto time_now = time(nullptr);
                 lender_vw->setLastLendTimestamp(time_now);

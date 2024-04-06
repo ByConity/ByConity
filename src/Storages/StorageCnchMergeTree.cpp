@@ -1141,7 +1141,7 @@ StorageCnchMergeTree::writeInWorker(const ASTPtr & query, const StorageMetadataP
 
 HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, ContextPtr local_context)
 {
-    String vw_name = local_context->getSettingsRef().virtual_warehouse_write;
+    String vw_name = local_context->getSettingsRef().virtual_warehouse;
     if (vw_name.empty())
         vw_name = getSettings()->cnch_vw_write;
 

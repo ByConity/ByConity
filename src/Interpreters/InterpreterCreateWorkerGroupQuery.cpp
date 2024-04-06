@@ -76,7 +76,7 @@ BlockIO InterpreterCreateWorkerGroupQuery::execute()
     }
 
     if (auto rm_client = getContext()->getResourceManagerClient())
-        rm_client->createWorkerGroup(create_query.worker_group_id, create_query.if_not_exists, create_query.vw_name, worker_group_data);
+        rm_client->createWorkerGroup(create_query.worker_group_id, create_query.vw_name, worker_group_data);
     else
         throw Exception("Can't apply DDL of worker group as RM is not enabled.", ErrorCodes::RESOURCE_MANAGER_ILLEGAL_CONFIG);
 
