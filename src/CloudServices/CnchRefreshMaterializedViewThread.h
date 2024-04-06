@@ -89,7 +89,8 @@ private:
     String executeTaskLocal(
         StoragePtr istorage,
         StorageMaterializedView & storage,
-        TaskRecordPtr record);
+        TaskRecordPtr record,
+        ContextMutablePtr query_context);
 
     StorageMaterializedView & checkAndGetMaterializedViewTable(StoragePtr & storage);
     UInt64 checkAndGetRefreshInterval(StorageMaterializedView & storage);

@@ -7,6 +7,8 @@ namespace DB
 
 class Context;
 
+String getCurrentTenantId();
+
 // database_name -> tenant_id.[catalog$$].database_name
 String formatTenantDatabaseName(const String & database_name);
 

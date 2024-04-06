@@ -49,6 +49,7 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/IParserBase.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
@@ -110,6 +111,7 @@
 #include <Optimizer/QueryUseOptimizerChecker.h>
 
 #include <fmt/format.h>
+
 
 namespace DB
 {
@@ -1380,6 +1382,31 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     if (create.replace_table)
         return doCreateOrReplaceTable(create, properties);
+    
+    /// when create materialized view and tenant id is not empty add setting tenant_id to select query
+    if (create.is_materialized_view && !getCurrentTenantId().empty())
+    {
+        ASTPtr settings = std::make_shared<ASTSetQuery>();
+        settings->as<ASTSetQuery &>().is_standalone = false;
+        settings->as<ASTSetQuery &>().changes.push_back({"tenant_id", getCurrentTenantId()});
+        ASTPtr select = create.select->clone();
+        if (select && select->as<ASTSelectWithUnionQuery &>().settings_ast)
+        {
+            if (!select->as<ASTSelectWithUnionQuery &>().settings_ast->as<ASTSetQuery &>().changes.tryGet("tenant_id"))
+            {
+                settings->as<ASTSetQuery &>().changes.merge(select->as<ASTSelectWithUnionQuery &>().settings_ast->as<ASTSetQuery &>().changes);
+                ASTSetQuery * setting_ptr = select->as<ASTSelectWithUnionQuery &>().settings_ast->as<ASTSetQuery>();
+                select->setOrReplace(setting_ptr, settings);
+                create.setOrReplace(create.select, select);
+            }
+        }   
+        else
+        {
+            select->as<ASTSelectWithUnionQuery &>().settings_ast = settings;
+            select->children.push_back(settings);
+            create.setOrReplace(create.select, select);
+        }
+    }
 
     /// Actually creates table
     bool created = doCreateTable(create, properties);

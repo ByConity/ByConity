@@ -195,14 +195,19 @@ IMPLEMENT_SETTING_ENUM(DedupKeyMode, ErrorCodes::BAD_ARGUMENTS,
     {{"replace",      DedupKeyMode::REPLACE},
      {"throw",        DedupKeyMode::THROW}})
 
-IMPLEMENT_SETTING_ENUM(RefreshViewTaskStatus, ErrorCodes::BAD_ARGUMENTS,
-    {{"START", RefreshViewTaskStatus::START},
-     {"FINISH", RefreshViewTaskStatus::FINISH},
-     {"EXCEPTION", RefreshViewTaskStatus::EXCEPTION}}
-     )
+IMPLEMENT_SETTING_ENUM(
+    RefreshViewTaskStatus,
+    ErrorCodes::BAD_ARGUMENTS,
+    {
+        {"START", RefreshViewTaskStatus::START},
+        {"FINISH", RefreshViewTaskStatus::FINISH},
+        {"EXCEPTION_EXECUTE_TASK", RefreshViewTaskStatus::EXCEPTION_EXECUTE_TASK},
+        {"EXCEPTION_BEFORE_START", RefreshViewTaskStatus::EXCEPTION_BEFORE_START},
+    })
 
 IMPLEMENT_SETTING_ENUM(RefreshViewTaskType, ErrorCodes::BAD_ARGUMENTS,
-    {{"PARTITION_BASED_REFRESH", RefreshViewTaskType::PARTITION_BASED_REFRESH},
+    {{"NONE", RefreshViewTaskType::NONE},
+     {"PARTITION_BASED_REFRESH", RefreshViewTaskType::PARTITION_BASED_REFRESH},
      {"FULL_REFRESH", RefreshViewTaskType::FULL_REFRESH}})
 
 } // namespace DB
