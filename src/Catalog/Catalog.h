@@ -673,7 +673,8 @@ public:
 
     // materialized view meta.
     BatchCommitRequest constructMvMetaRequests(const String & uuid,
-            std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions);
+            std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions, String mv_version_ts);
+    String getMvMetaVersion(const String & uuid);
     std::vector<std::shared_ptr<Protos::VersionedPartitions>> getMvBaseTables(const String & uuid);
     void updateMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
     void dropMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);

@@ -475,6 +475,8 @@ namespace ProfileEvents
     extern const Event GetByKeyFailed;
     extern const Event GetMvBaseTableIDSuccess;
     extern const Event GetMvBaseTableIDFailed;
+    extern const Event GetMvBaseTableVersionSuccess;
+    extern const Event GetMvBaseTableVersionFailed;
     extern const Event UpdateMvMetaIDSuccess;
     extern const Event UpdateMvMetaIDFailed;
 }
@@ -5027,16 +5029,33 @@ namespace Catalog
     {
         std::vector<std::shared_ptr<Protos::VersionedPartitions>> res;
         runWithMetricSupport(
-            [&] { res = meta_proxy->getMvBaseTables(name_space, uuid); },
+            [&] { 
+                    meta_proxy->getMvMetaVersion(name_space, uuid);
+                    res = meta_proxy->getMvBaseTables(name_space, uuid); 
+                },
             ProfileEvents::GetMvBaseTableIDSuccess,
             ProfileEvents::GetMvBaseTableIDFailed);
         return res;
     }
 
-    BatchCommitRequest Catalog::constructMvMetaRequests(const String & uuid,
-        std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions, std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions)
+    String Catalog::getMvMetaVersion(const String & uuid)
     {
-        return meta_proxy->constructMvMetaRequests(name_space, uuid, add_partitions, drop_partitions);
+        String res;
+        runWithMetricSupport(
+            [&] { 
+                    res = meta_proxy->getMvMetaVersion(name_space, uuid);
+                },
+            ProfileEvents::GetMvBaseTableVersionSuccess,
+            ProfileEvents::GetMvBaseTableVersionFailed);
+        return res;
+    }
+
+    BatchCommitRequest Catalog::constructMvMetaRequests(const String & uuid,
+        std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions,
+        std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions,
+        String mv_version_ts)
+    {
+        return meta_proxy->constructMvMetaRequests(name_space, uuid, add_partitions, drop_partitions, mv_version_ts);
     }
 
     void Catalog::updateMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)

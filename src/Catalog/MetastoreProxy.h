@@ -80,6 +80,7 @@ namespace DB::Catalog
 #define KV_LOCK_PREFIX "LK_"
 #define VIEW_DEPENDENCY_PREFIX "VD_"
 #define MAT_VIEW_BASETABLES_PREFIX "MVB_"
+#define MAT_VIEW_VERSION_PREFIX "MVV_"
 #define SYNC_LIST_PREFIX "SL_"
 #define KAFKA_OFFSETS_PREFIX "KO_"
 #define KAFKA_TRANSACTION_PREFIX "KT_"
@@ -419,6 +420,11 @@ public:
     static std::string viewDependencyKey(const std::string & name_space, const std::string & dependency, const std::string & uuid)
     {
         return viewDependencyPrefix(name_space, dependency) + uuid;
+    }
+
+    static std::string matViewVersionKey(const std::string & name_space, const std::string & mv_uuid)
+    {
+        return escapeString(name_space) + '_' + MAT_VIEW_VERSION_PREFIX + mv_uuid;
     }
 
     static std::string matViewBaseTablesPrefix(const std::string & name_space, const std::string & mv_uuid)
@@ -943,7 +949,8 @@ public:
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesIdByPrefix(const String & name_space, const String & prefix = "");
     Strings getAllDependence(const String & name_space, const String & uuid);
     std::vector<std::shared_ptr<Protos::VersionedPartitions>> getMvBaseTables(const String & name_space, const String & uuid);
-    BatchCommitRequest constructMvMetaRequests(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions,std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions);
+    String getMvMetaVersion(const String & name_space, const String & uuid);
+    BatchCommitRequest constructMvMetaRequests(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions,std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions, String mv_version_ts);
     void updateMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
     void dropMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
 

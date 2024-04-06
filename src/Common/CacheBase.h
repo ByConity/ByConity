@@ -164,6 +164,61 @@ public:
         return std::make_pair(token->value, result);
     }
 
+    template <typename LoadFunc>
+    std::pair<MappedPtr, bool> getOrSet(const Key & key, std::function<bool(MappedPtr)> && condition_func, LoadFunc && load_func)
+    {
+        InsertTokenHolder token_holder;
+        {
+            std::lock_guard cache_lock(mutex);
+            auto val = cache_policy->get(key, cache_lock);
+            if (val && condition_func(val))
+            {
+                ++hits;
+                return std::make_pair(val, false);
+            }
+
+            auto & token = insert_tokens[key];
+            if (!token)
+                token = std::make_shared<InsertToken>(*this);
+
+            token_holder.acquire(&key, token, cache_lock);
+        }
+
+        InsertToken * token = token_holder.token.get();
+
+        std::lock_guard token_lock(token->mutex);
+
+        token_holder.cleaned_up = token->cleaned_up;
+
+        if (token->value)
+        {
+            /// Another thread already produced the value while we waited for token->mutex.
+            ++hits;
+            return std::make_pair(token->value, false);
+        }
+
+        ++misses;
+        token->value = load_func();
+
+        std::lock_guard cache_lock(mutex);
+
+        /// Insert the new value only if the token is still in present in insert_tokens.
+        /// (The token may be absent because of a concurrent reset() call).
+        bool result = false;
+        auto token_it = insert_tokens.find(key);
+        if (token_it != insert_tokens.end() && token_it->second.get() == token)
+        {
+            cache_policy->set(key, token->value, cache_lock);
+            result = true;
+        }
+
+        if (!token->cleaned_up)
+            token_holder.cleanup(token_lock, cache_lock);
+
+        return std::make_pair(token->value, result);
+    }
+    
+
     void getStats(size_t & out_hits, size_t & out_misses) const
     {
         std::lock_guard lock(mutex);
