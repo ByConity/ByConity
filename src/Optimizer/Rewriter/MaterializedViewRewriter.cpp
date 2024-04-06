@@ -337,7 +337,9 @@ protected:
         skip_nodes.emplace(IQueryPlanStep::Type::Aggregating);
         skip_nodes.emplace(IQueryPlanStep::Type::Sorting);
         JoinHyperGraph query_join_hyper_graph = JoinHyperGraph::build(query, *query_map, context, skip_nodes);
-        PlanNodes query_inner_sources = InnerJoinCollector::collect(query);
+        InnerJoinCollector inner_join_collector;
+        inner_join_collector.collect(query);
+        PlanNodes query_inner_sources = inner_join_collector.getInnerSources();
         // get all predicates from join graph
         auto query_predicates = extractPredicates(query_join_hyper_graph, query_join_hyper_graph.getNodeSet(query_inner_sources));
 
@@ -1742,7 +1744,7 @@ void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr conte
     plan.update(res.plan_node);
 }
 
-LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context)
+LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context) const
 {
     std::vector<MaterializedViewStructurePtr> materialized_views;
     auto & cache = MaterializedViewMemoryCache::instance();
@@ -1760,11 +1762,22 @@ LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedVi
             materialized_views.push_back(*structure);
     }
 
+    if (log->debug())
+    {
+        std::stringstream ss;
+        for (const auto & materialized_view : materialized_views)
+            ss << materialized_view->view_storage_id.getFullTableName() << ", ";
+        LOG_DEBUG(log, "related {} materialized views: {}", materialized_views.size(), ss.str());
+    }
+
+
     LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> res;
     for (const auto & materialized_view : materialized_views)
     {
         if (auto partition_check_result = checkMaterializedViewPartitionConsistency(materialized_view, context))
             res.emplace(materialized_view, *partition_check_result);
+        else
+            LOG_DEBUG(log, "skip materialized view {}: check consistency failed", materialized_view->view_storage_id.getFullTableName());
     }
     return res;
 }

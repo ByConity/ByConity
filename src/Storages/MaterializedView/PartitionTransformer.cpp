@@ -142,15 +142,28 @@ void PartitionTransformer::validate(ContextMutablePtr local_context, Materialize
     using namespace MaterializedView;
 
     target_table = structure->target_storage;
-
-    /// get target table partition key required column names
+    bool enable_non_partition_throw = local_context->getSettingsRef().enable_non_partitioned_base_refresh_throw_exception;
     if (!target_table->getInMemoryMetadataPtr()->hasPartitionKey())
     {
-        bool enable_non_partition_throw = local_context->getSettingsRef().enable_non_partitioned_base_refresh_throw_exception;
         if (enable_non_partition_throw)
             throw Exception(
                 ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW,
                 "materializd view query not support partition based async refresh: target table has no partition key");
+
+        for (const auto & node : structure->outer_sources)
+        {
+            auto & step = dynamic_cast<TableScanStep &>(*node->getStep());
+            base_tables.insert(step.getStorage());
+            non_depend_base_tables.insert(step.getStorage()->getStorageID());
+        }
+
+        for (const auto & node : structure->inner_sources)
+        {
+            auto & step = dynamic_cast<TableScanStep &>(*node->getStep());
+            base_tables.insert(step.getStorage());
+            non_depend_base_tables.insert(step.getStorage()->getStorageID());
+        }
+
         always_non_partition_based = true;
         validated = true;
         return;
@@ -173,6 +186,13 @@ void PartitionTransformer::validate(ContextMutablePtr local_context, Materialize
             auto plan_node_id = structure->join_hyper_graph.getPlanNodes(filter.first)[0]->getId();
             predicates_by_table_maps[plan_node_id] = filter.second;
         }
+    }
+
+    for (const auto & node : structure->outer_sources)
+    {
+        auto & step = dynamic_cast<TableScanStep &>(*node->getStep());
+        base_tables.insert(step.getStorage());
+        non_depend_base_tables.insert(step.getStorage()->getStorageID());
     }
 
     // check whether mv partition can be calculated from base table partition
@@ -268,7 +288,6 @@ void PartitionTransformer::validate(ContextMutablePtr local_context, Materialize
             ++it;
     }
      
-    bool enable_non_partition_throw = local_context->getSettingsRef().enable_non_partitioned_base_refresh_throw_exception;
     if (depend_base_tables.empty() && enable_non_partition_throw)
             throw Exception(ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW, "materializd view query not support partition based async refresh");
     always_non_partition_based = depend_base_tables.empty();
