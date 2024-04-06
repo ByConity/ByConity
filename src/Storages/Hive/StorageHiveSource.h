@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/config.h"
+#include "Storages/StorageInMemoryMetadata.h"
 #if USE_HIVE
 
 #include "Processors/QueryPipeline.h"
@@ -18,7 +19,7 @@ public:
     struct BlockInfo
     {
         BlockInfo() = delete;
-        BlockInfo(const Block & header_, bool need_path_column_, bool need_file_column_, KeyDescription partition_);
+        BlockInfo(const Block & header_, bool need_path_column_, bool need_file_column_, const StorageMetadataPtr & metadata);
         Block getHeader() const;
 
         Block header;   /// phsical columns + partition columns
@@ -27,7 +28,8 @@ public:
         bool need_file_column = false;
 
         KeyDescription partition_description;
-        std::vector<size_t> partition_column_idx;
+        std::unordered_map<String, size_t> partition_name_to_index;
+        bool all_partition_column = false; /// whether only partition columns present
     };
     using BlockInfoPtr = std::shared_ptr<BlockInfo>;
 
@@ -66,9 +68,8 @@ public:
     void prepareReader();
 
 private:
-    void buildResultChunk(Chunk & chunk) const;
+    Chunk buildResultChunk(Chunk & chunk) const;
 
-    bool need_partition_columns = true;
     FileSlice current_file_slice;
     std::shared_ptr<const BlockInfo> block_info;
     std::shared_ptr<const Allocator> allocator;

@@ -58,7 +58,7 @@ Pipe StorageCloudHive::read(
 
     Pipes pipes;
     auto block_info = std::make_shared<StorageHiveSource::BlockInfo>(
-        storage_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, storage_snapshot->metadata->getPartitionKey());
+        storage_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, storage_snapshot->metadata);
     auto allocator = std::make_shared<StorageHiveSource::Allocator>(std::move(hive_files));
 
     if (block_info->to_read.columns() == 0)
