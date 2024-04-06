@@ -1014,6 +1014,8 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
                 as_create.storage->ttl_table = nullptr;
 
             create.set(create.storage, as_create.storage->ptr());
+            if (as_create.comment)
+                create.set(create.comment, as_create.comment->ptr());
         }
         else if (as_create.as_table_function)
             create.as_table_function = as_create.as_table_function->clone();

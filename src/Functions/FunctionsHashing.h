@@ -54,32 +54,32 @@
 #    include <openssl/sha.h>
 #endif
 
-#include <Poco/ByteOrder.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypesDecimal.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeEnum.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnString.h>
+#include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnArray.h>
-#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
-#include <Functions/IFunctionMySql.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
+#include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Common/TargetSpecific.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/PerformanceAdaptors.h>
 #include <Functions/hiveCityHash.h>
-#include <common/range.h>
+#include <Poco/ByteOrder.h>
+#include <Common/TargetSpecific.h>
 #include <common/bit_cast.h>
+#include <common/range.h>
 
 
 namespace DB
@@ -1679,6 +1679,10 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     bool useDefaultImplementationForConstants() const override { return !with_seed; }
+    bool useDefaultImplementationForNulls() const override
+    {
+        return with_default_nullable;
+    }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
@@ -2317,10 +2321,15 @@ using FunctionSipHash128Keyed = FunctionAnyHash<SipHash128KeyedImpl, false, true
 using FunctionSipHash128Reference = FunctionAnyHash<SipHash128ReferenceImpl>;
 using FunctionSipHash128ReferenceKeyed = FunctionAnyHash<SipHash128ReferenceKeyedImpl, false, true, true, SipHash128ReferenceKeyedImpl::Key>;
 using FunctionCityHash64 = FunctionAnyHash<ImplCityHash64>;
+using FunctionCityHash64V2 = FunctionAnyHash<ImplCityHash64, false, false>;
 using FunctionHiveCityHash64 = FunctionAnyHash<ImplHiveCityHash64>;
+using FunctionHiveCityHash64V2 = FunctionAnyHash<ImplHiveCityHash64, false, false>;
 using FunctionFarmFingerprint64 = FunctionAnyHash<ImplFarmFingerprint64>;
+using FunctionFarmFingerprint64V2 = FunctionAnyHash<ImplFarmFingerprint64, false, false>;
 using FunctionFarmHash64 = FunctionAnyHash<ImplFarmHash64>;
+using FunctionFarmHash64V2 = FunctionAnyHash<ImplFarmHash64, false, false>;
 using FunctionMetroHash64 = FunctionAnyHash<ImplMetroHash64>;
+using FunctionMetroHash64V2 = FunctionAnyHash<ImplMetroHash64, false, false>;
 
 #if !defined(ARCADIA_BUILD)
 using FunctionMurmurHash2_32 = FunctionAnyHash<MurmurHash2Impl32>;

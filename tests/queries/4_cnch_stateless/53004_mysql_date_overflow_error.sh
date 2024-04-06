@@ -2,7 +2,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . $CURDIR/../shell_config.sh
 
-OPTIONS=" --throw_on_date_overflow=1 --dialect_type=MYSQL"
+OPTIONS=" --dialect_type=MYSQL"
 
 function catch_error() 
 {
@@ -61,6 +61,6 @@ catch_error "INSERT INTO date_overflow VALUES (4, '2299-12-32 00:00:00')"
 catch_error "INSERT INTO date_overflow FORMAT CSV 5,'1899-12-31 23:59:59.999'"
 catch_error 'INSERT INTO date_overflow FORMAT JSONEachRow {"x": 6, "d": "2300-01-01 00:00:00"}'
 catch_error 'INSERT INTO date_overflow FORMAT JSONEachRow {"x": 7, "d": "2024-13-01 11:12:12.123"}'
-echo "2	1900-01-01 00:00:00.000" | ${CLICKHOUSE_CLIENT} ${OPTIONS} --query "INSERT INTO date_overflow FORMAT TabSeparated"
+echo "2	1900-01-01 00:00:00" | ${CLICKHOUSE_CLIENT} ${OPTIONS} --query "INSERT INTO date_overflow FORMAT TabSeparated"
 echo "3	2299-12-31 23:59:59.9999" | ${CLICKHOUSE_CLIENT} ${OPTIONS} --query "INSERT INTO date_overflow FORMAT TabSeparated"
 ${CLICKHOUSE_CLIENT} ${OPTIONS} --query "SELECT * from date_overflow order by x"

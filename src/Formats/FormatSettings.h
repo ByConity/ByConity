@@ -52,9 +52,7 @@ struct FormatSettings
     bool null_as_default = true;
     bool defaults_for_omitted_fields = true;
     bool decimal_trailing_zeros = false;
-    bool throw_on_date_overflow = false;
-    /// set to true for MYSQL dialect
-    bool check_date_overflow = false;
+    bool check_data_overflow = false;
 
     enum class DateTimeInputFormat
     {

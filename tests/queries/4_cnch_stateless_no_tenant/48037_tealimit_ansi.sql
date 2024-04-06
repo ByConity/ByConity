@@ -27,6 +27,7 @@ GROUP BY
  t,
  g0,
  g1
+ORDER BY t,g0,g1
 TEALIMIT 200 GROUP (assumeNotNull(g0), g1) ORDER (amount, amount1) DESC;
 
 drop table if exists tealimit_ansi

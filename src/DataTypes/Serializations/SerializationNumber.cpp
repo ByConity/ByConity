@@ -36,6 +36,34 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE;
+}
+
+
+template <typename T>
+void SerializationNumber<T>::checkNumberOverflow(T & x, const FormatSettings & settings) const
+{
+    if constexpr (is_integer_v<T>)
+    {
+        if (!settings.check_data_overflow || !current_thread || !current_thread->getOverflow(ThreadStatus::OverflowFlag::Integer))
+            return;
+
+        current_thread->unsetOverflow(ThreadStatus::OverflowFlag::Integer);
+        throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "The integer value is overflow. You can ignore it by setting check_data_overflow=0");
+    }
+    else
+    {
+        if (!settings.check_data_overflow || (!std::isinf(x) && !std::isnan(x)) || !current_thread)
+            return;
+        if (in_serialization_nullable)
+            current_thread->setOverflow(ThreadStatus::OverflowFlag::Float);
+        else
+            current_thread->unsetOverflow(ThreadStatus::OverflowFlag::Float);
+    }
+}
+
 template <typename T>
 void SerializationNumber<T>::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const
 {
@@ -43,15 +71,20 @@ void SerializationNumber<T>::serializeText(const IColumn & column, size_t row_nu
 }
 
 template <typename T>
-void SerializationNumber<T>::deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationNumber<T>::deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     T x;
 
     if constexpr (is_integer_v<T> && is_arithmetic_v<T>)
-        readIntTextUnsafe(x, istr);
+    {
+        if (settings.check_data_overflow)
+            readText(x, istr, true);
+        else
+            readIntTextUnsafe(x, istr);
+    }
     else
         readText(x, istr);
-
+    checkNumberOverflow(x, settings);
     assert_cast<ColumnVector<T> &>(column).getData().push_back(x);
 }
 
@@ -63,7 +96,7 @@ void SerializationNumber<T>::serializeTextJSON(const IColumn & column, size_t ro
 }
 
 template <typename T>
-void SerializationNumber<T>::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationNumber<T>::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     bool has_quote = false;
     if (!istr.eof() && *istr.position() == '"')        /// We understand the number both in quotes and without.
@@ -99,25 +132,27 @@ void SerializationNumber<T>::deserializeTextJSON(IColumn & column, ReadBuffer & 
                 x = tmp;
             }
             else
-                readText(x, istr);
+                readText(x, istr, settings.check_data_overflow);
         }
         else
         {
-            readText(x, istr);
+            readText(x, istr, settings.check_data_overflow);
         }
 
         if (has_quote)
             assertChar('"', istr);
     }
 
+    checkNumberOverflow(x, settings);
     assert_cast<ColumnVector<T> &>(column).getData().push_back(x);
 }
 
 template <typename T>
-void SerializationNumber<T>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationNumber<T>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     FieldType x;
-    readCSV(x, istr);
+    readCSV(x, istr, settings.check_data_overflow);
+    checkNumberOverflow(x, settings);
     assert_cast<ColumnVector<T> &>(column).getData().push_back(x);
 }
 

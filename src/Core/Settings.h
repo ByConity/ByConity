@@ -79,48 +79,15 @@ enum PreloadLevelSettings : UInt64
       "The maximum size of blocks of uncompressed data before compressing for writing to a table.", \
       0) \
     M(UInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading", 0) \
-    M(UInt64, \
-      max_insert_block_size, \
-      DEFAULT_INSERT_BLOCK_SIZE, \
-      "The maximum block size for insertion, if we control the creation of blocks for insertion.", \
-      0) \
-    M(UInt64, \
-      max_insert_block_size_bytes, \
-      DEFAULT_BLOCK_SIZE_BYTES, \
-      "The maximum block bytes for insertion, if we control the creation of blocks for insertion.", \
-      0) \
-    M(UInt64, \
-      min_insert_block_size_rows, \
-      DEFAULT_INSERT_BLOCK_SIZE, \
-      "Squash blocks passed to INSERT query to specified size in rows, if blocks are not big enough.", \
-      0) \
-    M(UInt64, \
-      min_insert_block_size_bytes, \
-      (DEFAULT_INSERT_BLOCK_SIZE * 256), \
-      "Squash blocks passed to INSERT query to specified size in bytes, if blocks are not big enough.", \
-      0) \
-    M(UInt64, \
-      min_insert_block_size_rows_for_materialized_views, \
-      0, \
-      "Like min_insert_block_size_rows, but applied only during pushing to MATERIALIZED VIEW (default: min_insert_block_size_rows)", \
-      0) \
-    M(UInt64, \
-      min_insert_block_size_bytes_for_materialized_views, \
-      0, \
-      "Like min_insert_block_size_bytes, but applied only during pushing to MATERIALIZED VIEW (default: min_insert_block_size_bytes)", \
-      0) \
-    M(UInt64, \
-      max_joined_block_size_rows, \
-      DEFAULT_BLOCK_SIZE, \
-      "Maximum block size for JOIN result (if join algorithm supports it). 0 means unlimited.", \
-      0) \
-    M(UInt64, \
-      max_insert_threads, \
-      0, \
-      "The maximum number of threads to execute the INSERT SELECT query. Values 0 or 1 means that INSERT SELECT is not run in parallel. " \
-      "Higher values will lead to higher memory usage. Parallel INSERT SELECT has effect only if the SELECT part is run on parallel, see " \
-      "'max_threads' setting.", \
-      0) \
+    M(UInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.", 0) \
+    M(UInt64, max_insert_block_size_bytes, DEFAULT_BLOCK_SIZE_BYTES, "The maximum block bytes for insertion, if we control the creation of blocks for insertion.", 0) \
+    M(UInt64, min_insert_block_size_rows, DEFAULT_INSERT_BLOCK_SIZE, "Squash blocks passed to INSERT query to specified size in rows, if blocks are not big enough.", 0) \
+    M(UInt64, min_insert_block_size_bytes, (DEFAULT_INSERT_BLOCK_SIZE * 256), "Squash blocks passed to INSERT query to specified size in bytes, if blocks are not big enough.", 0) \
+    M(UInt64, min_insert_block_size_rows_for_materialized_views, 0, "Like min_insert_block_size_rows, but applied only during pushing to MATERIALIZED VIEW (default: min_insert_block_size_rows)", 0) \
+    M(UInt64, min_insert_block_size_bytes_for_materialized_views, 0, "Like min_insert_block_size_bytes, but applied only during pushing to MATERIALIZED VIEW (default: min_insert_block_size_bytes)", 0) \
+    M(UInt64, max_joined_block_size_rows, DEFAULT_BLOCK_SIZE, "Maximum block size for JOIN result (if join algorithm supports it). 0 means unlimited.", 0) \
+    M(UInt64, max_insert_threads, 0, "The maximum number of threads to execute the INSERT SELECT query. Values 0 or 1 means that INSERT SELECT is not run in parallel. Higher values will lead to higher memory usage. Parallel INSERT SELECT has effect only if the SELECT part is run on parallel, see 'max_threads' setting.", 0) \
+    M(Bool, enable_insert_squashing, true, "Squashing when insert", 0) \
     M(UInt64, max_final_threads, 16, "The maximum number of threads to read from table with FINAL.", 0) \
     M(MaxThreads, max_threads, 0, "The maximum number of threads to execute the request. By default, it is determined automatically.", 0) \
     M(MaxThreads, \
@@ -1388,7 +1355,7 @@ enum PreloadLevelSettings : UInt64
     M(Milliseconds, topology_retry_interval_ms, 100, "Interval of topology background task to retry.", 0) \
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
     M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
-    M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
+    M(UInt64, catalog_max_commit_size, 500, "Max record number to be committed in one batch.", 0) \
     M(Bool, catalog_enable_multiple_threads, false, "Whether leverage multiple threads to handle metadata.", 0) \
     M(UInt64, catalog_multiple_threads_min_parts, 10000, "Minimum parts number to enable multi-thread in calc visible parts.", 0) \
     M(Bool, server_write_ha, false, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
@@ -1964,8 +1931,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_null_as_default, true, "For text input formats initialize null fields with default values if data type of this field is not nullable", 0) \
     M(Bool, input_format_protobuf_enable_multiple_message, true, "If it is set to true, allows read protobuf messages which separated by a length header consecutively.", 0) \
     M(Bool, input_format_protobuf_default_length_parser, false, "If it is set to true, use variable length header, otherwise a 8 byte fixed length header is used.", 0) \
-    M(Bool, throw_on_date_overflow, false, "When check_date_overflow is on, if the date is illegal or out of legal range, i.e., (1900-01-01, 2299-12-31) for Date32/DateTime64, (1970-01-01, 2149-06-06) for Date, (1970-01-01, 2106-02-07) for DateTime throw error when this setting is true; otherwise, convert it to null for nullable column or convert to the boundary value.", 0) \
-    M(Bool, check_date_overflow, false, "Used together with throw_on_date_overflow; default is false do not check. If dialect is mysql, set it to true automatically.", 0) \
+    M(Bool, check_data_overflow, false, "If true, throw exception when integer/decimal/date overflows; convert float/double to NULL if the column is nullable or +/- inf if the column is not nullable. Turned on automatically when dialect is mysql.", 0) \
     \
     M(DateTimeInputFormat, date_time_input_format, FormatSettings::DateTimeInputFormat::Basic, "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", 0) \
     M(DateTimeOutputFormat, date_time_output_format, FormatSettings::DateTimeOutputFormat::Simple, "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", 0) \

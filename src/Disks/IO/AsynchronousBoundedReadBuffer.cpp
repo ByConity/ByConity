@@ -255,7 +255,8 @@ off_t AsynchronousBoundedReadBuffer::seek(off_t offset, int whence)
 
     if (read_until_position && new_pos > *read_until_position)
     {
-        ProfileEvents::increment(ProfileEvents::RemoteFSSeeksWithReset);
+        if (!impl->isSeekCheap())
+            ProfileEvents::increment(ProfileEvents::RemoteFSSeeksWithReset);
         ProfileEvents::increment(ProfileEvents::RemoteFSSeeksOverUntilPosition);
         file_offset_of_buffer_end = new_pos = *read_until_position; /// read_until_position is a non-included boundary.
         impl->seek(file_offset_of_buffer_end, SEEK_SET);
@@ -266,7 +267,7 @@ off_t AsynchronousBoundedReadBuffer::seek(off_t offset, int whence)
     * Lazy ignore. Save number of bytes to ignore and ignore it either for prefetch buffer or current buffer.
     * Note: we read in range [file_offset_of_buffer_end, read_until_position).
     */
-    if (impl && file_offset_of_buffer_end && read_until_position && new_pos < *read_until_position
+    if (impl && !impl->isSeekCheap() && file_offset_of_buffer_end && read_until_position && new_pos < *read_until_position
         && new_pos > file_offset_of_buffer_end && new_pos < file_offset_of_buffer_end + read_settings.remote_read_min_bytes_for_seek)
     {
         ProfileEvents::increment(ProfileEvents::RemoteFSLazySeeks);
@@ -274,7 +275,8 @@ off_t AsynchronousBoundedReadBuffer::seek(off_t offset, int whence)
     }
     else
     {
-        ProfileEvents::increment(ProfileEvents::RemoteFSSeeksWithReset);
+        if (!impl->isSeekCheap())
+            ProfileEvents::increment(ProfileEvents::RemoteFSSeeksWithReset);
         file_offset_of_buffer_end = new_pos;
         impl->seek(file_offset_of_buffer_end, SEEK_SET);
     }

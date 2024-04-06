@@ -41,6 +41,7 @@ using SymbolEquivalences = Equivalences<String>;
 class Constants;
 
 using CTEId = UInt32;
+class Context;
 
 /**
  * A partition operation divides a relation into disjoint subsets, called partitions.
@@ -81,7 +82,8 @@ public:
         UInt64 buckets_ = 0,
         bool enforce_round_robin_ = true,
         Component component_ = Component::ANY,
-        bool exactly_match_ = false)
+        bool exactly_match_ = false,
+        bool satisfy_worker_ = false)
         : handle(handle_)
         , columns(std::move(columns_))
         , require_handle(require_handle_)
@@ -89,6 +91,7 @@ public:
         , enforce_round_robin(enforce_round_robin_)
         , component(component_)
         , exactly_match(exactly_match_)
+        , satisfy_worker(satisfy_worker_)
     {
     }
     bool operator==(const Partitioning & other) const;
@@ -101,6 +104,7 @@ public:
         columns = std::move(columns_);
     }
     UInt64 getBuckets() const { return buckets; }
+    void setBuckets(UInt64 buckets_) { buckets = buckets_; }
     bool isEnforceRoundRobin() const { return enforce_round_robin; }
     void setEnforceRoundRobin(bool enforce_round_robin_) { enforce_round_robin = enforce_round_robin_; }
     bool isRequireHandle() const { return require_handle; }
@@ -111,6 +115,16 @@ public:
     bool isExactlyMatch() const
     {
         return exactly_match;
+    }
+
+    bool isSatisfyWorker() const
+    {
+        return satisfy_worker;
+    }
+
+    void setSatisfyWorker(bool satisfy_worker_)
+    {
+        this->satisfy_worker = satisfy_worker_;
     }
 
     Partitioning translate(const std::unordered_map<String, String> & identities) const;
@@ -132,6 +146,7 @@ private:
     bool enforce_round_robin;
     Component component;
     bool exactly_match;
+    bool  satisfy_worker;
 };
 
 ENUM_WITH_PROTO_CONVERTER(

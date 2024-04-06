@@ -232,6 +232,8 @@ void LockManager::lock(const LockInfoPtr & info, const Context & context)
     assert(info->lock_id != 0);
     // register transaction in LockManager
     UInt64 txn_id = UInt64(info->txn_id);
+    /// ensure lock request is generated before put into map
+    const auto & requests = info->getLockRequests();
     TxnLockMapStripe & stripe = txn_locks_map.getStripe(txn_id);
     {
         // update txn_locks_map, which is a map of txn_id -> lock_ids;
@@ -250,7 +252,6 @@ void LockManager::lock(const LockInfoPtr & info, const Context & context)
         }
     }
 
-    const auto & requests = info->getLockRequests();
     // TODO: fix here type conversion
     Int64 remain_wait_time = info->timeout;
     Stopwatch watch;

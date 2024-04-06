@@ -213,7 +213,8 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
         /// Scan the directory to get all implicit columns(stream) for the map type
         const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column_from_part.type);
 
-        for (auto & file : data_part->getChecksums()->files)
+        auto checksums = data_part->getChecksums();
+        for (auto & file : checksums->files)
         {
             /// Need to use column_from_part to read the correct implicit column when renaming columns.
             /// Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
