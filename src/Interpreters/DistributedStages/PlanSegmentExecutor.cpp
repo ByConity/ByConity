@@ -937,11 +937,13 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
 
         manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);
-        LOG_TRACE(
+        LOG_INFO(
             logger,
-            "PlanSegment-{} send status to coordinator successfully, query id-{} cpu_micros-{} is_succeed:{} is_cancelled:{} code:{}",
+            "PlanSegment-{} send status to coordinator successfully, query id-{} parallel_index-{} cpu_micros-{} is_succeed:{} "
+            "is_cancelled:{} code:{}",
             request.segment_id(),
             request.query_id(),
+            status.parallel_index,
             status.metrics.cpu_micros,
             status.is_succeed,
             status.is_cancelled,
