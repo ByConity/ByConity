@@ -36,14 +36,14 @@ namespace DB
 
 using TableWithPartition = std::pair<UUID, String>;
 using DataPartModelsMap = ScanWaitFreeMap<String, DataModelPartWrapperPtr>;
-using DeleteBitmapModelsMap = ScanWaitFreeMap<String, DeleteBitmapMetaPtr>;
+using DeleteBitmapModelsMap = ScanWaitFreeMap<String, DataModelDeleteBitmapPtr>;
 
 const std::function<String(const DataModelPartWrapperPtr &)> dataPartGetKeyFunc =
     [](const DataModelPartWrapperPtr & part_wrapper_ptr) {
         return part_wrapper_ptr->name;
     };
-const std::function<String(const DeleteBitmapMetaPtr &)> dataDeleteBitmapGetKeyFunc
-    = [](const DeleteBitmapMetaPtr & ptr) { return dataModelName(*ptr->getModel()); };
+const std::function<String(const DataModelDeleteBitmapPtr &)> dataDeleteBitmapGetKeyFunc
+    = [](const DataModelDeleteBitmapPtr & ptr) { return dataModelName(*ptr); };
 
 template <typename Type>
 struct DataWeightFunction
