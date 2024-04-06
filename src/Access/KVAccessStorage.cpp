@@ -524,7 +524,7 @@ void KVAccessStorage::removeImpl(const UUID & id)
     prepareNotifications(id, *entry_ptr, true, notifications);
     entries_name_map.erase(name);
     entries_map.erase(it);
-    ++entry_ptr->commit_version;
+    //entry_ptr is already become invalid, so ++entry_ptr->commit_version is not needed.
     --prepared_entities;
 }
 
