@@ -1,14 +1,4 @@
-#include <Common/memory.h>
 #include <common/ThreadLocal.h>
-
-template<class T>
-class ThreadLocalManagedUntracked : public ThreadLocalManagedBase<T, ThreadLocalManagedUntracked<T>> {
-public:
-    static void *create() {
-        void *p = Memory::newImpl(sizeof(T));
-        return new (p) T();
-    }
-};
 
 namespace {
 struct __cxa_eh_globals {
@@ -21,7 +11,7 @@ namespace __cxxabiv1 {
 
 namespace {
     __cxa_eh_globals * __globals () {
-        static ThreadLocalManagedUntracked<__cxa_eh_globals> eh_globals;
+        static ThreadLocalManaged<__cxa_eh_globals> eh_globals;
         return eh_globals.get();
         }
     }

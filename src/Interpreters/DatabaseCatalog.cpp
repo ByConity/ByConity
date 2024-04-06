@@ -1147,6 +1147,13 @@ void DatabaseCatalog::waitTableFinallyDropped(const UUID & uuid)
     });
 }
 
+bool DatabaseCatalog::isDefaultVisibleSystemDatabase(const String & database_name)
+{
+    return database_name == SYSTEM_DATABASE
+        || database_name == INFORMATION_SCHEMA
+        || database_name == INFORMATION_SCHEMA_UPPERCASE;
+}
+
 static DatabasePtr
 getDatabaseFromCnchOrHiveCatalog(const String & database_name, ContextPtr context, const TxnTimestamp & timestamp, bool enable_three_part)
 {

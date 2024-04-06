@@ -15,6 +15,7 @@ class Context;
 class StorageSystemDatabases final : public shared_ptr_helper<StorageSystemDatabases>, public IStorageSystemOneBlock<StorageSystemDatabases>
 {
     friend struct shared_ptr_helper<StorageSystemDatabases>;
+
 public:
     std::string getName() const override
     {

@@ -34,11 +34,6 @@ namespace Poco
 class Logger;
 }
 
-namespace ErrorCodes
-{
-    extern const int LOGICAL_ERROR;
-}
-
 namespace DB
 {
 class Context;

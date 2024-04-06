@@ -16,7 +16,13 @@
 #include <Transaction/Actions/MergeMutateAction.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchDataWriter.h>
+#include <Common/ProfileEvents.h>
 #include <Storages/StorageCnchMergeTree.h>
+
+namespace ProfileEvents
+{
+    extern const Event ManipulationSuccess;
+}
 
 namespace DB
 {
@@ -81,6 +87,7 @@ void MergeMutateAction::postCommit(TxnTimestamp commit_time)
         part->commit_time = commit_time;
 
     ServerPartLog::addNewParts(getContext(), table->getStorageID(), getPartLogType(), type == ManipulationType::Merge ? getMergedPart() : parts, {}, txn_id, /*error=*/ false, source_part_names);
+    ProfileEvents::increment(ProfileEvents::ManipulationSuccess, 1);
 }
 
 void MergeMutateAction::abort()

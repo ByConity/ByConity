@@ -35,8 +35,8 @@ void StorageSystemDatabases::fillData(MutableColumns & res_columns, ContextPtr c
         {
             if (startsWith(database_name, tenant_id + "."))
                 database_strip_tenantid = getOriginalDatabaseName(database_name, tenant_id);
-            // Will skip database of other tenants.
-            else if (database_name.find(".") != std::string::npos)
+            // Will skip database of other tenants and default user (without tenantid prefix)
+            else if (database_name.find(".") != std::string::npos || !DatabaseCatalog::isDefaultVisibleSystemDatabase(database_name))
                 continue;
         }
 

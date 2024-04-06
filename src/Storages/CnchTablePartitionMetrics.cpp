@@ -392,7 +392,8 @@ void TableMetrics::recalculate(size_t current_time, ContextPtr context, bool for
             stopwatch = std::make_optional<Stopwatch>();
             LOG_TRACE(log, "{} Start recalculate {}, recalculation triggered at {}", getTraceID(), table_uuid, current_time);
 
-            auto metrics = context->getCnchCatalog()->getTableTrashItemsMetricsDataFromMetastore(table_uuid, current_time);
+            auto metrics = context->getCnchCatalog()->getTableTrashItemsMetricsDataFromMetastore(
+                table_uuid, current_time, [this]() { return shutdown.load(); });
 
             /// Inherit `last_update_time` and `last_snapshot_time`.
             metrics.last_update_time = current_time;
@@ -492,6 +493,34 @@ void TableMetrics::TableMetricsData::update(const DeleteBitmapMetaPtr & bitmap, 
     {
         total_bitmap_number--;
         total_bitmap_size -= bitmap->getModel()->file_size();
+    }
+    last_update_time.store(std::max(last_update_time.load(), ts));
+}
+void TableMetrics::TableMetricsData::update(const Protos::DataModelPart & part, size_t ts, bool positive)
+{
+    if (positive)
+    {
+        total_parts_number++;
+        total_parts_size += part.size();
+    }
+    else
+    {
+        total_parts_number--;
+        total_parts_size -= part.size();
+    }
+    last_update_time.store(std::max(last_update_time.load(), ts));
+}
+void TableMetrics::TableMetricsData::update(const Protos::DataModelDeleteBitmap & bitmap, size_t ts, bool positive)
+{
+    if (positive)
+    {
+        total_bitmap_number++;
+        total_bitmap_size += bitmap.file_size();
+    }
+    else
+    {
+        total_bitmap_number--;
+        total_bitmap_size -= bitmap.file_size();
     }
     last_update_time.store(std::max(last_update_time.load(), ts));
 }
