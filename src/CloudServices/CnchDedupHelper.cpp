@@ -183,7 +183,7 @@ getDedupScope(MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVe
         auto table_definition_hash = storage.getTableHashForClusterBy();
         /// Check whether all parts has same table_definition_hash.
         auto it = std::find_if(preload_parts.begin(), preload_parts.end(), [&](const auto & part) {
-            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+            return part->bucket_number == -1 || !table_definition_hash.match(part->table_definition_hash);
         });
         return it == preload_parts.end();
     };
@@ -233,7 +233,7 @@ bool checkBucketParts(
     auto table_definition_hash = storage.getTableHashForClusterBy();
     auto checkIfBucketPartValid = [&table_definition_hash](const MergeTreeDataPartsCNCHVector & parts) -> bool {
         auto it = std::find_if(parts.begin(), parts.end(), [&](const auto & part) {
-            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+            return part->bucket_number == -1 || !table_definition_hash.match(part->table_definition_hash);
         });
         return it == parts.end();
     };

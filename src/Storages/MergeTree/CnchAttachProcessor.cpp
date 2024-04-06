@@ -616,7 +616,7 @@ CnchAttachProcessor::collectPartsFromPath(const String & path, const AttachFilte
         }
         case DiskType::Type::ByteS3:
         {
-            // This is to handle parts generated from part writer. In this way, unique table will not generate bitmap. See more detail in doc: https://xxxxx
+            // This is to handle parts generated from part writer. In this way, unique table will not generate bitmap. See more detail in doc: Unique Table Batch Loading Doc
             // Read info from task meta file
             return collectPartsFromS3TaskMeta(target_tbl, path, filter, attach_ctx);
         }
@@ -1313,7 +1313,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                 UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()),
                 query_ctx->getCurrentTransaction()->getTransactionID());
 
-            UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
+            auto table_def_hash = target_tbl.getTableHashForClusterBy().getDeterminHash();
             bool is_user_defined_cluster_by_expression = target_tbl.getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
             size_t offset = 0;
             auto & worker_pool = attach_ctx.getWorkerPool(total_parts_count);
@@ -1389,7 +1389,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
             TxnTimestamp txn_id = query_ctx->getCurrentTransaction()->getTransactionID();
 
             size_t offset = 0;
-            UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
+            UInt64 table_def_hash = target_tbl.getTableHashForClusterBy().getDeterminHash();
             bool is_user_defined_cluster_by_expression = target_tbl.getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
             String from_storage_uuid = from_storage == nullptr ? "" : UUIDHelpers::UUIDToString(from_storage->getStorageUUID());
 
@@ -1510,11 +1510,11 @@ void CnchAttachProcessor::genPartsDeleteMark(PartsWithHistory & parts_to_write)
             auto table_def_hash = target_tbl.getTableHashForClusterBy();
             for (const auto& part : parts_to_drop)
             {
-                if (part->part_model().bucket_number() < 0 || table_def_hash != part->part_model().table_definition_hash())
+                if (part->part_model().bucket_number() < 0 || !table_def_hash.match(part->part_model().table_definition_hash()))
                 {
                     LOG_ERROR(logger, fmt::format("Part's table_definition_hash [{}] is "
                         "different from target's table_definition_hash [{}]",
-                        part->part_model().table_definition_hash(), table_def_hash));
+                        part->part_model().table_definition_hash(), table_def_hash.toString()));
                     throw Exception("Source parts are not bucket parts or have different CLUSTER BY definition from the target table. ",
                         ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
                 }

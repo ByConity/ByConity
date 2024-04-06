@@ -400,7 +400,7 @@ public:
     virtual bool unlockSharedData(const IMergeTreeDataPart &) const { return true; }
 
     bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
-    UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
+    TableDefinitionHash getTableHashForClusterBy() const override; // to compare table engines efficiently
 
     /// Snapshot for MergeTree contains the current set of data parts
     /// at the moment of the start of query.

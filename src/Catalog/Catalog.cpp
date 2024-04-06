@@ -912,11 +912,11 @@ namespace Catalog
                 meta_proxy->createTable(name_space, db_uuid, tb_data, dependencies, masking_policy_names);
                 if (auto query_context = CurrentThread::getGroup()->query_context.lock())
                 {
-                    meta_proxy->setTableClusterStatus(name_space, uuid_str, true, createTableFromDataModel(*query_context, tb_data)->getTableHashForClusterBy());
+                    meta_proxy->setTableClusterStatus(name_space, uuid_str, true, createTableFromDataModel(*query_context, tb_data)->getTableHashForClusterBy().getDeterminHash());
                 }
                 else
                 {
-                    meta_proxy->setTableClusterStatus(name_space, uuid_str, true, createTableFromDataModel(context, tb_data)->getTableHashForClusterBy());
+                    meta_proxy->setTableClusterStatus(name_space, uuid_str, true, createTableFromDataModel(context, tb_data)->getTableHashForClusterBy().getDeterminHash());
                 }
 
                 LOG_INFO(log, "finish createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
@@ -1100,7 +1100,7 @@ namespace Catalog
 
                 // Set cluster status after Alter table is successful to update PartCacheManager with new table metadata
                 if (is_recluster)
-                    setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy());
+                    setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy().getDeterminHash());
 
                 if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                 {
@@ -2112,16 +2112,17 @@ namespace Catalog
                                                         && !storage->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
                 if (storage->isBucketTable() && !skip_table_definition_hash_check)
                 {
+                    auto table_definition_hash = storage->getTableHashForClusterBy();
                     for (auto & part : parts)
                     {
                         if (!part->deleted
-                            && (part->bucket_number < 0 || storage->getTableHashForClusterBy() != part->table_definition_hash))
+                            && (part->bucket_number < 0 || !table_definition_hash.match(part->table_definition_hash)))
                         {
                             LOG_DEBUG(
                                 log,
                                 "Part's table_definition_hash {} is different from target table's table_definition_hash {}"
                                 ,part->table_definition_hash
-                                ,storage->getTableHashForClusterBy());
+                                ,table_definition_hash.toString());
 
                             throw Exception(
                                 "Source table is not a bucket table or has a different CLUSTER BY definition from the target table. ",
@@ -2136,11 +2137,12 @@ namespace Catalog
                     && skip_table_definition_hash_check
                     && isTableClustered(storage->getStorageUUID()))
                 {
+                    auto table_definition_hash = storage->getTableHashForClusterBy();
                     for (auto & part : parts)
                     {
-                        if (!part->deleted && (storage->getTableHashForClusterBy() != part->table_definition_hash))
+                        if (!part->deleted && !table_definition_hash.match(part->table_definition_hash))
                         {
-                            setTableClusterStatus(storage->getStorageUUID(), false, storage->getTableHashForClusterBy());
+                            setTableClusterStatus(storage->getStorageUUID(), false, table_definition_hash.getDeterminHash());
                             break;
                         }
                     }
@@ -3106,13 +3108,14 @@ namespace Catalog
                                                         && !table->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
                 if (table->isBucketTable() && !skip_table_definition_hash_check)
                 {
+                    auto table_definition_hash = table->getTableHashForClusterBy();
                     for (const auto & part : commit_data.data_parts)
                     {
-                        if (!part->deleted && (part->bucket_number < 0 || table->getTableHashForClusterBy() != part->table_definition_hash))
+                        if (!part->deleted && (part->bucket_number < 0 || !table_definition_hash.match(part->table_definition_hash)))
                             throw Exception(
                                 "Part's table_definition_hash [" + std::to_string(part->table_definition_hash)
                                     + "] is different from target table's table_definition_hash  ["
-                                    + std::to_string(table->getTableHashForClusterBy()) + "]",
+                                    + table_definition_hash.toString() + "]",
                                 ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
                     }
                 }
@@ -3123,11 +3126,12 @@ namespace Catalog
                     && skip_table_definition_hash_check
                     && isTableClustered(table->getStorageUUID()))
                 {
+                    auto table_definition_hash = table->getTableHashForClusterBy();
                     for (const auto & part : commit_data.data_parts)
                     {
-                        if (!part->deleted && (table->getTableHashForClusterBy() != part->table_definition_hash))
+                        if (!part->deleted && !table_definition_hash.match(part->table_definition_hash))
                         {
-                            setTableClusterStatus(table->getStorageUUID(), false, table->getTableHashForClusterBy());
+                            setTableClusterStatus(table->getStorageUUID(), false, table_definition_hash.getDeterminHash());
                             break;
                         }
                     }

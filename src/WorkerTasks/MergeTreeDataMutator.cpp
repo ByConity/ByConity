@@ -200,6 +200,7 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
 
     IMutableMergeTreeDataPartsVector new_partial_parts;
     new_partial_parts.reserve(params.source_data_parts.size());
+    auto table_definition_hash = table->getTableHashForClusterBy();
     for (const auto & part : params.source_data_parts)
     {
         auto estimated_space_for_result = static_cast<size_t>(part->getBytesOnDisk() * DISK_USAGE_COEFFICIENT_TO_RESERVE);
@@ -221,7 +222,7 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
         if (params.is_bucket_table) 
         {
             // NOTE: Assuming that PARTITION BY and ORDER BY are immutable
-            if (part->table_definition_hash != table->getTableHashForClusterBy())
+            if (!table_definition_hash.match(part->table_definition_hash))
                 new_partial_parts.back()->bucket_number = -1;
             else
                 new_partial_parts.back()->bucket_number = part->bucket_number;
