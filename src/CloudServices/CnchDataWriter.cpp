@@ -597,8 +597,8 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             }
             else
             {
-                merge_mutate_thread->finishTask(task_id, [&](const ManipulationTaskRecord & task) {
-                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, task.getSourcePartNames());
+                merge_mutate_thread->finishTask(task_id, [&](const Strings & source_part_names) {
+                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, source_part_names);
 
                     for (const auto & part : dumped_data.parts)
                         action->as<MergeMutateAction &>().appendPart(part);
