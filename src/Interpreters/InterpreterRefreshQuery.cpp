@@ -45,7 +45,7 @@ namespace DB
                     if (bg_thread)
                     {
                         auto * refresh_thread = dynamic_cast<CnchRefreshMaterializedViewThread *>(bg_thread.get());
-                        refresh_thread->wakeup();
+                        refresh_thread->start();
                     }
                     else
                     {
