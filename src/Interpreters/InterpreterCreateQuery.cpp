@@ -1551,11 +1551,11 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     try
     {
         res->checkColumnsValidity(properties.columns);
-        if (auto * view = dynamic_cast<StorageMaterializedView *>(res.get()))
-        {
-            if (view->async())
-                view->validatePartitionBased(getContext());
-        }
+        // if (auto * view = dynamic_cast<StorageMaterializedView *>(res.get()))
+        // {
+        //     if (view->async() && getContext()->getSettingsRef().enable_non_partitioned_base_refresh_throw_exception)
+        //         view->validatePartitionBased(getContext());
+        // }
     }
     catch (...)
     {

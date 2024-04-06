@@ -69,11 +69,11 @@ struct ManipulationTaskParams
     void assignSourceParts(ServerDataPartsVector parts);
     void assignSourceParts(MergeTreeDataPartsVector parts);
 
-    void assignParts(MergeTreeMutableDataPartsVector parts);
+    void assignParts(MergeTreeMutableDataPartsVector parts, const std::function<UInt64()> & ts_getter);
 
 private:
     template <class Vec>
-    void assignSourcePartsImpl(const Vec & parts);
+    void assignSourcePartsImpl(const Vec & parts, UInt64 ts = 0);
 };
 
 }

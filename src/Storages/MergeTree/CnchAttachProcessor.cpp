@@ -1341,7 +1341,8 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                                     // Move delete files
                                     String dir_rel_path = std::filesystem::path(tbl_rel_path)
                                         / DeleteBitmapMeta::deleteBitmapDirRelativePath(part_info.partition_id);
-                                    disk->createDirectories(dir_rel_path);
+                                    if (!disk->exists(dir_rel_path))
+                                        disk->createDirectories(dir_rel_path);
                                     String from_path = std::filesystem::path(tbl_rel_path) / bitmap_rel_path / (part->name + ".bitmap");
                                     String to_path = std::filesystem::path(tbl_rel_path)
                                         / DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta);

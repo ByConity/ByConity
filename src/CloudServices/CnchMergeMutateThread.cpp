@@ -680,9 +680,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     metrics.elapsed_calc_visible_parts = watch.elapsedMicroseconds();
     watch.restart();
 
-    if (visible_parts.size() <= 1)
+    if (visible_parts.empty())
     {
-        LOG_TRACE(log, "There is only {} part in visible_parts, exit merge selection.", visible_parts.size());
+        LOG_TRACE(log, "There is no visible parts, exit merge selection.");
         return false;
     }
 
@@ -728,9 +728,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
             visible_parts.end()
         );
 
-        if (visible_parts.size() <= 1)
+        if (visible_parts.empty())
         {
-            LOG_TRACE(log, "Only {} parts in visible_parts, exit merge selection.", visible_parts.size());
+            LOG_TRACE(log, "There is no visible parts, exit merge selection.");
             return false;
         }
 
@@ -1001,9 +1001,9 @@ String CnchMergeMutateThread::triggerPartMerge(
 
     auto visible_parts = CnchPartsHelper::calcVisibleParts(
         data_parts, false, (try_select ? CnchPartsHelper::EnableLogging : CnchPartsHelper::DisableLogging));
-    if (visible_parts.size() <= 1)
+    if (visible_parts.empty())
     {
-        LOG_DEBUG(log, "triggerPartMerge(): size of visible_parts <= 1");
+        LOG_TRACE(log, "There is no visible parts, exit merge selection.");
         return {};
     }
 

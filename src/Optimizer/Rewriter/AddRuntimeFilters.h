@@ -107,9 +107,9 @@ protected:
 private:
     ContextMutablePtr context;
     SimpleCTEVisitHelper<PlanNodePtr> cte_helper;
-    const RuntimeFilterContext & runtime_filter_context;
 
-    std::unordered_map<RuntimeFilterId, std::unordered_set<RuntimeFilterId>> effective_runtime_filters{};
+    RuntimeFilterContext & runtime_filter_context;
+    std::unordered_set<RuntimeFilterId> effective_runtime_filters;
 };
 
 class AddRuntimeFilters::RemoveUnusedRuntimeFilterBuildRewriter : public PlanNodeVisitor<PlanNodePtr, Void>
@@ -129,7 +129,7 @@ protected:
 
     ContextMutablePtr & context;
     SimpleCTEVisitHelper<PlanNodePtr> cte_helper;
-    const std::unordered_map<RuntimeFilterId, std::unordered_set<RuntimeFilterId>> & effective_runtime_filters;
+    const std::unordered_set<RuntimeFilterId> & effective_runtime_filters;
     const RuntimeFilterContext & runtime_filter_context;
 };
 
