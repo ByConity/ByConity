@@ -1500,7 +1500,13 @@ namespace Catalog
     {
         ServerDataPartsWithDBM res;
         res.first = getStagedServerDataParts(table, ts, partitions, /*execute_filter=*/false);
-        res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+
+        if (res.first.empty())
+            return res;
+
+        bool is_unique_table = table->getInMemoryMetadataPtr()->hasUniqueKey();
+        if (is_unique_table)
+            res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
 
         if (ts)
         {
@@ -1516,7 +1522,8 @@ namespace Catalog
             /// Make sure they use the same records of transactions list.
             auto txn_records = getTransactionRecords(res.first, res.second);
             getVisibleServerDataParts(res.first, ts, this, &txn_records);
-            getVisibleBitmaps(res.second, ts, this, &txn_records);
+            if (is_unique_table)
+                getVisibleBitmaps(res.second, ts, this, &txn_records);
 
             LOG_DEBUG(
                 log,
@@ -1597,7 +1604,13 @@ namespace Catalog
     {
         ServerDataPartsWithDBM res;
         res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, visibility, /*execute_filter=*/false, bucket_numbers);
-        res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+
+        if (res.first.empty())
+            return res;
+
+        bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
+        if (is_unique_table)
+            res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
 
         /// Make sure they use the same records of transactions list.
         if (ts && visibility != VisibilityLevel::All)
@@ -1615,12 +1628,14 @@ namespace Catalog
             if (visibility == VisibilityLevel::Visible)
             {
                 getVisibleServerDataParts(res.first, ts, this, &txn_records);
-                getVisibleBitmaps(res.second, ts, this, &txn_records);
+                if (is_unique_table)
+                    getVisibleBitmaps(res.second, ts, this, &txn_records);
             }
             else
             {
                 getCommittedServerDataParts(res.first, ts, this, &txn_records);
-                getCommittedBitmaps(res.second, ts, this, &txn_records);
+                if (is_unique_table)
+                    getCommittedBitmaps(res.second, ts, this, &txn_records);
             }
 
             LOG_DEBUG(
@@ -1893,7 +1908,14 @@ namespace Catalog
     {
         ServerDataPartsWithDBM res;
         res.first = getTrashedPartsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
-        res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+
+        if (res.first.empty())
+            return res;
+
+        bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
+        if (is_unique_table)
+            res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+
         if (ts)
         {
             LOG_DEBUG(
@@ -1908,7 +1930,8 @@ namespace Catalog
             /// Make sure they use the same records of transactions list.
             auto txn_records = getTransactionRecords(res.first, res.second);
             getVisibleServerDataParts(res.first, ts, this, &txn_records);
-            getVisibleBitmaps(res.second, ts, this, &txn_records);
+            if (is_unique_table)
+                getVisibleBitmaps(res.second, ts, this, &txn_records);
 
             LOG_DEBUG(
                 log,
