@@ -6611,7 +6611,12 @@ namespace Catalog
             ProfileEvents::DropAccessEntitySuccess,
             ProfileEvents::DropAccessEntityFailed);
         if (isSuccessful)
-            notifyOtherServersOnAccessEntityChange(context, type, name, uuid, log);
+        {
+            auto ctx = context.getGlobalContext();
+            ThreadFromGlobalPool([=] {
+                notifyOtherServersOnAccessEntityChange(*ctx, type, name, uuid);
+            }).detach();
+        }
     }
 
     void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, AccessEntityModel & old_access_entity, bool replace_if_exists)
@@ -6630,11 +6635,20 @@ namespace Catalog
             ProfileEvents::PutAccessEntitySuccess,
             ProfileEvents::PutAccessEntityFailed);
         if (isSuccessful)
-            notifyOtherServersOnAccessEntityChange(context, type, new_access_entity.name(), RPCHelpers::createUUID(new_access_entity.uuid()), log);
-    }
+        {
+            auto ctx = context.getGlobalContext();
+            ThreadFromGlobalPool([=, old_name = old_access_entity.name(), new_name = new_access_entity.name(),
+             old_uuid = old_access_entity.uuid(), new_uuid = new_access_entity.uuid()] {
+                if (old_name != new_name)
+                    notifyOtherServersOnAccessEntityChange(*ctx, type, old_name, RPCHelpers::createUUID(old_uuid));
+                notifyOtherServersOnAccessEntityChange(*ctx, type, new_name, RPCHelpers::createUUID(new_uuid));
+            }).detach();
+        }         
+    }   
 
-    void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, const UUID & uuid, Poco::Logger * log)
+    void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, const UUID & uuid)
     {
+        static Poco::Logger * log = &Poco::Logger::get("Catalog::notifyOtherServersOnAccessEntityChange");
         std::shared_ptr<CnchTopologyMaster> topology_master = context.getCnchTopologyMaster();
         if (!topology_master)
         {
