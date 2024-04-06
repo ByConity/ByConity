@@ -157,7 +157,7 @@ std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransactionForKafk
     return {response.txn_id(), response.start_time()};
 }
 
-ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts)
+ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts, const std::set<Int64> & bucket_numbers)
 {
     brpc::Controller cntl;
     if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
@@ -175,6 +175,9 @@ ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_hos
 
     for (const auto & partition_id : partition_list)
         request.add_partitions(partition_id);
+
+    for (auto & bucket_number : bucket_numbers)
+        request.add_bucket_numbers(bucket_number);
 
     stub->fetchDataParts(&cntl, &request, &response, nullptr);
 

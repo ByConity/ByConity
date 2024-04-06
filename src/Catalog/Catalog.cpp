@@ -1593,10 +1593,10 @@ namespace Catalog
     }
 
     DB::ServerDataPartsWithDBM Catalog::getServerDataPartsInPartitionsWithDBM(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility, const std::set<Int64> & bucket_numbers)
     {
         ServerDataPartsWithDBM res;
-        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, visibility, /*execute_filter=*/false);
+        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, visibility, /*execute_filter=*/false, bucket_numbers);
         res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
 
         /// Make sure they use the same records of transactions list.
@@ -1641,13 +1641,15 @@ namespace Catalog
         const TxnTimestamp & ts,
         const Context * session_context,
         VisibilityLevel visibility,
-        bool execute_filter)
+        bool execute_filter,
+        const std::set<Int64> & bucket_numbers)
     {
         ServerDataPartsVector res;
         String source;
         runWithMetricSupport(
             [&] {
                 Stopwatch watch;
+                bool filter_bucket_numbers = false;
                 auto fall_back = [&]() {
                     ServerDataPartsVector tmp_res;
                     const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
@@ -1717,8 +1719,9 @@ namespace Catalog
                 {
                     try
                     {
-                        res = context.getCnchServerClientPool().get(host_with_rpc)->fetchDataParts(host_with_rpc, storage, partitions, ts);
+                        res = context.getCnchServerClientPool().get(host_with_rpc)->fetchDataParts(host_with_rpc, storage, partitions, ts, bucket_numbers);
                         source = "TargetServer(" + host_with_rpc + ")";
+                        filter_bucket_numbers = true;
                     }
                     catch (...)
                     {
@@ -1748,6 +1751,20 @@ namespace Catalog
                         ,storage->getStorageID().getNameForLogs()
                         ,res.size()
                         ,ts.toString());
+                }
+
+                /// Filter parts by bucket_numbers if it is bucket table and cluster ready
+                if (!res.empty() && !filter_bucket_numbers && !bucket_numbers.empty() && storage->isBucketTable() && isTableClustered(storage->getStorageUUID()))
+                {
+                    auto old_part_size = res.size();
+                    std::erase_if(res, [&bucket_numbers](const ServerDataPartPtr & part) {
+                        return part->part_model().bucket_number() >=0 && bucket_numbers.count(part->part_model().bucket_number()) == 0;
+                    });
+                    LOG_TRACE(log, "{} filter parts by {} buckets from {} parts to {} parts."
+                        ,storage->getStorageID().getNameForLogs()
+                        ,bucket_numbers.size()
+                        ,old_part_size
+                        ,res.size());
                 }
 
                 LOG_DEBUG(
