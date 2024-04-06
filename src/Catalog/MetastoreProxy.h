@@ -953,6 +953,7 @@ public:
     BatchCommitRequest constructMvMetaRequests(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions,std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions, String mv_version_ts);
     void updateMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
     void dropMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+    void cleanMvMeta(const String & name_space, const String & uuid);
 
     IMetaStore::IteratorPtr getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTrashTableID(const String & name_space);

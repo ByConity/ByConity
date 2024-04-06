@@ -576,6 +576,12 @@ void MetastoreProxy::updateMvMeta(const String & name_space, const String & uuid
     }
 }
 
+void MetastoreProxy::cleanMvMeta(const String & name_space, const String & uuid)
+{
+    metastore_ptr->clean(matViewVersionKey(name_space, uuid));
+    metastore_ptr->clean(matViewBaseTablesPrefix(name_space, uuid));
+}
+
 void MetastoreProxy::dropMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
 {
     for (const auto & ele : versioned_partitions)

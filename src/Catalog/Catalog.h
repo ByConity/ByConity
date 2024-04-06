@@ -678,6 +678,7 @@ public:
     std::vector<std::shared_ptr<Protos::VersionedPartitions>> getMvBaseTables(const String & uuid);
     void updateMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
     void dropMvMeta(const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions);
+    void cleanMvMeta(const String & uuid);
 
     /// Time Travel relate interfaces
     std::vector<UInt64> getTrashDBVersions(const String & database);
