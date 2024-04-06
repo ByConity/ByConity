@@ -143,6 +143,7 @@ public:
 
     /// The name of the table.
     StorageID getStorageID() const;
+    virtual StorageID getCnchStorageID() const { return getStorageID(); }
     std::string getTableName() const { return storage_id.table_name; }
     std::string getDatabaseName() const { return storage_id.database_name; }
     UUID getStorageUUID() const { return storage_id.uuid; }

@@ -322,7 +322,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
     auto txn = context->getCurrentTransaction();
     if (dynamic_pointer_cast<CnchServerTransaction>(txn) && !disable_transaction_commit)
     {
-        txn->setMainTableUUID(storage.getStorageUUID());
+        txn->setMainTableUUID(storage.getCnchStorageUUID());
         txn->commitV2();
         LOG_DEBUG(storage.getLogger(), "Finishing insert values commit in cnch server.");
     }
@@ -334,7 +334,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
         auto kafka_table_id = txn->getKafkaTableID();
         if (!kafka_table_id.empty() && !worker_txn->hasEnableExplicitCommit())
         {
-            txn->setMainTableUUID(UUIDHelpers::toUUID(storage.getSettings()->cnch_table_uuid.value));
+            txn->setMainTableUUID(storage.getCnchStorageUUID());
             Stopwatch watch;
             txn->commitV2();
             LOG_TRACE(
@@ -385,12 +385,9 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
     if (!txn)
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 
-    /// prefer to get cnch table uuid from settings as CloudMergeTree has no uuid for Kafka task
-    String uuid_str = storage.getSettings()->cnch_table_uuid.value;
-    if (uuid_str.empty())
-        uuid_str = UUIDHelpers::UUIDToString(storage.getStorageUUID());
-
-    txn->setMainTableUUID(UUIDHelpers::toUUID(uuid_str));
+    UUID uuid = storage.getCnchStorageUUID();
+    String uuid_str = UUIDHelpers::UUIDToString(uuid);
+    txn->setMainTableUUID(uuid);
     if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn); worker_txn && !worker_txn->tryGetServerClient())
     {
         /// case: server initiated "insert select/infile" txn, need to set server client here in order to commit from worker

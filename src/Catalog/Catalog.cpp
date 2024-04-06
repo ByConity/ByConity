@@ -3484,16 +3484,20 @@ namespace Catalog
     }
 
     // write undo buffer before write vfs
-    void Catalog::writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, const UndoResources & resources)
+    void Catalog::writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, const UndoResources & resources)
     {
         runWithMetricSupport(
             [&] {
+                if (storage_id.uuid == UUIDHelpers::Nil)
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Storage uuid of table {} can't be empty", storage_id.getNameForLogs());
+                String uuid_str = UUIDHelpers::UUIDToString(storage_id.uuid);
+
                 /// write resources in batch, max batch size is max_commit_size_one_batch
                 auto begin = resources.begin(), end = std::min(resources.end(), begin + max_commit_size_one_batch);
                 while (begin < end)
                 {
                     UndoResources tmp{begin, end};
-                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid, tmp);
+                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid_str, tmp);
                     begin = end;
                     end = std::min(resources.end(), begin + max_commit_size_one_batch);
                 }
@@ -3502,15 +3506,19 @@ namespace Catalog
             ProfileEvents::WriteUndoBufferConstResourceFailed);
     }
 
-    void Catalog::writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, UndoResources && resources)
+    void Catalog::writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, UndoResources && resources)
     {
         runWithMetricSupport(
             [&] {
+                if (storage_id.uuid == UUIDHelpers::Nil)
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Storage uuid of table {} can't be empty", storage_id.getNameForLogs());
+                String uuid_str = UUIDHelpers::UUIDToString(storage_id.uuid);
+
                 auto begin = resources.begin(), end = std::min(resources.end(), begin + max_commit_size_one_batch);
                 while (begin < end)
                 {
                     UndoResources tmp{std::make_move_iterator(begin), std::make_move_iterator(end)};
-                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid, tmp);
+                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), context.getHostWithPorts().getRPCAddress(), uuid_str, tmp);
                     begin = end;
                     end = std::min(resources.end(), begin + max_commit_size_one_batch);
                 }
@@ -3804,7 +3812,6 @@ namespace Catalog
             [&] {
                 auto db = storage.getDatabaseName();
                 auto table = storage.getTableName();
-                auto uuid = storage.getStorageUUID();
                 if (dir.empty() || db.empty() || table.empty())
                 {
                     throw Exception(
@@ -3853,7 +3860,7 @@ namespace Catalog
 
                 /// Write the undo resouce for the lock
                 UndoResource ub(txn_id, UndoResourceType::KVFSLockKey, normalized_dir);
-                writeUndoBuffer(UUIDHelpers::UUIDToString(uuid), txn_id, {ub});
+                writeUndoBuffer(storage.getCnchStorageID(), txn_id, {ub});
                 /// Write the lock
                 meta_proxy->writeFilesysLock(name_space, txn_id, normalized_dir, db, table);
                 res = txn_id;

@@ -2710,7 +2710,7 @@ void StorageCnchMergeTree::dropPartsImpl(
                     data_part->enumeratePreviousParts(write_undo_callback);
                 }
                 local_context->getCnchCatalog()->writeUndoBuffer(
-                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
+                    getCnchStorageID(), txn->getTransactionID(), undo_resources);
 
                 if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
                     getDeleteBitmapMetaForParts(parts_to_drop, svr_parts_to_drop_with_dbm.second, /*force_found*/ false);
@@ -2779,7 +2779,7 @@ void StorageCnchMergeTree::dropPartsImpl(
 
                 // Write undo buffer first
                 local_context->getCnchCatalog()->writeUndoBuffer(
-                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), resources);
+                    getCnchStorageID(), txn->getTransactionID(), resources);
 
                 DeleteBitmapMetaPtrVector bitmap_metas = dumpDeleteBitmaps(*this, new_bitmaps);
                 ActionPtr action;

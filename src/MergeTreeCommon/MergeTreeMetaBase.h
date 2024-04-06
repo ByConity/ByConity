@@ -198,6 +198,9 @@ public:
     /// A global unique id for the storage. If storage UUID is not empty, use the storage UUID. Otherwise, use the address of current object.
     String getStorageUniqueID() const;
 
+    /// If uuid is empty, throw exception
+    UUID getCnchStorageUUID() const;
+
     //// Data parts
     /// Returns a copy of the list so that the caller shouldn't worry about locks.
     DataParts getDataParts(const DataPartStates & affordable_states) const;
