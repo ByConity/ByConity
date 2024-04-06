@@ -61,7 +61,7 @@
 #include <Core/QueryProcessingStage.h>
 #include <Core/ExternalTable.h>
 #include <DataStreams/InternalTextLogsRowOutputStream.h>
-#include <DataStreams/NullBlockOutputStream.h>
+#include <Processors/Formats/Impl/NullFormat.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/registerFormats.h>
 #include <Functions/registerFunctions.h>
@@ -233,7 +233,7 @@ private:
     /// The user can specify to redirect query output to a file.
     OutfileTargetPtr outfile_target;
 
-    BlockOutputStreamPtr block_out_stream;
+    std::shared_ptr<IOutputFormat> output_format;
     /// The user could specify special file for server logs (stderr by default)
     std::unique_ptr<WriteBuffer> out_logs_buf;
     String server_logs_file;
@@ -1995,7 +1995,7 @@ private:
     /// Flush all buffers.
     void resetOutput()
     {
-        block_out_stream.reset();
+        output_format.reset();
         logs_out_stream.reset();
         outfile_target.reset();
 
@@ -2224,12 +2224,12 @@ private:
 
     void initBlockOutputStream(const Block & block)
     {
-        if (!block_out_stream)
+        if (!output_format)
         {
             /// Ignore all results when fuzzing as they can be huge.
             if (query_fuzzer_runs)
             {
-                block_out_stream = std::make_shared<NullBlockOutputStream>(block);
+                output_format = std::make_shared<NullOutputFormat>(block);
                 return;
             }
 
@@ -2253,6 +2253,13 @@ private:
             if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(parsed_query.get());
                 query_with_output && !context->getSettingsRef().outfile_in_server_with_tcp)
             {
+                if (query_with_output->format != nullptr)
+                {
+                    if (has_vertical_output_suffix)
+                        throw Exception("Output format already specified", ErrorCodes::CLIENT_OUTPUT_FORMAT_SPECIFIED);
+                    current_format = query_with_output->format->as<ASTIdentifier &>().name();
+                }
+
                 if (query_with_output->out_file)
                 {
                     // const auto & out_file_node = query_with_output->out_file->as<ASTLiteral &>();
@@ -2266,23 +2273,15 @@ private:
                     }
                     out_path.emplace(typeid_cast<const ASTLiteral &>(*query_with_output->out_file).value.safeGet<std::string>());
                     // We are writing to file, so default format is the same as in non-interactive mode.
-                    if (is_interactive && is_default_format)
+                    if (is_interactive && query_with_output->format == nullptr && is_default_format)
                         current_format = "TabSeparated";
 
                     String compression_method_str;
                     UInt64 compression_level = 1;
-
                     OutfileTarget::setOutfileCompression(query_with_output, compression_method_str, compression_level);
 
-                    outfile_target = OutfileTarget::getOutfileTarget(*out_path, "", compression_method_str, compression_level);
-                    out_buf = outfile_target->getOutfileBuffer(context, true).get();
-                }
-                if (query_with_output->format != nullptr)
-                {
-                    if (has_vertical_output_suffix)
-                        throw Exception("Output format already specified", ErrorCodes::CLIENT_OUTPUT_FORMAT_SPECIFIED);
-                    const auto & id = query_with_output->format->as<ASTIdentifier &>();
-                    current_format = id.name();
+                    outfile_target = std::make_shared<OutfileTarget>(context, *out_path, current_format, compression_method_str, compression_level);
+                    out_buf = outfile_target->getOutfileBuffer(true).get();
                 }
             }
 
@@ -2291,11 +2290,15 @@ private:
 
             /// It is not clear how to write progress with parallel formatting. It may increase code complexity significantly.
             if (!need_render_progress)
-                block_out_stream = context->getOutputStreamParallelIfPossible(current_format, *out_buf, block);
+                output_format = context->getOutputFormatParallelIfPossible(
+                    current_format, *out_buf, block, outfile_target ? outfile_target->outToMultiFile() : false);
             else
-                block_out_stream = context->getOutputStream(current_format, *out_buf, block);
+                output_format = context->getOutputFormat(current_format, *out_buf, block);
 
-            block_out_stream->writePrefix();
+            if (outfile_target)
+                output_format->setOutFileTarget(outfile_target);
+
+            output_format->doWritePrefix();
         }
     }
 
@@ -2344,7 +2347,7 @@ private:
         initBlockOutputStream(block);
 
         /// The header block containing zero rows was used to initialize
-        /// block_out_stream, do not output it.
+        /// output_format, do not output it.
         /// Also do not output too much data if we're fuzzing.
         if (block.rows() == 0 || (query_fuzzer_runs != 0 && processed_rows >= 100))
             return;
@@ -2352,12 +2355,12 @@ private:
         if (need_render_progress)
             progress_indication.clearProgressOutput();
 
-        block_out_stream->write(block);
+        output_format->write(block);
         written_first_block = true;
 
         /// If does not upload result to local file/hdfs, then received data block is immediately displayed to the user.
         if (!out_path)
-            block_out_stream->flush();
+            output_format->flush();
 
         /// Restore progress bar after data block.
         if (need_render_progress)
@@ -2377,13 +2380,13 @@ private:
     void onTotals(Block & block)
     {
         initBlockOutputStream(block);
-        block_out_stream->setTotals(block);
+        output_format->setTotals(block);
     }
 
     void onExtremes(Block & block)
     {
         initBlockOutputStream(block);
-        block_out_stream->setExtremes(block);
+        output_format->setExtremes(block);
     }
 
 
@@ -2395,8 +2398,8 @@ private:
             return;
         }
 
-        if (block_out_stream)
-            block_out_stream->onProgress(value);
+        if (output_format)
+            output_format->onProgress(value);
 
         if (need_render_progress)
             progress_indication.writeProgress();
@@ -2416,8 +2419,8 @@ private:
 
     void onProfileInfo(const BlockStreamProfileInfo & profile_info)
     {
-        if (profile_info.hasAppliedLimit() && block_out_stream)
-            block_out_stream->setRowsBeforeLimit(profile_info.getRowsBeforeLimit());
+        if (profile_info.hasAppliedLimit() && output_format)
+            output_format->setRowsBeforeLimit(profile_info.getRowsBeforeLimit());
     }
 
 
@@ -2425,13 +2428,16 @@ private:
     {
         progress_indication.clearProgressOutput();
 
-        if (block_out_stream)
+        if (output_format)
         {
-            block_out_stream->writeSuffix();
+            output_format->doWriteSuffix();
 
             if (outfile_target)
             {
-                outfile_target->flushFile(context);
+                if (outfile_target->outToFile())
+                    outfile_target->flushFile();
+                if (outfile_target->outToMultiFile())
+                    outfile_target->resetCounter();
             }
         }
 

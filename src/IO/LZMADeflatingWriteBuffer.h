@@ -19,7 +19,7 @@ class LZMADeflatingWriteBuffer : public BufferWithOwnMemory<WriteBuffer>
 public:
     LZMADeflatingWriteBuffer(
         std::unique_ptr<WriteBuffer> out_,
-        int compression_level,
+        int compression_level_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
         size_t alignment = 0);
@@ -27,6 +27,15 @@ public:
     void finalize() override { finish(); }
 
     ~LZMADeflatingWriteBuffer() override;
+
+    WriteBuffer * inplaceReconstruct([[maybe_unused]] const String & out_path, std::unique_ptr<WriteBuffer> nested) override
+    {
+        int level = this->compression_level;
+        // Call the destructor explicitly but does not free memory
+        this->~LZMADeflatingWriteBuffer();
+        new (this) LZMADeflatingWriteBuffer(std::move(nested), level);
+        return this;
+    }
 
 private:
     void nextImpl() override;
@@ -37,6 +46,8 @@ private:
     std::unique_ptr<WriteBuffer> out;
     lzma_stream lstr;
     bool finished = false;
+
+    int compression_level;
 };
 
 #else

@@ -146,12 +146,15 @@ public:
         UInt64 max_block_size,
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
-    /// Checks all preconditions. Returns ordinary format if parallel formatting cannot be done.
+    /// Checks all preconditions. Returns ordinary format if parallel formatting cannot be done
+    /// For exporting into multiple files, ParallelFormat can't be used because of concurrency calculation
+    /// of accumulated file.
     OutputFormatPtr getOutputFormatParallelIfPossible(
         const String & name,
         WriteBuffer & buf,
         const Block & sample,
         ContextPtr context,
+        bool out_to_directory = false,
         WriteCallback callback = {},
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
