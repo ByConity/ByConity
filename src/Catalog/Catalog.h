@@ -19,6 +19,7 @@
 #include <optional>
 #include <set>
 #include <Catalog/CatalogUtils.h>
+#include <Catalog/CatalogSettings.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Catalog/MetastoreProxy.h>
 #include <Core/SettingsEnums.h>
@@ -94,6 +95,8 @@ public:
     Catalog(Context & _context, const MetastoreConfig & config, String _name_space = "default");
 
     ~Catalog() = default;
+
+    void loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config);
 
     MetastoreProxy::MetastorePtr getMetastore();
 
@@ -835,10 +838,9 @@ private:
     const String name_space;
     String topology_key;
 
-    UInt32 max_commit_size_one_batch {2000};
     std::unordered_map<UUID, std::shared_ptr<std::mutex>> nhut_mutex;
     std::mutex all_storage_nhut_mutex;
-    UInt32 max_drop_size_one_batch {10000};
+    CatalogSettings settings;
 
     std::shared_ptr<Protos::DataModelDB> tryGetDatabaseFromMetastore(const String & database, const UInt64 & ts);
     std::shared_ptr<Protos::DataModelTable>
