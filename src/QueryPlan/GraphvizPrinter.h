@@ -36,9 +36,14 @@ struct PrinterContext;
 class PlanNodePrinter : public PlanNodeVisitor<Void, PrinterContext>
 {
 public:
-    explicit PlanNodePrinter(std::stringstream & out_, bool with_id_ = false, CTEInfo * cte_info = nullptr, PlanCostMap plan_cost_map_ = {}, StepAggregatedOperatorProfiles profiles_ = {})
+    explicit PlanNodePrinter(
+        std::stringstream & out_,
+        bool with_id_ = false,
+        CTEInfo * cte_info = nullptr,
+        PlanCostMap plan_cost_map_ = {},
+        StepAggregatedOperatorProfiles profiles_ = {})
         : out(out_)
-        , cte_helper(cte_info ? std::make_optional<CTEPreorderVisitHelper>(*cte_info) : std::nullopt)
+        , cte_helper(cte_info ? std::make_optional<SimpleCTEVisitHelper<void>>(*cte_info) : std::nullopt)
         , with_id(with_id_)
         , plan_cost_map(std::move(plan_cost_map_))
         , profiles(profiles_)
@@ -90,7 +95,7 @@ public:
 private:
     void printCTEDefNode(CTEId cte_id);
     std::stringstream & out;
-    std::optional<CTEPreorderVisitHelper> cte_helper;
+    std::optional<SimpleCTEVisitHelper<void>> cte_helper;
     bool with_id;
     PlanCostMap plan_cost_map;
     StepAggregatedOperatorProfiles profiles;
@@ -103,7 +108,7 @@ class PlanNodeEdgePrinter : public PlanNodeVisitor<Void, Void>
 {
 public:
     explicit PlanNodeEdgePrinter(std::stringstream & out_, CTEInfo * cte_info = nullptr)
-        : out(out_), cte_helper(cte_info ? std::make_optional<CTEPreorderVisitHelper>(*cte_info) : std::nullopt)
+        : out(out_), cte_helper(cte_info ? std::make_optional<SimpleCTEVisitHelper<void>>(*cte_info) : std::nullopt)
     {
     }
     Void visitPlanNode(PlanNodeBase &, Void &) override;
@@ -112,7 +117,7 @@ public:
 
 private:
     std::stringstream & out;
-    std::optional<CTEPreorderVisitHelper> cte_helper;
+    std::optional<SimpleCTEVisitHelper<void>> cte_helper;
     void printEdge(PlanNodeBase & from, PlanNodeBase & to, std::string_view format = "");
 };
 

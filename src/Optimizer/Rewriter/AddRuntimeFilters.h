@@ -128,7 +128,7 @@ protected:
     PlanNodePtr visitCTERefNode(CTERefNode & node, Void & context) override;
 
     ContextMutablePtr & context;
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<PlanNodePtr> cte_helper;
     const std::unordered_map<RuntimeFilterId, std::unordered_set<RuntimeFilterId>> & effective_runtime_filters;
     const RuntimeFilterContext & runtime_filter_context;
 };

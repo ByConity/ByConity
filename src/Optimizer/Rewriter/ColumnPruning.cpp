@@ -1014,7 +1014,7 @@ PlanNodePtr ColumnPruningVisitor::visitCTERefNode(CTERefNode & node, ColumnPruni
     auto & cte_require = cte_require_columns[with_step->getId()];
     for (const auto & item : required)
         cte_require.name_set.emplace(with_step->getOutputColumns().at(item));
-    post_order_cte_helper.acceptAndUpdate(with_step->getId(), *this, cte_require);
+    post_order_cte_helper.acceptAndUpdate(with_step->getId(), node.getId(), *this, cte_require);
 
     NamesAndTypes result_columns;
     std::unordered_map<String, String> output_columns;
