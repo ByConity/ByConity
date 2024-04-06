@@ -526,7 +526,7 @@ namespace Catalog
                 /// and re-open again frequently. This will cause a lot of TIME-WAIT connections and may lead to unexpected exceptions.
                 brpc::FLAGS_defer_close_second = 30;
 
-                const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+                const char * consul_http_host = getConsulIPFromEnv();
                 const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
                 if (consul_http_host != nullptr && consul_http_port != nullptr)
                 {
