@@ -291,9 +291,9 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
     }
 
     /// Schedule a table level trash items recalculation.
-    auto task = [this, table_meta_ptr, current_time]() {
+    auto task = [this, table_meta_ptr, current_time, force]() {
         CurrentMetrics::Increment metric_increment{CurrentMetrics::SystemCnchTrashItemsInfoRecalculationTasksSize};
-        table_meta_ptr->trash_item_metrics->recalculate(current_time, getContext());
+        table_meta_ptr->trash_item_metrics->recalculate(current_time, getContext(), force);
     };
 
     if (schedule_timeout)

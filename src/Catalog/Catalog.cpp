@@ -7029,25 +7029,34 @@ namespace Catalog
     {
         meta_proxy->updatePartitionMetricsSnapshot(name_space, table_uuid, partition_id, snapshot.SerializeAsString());
     }
-    TableMetrics::TableMetricsData Catalog::getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, const TxnTimestamp ts)
+    TableMetrics::TableMetricsData
+    Catalog::getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, const TxnTimestamp ts, std::function<bool()> need_abort)
     {
         TableMetrics::TableMetricsData res;
         runWithMetricSupport(
             [&] {
                 auto storage = getTableByUUID(context, table_uuid, TxnTimestamp::maxTS());
-                const auto trash_items = getDataItemsInTrash(storage, 0);
+                String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+                size_t prefix_length = MetastoreProxy::trashItemsPrefix(name_space, uuid).length();
 
-                for (const auto & part : trash_items.data_parts)
+                auto it = meta_proxy->getItemsInTrash(name_space, uuid, 0);
+                while (it->next() && !need_abort())
                 {
-                    res.update(part, ts);
-                }
-                for (const auto & part : trash_items.staged_parts)
-                {
-                    res.update(part, ts);
-                }
-                for (const auto & bitmap : trash_items.delete_bitmaps)
-                {
-                    res.update(bitmap, ts);
+                    const auto & key = it->key();
+                    String meta_key = key.substr(prefix_length, String::npos);
+                    if (startsWith(meta_key, PART_STORE_PREFIX))
+                    {
+                        Protos::DataModelPart part_model;
+                        part_model.ParseFromString(it->value());
+                        res.update(part_model, ts);
+                    }
+                    else if (startsWith(meta_key, DELETE_BITMAP_PREFIX))
+                    {
+                        Protos::DataModelDeleteBitmap delete_bitmap_model;
+                        delete_bitmap_model.ParseFromString(it->value());
+                        res.update(delete_bitmap_model, ts);
+                    }
+                    // not handling staged parts because we never move them to trash
                 }
             },
             ProfileEvents::GetTableTrashItemsMetricsDataFromMetastoreSuccess,
