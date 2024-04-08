@@ -88,6 +88,8 @@ public:
         const bool is_merged_parts,
         const bool preallocate_mode);
 
+    void redirectClearParts(const StoragePtr & table, const Catalog::CommitItems & commit_data);
+
     void redirectSetCommitTime(
         const StoragePtr & table,
         const Catalog::CommitItems & commit_data,

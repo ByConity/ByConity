@@ -361,6 +361,17 @@ message RedirectCommitPartsReq {
 
 message RedirectCommitPartsResp { optional string exception = 1; }
 
+message RedirectClearPartsReq {
+  required string database = 1;
+  required string table = 2;
+  required UUID uuid = 3;
+  repeated DataModelPart parts = 5;
+  repeated DataModelPart staged_parts = 6;
+  repeated DataModelDeleteBitmap delete_bitmaps = 7;
+}
+
+message RedirectClearPartsResp { optional string exception = 1; }
+
 enum DetachAttachType {
   ATTACH_DETACHED_PARTS = 1; DETACH_ATTACHED_PARTS = 2; ATTACH_DETACHED_RAW = 3;
   DETACH_ATTACHED_RAW = 4;
@@ -582,6 +593,9 @@ service CnchServerService {
 
   rpc redirectCommitParts(RedirectCommitPartsReq)
       returns(RedirectCommitPartsResp);
+
+  rpc redirectClearParts(RedirectClearPartsReq)
+      returns(RedirectClearPartsResp);
 
   rpc redirectSetCommitTime(RedirectCommitPartsReq)
       returns(RedirectCommitPartsResp);

@@ -735,6 +735,7 @@ void PartCacheManager::invalidDataCache(const UUID & uuid, const Ds & xs)
     }
 }
 
+/// bsp retry assumes worker wont hold part cache, thus only invalidate part cache in host server before retry plan segment instance
 
 void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector & parts)
 {

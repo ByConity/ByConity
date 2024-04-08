@@ -275,6 +275,12 @@ public:
         Protos::RedirectCommitPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void redirectClearParts(
+        google::protobuf::RpcController * controller,
+        const Protos::RedirectClearPartsReq * request,
+        Protos::RedirectClearPartsResp * response,
+        google::protobuf::Closure * done) override;
+
     void redirectSetCommitTime(
         google::protobuf::RpcController * controller,
         const Protos::RedirectCommitPartsReq * request,

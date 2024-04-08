@@ -16,15 +16,16 @@
 #pragma once
 
 #include <memory>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Transaction/Actions/S3AttachMetaAction.h>
 #include <Transaction/TxnTimestamp.h>
 #include <WorkerTasks/ManipulationType.h>
-#include <Transaction/Actions/S3AttachMetaAction.h>
 #include <cppkafka/cppkafka.h>
 #include <cppkafka/topic_partition_list.h>
-#include <Databases/MySQL/MaterializedMySQLCommon.h>
 
 namespace DB
 {
@@ -96,12 +97,15 @@ private:
     cppkafka::TopicPartitionList tpl;
     MySQLBinLogInfo binlog;
 
-    UUID newPartID(const MergeTreePartInfo & part_info, UInt64 txn_timestamp);
     /// dump with thread pool
     std::unique_ptr<ThreadPool> thread_pool;
     ExceptionHandler handler;
     std::atomic_bool cancelled{false};
     mutable std::mutex write_mutex;
+
+    PlanSegmentInstanceId instance_id{};
+
+    UUID newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp);
 };
 
 }

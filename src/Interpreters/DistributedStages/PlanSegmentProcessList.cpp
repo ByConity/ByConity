@@ -13,13 +13,15 @@
  * limitations under the License.
  */
 
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/DistributedStages/AddressInfo.h>
-#include <IO/WriteBufferFromString.h>
 #include <Common/Exception.h>
+#include <Common/time.h>
 
 #include <memory>
 #include <mutex>
@@ -49,6 +51,8 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
         tryEraseGroup();
     }
 
+    bool bsp_mode = query_context->getSettingsRef().bsp_mode;
+    auto instance_id = query_context->getPlanSegmentInstanceId();
     auto initial_query_start_time_ms = query_context->getClientInfo().initial_query_start_time_microseconds;
     {
         Element segment_group{nullptr};
@@ -78,6 +82,29 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
                 need_wait_cancel = segment_group->tryCancel();
             }
         }
+
+        if (found && bsp_mode && segment_group->coordinator_address == coordinator_address && segment_group->tryCancel(instance_id))
+        {
+            std::unique_lock lock(mutex);
+            auto query_expiration_ts = query_context->getQueryExpirationTimeStamp();
+            if (!remove_group.wait_until(lock, timespec_to_timepoint(query_expiration_ts), [&] {
+                    tryEraseGroup();
+                    bool deleted = true;
+                    initail_query_to_groups.if_contains(initial_query_id, [&](auto & it) {
+                        if (it.second->coordinator_address == coordinator_address && it.second->contains(instance_id))
+                            deleted = false;
+                    });
+                    return deleted;
+                }))
+            {
+                throw Exception(
+                    fmt::format(
+                        "Distributed query with id = {} is already running and can't be stopped, query_expiration_ts is {}",
+                        initial_query_id,
+                        query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000),
+                    ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
+            }
+        }
     }
 
     WriteBufferFromOwnString pipeline_buffer;
@@ -92,7 +119,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
     else
         entry = query_context->getProcessList().insert("\n" + pipeline_string, nullptr, query_context, force);
 
-    auto res = std::make_shared<PlanSegmentProcessListEntry>(*this, entry->getPtr(), initial_query_id, plan_segment.getPlanSegmentId());
+    auto res = std::make_shared<PlanSegmentProcessListEntry>(*this, entry->getPtr(), initial_query_id, instance_id);
     res->setCoordinatorAddress(plan_segment.getCoordinatorAddress());
 
     if (need_wait_cancel)
@@ -116,7 +143,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
                 ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
         }
     }
- 
+
     {
         Element segment_group{nullptr};
         bool found = initail_query_to_groups.if_contains(initial_query_id, [&](auto & it){
@@ -138,7 +165,8 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
         found = initail_query_to_groups.if_contains(initial_query_id, [&](auto & it){
             segment_group = it.second;
         });
-        if (found && !segment_group->emplace(plan_segment.getPlanSegmentId(), std::move(entry)))
+
+        if (found && !segment_group->emplace(query_context->getPlanSegmentInstanceId(), std::move(entry)))
         {
             throw Exception("Exsited segment_id: " + segment_id_str + " for query: " + initial_query_id, ErrorCodes::LOGICAL_ERROR);
         }
@@ -161,7 +189,20 @@ bool PlanSegmentGroup::tryCancel()
         entry->get().cancelQuery(true);
     }
 
-    return to_cancel.size() > 0;
+    return !to_cancel.empty();
+}
+
+bool PlanSegmentGroup::tryCancel(PlanSegmentInstanceId instance_id)
+{
+    std::unique_lock lock(mutex);
+    auto iter = segment_queries.find(instance_id);
+    auto to_cancel = iter == segment_queries.end() ? nullptr : iter->second;
+    lock.unlock();
+
+    if (to_cancel)
+        to_cancel->get().cancelQuery(true);
+
+    return to_cancel != nullptr;
 }
 
 bool PlanSegmentProcessList::shouldEraseGroup()
@@ -173,9 +214,9 @@ bool PlanSegmentProcessList::shouldEraseGroup()
 bool PlanSegmentProcessList::tryEraseGroup()
 {
     std::unique_lock lock(group_to_erase_mutex);
-    if (group_to_erase.size() > 0)
+    if (!group_to_erase.empty())
     {
-        for (auto& initial_query_id : group_to_erase)
+        for (const auto & initial_query_id : group_to_erase)
         {
             initail_query_to_groups.erase(initial_query_id);
         }
@@ -184,7 +225,7 @@ bool PlanSegmentProcessList::tryEraseGroup()
     return true;
 }
 
-bool PlanSegmentProcessList::remove(std::string initial_query_id, size_t segment_id)
+bool PlanSegmentProcessList::remove(std::string initial_query_id, PlanSegmentInstanceId instance_id)
 {
     Element segment_group{nullptr};
     initail_query_to_groups.if_contains(initial_query_id, [&](auto & it){
@@ -192,12 +233,12 @@ bool PlanSegmentProcessList::remove(std::string initial_query_id, size_t segment
     });
     if (segment_group.get() && !segment_group->empty())
     {
-        segment_group->erase(segment_id);
+        segment_group->erase(instance_id);
 
         LOG_TRACE(
             logger,
-            "Remove segment {} for distributed query {}@{} from PlanSegmentProcessList",
-            segment_id,
+            "Remove {} for distributed query {}@{} from PlanSegmentProcessList",
+            instance_id.toString(),
             initial_query_id,
             segment_group->coordinator_address);
 
@@ -251,13 +292,13 @@ CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String 
 }
 
 PlanSegmentProcessListEntry::PlanSegmentProcessListEntry(
-    PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, size_t segment_id_)
-    : parent(parent_), status(status_), initial_query_id(std::move(initial_query_id_)), segment_id(segment_id_)
+    PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, PlanSegmentInstanceId instance_id_)
+    : parent(parent_), status(status_), initial_query_id(std::move(initial_query_id_)), instance_id(instance_id_)
 {
 }
 
 PlanSegmentProcessListEntry::~PlanSegmentProcessListEntry()
 {
-    parent.remove(initial_query_id, segment_id);
+    parent.remove(initial_query_id, instance_id);
 }
 }

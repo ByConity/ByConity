@@ -15,6 +15,7 @@
 
 #include <Transaction/CnchServerTransaction.h>
 
+#include <atomic>
 #include <mutex>
 #include <Catalog/Catalog.h>
 #include <IO/WriteBuffer.h>
@@ -498,10 +499,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
                 undo_size += action->getSize();
             }
 
-            {
-                std::lock_guard lk(task.mutex);
-                task.undo_size = undo_size;
-            }
+            task.undo_size.store(undo_size, std::memory_order_relaxed);
 
             for (auto & action : actions)
                 action->postCommit(getCommitTime());
@@ -525,10 +523,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
             for (const auto & buffer : undo_buffer)
                 undo_size += buffer.second.size();
 
-            {
-                std::lock_guard lk(task.mutex);
-                task.undo_size = undo_size;
-            }
+            task.undo_size.store(undo_size, std::memory_order_relaxed);
 
             std::set<String> kvfs_lock_keys;
             for (const auto & [uuid, resources] : undo_buffer)

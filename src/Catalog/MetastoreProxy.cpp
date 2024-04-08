@@ -13,8 +13,6 @@
  * limitations under the License.
  */
 
-#include <Catalog/MetastoreProxy.h>
-#include <Protos/DataModelHelpers.h>
 #include <cstddef>
 #include <random>
 #include <sstream>
@@ -22,17 +20,17 @@
 #include <string.h>
 #include <Catalog/MetastoreCommon.h>
 #include <Catalog/MetastoreProxy.h>
-#include <Databases/MySQL/MaterializedMySQLCommon.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
-#include <common/types.h>
-#include <common/logger_useful.h>
-#include <CloudServices/CnchBGThreadCommon.h>
-#include <Catalog/MetastoreByteKVImpl.h>
-#include <Interpreters/executeQuery.h>
-#include <Storages/MergeTree/IMetastore.h>
 #include <Statistics/StatisticsBase.h>
+#include <Storages/MergeTree/IMetastore.h>
+#include <Storages/StorageSnapshot.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
+#include "Interpreters/DistributedStages/PlanSegmentInstance.h"
 
 namespace DB::ErrorCodes
 {
@@ -1483,7 +1481,14 @@ std::unordered_set<UInt64> MetastoreProxy::getActiveTransactionsSet()
     return res;
 }
 
-void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & rpc_address, const String & uuid, UndoResources & resources, bool write_undo_buffer_new_key)
+void MetastoreProxy::writeUndoBuffer(
+    const String & name_space,
+    const UInt64 & txnID,
+    const String & rpc_address,
+    const String & uuid,
+    UndoResources & resources,
+    PlanSegmentInstanceId instance_id,
+    bool write_undo_buffer_new_key)
 {
     if (resources.empty())
         return;
@@ -1493,7 +1498,8 @@ void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & t
     for (auto & resource : resources)
     {
         resource.setUUID(uuid);
-        batch_write.AddPut(SinglePutRequest(undoBufferStoreKey(name_space, txnID, rpc_address, resource, write_undo_buffer_new_key), resource.serialize()));
+        batch_write.AddPut(
+            SinglePutRequest(undoBufferStoreKey(name_space, txnID, rpc_address, resource, instance_id, write_undo_buffer_new_key), resource.serialize()));
     }
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -1505,9 +1511,23 @@ void MetastoreProxy::clearUndoBuffer(const String & name_space, const UInt64 & t
     metastore_ptr->clean(undoBufferKey(name_space, txnID, false));
 }
 
+void MetastoreProxy::clearUndoBuffer(
+    const String & name_space, const UInt64 & txnID, const String & rpc_address, PlanSegmentInstanceId instance_id)
+{
+    /// Clean both new and old keys
+    metastore_ptr->clean(undoBufferSegmentInstanceKey(name_space, txnID, rpc_address, instance_id, true));
+    metastore_ptr->clean(undoBufferSegmentInstanceKey(name_space, txnID, rpc_address, instance_id, false));
+}
+
 IMetaStore::IteratorPtr MetastoreProxy::getUndoBuffer(const String & name_space, UInt64 txnID, bool write_undo_buffer_new_key)
 {
     return metastore_ptr->getByPrefix(undoBufferKey(name_space, txnID, write_undo_buffer_new_key));
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getUndoBuffer(
+    const String & name_space, UInt64 txnID, const String & rpc_address, PlanSegmentInstanceId instance_id, bool write_undo_buffer_new_key)
+{
+    return metastore_ptr->getByPrefix(undoBufferSegmentInstanceKey(name_space, txnID, rpc_address, instance_id, write_undo_buffer_new_key));
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getAllUndoBuffer(const String & name_space)

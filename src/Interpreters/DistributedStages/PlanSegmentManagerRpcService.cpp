@@ -18,6 +18,8 @@
 #include <string>
 #include <IO/Progress.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/DistributedStages/PlanSegmentReport.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>

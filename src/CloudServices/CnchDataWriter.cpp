@@ -13,9 +13,11 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <memory>
 #include <CloudServices/CnchDataWriter.h>
 
+#include <Catalog/Catalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
@@ -31,19 +33,20 @@
 #include <Statistics/AutoStatisticsMemoryRecord.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/S3PartsAttachMeta.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Transaction/Actions/DropRangeAction.h>
 #include <Transaction/Actions/InsertAction.h>
 #include <Transaction/Actions/MergeMutateAction.h>
 #include <Transaction/Actions/S3AttachMetaAction.h>
 #include <Transaction/Actions/S3DetachMetaAction.h>
+#include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <common/strong_typedef.h>
-#include "Transaction/CnchServerTransaction.h"
 
 namespace ProfileEvents
 {
@@ -120,6 +123,7 @@ CnchDataWriter::CnchDataWriter(
     , consumer_group(std::move(consumer_group_))
     , tpl(tpl_)
     , binlog(binlog_)
+    , instance_id(context->getPlanSegmentInstanceId())
 {
 }
 
@@ -231,11 +235,9 @@ DumpedData CnchDataWriter::dumpCnchParts(
         undo_resources.back().setDiskName(disk->getName());
         part_disks.emplace_back(std::move(disk));
     }
-    for (auto & bitmap : temp_bitmaps)
-    {
+    for (const auto & bitmap : temp_bitmaps)
         undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
-    }
-    for (auto & staged_part : temp_staged_parts)
+    for (const auto & staged_part : temp_staged_parts)
     {
         String part_name = staged_part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
@@ -256,7 +258,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     try
     {
-        context->getCnchCatalog()->writeUndoBuffer(storage.getCnchStorageID(), txn_id, undo_resources);
+        context->getCnchCatalog()->writeUndoBuffer(storage.getCnchStorageID(), txn_id, undo_resources, instance_id);
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", undo_resources.size(), watch.elapsedMilliseconds());
     }
     catch (...)
@@ -684,7 +686,7 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
     for (auto & staged_part : items.staged_parts)
         undo_resources.emplace_back(std::move(
             UndoResource(txn_id, UndoResourceType::StagedPart, staged_part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
-    for (auto & bitmap : bitmaps_to_dump)
+    for (const auto & bitmap : bitmaps_to_dump)
         undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
 
     /// write undo buffer

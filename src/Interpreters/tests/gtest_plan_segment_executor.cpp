@@ -255,7 +255,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     for (int i = 0; i < 5; i++)
     {
         BroadcastStatus status = source_sender->send(chunk.clone());
-        ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
+        ASSERT_EQ(status.code, BroadcastStatusCode::RUNNING) << status.message;
     }
 
     source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");

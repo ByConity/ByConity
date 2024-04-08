@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <optional>
 #include <set>
@@ -31,22 +32,23 @@
 #include <Statistics/ExportSymbols.h>
 #include <Statistics/StatisticsBase.h>
 // #include <Transaction/ICnchTransaction.h>
+#include <Catalog/IMetastore.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <ResourceManagement/CommonData.h>
+#include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/StorageSnapshot.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
 #include "common/types.h"
-#include <Common/Exception.h>
 #include <Common/Config/MetastoreConfig.h>
 #include <Common/Configurations.h>
 #include <Common/DNSResolver.h>
+#include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
 #include <common/getFQDNOrHostName.h>
-#include "Storages/IStorage_fwd.h"
-#include <Storages/StorageSnapshot.h>
-#include <Catalog/IMetastore.h>
 // #include <Access/MaskingPolicyDataModel.h>
 
 namespace DB::ErrorCodes
@@ -440,14 +442,24 @@ public:
     void clearParts(const StoragePtr & table, const CommitItems & commit_data);
 
     /// write undo buffer before write vfs
-    void writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, const UndoResources & resources);
-    void writeUndoBuffer(const StorageID & storage_id, const TxnTimestamp & txnID, UndoResources && resources);
+    void writeUndoBuffer(
+        const StorageID & storage_id, const TxnTimestamp & txnID, const UndoResources & resources, PlanSegmentInstanceId instance_id = {});
+    void writeUndoBuffer(
+        const StorageID & storage_id, const TxnTimestamp & txnID, UndoResources && resources, PlanSegmentInstanceId instance_id = {});
 
     /// clear undo buffer
     void clearUndoBuffer(const TxnTimestamp & txnID);
 
+    /// clear undo buffer
+    void clearUndoBuffer(const TxnTimestamp & txnID, const String & rpc_address, PlanSegmentInstanceId instance_id);
+
     /// return storage uuid -> undo resources
     std::unordered_map<String, UndoResources> getUndoBuffer(const TxnTimestamp & txnID);
+    std::unordered_map<String, UndoResources>
+    getUndoBuffer(const TxnTimestamp & txnID, const String & rpc_address, PlanSegmentInstanceId instance_id);
+    /// execute undos, returns whether clean_fs_lock_by_scan is true
+    uint32_t applyUndos(
+        const TransactionRecord & txn_record, const StoragePtr & table, const UndoResources & resources, bool & clean_fs_lock_by_scan);
 
     /// return txn_id -> undo resources
     std::unordered_map<UInt64, UndoResources> getAllUndoBuffer();

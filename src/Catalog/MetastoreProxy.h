@@ -28,29 +28,25 @@
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+#include <Access/IAccessEntity.h>
 #include <Catalog/IMetastore.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <Core/UUID.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Interpreters/SQLBinding/SQLBinding.h>
 #include <MergeTreeCommon/InsertionLabel.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Protos/RPCHelpers.h>
 #include <ResourceManagement/CommonData.h>
 #include <Statistics/ExportSymbols.h>
 #include <Statistics/StatisticsBase.h>
+#include <Storages/StorageSnapshot.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
 #include <google/protobuf/repeated_field.h>
-#include <common/types.h>
-#include <Storages/StorageSnapshot.h>
-#include <Access/IAccessEntity.h>
-#include <Parsers/formatTenantDatabaseName.h>
-#include <Interpreters/SQLBinding/SQLBinding.h>
 #include <Common/Config/MetastoreConfig.h>
-
-namespace DB::ErrorCodes
-{
-    extern const int METASTORE_ACCESS_ENTITY_NOT_IMPLEMENTED;
-}
+#include <common/types.h>
 
 namespace DB::ErrorCodes
 {
@@ -556,9 +552,28 @@ public:
         return escapeString(name_space) + '_' + UNDO_BUFFER_PREFIX + toString(txn);
     }
 
-    static std::string undoBufferStoreKey(const std::string & name_space, const UInt64 & txn, const String & rpc_address, const UndoResource & resource, bool write_undo_buffer_new_key)
+    static std::string undoBufferStoreKey(
+        const std::string & name_space,
+        const UInt64 & txn,
+        const String & rpc_address,
+        const UndoResource & resource,
+        PlanSegmentInstanceId instance_id,
+        bool write_undo_buffer_new_key)
     {
-        return undoBufferKey(name_space, txn, write_undo_buffer_new_key) + '_' + escapeString(rpc_address) + '_' + escapeString(toString(resource.id));
+        return fmt::format(
+            "{}_{}_{}_{}_{}",
+            undoBufferKey(name_space, txn, write_undo_buffer_new_key),
+            escapeString(rpc_address),
+            instance_id.segment_id,
+            instance_id.parallel_id,
+            escapeString(toString(resource.id)));
+    }
+
+    static std::string undoBufferSegmentInstanceKey(
+        const std::string & name_space, const UInt64 & txn, const String & rpc_address, PlanSegmentInstanceId instance_id, bool write_undo_buffer_new_key)
+    {
+        return fmt::format(
+            "{}_{}_{}_{}", undoBufferKey(name_space, txn, write_undo_buffer_new_key), escapeString(rpc_address), instance_id.segment_id, instance_id.parallel_id);
     }
 
     static std::string kvLockKey(const std::string & name_space, const std::string & uuid, const std::string & part_name)
@@ -1050,10 +1065,24 @@ public:
     Strings getAllMutations(const String & name_space, const String & uuid);
     std::multimap<String, String> getAllMutations(const String & name_space);
 
-    void writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & rpc_address, const String & uuid, UndoResources & resources, bool write_undo_buffer_new_key);
+    void writeUndoBuffer(
+        const String & name_space,
+        const UInt64 & txnID,
+        const String & rpc_address,
+        const String & uuid,
+        UndoResources & resources,
+        PlanSegmentInstanceId instance_id,
+        bool write_undo_buffer_new_key);
 
     void clearUndoBuffer(const String & name_space, const UInt64 & txnID);
+    void clearUndoBuffer(const String & name_space, const UInt64 & txnID, const String & rpc_address, PlanSegmentInstanceId instance_id);
     IMetaStore::IteratorPtr getUndoBuffer(const String & name_space, UInt64 txnID, bool write_undo_buffer_new_key);
+    IMetaStore::IteratorPtr getUndoBuffer(
+        const String & name_space,
+        UInt64 txnID,
+        const String & rpc_address,
+        PlanSegmentInstanceId instance_id,
+        bool write_undo_buffer_new_key);
     IMetaStore::IteratorPtr getAllUndoBuffer(const String & name_space);
 
     void multiDrop(const Strings & keys);

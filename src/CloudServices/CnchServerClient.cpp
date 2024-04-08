@@ -263,10 +263,8 @@ PrunedPartitions CnchServerClient::fetchPartitions(
     return PrunedPartitions{fetched_partitions, total_size};
 }
 
-void buildRedirectCommitRequestBase(
-    const StoragePtr & table,
-    const Catalog::CommitItems & commit_data,
-    Protos::RedirectCommitPartsReq & request)
+template <class Request>
+void buildRedirectRequest(const StoragePtr & table, const Catalog::CommitItems & commit_data, Request & request)
 {
     request.set_database(table->getDatabaseName());
     request.set_table(table->getTableName());
@@ -300,13 +298,26 @@ void CnchServerClient::redirectCommitParts(
     Protos::RedirectCommitPartsReq request;
     Protos::RedirectCommitPartsResp response;
 
-    buildRedirectCommitRequestBase(table, commit_data, request);
+    buildRedirectRequest(table, commit_data, request);
 
     request.set_txn_id(txnID.toUInt64());
     request.set_from_merge_task(is_merged_parts);
     request.set_preallocate_mode(preallocate_mode);
 
     stub->redirectCommitParts(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::redirectClearParts(const StoragePtr & table, const Catalog::CommitItems & commit_data)
+{
+    brpc::Controller cntl;
+    Protos::RedirectClearPartsReq request;
+    Protos::RedirectClearPartsResp response;
+    buildRedirectRequest(table, commit_data, request);
+
+    stub->redirectClearParts(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);
@@ -322,7 +333,7 @@ void CnchServerClient::redirectSetCommitTime(
     Protos::RedirectCommitPartsReq request;
     Protos::RedirectCommitPartsResp response;
 
-    buildRedirectCommitRequestBase(table, commit_data, request);
+    buildRedirectRequest(table, commit_data, request);
 
     request.set_txn_id(txn_id);
     request.set_commit_ts(commitTs.toUInt64());

@@ -1,15 +1,19 @@
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <CloudServices/CnchServerResource.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
+#include <common/logger_useful.h>
 
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
 #include <Interpreters/NodeSelector.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/TableWriteStep.h>
 #include "BSPScheduler.h"
 
 #include <cstddef>
@@ -17,11 +21,14 @@
 #include <unordered_map>
 #include <utility>
 #include <CloudServices/CnchServerResource.h>
-#include <Interpreters/DistributedStages/AddressInfo.h>
-#include <Interpreters/DistributedStages/Scheduler.h>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int BRPC_PROTOCOL_VERSION_UNSUPPORT;
+}
 
 /// BSP scheduler logic
 void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
@@ -162,28 +169,92 @@ void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel
     }
 }
 
+const size_t MIN_MAJOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 2;
+const size_t MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 3;
+
 bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
 {
     if (retry_count.load(std::memory_order_acquire) >= query_context->getSettings().bsp_max_retry_num)
         return false;
-    /// currently disable retry for TableWite && TableFinish
+    /// currently disable retry for TableFinish
+    bool is_table_write = false;
     auto * plansegment = dag_graph_ptr->getPlanSegmentPtr(segment_id);
     for (const auto & node : plansegment->getQueryPlan().getNodes())
     {
-        if (node.step->getType() == IQueryPlanStep::Type::TableWrite || node.step->getType() == IQueryPlanStep::Type::TableFinish)
+        if (auto step = std::dynamic_pointer_cast<TableWriteStep>(node.step))
+        {
+            if (auto cnch_table = step->getTarget()->getStorage())
+            {
+                // unique table can't support retry
+                if (cnch_table->getInMemoryMetadataPtr()->hasUniqueKey())
+                    return false;
+                is_table_write = true;
+            }
+        }
+        else if (node.step->getType() == IQueryPlanStep::Type::TableFinish)
             return false;
+    }
+    auto major = query_context->getClientInfo().brpc_protocol_major_version;
+    auto effective_minor = std::min(
+        query_context->getSettingsRef().min_compatible_brpc_minor_version.value, static_cast<uint64_t>(DBMS_BRPC_PROTOCOL_MINOR_VERSION));
+    if (major == MIN_MAJOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE && effective_minor < MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE)
+    {
+        if (is_table_write)
+        {
+            LOG_ERROR(
+                log,
+                "Current brpc protocol version is {}.{}(expected at least {}.{}), does not support retry for table write segment",
+                major,
+                effective_minor,
+                major,
+                MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE);
+            return false;
+        }
     }
     auto cnt = retry_count.fetch_add(1, std::memory_order_acq_rel);
     if (cnt < query_context->getSettingsRef().bsp_max_retry_num)
     {
+        String rpc_address;
+        auto instance_id = PlanSegmentInstanceId{static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index)};
+        size_t retry_id;
         {
             std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            // table scan plansegment will retry at the same worker
+            retry_id = (segment_instance_retry_cnt[instance_id]++);
+            rpc_address = extractExchangeHostPort(segment_parallel_locations[instance_id.segment_id][instance_id.parallel_id]);
+        }
+        LOG_INFO(
+            log,
+            "bsp retry segment instance(query_id:{} {} rpc_address:{}) with instance_retry_id:{}, query has retried {} times",
+            plansegment->getQueryId(),
+            instance_id.toString(),
+            rpc_address,
+            retry_id,
+            cnt);
+        if (is_table_write && retry_id >= 1)
+        {
+            // execute undos and clear part cache before execution
+            auto catalog = query_context->getCnchCatalog();
+            auto txn = query_context->getCurrentTransaction();
+            auto txn_id = txn->getTransactionID();
+            auto undo_buffer = catalog->getUndoBuffer(txn_id, rpc_address, instance_id);
+            for (const auto & [uuid, resources] : undo_buffer)
+            {
+                StoragePtr table = catalog->tryGetTableByUUID(*query_context, uuid, TxnTimestamp::maxTS(), true);
+                if (table)
+                {
+                    bool clean_fs_lock_by_scan;
+                    catalog->applyUndos(txn->getTransactionRecord(), table, resources, clean_fs_lock_by_scan);
+                }
+            }
+            catalog->clearUndoBuffer(txn_id, rpc_address, instance_id);
+        }
+        {
+            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
             if (dag_graph_ptr->any_tables.contains(segment_id) ||
-                // in case all workers are occupied, simply retry at last node
-                failed_workers[segment_id].size() == cluster_nodes.rank_workers.size() ||
                 // for local no repartion and local may no repartition, schedule to original node
-                NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)))
+                NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)) ||
+                // in case all workers except servers are occupied, simply retry at last node
+                failed_workers[segment_id].size() == cluster_nodes.rank_workers.size())
             {
                 auto available_worker = segment_parallel_locations[segment_id][parallel_index];
                 occupied_workers[segment_id].erase(available_worker);
@@ -204,6 +275,12 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
     {
         return false;
     }
+}
+
+const AddressInfo & BSPScheduler::getSegmentParallelLocation(PlanSegmentInstanceId instance_id)
+{
+    std::unique_lock<std::mutex> lock(nodes_alloc_mutex);
+    return segment_parallel_locations[instance_id.segment_id][instance_id.parallel_id];
 }
 
 std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const AddressInfo & worker)
@@ -279,6 +356,7 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
             std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
             occupied_workers[task_instance->task_id].insert(address);
             segment_parallel_locations[task_instance->task_id][task_instance->parallel_index] = address;
+            failed_workers[task_instance->task_id].insert(local_address); /// init with server addr, as we wont schedule to server
         }
 
         dispatchTask(

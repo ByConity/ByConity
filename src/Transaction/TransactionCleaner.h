@@ -15,13 +15,14 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TxnTimestamp.h>
-#include <Common/Stopwatch.h>
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadPool.h>
-#include <Interpreters/Context_fwd.h>
 
+#include <atomic>
 #include <mutex>
 
 namespace DB
@@ -52,9 +53,8 @@ struct TxnCleanTask
     TxnTimestamp txn_id;
     CleanTaskPriority priority;
     CnchTransactionStatus txn_status;
-    UInt32 undo_size {0};
+    std::atomic_uint32_t undo_size{0};
     Stopwatch watch;
-    mutable std::mutex mutex;
 };
 
 using TxnCleanTasks = std::vector<TxnCleanTask>;
