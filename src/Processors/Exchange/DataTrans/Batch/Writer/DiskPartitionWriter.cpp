@@ -30,17 +30,21 @@ namespace ErrorCodes
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
-DiskPartitionWriter::DiskPartitionWriter(ContextPtr context_, DiskExchangeDataManagerPtr mgr_, Block header_, ExchangeDataKeyPtr key_)
+DiskPartitionWriter::DiskPartitionWriter(
+    ContextPtr context_, const DiskExchangeDataManagerPtr & mgr_, Block header_, ExchangeDataKeyPtr key_)
     : IBroadcastSender(true)
     , context(std::move(context_))
-    , mgr(std::move(mgr_))
-    , disk(mgr->getDisk())
+    , mgr(mgr_)
     , header(std::move(header_))
     , key(std::move(key_))
     , log(&Poco::Logger::get("DiskPartitionWriter"))
     , data_queue(std::make_shared<BoundedDataQueue<Chunk>>(context->getSettingsRef().exchange_remote_receiver_queue_size))
     , enable_disk_writer_metrics(context->getSettingsRef().log_query_exchange)
 {
+    if (auto manager = mgr.lock(); manager)
+        disk = manager->getDisk();
+    else
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid disk exchange manager when creating disk partition writer {}", *key);
     auto query_expiration_ts = context->getQueryExpirationTimeStamp();
     query_expiration_ms = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
     LOG_TRACE(log, "constructed for key:{}", *key);
@@ -78,6 +82,8 @@ DiskPartitionWriter::~DiskPartitionWriter()
             element.disk_partition_writer_pop_ms = writer_metrics.pop_ms.get_value();
             element.disk_partition_writer_write_ms = writer_metrics.write_ms.get_value();
             element.disk_partition_writer_write_num = writer_metrics.write_num.get_value();
+            element.disk_partition_writer_sync_ms = writer_metrics.sync_ms.get_value();
+            element.disk_partition_writer_wait_done_ms = writer_metrics.wait_done_ms.get_value();
             query_exchange_log->add(element);
         }
     }
@@ -108,6 +114,9 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
     auto expected = static_cast<int>(BroadcastStatusCode::RUNNING);
     bool is_modifier = false;
     Stopwatch s;
+    /// if any error happened when CAS op is successful, other finish calls
+    /// might get a status code different from the final code, but its okay,
+    /// since the modified status is returned correctly.
     if (sender_metrics.finish_code.compare_exchange_strong(
             expected, static_cast<int>(status_code), std::memory_order_acq_rel, std::memory_order_relaxed))
     {
@@ -124,16 +133,33 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
             if (!done_cv.wait_for(lock, std::chrono::milliseconds(timeout), [&]() { return done || data_queue->closed(); }))
             {
                 sender_metrics.finish_code.store(BroadcastStatusCode::SEND_TIMEOUT, std::memory_order_release);
-                if (enable_disk_writer_metrics)
-                    sender_metrics.message = fmt::format(
-                    "wait flushing data to disk timeout for key:{} done:{} data_queue->closed():{}", *key, done, data_queue->closed());
                 status_code = static_cast<BroadcastStatusCode>(sender_metrics.finish_code.load(std::memory_order_acquire));
-                return BroadcastStatus(status_code, true, sender_metrics.message);
+                auto ret = BroadcastStatus(
+                    status_code,
+                    true,
+                    fmt::format(
+                        "wait flushing data to disk timeout for key:{} done:{} data_queue->closed():{}", *key, done, data_queue->closed()));
+                if (enable_disk_writer_metrics)
+                    sender_metrics.message = ret.message;
+                return ret;
             }
             if (enable_disk_writer_metrics)
-                s.start();
+            {
+                writer_metrics.wait_done_ms << s.elapsedMilliseconds();
+                s.restart();
+            }
             /// commit file by renaming
-            disk->replaceFile(mgr->getTemporaryFileName(*key), mgr->getFileName(*key));
+            if (auto manager = mgr.lock())
+                disk->replaceFile(manager->getTemporaryFileName(*key), manager->getFileName(*key));
+            else
+            {
+                sender_metrics.finish_code.store(BroadcastStatusCode::SEND_UNKNOWN_ERROR, std::memory_order_release);
+                status_code = static_cast<BroadcastStatusCode>(sender_metrics.finish_code.load(std::memory_order_acquire));
+                auto ret = BroadcastStatus(status_code, true, fmt::format("disk exchange manager invalid key:{}", *key));
+                if (enable_disk_writer_metrics)
+                    sender_metrics.message = ret.message;
+                return ret;
+            }
             if (enable_disk_writer_metrics)
                 writer_metrics.commit_ms << s.elapsedMilliseconds();
         }
@@ -163,17 +189,20 @@ void DiskPartitionWriter::runWriteTask()
     Stopwatch s;
     if (enable_disk_writer_metrics)
         s.start();
-    auto buf = mgr->createFileBufferForWrite(key);
-    auto stream
-        = std::make_unique<NativeChunkOutputStream>(*buf, header);
+    auto manager = mgr.lock();
+    if (!manager)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid disk exchange manager when creating disk partition writer {}", *key);
+    auto buf = manager->createFileBufferForWrite(key);
+    auto stream = std::make_unique<NativeChunkOutputStream>(*buf, header);
     if (enable_disk_writer_metrics)
+    {
         writer_metrics.create_file_ms << s.elapsedMilliseconds();
+        s.restart();
+    }
 
     /// only breaks when
     /// 1. data_queue is closed.
     /// 2. finish is called, so no more data will be pushed to queue, and data_queue is empty.
-    if (enable_disk_writer_metrics)
-        s.restart();
     while (!data_queue->closed() && !(finished.load(std::memory_order_acquire) && data_queue->empty()))
     {
         Chunk chunk;
@@ -200,7 +229,13 @@ void DiskPartitionWriter::runWriteTask()
         }
     }
 
+    if (enable_disk_writer_metrics)
+        s.restart();
+
     buf->sync();
+
+    if (enable_disk_writer_metrics)
+        writer_metrics.sync_ms << s.elapsedMilliseconds();
 
     SCOPE_EXIT({
         {
@@ -208,7 +243,7 @@ void DiskPartitionWriter::runWriteTask()
             done = true;
         }
         done_cv.notify_all();
-        mgr->updateWrittenBytes(key->query_unique_id, key, buf->count());
+        manager->updateWrittenBytes(key->query_unique_id, key, buf->count());
     });
 }
 

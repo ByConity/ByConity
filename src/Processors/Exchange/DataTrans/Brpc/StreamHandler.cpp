@@ -14,6 +14,7 @@
  */
 
 #include "StreamHandler.h"
+#include "Processors/Exchange/DataTrans/MultiPathBoundedQueue.h"
 #include "ReadBufferFromBrpcBuf.h"
 
 #include <Compression/CompressedReadBuffer.h>
@@ -55,11 +56,21 @@ int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_i
                     stream_id,
                     msg->size());
 #endif
-                auto chunk_info = std::make_shared<DeserializeBufTransform::IOBufChunkInfo>();
-                chunk_info->io_buf.append(msg->movable());
                 Chunk chunk;
-                chunk.setChunkInfo(std::move(chunk_info));
-                receiver_ptr->pushReceiveQueue(std::move(chunk));
+                if (context->getSettingsRef().log_query_exchange)
+                {
+                    auto chunk_info = std::make_shared<DeserializeBufTransform::IOBufChunkInfoWithReceiver>();
+                    chunk_info->io_buf.append(msg->movable());
+                    chunk_info->receiver = receiver_ptr;
+                    chunk.setChunkInfo(std::move(chunk_info));
+                }
+                else
+                {
+                    auto chunk_info = std::make_shared<DeserializeBufTransform::IOBufChunkInfo>();
+                    chunk_info->io_buf.append(msg->movable());
+                    chunk.setChunkInfo(std::move(chunk_info));
+                }
+                receiver_ptr->pushReceiveQueue(DataPacket{std::move(chunk)});
             }
             return 0;
         }
@@ -75,8 +86,12 @@ int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_i
                 buf = std::move(read_buffer);
             NativeChunkInputStream chunk_in(*buf, header);
             Chunk chunk = chunk_in.readImpl();
-            if (receiver_ptr->enable_receiver_metrics)
-                receiver_ptr->receiver_metrics.dser_time_ms << s.elapsedMilliseconds();
+            if (context->getSettingsRef().log_query_exchange)
+            {
+                auto chunk_info = std::make_shared<DeserializeBufTransform::IOBufChunkInfoWithReceiver>();
+                chunk_info->receiver = receiver_ptr;
+            }
+            receiver_ptr->addToMetricsMaybe(0, s.elapsedMilliseconds(), 0, msg);
 #ifndef NDEBUG
             LOG_TRACE(
                 log,
@@ -85,7 +100,7 @@ int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_i
                 msg.size(),
                 chunk.getNumRows());
 #endif
-            receiver_ptr->pushReceiveQueue(MultiPathDataPacket(std::move(chunk)));
+            receiver_ptr->pushReceiveQueue(MultiPathDataPacket(DataPacket{std::move(chunk)}));
         }
     }
     catch (...)

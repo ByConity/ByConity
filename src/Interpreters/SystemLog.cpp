@@ -128,7 +128,7 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
 
     query_log = createSystemLog<QueryLog>(global_context, "system", "query_log", config, "query_log", true);
     query_thread_log = createSystemLog<QueryThreadLog>(global_context, "system", "query_thread_log", config, "query_thread_log", false);
-    query_exchange_log = createSystemLog<QueryExchangeLog>(global_context, "system", "query_exchange_log", config, "query_exchange_log", false);
+    query_exchange_log = createSystemLog<QueryExchangeLog>(global_context, "system", "query_exchange_log", config, "query_exchange_log", true);
     part_log = createSystemLog<PartLog>(global_context, "system", "part_log", config, "part_log", on_worker);
     part_merge_log = createSystemLog<PartMergeLog>(global_context, "system", "part_merge_log", config, "part_merge_log", on_server);
     server_part_log = createSystemLog<ServerPartLog>(global_context, "system", "server_part_log", config, "server_part_log", on_server);

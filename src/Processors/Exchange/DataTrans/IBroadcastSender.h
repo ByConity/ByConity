@@ -46,16 +46,16 @@ public:
     struct SenderMetrics
     {
         /// all senders
-        bvar::Adder<size_t> send_time_ms;
-        bvar::Adder<size_t> send_rows;
-        bvar::Adder<size_t> send_uncompressed_bytes;
-        bvar::Adder<size_t> num_send_times;
+        bvar::Adder<size_t> send_time_ms{};
+        bvar::Adder<size_t> send_rows{};
+        bvar::Adder<size_t> send_uncompressed_bytes{};
+        bvar::Adder<size_t> num_send_times{};
         /// for brpc senders
-        bvar::Adder<size_t> send_bytes;
-        bvar::Adder<size_t> ser_time_ms;
-        bvar::Adder<size_t> send_retry;
-        bvar::Adder<size_t> send_retry_ms;
-        bvar::Adder<size_t> overcrowded_retry;
+        bvar::Adder<size_t> send_bytes{};
+        bvar::Adder<size_t> ser_time_ms{};
+        bvar::Adder<size_t> send_retry{};
+        bvar::Adder<size_t> send_retry_ms{};
+        bvar::Adder<size_t> overcrowded_retry{};
         /// finish related
         std::atomic<Int32> finish_code{};
         std::atomic<Int8> is_modifier{-1};

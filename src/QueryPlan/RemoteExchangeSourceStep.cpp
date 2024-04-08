@@ -247,7 +247,10 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             }
             String receiver_name = MultiPathReceiver::generateName(
                 exchange_id, write_plan_segment_id, plan_segment_id, coordinator_address);
-            auto multi_path_receiver = std::make_shared<MultiPathReceiver>(collector, std::move(receivers), exchange_header, receiver_name, enable_block_compress);
+            auto multi_path_options
+                = MultiPathReceiverOptions{.enable_block_compress = enable_block_compress, .enable_metrics = enable_metrics};
+            auto multi_path_receiver = std::make_shared<MultiPathReceiver>(
+                collector, std::move(receivers), exchange_header, receiver_name, std::move(multi_path_options), context);
             LOG_DEBUG(logger, "Create {}", multi_path_receiver->getName());
             auto source = std::make_shared<ExchangeSource>(source_header, std::move(multi_path_receiver), options, is_final_plan_segment, totals_source, extremes_source);
             pipe.addSource(std::move(source));

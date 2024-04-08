@@ -52,9 +52,12 @@ NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
         {"send_retry_ms", std::make_shared<DataTypeInt64>()},
         {"overcrowded_retry", std::make_shared<DataTypeInt64>()},
 
+        {"recv_counts", std::make_shared<DataTypeUInt64>()},
+        {"recv_rows", std::make_shared<DataTypeUInt64>()},
         {"recv_time_ms", std::make_shared<DataTypeUInt64>()},
         {"register_time_ms", std::make_shared<DataTypeUInt64>()},
         {"recv_bytes", std::make_shared<DataTypeUInt64>()},
+        {"recv_uncompressed_bytes", std::make_shared<DataTypeUInt64>()},
         {"dser_time_ms", std::make_shared<DataTypeInt64>()},
 
         {"disk_partition_writer_create_file_ms", std::make_shared<DataTypeUInt64>()},
@@ -62,6 +65,8 @@ NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
         {"disk_partition_writer_write_ms", std::make_shared<DataTypeUInt64>()},
         {"disk_partition_writer_write_num", std::make_shared<DataTypeUInt64>()},
         {"disk_partition_writer_commit_ms", std::make_shared<DataTypeUInt64>()},
+        {"disk_partition_writer_sync_ms", std::make_shared<DataTypeUInt64>()},
+        {"disk_partition_writer_wait_done_ms", std::make_shared<DataTypeUInt64>()},
 
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
     };
@@ -102,9 +107,12 @@ void QueryExchangeLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(send_retry_ms);
     columns[i++]->insert(overcrowded_retry);
 
+    columns[i++]->insert(recv_counts);
+    columns[i++]->insert(recv_rows);
     columns[i++]->insert(recv_time_ms);
     columns[i++]->insert(register_time_ms);
     columns[i++]->insert(recv_bytes);
+    columns[i++]->insert(recv_uncompressed_bytes);
     columns[i++]->insert(dser_time_ms);
 
     columns[i++]->insert(disk_partition_writer_create_file_ms);
@@ -112,6 +120,8 @@ void QueryExchangeLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(disk_partition_writer_write_ms);
     columns[i++]->insert(disk_partition_writer_write_num);
     columns[i++]->insert(disk_partition_writer_commit_ms);
+    columns[i++]->insert(disk_partition_writer_sync_ms);
+    columns[i++]->insert(disk_partition_writer_wait_done_ms);
 
 
     if (profile_counters)
