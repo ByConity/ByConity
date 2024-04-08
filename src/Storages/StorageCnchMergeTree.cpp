@@ -933,6 +933,8 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(
 
         if (auto * mv = dynamic_cast<StorageMaterializedView *>(table.get()))
         {
+            if (mv->async())
+                continue;
             auto target_table = mv->tryGetTargetTable();
             if (!target_table)
             {
