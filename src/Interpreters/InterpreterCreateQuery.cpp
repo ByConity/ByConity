@@ -1385,7 +1385,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     if (create.replace_table)
         return doCreateOrReplaceTable(create, properties);
-    
+
     /// when create materialized view and tenant id is not empty add setting tenant_id to select query
     if (create.is_materialized_view && !getCurrentTenantId().empty())
     {
@@ -1402,7 +1402,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                 select->setOrReplace(setting_ptr, settings);
                 create.setOrReplace(create.select, select);
             }
-        }   
+        }
         else
         {
             select->as<ASTSelectWithUnionQuery &>().settings_ast = settings;

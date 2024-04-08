@@ -155,7 +155,12 @@ StorageMaterializedView::StorageMaterializedView(
         manual_create_query->set(manual_create_query->columns_list, new_columns_list);
         manual_create_query->set(manual_create_query->storage, query.storage->ptr());
 
-        create_context->setCurrentTransaction(nullptr, false);
+        if (getContext()->getServerType() == ServerType::cnch_server)
+        {
+            auto & txn_coordinator = getContext()->getCnchTransactionCoordinator();
+            auto server_txn = txn_coordinator.createTransaction(CreateTransactionOption().setType(CnchTransactionType::Implicit));
+            create_context->setCurrentTransaction(server_txn);
+        }
         executeQuery(serializeAST(*manual_create_query), create_context, true);
 
         target_table_id = DatabaseCatalog::instance().getTable({manual_create_query->database, manual_create_query->table}, getContext())->getStorageID();
@@ -511,6 +516,7 @@ void StorageMaterializedView::executeByDropInsert(AsyncRefreshParamPtr param, Co
         command_context->setCurrentQueryId(query_id);
         auto settings = local_context->getSettings();
         command_context->setSettings(settings);
+        command_context->setSetting("enable_materialized_view_rewrite", false);
         return command_context;
     };
     auto start_time = std::chrono::system_clock::now();
@@ -661,6 +667,7 @@ void StorageMaterializedView::executeByInsertOverwrite(AsyncRefreshParamPtr para
         command_context->setCurrentQueryId(query_id);
         auto settings = local_context->getSettings();
         command_context->setSettings(settings);
+        command_context->setSetting("enable_materialized_view_rewrite", false);
         return command_context;
     };
 
@@ -1034,16 +1041,44 @@ void StorageMaterializedView::drop()
     dropInnerTableIfAny(true, getContext());
 }
 
-void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr local_context)
+void StorageMaterializedView::dropInnerTableIfAny(bool, ContextPtr)
 {
     if (has_inner_table && tryGetTargetTable())
-        InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind::Drop, getContext(), local_context, target_table_id, no_delay);
+    {
+        auto drop_query = std::make_shared<ASTDropQuery>();
+        drop_query->database = target_table_id.database_name;
+        drop_query->table = target_table_id.table_name;
+        drop_query->kind = ASTDropQuery::Drop;
+        drop_query->if_exists = true;
+        auto drop_context = Context::createCopy(getContext());
+        if (getContext()->getServerType() == ServerType::cnch_server)
+        {
+            auto & txn_coordinator = getContext()->getCnchTransactionCoordinator();
+            auto server_txn = txn_coordinator.createTransaction(CreateTransactionOption().setType(CnchTransactionType::Implicit));
+            drop_context->setCurrentTransaction(server_txn);
+        }       
+        InterpreterDropQuery(drop_query, drop_context).execute();
+    }
 }
 
-void StorageMaterializedView::truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr local_context, TableExclusiveLockHolder &)
+void StorageMaterializedView::truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr , TableExclusiveLockHolder &)
 {
-    if (has_inner_table)
-        InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind::Truncate, getContext(), local_context, target_table_id, true);
+    if (has_inner_table && tryGetTargetTable())
+    {
+        auto drop_query = std::make_shared<ASTDropQuery>();
+        drop_query->database = target_table_id.database_name;
+        drop_query->table = target_table_id.table_name;
+        drop_query->kind = ASTDropQuery::Truncate;
+        drop_query->if_exists = true;
+        auto drop_context = Context::createCopy(getContext());
+        if (getContext()->getServerType() == ServerType::cnch_server)
+        {
+            auto & txn_coordinator = getContext()->getCnchTransactionCoordinator();
+            auto server_txn = txn_coordinator.createTransaction(CreateTransactionOption().setType(CnchTransactionType::Implicit));
+            drop_context->setCurrentTransaction(server_txn);
+        }
+        InterpreterDropQuery(drop_query, drop_context).execute();
+    }
 }
 
 void StorageMaterializedView::checkStatementCanBeForwarded() const
