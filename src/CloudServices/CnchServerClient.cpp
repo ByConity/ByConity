@@ -1147,6 +1147,22 @@ std::vector<Protos::LastModificationTimeHint> CnchServerClient::getLastModificat
     return ret;
 }
 
+void CnchServerClient::notifyTableCreated(const UUID & uuid, const int64_t cnch_notify_table_created_rpc_timeout_ms)
+{
+    brpc::Controller cntl;
+    cntl.set_timeout_ms(cnch_notify_table_created_rpc_timeout_ms);
+
+    Protos::notifyTableCreatedReq req;
+    Protos::notifyTableCreatedResp resp;
+
+    RPCHelpers::fillUUID(uuid, *req.mutable_storage_uuid());
+
+    stub->notifyTableCreated(&cntl, &req, &resp, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(resp);
+}
+
 
 MergeTreeDataPartsCNCHVector CnchServerClient::fetchCloudTableMeta(
     const StorageCloudMergeTree & storage, const TxnTimestamp & ts, const std::unordered_set<Int64> & bucket_numbers)

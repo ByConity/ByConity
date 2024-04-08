@@ -37,8 +37,17 @@ struct TableMetaEntry
 
     TableLockHolder writeLock() const { return meta_mutex->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString()); }
 
-    TableMetaEntry(const String & database_, const String & table_, const String & table_uuid_, const RWLock & lock = nullptr)
-        : database(database_), table(table_), table_uuid(table_uuid_), trash_item_metrics(std::make_shared<TableMetrics>(table_uuid_))
+    TableMetaEntry(
+        const String & database_,
+        const String & table_,
+        const String & table_uuid_,
+        const RWLock & lock = nullptr,
+        const bool on_table_creation = false)
+        : database(database_)
+        , table(table_)
+        , table_uuid(table_uuid_)
+        , partition_metrics_loaded(on_table_creation)
+        , trash_item_metrics(std::make_shared<TableMetrics>(table_uuid_))
     {
         if (!lock)
             meta_mutex = RWLockImpl::create();

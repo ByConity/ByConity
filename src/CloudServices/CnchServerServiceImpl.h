@@ -361,6 +361,12 @@ public:
         Protos::getLastModificationTimeHintsResp * response,
         google::protobuf::Closure * done) override;
 
+    void notifyTableCreated(
+        google::protobuf::RpcController * cntl,
+        const Protos::notifyTableCreatedReq * request,
+        Protos::notifyTableCreatedResp * response,
+        google::protobuf::Closure * done) override;
+
 private:
     const UInt64 server_start_time;
     std::optional<GlobalGCManager> global_gc_manager;

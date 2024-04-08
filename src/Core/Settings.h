@@ -1789,6 +1789,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, force_clean_transaction_by_dm, false, "Force clean transaction by dm, can be used for testing purpose", 0) \
     M(Bool, cnch_atomic_attach_part, true, "Whether to ATTACH PARTITION/PARTS in atomic way", 0) \
     M(Bool, cnch_atomic_attach_part_preemtive_lock_acquire, false, "Whether to acquire lock preemptively during atomic attach part", 0) \
+    M(UInt64, cnch_notify_table_created_rpc_timeout_ms, 1000, "Timeout for create table meta when creating table", 0) \
     M(Bool, allow_full_scan_txn_records, false, "Whether to allow full scan of all transaction records on catalog", 0) \
     \
     /* Snapshot */ \
