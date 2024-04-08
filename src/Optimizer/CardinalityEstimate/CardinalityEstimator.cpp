@@ -134,6 +134,18 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitTableWriteStep(const TableWriteSt
     return child_stats;
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitOutfileWriteStep(const OutfileWriteStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitOutfileFinishStep(const OutfileFinishStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
 PlanNodeStatisticsPtr CardinalityVisitor::visitProjectionStep(const ProjectionStep & step, CardinalityContext & context)
 {
     if (context.children_stats.empty())

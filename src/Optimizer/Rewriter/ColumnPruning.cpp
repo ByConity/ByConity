@@ -41,6 +41,7 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
+#include <QueryPlan/OutfileWriteStep.h>
 
 namespace DB
 {
@@ -164,6 +165,11 @@ PlanNodePtr ColumnPruningVisitor::visitOffsetNode(OffsetNode & node, ColumnPruni
 }
 
 PlanNodePtr ColumnPruningVisitor::visitTableFinishNode(TableFinishNode & node, ColumnPruningContext & column_pruning_context)
+{
+    return visitPlanNode(node, column_pruning_context);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitOutfileFinishNode(OutfileFinishNode & node, ColumnPruningContext & column_pruning_context)
 {
     return visitPlanNode(node, column_pruning_context);
 }
@@ -1086,6 +1092,21 @@ PlanNodePtr ColumnPruningVisitor::visitTableWriteNode(TableWriteNode & node, Col
     node.replaceChildren({new_child});
     return node.shared_from_this();
 }
+
+PlanNodePtr ColumnPruningVisitor::visitOutfileWriteNode(OutfileWriteNode & node, ColumnPruningContext &)
+{
+    const auto * outfile_write = dynamic_cast<const OutfileWriteStep *>(node.getStep().get());
+
+    NameSet require;
+    for (const auto & item : outfile_write->getInputStreams()[0].header)
+        require.insert(item.name);
+    PlanNodePtr child = node.getChildren()[0];
+    ColumnPruningContext child_column_pruning_context{.name_set = require};
+    PlanNodePtr new_child = VisitorUtil::accept(*child, *this, child_column_pruning_context);
+    node.replaceChildren({new_child});
+    return node.shared_from_this();
+}
+
 
 PlanNodePtr ColumnPruningVisitor::visitTotalsHavingNode(TotalsHavingNode & node, ColumnPruningContext & column_pruning_context)
 {

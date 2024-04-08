@@ -667,6 +667,22 @@ Property DeriverVisitor::visitTableFinishStep(const TableFinishStep &, DeriverCo
     return context.getInput()[0];
 }
 
+Property DeriverVisitor::visitOutfileWriteStep(const OutfileWriteStep &, DeriverContext & context)
+{
+    auto prop = context.getInput()[0];
+    prop.getNodePartitioningRef().setComponent(Partitioning::Component::WORKER);
+    if (context.getInput()[0].getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::SINGLE)
+    {
+        prop.getNodePartitioningRef().setComponent(Partitioning::Component::COORDINATOR);
+    }
+    return prop;
+}
+
+Property DeriverVisitor::visitOutfileFinishStep(const OutfileFinishStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
 Property DeriverVisitor::visitMultiJoinStep(const MultiJoinStep &, DeriverContext & context)
 {
     return context.getInput()[0];

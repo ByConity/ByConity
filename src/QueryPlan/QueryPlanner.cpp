@@ -51,6 +51,8 @@
 #include <QueryPlan/LimitStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingSortedStep.h>
+#include <QueryPlan/OutfileFinishStep.h>
+#include <QueryPlan/OutfileWriteStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PlanBuilder.h>
 #include <QueryPlan/ProjectionStep.h>
@@ -206,6 +208,24 @@ private:
 
 namespace
 {
+    PlanNodePtr planOutfile(PlanNodePtr output_root, Analysis & analysis, ContextMutablePtr context)
+    {
+        auto & outfile_info = analysis.getOutfileInfo();
+        if (context->getSettingsRef().enable_distributed_output && outfile_info)
+        {
+            OutfileTargetPtr outfile_target = std::make_shared<OutfileTarget>(
+                context, outfile_info->out_file, outfile_info->format, outfile_info->compression_method, outfile_info->compression_level);
+            auto outfile_step = std::make_shared<OutfileWriteStep>(output_root->getCurrentDataStream(), outfile_target);
+            auto outfile_root = output_root->addStep(context->nextNodeId(), std::move(outfile_step));
+
+            auto outfile_finish_step = std::make_shared<OutfileFinishStep>(output_root->getCurrentDataStream());
+            auto outfile_finish_root = outfile_root->addStep(context->nextNodeId(), std::move(outfile_finish_step));
+
+            return outfile_finish_root;
+        }
+        return output_root;
+    }
+    
     PlanNodePtr planOutput(const RelationPlan & plan, ASTPtr & query, Analysis & analysis, ContextMutablePtr context)
     {
         const auto & output_desc = analysis.getOutputDescription(*query);
@@ -249,7 +269,8 @@ namespace
 
         auto output_step
             = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types, true);
-        auto new_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
+        auto output_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
+        auto new_root = planOutfile(output_root, analysis, context);
         PRINT_PLAN(new_root, plan_output);
         return new_root;
     }

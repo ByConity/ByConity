@@ -620,6 +620,7 @@
 
     "s3": [
         "46016_outfile_failed_select",
+        "46017_distributed_outfile",
         "02114_compression_in_query",
         "01496_attach_from_path_without_delta",
         "01498_attach_from_self_with_exception",

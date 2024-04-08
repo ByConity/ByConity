@@ -202,9 +202,9 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
 
     if (query->as<ASTSelectQuery>())
     {
-        if (QueryUseOptimizerChecker::check(query, context)) {
+        if (QueryUseOptimizerChecker::check(query, context))
             return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
-        }
+
         /// This is internal part of ASTSelectWithUnionQuery.
         /// Even if there is SELECT without union, it is represented by ASTSelectWithUnionQuery with single ASTSelectQuery as a child.
         return std::make_unique<InterpreterSelectQuery>(query, context, options);

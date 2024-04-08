@@ -35,6 +35,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_QUERY;
+    extern const int UNSUPPORTED_PARAMETER;
 }
 
 void changeASTSettings(ASTPtr &node)
@@ -119,6 +120,9 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
         turnOffOptimizer(context, node);
         return false;
     }
+
+    if (!context->getSettingsRef().enable_optimizer && context->getSettingsRef().enable_distributed_output)
+        throw Exception("Distributed output in non-optimizer mode is not supported, please enable optimizer.", ErrorCodes::UNSUPPORTED_PARAMETER);
 
     String reason;
     if (auto * explain = node->as<ASTExplainQuery>())
