@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/QueryExchangeLog.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
 #include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -10,6 +12,7 @@
 #include <bthread/mutex.h>
 #include <butil/iobuf.h>
 #include <Poco/Logger.h>
+#include <Common/Stopwatch.h>
 
 #include <atomic>
 #include <memory>
@@ -21,10 +24,24 @@
 namespace DB
 {
 
-class MultiPathReceiver final : public IBroadcastReceiver, private boost::noncopyable
+struct MultiPathReceiverOptions
+{
+    bool enable_block_compress;
+    bool enable_metrics;
+};
+
+class MultiPathReceiver final : public IBroadcastReceiver,
+                                public std::enable_shared_from_this<MultiPathReceiver>,
+                                private boost::noncopyable
 {
 public:
-    explicit MultiPathReceiver(MultiPathQueuePtr collector_, BroadcastReceiverPtrs sub_receivers_, Block header_, String name_, bool enable_block_compress_);
+    explicit MultiPathReceiver(
+        MultiPathQueuePtr collector_,
+        BroadcastReceiverPtrs sub_receivers_,
+        Block header_,
+        String name_,
+        MultiPathReceiverOptions options_,
+        ContextPtr context_);
     ~MultiPathReceiver() override;
     void registerToSenders(UInt32 timeout_ms) override;
 
@@ -66,8 +83,10 @@ private:
     BroadcastReceiverPtrs sub_receivers;
     Block header;
     String name;
-    bool enable_block_compress;
     Poco::Logger * logger;
+    Stopwatch register_s;
+    ContextPtr context;
+
 };
 
 }

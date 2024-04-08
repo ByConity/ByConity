@@ -14,6 +14,7 @@
  */
 
 #include <atomic>
+#include <memory>
 #include <brpc/stream.h>
 
 #include <IO/WriteBufferFromString.h>
@@ -77,7 +78,7 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
             brpc::StreamClose(stream_id);
             LOG_TRACE(log, "Stream {} for {} @ {} Close", stream_id, name, registry_address);
         }
-        if (!enable_receiver_metrics)
+        if (!enable_receiver_metrics || !query_exchange_log)
             return;
         QueryExchangeLogElement element;
         element.initial_query_id = initial_query_id;
@@ -86,16 +87,18 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
         element.event_time =
             std::chrono::duration_cast<std::chrono::seconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
+        element.recv_counts = receiver_metrics.recv_counts.get_value();
         element.recv_time_ms = receiver_metrics.recv_time_ms.get_value();
         element.register_time_ms = receiver_metrics.register_time_ms.get_value();
+        element.recv_rows = receiver_metrics.recv_rows.get_value();
         element.recv_bytes = receiver_metrics.recv_bytes.get_value();
+        element.recv_uncompressed_bytes = receiver_metrics.recv_uncompressed_bytes.get_value();
         element.dser_time_ms = receiver_metrics.dser_time_ms.get_value();
         element.finish_code = receiver_metrics.finish_code;
         element.is_modifier = receiver_metrics.is_modifier;
         element.message = receiver_metrics.message;
         element.type = "brpc_receiver@reg_addr_" + registry_address;
-        if (query_exchange_log)
-            query_exchange_log->add(element);
+        query_exchange_log->add(element);
     }
     catch (...)
     {
@@ -180,9 +183,9 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(timespec timeout_ts) noexcept
         return std::move(current_status);
     }
 
-    if (std::holds_alternative<Chunk>(data_packet))
+    if (std::holds_alternative<DataPacket>(data_packet))
     {
-        auto& received_chunk = std::get<Chunk>(data_packet);
+        auto & received_chunk = std::get<DataPacket>(data_packet).chunk;
         if (!received_chunk && !received_chunk.getChunkInfo())
         {
             LOG_TRACE(log, "{} finished ", getName());
@@ -195,21 +198,8 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(timespec timeout_ts) noexcept
             // Allocator (ref srcs/Common/Allocator.cpp) will add the momory of chunk to global memory tacker.
             // When this chunk is poped, we should add this memory to current query momory tacker, and subtract from global memory tacker.
             ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
-            if (enable_receiver_metrics)
-                receiver_metrics.recv_bytes << received_chunk.bytes();
         }
-        else
-        {
-            if (enable_receiver_metrics)
-            {
-                const ChunkInfoPtr & info = received_chunk.getChunkInfo();
-                auto iobuf_info = info ? std::dynamic_pointer_cast<const DeserializeBufTransform::IOBufChunkInfo>(info): nullptr;
-                if (iobuf_info)
-                    receiver_metrics.recv_bytes << iobuf_info->io_buf.length();
-            }
-        }
-        if (enable_receiver_metrics)
-            receiver_metrics.recv_time_ms << s.elapsedMilliseconds();
+        addToMetricsMaybe(s.elapsedMilliseconds(), 0, 1, received_chunk);
         return RecvDataPacket(std::move(received_chunk));
     }
     else

@@ -201,11 +201,11 @@ BlockIO MPPQueryCoordinator::execute()
 
     /// set progress_callback before send plan segment
     progress_manager.setProgressCallback([previous_progress_callback = query_context->getProgressCallback(),
-                                          process_list_elem_ptr = query_context->getProcessListElement()](const Progress & p) {
+                                          entry = query_context->getProcessListEntry()](const Progress & p) {
         if (previous_progress_callback)
             previous_progress_callback(p);
-        if (process_list_elem_ptr)
-            process_list_elem_ptr->updateProgressIn(p);
+        if (auto process_list_elem_ptr = entry.lock())
+            process_list_elem_ptr->get().updateProgressIn(p);
     });
 
     scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
