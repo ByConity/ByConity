@@ -275,13 +275,17 @@ inline String getIndexType(const String& type) {
     {
         return "PRIMARY KEY";
     }
+    else if (type.starts_with("UNIQUE"))
+    {
+        return "UNIQUE KEY";
+    }
 
     return "INDEX";
 }
 
 void ASTDeclareIndex::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
 {
-    if (index_type == "CLUSTERED_KEY" || index_type == "KEY_BTREE" || index_type == "PRIMARY_KEY_BTREE")
+    if (index_type == "CLUSTERED_KEY" || index_type == "KEY_BTREE" || index_type == "PRIMARY_KEY_BTREE" || index_type == "UNIQUE_BTREE")
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << getIndexType(index_type) << (s.hilite ? hilite_none : "");
         s.ostr << "(";

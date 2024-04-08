@@ -70,8 +70,9 @@ ASTPtr parseComment(IParser::Pos & pos, Expected & expected)
     ParserToken s_eq(TokenType::Equals);
     ParserStringLiteral string_literal_parser;
     ASTPtr comment;
+    s_comment.ignore(pos, expected);
     s_eq.ignore(pos, expected);
-    s_comment.ignore(pos, expected) && string_literal_parser.parse(pos, comment, expected);
+    string_literal_parser.parse(pos, comment, expected);
 
     return comment;
 }
@@ -364,6 +365,7 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     ParserKeyword s_bitengine_constraint("BITENGINE_CONSTRAINT");
     ParserKeyword s_projection("PROJECTION");
     ParserKeyword s_primary_key("PRIMARY KEY");
+    ParserKeyword s_unique_key("UNIQUE KEY");
 
     ParserIndexDeclaration index_p(dt);
     ParserConstraintDeclaration constraint_p(dt);
@@ -380,7 +382,7 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     {
         // mysql table_constraints
         if (s_index.checkWithoutMoving(pos, expected) || s_key.checkWithoutMoving(pos, expected) ||
-            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected))
+            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected) || s_unique_key.checkWithoutMoving(pos, expected))
         {
             MySQLParser::ParserDeclareIndex index_p_mysql;
             if (index_p_mysql.parse(pos, new_node, expected))
@@ -697,6 +699,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_collate("COLLATE");
     ParserKeyword s_default_collate("DEFAULT COLLATE");
     ParserKeyword s_auto_increment("AUTO_INCREMENT");
+    ParserKeyword s_row_format("ROW_FORMAT");
 
     ParserIdentifierWithOptionalParameters ident_with_optional_params_p(dt);
     ParserExpression expression_p(dt);
@@ -728,6 +731,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ASTPtr charset;
     ASTPtr collate;
     ASTPtr auto_increment;
+    ASTPtr row_format;
     bool broadcast = false;
 
     // optional engine
@@ -829,8 +833,8 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
         }
 
-        if (s_charset1.ignore(pos, expected) || s_default_charset1.ignore(pos, expected) || s_charset2.ignore(pos, expected)
-            || s_default_charset2.ignore(pos, expected))
+        if (!charset && (s_charset1.ignore(pos, expected) || s_default_charset1.ignore(pos, expected) || s_charset2.ignore(pos, expected)
+            || s_default_charset2.ignore(pos, expected)))
         {
             s_eq.ignore(pos, expected);
             if (expression_p.parse(pos, charset, expected))
@@ -839,7 +843,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
         }
 
-        if (s_collate.ignore(pos, expected) || s_default_collate.ignore(pos, expected))
+        if (!collate && (s_collate.ignore(pos, expected) || s_default_collate.ignore(pos, expected)))
         {
             s_eq.ignore(pos, expected);
             if (expression_p.parse(pos, collate, expected))
@@ -848,10 +852,19 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
         }
 
-        if (s_auto_increment.ignore(pos, expected))
+        if (!auto_increment && s_auto_increment.ignore(pos, expected))
         {
             s_eq.ignore(pos, expected);
             if (expression_p.parse(pos, auto_increment, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!row_format && s_row_format.ignore(pos, expected))
+        {
+            s_eq.ignore(pos, expected);
+            if (expression_p.parse(pos, row_format, expected))
                 continue;
             else
                 return false;
