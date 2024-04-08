@@ -69,6 +69,7 @@
 #include <Access/AccessRightsElement.h>
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/IDataType.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeLowCardinality.h>
@@ -576,6 +577,16 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         if (col_decl.type)
         {
             column_type = DataTypeFactory::instance().get(col_decl.type);
+
+            if (col_decl.unsigned_modifier)
+            {
+                if (!isInteger(column_type))
+                    throw Exception("Can only use SIGNED/UNSIGNED modifier with integer type", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
+                if (isSignedInteger(column_type) && *col_decl.unsigned_modifier)
+                    column_type = makeUnsigned(column_type);
+                if (isUnsignedInteger(column_type) && !(*col_decl.unsigned_modifier))
+                    column_type = makeSigned(column_type);
+            }
 
             if (col_decl.null_modifier)
             {

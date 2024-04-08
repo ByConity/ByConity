@@ -134,7 +134,18 @@ static void setNotNullModifier(ASTExpressionList * columns_definition, const Nam
         {
             auto declare_column = declare_column_ast->as<ASTColumnDeclaration>();
             if (declare_column->name == primary_key.name)
-                declare_column->null_modifier = false;
+            {
+               declare_column->null_modifier = false;
+               if (!declare_column->default_specifier.empty() && declare_column->default_expression)
+               {
+                auto expr = declare_column->default_expression->as<ASTLiteral>();
+                if (expr && expr->value.isNull())
+                {
+                    declare_column->default_expression = nullptr;
+                    declare_column->default_specifier = "";
+                }
+               }
+            }
         }
 
     }
@@ -256,14 +267,23 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, NameS
             auto default_id = column->default_expression->as<ASTIdentifier>();
             if (default_id && Poco::toUpper(default_id->name()) == "CURRENT_TIMESTAMP")
             {
-                column->default_expression = makeASTFunction("now");
+                column->default_expression = makeASTFunction("now64");
+            }
+
+            auto default_function = column->default_expression->as<ASTFunction>();
+            if (default_function && Poco::toUpper(default_function->name) == "CURRENT_TIMESTAMP")
+            {
+                default_function->name = "now64";
             }
         }
     }
 
     const auto & primary_keys_names_and_types = getNames(*primary_keys, context, columns);
     const auto & non_nullable_primary_keys_names_and_types = modifyPrimaryKeysToNonNullable(primary_keys_names_and_types, columns);
-    return std::make_tuple(non_nullable_primary_keys_names_and_types, getNames(*unique_keys, context, columns), getNames(*keys, context, columns), increment_columns, getNames(*cluster_keys, context, columns));
+
+    const auto & unique_keys_names_and_types = getNames(*unique_keys, context, columns);
+    const auto & non_nullable_unique_keys_names_and_types = modifyPrimaryKeysToNonNullable(unique_keys_names_and_types, columns);
+    return std::make_tuple(non_nullable_primary_keys_names_and_types, non_nullable_unique_keys_names_and_types, getNames(*keys, context, columns), increment_columns, getNames(*cluster_keys, context, columns));
 }
 
 static ASTPtr getPartitionPolicy(const NamesAndTypesList & primary_keys)
@@ -593,6 +613,7 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
         const auto & [primary_keys, unique_keys, keys, increment_columns, cluster_keys] = getKeys(create_defines->columns, create_defines->mysql_indices, context, columns_name_and_type);
 
         setNotNullModifier(create_defines->columns, primary_keys);
+        setNotNullModifier(create_defines->columns, unique_keys);
 
         /// The `partition by` expression must use primary keys, otherwise the primary keys will not be merge.
         if (ASTPtr partition_expression = getPartitionPolicy(primary_keys))
@@ -648,7 +669,6 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
             auto cluster_by_ast = std::make_shared<ASTClusterByElement>(mysql_storage->distributed_by->clone(), std::make_shared<ASTLiteral>(total_bucket_number), 0, false, false);
             storage->set(storage->cluster_by, cluster_by_ast);
         }
-
         if (has_unique_key)
             settings_ast->changes.push_back({"partition_level_unique_keys", 0});
         if (const auto mysql_settings = mysql_storage->settings->as<ASTSetQuery>())

@@ -558,7 +558,7 @@ void LocalServer::cleanup()
 
 static void showClientVersion()
 {
-    std::cout << DBMS_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << '\n';
+    std::cout << VERSION_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << '\n';
 }
 
 static std::string getHelpHeader()
