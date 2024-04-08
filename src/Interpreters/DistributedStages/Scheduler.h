@@ -111,7 +111,10 @@ public:
         , log(&Poco::Logger::get("Scheduler"))
     {
         cluster_nodes.rank_workers.emplace_back(local_address, NodeType::Local, "");
+        timespec query_expiration_ts = query_context->getQueryExpirationTimeStamp();
+        query_expiration_ms = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
     }
+
     virtual ~Scheduler() = default;
     // Pop tasks from queue and schedule them.
     void schedule();
@@ -174,6 +177,8 @@ protected:
 
     std::mutex node_selector_result_mutex;
     NodeSelector::SelectorResultMap node_selector_result;
+
+    size_t query_expiration_ms;
 };
 
 }

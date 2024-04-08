@@ -331,7 +331,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             progress.fromProto(status.metrics.final_progress);
             coordinator->onFinalProgress(request->segment_id(), request->parallel_index(), progress);
         }
-        if (!status.is_succeed && !status.is_cancelled)
+        if (!status.is_succeed)
         {
             if (coordinator)
                 coordinator->updateSegmentInstanceStatus(status);
