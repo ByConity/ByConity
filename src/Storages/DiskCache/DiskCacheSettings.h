@@ -28,6 +28,7 @@ struct DiskCacheSettings
     static constexpr auto root = "disk_cache_strategies";
     void loadFromConfig(const Poco::Util::AbstractConfiguration & conf, const std::string & disk_cache_name);
 
+    String disk_policy {"default"};
     size_t lru_max_size {std::numeric_limits<size_t>::max()};
     size_t lru_max_nums {std::numeric_limits<size_t>::max()};
     // When queue size exceed random drop ratio, start drop disk cache task, range from 0 - 100

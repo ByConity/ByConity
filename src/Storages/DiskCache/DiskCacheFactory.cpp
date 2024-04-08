@@ -33,8 +33,6 @@ void DiskCacheFactory::init(Context & context)
         throw Exception("Can't repeat register DiskCache!", DB::ErrorCodes::LOGICAL_ERROR);
     const auto & config = context.getConfigRef();
 
-    // TODO(jiashuo): suppport multi volume
-    VolumePtr disk_cache_volume = context.getStoragePolicy("default")->getVolume(0);
     auto throttler = context.getDiskCacheThrottler();
 
     /// init pool
@@ -51,6 +49,7 @@ void DiskCacheFactory::init(Context & context)
             DiskCacheSettings cache_settings;
             cache_settings.loadFromConfig(config, key);
             LOG_DEBUG(log, fmt::format("Creating DiskCache of {} kind by setting: {}", key, cache_settings.toString()));
+            VolumePtr disk_cache_volume = context.getStoragePolicy(cache_settings.disk_policy)->getVolumeByName("local", true);
             if (!cache_settings.meta_cache_size_ratio)
             {
                 auto disk_cache = std::make_shared<DiskCacheLRU>(
@@ -78,7 +77,7 @@ void DiskCacheFactory::init(Context & context)
     // create dafault cache for MergeTree Diskcache
     DiskCacheSettings cache_settings;
     cache_settings.loadFromConfig(config, "MergeTree");
-    
+    VolumePtr disk_cache_volume = context.getStoragePolicy(cache_settings.disk_policy)->getVolumeByName("local", true);
     if (caches.find(DiskCacheType::MergeTree) == caches.end())
     {
         LOG_TRACE(

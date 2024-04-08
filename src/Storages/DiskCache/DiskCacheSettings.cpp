@@ -16,12 +16,14 @@
 #include "DiskCacheSettings.h"
 
 #include <fmt/format.h>
+#include "Storages/DiskCache/DiskCacheLRU.h"
 
 namespace DB
 {
 void DiskCacheSettings::loadFromConfig(const Poco::Util::AbstractConfiguration & config, const std::string & disk_cache_name)
 {
     std::string config_prefix = fmt::format("{}.{}", root, disk_cache_name); // {root}.MergeTree
+    disk_policy = config.getString(config_prefix + ".disk_policy", "default");
     lru_max_nums = config.getUInt64(config_prefix + ".lru_max_object_num", std::numeric_limits<size_t>::max());
     // Todo: process the case which disk not have 2 TB free space
     lru_max_size = config.getUInt64(config_prefix + ".lru_max_size", static_cast<uint64_t>(2) * 1024 * 1024 * 1024 * 1024);
@@ -53,6 +55,7 @@ std::string DiskCacheSettings::toString() const
     {
     return fmt::format(
         R"({{
+            "disk_policy": {},
             "lru_max_size": {},
             "random_drop_threshold": {},
             "mapping_bucket_size": {},
@@ -71,6 +74,7 @@ std::string DiskCacheSettings::toString() const
             "meta_cache_size_ratio": "{}",
             "meta_cache_nums_ratio": "{}"
         }})",
+        disk_policy,
         lru_max_size,
         random_drop_threshold,
         mapping_bucket_size,
