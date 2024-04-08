@@ -163,6 +163,8 @@ public:
     MM(Offset, offset) \
     MM(FinishSorting, finish_sorting) \
     MM(TotalsHaving, totals_having) \
+    MM(OutfileWrite, outfile_write) \
+    MM(OutfileFinish, outfile_finish) \
     MM(MultiJoin, multi_join)
 
 // macro helpers to convert MM(x, y) to M(x)

@@ -28,16 +28,20 @@ public:
     };
 
     explicit OutfileTarget(
-        const ContextMutablePtr & context_,
+        ContextMutablePtr context_,
         std::string uri,
         std::string format = "",
         std::string compression_method_str = "",
         int compression_level = 1);
 
+    void updateBaseFilePathIfDistributedOutput();
+
     void getRawBuffer();
     /// Generate desirable buffer according to schema and file out path
     /// New write buffer is owned by this object
     std::shared_ptr<WriteBuffer> getOutfileBuffer(bool allow_into_local = false);
+
+    String & getFormat() { return format; }
 
     // Used to update buffer when export into multiple files(directory).
     // It constructs new buffer in-place, and the shared_ptr of first buffer will be keep to make sure
@@ -62,14 +66,31 @@ public:
         const ASTQueryWithOutput * query_with_output, String & outfile_compression_method_str, UInt64 & outfile_compression_level);
 
     // return true if it can export on server with tcp
-    static bool checkOutfileWithTcpOnServer(const ContextMutablePtr & context);
+    static bool checkOutfileWithTcpOnServer(ContextMutablePtr & context);
+
+    void toProto(Protos::OutfileWriteStep::OutfileTarget & proto, bool for_hash_equals = false) const;
+
+    static std::shared_ptr<OutfileTarget> fromProto(const Protos::OutfileWriteStep::OutfileTarget & proto, ContextPtr context);
+
+    String toString()
+    {
+        std::stringstream stream;
+        stream << "uri: " << request_uri << "\\n";
+        stream << "format: " << format << "\\n";
+        stream << "compression_method: " << compression_method_str << "\\n";
+        stream << "compression_level: " << compression_level << "\\n";
+        return stream.str();
+    }
 
 private:
     ContextMutablePtr context;
 
     OutType out_type{NO_OUT_FILE};
     // for serialize and deserialize
-    std::string request_uri;
+    const std::string request_uri;
+    // if enable distributed output, to avoid writing to the same file, we add ip and port to request_uri
+    std::string converted_uri;
+    // add file format and compression suffix to complete a real outfile path
     std::string real_outfile_path;
 
     String scheme;     // What the protocol's scheme is in remote output file.

@@ -139,6 +139,11 @@ PlanNodePtr UnifyNullableVisitor::visitTableWriteNode(TableWriteNode & node, Con
     return visitPlanNode(node, context);
 }
 
+PlanNodePtr UnifyNullableVisitor::visitOutfileWriteNode(OutfileWriteNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
 PlanNodePtr UnifyNullableVisitor::visitApplyNode(ApplyNode & node, ContextMutablePtr & context)
 {
     return visitPlanNode(node, context);
@@ -225,6 +230,11 @@ PlanNodePtr UnifyNullableVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & n
 }
 
 PlanNodePtr UnifyNullableVisitor::visitTableFinishNode(TableFinishNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitOutfileFinishNode(OutfileFinishNode & node, ContextMutablePtr & context)
 {
     return visitPlanNode(node, context);
 }

@@ -290,7 +290,7 @@ void SelectStreamFactory::createForShard(
     const auto & settings = context->getSettingsRef();
 
     /**
-        prefer_localost_replica in cnch is useless and is buggy.
+        prefer_localhost_replica in cnch is useless and is buggy.
         and in worker we query from remote to reuse send WorkerResource flow to send/load datapart
     */
     if (main_table && settings.prefer_localhost_replica && shard_info.isLocal() && (context->getServerType() != ServerType::cnch_worker))

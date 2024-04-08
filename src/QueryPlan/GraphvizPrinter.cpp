@@ -38,6 +38,8 @@
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
+#include <QueryPlan/OutfileFinishStep.h>
+#include <QueryPlan/OutfileWriteStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
 #include <QueryPlan/PlanPrinter.h>
@@ -106,6 +108,8 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::ExplainAnalyze, "orange"},
     {IQueryPlanStep::Type::TopNFiltering, "fuchsia"},
     {IQueryPlanStep::Type::MarkDistinct, "violet"},
+    {IQueryPlanStep::Type::OutfileWrite, "green"},
+    {IQueryPlanStep::Type::OutfileFinish, "greenyellow"},
 };
 
 static auto escapeSpecialCharacters = [](String content) {
@@ -300,6 +304,24 @@ Void PlanNodePrinter::visitTableFinishNode(TableFinishNode & node, PrinterContex
     String color{NODE_COLORS[step.getType()]};
     String label{"TableFinishNode"};
     printNode(node, label, StepPrinter::printTableFinishStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitOutfileWriteNode(OutfileWriteNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"OutfileWriteNode"};
+    printNode(node, label, StepPrinter::printOutfileWriteStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitOutfileFinishNode(OutfileFinishNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"OutfileFinishNode"};
+    printNode(node, label, StepPrinter::printOutfileFinishStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -828,6 +850,26 @@ Void PlanSegmentNodePrinter::visitTableFinishNode(QueryPlan::Node * node, Printe
     String label{"TableFinishNode"};
     String color{NODE_COLORS[step_ptr->getType()]};
     printNode(node, label, StepPrinter::printTableFinishStep(step), color, context);
+    return Void{};
+}
+
+Void PlanSegmentNodePrinter::visitOutfileWriteNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const OutfileWriteStep &>(*step_ptr);
+    String label{"OutfileWriteNode"};
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printOutfileWriteStep(step), color, context);
+    return Void{};
+}
+
+Void PlanSegmentNodePrinter::visitOutfileFinishNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const OutfileFinishStep &>(*step_ptr);
+    String label{"OutfileFinishNode"};
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printOutfileFinishStep(step), color, context);
     return Void{};
 }
 
@@ -1777,6 +1819,24 @@ String StepPrinter::printTableFinishStep(const TableFinishStep & step)
         details << column.type->getName() << "\\n";
     }
     return details.str();
+}
+
+String StepPrinter::printOutfileWriteStep(const OutfileWriteStep & step)
+{
+    String label{"OutfileWriteNode"};
+
+    std::stringstream details;
+    details << "Outfile \\n";
+    details << step.outfile_target->toString() << "\\n";
+
+    return details.str();
+}
+
+String StepPrinter::printOutfileFinishStep(const OutfileFinishStep &)
+{
+    String label{"OutfileFinishNode"};
+
+    return "Outfile Finish \\n";
 }
 
 String StepPrinter::printTableScanStep(const TableScanStep & step)

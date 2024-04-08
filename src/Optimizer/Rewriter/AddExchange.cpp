@@ -316,6 +316,16 @@ ExchangeResult ExchangeVisitor::visitTableFinishNode(TableFinishNode & node, Exc
     return enforceNodeAndStream(node, cxt);
 }
 
+ExchangeResult ExchangeVisitor::visitOutfileWriteNode(OutfileWriteNode & node, ExchangeContext & cxt)
+{
+    return enforceNodeAndStream(node, cxt);
+}
+
+ExchangeResult ExchangeVisitor::visitOutfileFinishNode(OutfileFinishNode & node, ExchangeContext & cxt)
+{
+    return enforceNodeAndStream(node, cxt);
+}
+
 ExchangeResult ExchangeVisitor::visitChild(PlanNodePtr node, ExchangeContext & cxt)
 {
     return VisitorUtil::accept(node, *this, cxt);

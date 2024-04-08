@@ -216,6 +216,20 @@ message TableFinishStep {
   optional AST query = 4;
 }
 
+message OutfileWriteStep {
+  message OutfileTarget {
+    required string request_uri = 1;
+    required string format = 2;
+    required string compression_method_str = 3;
+    required uint64 compression_level = 4;
+  }
+
+  required ITransformingStep query_plan_base = 1;
+  required OutfileTarget outfile_target = 2;
+}
+
+message OutfileFinishStep {}
+
 message FilterStep {
   required ITransformingStep query_plan_base = 1;
   required AST filter = 2;
@@ -417,6 +431,8 @@ message QueryPlanStep {
     IntersectOrExceptStep intersect_or_except_step = 37;
     BufferStep buffer_step = 38;
     ApplyStep apply_step = 39;
+    OutfileWriteStep outfile_write_step = 40;
+    OutfileFinishStep outfile_finish_step = 41;
     ExplainAnalyzeStep explain_analyze_step = 44;
     TotalsHavingStep totals_having_step = 50;
     MultiJoinStep multi_join_step = 55;

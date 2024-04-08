@@ -706,20 +706,20 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
 
 BlockIO InterpreterExplainQuery::explainAnalyze()
 {
-    auto contxt = getContext();
-    auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query, contxt, options);
+    auto context = getContext();
+    auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
     return interpreter->execute();
 }
 
 void InterpreterExplainQuery::explainPlanWithOptimizer(
-    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & /*single_line*/)
+    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & context_ptr, bool & /*single_line*/)
 {
     auto settings = checkAndGetSettings<QueryPlanSettings>(explain_ast.getSettings());
-    CardinalityEstimator::estimate(plan, contextptr);
-    PlanCostMap costs = CostCalculator::calculate(plan, *contextptr);
+    CardinalityEstimator::estimate(plan, context_ptr);
+    PlanCostMap costs = CostCalculator::calculate(plan, *context_ptr);
     if (settings.json)
     {
-        auto plan_cost = CostCalculator::calculatePlanCost(plan, *contextptr);
+        auto plan_cost = CostCalculator::calculatePlanCost(plan, *context_ptr);
         buffer << PlanPrinter::jsonLogicalPlan(plan, settings.stats, true, plan_cost);
     }
     else if (settings.pb_json)
@@ -736,7 +736,7 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
         buffer << json_msg;
     }
     else
-        buffer << PlanPrinter::textLogicalPlan(plan, contextptr, settings.stats, settings.verbose, costs);
+        buffer << PlanPrinter::textLogicalPlan(plan, context_ptr, settings.stats, settings.verbose, costs);
 }
 
 void InterpreterExplainQuery::explainDistributedWithOptimizer(
@@ -902,20 +902,19 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)
     return std::make_shared<OneBlockInputStream>(block);
 }
 
-void InterpreterExplainQuery::explainPipelineWithOptimizer(
-    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
+void InterpreterExplainQuery::explainPipelineWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & context_ptr)
 {
     auto settings = checkAndGetSettings<QueryPipelineSettings>(explain_ast.getSettings());
     QueryPlan query_plan = PlanNodeToNodeVisitor::convert(plan);
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
 
-    ClusterInfoContext cluster_info_context{.query_plan = query_plan, .context = contextptr, .plan_segment_tree = plan_segment_tree};
+    ClusterInfoContext cluster_info_context{.query_plan = query_plan, .context = context_ptr, .plan_segment_tree = plan_segment_tree};
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(plan, cluster_info_context);
 
     // query_plan.allocateLocalTable(contextptr);
     PlanSegmentSplitter::split(query_plan, plan_segment_context);
     auto & plan_segments = plan_segment_tree->getNodes();
-    GraphvizPrinter::printPlanSegment(plan_segment_tree, contextptr);
+    GraphvizPrinter::printPlanSegment(plan_segment_tree, context_ptr);
 
     //    PlanSegmentsStatusPtr scheduler_status;
     //    if (plan_segment_tree->getNodes().size() > 1)
@@ -936,13 +935,13 @@ void InterpreterExplainQuery::explainPipelineWithOptimizer(
     for (auto it = plan_segments.begin(); it != plan_segments.end(); ++it)
     {
         auto * segment = it->getPlanSegment();
-        segment->update(contextptr);
+        segment->update(context_ptr);
         buffer << "\nSegment[ " << std::to_string(segment->getPlanSegmentId()) <<" ] :\n" ;
         auto & segment_plan = segment->getQueryPlan();
         auto pipeline = segment_plan.buildQueryPipeline(
-            QueryPlanOptimizationSettings::fromContext(contextptr),
+            QueryPlanOptimizationSettings::fromContext(context_ptr),
             BuildQueryPipelineSettings::fromPlanSegment(
-                segment, {.execution_address = segment->getCoordinatorAddress()}, contextptr, true));
+                segment, {.execution_address = segment->getCoordinatorAddress()}, context_ptr, true));
         if (pipeline)
         {
             if (settings.graph)

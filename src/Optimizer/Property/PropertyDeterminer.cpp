@@ -542,4 +542,18 @@ PropertySets DeterminerVisitor::visitTableFinishStep(const TableFinishStep &, De
     node.setComponent(Partitioning::Component::WORKER);
     return {{Property{node}}};
 }
+
+PropertySets DeterminerVisitor::visitOutfileWriteStep(const OutfileWriteStep &, DeterminerContext &)
+{
+    auto node = Partitioning{Partitioning::Handle::FIXED_ARBITRARY};
+    node.setComponent(Partitioning::Component::WORKER);
+    return {{Property{node}}};
+}
+
+PropertySets DeterminerVisitor::visitOutfileFinishStep(const OutfileFinishStep &, DeterminerContext &)
+{
+    auto node = Partitioning{Partitioning::Handle::SINGLE};
+    node.setComponent(Partitioning::Component::WORKER);
+    return {{Property{node}}};
+}
 }

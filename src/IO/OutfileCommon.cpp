@@ -39,7 +39,7 @@ namespace ErrorCodes
 constexpr UInt64 DEFAULT_SPLIT_FILE_SIZE_IN_MB = 256UL;  // Default threshold size when splitting out file
 constexpr UInt64 MAX_SPLIT_FILE_SIZE_IN_MB = 3096UL; // Upper bound of the threshold for split data
 
-size_t calcFileSizeLimit(ContextMutablePtr context)
+size_t calcFileSizeLimit(ContextMutablePtr & context)
 {
     size_t split_file_size_in_mb = context->getSettingsRef().split_file_size_in_mb;
     size_t split_file_limit = split_file_size_in_mb * 1024 * 1024;
@@ -73,8 +73,33 @@ String getFullOutPath(String & format_name, String & path, int serial_no, Compre
     return out_path;
 }
 
+void OutfileTarget::updateBaseFilePathIfDistributedOutput()
+{
+    if (context->getSettingsRef().enable_distributed_output)
+    {
+        /// each worker have to use different file name if concurrent writing
+        auto file_prefix = getIPOrFQDNOrHostName() + "_" + std::to_string(context->getTCPPort()) + "_";
+        std::replace(file_prefix.begin(), file_prefix.end(), ':', '-');
+
+        Poco::Path file_path(request_uri);
+        if (file_path.isFile())
+        {
+            String directory_path = request_uri.substr(0, request_uri.find_last_of('/'));
+            converted_uri = std::filesystem::path(directory_path) / (file_prefix + file_path.getFileName());
+        }
+        else
+        {
+            converted_uri = std::filesystem::path(request_uri) / file_prefix;
+        }
+    }
+    else
+    {
+        converted_uri = request_uri;
+    }
+}
+
 OutfileTarget::OutfileTarget(
-    const ContextMutablePtr & context_, std::string uri_, std::string format_, std::string compression_method_str_, int compression_level_)
+    ContextMutablePtr context_, std::string uri_, std::string format_, std::string compression_method_str_, int compression_level_)
     : context(context_)
     , request_uri(uri_)
     , format(format_)
@@ -92,18 +117,19 @@ OutfileTarget::OutfileTarget(
     else if (scheme == "lasfs")
         compression_method = CompressionMethod::None;
 
+    updateBaseFilePathIfDistributedOutput();
+    // we have to use raw request uri to judge file or directory
     if (Poco::Path(request_uri).isFile())
     {
         out_type = OutType::SINGLE_OUT_FILE;
-        real_outfile_path = request_uri;
+        real_outfile_path = converted_uri;
     }
     else
     {
         out_type = OutType::MULTI_OUT_FILE;
         split_file_limit = calcFileSizeLimit(context);
-
         /// the first real out_file_path;
-        real_outfile_path = getFullOutPath(format, request_uri, serial_no, compression_method);
+        real_outfile_path = getFullOutPath(format, converted_uri, serial_no, compression_method);
     }
 }
 
@@ -285,7 +311,7 @@ void OutfileTarget::updateOutPathIfNeeded()
     {
         ++serial_no;
         current_bytes = 0;
-        real_outfile_path = getFullOutPath(format, request_uri, serial_no, compression_method);
+        real_outfile_path = getFullOutPath(format, converted_uri, serial_no, compression_method);
     }
 }
 
@@ -309,10 +335,30 @@ void OutfileTarget::setOutfileCompression(
     }
 }
 
-bool OutfileTarget::checkOutfileWithTcpOnServer(const ContextMutablePtr & context)
+// If only outfile_in_server_with_tcp is specified, outfile is executed in server side;
+// If only enable_distributed_output is specified, worker will be considered as server role,
+// and outfile is executed in worker side.
+// If both is specified, outfile is executed only in worker side.
+bool OutfileTarget::checkOutfileWithTcpOnServer(ContextMutablePtr & context)
 {
-    return context->getSettingsRef().outfile_in_server_with_tcp
-        && context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY
-        && context->getServerType() == ServerType::cnch_server;
+    return (context->getServerType() == ServerType::cnch_server
+            && context->getSettingsRef().outfile_in_server_with_tcp
+            && !context->getSettingsRef().enable_distributed_output
+            && context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+        || (context->getSettingsRef().enable_distributed_output && context->getServerType() == ServerType::cnch_worker);
+}
+
+void OutfileTarget::toProto(Protos::OutfileWriteStep::OutfileTarget & proto, bool) const
+{
+    proto.set_request_uri(request_uri);
+    proto.set_format(format);
+    proto.set_compression_method_str(compression_method_str);
+    proto.set_compression_level(compression_level);
+}
+
+std::shared_ptr<OutfileTarget> OutfileTarget::fromProto(const Protos::OutfileWriteStep::OutfileTarget & proto, ContextPtr context)
+{
+    return std::make_shared<OutfileTarget>(
+        Context::createCopy(context), proto.request_uri(), proto.format(), proto.compression_method_str(), proto.compression_level());
 }
 }
