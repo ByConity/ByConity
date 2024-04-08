@@ -197,9 +197,9 @@ public:
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts);
 
-    void createUDF(const String & db, const String & name, const String & create_query);
+    void createUDF(const String & prefix_name, const String & name, const String & create_query);
 
-    void dropUDF(const String & db, const String & name);
+    void dropUDF(const String & resolved_name);
 
     void detachTable(const String & db, const String & name, const TxnTimestamp & ts);
 
@@ -467,6 +467,17 @@ public:
     };
 
     UndoBufferIterator getUndoBufferIterator() const;
+
+
+    /**
+     * @brief Try to create table meta proactively.
+     *        This function is used to help MV to get
+     *        table meta without waiting for lazy loading.
+     *
+     * @param uuid Table uuid.
+     * @param host_port Host server for the table.
+     */
+    void notifyTableCreated(const UUID & uuid, const HostWithPorts & host_port) noexcept;
 
     /// get transaction records, if the records exists, we can check with the transaction coordinator to detect zombie record.
     /// the transaction record will be cleared only after all intents have been cleared and set commit time for all parts.

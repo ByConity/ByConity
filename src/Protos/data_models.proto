@@ -581,16 +581,14 @@ enum UdfLanguageType { SQL = 1; PYTHON = 2; }
 
 enum UdfTypeEnum { SCALAR = 1; UDAF = 2; UDTF = 3; WINDOW_UDF = 4; }
 
-message DataModelUDF {
-  optional string database = 1;
-  required string function_name = 2;
-  optional string function_definition = 3; // create query
-  optional string argument_name_and_type = 4;
-  optional string return_data_type = 5;
-  optional UdfLanguageType function_language = 6;
-  optional UdfTypeEnum udf_type = 7; // scalar, UDAF, UDTF, Window UDF.
-  optional int64 udf_flags = 8;      // bitmap of enum UDFFlags
-  optional uint64 version = 9;
+message DataModelUDF
+{
+    optional string prefix_name = 1;
+    required string function_name = 2;
+    optional string function_definition = 3;
+    optional string return_data_type = 4;
+    optional UdfLanguageType function_language = 5;
+    optional UdfTypeEnum udf_type = 6;
 }
 
 message MaterializedMySQLManagerMetadata {

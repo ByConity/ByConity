@@ -150,7 +150,7 @@ PartCacheManager::~PartCacheManager()
     }
 }
 
-void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairInt64 & topology_version)
+void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairInt64 & topology_version, const bool on_table_creation)
 {
     /* Fetches partitions from metastore if storage is not present in active_tables*/
 
@@ -232,12 +232,17 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
                     storage.getDatabaseName(),
                     storage.getTableName(),
                     UUIDHelpers::UUIDToString(storage.getStorageUUID()),
-                    meta_lock_it->second);
+                    meta_lock_it->second,
+                    on_table_creation);
             }
             else
             {
                 meta_ptr = std::make_shared<TableMetaEntry>(
-                    storage.getDatabaseName(), storage.getTableName(), UUIDHelpers::UUIDToString(storage.getStorageUUID()));
+                    storage.getDatabaseName(),
+                    storage.getTableName(),
+                    UUIDHelpers::UUIDToString(storage.getStorageUUID()),
+                    nullptr,
+                    on_table_creation);
                 /// insert the new meta lock into lock container.
                 meta_lock_container.emplace(uuid, meta_ptr->meta_mutex);
             }

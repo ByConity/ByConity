@@ -1752,6 +1752,36 @@ void CnchServerServiceImpl::getLastModificationTimeHints(
     });
 }
 
+void CnchServerServiceImpl::notifyTableCreated(
+    google::protobuf::RpcController *,
+    const Protos::notifyTableCreatedReq * request,
+    Protos::notifyTableCreatedResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            if (auto pcm = gc->getPartCacheManager())
+            {
+                UUID uuid = RPCHelpers::createUUID(request->storage_uuid());
+                auto storage = gc->getCnchCatalog()->getTableByUUID(*gc, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+                if (storage)
+                {
+                    auto host_port = gc->getCnchTopologyMaster()->getTargetServer(
+                        UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
+                    pcm->mayUpdateTableMeta(*storage, host_port.topology_version, true);
+                }
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
 void CnchServerServiceImpl::notifyAccessEntityChange(
     google::protobuf::RpcController *,
     const Protos::notifyAccessEntityChangeReq * request,
