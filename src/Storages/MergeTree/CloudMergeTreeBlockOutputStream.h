@@ -38,7 +38,6 @@ public:
         MergeTreeMetaBase & storage_,
         StorageMetadataPtr metadata_snapshot_,
         ContextPtr context_,
-        bool to_staging_area_ = false,
         ASTPtr overwrite_partition_ = nullptr);
 
     Block getHeader() const override;
@@ -60,11 +59,12 @@ private:
 
     void initOverwritePartitionPruner();
 
+    void checkAndInit();
+
     MergeTreeMetaBase & storage;
     Poco::Logger * log;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr context;
-    bool to_staging_area;
 
     MergeTreeDataWriter writer;
     CnchDataWriter cnch_writer;
@@ -77,6 +77,13 @@ private:
 
     ASTPtr overwrite_partition;
     NameSet overwrite_partition_ids;
+
+    struct DedupParameters
+    {
+        bool enable_staging_area = false;
+        bool enable_append_mode = false; /// If it's true, we'll not dedup with existing parts, but it will dedup in block self.
+    };
+    DedupParameters dedup_parameters;
 };
 
 }

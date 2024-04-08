@@ -166,8 +166,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
             if (cnch_target_table && getContext()->getServerType() == ServerType::cnch_server)
             {
                 auto target_metadata_snapshot = cnch_target_table->getInMemoryMetadataPtr();
-                bool enable_staging_area = target_metadata_snapshot->hasUniqueKey() && bool(getContext()->getSettingsRef().enable_staging_area_for_write);
-                out = std::make_shared<CloudMergeTreeBlockOutputStream>(*cnch_target_table, target_metadata_snapshot, insert_context, enable_staging_area);
+                out = std::make_shared<CloudMergeTreeBlockOutputStream>(*cnch_target_table, target_metadata_snapshot, insert_context);
                 output_header = target_metadata_snapshot->getSampleBlockNonMaterialized(true);
             }
             else

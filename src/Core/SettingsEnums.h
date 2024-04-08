@@ -363,6 +363,7 @@ enum class DedupKeyMode
 {
     REPLACE,
     THROW,
+    APPEND,
 };
 
 DECLARE_SETTING_ENUM(DedupKeyMode)

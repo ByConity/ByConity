@@ -18,7 +18,7 @@ SYSTEM STOP DEDUP WORKER unique_with_exception_on_unique_key_duplication;
 INSERT INTO unique_with_exception_on_unique_key_duplication VALUES ('2020-10-29 23:40:00', 10001, 'Beijing', '男装', 5, 500), ('2020-10-29 23:40:00', 10002, 'Beijing', '男装', 2, 200);
 
 INSERT INTO unique_with_exception_on_unique_key_duplication Format Values SETTINGS enable_staging_area_for_write = 1, dedup_key_mode = 'throw'
-('2020-10-29 23:40:00', 10001, 'Beijing', '男装', 4, 500); -- { serverError 344 }
+('2020-10-29 23:40:00', 10001, 'Beijing', '男装', 4, 500); -- { serverError 36 }
 
 INSERT INTO unique_with_exception_on_unique_key_duplication Format Values SETTINGS enable_staging_area_for_write = 1
 ('2020-10-29 23:40:00', 10003, 'Beijing', '男装', 1, 100);

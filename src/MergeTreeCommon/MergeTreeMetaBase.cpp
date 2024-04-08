@@ -1849,6 +1849,15 @@ void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns,
     }
 }
 
+bool MergeTreeMetaBase::commitTxnFromWorkerSide(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
+{
+    if (!metadata_snapshot->hasUniqueKey())
+        return false;
+    bool enable_staging_area = query_context->getSettingsRef().enable_staging_area_for_write || getSettings()->cloud_enable_staging_area;
+    bool enable_append_mode = query_context->getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
+    return !enable_append_mode && !enable_staging_area;
+}
+
 ASTPtr MergeTreeMetaBase::applyFilter(
     ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr storage_statistics) const
 {
