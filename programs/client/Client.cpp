@@ -2476,7 +2476,7 @@ private:
                     |___/
             )" << std::endl;
 
-        std::cout << DBMS_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
+        std::cout << VERSION_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
     }
 
     static void clearTerminal()
