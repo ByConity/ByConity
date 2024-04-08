@@ -35,7 +35,6 @@ SETTINGS load_balancing = 'random', distributed_aggregation_memory_efficient = 0
 
     const char * begin = create_query.data();
     const char * end = create_query.data() + create_query.size();
-    const std::string & description = "CreateCloudTable";
     ParserQueryWithOutput parser{end};
     ASTPtr ast = parseQuery(parser, begin, end, "CreateCloudTable", 0, 0);
 }
