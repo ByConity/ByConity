@@ -466,27 +466,6 @@ static void logQuery(ContextPtr context, const QueryLogElement & log_element)
         cnch_query_log->add(log_element);
 }
 
-/// Call this inside catch block.
-static void setExceptionStackTrace(QueryLogElement & elem)
-{
-    /// Disable memory tracker for stack trace.
-    /// Because if exception is "Memory limit (for query) exceed", then we probably can't allocate another one string.
-    MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
-
-    try
-    {
-        throw;
-    }
-    catch (const std::exception & e)
-    {
-        elem.stack_trace = getExceptionStackTraceString(e);
-    }
-    catch (...)
-    {
-    }
-}
-
-
 /// Log exception (with query info) into text log (not into system table).
 static void logException(ContextPtr context, QueryLogElement & elem)
 {
