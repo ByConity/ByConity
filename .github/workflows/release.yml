@@ -67,6 +67,7 @@ jobs:
         run: |
           docker tag byconity/byconity:${{ github.ref_name }} byconity/byconity:stable
           docker push byconity/byconity:stable
+          docker image rm -f byconity/byconity:stable
       - name: Cleanup Data.
         if: always()
         run: |
@@ -74,3 +75,6 @@ jobs:
           docker volume rm ${SRC_VOL}
           docker volume rm ${OUTPUT_VOL}
           docker volume prune -f
+          docker image rm -f byconity/byconity:${{ github.ref_name }}
+          docker container prune -f
+          docker network prune -f
