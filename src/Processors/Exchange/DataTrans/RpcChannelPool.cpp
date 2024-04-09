@@ -58,7 +58,7 @@ std::shared_ptr<RpcClient> RpcChannelPool::getClient(const String & host_port, c
         auto & index = pool.counter;
         auto & pool_clients = pool.clients;
         index = (++index) % pool_options.max_connections;
-        if (connection_reuse && pool_clients.at(index) != nullptr)
+        if (connection_reuse && pool_clients.at(index) != nullptr && pool_clients.at(index)->ok())
         {
             return pool_clients.at(index);
         }
