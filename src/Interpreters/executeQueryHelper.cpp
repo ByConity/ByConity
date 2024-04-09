@@ -20,10 +20,12 @@
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
 
-#include <common/logger_useful.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/RemoteBlockInputStream.h>
+#include <Interpreters/QueryLog.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
+#include <common/logger_useful.h>
+
 
 namespace DB
 {
@@ -175,4 +177,23 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     };
 }
 
+/// Call this inside catch block.
+void setExceptionStackTrace(QueryLogElement & elem)
+{
+    /// Disable memory tracker for stack trace.
+    /// Because if exception is "Memory limit (for query) exceed", then we probably can't allocate another one string.
+    MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
+
+    try
+    {
+        throw;
+    }
+    catch (const std::exception & e)
+    {
+        elem.stack_trace = getExceptionStackTraceString(e);
+    }
+    catch (...)
+    {
+    }
+}
 }

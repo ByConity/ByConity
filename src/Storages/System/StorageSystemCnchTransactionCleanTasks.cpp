@@ -1,8 +1,8 @@
 #include <mutex>
-#include <Storages/System/StorageSystemCnchTransactionCleanTasks.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
+#include <Storages/System/StorageSystemCnchTransactionCleanTasks.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
 namespace DB
@@ -34,12 +34,11 @@ void StorageSystemCnchTransactionCleanTasks::fillData(MutableColumns& res_column
         for (const auto& [txn_id, task] : tasks)
         {
             int i = 0;
-            std::lock_guard task_lock(task.mutex);
             res_columns[i++]->insert(static_cast<UInt64>(task.txn_id));
             res_columns[i++]->insert(txnStatusToString(task.txn_status));
             res_columns[i++]->insert(static_cast<Int32>(task.priority));
             res_columns[i++]->insert(task.elapsed());
-            res_columns[i++]->insert(task.undo_size);
+            res_columns[i++]->insert(task.undo_size.load(std::memory_order_relaxed));
         }
     }
 }

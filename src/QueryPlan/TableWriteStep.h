@@ -1,7 +1,7 @@
 #pragma once
+#include <Parsers/IAST_fwd.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/ITransformingStep.h>
-#include "Parsers/IAST_fwd.h"
 
 namespace DB
 {

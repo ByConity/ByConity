@@ -151,6 +151,8 @@ void BrpcExchangeReceiverRegistryService::registerSenderToProxy(
 {
     try
     {
+        if (read_from_disk)
+            mgr->cancelReadTask(sender_proxy->getDataKey());
         auto real_sender = std::dynamic_pointer_cast<IBroadcastSender>(std::make_shared<BrpcRemoteBroadcastSender>(
             sender_proxy->getDataKey(), sender_stream_id, sender_proxy->getContext(), sender_proxy->getHeader()));
         sender_proxy->becomeRealSender(std::move(real_sender));

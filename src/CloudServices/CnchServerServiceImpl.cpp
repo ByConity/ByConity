@@ -1226,6 +1226,44 @@ void CnchServerServiceImpl::redirectCommitParts(
     handleRedirectCommitRequest(controller, request, response, done, false);
 }
 
+void CnchServerServiceImpl::redirectClearParts(
+    [[maybe_unused]] google::protobuf::RpcController * controller,
+    const Protos::RedirectClearPartsReq * request,
+    Protos::RedirectClearPartsResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done, response, [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+            try
+            {
+                String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
+                StoragePtr storage
+                    = global_context->getCnchCatalog()->tryGetTableByUUID(*global_context, table_uuid, TxnTimestamp::maxTS());
+
+                if (!storage)
+                    throw Exception("Table with uuid " + table_uuid + " not found.", ErrorCodes::UNKNOWN_TABLE);
+
+                auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+                if (!cnch)
+                    throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
+
+                auto parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->parts(), nullptr);
+                auto staged_parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->staged_parts(), nullptr);
+                DeleteBitmapMetaPtrVector delete_bitmaps;
+                delete_bitmaps.reserve(request->delete_bitmaps_size());
+                for (const auto & bitmap_model : request->delete_bitmaps())
+                    delete_bitmaps.emplace_back(createFromModel(*cnch, bitmap_model));
+                global_context->getCnchCatalog()->clearParts(storage, Catalog::CommitItems{parts, delete_bitmaps, staged_parts});
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        });
+}
+
 void CnchServerServiceImpl::redirectSetCommitTime(
     [[maybe_unused]] google::protobuf::RpcController* controller,
     [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,

@@ -100,7 +100,7 @@ void TableFinishTransform::consume(Chunk chunk)
 void TableFinishTransform::onFinish()
 {
     if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
-        cnch_table && cnch_table->getInMemoryMetadataPtr()->hasUniqueKey() && !context->getSettingsRef().enable_staging_area_for_write)
+        cnch_table && cnch_table->commitTxnFromWorkerSide(cnch_table->getInMemoryMetadataPtr(), context))
     {
         /// for unique table, insert select|infile is committed from worker side
         /// TODO: should also commit in server side

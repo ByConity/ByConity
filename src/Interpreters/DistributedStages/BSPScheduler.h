@@ -1,9 +1,10 @@
+#include <atomic>
 #include <cstddef>
 #include <unordered_map>
-#include <atomic>
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
-#include "Interpreters/DistributedStages/PlanSegmentInstance.h"
 
 namespace DB
 {
@@ -50,6 +51,8 @@ public:
     /// retry task if possible, returns whether retry is successful or not
     bool retryTaskIfPossible(size_t segment_id, UInt64 parallel_index);
 
+    const AddressInfo & getSegmentParallelLocation(PlanSegmentInstanceId instance_id);
+
 private:
     std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
     void triggerDispatch(const std::vector<WorkerNode> & available_workers);
@@ -67,6 +70,8 @@ private:
     std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> failed_workers;
     // segment id -> [segment instance, node]
     std::unordered_map<size_t, std::unordered_map<UInt64, AddressInfo>> segment_parallel_locations;
+    std::unordered_map<PlanSegmentInstanceId, size_t> segment_instance_retry_cnt;
+
     PendingTaskIntances pending_task_instances;
     // segment task instance -> <index, total> count in this worker
     std::unordered_map<SegmentTaskInstance, std::pair<size_t, size_t>, SegmentTaskInstance::Hash> source_task_idx;

@@ -846,7 +846,6 @@ void DiskExchangeDataManager::shutdown()
         {
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
-        this->shutdown_cv.notify_all();
         std::unique_lock<bthread::Mutex> lock(mutex);
         for (const auto & p : read_tasks)
         {
@@ -856,7 +855,7 @@ void DiskExchangeDataManager::shutdown()
         {
             p.second->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled when shutdown");
         }
-        if (!shutdown_cv.wait_for(
+        if (!all_task_done_cv.wait_for(
                 lock, std::chrono::seconds(60), [&]() { return read_tasks.empty() && write_tasks.empty() && cleanup_tasks.empty(); }))
             LOG_ERROR(logger, "tasks still running");
     }

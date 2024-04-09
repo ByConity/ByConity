@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <Transaction/TransactionCleaner.h>
 
 #include <Disks/DiskByteS3.h>
@@ -152,10 +153,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             auto undo_bitmaps = catalog->getDeleteBitmapByKeys(table, names.bitmaps);
             auto staged_parts = catalog->getStagedDataPartsByNames(names.staged_parts, table, 0);
 
-            {
-                std::lock_guard lock(task.mutex);
-                task.undo_size = intermediate_parts.size() + undo_bitmaps.size();
-            }
+            task.undo_size.store(intermediate_parts.size() + undo_bitmaps.size(), std::memory_order_relaxed);
             catalog->setCommitTime(table, Catalog::CommitItems{intermediate_parts, undo_bitmaps, staged_parts}, txn_record.commitTs(), txn_record.txnID());
 
             // clean vfs if necessary
@@ -222,44 +220,9 @@ void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
             StoragePtr table = catalog->tryGetTableByUUID(global_context, uuid, TxnTimestamp::maxTS(), true);
             if (!table)
                 continue;
-
-            auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
-            if (!storage)
-                throw Exception("Table is not of MergeTree class", ErrorCodes::LOGICAL_ERROR);
-
-            // Clean attach parts for s3 aborted
-            S3AttachMetaAction::abortByUndoBuffer(global_context, table, resources);
-            // Clean detach parts for s3 aborted
-            S3DetachMetaAction::abortByUndoBuffer(global_context, table, resources);
-
-            UndoResourceNames names = integrateResources(resources);
-            auto intermediate_parts = catalog->getDataPartsByNames(names.parts, table, 0);
-            auto undo_bitmaps = catalog->getDeleteBitmapByKeys(table, names.bitmaps);
-            auto staged_parts = catalog->getStagedDataPartsByNames(names.staged_parts, table, 0);
-
-            {
-                std::lock_guard lock(task.mutex);
-                task.undo_size = intermediate_parts.size() + undo_bitmaps.size();
-            }
-
-            // skip part cache to avoid blocking by write lock of part cache for long time
-            catalog->clearParts(table, Catalog::CommitItems{intermediate_parts, undo_bitmaps, staged_parts});
-
-            // clean vfs
-            for (const auto & resource : resources)
-            {
-                resource.clean(*catalog, storage);
-            }
-
-            /// Release directory lock if any
-            if (!names.kvfs_lock_keys.empty())
-            {
-                catalog->clearFilesysLocks({names.kvfs_lock_keys.begin(), names.kvfs_lock_keys.end()},
-                    txn_record.txnID());
-                clean_fs_lock_by_scan = false;
-            }
+            auto undo_size = catalog->applyUndos(txn_record, table, resources, clean_fs_lock_by_scan);
+            task.undo_size.store(undo_size, std::memory_order_relaxed);
         }
-
         if (clean_fs_lock_by_scan)
         {
             // remove directory lock if there's one, this is tricky, because we don't know the directory name

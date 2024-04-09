@@ -29,6 +29,7 @@
 #include <Interpreters/ProcessorProfile.h>
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
+#include <Interpreters/executeQueryHelper.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
@@ -49,7 +50,9 @@
 #include <Processors/Exchange/MultiPartitionExchangeSink.h>
 #include <Processors/Exchange/RepartitionTransform.h>
 #include <Processors/Exchange/SinglePartitionExchangeSink.h>
+#include <Processors/Executors/ExecutingGraph.h>
 #include <Processors/Executors/PipelineExecutor.h>
+#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/ResizeProcessor.h>
 #include <Processors/Transforms/BufferedCopyTransform.h>
 #include <Processors/Transforms/CopyTransform.h>
@@ -71,8 +74,6 @@
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include <Processors/Executors/ExecutingGraph.h>
-#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 
 namespace ProfileEvents
 {
@@ -185,7 +186,9 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
 
         query_log_element->type = QueryLogElementType::EXCEPTION_WHILE_PROCESSING;
         query_log_element->exception_code = exception_code;
-        query_log_element->stack_trace = exception_message;
+        query_log_element->exception = exception_message;
+        if (context->getSettingsRef().calculate_text_stack_trace && exception_code != ErrorCodes::MEMORY_LIMIT_EXCEEDED)
+            setExceptionStackTrace(*query_log_element);
         const auto time_now = std::chrono::system_clock::now();
         query_log_element->event_time = time_in_seconds(time_now);
         query_log_element->event_time_microseconds = time_in_microseconds(time_now);

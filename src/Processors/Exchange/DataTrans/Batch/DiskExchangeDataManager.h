@@ -166,7 +166,6 @@ private:
     std::atomic_bool is_shutdown{false};
     size_t gc_interval_seconds;
     size_t file_expire_seconds;
-    bthread::ConditionVariable shutdown_cv;
     BackgroundSchedulePool::TaskHolder gc_task;
     bthread::ConditionVariable all_task_done_cv;
     /// send rpc to all servers

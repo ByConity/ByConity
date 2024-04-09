@@ -1092,22 +1092,13 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
 
 BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
-    bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
-
-    if (enable_staging_area && local_context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
-        throw Exception("Insert VALUES into staging area with dedup_key_mode=DedupKeyMode::THROW is not allowed", ErrorCodes::SUPPORT_IS_DISABLED);
-
-
     auto modified_query_ast = query->clone();
     auto & insert_query = modified_query_ast->as<ASTInsertQuery &>();
 
     if (insert_query.table_id.database_name.empty())
         insert_query.table_id.database_name = local_context->getCurrentDatabase();
 
-    if (enable_staging_area)
-        LOG_DEBUG(log, "enable staging area for write");
-
-    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area, insert_query.is_overwrite ? insert_query.overwrite_partition : nullptr);
+    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, insert_query.is_overwrite ? insert_query.overwrite_partition : nullptr);
 }
 
 /// for insert select and insert infile

@@ -271,8 +271,8 @@ message DataModelUndoBuffer {
   optional string placeholder_0 = 2; /// deprecated in post_1.0
   optional UndoResourceType type = 3;
   optional string placeholder_1 = 4; /// deprecated in post_1.0
-  optional uint64 txn_id = 6;
   reserved 5;
+  optional uint64 txn_id = 6;
   // for metadata only undo buffer, `relative_path` is not set
   optional bool metadata_only = 7;
   optional string disk_name = 8;    /// location of the resource

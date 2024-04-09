@@ -190,6 +190,7 @@ message ExecutePlanSegmentRequest {
   optional uint32 parallel_id = 30;
   optional uint32 source_task_index = 31;
   optional uint32 source_task_count = 32;
+  optional uint32 retry_id = 33;
 }
 
 message ExecutePlanSegmentResponse {

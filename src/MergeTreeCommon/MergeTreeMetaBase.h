@@ -422,6 +422,8 @@ public:
 
     virtual bool supportsOptimizer() const override { return true; }
 
+    bool commitTxnFromWorkerSide(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const;
+
     void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
 
     // TODO: @lianwenlong not thread safe if storage cache enabled
