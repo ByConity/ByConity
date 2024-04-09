@@ -83,6 +83,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
     extern const int DUPLICATE_COLUMN;
     extern const int SUPPORT_IS_DISABLED;
+    extern const int NOT_IMPLEMENTED;
 }
 
 InterpreterInsertQuery::InterpreterInsertQuery(
@@ -304,6 +305,9 @@ BlockIO InterpreterInsertQuery::execute()
     auto table_lock = table->lockForShare(getContext()->getInitialQueryId(), settings.lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
+    if (insert_query.is_replace && !metadata_snapshot->hasUniqueKey())
+        throw Exception("REPLACE INTO statement only supports table with UNIQUE KEY.", ErrorCodes::NOT_IMPLEMENTED);
+
     auto query_sample_block = getSampleBlock(insert_query, table, metadata_snapshot);
     if (!insert_query.table_function)
         getContext()->checkAccess(AccessType::INSERT, insert_query.table_id, query_sample_block.getNames());
@@ -320,7 +324,6 @@ BlockIO InterpreterInsertQuery::execute()
             is_distributed_insert_select = true;
         }
     }
-
 
     StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree*>(table.get());
     CnchLockHolderPtrs lock_holders;

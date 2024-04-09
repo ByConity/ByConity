@@ -47,6 +47,7 @@ namespace ErrorCodes
 bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_insert_into("INSERT INTO");
+    ParserKeyword s_replace_into("REPLACE INTO");
     ParserKeyword s_insert_overwrite("INSERT OVERWRITE");
     ParserKeyword s_table("TABLE");
     ParserKeyword s_function("FUNCTION");
@@ -83,14 +84,17 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr settings_ast;
     ASTPtr partition_by_expr;
     bool is_overwrite {false};
+    bool is_replace {false};
     ASTPtr overwrite_partition;
 
     /// Insertion data
     const char * data = nullptr;
 
-    // Check for key words `INSERT INTO` or `INSERT OVERWRITE`. If it isn't found, the query can't be parsed as insert query.
+    // Check for key words `INSERT INTO` or `REPLACE INTO` or `INSERT OVERWRITE`. If it isn't found, the query can't be parsed as insert query.
     if (s_insert_overwrite.ignore(pos, expected))
         is_overwrite = true;
+    else if (s_replace_into.ignore(pos, expected))
+        is_replace = true;
     else
     {
         if (!s_insert_into.ignore(pos, expected))
@@ -292,8 +296,9 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
 
     tryGetIdentifierNameInto(format, query->format);
-    
+
     query->is_overwrite = is_overwrite;
+    query->is_replace = is_replace;
     query->overwrite_partition = overwrite_partition;
     query->columns = columns;
     query->select = select;
