@@ -50,6 +50,7 @@ BlockIO InterpreterUpdateQuery::execute()
     auto table_lock = table->lockForShare(getContext()->getInitialQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
 
     ASTPtr insert_ast = transformToInterpreterInsertQuery(table); 
+    LOG_DEBUG(log, "Convert to INSERT SELECT: {}", DB::serializeAST(*insert_ast));
 
     InterpreterInsertQuery interpreter_insert(insert_ast, getContext());
 
@@ -60,7 +61,7 @@ BlockIO InterpreterUpdateQuery::execute()
 ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & storage)
 {
     auto res = std::make_shared<ASTSelectQuery>();
-    const auto & update = query_ptr->as<ASTUpdateQuery &>();
+    const auto & ast_update = query_ptr->as<ASTUpdateQuery &>();
 
     auto metadata_ptr = storage->getInMemoryMetadataPtr();
 
@@ -75,19 +76,19 @@ ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & 
     for (const auto & column : metadata_ptr->getColumns().getOrdinary())
         ordinary_columns.emplace(column.name);
 
-    //collect assinments
+    //collect assignments
     std::unordered_map<String, ASTPtr> assignments;
-    for (const auto & child : update.assignment_list->children)
+    for (const auto & child : ast_update.assignment_list->children)
     {
-        if (const ASTAssignment * assinment = child->as<ASTAssignment>())
+        if (const ASTAssignment * assignment = child->as<ASTAssignment>())
         {
-            if (immutable_columns.count(assinment->column_name))
-                throw Exception("Updating parition/unique keys is not allowed.", ErrorCodes::BAD_ARGUMENTS);
+            if (immutable_columns.count(assignment->column_name))
+                throw Exception("Updating partition/unique keys is not allowed.", ErrorCodes::BAD_ARGUMENTS);
 
-            if (!ordinary_columns.count(assinment->column_name))
-                throw Exception("There is no column named " + assinment->column_name, ErrorCodes::BAD_ARGUMENTS);
+            if (!ordinary_columns.count(assignment->column_name))
+                throw Exception("There is no column named " + assignment->column_name, ErrorCodes::BAD_ARGUMENTS);
 
-            assignments.emplace(assinment->column_name, assinment->expression()->clone());
+            assignments.emplace(assignment->column_name, assignment->expression()->clone());
         }
         else
             throw Exception("Syntax error in update statement. " + child->getID(), ErrorCodes::SYNTAX_ERROR);
@@ -105,25 +106,33 @@ ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & 
         select_list->children.push_back(element);
     }
 
-    res->setExpression(ASTSelectQuery::Expression::SELECT, select_list);
-    res->setExpression(ASTSelectQuery::Expression::WHERE, update.where_condition->clone());
+    res->setExpression(ASTSelectQuery::Expression::SELECT, std::move(select_list));
 
-    if (update.order_by_expr)
-        res->setExpression(ASTSelectQuery::Expression::ORDER_BY, update.order_by_expr->clone());
-    if (update.limit_value)
-        res->setExpression(ASTSelectQuery::Expression::LIMIT_LENGTH, update.limit_value->clone());
-    if (update.limit_offset)
-        res->setExpression(ASTSelectQuery::Expression::LIMIT_OFFSET, update.limit_offset->clone());
+    if (ast_update.where_condition)
+        res->setExpression(ASTSelectQuery::Expression::WHERE, ast_update.where_condition->clone());
+    if (ast_update.order_by_expr)
+        res->setExpression(ASTSelectQuery::Expression::ORDER_BY, ast_update.order_by_expr->clone());
+    if (ast_update.limit_value)
+        res->setExpression(ASTSelectQuery::Expression::LIMIT_LENGTH, ast_update.limit_value->clone());
+    if (ast_update.limit_offset)
+        res->setExpression(ASTSelectQuery::Expression::LIMIT_OFFSET, ast_update.limit_offset->clone());
 
-    res->setExpression(ASTSelectQuery::Expression::TABLES, std::make_shared<ASTTablesInSelectQuery>());
-    auto tables = res->tables();
-    auto tables_elem = std::make_shared<ASTTablesInSelectQueryElement>();
-    auto table_expr = std::make_shared<ASTTableExpression>();
-    tables->children.push_back(tables_elem);
-    tables_elem->table_expression = table_expr;
-    tables_elem->children.push_back(table_expr);
-    table_expr->database_and_table_name = std::make_shared<ASTTableIdentifier>(storage->getDatabaseName(), storage->getTableName());
-    table_expr->children.push_back(table_expr->database_and_table_name);
+    if (ast_update.single_table)
+    {
+        res->setExpression(ASTSelectQuery::Expression::TABLES, std::make_shared<ASTTablesInSelectQuery>());
+        auto tables = res->tables();
+        auto tables_elem = std::make_shared<ASTTablesInSelectQueryElement>();
+        auto table_expr = std::make_shared<ASTTableExpression>();
+        tables->children.push_back(tables_elem);
+        tables_elem->table_expression = table_expr;
+        tables_elem->children.push_back(table_expr);
+        table_expr->database_and_table_name = std::make_shared<ASTTableIdentifier>(storage->getDatabaseName(), storage->getTableName());
+        table_expr->children.push_back(table_expr->database_and_table_name);
+    }
+    else
+    {
+        res->setExpression(ASTSelectQuery::Expression::TABLES, ast_update.tables->clone());
+    }
 
     return res;
 }
@@ -148,3 +157,5 @@ ASTPtr InterpreterUpdateQuery::transformToInterpreterInsertQuery(const StoragePt
 }
 
 }
+
+// UPDATE customer LEFT JOIN new_customer ON customer.customer_id = new_customer.customer_id SET customer.customer_age = 42 WHERE new_customer.customer_id = 1;
