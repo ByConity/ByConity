@@ -28,7 +28,7 @@ TransformResult PushProjectionThroughFilter::transformImpl(PlanNodePtr node, con
     size_t func_count = 0;
     for (const auto & item : projection->getAssignments())
     {
-        func_count += CollectFuncs::collect(item.second, rule_context.context).size();
+        func_count += CollectFuncs::collect(item.second, node->getChildren()[0]->getCurrentDataStream().getNamesToTypes(), rule_context.context).size();
     }
 
     if (!func_count)
@@ -118,7 +118,7 @@ TransformResult PushProjectionThroughProjection::transformImpl(PlanNodePtr node,
     size_t func_count = 0;
     for (const auto & item : projection->getAssignments())
     {
-        func_count += CollectFuncs::collect(item.second, rule_context.context).size();
+        func_count += CollectFuncs::collect(item.second, node->getChildren()[0]->getCurrentDataStream().getNamesToTypes(), rule_context.context).size();
     }
 
     if (!func_count)
