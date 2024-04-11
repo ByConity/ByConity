@@ -83,6 +83,8 @@ public:
 
 }
 
+constexpr size_t kMaxAllowedJoinedBlockRows = DEFAULT_BLOCK_SIZE * 2;
+
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -452,7 +454,7 @@ private:
     
     /// Join Block imple without inequal condition 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImpl(
+    Block joinBlockImpl(
         Block & block,
         const Names & key_names_left,
         const Block & block_with_columns_to_add,
@@ -461,7 +463,7 @@ private:
     
     /// Join Block imple with inequal condition 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    void joinBlockImplIneuqalCondition(Block & block,
+    Block joinBlockImplIneuqalCondition(Block & block,
         const Names & key_names_left,
         const Block & block_with_columns_to_add,
         const Maps & maps,

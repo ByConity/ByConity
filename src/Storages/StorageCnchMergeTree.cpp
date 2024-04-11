@@ -3392,16 +3392,23 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
     }
     addMutationEntry(*mutation_entry);
 
-    auto timeout_ms = query_context->getSettingsRef().max_execution_time.totalMilliseconds();
-    auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
-    if (bg_thread)
+    try
     {
-        auto * merge_mutate_thread = typeid_cast<CnchMergeMutateThread *>(bg_thread.get());
-        auto istorage = shared_from_this();
-        merge_mutate_thread->triggerPartMutate(shared_from_this());
+        auto timeout_ms = query_context->getSettingsRef().max_execution_time.totalMilliseconds();
+        auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
+        if (bg_thread)
+        {
+            auto * merge_mutate_thread = typeid_cast<CnchMergeMutateThread *>(bg_thread.get());
+            auto istorage = shared_from_this();
+            merge_mutate_thread->triggerPartMutate(shared_from_this());
 
-        if (query_context->getSettingsRef().mutations_sync != 0)
-            merge_mutate_thread->waitMutationFinish(mutation_entry->commit_time, timeout_ms);
+            if (query_context->getSettingsRef().mutations_sync != 0)
+                merge_mutate_thread->waitMutationFinish(mutation_entry->commit_time, timeout_ms);
+        }
+    }
+    catch(...)
+    {
+        tryLogCurrentException(log, "Failed to start or wait the mutation. It will be scheduled in background. Check `system.mutations` and `system.manipulations` for progress.");
     }
 }
 
