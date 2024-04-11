@@ -16,6 +16,7 @@ services:
     depends_on:
       - fdb
       - minio
+      - createbuckets
     volumes:
       - binary_volume:/opt/byconity/bin/
       - config_volume_for_s3:/config/
