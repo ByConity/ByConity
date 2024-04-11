@@ -32,6 +32,8 @@
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ParserWithElement.h>
 #include <Parsers/ParserHints.h>
+#include <Poco/Logger.h>
+#include <Parsers/formatAST.h>
 
 
 namespace DB
