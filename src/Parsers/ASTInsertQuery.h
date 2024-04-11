@@ -45,6 +45,8 @@ public:
     ASTPtr settings_ast;
     bool is_overwrite = false;
     ASTPtr overwrite_partition;
+    // REPLACE INTO
+    bool is_replace = false;
 
     /// Data to insert
     const char * data = nullptr;
