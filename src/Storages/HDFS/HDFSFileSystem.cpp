@@ -1010,11 +1010,6 @@ HDFSBuilderPtr HDFSConnectionParams::createBuilder(const Poco::URI & uri) const
             setHdfsDirectConfig(builder, hdfs_user, "hdfs://" + normalizedHost, uri.getPort());
             return builder;
         }
-        else if (uri.getScheme() == "hdfs")
-        {
-            setHdfsHaConfig(builder, normalizedHost, hdfs_user, std::vector<std::pair<String, int>>());
-            return builder;
-        }
     }
 
     // construt from other configs.
