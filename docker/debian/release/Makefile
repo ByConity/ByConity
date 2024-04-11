@@ -25,7 +25,8 @@ image:
 
 image-github:
 	mkdir -p build_install
-	cp -r ${BINARY_DIR}/clickhouse* ./build_install/
+	cp -ra ${BINARY_DIR}/usr/* ./build_install/
+	cp -ra ${BINARY_DIR}/etc ./build_install/
 	DOCKER_BUILDKIT=1 docker build -t byconity/byconity:${TAG} .
 
 release:
