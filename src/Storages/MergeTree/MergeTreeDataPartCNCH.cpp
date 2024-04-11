@@ -1055,7 +1055,9 @@ void MergeTreeDataPartCNCH::calculateEachColumnSizes(
         if (rows_count != 0 && column.type->isValueRepresentedByNumber() && !column.type->haveSubtypes())
         {
             size_t rows_in_column = size.data_uncompressed / column.type->getSizeOfValueInMemory();
-            if (rows_in_column != rows_count)
+            /// rows_in_column = 0 may indicate that the part don't contains the column 
+            /// (like running mutation task involved new columns on old parts).
+            if (rows_in_column != 0 && rows_in_column != rows_count)
             {
                 throw Exception(
                     ErrorCodes::LOGICAL_ERROR,
