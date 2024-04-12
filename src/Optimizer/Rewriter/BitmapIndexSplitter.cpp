@@ -130,9 +130,10 @@ PlanNodePtr FuncSplitter::visitProjectionNode(ProjectionNode & node, SplitterCon
         }
         // split arraysetcheck func in projection
         Assignments array_set_check_func;
+        auto tname_to_type = new_node->getChildren()[0]->getCurrentDataStream().getNamesToTypes();
         for (const auto & item : projection_step->getAssignments())
         {
-            auto tmp_array_set_check_func = CollectFuncs::collect(item.second, new_node->getChildren()[0]->getCurrentDataStream().getNamesToTypes(), context);
+            auto tmp_array_set_check_func = CollectFuncs::collect(item.second, tname_to_type, context);
             for (const auto & it : tmp_array_set_check_func)
             {
                 if (!splitter_context.ast_to_name.contains(it.second))

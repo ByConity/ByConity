@@ -290,7 +290,7 @@ public:
             }
             else if constexpr (std::is_same_v<UInt256, KeyType>)
             {
-                auto * k = static_cast<MinMaxWrapper<UInt128> *>(min_max.get());
+                auto * k = static_cast<MinMaxWrapper<UInt256> *>(min_max.get());
                 k->addKey(key);
             }
             else if constexpr (std::is_same_v<Int256, KeyType>)
@@ -357,7 +357,7 @@ public:
             }
             else if constexpr (std::is_same_v<UInt256, KeyType>)
             {
-                const auto * k = static_cast<const MinMaxWrapper<UInt128> *>(min_max.get());
+                const auto * k = static_cast<const MinMaxWrapper<UInt256> *>(min_max.get());
                 if (!k->probInRange(key))
                     return false;
             }
