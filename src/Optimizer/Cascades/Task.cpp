@@ -676,6 +676,7 @@ void OptimizeInput::enforcePropertyAndUpdateWinner(
         && !PropertyMatcher::matchNodePartitioning(
             *opt_context->getOptimizerContext().getContext(),
             require.getNodePartitioningRef(),
+            require.isEnforceNotMatch(),
             output_prop.getNodePartitioning(),
             *equivalences,
             constants))
