@@ -33,6 +33,7 @@
 #include <Poco/Util/HelpFormatter.h>
 
 #include <ResourceManagement/CommonData.h>
+#include <Common/Brpc/BrpcApplication.h>
 
 namespace brpc
 {
@@ -65,6 +66,7 @@ void ResourceManager::initialize(Poco::Util::Application & self)
 
 int ResourceManager::run()
 {
+    BrpcApplication::getInstance().initialize(config());
     if (config().hasOption("help"))
     {
         Poco::Util::HelpFormatter helpFormatter(ResourceManager::options());
