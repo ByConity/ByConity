@@ -292,14 +292,14 @@ int InternalResourceGroupManager::calcCGroupUsage(const String & root_group, flo
 //only set leaf nodes cfs_quota and cfs_period
 int InternalResourceGroupManager::setCfsQuotaPeriod(const String & root_group, int64_t cfs_quota_us, int64_t cfs_period_us)
 {
-    auto get_leaf_children_func = [&](const String & group_name) -> std::vector<IResourceGroup*> {
+    auto iter = root_groups.find(root_group);
+    assert(iter != root_groups.end());
+
+    auto get_leaf_children_func = [&](IResourceGroup* root_group_ptr) -> std::vector<IResourceGroup*> {
         std::vector<IResourceGroup*> result_groups;
 
-        auto iter = root_groups.find(group_name);
-        assert(iter != root_groups.end());
-
         std::vector<IResourceGroup*> groups;
-        for (auto & p : iter->second->getChildren())
+        for (auto & p : root_group_ptr->getChildren())
         {
             groups.emplace_back(p.second);
         }
@@ -323,7 +323,7 @@ int InternalResourceGroupManager::setCfsQuotaPeriod(const String & root_group, i
         return result_groups;
     };
 
-    auto leaf_children = get_leaf_children_func(root_group);
+    auto leaf_children = get_leaf_children_func(iter->second);
     for (auto & item : leaf_children)
     {
         assert(item->getRoot() != nullptr);
