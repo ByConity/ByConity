@@ -172,6 +172,7 @@ private:
     NameSet array_joined_names;
     const StorageMetadataPtr & metadata_snapshot;
     bool enable_ab_index_optimization;
+    bool enable_implicit_column_prewhere_push;
 
     /// Late materialize
     MaterializeStrategy materialize_strategy;
