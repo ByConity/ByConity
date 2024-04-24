@@ -85,7 +85,7 @@ public:
         }
     private:
         InternalResourceGroupManager * manager;
-        static const float CGROUP_CPU_USAGE_FULL_THRESHHOLD = 90;
+        static constexpr float CGROUP_CPU_USAGE_FULL_THRESHHOLD = 90;
     };
 
     bool cGroupQuotaSwitchOn(const String & root_group) const;
