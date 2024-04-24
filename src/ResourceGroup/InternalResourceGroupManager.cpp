@@ -231,7 +231,7 @@ bool InternalResourceGroupManager::cGroupQuotaSwitchOn(const String & root_group
     return iter->second.cfs_max_quota_us != -1 && iter->second.cfs_min_quota_us != -1;
 }
 
-int InternalResourceGroupManager::calcCGroupUsage(const String & root_group, float & usage)
+int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, float & usage)
 {
     auto iter = root_groups.find(root_group);
     if (iter == root_groups.end())

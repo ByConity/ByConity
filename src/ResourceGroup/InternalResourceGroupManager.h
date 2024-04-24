@@ -61,7 +61,7 @@ public:
                 }
 
                 float usage = 0;
-                if (manager->calcCGroupUsage(iter.first, usage) != 0)
+                if (manager->calcCGroupCpuUsage(iter.first, usage) != 0)
                 {
                     continue;
                 }
@@ -88,7 +88,7 @@ public:
     };
 
     bool cGroupQuotaSwitchOn(const String & root_group) const;
-    int calcCGroupUsage(const String & root_group, float & usage);
+    int calcCGroupCpuUsage(const String & root_group, float & usage);
     int setCfsQuotaPeriod(const String & root_group, int64_t cfs_quota_us, int64_t cfs_period_us); 
 
 private:
