@@ -163,8 +163,7 @@ void IResourceGroup::internalUpdateQueryTime()
 
 void IResourceGroup::internalRefreshStats()
 {
-    return;
-    /*Int64 newCacheMemoryUsage = 0, queryMemoryUsage;
+    Int64 newCacheMemoryUsage = 0, queryMemoryUsage;
     for (const auto & query : running_queries)
     {
         queryMemoryUsage = 0;
@@ -178,7 +177,6 @@ void IResourceGroup::internalRefreshStats()
         newCacheMemoryUsage += item.second->cached_memory_usage_bytes;
     }
     cached_memory_usage_bytes = newCacheMemoryUsage;
-   */
 }
 
 bool IResourceGroup::internalProcessNext()
