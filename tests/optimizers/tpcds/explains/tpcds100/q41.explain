@@ -16,7 +16,7 @@ Projection Est. 100 rows
                      │     Group by: {i_product_name}
                      └─ Inner Join Est. 1251 rows
                         │     Condition: 
-                        │     Filter: coalesce(`expr#count()`, countIf) != 0
+                        │     Filter: coalesce(`expr#count()_2`, countIf) != 0
                         ├─ Left Join Est. 2503 rows
                         │  │     Condition: i_manufact == i_manufact_1
                         │  ├─ Projection Est. 2503 rows
@@ -32,7 +32,7 @@ Projection Est. 100 rows
                         │           │     Partition by: {i_manufact_1}
                         │           └─ Aggregating Est. 1 rows
                         │              │     Group by: {i_manufact_1}
-                        │              │     Aggregates: expr#count():=AggNull(countIf)(build_side_non_null_symbol)
+                        │              │     Aggregates: expr#count()_2:=AggNull(countIf)(build_side_non_null_symbol)
                         │              └─ Projection Est. 69 rows
                         │                 │     Expressions: [i_manufact_1], build_side_non_null_symbol:=1
                         │                 └─ Filter Est. 69 rows

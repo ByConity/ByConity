@@ -156,9 +156,11 @@ std::string BasePlanTest::execute(const String & query, ContextMutablePtr query_
     ThreadStatus thread_status;
     thread_status.attachQueryContext(query_context);
     String res;
-    ReadBufferFromString is1(query);
-    WriteBufferFromString os1(res);
-    executeQuery(is1, os1, false, query_context, {}, {}, false);
+    {
+        ReadBufferFromString is1(query);
+        WriteBufferFromString os1(res);
+        executeQuery(is1, os1, false, query_context, {}, {}, false);
+    }
     return res;
 }
 

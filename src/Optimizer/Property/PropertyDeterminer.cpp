@@ -31,7 +31,7 @@ namespace DB
 PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step, const Property & property, Context & context)
 {
     DeterminerContext ctx{property, context};
-    static DeterminerVisitor visitor{};
+    DeterminerVisitor visitor{};
     PropertySets input_properties = VisitorUtil::accept(step, visitor, ctx);
     if (!property.getCTEDescriptions().empty() || !property.getTableLayout().empty())
     {
