@@ -68,14 +68,14 @@ public:
 
                 auto & cpu_usage = manager->root_cgroup_cpu_usage[iter.first];
                 int delta = std::max(static_cast<int>(iter.second.cfs_max_quota_us / 10), 1); //change 10% delta every time
-                if (usage >= 85 && iter.second.curr_quota_us >= iter.second.cfs_min_quota_us)
+                if (usage >= CGROUP_CPU_USAGE_FULL_THRESHHOLD && iter.second.curr_quota_us >= iter.second.cfs_min_quota_us)
                 {
                     manager->setCfsQuotaPeriod(iter.first, 
                             std::max(iter.second.curr_quota_us - delta, iter.second.cfs_min_quota_us), iter.second.cfs_period_us);
                     cpu_usage.curr_quota_us = std::max(iter.second.curr_quota_us - delta, iter.second.cfs_min_quota_us);
                 }
 
-                if (usage < 85 && iter.second.curr_quota_us < iter.second.cfs_max_quota_us)
+                if (usage < CGROUP_CPU_USAGE_FULL_THRESHHOLD && iter.second.curr_quota_us < iter.second.cfs_max_quota_us)
                 {
                     manager->setCfsQuotaPeriod(iter.first, 
                             std::min(iter.second.curr_quota_us + delta, iter.second.cfs_max_quota_us), iter.second.cfs_period_us);
@@ -85,6 +85,7 @@ public:
         }
     private:
         InternalResourceGroupManager * manager;
+        static const float CGROUP_CPU_USAGE_FULL_THRESHHOLD = 90;
     };
 
     bool cGroupQuotaSwitchOn(const String & root_group) const;
