@@ -1492,6 +1492,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_sorting_property, true, "Whether enable sorting property rule", 0) \
     M(Bool, enable_streaming_property, true, "Whether enable streaming property rule", 0) \
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
+    M(Bool, enable_cross_join_to_union, false, "Whether enable convert cross join to union", 0) \
     M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
     M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
     M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \

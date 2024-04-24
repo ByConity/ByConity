@@ -40,6 +40,7 @@
 #include <Optimizer/Rule/Rewrite/SwapAdjacentRules.h>
 #include <Optimizer/Rule/Rewrite/TopNRules.h>
 #include <Optimizer/Rule/Rewrite/EagerAggregation.h>
+#include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
 
 namespace DB
 {
@@ -219,4 +220,11 @@ std::vector<RulePtr> Rules::unnestingSubqueryRules()
         std::make_shared<ExistsToSemiJoin>(),
         std::make_shared<InToSemiJoin>()};
 }
+
+std::vector<RulePtr> Rules::crossJoinToUnion()
+{
+    return {std::make_shared<CrossJoinToUnion>()};
+}
+
+
 }
