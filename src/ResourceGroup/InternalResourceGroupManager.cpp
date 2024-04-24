@@ -244,7 +244,7 @@ int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, 
         return 0;
     }
 
-    auto read_func = [&](const String & name)->String {
+    auto read_file_func = [&](const String & name)->String {
         String content;
         String path = CGroupManagerFactory::instance().getClickhouseCpuPath() 
             + "/" + root_group + "/" + name;
@@ -252,9 +252,9 @@ int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, 
         return content;
     };
 
-    String cpu_quota_str = read_func("cpu.cfs_quota_us");
-    String cpu_period_str = read_func("cpu.cfs_period_us");
-    String cpu_usage_str = read_func("cpuacct.usage");
+    String cpu_quota_str = read_file_func("cpu.cfs_quota_us");
+    String cpu_period_str = read_file_func("cpu.cfs_period_us");
+    String cpu_usage_str = read_file_func("cpuacct.usage");
     
     int64_t cpu_quota = 0, cpu_period = 0, cpu_usage = 0;
     try 

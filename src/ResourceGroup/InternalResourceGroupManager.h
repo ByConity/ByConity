@@ -66,7 +66,7 @@ public:
                     continue;
                 }
 
-                auto & cpu_usage_info = iter->second;
+                auto & cpu_usage_info = iter.second;
                 int delta = std::max(static_cast<int>(iter.second.cfs_max_quota_us / 10), 1); //change 10% delta every time
                 if (usage >= CGROUP_CPU_USAGE_FULL_THRESHHOLD && iter.second.curr_quota_us >= iter.second.cfs_min_quota_us)
                 {
