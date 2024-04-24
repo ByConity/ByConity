@@ -247,7 +247,7 @@ int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, 
     auto read_func = [&](const String & name)->String {
         String content;
         String path = CGroupManagerFactory::instance().getClickhouseCpuPath() 
-            + "/" + iter->first + "/" + name;
+            + "/" + root_group + "/" + name;
         SystemUtils::ReadFileToString(path, content);
         return content;
     };
