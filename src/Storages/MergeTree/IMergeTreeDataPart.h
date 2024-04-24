@@ -441,11 +441,11 @@ public:
     /// Moves a part to detached/ directory and adds prefix to its name
     void renameToDetached(const String & prefix) const;
 
-    /// Generate unique path to detach part based on table path
+    /// Generate unique path to detach part relative to table path
     String getRelativePathForDetachedPart(const String & prefix) const;
 
-    /// Generate unique path to detach part based on disk path
-    String getRelativePathToDiskForDetachedPart(const String & prefix) const;
+    /// Generate unique path to detach part relative to disk path
+    virtual String getFullRelativePathForDetachedPart(const String & prefix) const;
 
     void createDeleteBitmapForDetachedPart() const;
 
@@ -480,7 +480,7 @@ public:
     static UInt64 calculateTotalSizeOnDisk(const DiskPtr & disk_, const String & from);
     void calculateColumnsSizesOnDisk();
 
-    String getRelativePathForPrefix(const String & prefix) const;
+    String getRelativePathForPrefix(const String & prefix, bool is_detach) const;
 
     bool isProjectionPart() const { return parent_part != nullptr; }
 
