@@ -52,17 +52,19 @@ void IResourceGroup::setParent(IResourceGroup * parent_)
 IResourceGroup::QueryEntity::QueryEntity(
     IResourceGroup * group_,
     const String & query_,
-    const Context & query_context_,
+    const Context & /*query_context_*/,
     QueryStatusType status_type_)
     : group(group_)
     , query(query_)
-    , query_context(&query_context_)
     , status_type(status_type_)
     , id(group->root->id.fetch_add(1, std::memory_order_relaxed)) {}
 
 void IResourceGroup::queryFinished(IResourceGroup::Container::iterator it)
 {
     std::lock_guard lock(root->mutex);
+    auto res = std::find(running_queries.begin(), running_queries.end(), *it);
+    if (res == running_queries.end())
+        throw Exception("The running query can not be found in the resource group " + name, ErrorCodes::RESOURCE_GROUP_INTERNAL_ERROR);
     running_queries.erase(it);
     IResourceGroup * group = parent;
     while (group)
@@ -94,6 +96,7 @@ IResourceGroup::Container::iterator IResourceGroup::run(const String & query, co
     IResourceGroup::Element element = std::make_shared<IResourceGroup::QueryEntity>(this, query, query_context);
     if (canRun)
         return runQuery(element);
+    
     auto it = enqueueQuery(element);
 
     if (!root->can_run.wait_for(lock,
@@ -117,14 +120,14 @@ IResourceGroup::Container::iterator IResourceGroup::run(const String & query, co
 
 IResourceGroup::Container::iterator IResourceGroup::enqueueQuery(IResourceGroup::Element & element)
 {
-    element->queue_timestamp = element->query_context->getTimestamp();
+    //element->queue_timestamp = element->query_context->getTimestamp();
     Container::iterator it = queued_queries.emplace(queued_queries.end(), element);
     IResourceGroup *group = parent;
     while (group)
     {
         ++group->descendent_queued_queries;
-        group = group->parent;
         group->setInUse(true);
+        group = group->parent;
     }
 
     setInUse(true);
@@ -142,9 +145,8 @@ IResourceGroup::Container::iterator IResourceGroup::runQuery(IResourceGroup::Ele
     {
         ++group->descendent_running_queries;
         group->cached_memory_usage_bytes += min_query_memory_usage;
-        group = group->parent;
-
         group->setInUse(true);
+        group = group->parent;
     }
     setInUse(true);
     return it;
@@ -161,7 +163,8 @@ void IResourceGroup::internalUpdateQueryTime()
 
 void IResourceGroup::internalRefreshStats()
 {
-    Int64 newCacheMemoryUsage = 0, queryMemoryUsage;
+    return;
+    /*Int64 newCacheMemoryUsage = 0, queryMemoryUsage;
     for (const auto & query : running_queries)
     {
         queryMemoryUsage = 0;
@@ -175,6 +178,7 @@ void IResourceGroup::internalRefreshStats()
         newCacheMemoryUsage += item.second->cached_memory_usage_bytes;
     }
     cached_memory_usage_bytes = newCacheMemoryUsage;
+   */
 }
 
 bool IResourceGroup::internalProcessNext()

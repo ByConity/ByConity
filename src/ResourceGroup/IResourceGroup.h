@@ -92,7 +92,6 @@ public:
 
         IResourceGroup * group;
         String query;
-        const ContextPtr query_context;
         QueryStatusType status_type = QueryStatusType::WAITING;
         Int32 id;
         UInt64 queue_timestamp;
@@ -112,7 +111,10 @@ public:
         ~QueryEntityHandler()
         {
             IResourceGroup * group = (*it)->group;
+            assert(group != nullptr);
+
             group->queryFinished(it);
+            (*it)->group = nullptr;
         }
     };
     using Handle = std::shared_ptr<QueryEntityHandler>;
@@ -129,12 +131,18 @@ public:
     void processQueuedQueues();
     bool isLeaf() const { return children.empty(); }
     ResourceGroupInfo getInfo() const;
+    
+    const std::unordered_map<String, IResourceGroup *> & getChildren() const {return children;}
 
     IResourceGroup * getParent() const;
     void setParent(IResourceGroup * parent);
 
     IResourceGroup * getRoot() const;
     void setRoot();
+    void setRoot(IResourceGroup *root_)
+    {
+        root = root_;
+    }
 
     Int64 getSoftMaxMemoryUsage() const { return soft_max_memory_usage; }
     void setSoftMaxMemoryUsage(Int64 softMaxMemoryUsage) { soft_max_memory_usage = softMaxMemoryUsage; }
@@ -178,6 +186,9 @@ public:
 
     FreeThreadPool * getThreadPool() const { return thread_pool ? thread_pool.get() : nullptr; }
 
+    // Updates resource group when a query has finished
+    void queryFinished(Container::iterator entityIt);
+
 protected:
     IResourceGroup() = default;
 
@@ -187,8 +198,6 @@ protected:
     void internalRefreshStats();
     // Executes queue management, i.e. running of queued queries
     bool internalProcessNext();
-    // Updates resource group when a query has finished
-    void queryFinished(Container::iterator entityIt);
     Container::iterator enqueueQuery(Element & element);
     Container::iterator runQuery(Element & element);
 

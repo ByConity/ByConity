@@ -36,7 +36,7 @@ const String CpuSet::CPUS = "cpuset.cpus";
 const String CpuSet::MEMS = "cpuset.mems";
 const String CpuSet::PROC = "cgroup.procs";
 
-static String getDefaultMems()
+[[maybe_unused]] static String getDefaultMems()
 {
     size_t numa_node = SystemUtils::getMaxNumaNode();
     std::stringstream mems_ss;
@@ -83,23 +83,23 @@ void CpuSet::createCpuSetController()
 void CpuSet::resetCpuSet()
 {
     std::lock_guard<std::recursive_mutex> lock(mutex);
-    std::filesystem::path exclusive_path = dir_path + "/" + CPU_EXCLUSIVE;
-    std::filesystem::path cpus_path = dir_path + "/" + CPUS;
-    std::filesystem::path mems_path = dir_path + "/" + MEMS;
+    //std::filesystem::path exclusive_path = dir_path + "/" + CPU_EXCLUSIVE;
+    //std::filesystem::path cpus_path = dir_path + "/" + CPUS;
+    //std::filesystem::path mems_path = dir_path + "/" + MEMS;
 
-    SystemUtils::writeStringToFile(cpus_path, cpus.toString() + "\n", true);
-    SystemUtils::writeStringToFile(exclusive_path, std::to_string(enable_exclusive) + "\n", true);
-    SystemUtils::writeStringToFile(mems_path, getDefaultMems(), true);
+    //SystemUtils::writeStringToFile(cpus_path, cpus.toString() + "\n", true);
+    //SystemUtils::writeStringToFile(exclusive_path, std::to_string(enable_exclusive) + "\n", true);
+    //SystemUtils::writeStringToFile(mems_path, getDefaultMems(), true);
 }
 
 
-void CpuSet::addTask(size_t tid)
+void CpuSet::addTask([[maybe_unused]] size_t tid)
 {
     std::lock_guard<std::recursive_mutex> lock(mutex);
-    std::filesystem::path task_path = dir_path + "/" + TASK_FILE;
-    std::stringstream ss;
-    ss << tid << std::endl;
-    SystemUtils::writeStringToFile(task_path, ss.str());
+    //std::filesystem::path task_path = dir_path + "/" + TASK_FILE;
+    //std::stringstream ss;
+    //ss << tid << std::endl;
+    //SystemUtils::writeStringToFile(task_path, ss.str());
 }
 
 void CpuSet::addTasks(const std::vector<size_t> & tids)

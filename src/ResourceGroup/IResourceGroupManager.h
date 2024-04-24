@@ -76,6 +76,12 @@ protected:
         IResourceGroupManager * manager;
     };
 
+public:
+    virtual ~IResourceGroupManager();
+    virtual void initialize(const Poco::Util::AbstractConfiguration & config) = 0;
+    virtual IResourceGroup * selectGroup(const Context & query_context, const IAST * ast) = 0;
+    virtual void shutdown() = 0;
+
     RWLockImpl::LockHolder getReadLock() const
     {
         return mutex->getLock(RWLockImpl::Read, RWLockImpl::NO_QUERY);
@@ -84,12 +90,6 @@ protected:
     {
         return mutex->getLock(RWLockImpl::Write, RWLockImpl::NO_QUERY);
     }
-
-public:
-    virtual ~IResourceGroupManager();
-    virtual void initialize(const Poco::Util::AbstractConfiguration & config) = 0;
-    virtual IResourceGroup * selectGroup(const Context & query_context, const IAST * ast) = 0;
-    virtual void shutdown() = 0;
 
     void enable();
     void disable();
@@ -102,6 +102,14 @@ public:
     ResourceGroupInfoVec getInfoVec() const;
     ResourceGroupInfoMap getInfoMap() const;
     bool getInfo(const String & group, ResourceGroupInfo & ret_info) const;
+    const std::unordered_map<String, ResourceSelectCase> & getSelectCases() const
+    {
+        return select_cases;
+    }
+    const std::unordered_map<String, IResourceGroup*> & getRootGroups() const
+    {
+        return root_groups;
+    }
 
 protected:
     mutable RWLock mutex = RWLockImpl::create();

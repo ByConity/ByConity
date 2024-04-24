@@ -29,9 +29,9 @@ namespace DB
 class CGroupManager
 {
 public:
-    bool enable(){ return access("/proc/cgroups", F_OK) == 0 && access(getCGroupCpuSetPath().c_str(), W_OK|R_OK) == 0; }
+    bool enable(){ return access("/proc/cgroups", F_OK) == 0 && access(cgroup_root_path.c_str(), F_OK) == 0; }
 
-    bool enableForCpu(){ return enable() && access(getClickhouseCpuPath().c_str(), W_OK|R_OK) == 0; }
+    bool enableForCpu(){ return enable(); }
 
     /// cpuset
 
@@ -58,6 +58,38 @@ public:
 
     CpuControllerPtr getCpu(const String & cpu_name);
 
+public:
+    void setCGroupRootPath(String cgroup_root_path_) {cgroup_root_path = cgroup_root_path_;}
+    inline String getCgroupRootPath() {return cgroup_root_path;}
+
+    void setDockerPath(String docker_path_) {docker_path = docker_path_;}
+    inline String getDockerPath() {return docker_path;}
+
+    String getCGroupCpuSetPath() 
+    {
+        if (docker_path.empty())
+        {
+            return cgroup_root_path + "/cpuset";
+        }
+        else
+        {
+            return cgroup_root_path + "/cpuset/" + docker_path;
+        }
+    }
+    inline String getClickhouseCpuSetPath() { return getCGroupCpuSetPath() + "/clickhouse";}
+
+    String getCGroupCpuPath()
+    {
+        if (docker_path.empty())
+        {
+            return cgroup_root_path + "/cpu,cpuacct";
+        }
+        else
+        {
+            return cgroup_root_path + "/cpu,cpuacct/" + docker_path;
+        }
+    }
+    inline String getClickhouseCpuPath() { return getCGroupCpuPath() + "/clickhouse"; }
 
 private:
     struct PassKey
@@ -71,12 +103,10 @@ private:
     std::atomic<bool> init_flag = false;
 
     static const String CGROUP_ROOT_PATH;
-    static const String CGROUP_CPU_SET_PATH;
-    static const String CGROUP_CPU_PATH;
     static const String SYSTEM;
 
-    String cgroup_cpu_set_path = CGROUP_CPU_SET_PATH;
-    String cgroup_cpu_path = CGROUP_CPU_PATH;
+    String cgroup_root_path = CGROUP_ROOT_PATH;
+    String docker_path;
 
     void alloc(const Cpus & cpus);
 
@@ -87,16 +117,6 @@ private:
     void initClickhouseCpuSet();
 
     void moveClickhouseProc();
-
-    void setCGroupCpuSetPath(String cgroup_cpu_set_path_) { cgroup_cpu_set_path = std::move(cgroup_cpu_set_path_); }
-
-    inline String getCGroupCpuSetPath() { return cgroup_cpu_set_path; }
-
-    inline String getClickhouseCpuSetPath() { return getCGroupCpuSetPath() + "/clickhouse";}
-
-    void setCGgroupCpuPath(String cgroup_cpu_path_) {cgroup_cpu_path = std::move(cgroup_cpu_path_); }
-
-    inline String getClickhouseCpuPath() { return cgroup_cpu_path;}
 
     friend class CGroupManagerFactory;
     friend class CpuSetScaleOperator;
