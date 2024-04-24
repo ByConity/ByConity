@@ -268,7 +268,7 @@ int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, 
         throw Exception("Resource group cgroup value invalid", ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
     }
 
-    if (cpu_quota <= 0 || cpu_period <= 0 || cpu_usage <= 0)
+    if (cpu_quota <= 0 || cpu_period <= 0 || cpu_usage < 0)
     {
         return -2;
     }
