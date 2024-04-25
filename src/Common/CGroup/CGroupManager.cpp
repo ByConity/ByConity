@@ -33,7 +33,7 @@ namespace ErrorCodes
 const String CGroupManager::CGROUP_ROOT_PATH = "/sys/fs/cgroup";
 const String CGroupManager::SYSTEM = "system";
 
-[[maybe_unused]] static String getDefaultMems()
+static String getDefaultMems()
 {
     size_t numa_node = SystemUtils::getMaxNumaNode();
     std::stringstream mems_ss;
