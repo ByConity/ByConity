@@ -1576,7 +1576,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_simplify_join_filter_rewrite, true, "Whether to enable SimplifyJoinFilterRewrite rule", 0) \
     M(Bool, enable_simplify_expression_rewrite, true, "Whether to enable SimplifyExpressionRewrite rule", 0) \
     M(Bool, enable_simplify_predicate_in_projection, false, "Whether to rewrite predicate in projection", 0) \
-    M(Bool, enable_simplify_assume_not_null, false, "Whether to remove redundant assumeNotNull --temporary settings", 0) \
+    M(Bool, enable_simplify_assume_not_null, true, "Whether to remove redundant assumeNotNull --temporary settings", 0) \
+    M(Bool, enable_evaluate_constant_for_nondeterministic, true, "Enable evaluate the constant result of non-deterministic functions while using optimizer", 0) \
     M(Bool, enable_remove_redundant, true, "Whether to enable RemoveRedundant rules", 0) \
     M(Bool, enable_push_projection, true, "Whether to enable PushProjection rules", 0) \
     M(Bool, enable_push_partial_agg_through_exchange, true, "Whether to enable PushPartialAggThroughExchange rules", 0) \

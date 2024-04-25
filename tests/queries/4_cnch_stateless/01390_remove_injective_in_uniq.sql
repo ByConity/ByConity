@@ -1,4 +1,5 @@
 set optimize_injective_functions_inside_uniq = 1;
+SET enable_optimizer = 0;
 
 EXPLAIN SYNTAX select uniq(x), uniqExact(x), uniqHLL12(x), uniqCombined(x), uniqCombined64(x)
 from (select number % 2 as x from numbers(10));

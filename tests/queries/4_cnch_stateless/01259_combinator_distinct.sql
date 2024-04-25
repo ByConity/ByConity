@@ -1,3 +1,5 @@
+SET enable_optimizer = 0;
+
 SELECT sum(DISTINCT number) FROM numbers_mt(100000);
 SELECT sum(DISTINCT number % 13) FROM numbers_mt(100000);
 SELECT arraySort(groupArray(DISTINCT number % 13)) FROM numbers_mt(100000);

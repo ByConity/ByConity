@@ -1,3 +1,5 @@
+SET enable_optimizer = 0;
+
 EXPLAIN SYNTAX
 SELECT msg, toDateTime(intDiv(ms, 1000)) AS time
 FROM

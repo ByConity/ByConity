@@ -1,4 +1,5 @@
 SET optimize_monotonous_functions_in_order_by = 1;
+SET enable_optimizer = 0;
 
 SELECT number FROM numbers(3) ORDER BY toFloat32(toFloat64(number));
 SELECT number FROM numbers(3) ORDER BY abs(toFloat32(number));
