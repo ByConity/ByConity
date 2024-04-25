@@ -239,7 +239,7 @@ void CGroupManager::init()
         //std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
         //Cpus cpus(data);
         //createCpuSet(SYSTEM, cpus);
-        moveClickhouseProc();
+        //moveClickhouseProc();
         init_flag = true;
     }
 }
