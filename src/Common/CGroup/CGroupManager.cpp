@@ -146,11 +146,11 @@ void CGroupManager::alloc(const Cpus & cpus)
 }
 void CGroupManager::initCpuSetRoot()
 {
-    //std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
-    //Cpus cpus(data);
-    //SystemUtils::writeStringToFile(getCGroupCpuSetPath() + "/" + CpuSet::CPUS, cpus.toString() + "\n", true);
-    //SystemUtils::writeStringToFile(getCGroupCpuSetPath() + "/" + CpuSet::MEMS, getDefaultMems(), true);
-    //SystemUtils::writeStringToFile(getCGroupCpuSetPath() + "/" + CpuSet::CPU_EXCLUSIVE, std::to_string(true) + "\n", true);
+    std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
+    Cpus cpus(data);
+    SystemUtils::writeStringToFile(getCGroupCpuSetPath() + "/" + CpuSet::CPUS, cpus.toString() + "\n", true);
+    SystemUtils::writeStringToFile(getCGroupCpuSetPath() + "/" + CpuSet::MEMS, getDefaultMems(), true);
+    SystemUtils::writeStringToFile(getCGroupCpuSetPath() + "/" + CpuSet::CPU_EXCLUSIVE, std::to_string(true) + "\n", true);
 }
 void CGroupManager::initClickhouseCpuSet()
 {
@@ -174,20 +174,20 @@ void CGroupManager::initClickhouseCpuSet()
     bool res = std::filesystem::create_directory(getClickhouseCpuSetPath(), error_code);
     if (!res)
         throw Exception("create cgroup directory " + getClickhouseCpuSetPath() + " failed, filesystem error code: " + std::to_string(error_code.value()), ErrorCodes::CREATE_CGROUP_DIRECTORY_FAILED);
-    //std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
-    //Cpus cpus(data);
-    //SystemUtils::writeStringToFile(getClickhouseCpuSetPath() + "/" + CpuSet::CPUS, cpus.toString() + "\n", true);
-    //SystemUtils::writeStringToFile(getClickhouseCpuSetPath() + "/" + CpuSet::MEMS,  getDefaultMems(), true);
-    //SystemUtils::writeStringToFile(getClickhouseCpuSetPath() + "/" + CpuSet::CPU_EXCLUSIVE, std::to_string(true) + "\n", true);
+    std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
+    Cpus cpus(data);
+    SystemUtils::writeStringToFile(getClickhouseCpuSetPath() + "/" + CpuSet::CPUS, cpus.toString() + "\n", true);
+    SystemUtils::writeStringToFile(getClickhouseCpuSetPath() + "/" + CpuSet::MEMS,  getDefaultMems(), true);
+    SystemUtils::writeStringToFile(getClickhouseCpuSetPath() + "/" + CpuSet::CPU_EXCLUSIVE, std::to_string(true) + "\n", true);
 }
 
 void CGroupManager::moveClickhouseProc()
 {
-    //auto pid = getpid();
-    //std::stringstream ss;
-    //ss << pid;
-    //CpuSetPtr system_cpu_set = getCpuSet(SYSTEM);
-    //SystemUtils::writeStringToFile(system_cpu_set->dir_path + "/" + CpuSet::PROC, ss.str());
+    auto pid = getpid();
+    std::stringstream ss;
+    ss << pid;
+    CpuSetPtr system_cpu_set = getCpuSet(SYSTEM);
+    SystemUtils::writeStringToFile(system_cpu_set->dir_path + "/" + CpuSet::PROC, ss.str());
 }
 
 void CGroupManager::scaleCpuSet(CpuSet & cpu_set, const Cpus & cpus)
@@ -234,11 +234,11 @@ void CGroupManager::init()
 {
     if (enable())
     {
-        initCpuSetRoot();
-        initClickhouseCpuSet();
-        std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
-        Cpus cpus(data);
-        createCpuSet(SYSTEM, cpus);
+        //initCpuSetRoot();
+        //initClickhouseCpuSet();
+        //std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
+        //Cpus cpus(data);
+        //createCpuSet(SYSTEM, cpus);
         moveClickhouseProc();
         init_flag = true;
     }

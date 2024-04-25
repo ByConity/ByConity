@@ -56,7 +56,7 @@ IResourceGroup::QueryEntity::QueryEntity(
     QueryStatusType status_type_)
     : group(group_)
     , query(query_)
-    , query_context(new Context(query_context_))
+    , query_context(Context::createCopy(std::shared_ptr<const Context>(&query_context_)))
     , status_type(status_type_)
     , id(group->root->id.fetch_add(1, std::memory_order_relaxed)) {}
 

@@ -186,7 +186,7 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, int priority, std::opti
                 if constexpr (std::is_same_v<ThreadFromGlobalPool, Thread>)
                 {
                     auto & cgroup_manager = DB::CGroupManagerFactory::instance();
-                    if (cgroup_manager.isInit())
+                    if (cgroup_manager.isInit() && cpu_set)
                     {
                         DB::CpuSetPtr system_cpu_set = cgroup_manager.getSystemCpuSet();
                         system_cpu_set->addTask(threads.front().gettid());
@@ -283,7 +283,7 @@ void ThreadPoolImpl<Thread>::finalize()
     if (!tids.empty())
     {
         auto & cgroup_manager = DB::CGroupManagerFactory::instance();
-        if (cgroup_manager.isInit())
+        if (cgroup_manager.isInit() && cpu_set)
         {
             DB::CpuSetPtr system_cpu_set = cgroup_manager.getSystemCpuSet();
             system_cpu_set->addTasks(tids);
