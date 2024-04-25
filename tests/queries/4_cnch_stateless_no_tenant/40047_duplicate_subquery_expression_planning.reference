@@ -121,7 +121,7 @@ Projection Est. ? rows
    └─ Projection Est. ? rows
       │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=`expr#max(c)_1` + 1
       └─ Projection Est. ? rows
-         │     Expressions: expr#max(c)_1:=cast(`expr#max(c)`, \'Nullable(Int32)\')
+         │     Expressions: expr#max(c)_1:=cast(`expr#max(c)_2`, \'Nullable(Int32)\')
          └─ Left Join Est. ? rows
             │     Condition: b == c
             ├─ TableScan test.t40047_x Est. ? rows
@@ -132,7 +132,7 @@ Projection Est. ? rows
                      │     Partition by: {c}
                      └─ Aggregating Est. ? rows
                         │     Group by: {c}
-                        │     Aggregates: expr#max(c):=AggNull(maxIf)(c,build_side_non_null_symbol)
+                        │     Aggregates: expr#max(c)_2:=AggNull(maxIf)(c,build_side_non_null_symbol)
                         └─ Projection Est. ? rows
                            │     Expressions: [c], build_side_non_null_symbol:=1
                            └─ TableScan test.t40047_y Est. ? rows
@@ -141,7 +141,7 @@ Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(c)_1`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
 └─ Gather Exchange Est. ? rows
    └─ Projection Est. ? rows
-      │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=cast(`expr#max(c)_2`, \'Nullable(Int32)\') + 1
+      │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=cast(`expr#max(c)_4`, \'Nullable(Int32)\') + 1
       └─ Left Join Est. ? rows
          │     Condition: a == c_1
          ├─ Inner Join Est. ? rows
@@ -169,7 +169,7 @@ Projection Est. ? rows
                   │     Partition by: {c_1}
                   └─ Aggregating Est. ? rows
                      │     Group by: {c_1}
-                     │     Aggregates: expr#max(c)_2:=AggNull(maxIf)(c_1,build_side_non_null_symbol)
+                     │     Aggregates: expr#max(c)_4:=AggNull(maxIf)(c_1,build_side_non_null_symbol)
                      └─ Projection Est. ? rows
                         │     Expressions: [c_1], build_side_non_null_symbol:=1
                         └─ TableScan test.t40047_y Est. ? rows

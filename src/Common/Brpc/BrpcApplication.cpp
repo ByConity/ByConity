@@ -65,7 +65,7 @@ void BrpcApplication::initialize(const RawConfig & app_conf)
         item.second->init(brpc_config);
     }
     std::cout << Poco::DateTimeFormatter::format(Poco::DateTime(), "%Y.%m.%d %H:%M:%S.%i")
-              << " <Info> BrpcApplication::initialize Brpc is initialized with {} config holders" << holder_map.size() << " config holders"
+              << " <Info> BrpcApplication::initialize Brpc is initialized with " << holder_map.size() << " config holders config holders"
               << std::endl;
 }
 

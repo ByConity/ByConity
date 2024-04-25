@@ -252,6 +252,8 @@ public:
     {
         auto lock = lockPartsRead();
         const auto it = column_sizes.find(name);
+        if (it == std::end(column_sizes))
+            LOG_TRACE(log, "Can not get column compressed size:{}", name);
         return it == std::end(column_sizes) ? 0 : it->second.data_compressed;
     }
 
@@ -261,12 +263,16 @@ public:
         return column_sizes;
     }
 
+    std::pair<DataPartsVector, double> getCalculatedPartsAndRatio() const;
+
     /// Calculates column sizes in compressed form for the current state of data_parts. Call with data_parts mutex locked.
     void calculateColumnSizesImpl();
 
     /// Adds or subtracts the contribution of the part to compressed column sizes.
     void addPartContributionToColumnSizes(const DataPartPtr & part);
     void removePartContributionToColumnSizes(const DataPartPtr & part);
+    ColumnSize getMapColumnSizes(const DataPartPtr & part, const String & map_implicit_column_name) const;
+
 
     /// For ATTACH/DETACH/DROP PARTITION.
     String getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr context) const;
@@ -423,6 +429,8 @@ public:
     virtual bool supportsOptimizer() const override { return true; }
 
     bool commitTxnFromWorkerSide(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const;
+
+     ColumnSize calculateMapColumnSizesImpl(const String & map_implicit_column_name) const;
 
     void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
 

@@ -181,6 +181,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize
     {
         if (enable_plan_cache)
         {
+            context->applySettingChange({"enable_evaluate_constant_for_nondeterministic", false});
             if (context->getSettingsRef().enable_auto_prepared_statement)
             {
                 SubstituteLiteralToPreparedParamsMatcher::Data substitude_prepared_param_data(context);

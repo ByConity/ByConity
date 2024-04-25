@@ -28,6 +28,7 @@ export CMAKE_FLAGS
 rm -rf build && mkdir build && cd build
 
 source /etc/os-release
+set -e
 if [ "$NAME" == "CentOS Linux" ] && [ "$VERSION_ID" == "7" ] && hash scl 2>/dev/null; then
     echo "Found Centos 7 and scl"
     scl enable devtoolset-9 "CC=clang CXX=clang++ cmake3 ${CMAKE_FLAGS} -DCMAKE_MAKE_PROGRAM:FILEPATH=/usr/bin/ninja ../"

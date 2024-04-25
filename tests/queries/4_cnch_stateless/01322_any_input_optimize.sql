@@ -1,4 +1,5 @@
 SET optimize_move_functions_out_of_any = 1;
+SET enable_optimizer = 0;
 
 EXPLAIN SYNTAX SELECT any(number + number * 2) FROM numbers(1, 2);
 SELECT any(number + number * 2) FROM numbers(1, 2);

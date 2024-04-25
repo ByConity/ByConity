@@ -1492,6 +1492,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_sorting_property, true, "Whether enable sorting property rule", 0) \
     M(Bool, enable_streaming_property, true, "Whether enable streaming property rule", 0) \
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
+    M(Bool, enable_cross_join_to_union, false, "Whether enable convert cross join to union", 0) \
     M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
     M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
     M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
@@ -1575,7 +1576,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_simplify_join_filter_rewrite, true, "Whether to enable SimplifyJoinFilterRewrite rule", 0) \
     M(Bool, enable_simplify_expression_rewrite, true, "Whether to enable SimplifyExpressionRewrite rule", 0) \
     M(Bool, enable_simplify_predicate_in_projection, false, "Whether to rewrite predicate in projection", 0) \
-    M(Bool, enable_simplify_assume_not_null, false, "Whether to remove redundant assumeNotNull --temporary settings", 0) \
+    M(Bool, enable_simplify_assume_not_null, true, "Whether to remove redundant assumeNotNull --temporary settings", 0) \
+    M(Bool, enable_evaluate_constant_for_nondeterministic, true, "Enable evaluate the constant result of non-deterministic functions while using optimizer", 0) \
     M(Bool, enable_remove_redundant, true, "Whether to enable RemoveRedundant rules", 0) \
     M(Bool, enable_push_projection, true, "Whether to enable PushProjection rules", 0) \
     M(Bool, enable_push_partial_agg_through_exchange, true, "Whether to enable PushPartialAggThroughExchange rules", 0) \
@@ -1849,6 +1851,7 @@ enum PreloadLevelSettings : UInt64
     /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
+    M(Bool, enable_implicit_column_prewhere_push, false, "Enable push implicit column(map column) to prewhere", 0) \
     \
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
     M(Bool, throw_exception_when_mysql_connection_failed, false, "For mysql database engine, whether throw exception when mysql connection failed. If it is set to true, clickhouse may shutdown during restarting due to mysql connection failure", 0) \

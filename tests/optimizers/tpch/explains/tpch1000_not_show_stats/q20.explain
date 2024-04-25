@@ -17,13 +17,13 @@ Projection
             │     │  │     Partition by: {ps_partkey}
             │     │  └─ Inner (PARALLEL_HASH) Join
             │     │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-            │     │     │     Filter: ps_availqty > cast('0.5' * `expr#sum(l_quantity)`, 'Nullable(Decimal(38, 3))')
+            │     │     │     Filter: ps_availqty > cast('0.5' * `expr#sum(l_quantity)_1`, 'Nullable(Decimal(38, 3))')
             │     │     ├─ MergingAggregated
             │     │     │  └─ Repartition Exchange
             │     │     │     │     Partition by: {l_partkey, l_suppkey}
             │     │     │     └─ Aggregating
             │     │     │        │     Group by: {l_partkey, l_suppkey}
-            │     │     │        │     Aggregates: expr#sum(l_quantity):=AggNull(sumIf)(l_quantity,build_side_non_null_symbol)
+            │     │     │        │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sumIf)(l_quantity,build_side_non_null_symbol)
             │     │     │        └─ Projection
             │     │     │           │     Expressions: [l_partkey, l_quantity, l_suppkey], build_side_non_null_symbol:=1
             │     │     │           └─ Filter

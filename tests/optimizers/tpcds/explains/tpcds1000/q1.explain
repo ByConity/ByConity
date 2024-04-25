@@ -23,7 +23,7 @@ Projection Est. 100 rows
                   │     Partition by: {sr_customer_sk_1}
                   └─ Inner Join Est. 2147435 rows
                      │     Condition: sr_store_sk_1 == s_store_sk
-                     │     Filter: `expr#sum(sr_return_amt)_1` > (`expr#avg(ctr_total_return)` * '1.2')
+                     │     Filter: `expr#sum(sr_return_amt)_1` > (`expr#avg(ctr_total_return)_1` * '1.2')
                      ├─ Projection Est. 4294871 rows
                      │  │     Expressions: expr#sum(sr_return_amt)_1:=`expr#sum(sr_return_amt)_3`, sr_customer_sk_1:=sr_customer_sk_3, sr_store_sk_1:=sr_store_sk_3
                      │  └─ MergingAggregated Est. 4294871 rows
@@ -62,7 +62,7 @@ Projection Est. 100 rows
                            │     │     Partition by: {sr_store_sk_2}
                            │     └─ Aggregating Est. 41 rows
                            │        │     Group by: {sr_store_sk_2}
-                           │        │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(sr_return_amt)_2,build_side_non_null_symbol)
+                           │        │     Aggregates: expr#avg(ctr_total_return)_1:=AggNull(avgIf)(expr#sum(sr_return_amt)_2,build_side_non_null_symbol)
                            │        └─ Projection Est. 4294871 rows
                            │           │     Expressions: build_side_non_null_symbol:=1, expr#sum(sr_return_amt)_2:=`expr#sum(sr_return_amt)_4`, sr_store_sk_2:=sr_store_sk_4
                            │           └─ MergingAggregated Est. 4294871 rows

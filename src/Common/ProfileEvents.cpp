@@ -393,8 +393,14 @@
     M(HDFSWriteElapsedMicroseconds, "")\
     M(WriteBufferFromHdfsWrite, "")\
     M(WriteBufferFromHdfsWriteFailed, "")\
+    M(HdfsConnect, "") \
+    M(HdfsConnectMicroseconds, "") \
+    M(HdfsRequestErrors, "") \
     M(HdfsFileOpen, "")\
-    M(HdfsFileOpenMs, "")\
+    M(HdfsFileOpenMicroseconds, "")\
+    M(HdfsExists, "") \
+    M(HdfsList, "") \
+    M(HdfsRename, "") \
     M(ReadBufferFromHdfsRead, "")\
     M(ReadBufferFromHdfsReadFailed, "")\
     M(ReadBufferFromHdfsReadBytes, "")\

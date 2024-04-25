@@ -12,16 +12,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <Common/tests/gtest_global_context.h>
-#include <DaemonManager/BackgroudJobExecutor.h>
-#include <DaemonManager/DaemonJobServerBGThread.h>
-#include <DaemonManager/BackgroundJob.h>
-#include <Interpreters/Context.h>
-#include <gtest/gtest.h>
+#include <chrono>
 #include <string>
 #include <thread>
-#include <chrono>
+#include <DaemonManager/BackgroudJobExecutor.h>
+#include <DaemonManager/BackgroundJob.h>
+#include <DaemonManager/DaemonJobServerBGThread.h>
+#include <Interpreters/Context.h>
+#include <gtest/gtest.h>
+#include <Common/Brpc/BrpcApplication.h>
+#include <Common/tests/gtest_global_context.h>
+#include <Common/tests/gtest_utils.h>
+
 
 using namespace DB::DaemonManager;
 using namespace DB;
@@ -166,7 +168,22 @@ public:
     mutable std::map<UUID, CnchBGThreadStatus> stored_statuses;
 };
 
-TEST(backgroundjob, test_persistent_status)
+class BackGroundJobTest : public ::testing::Test
+{
+public:
+    static void SetUpTestCase()
+    {
+        UnitTest::initLogger();
+        Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
+        Coordination::BrpcApplication::getInstance().initialize(*map_config);
+    }
+
+    void SetUp() override
+    {
+    }
+};
+
+TEST_F(BackGroundJobTest, PersistentStatus)
 {
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
     const StablePersistentStoreProxy * proxy = dynamic_cast<const StablePersistentStoreProxy *>(&daemon_job.getStatusPersistentStore());
@@ -216,7 +233,7 @@ TEST(backgroundjob, test_persistent_status)
     }
 }
 
-TEST(backgroundjob, test_BackgroundJob_withStableDaemonJob)
+TEST_F(BackGroundJobTest, BackgroundJobWithStableDaemonJob)
 {
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
 
@@ -328,7 +345,7 @@ TEST(backgroundjob, test_BackgroundJob_withStableDaemonJob)
     }
 }
 
-TEST(backgroundjob, test_BackgroundJob_withUnstableDaemonJob)
+TEST_F(BackGroundJobTest, BackgroundJobWithUnstableDaemonJob)
 {
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<UnstableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
 
@@ -361,7 +378,7 @@ TEST(backgroundjob, test_BackgroundJob_withUnstableDaemonJob)
     EXPECT_EQ(bg_info.getHostPort(), MockTargetServerCalculater::TARGET_SERVER);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case0)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase0)
 {
     // server restart; target host change; running job
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -389,7 +406,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case0)
     EXPECT_EQ(bg_info.getHostPort(), MockTargetServerCalculater::TARGET_SERVER);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case1)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase1)
 {
     // target host change; running job
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -419,7 +436,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case1)
     EXPECT_EQ(bg_info.getHostPort(), MockTargetServerCalculater::TARGET_SERVER);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case2)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase2)
 {
     // server die, target host change
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -447,7 +464,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case2)
     EXPECT_EQ(bg_info.getHostPort(), MockTargetServerCalculater::TARGET_SERVER);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case3)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase3)
 {
     // nothing change, running job
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -472,7 +489,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case3)
     EXPECT_EQ(bg_info.getHostPort(), MockTargetServerCalculater::TARGET_SERVER);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case4)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase4)
 {
     // stopped job, server die, target host change
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -496,7 +513,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case4)
     EXPECT_EQ(bg_info.getJobStatus(), CnchBGThreadStatus::Stopped);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case5)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase5)
 {
     // removed bg job, server die, target host change
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -520,7 +537,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case5)
     EXPECT_EQ(bg_info.getJobStatus(), CnchBGThreadStatus::Removed);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case6)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase6)
 {
     // nothing change, remove job, set expected status to Running
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -551,7 +568,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case6)
     EXPECT_EQ(bg_info.getHostPort(), MockTargetServerCalculater::TARGET_SERVER);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case13)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase13)
 {
     /// target host not found
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -577,7 +594,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case13)
     EXPECT_EQ(bg_info.getHostPort(), SERVER1);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case14)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase14)
 {
     /// target host not found, server restart
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -605,7 +622,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case14)
     EXPECT_EQ(bg_info.getHostPort(), MockTargetServerCalculater::TARGET_SERVER);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case15)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase15)
 {
     /// target host not found, server die
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -633,7 +650,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case15)
     EXPECT_EQ(bg_info.getHostPort(), MockTargetServerCalculater::TARGET_SERVER);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_case16)
+TEST_F(BackGroundJobTest, BackgroundJobSyncCase16)
 {
     // stopped job, server die, host_port_empty
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -658,7 +675,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_case16)
     EXPECT_EQ(bg_info.getJobStatus(), CnchBGThreadStatus::Stopped);
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_with_persistent_status_case0)
+TEST_F(BackGroundJobTest, BackgroundJobSyncWithPersistentStatusCase0)
 {
     // server restart; target host change; running job, persistent status is stop
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -700,7 +717,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_with_persistent_status_case0)
     }
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_with_persistent_status_case1)
+TEST_F(BackGroundJobTest, BackgroundJobSyncWithPersistentStatusCase1)
 {
     // target host change; running job, persistent status is stop
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -743,7 +760,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_with_persistent_status_case1)
     }
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_with_persistent_status_case2)
+TEST_F(BackGroundJobTest, BackgroundJobSyncWithPersistentStatusCase2)
 {
     // server die; running job, persistent status is stop
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -784,7 +801,7 @@ TEST(backgroundjob, test_BackgroundJob_sync_with_persistent_status_case2)
     }
 }
 
-TEST(backgroundjob, test_BackgroundJob_sync_with_persistent_status_case3)
+TEST_F(BackGroundJobTest, BackgroundJobSyncWithPersistentStatusCase3)
 {
     // running job, persistent status is stop
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());

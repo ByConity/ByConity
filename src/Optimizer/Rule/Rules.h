@@ -47,6 +47,7 @@ public:
     static std::vector<RulePtr> pushDownBitmapProjection();
     static std::vector<RulePtr> pushProjectionIntoTableScanRules();
     static std::vector<RulePtr> pushIndexProjectionIntoTableScanRules();
+    static std::vector<RulePtr> crossJoinToUnion();
 };
 
 }

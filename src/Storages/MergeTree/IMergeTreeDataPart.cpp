@@ -1662,7 +1662,7 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
      }
  }
 
-String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
+String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix, bool is_detach) const
 {
     String res;
 
@@ -1673,9 +1673,9 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
         */
     for (int try_no = 0; try_no < 10; try_no++)
     {
-        res = (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation() + (try_no ? "_try" + DB::toString(try_no) : "");
+        res = (is_detach ? "detached/" : "") + (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation() + (try_no ? "_try" + DB::toString(try_no) : "");
 
-        if (!volume->getDisk()->exists(fs::path(getFullRelativePath()) / res))
+        if (!volume->getDisk()->exists(fs::path(storage.getRelativeDataPath(location)) / res))
             return res;
 
         LOG_WARNING(storage.log, "Directory {} (to detach to) already exists. Will detach to directory with '_tryN' suffix.", res);
@@ -1748,10 +1748,10 @@ String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix)
     assert(prefix.empty() || std::find(DetachedPartInfo::DETACH_REASONS.begin(),
                                        DetachedPartInfo::DETACH_REASONS.end(),
                                        prefix) != DetachedPartInfo::DETACH_REASONS.end());
-    return "detached/" + getRelativePathForPrefix(prefix);
+    return getRelativePathForPrefix(prefix, /*is_detach*/true);
 }
 
-String IMergeTreeDataPart::getRelativePathToDiskForDetachedPart(const String & prefix) const
+String IMergeTreeDataPart::getFullRelativePathForDetachedPart(const String & prefix) const
 {
     return fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
 }
@@ -1763,7 +1763,7 @@ void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 
 void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
 {
-    String destination_path = getRelativePathToDiskForDetachedPart(prefix);
+    String destination_path = getFullRelativePathForDetachedPart(prefix);
 
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);
@@ -1960,6 +1960,40 @@ ColumnSize IMergeTreeDataPart::getColumnSize(const String & column_name, const I
         return it->second;
 
     return ColumnSize{};
+}
+
+ColumnSize IMergeTreeDataPart::getMapColumnSize(const String & map_implicit_column_name, const IDataType & type) const
+{
+    auto checksums = getChecksums();
+    ColumnSize size;
+    if (checksums->empty())
+        return size;
+
+    // special handling flattened map type
+    if (type.isByteMap())
+    {
+        const auto & implicit_map_type = typeid_cast<const DataTypeMap &>(type).getValueTypeForImplicitColumn();
+        implicit_map_type->getDefaultSerialization()->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path) {
+            auto filename = ISerialization::getFileNameForStream({map_implicit_column_name, implicit_map_type}, substream_path);
+            const String & implicit_col_name_bin = filename + DATA_FILE_EXTENSION;
+            const String & implicit_col_name_mrk = filename + getMarksFileExtension();
+
+            // we get name, and we direct find in map
+            auto pos1 = checksums->files.find(implicit_col_name_bin);
+            auto pos2 = checksums->files.find(implicit_col_name_mrk);
+            if (pos1 != checksums->files.end())
+            {
+                size.data_compressed += pos1->second.file_size;
+                size.data_uncompressed += pos1->second.uncompressed_size;
+            }
+            if (pos2 != checksums->files.end())
+            {
+                size.marks += pos2->second.file_size;
+            }
+
+        });
+    }
+    return size;
 }
 
 void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) const

@@ -163,6 +163,8 @@ enum class RuleType : UInt32
 
     EAGER_AGGREGATION,
 
+    CROSS_JOIN_TO_UNION,
+
     // Implementation
     SET_JOIN_DISTRIBUTION,
 

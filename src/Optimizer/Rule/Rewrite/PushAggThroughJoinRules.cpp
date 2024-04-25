@@ -143,7 +143,11 @@ static MappedAggregationInfo createAggregationOverNull(const AggregatingStep * r
 // of an aggregation over a single null row is one or zero rather than null. In order to ensure correct results,
 // we add a coalesce function with the output of the new outer join and the aggregation performed over a single
 // null row.
-static PlanNodePtr coalesceWithNullAggregation(const AggregatingStep * aggregation_step, const PlanNodePtr & outerJoin, Context & context)
+static PlanNodePtr coalesceWithNullAggregation(
+    const AggregatingStep * aggregation_step,
+    const PlanNodePtr & outerJoin,
+    const NameToNameMap & rewritten_aggregates_to_outputs,
+    Context & context)
 {
     // Create an aggregation node over a row of nulls.
     MappedAggregationInfo aggregation_over_null_info = createAggregationOverNull(aggregation_step, context);
@@ -195,19 +199,37 @@ static PlanNodePtr coalesceWithNullAggregation(const AggregatingStep * aggregati
                 ASTs{
                     std::make_shared<ASTIdentifier>(symbol.name),
                     std::make_shared<ASTIdentifier>(source_aggregation_to_over_null_mapping[symbol.name])});
-            assignments_builder.emplace_back(symbol.name, coalesce);
+            assignments_builder.emplace_back(rewritten_aggregates_to_outputs.at(symbol.name), coalesce);
+            name_to_type[rewritten_aggregates_to_outputs.at(symbol.name)] = symbol.type;
         }
         else
         {
             assignments_builder.emplace_back(symbol.name, std::make_shared<ASTIdentifier>(symbol.name));
+            name_to_type[symbol.name] = symbol.type;
         }
-        name_to_type[symbol.name] = symbol.type;
     }
 
     auto projection_step = std::make_shared<ProjectionStep>(cross_join->getStep()->getOutputStream(), std::move(assignments_builder), std::move(name_to_type));
     return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(projection_step), {cross_join});
 }
 
+static PlanNodePtr
+restoreOutputName(const PlanNodePtr & node, const NameToNameMap & rewritten_aggregates_to_outputs, ContextMutablePtr & context)
+{
+    Assignments assignments_builder;
+    NameToType name_to_type;
+
+    for (const auto & symbol : node->getStep()->getOutputStream().header)
+    {
+        String output_name
+            = rewritten_aggregates_to_outputs.count(symbol.name) ? rewritten_aggregates_to_outputs.at(symbol.name) : symbol.name;
+        assignments_builder.emplace_back(output_name, std::make_shared<ASTIdentifier>(symbol.name));
+        name_to_type[output_name] = symbol.type;
+    }
+
+    auto projection_step = std::make_shared<ProjectionStep>(node->getStep()->getOutputStream(), assignments_builder, name_to_type);
+    return PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(projection_step), {node});
+}
 
 PatternPtr PushAggThroughOuterJoin::getPattern() const
 {
@@ -278,11 +300,22 @@ TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, 
 
     auto grouping_keys = join_step->getKind() == ASTTableJoin::Kind::Right ? join_step->getLeftKeys() : join_step->getRightKeys();
 
+    // Use new names for pushed aggregates to avoid name conflict when aggregation over null is needed.
+    // Keep the name mappings to restore the output name at the end.
+    auto rewritten_aggregates = agg_step->getAggregates();
+    NameToNameMap rewritten_aggregates_to_outputs;
+    for (auto & agg_desc : rewritten_aggregates)
+    {
+        auto rewritten_name = context.context->getSymbolAllocator()->newSymbol(agg_desc.column_name);
+        rewritten_aggregates_to_outputs.emplace(rewritten_name, agg_desc.column_name);
+        agg_desc.column_name = rewritten_name;
+    }
+
     auto rewritten_aggregation = std::make_shared<AggregatingStep>(
         inner_table->getStep()->getOutputStream(),
         grouping_keys,
         agg_step->getKeysNotHashed(),
-        agg_step->getAggregates(),
+        rewritten_aggregates,
         agg_step->getGroupingSetsParams(),
         agg_step->isFinal(),
         SortDescription{},
@@ -376,7 +409,10 @@ TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, 
     if (add_null)
     {
         auto result_node = coalesceWithNullAggregation(
-            dynamic_cast<const AggregatingStep *>(rewritten_agg_node->getStep().get()), rewritten_join, *context.context);
+            dynamic_cast<const AggregatingStep *>(rewritten_agg_node->getStep().get()),
+            rewritten_join,
+            rewritten_aggregates_to_outputs,
+            *context.context);
         if (!result_node)
         {
             return {};
@@ -389,7 +425,7 @@ TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, 
         {
             return {};
         }
-        return rewritten_join;
+        return restoreOutputName(rewritten_join, rewritten_aggregates_to_outputs, context.context);
     }
 }
 

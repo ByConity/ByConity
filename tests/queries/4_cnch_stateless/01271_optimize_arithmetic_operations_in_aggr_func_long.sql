@@ -1,4 +1,5 @@
 SET optimize_arithmetic_operations_in_aggregate_functions = 1;
+SET enable_optimizer = 0;
 
 EXPLAIN SYNTAX SELECT sum(n + 1), sum(1 + n), sum(n - 1), sum(1 - n) FROM (SELECT number n FROM numbers(10));
 EXPLAIN SYNTAX SELECT sum(n * 2), sum(2 * n), sum(n / 2), sum(1 / n) FROM (SELECT number n FROM numbers(10));
