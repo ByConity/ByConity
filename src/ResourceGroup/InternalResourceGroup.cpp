@@ -35,16 +35,13 @@ namespace ErrorCodes
 
 bool InternalResourceGroup::canRunMore() const
 {
-    return true;
-    /*return (max_concurrent_queries == 0 || static_cast<Int32>(running_queries.size()) + descendent_running_queries < max_concurrent_queries)
+    return (max_concurrent_queries == 0 || static_cast<Int32>(running_queries.size()) + descendent_running_queries < max_concurrent_queries)
         && (soft_max_memory_usage == 0 || cached_memory_usage_bytes < soft_max_memory_usage);
-    */
 }
 
 bool InternalResourceGroup::canQueueMore() const
 {
-    return false;
-    // return static_cast<Int32>(queued_queries.size()) + descendent_queued_queries < max_queued;
+    return static_cast<Int32>(queued_queries.size()) + descendent_queued_queries < max_queued;
 }
 
 void InternalResourceGroup::initCpu()

@@ -92,6 +92,7 @@ public:
 
         IResourceGroup * group;
         String query;
+        const ContextPtr query_context;
         QueryStatusType status_type = QueryStatusType::WAITING;
         Int32 id;
         UInt64 queue_timestamp;

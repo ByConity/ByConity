@@ -52,10 +52,11 @@ void IResourceGroup::setParent(IResourceGroup * parent_)
 IResourceGroup::QueryEntity::QueryEntity(
     IResourceGroup * group_,
     const String & query_,
-    const Context & /*query_context_*/,
+    const Context & query_context_,
     QueryStatusType status_type_)
     : group(group_)
     , query(query_)
+    , query_context(new Context(query_context_))
     , status_type(status_type_)
     , id(group->root->id.fetch_add(1, std::memory_order_relaxed)) {}
 
@@ -120,7 +121,7 @@ IResourceGroup::Container::iterator IResourceGroup::run(const String & query, co
 
 IResourceGroup::Container::iterator IResourceGroup::enqueueQuery(IResourceGroup::Element & element)
 {
-    //element->queue_timestamp = element->query_context->getTimestamp();
+    element->queue_timestamp = element->query_context->getTimestamp();
     Container::iterator it = queued_queries.emplace(queued_queries.end(), element);
     IResourceGroup *group = parent;
     while (group)

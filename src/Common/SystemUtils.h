@@ -26,6 +26,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
+#include <IO/ReadBufferFromFile.h>
 #include <boost/algorithm/string.hpp>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -130,6 +131,13 @@ public:
         hashing_writer.write(content.c_str(), content.size());
         hashing_writer.getHash();
         file_writer.close();
+    }
+
+    static int ReadFileToString(const String & filename, String & content)
+    {
+        ReadBufferFromFile file_reader(filename);
+        readStringUntilEOF(content, file_reader);
+        return 0;
     }
 
     static size_t gettid()

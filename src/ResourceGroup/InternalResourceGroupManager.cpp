@@ -292,9 +292,6 @@ int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, 
 //only set leaf nodes cfs_quota and cfs_period
 int InternalResourceGroupManager::setCfsQuotaPeriod(const String & root_group, int64_t cfs_quota_us, int64_t cfs_period_us)
 {
-    auto iter = root_groups.find(root_group);
-    assert(iter != root_groups.end());
-
     auto get_leaf_children_func = [&](IResourceGroup* root_group_ptr) -> std::vector<IResourceGroup*> {
         std::vector<IResourceGroup*> result_groups;
 
@@ -305,23 +302,26 @@ int InternalResourceGroupManager::setCfsQuotaPeriod(const String & root_group, i
         }
         while (!groups.empty())
         {
-            std::vector<IResourceGroup*> tmp_groups;
-            tmp_groups.swap(groups);
-            for (auto & item : tmp_groups)
+            auto iter = groups.begin();
+            auto item = *iter;
+            groups.erase(iter);
+
+            if (item->getChildren().empty())
             {
-                if (item->getChildren().empty())
-                {
-                    result_groups.push_back(item);
-                }
-                for (auto child : item->getChildren())
-                {
-                    groups.emplace_back(child.second);
-                }
+                result_groups.push_back(item);
+            }
+
+            for (auto child : item->getChildren())
+            {
+                groups.emplace_back(child.second);
             }
         }
 
         return result_groups;
     };
+
+    auto iter = root_groups.find(root_group);
+    assert(iter != root_groups.end());
 
     auto leaf_children = get_leaf_children_func(iter->second);
     for (auto & item : leaf_children)
