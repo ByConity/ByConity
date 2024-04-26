@@ -350,9 +350,9 @@ public:
         return tableMetaPrefix(name_space) + uuid + '_';
     }
 
-    static std::string udfStoreKey(const std::string & name_space, const std::string & db, const std::string & function_name)
+    static std::string udfStoreKey(const std::string & name_space, const std::string & prefix_name, const std::string & function_name)
     {
-        return udfMetaPrefix(name_space) + db + '.' + function_name;
+        return udfMetaPrefix(name_space) + prefix_name + '.' + function_name;
     }
 
     static std::string udfStoreKey(const std::string & name_space, const std::string & name)
@@ -977,7 +977,7 @@ public:
     String getTrashTableUUID(const String & name_space, const String & database, const String & name, const UInt64 & ts);
     void createTable(const String & name_space, const UUID & db_uuid, const DB::Protos::DataModelTable & table_data, const Strings & dependencies, const Strings & masking_policy_mapping);
     void createUDF(const String & name_space, const DB::Protos::DataModelUDF & udf_data);
-    void dropUDF(const String & name_space, const String &db_name, const String &function_name);
+    void dropUDF(const String & name_space, const String &resolved_function_name);
     void updateTable(const String & name_space, const String & table_uuid, const String & table_info_new, const UInt64 & ts);
     void updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data);
     void getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info);

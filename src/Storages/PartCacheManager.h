@@ -56,7 +56,8 @@ public:
 
     TableMetaEntryPtr getTableMeta(const UUID & uuid);
 
-    void mayUpdateTableMeta(const IStorage & storage, const PairInt64 & topology_version);
+    /// `on_table_creation` will give the information that there is no need to sync metrics on the new table.
+    void mayUpdateTableMeta(const IStorage & storage, const PairInt64 & topology_version, bool on_table_creation = false);
 
     void updateTableNameInMetaEntry(const String & table_uuid, const String & database_name, const String & table_name);
 
@@ -191,8 +192,6 @@ public:
         LoadDeleteBitmapsFunc && load_func,
         const UInt64 & ts,
         const PairInt64 & topology_version);
-
-    void mayUpdateTableMeta(const StoragePtr & table);
 
     bool trySetCachedNHUTForUpdate(const UUID & uuid, const UInt64 & pts);
 
