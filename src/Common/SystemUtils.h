@@ -41,6 +41,7 @@ namespace ErrorCodes
     extern const int CANNOT_OPEN_FILE;
     extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
     extern const int CANNOT_READ_ALL_DATA;
+    extern const int FILE_DOESNT_EXIST;
 }
 
 extern size_t max_numa_node;
@@ -135,6 +136,9 @@ public:
 
     static int ReadFileToString(const String & filename, String & content)
     {
+        if (!std::filesystem::exists(filename))
+            throw  Exception("file " + filename + " not exists", ErrorCodes::FILE_DOESNT_EXIST);
+
         ReadBufferFromFile file_reader(filename);
         readStringUntilEOF(content, file_reader);
         return 0;

@@ -1452,7 +1452,7 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
     shared->access_control_manager.setUsersConfig(*shared->users_config);
     if (getServerType() == ServerType::cnch_server || getServerType() == ServerType::cnch_worker)
     {
-        if (!shared->resource_group_manager && CGroupManagerFactory::instance().isInit())
+        if (!shared->resource_group_manager)
             initResourceGroupManager(config);
 
         if (shared->resource_group_manager)
@@ -1489,10 +1489,8 @@ void Context::setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_sett
 }
 
 
-void Context::initResourceGroupManager([[maybe_unused]] const ConfigurationPtr & config)
+void Context::initResourceGroupManager(const ConfigurationPtr & config)
 {
-    LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Skip initialize resource group");
-
     if (!config->has("resource_groups"))
     {
         LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
@@ -1503,15 +1501,18 @@ void Context::initResourceGroupManager([[maybe_unused]] const ConfigurationPtr &
     {
         if (!getResourceManagerClient())
         {
-            LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
+            LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialized.");
             return;
         }
-        LOG_DEBUG(&Poco::Logger::get("Context"), "Creating VW Resource Group Manager");
         shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
     }
     else if (resource_group_manager_type == "internal")
     {
-        LOG_DEBUG(&Poco::Logger::get("Context"), "Creating Internal Resource Group Manager");
+        if (!CGroupManagerFactory::instance().isInit())
+        {
+            LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create Internal Resource Group Manager since cgroup manger is not initialized");
+            return ;
+        }
         shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
     }
     else

@@ -194,6 +194,14 @@ void InternalResourceGroupManager::initialize(const Poco::Util::AbstractConfigur
               groups.size(), select_cases.size());
 
     select_algorithm = config.getString("resource_groups.select_algorithm", "user_query");
+    if (select_algorithm == "user_query")
+    {
+        resource_select_algorithm = std::make_shared<UserQuerySelectStrategy>(this);
+    }
+    else
+    {
+        resource_select_algorithm = std::make_shared<UserTableSelectStrategy>(this);
+    }
 
     bool old_val = false;
     if (!root_groups.empty()
@@ -209,16 +217,6 @@ void InternalResourceGroupManager::initialize(const Poco::Util::AbstractConfigur
 
 IResourceGroup * InternalResourceGroupManager::selectGroup(const Context & query_context, const IAST * ast)
 {
-    std::shared_ptr<IResouceGroupSelectStrategy> resource_select_algorithm;
-    if (select_algorithm == "user_query")
-    {
-        resource_select_algorithm = std::make_shared<UserQuerySelectStrategy>(this);
-    }
-    else
-    {
-        resource_select_algorithm = std::make_shared<UserTableSelectStrategy>(this);
-    }
-
     return resource_select_algorithm->selectGroup(query_context, ast);
 }
 

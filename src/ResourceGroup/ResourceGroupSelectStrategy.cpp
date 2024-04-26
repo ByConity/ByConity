@@ -9,6 +9,7 @@
 #include <Common/thread_local_rng.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <common/logger_useful.h>
+#include <city.h>
 
 namespace DB
 {
@@ -24,7 +25,7 @@ IResourceGroup* UserTableSelectStrategy::selectGroup(const Context & query_conte
     auto & select_cases = resource_group_manager->getSelectCases();
     const ClientInfo & client_info = query_context.getClientInfo();
 
-    const auto get_user_group = [&]() -> IResourceGroup * {
+    const auto get_user_group = [&select_cases, &client_info]() -> IResourceGroup * {
         for (const auto & [_, select_case] : select_cases)
         {
             if ((select_case.user == nullptr || std::regex_match(client_info.initial_user, *(select_case.user))))
@@ -34,7 +35,7 @@ IResourceGroup* UserTableSelectStrategy::selectGroup(const Context & query_conte
     };
 
     IResourceGroup * user_group = get_user_group();
-    LOG_DEBUG(&Poco::Logger::get("UserTableSelectStrategy"), "user {} user_group {} children_size {}", 
+    LOG_DEBUG(logger, "user {} user_group {} children_size {}", 
             client_info.initial_user, user_group ? user_group->getName() : "not found", 
             user_group ? user_group->getChildren().size() : 0);
     if (user_group && !user_group->getChildren().empty())
@@ -69,7 +70,7 @@ IResourceGroup* UserTableSelectStrategy::selectGroup(const Context & query_conte
             database_and_table = getDatabaseAndTable(*select_query, 0);
         }
 
-        LOG_DEBUG(&Poco::Logger::get("UserTableSelectStrategy"), "user_query {} user_group {} table {}", 
+        LOG_DEBUG(logger, "user_query {} user_group {} table {}", 
             select_query ? "select" : "not_select", 
             user_group->getName(), 
             database_and_table ? database_and_table->table : "empty");
@@ -82,8 +83,8 @@ IResourceGroup* UserTableSelectStrategy::selectGroup(const Context & query_conte
                 table = table.substr(0, table.find_last_of('_'));
             }
 
-            group_idx = std::hash<String>()(table) % children.size();
-            LOG_DEBUG(&Poco::Logger::get("UserTableSelectStrategy"), "user {} table {} group_idx {}", client_info.initial_user, table, group_idx);
+            group_idx = CityHash_v1_0_2::CityHash64(table.data(), table.length()) % children.size();
+            LOG_DEBUG(logger, "user {} table {} group_idx {}", client_info.initial_user, table, group_idx);
         }
         else
         {
@@ -126,7 +127,7 @@ IResourceGroup* UserQuerySelectStrategy::selectGroup(const Context & query_conte
         }
     }
 
-    LOG_DEBUG(&Poco::Logger::get("UserQuerySelectStrategy"), "user {} res_group {} children_size {}", 
+    LOG_DEBUG(logger, "user {} res_group {} children_size {}", 
             client_info.initial_user, res_group ? res_group->getName() : "not found", 
             res_group ? res_group->getChildren().size() : 0);
 

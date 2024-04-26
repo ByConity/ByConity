@@ -40,6 +40,11 @@ namespace ErrorCodes
     extern const int RESOURCE_GROUP_MISMATCH;
 }
 
+VWResourceGroupManager::VWResourceGroupManager(ContextPtr global_context_) 
+    : WithContext(global_context_)
+    , select_strategy(std::make_shared<VWSelectStrategy>(this))
+{
+}
 void VWResourceGroupManager::initialize([[maybe_unused]] const Poco::Util::AbstractConfiguration & config)
 {
     bool old_val= false;
@@ -56,8 +61,7 @@ void VWResourceGroupManager::initialize([[maybe_unused]] const Poco::Util::Abstr
 
 IResourceGroup* VWResourceGroupManager::selectGroup(const Context & query_context, const IAST *ast)
 {
-    VWSelectStrategy strategy(this);
-    return strategy.selectGroup(query_context, ast);
+    return select_strategy->selectGroup(query_context, ast);
 }
 
 IResourceGroup* VWResourceGroupManager::addGroup(const String & virtual_warehouse, const VirtualWarehouseData & vw_data) const

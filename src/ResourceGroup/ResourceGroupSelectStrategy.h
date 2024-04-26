@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <Parsers/IAST.h>
+#include <Poco/Logger.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -25,14 +26,16 @@ public:
 
 protected:
     IResourceGroupManager * resource_group_manager;
+    Poco::Logger* logger;
 };
 
 class UserTableSelectStrategy : public IResouceGroupSelectStrategy
 {
 public:
-    UserTableSelectStrategy(IResourceGroupManager * manager) : IResouceGroupSelectStrategy(manager)
+    UserTableSelectStrategy(IResourceGroupManager * manager)
+        : IResouceGroupSelectStrategy(manager)
     {
-
+        logger = &Poco::Logger::get("UserTableSelectStrategy");
     }
     ~UserTableSelectStrategy() override
     {
@@ -46,9 +49,10 @@ public:
 class UserQuerySelectStrategy: public IResouceGroupSelectStrategy
 {
 public:
-    UserQuerySelectStrategy(IResourceGroupManager * manager) : IResouceGroupSelectStrategy(manager)
+    UserQuerySelectStrategy(IResourceGroupManager * manager) 
+        : IResouceGroupSelectStrategy(manager)
     {
-
+        logger = &Poco::Logger::get("UserQuerySelectStrategy");
     }
     ~UserQuerySelectStrategy() override
     {
@@ -62,8 +66,10 @@ public:
 class VWSelectStrategy: public IResouceGroupSelectStrategy
 {
 public:
-    VWSelectStrategy(IResourceGroupManager * manager) : IResouceGroupSelectStrategy(manager)
+    VWSelectStrategy(IResourceGroupManager * manager) 
+        : IResouceGroupSelectStrategy(manager)
     {
+        logger = &Poco::Logger::get("VWSelectStrategy");
     }
     ~VWSelectStrategy() override
     {

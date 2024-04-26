@@ -28,6 +28,8 @@
 
 namespace DB
 {
+class IResouceGroupSelectStrategy;
+
 class InternalResourceGroupManager : public IResourceGroupManager
 {
 public:
@@ -110,6 +112,7 @@ private:
 
     std::unique_ptr<ResourceTask> resource_task;
     String select_algorithm;
+    std::shared_ptr<IResouceGroupSelectStrategy> resource_select_algorithm;
 };
 
 }

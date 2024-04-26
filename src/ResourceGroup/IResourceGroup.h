@@ -85,14 +85,14 @@ public:
         QueryEntity(
             IResourceGroup * group_,
             const String & query_,
-            const Context & query_context_,
+            const ContextPtr & query_context_,
             QueryStatusType status_type_ = QueryStatusType::WAITING);
 
         bool operator==(const QueryEntity & other) { return id == other.id; }
 
         IResourceGroup * group;
         String query;
-        const ContextPtr query_context;
+        ContextPtr query_context;
         QueryStatusType status_type = QueryStatusType::WAITING;
         Int32 id;
         UInt64 queue_timestamp;
@@ -127,7 +127,7 @@ public:
 
     std::lock_guard<std::mutex> getLock() const {return std::lock_guard<std::mutex>(root->mutex);}
 
-    Container::iterator run(const String & query, const Context & query_context);
+    Container::iterator run(const String & query, const ContextPtr & query_context);
     Handle insert(Container::iterator it) { return std::make_shared<QueryEntityHandler>(it); }
     void processQueuedQueues();
     bool isLeaf() const { return children.empty(); }

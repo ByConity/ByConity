@@ -88,7 +88,7 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
             {
                 auto * command_ast = child->as<ASTAlterCommand>();
 
-                if (auto command = AlterCommand::parse(command_ast, nullptr); command)
+                if (auto command = AlterCommand::parse(command_ast); command)
                 {
                     if (command->type == AlterCommand::Type::ADD_COLUMN || command->type == AlterCommand::Type::DROP_COLUMN
                         || command->type == AlterCommand::Type::MODIFY_COLUMN || command->type == AlterCommand::Type::COMMENT_COLUMN

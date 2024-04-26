@@ -52,20 +52,17 @@ void IResourceGroup::setParent(IResourceGroup * parent_)
 IResourceGroup::QueryEntity::QueryEntity(
     IResourceGroup * group_,
     const String & query_,
-    const Context & query_context_,
+    const ContextPtr & query_context_,
     QueryStatusType status_type_)
     : group(group_)
     , query(query_)
-    , query_context(Context::createCopy(std::shared_ptr<const Context>(&query_context_)))
+    , query_context(query_context_)
     , status_type(status_type_)
     , id(group->root->id.fetch_add(1, std::memory_order_relaxed)) {}
 
 void IResourceGroup::queryFinished(IResourceGroup::Container::iterator it)
 {
     std::lock_guard lock(root->mutex);
-    auto res = std::find(running_queries.begin(), running_queries.end(), *it);
-    if (res == running_queries.end())
-        throw Exception("The running query can not be found in the resource group " + name, ErrorCodes::RESOURCE_GROUP_INTERNAL_ERROR);
     running_queries.erase(it);
     IResourceGroup * group = parent;
     while (group)
@@ -77,7 +74,7 @@ void IResourceGroup::queryFinished(IResourceGroup::Container::iterator it)
     setInUse(true);
 }
 
-IResourceGroup::Container::iterator IResourceGroup::run(const String & query, const Context & query_context)
+IResourceGroup::Container::iterator IResourceGroup::run(const String & query, const ContextPtr & query_context)
 {
     std::unique_lock lock(root->mutex);
     bool canRun = true;
