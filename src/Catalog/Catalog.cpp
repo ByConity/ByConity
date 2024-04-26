@@ -1332,7 +1332,7 @@ namespace Catalog
                 if (is_host_server && cache_manager)
                 {
                     auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version);
-                    if (cached_storage && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
+                    if (cached_storage && cached_storage->commit_time <= ts && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
                     {
                         res = cached_storage;
                         return;
@@ -1403,7 +1403,7 @@ namespace Catalog
                     if (current_topology_version != PairInt64(0, 0))
                     {
                         auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(uuid), current_topology_version);
-                        if (cached_storage)
+                        if (cached_storage && cached_storage->commit_time <= ts)
                         {
                             auto host_server = current_topology.getTargetServer(uuid, cached_storage->getServerVwName());
                             if (isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort())))
