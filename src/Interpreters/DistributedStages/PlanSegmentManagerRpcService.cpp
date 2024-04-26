@@ -558,6 +558,8 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
             execution_info.source_task_index = request->source_task_index();
             execution_info.source_task_count = request->source_task_count();
         }
+        if (request->has_retry_id())
+            execution_info.retry_id = request->retry_id();
         query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{request->plan_segment_id(), request->parallel_id()});
 
         /// Set client info.

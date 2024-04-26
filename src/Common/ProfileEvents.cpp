@@ -1063,7 +1063,9 @@
     M(UpdateMvMetaIDSuccess, "") \
     M(UpdateMvMetaIDFailed, "") \
 \
-    M(AfterPrewhereNumRows, "Number of rows after filtered by prewhere")
+    M(AfterPrewhereNumRows, "Number of rows after filtered by prewhere") \
+\
+    M(PlanSegmentInstanceRetry, "How many times this plan segment has been retried, only valid under bsp mode")
 
 namespace ProfileEvents
 {

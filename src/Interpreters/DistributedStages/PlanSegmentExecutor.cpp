@@ -79,6 +79,7 @@ namespace ProfileEvents
 {
     extern const Event SystemTimeMicroseconds;
     extern const Event UserTimeMicroseconds;
+    extern const Event PlanSegmentInstanceRetry;
 }
 
 namespace DB
@@ -327,6 +328,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
                     plan_segment->getPlanSegmentId(),
                     plan_segment_instance->info.parallel_id));
         }
+        CurrentThread::getProfileEvents().increment(ProfileEvents::PlanSegmentInstanceRetry, plan_segment_instance->info.retry_id);
     }
 
     // set process list before building pipeline, or else TableWriteTransform's output stream can't set its process list properly
@@ -344,7 +346,6 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         this->progress.incrementPiecewiseAtomically(value);
         this->final_progress.incrementPiecewiseAtomically(value);
     });
-
 
     size_t max_threads = context->getSettingsRef().max_threads;
     if (max_threads)

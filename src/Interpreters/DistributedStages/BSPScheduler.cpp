@@ -404,6 +404,10 @@ PlanSegmentExecutionInfo BSPScheduler::generateExecutionInfo(size_t task_id, siz
         execution_info.source_task_index = source_task_idx[instance].first;
         execution_info.source_task_count = source_task_idx[instance].second;
     }
+    {
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        execution_info.retry_id = (segment_instance_retry_cnt[{static_cast<UInt32>(task_id), static_cast<UInt32>(index)}]);
+    }
     return execution_info;
 }
 }
