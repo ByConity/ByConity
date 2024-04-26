@@ -52,7 +52,7 @@ BroadcastStatus ExchangeBufferedSender::flush(bool force, const ChunkInfoPtr & c
             return BroadcastStatus(BroadcastStatusCode::RUNNING);
     }
 
-    LOG_TRACE(logger, "flush buffer, force: {}, row: {}", force, rows);
+    LOG_TRACE(logger, "flush buffer, force: {}, row: {}, memory(KB): {}", force, rows, bufferBytes() / 1024);
 
     Chunk chunk(std::move(partition_buffer), rows, chunk_info);
     auto res = ExchangeUtils::sendAndCheckReturnStatus(*sender, std::move(chunk));

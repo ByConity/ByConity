@@ -149,9 +149,9 @@ void ThreadStatus::setupState(const ThreadGroupStatusPtr & thread_group_)
     thread_state = ThreadState::AttachedToQuery;
 }
 
-void ThreadStatus::initializeQuery()
+void ThreadStatus::initializeQuery(MemoryTracker * memory_tracker_)
 {
-    setupState(std::make_shared<ThreadGroupStatus>());
+    setupState(std::make_shared<ThreadGroupStatus>(memory_tracker_));
 
     /// No need to lock on mutex here
     thread_group->memory_tracker.setDescription("(for query)");
@@ -474,11 +474,11 @@ void ThreadStatus::tryUpdateMaxIOThreadProfile(bool use_async_read)
     }
 }
 
-void CurrentThread::initializeQuery()
+void CurrentThread::initializeQuery(MemoryTracker * memory_tracker)
 {
     if (unlikely(!current_thread))
         return;
-    current_thread->initializeQuery();
+    current_thread->initializeQuery(memory_tracker);
     current_thread->deleter = CurrentThread::defaultThreadDeleter;
 }
 
@@ -527,9 +527,9 @@ void CurrentThread::detachQueryIfNotDetached()
 }
 
 
-CurrentThread::QueryScope::QueryScope(ContextMutablePtr query_context)
+CurrentThread::QueryScope::QueryScope(ContextMutablePtr query_context, MemoryTracker * memory_tracker)
 {
-    CurrentThread::initializeQuery();
+    CurrentThread::initializeQuery(memory_tracker);
     CurrentThread::attachQueryContext(query_context);
     if (!query_context->hasQueryContext())
         query_context->makeQueryContext();

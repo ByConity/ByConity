@@ -41,7 +41,6 @@
 #include <Common/tests/gtest_utils.h>
 #include <common/types.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
-#include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
 
 using namespace DB;
 
@@ -85,9 +84,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
 
     auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 0);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel
-        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     sink_sender->becomeRealSender(sink_channel);
     BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 
@@ -145,6 +142,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     plan_segment_instance->info.parallel_id = 0;
     plan_segment_instance->plan_segment = std::move(plan_segment);
     PlanSegmentExecutor executor(std::move(plan_segment_instance), context, exchange_options);
+
     executor.execute();
 
 
@@ -191,9 +189,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
 
     auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 0);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel
-        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     sink_sender->becomeRealSender(sink_channel);
     BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 
@@ -244,6 +240,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     plan_segment->setQueryPlan(std::move(query_plan));
     plan_segment_instance->plan_segment = std::move(plan_segment);
     PlanSegmentExecutor executor(std::move(plan_segment_instance), context, exchange_options);
+
     auto execute_func = [&]() { executor.execute(); };
 
     ThreadFromGlobalPool thread(std::move(execute_func));
@@ -303,9 +300,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
 
     auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 0);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel
-        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel  = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     sink_sender->becomeRealSender(sink_channel);
     BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 

@@ -50,6 +50,25 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     Block header_,
     bool keep_order_,
     const String & name_,
+    BrpcExchangeReceiverRegistryService::RegisterMode mode_)
+    : BrpcRemoteBroadcastReceiver(std::move(trans_key_)
+    , std::move(registry_address_)
+    , context_
+    , std::move(header_)
+    , keep_order_
+    , name_
+    , std::make_shared<MultiPathBoundedQueue>(context_->getSettingsRef().exchange_remote_receiver_queue_size, nullptr)
+    , mode_)
+{
+}
+
+BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
+    ExchangeDataKeyPtr trans_key_,
+    String registry_address_,
+    ContextPtr context_,
+    Block header_,
+    bool keep_order_,
+    const String & name_,
     MultiPathQueuePtr queue_,
     BrpcExchangeReceiverRegistryService::RegisterMode mode_,
     std::shared_ptr<QueryExchangeLog> query_exchange_log_,

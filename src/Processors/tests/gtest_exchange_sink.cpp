@@ -60,9 +60,7 @@ TEST(ExchangeSink, BroadcastExchangeSinkTest)
     ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
     LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
     auto source_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto source_channel
-        = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr source_sender
         = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key, SenderProxyOptions{.wait_timeout_ms = 2000});
     source_sender->accept(context, header);
@@ -70,9 +68,7 @@ TEST(ExchangeSink, BroadcastExchangeSinkTest)
     BroadcastReceiverPtr source_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(source_channel);
 
     auto sink_key = std::make_shared<ExchangeDataKey>(1, 2, 2);
-    queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel
-        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     sink_sender->accept(context, header);
     sink_channel->registerToSenders(1000);
@@ -117,18 +113,14 @@ TEST(ExchangeSink, BroadcastExchangeSinkBufferTest)
     ExchangeOptions exchange_options {.exchange_timeout_ts = ts, .force_use_buffer = true};
     LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
     auto source_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto source_channel
-        = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
     source_channel->registerToSenders(1000);
     BroadcastReceiverPtr source_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(source_channel);
 
     auto sink_key = std::make_shared<ExchangeDataKey>(1, 2, 2);
-    queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel
-        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     sink_sender->accept(context, header);
     sink_channel->registerToSenders(1000);
@@ -173,18 +165,14 @@ TEST(ExchangeSink, LoadBalancedExchangeSinkTest)
     ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
     LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
     auto source_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto source_channel
-        = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
     source_channel->registerToSenders(1000);
     BroadcastReceiverPtr source_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(source_channel);
 
     auto sink_key = std::make_shared<ExchangeDataKey>(1, 2, 2);
-    queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel
-        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     sink_sender->accept(context, header);
     sink_channel->registerToSenders(1000);
@@ -232,18 +220,14 @@ TEST(ExchangeSink, MultiPartitionExchangeSinkTest)
     ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
     LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
     auto source_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto source_channel
-        = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
     source_channel->registerToSenders(1000);
     BroadcastReceiverPtr source_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(source_channel);
 
     auto sink_key = std::make_shared<ExchangeDataKey>(1, 2, 2);
-    queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel
-        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     sink_sender->accept(context, header);
     sink_channel->registerToSenders(1000);
@@ -302,18 +286,14 @@ TEST(ExchangeSink, SinglePartitionExchangeSinkNormalTest)
     ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
     LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
     auto source_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto source_channel
-        = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
     source_channel->registerToSenders(1000);
     BroadcastReceiverPtr source_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(source_channel);
 
     auto sink_key = std::make_shared<ExchangeDataKey>(1, 2, 2);
-    queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel
-        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     sink_sender->accept(context, header);
     sink_channel->registerToSenders(1000);
@@ -370,27 +350,21 @@ TEST(ExchangeSink, SinglePartitionExchangeSinkPipelineTest)
     ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
     LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
     auto source_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto source_channel
-        = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
     source_channel->registerToSenders(1000);
     BroadcastReceiverPtr source_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(source_channel);
 
     auto sink_key_1 = std::make_shared<ExchangeDataKey>(1, 2, 2);
-    queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel_1
-        = std::make_shared<LocalBroadcastChannel>(sink_key_1, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel_1 = std::make_shared<LocalBroadcastChannel>(sink_key_1, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr sink_sender_1 = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key_1);
     sink_sender_1->accept(context, header);
     sink_channel_1->registerToSenders(1000);
     BroadcastReceiverPtr sink_receiver_1 = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel_1);
 
     auto sink_key_2 = std::make_shared<ExchangeDataKey>(1, 3, 3);
-    queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
-    auto sink_channel_2
-        = std::make_shared<LocalBroadcastChannel>(sink_key_2, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    auto sink_channel_2 = std::make_shared<LocalBroadcastChannel>(sink_key_2, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr sink_sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key_2);
     sink_sender_2->accept(context, header);
     sink_channel_2->registerToSenders(1000);

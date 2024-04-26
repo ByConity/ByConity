@@ -70,15 +70,13 @@ void receiver1()
 {
     auto receiver_data = std::make_shared<ExchangeDataKey>(3, 1, 1);
     Block header = getHeader(1);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size);
     BrpcRemoteBroadcastReceiverShardPtr receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
         receiver_data,
         "127.0.0.1:8001",
         getContext().context,
         header,
         true,
-        BrpcRemoteBroadcastReceiver::generateNameForTest(),
-        std::move(queue));
+        BrpcRemoteBroadcastReceiver::generateNameForTest());
     receiver->registerToSenders(1000);
     auto packet = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver)->recv(1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
@@ -92,7 +90,7 @@ void receiver2()
 {
     auto receiver_data = std::make_shared<ExchangeDataKey>(3, 1, 2);
     Block header = getHeader(1);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size);
+    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size, nullptr);
     BrpcRemoteBroadcastReceiverShardPtr receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
         receiver_data,
         "127.0.0.1:8001",
@@ -182,7 +180,7 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
     setQueryDuration();
     std::thread thread_sender(sender_thread, sender, std::move(chunk));
 
-    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size);
+    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size, nullptr);
     BrpcRemoteBroadcastReceiverShardPtr receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
         data_key,
         "127.0.0.1:8001",
@@ -242,7 +240,7 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size);
+    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size, nullptr);
     BrpcRemoteBroadcastReceiverShardPtr receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
         data_key,
         "127.0.0.1:8001",

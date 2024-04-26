@@ -15,19 +15,19 @@
 
 #include <string>
 #include <thread>
+#include <Columns/IColumn.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
-#include <Columns/IColumn.h>
-#include <DataTypes/DataTypeFactory.h>
+#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <QueryPlan/ReadNothingStep.h>
-#include <Common/Stopwatch.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>
-#include <common/scope_guard.h>
+#include <Common/Stopwatch.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
-
+#include <common/scope_guard.h>
 
 
 using namespace DB;
@@ -61,13 +61,18 @@ QueryPlan generateEmptyPlan()
     return plan;
 }
 
+PlanSegmentProcessList::EntryPtr insertProcessList(PlanSegment & plan_segment, ContextMutablePtr context, bool force = false)
+{
+    auto segment_group = context->getPlanSegmentProcessList().insertGroup(plan_segment, context, force);
+    return context->getPlanSegmentProcessList().insertProcessList(segment_group, plan_segment, context, force);
+}
+
 TEST(PlanSegmentProcessList, InsertTest)
 {
     initLogger();
     const auto & context = getContext().context;
     context->setProcessListEntry(nullptr);
     auto & client_info = context->getClientInfo();
-    auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();
     plan_segment.setQueryId("PlanSegmentProcessList_test");
     plan_segment.setPlanSegmentId(0);
@@ -78,7 +83,7 @@ TEST(PlanSegmentProcessList, InsertTest)
     client_info.initial_query_id = plan_segment.getQueryId();
     AddressInfo coordinator_address("localhost", 8888, "test", "123456");
     plan_segment.setCoordinatorAddress(coordinator_address);
-    plan_segment_processlist.insert(plan_segment, context);
+    insertProcessList(plan_segment, context);
 }
 
 TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
@@ -87,7 +92,6 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
     const auto & context = getContext().context;
     context->setProcessListEntry(nullptr);
     auto & client_info = context->getClientInfo();
-    auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();
     plan_segment.setQueryId("PlanSegmentProcessList_test");
     plan_segment.setPlanSegmentId(0);
@@ -98,7 +102,7 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
     client_info.initial_query_id = plan_segment.getQueryId();
     AddressInfo coordinator_address("localhost", 8888, "test", "123456");
     plan_segment.setCoordinatorAddress(coordinator_address);
-    auto plan_segment_process_entry = plan_segment_processlist.insert(plan_segment, context);
+    auto plan_segment_process_entry = insertProcessList(plan_segment, context);
     auto async_func = [to_release_entry = std::move(plan_segment_process_entry)]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         to_release_entry.get();
@@ -109,7 +113,7 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
             thread.join();
     });
     plan_segment.setCoordinatorAddress(AddressInfo("localhost", 8888, "test", "123456"));
-    plan_segment_processlist.insert(plan_segment, context, true);
+    insertProcessList(plan_segment, context, true);
 }
 
 TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
@@ -117,7 +121,6 @@ TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
     const auto & context = getContext().context;
     context->setProcessListEntry(nullptr);
     auto & client_info = context->getClientInfo();
-    auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();
     plan_segment.setQueryId("PlanSegmentProcessList_test");
     plan_segment.setPlanSegmentId(0);
@@ -128,7 +131,7 @@ TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
     client_info.initial_query_id = plan_segment.getQueryId();
     AddressInfo coordinator_address("localhost", 8888, "test", "123456");
     plan_segment.setCoordinatorAddress(coordinator_address);
-    auto plan_segment_process_entry = plan_segment_processlist.insert(plan_segment, context);
+    auto plan_segment_process_entry = insertProcessList(plan_segment, context);
 
     auto async_func = [&, to_release_entry = std::move(plan_segment_process_entry)]() {
         std::this_thread::sleep_for(
@@ -142,7 +145,7 @@ TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
     });
 
     plan_segment.setCoordinatorAddress(AddressInfo("localhost", 8888, "test", "123456"));
-    ASSERT_THROW(plan_segment_processlist.insert(plan_segment, context, true), DB::Exception);
+    ASSERT_THROW(insertProcessList(plan_segment, context, true), DB::Exception);
 }
 
 }

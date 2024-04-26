@@ -36,7 +36,6 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/DistributedStages/ExchangeDataTracker.h>
-#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Optimizer/OptimizerProfile.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -364,6 +363,9 @@ using ExcludedRulesMap = std::unordered_map<PlanNodeId, ExcludedRules>;
 
 class PlanCacheManager;
 class PreparedStatementManager;
+
+class PlanSegmentProcessList;
+class PlanSegmentProcessListEntry;
 
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.

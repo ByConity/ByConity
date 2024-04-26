@@ -21,6 +21,7 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <parallel_hashmap/phmap.h>
@@ -45,8 +46,14 @@ public:
     using Element = std::shared_ptr<ProcessListEntry>;
     using Container = std::map<PlanSegmentInstanceId, Element>;
 
-    PlanSegmentGroup(String coordinator_address_, Decimal64 initial_query_start_time_ms_)
-        : coordinator_address(std::move(coordinator_address_)), initial_query_start_time_ms(initial_query_start_time_ms_) {}
+    PlanSegmentGroup(String coordinator_address_, Decimal64 initial_query_start_time_ms_, bool use_query_memory_tracker_, size_t queue_bytes_)
+        : coordinator_address(std::move(coordinator_address_))
+        , initial_query_start_time_ms(initial_query_start_time_ms_)
+        , use_query_memory_tracker(use_query_memory_tracker_)
+    {
+        if (queue_bytes_ != 0)
+            memory_controller = std::make_shared<MemoryController>(queue_bytes_);
+    }
 
     bool empty()
     {
@@ -81,6 +88,11 @@ public:
     String coordinator_address;
     Decimal64 initial_query_start_time_ms{0};
     Container segment_queries;
+    // not for planSegment_0, because query_context of planSegment_0 create too early
+    bool use_query_memory_tracker{true};
+    MemoryTracker memory_tracker{VariableContext::Process};
+    // for all planSegment
+    std::shared_ptr<MemoryController> memory_controller = nullptr;
 };
 
 class PlanSegmentProcessList;
@@ -93,6 +105,7 @@ private:
     String initial_query_id;
     PlanSegmentInstanceId instance_id;
     AddressInfo coordinator_address;
+    std::shared_ptr<MemoryController> memory_controller;
 
 public:
     PlanSegmentProcessListEntry(
@@ -104,10 +117,9 @@ public:
     const QueryStatus & get() const { return *status; }
     void setCoordinatorAddress(const AddressInfo & coordinator_address_) {coordinator_address = coordinator_address_;}
     AddressInfo getCoordinatorAddress() const {return coordinator_address;}
-    size_t getSegmentId() const
-    {
-        return instance_id.segment_id;
-    }
+    void setMemoryController(std::shared_ptr<MemoryController> & memory_controller_) {memory_controller = memory_controller_;}
+    std::shared_ptr<MemoryController> getMemoryController() const {return memory_controller;}
+    size_t getSegmentId() const {return instance_id.segment_id;}
 };
 
 /// List of currently executing query created from plan segment.
@@ -121,11 +133,13 @@ public:
 
     friend class PlanSegmentProcessListEntry;
 
-    EntryPtr insert(const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
+    Element insertGroup(const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
+
+    EntryPtr insertProcessList(const Element segment_group, const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
 
     CancellationCode tryCancelPlanSegmentGroup(const String & initial_query_id, String coordinator_address = "");
 
-    bool remove(std::string initial_query_id, PlanSegmentInstanceId instance_id);
+    bool remove(std::string initial_query_id, PlanSegmentInstanceId instance_id, bool before_execute = false);
 
 private:
     bool tryEraseGroup();
@@ -144,6 +158,5 @@ private:
     mutable bthread::ConditionVariable remove_group;
     Poco::Logger * logger = &Poco::Logger::get("PlanSegmentProcessList");
 };
-
 
 }

@@ -34,6 +34,15 @@
 namespace DB
 {
 LocalBroadcastChannel::LocalBroadcastChannel(
+    ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String & name_)
+    : LocalBroadcastChannel(std::move(data_key_)
+    , options_
+    , name_
+    , std::make_shared<MultiPathBoundedQueue>(options_.queue_size, nullptr))
+{
+}
+
+LocalBroadcastChannel::LocalBroadcastChannel(
     ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String & name_, MultiPathQueuePtr queue_, ContextPtr context_)
     : IBroadcastReceiver(options_.enable_metrics)
     , IBroadcastSender(options_.enable_metrics)
@@ -62,7 +71,6 @@ RecvDataPacket LocalBroadcastChannel::recv(timespec timeout_ts)
         {
             Chunk & recv_chunk = std::get<DataPacket>(data_packet).chunk;
             addToMetricsMaybe(s.elapsedMilliseconds(), 0, 1, recv_chunk);
-            ExchangeUtils::transferGlobalMemoryToThread(recv_chunk.allocatedBytes());
             return RecvDataPacket(std::move(recv_chunk));
         }
         else if (std::holds_alternative<SendDoneMark>(data_packet))
@@ -90,17 +98,13 @@ BroadcastStatus LocalBroadcastChannel::sendImpl(Chunk chunk)
     if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
         return *current_status_ptr;
 
-    size_t allocated_bytes = chunk.allocatedBytes();
     if (enable_receiver_metrics)
     {
         auto chunk_info = std::make_shared<DeserializeBufTransform::IOBufChunkInfoWithReceiver>();
         chunk_info->receiver = shared_from_this();
     }
     if (receive_queue->tryEmplaceUntil(options.max_timeout_ts, MultiPathDataPacket(DataPacket{std::move(chunk)})))
-    {
-        ExchangeUtils::transferThreadMemoryToGlobal(allocated_bytes);
         return *broadcast_status.load(std::memory_order_acquire);
-    }
 
     // finished in other thread, receive_queue is closed.
     if(receive_queue->closed())
