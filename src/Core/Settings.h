@@ -1427,6 +1427,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "Whether to enable replicas to create ingest node in zk", 0) \
     M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
     M(Bool, enable_async_ingest, false, "Allow ingest in aync mode", 0) \
+    M(Bool, optimize_ingest_with_bucket, true, "Using bucket table to optimize ingest", 0) \
+    M(UInt64, max_ingest_task_on_workers, 50, "Max ingest task on wokers, now It is not make a distinction with query num", 0) \
     /** Early Stop **/ \
     M(Milliseconds, query_shard_timeout_time, 0, "Timeout for query shard", 0) \
     M(Milliseconds, late_shard_relax_time, 1000, "Relaxition time for late shard", 0) \
