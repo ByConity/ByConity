@@ -250,9 +250,17 @@ int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, 
         return content;
     };
 
-    String cpu_quota_str = read_file_func("cpu.cfs_quota_us");
-    String cpu_period_str = read_file_func("cpu.cfs_period_us");
-    String cpu_usage_str = read_file_func("cpuacct.usage");
+    try
+    {
+        String cpu_quota_str = read_file_func("cpu.cfs_quota_us");
+        String cpu_period_str = read_file_func("cpu.cfs_period_us");
+        String cpu_usage_str = read_file_func("cpuacct.usage");
+    }
+    catch(...)
+    {
+        LOG_ERROR(&Poco::Logger::get("ResourceGroupManager"), "calc cgroup {} read cgroup file error", root_group);
+        return -2;
+    }
     
     int64_t cpu_quota = 0, cpu_period = 0, cpu_usage = 0;
     try 
@@ -263,12 +271,13 @@ int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, 
     }
     catch(...)
     {
-        throw Exception("Resource group cgroup value invalid", ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
+        LOG_ERROR(&Poco::Logger::get("ResourceGroupManager"), "calc cgroup {} cgroup value invalid", root_group);
+        return -3;
     }
 
     if (cpu_quota <= 0 || cpu_period <= 0 || cpu_usage < 0)
     {
-        return -2;
+        return -4;
     }
 
     float numerator = (static_cast<uint64_t>(cpu_usage) < cpu_usage_info.last_usage_value) 
