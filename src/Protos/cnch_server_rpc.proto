@@ -487,6 +487,10 @@ message getLastModificationTimeHintsResp {
   repeated LastModificationTimeHint last_modification_time_hints = 2;
 }
 
+message notifyTableCreatedReq { required UUID storage_uuid = 1; }
+
+message notifyTableCreatedResp { optional string exception = 1; }
+
 message handleRefreshTaskOnFinishReq
 {
   required string task_id = 1;
@@ -631,6 +635,7 @@ service CnchServerService {
       returns(notifyAccessEntityChangeResp);
   rpc getLastModificationTimeHints(getLastModificationTimeHintsReq)
       returns(getLastModificationTimeHintsResp);
+  rpc notifyTableCreated(notifyTableCreatedReq) returns(notifyTableCreatedResp);
 
   rpc handleRefreshTaskOnFinish(handleRefreshTaskOnFinishReq) 
       returns (handleRefreshTaskOnFinishResp);

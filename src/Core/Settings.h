@@ -1427,6 +1427,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "Whether to enable replicas to create ingest node in zk", 0) \
     M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
     M(Bool, enable_async_ingest, false, "Allow ingest in aync mode", 0) \
+    M(Bool, optimize_ingest_with_bucket, true, "Using bucket table to optimize ingest", 0) \
+    M(UInt64, max_ingest_task_on_workers, 50, "Max ingest task on wokers, now It is not make a distinction with query num", 0) \
     /** Early Stop **/ \
     M(Milliseconds, query_shard_timeout_time, 0, "Timeout for query shard", 0) \
     M(Milliseconds, late_shard_relax_time, 1000, "Relaxition time for late shard", 0) \
@@ -1711,15 +1713,12 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, min_compatible_brpc_minor_version, 2, "Min compatble version of inter server BRPC protocol", 0) \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
-    M(UInt64, \
-      exchange_source_pipeline_threads, \
-      16, \
-      "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", \
-      0) \
-    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms", 0) \
-    M(UInt64, exchange_wait_accept_max_timeout_ms, 10000, "Exchange receiver wait accept max timeout ms", 0) \
-    M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver", 0) \
-    M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver", 0) \
+    M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
+    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
+    M(UInt64, exchange_wait_accept_max_timeout_ms, 10000, "Exchange receiver wait accept max timeout ms",0) \
+    M(UInt64, exchange_queue_bytes, 209715200, "Queue size(bytes) for exchange queue, 0 means disable", 0) \
+    M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver",0) \
+    M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
     M(UInt64, exchange_multi_path_receiver_queue_size, 200, "Queue size for multi path exchange receiver", 0) \
     M(Bool, exchange_enable_block_compress, false, "Whether enable exchange block compress ", 0) \
     M(UInt64, exchange_stream_max_buf_size, 209715200, "Default 200M, -1 means no limit", 0) \
@@ -1736,6 +1735,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_force_keep_order, false, "Force exchange keep data order", 0) \
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
+    M(Bool, exchange_use_query_memory_tracker, true, "Use query-level memory tracker", 0) \
     M(UInt64, wait_for_post_processing_timeout_ms, 1000, "Timeout for waiting post processing rpc from workers.", 0) \
     M(UInt64, distributed_query_wait_exception_ms, 1000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
@@ -1806,6 +1806,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, force_clean_transaction_by_dm, false, "Force clean transaction by dm, can be used for testing purpose", 0) \
     M(Bool, cnch_atomic_attach_part, true, "Whether to ATTACH PARTITION/PARTS in atomic way", 0) \
     M(Bool, cnch_atomic_attach_part_preemtive_lock_acquire, false, "Whether to acquire lock preemptively during atomic attach part", 0) \
+    M(UInt64, cnch_notify_table_created_rpc_timeout_ms, 1000, "Timeout for create table meta when creating table", 0) \
     M(Bool, allow_full_scan_txn_records, false, "Whether to allow full scan of all transaction records on catalog", 0) \
     \
     /* Snapshot */ \
@@ -1904,6 +1905,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_csv_enum_as_number, false, "Treat inserted enum values in CSV formats as enum indices \\N", 0) \
     M(Bool, input_format_csv_arrays_as_nested_csv, false, R"(When reading Array from CSV, expect that its elements were serialized in nested CSV and then put into string. Example: "[""Hello"", ""world"", ""42"""" TV""]". Braces around array can be omitted.)", 0) \
     M(Bool, input_format_json_read_objects_as_strings, false, "Allow to parse JSON objects as strings in JSON input formats; Do NOT set it true by default as it breaks the logic of parsing JSON", 0) \
+    M(Bool, input_format_json_named_tuples_as_objects, true, "Deserialize named tuple columns as JSON objects", 0) \
+    M(Bool, input_format_json_defaults_for_missing_elements_in_named_tuple, true, "Insert default value in named tuple element if it's missing in json object", 0) \
     M(Bool, input_format_skip_unknown_fields, false, "Skip columns with unknown names from input data (it works for JSONEachRow, CSVWithNames, TSVWithNames and TSKV formats).", 0) \
     M(Bool, input_format_with_names_use_header, true, "For TSVWithNames and CSVWithNames input formats this controls whether format parser is to assume that column data appear in the input exactly as they are specified in the header.", 0) \
     M(Bool, input_format_import_nested_json, false, "Map nested JSON data to nested tables (it works for JSONEachRow format).", 0) \

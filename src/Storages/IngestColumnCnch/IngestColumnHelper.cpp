@@ -15,6 +15,55 @@ namespace ErrorCodes
     extern const int DUPLICATE_COLUMN;
 }
 
+namespace
+{
+    inline bool checkKeysInOrderKeys(const Names & key_names, const Names & ordered_keys)
+    {
+        for (const auto & key : key_names)
+        {
+            bool found = false;
+            for (const auto & table_key : ordered_keys)
+            {
+                if (table_key == key)
+                    found = true;
+            }
+
+            if (!found)
+                return false;
+        }
+        return true;
+    }
+
+    inline bool compareClusterKeyColumnsWithOrderedKey(const Names & cluster_keys, const Names & ordered_keys)
+    {
+        if (cluster_keys.size() > ordered_keys.size())
+        {
+            return false;
+        }
+        return checkKeysInOrderKeys(cluster_keys, ordered_keys);
+    }
+
+    inline bool includeUniqueKey(const MergeTreeMetaBase & table, const Names & columns)
+    {
+        if (!table.getInMemoryMetadataPtr()->hasUniqueKey())
+        {
+            return false;
+        }
+        const Names & unique_key_columns = table.getInMemoryMetadataPtr()->getUniqueKeyColumns();
+        for (const auto & column : columns)
+        {
+            for (const auto & unique_key_column : unique_key_columns)
+            {
+                if (column == unique_key_column)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+}
+
 int compare(Columns & target_key_cols, Columns & src_key_cols, size_t n, size_t m)
 {
     for (size_t i = 0; i < target_key_cols.size(); ++i)
@@ -54,7 +103,22 @@ void checkColumnStructure(const StorageInMemoryMetadata & target_data, const Sto
 
 Names getOrderedKeys(const Names & names_to_order, const StorageInMemoryMetadata & meta_data)
 {
-    auto ordered_keys = meta_data.getColumnsRequiredForPrimaryKey();
+    auto ordered_keys = meta_data.getPrimaryKeyColumns();
+
+    auto required_keys = meta_data.getColumnsRequiredForPrimaryKey();
+
+    NameSet required_keys_set(required_keys.begin(), required_keys.end());
+
+    for (auto it = ordered_keys.begin(); it != ordered_keys.end();)
+    {
+        if (required_keys_set.count(*it))
+        {
+            ++it;
+        }
+        else {
+            it = ordered_keys.erase(it);
+        }
+    }
 
     if (names_to_order.empty())
     {
@@ -62,7 +126,7 @@ Names getOrderedKeys(const Names & names_to_order, const StorageInMemoryMetadata
     }
     else
     {
-        for (auto & key : names_to_order)
+        for (const auto & key : names_to_order)
         {
             bool found = false;
             for (auto & table_key : ordered_keys)
@@ -77,11 +141,11 @@ Names getOrderedKeys(const Names & names_to_order, const StorageInMemoryMetadata
 
         // get reorderd ingest key
         Names res;
-        for (size_t i = 0; i < ordered_keys.size(); ++i)
+        for (auto & ordered_key : ordered_keys)
         {
-            for (auto & key : names_to_order)
+            for (const auto & key : names_to_order)
             {
-                if (key == ordered_keys[i])
+                if (key == ordered_key)
                     res.push_back(key);
             }
         }
@@ -103,7 +167,7 @@ void checkIngestColumns(const Strings & column_names, const StorageInMemoryMetad
 
     for (auto & primary_key : meta_data.getColumnsRequiredForPrimaryKey())
     {
-        for (auto & col_name : column_names)
+        for (const auto & col_name : column_names)
         {
             if (col_name == primary_key)
                 throw Exception("Column " + backQuoteIfNeed(col_name) + " is part of the table's primary key which is not allowed!", ErrorCodes::BAD_ARGUMENTS);
@@ -112,7 +176,7 @@ void checkIngestColumns(const Strings & column_names, const StorageInMemoryMetad
 
     for (auto & partition_key : meta_data.getColumnsRequiredForPartitionKey())
     {
-        for (auto & col_name : column_names)
+        for (const auto & col_name : column_names)
         {
             if (col_name == partition_key)
                 throw Exception("Column " + backQuoteIfNeed(col_name) + " is part of the table's partition key which is not allowed!", ErrorCodes::BAD_ARGUMENTS);
@@ -142,7 +206,7 @@ std::optional<NameAndTypePair> tryGetMapColumn(const StorageInMemoryMetadata & m
 {
     if (!meta_data.getColumns().hasPhysical(col_name) && isMapImplicitKey(col_name))
     {
-        auto & columns = meta_data.getColumns();
+        const auto & columns = meta_data.getColumns();
         for (auto & nt : (columns.getOrdinary()))
         {
             if (nt.type->isMap())
@@ -272,6 +336,95 @@ void updateTempPartWithData(
     auto changed_checksums = out.writeSuffixAndGetChecksums(new_partial_part, *(new_partial_part->getChecksums()));
     new_partial_part->checksums_ptr->add(std::move(changed_checksums));
     finalizeTempPart(target_part, new_partial_part, compression_codec);
+}
+
+bool checkIngestWithBucketTable(
+    const MergeTreeMetaBase & source_table,
+    const MergeTreeMetaBase & target_table,
+    const Names & ordered_key_names,
+    const Names & ingest_column_names)
+{
+    const auto & target_table_matadata_ptr = target_table.getInMemoryMetadataPtr();
+    if (source_table.isBucketTable() && target_table.isBucketTable()
+        && source_table.getTableHashForClusterBy() == target_table.getTableHashForClusterBy()
+        && !includeUniqueKey(source_table, ingest_column_names) && !includeUniqueKey(target_table, ingest_column_names))
+    {
+        if (ordered_key_names.empty())
+        {
+            return checkKeysInOrderKeys(target_table_matadata_ptr->getColumnsForClusterByKey(), target_table_matadata_ptr->getColumnsRequiredForPrimaryKey());
+        }
+        return compareClusterKeyColumnsWithOrderedKey(target_table_matadata_ptr->getColumnsForClusterByKey(), ordered_key_names);
+    }
+    return false;
+}
+
+std::vector<std::vector<Int64>> splitBucketsForWorker(size_t total_worker_num, const std::vector<Int64> & buckets_for_ingest)
+{    
+    std::vector<std::vector<Int64>> buckets_lists(total_worker_num);
+
+    if (total_worker_num == 0 || buckets_for_ingest.empty())
+        throw Exception(fmt::format("The total worker num for ingest is {} and bucket for ingest is {}", total_worker_num, buckets_for_ingest.size()), ErrorCodes::LOGICAL_ERROR);
+
+    size_t bucket_num_per_worker = buckets_for_ingest.size()/total_worker_num;
+    size_t remain_bucket_num = buckets_for_ingest.size()%total_worker_num;
+    size_t cur_bucket_num_idx = 0 ;
+
+    for(size_t i = 0 ; i < total_worker_num; i ++)
+    {   
+        size_t assign_bucket_nums = bucket_num_per_worker;
+        if(remain_bucket_num!=0)
+        {
+            ++assign_bucket_nums;
+            --remain_bucket_num;
+        }
+
+        buckets_lists[i].resize(assign_bucket_nums);
+
+        std::copy(
+            buckets_for_ingest.begin() + cur_bucket_num_idx,
+            buckets_for_ingest.begin() + cur_bucket_num_idx + assign_bucket_nums,
+            buckets_lists[i].begin());
+        
+        cur_bucket_num_idx += assign_bucket_nums;
+    }
+    return buckets_lists;
+}
+
+std::vector<IMergeTreeDataPartsVector>
+clusterDataPartWithBucketTable(const StorageCloudMergeTree & table, const IMergeTreeDataPartsVector & data_parts)
+{
+    if (table.isBucketTable())
+    {
+        auto table_definition_hash = table.getTableHashForClusterBy();
+        std::vector<IMergeTreeDataPartsVector> data_part_with_bucket(table.getInMemoryMetadataPtr()->getBucketNumberFromClusterByKey());
+        for (const auto& data_part : data_parts)
+        {
+            LOG_TRACE(
+                &Poco::Logger::get("clusterDataPartWithBucketTable"),
+                data_part->name + " bucket_number:" + std::to_string(data_part->bucket_number));
+
+            if (data_part->table_definition_hash != table_definition_hash.getDeterminHash())
+            {
+                LOG_DEBUG(&Poco::Logger::get("clusterDataPartWithBucketTable"), "data part not match current cluster by definition");
+                return {};
+            }
+            if (data_part->bucket_number >= 0 && static_cast<size_t>(data_part->bucket_number) < data_part_with_bucket.size())
+            {
+                data_part_with_bucket[data_part->bucket_number].push_back(data_part);
+            }
+            else
+            {
+                throw Exception(
+                    fmt::format(
+                        "bucket number {} of data part not fit table bucket size {}",
+                        data_part->bucket_number,
+                        data_part_with_bucket.size()),
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        return data_part_with_bucket;
+    }
+    return {};
 }
 
 }

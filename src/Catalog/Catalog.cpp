@@ -906,9 +906,10 @@ namespace Catalog
                 tb_data.set_txnid(txnID.toUInt64());
                 tb_data.set_commit_time(ts.toUInt64());
                 RPCHelpers::fillUUID(storage_id.uuid, *(tb_data.mutable_uuid()));
+                HostWithPorts host_port = context.getCnchTopologyMaster()->getTargetServer(uuid_str, storage_id.server_vw_name, true);
                 if (storage_id.server_vw_name != DEFAULT_SERVER_VW_NAME)
                 {
-                    if (context.getCnchTopologyMaster()->getTargetServer(uuid_str, storage_id.server_vw_name, true).empty())
+                    if (host_port.empty())
                         throw Exception("Cannot create table because no server in vw: " + storage_id.server_vw_name, ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
                     tb_data.set_server_vw_name(storage_id.server_vw_name);
                 }
@@ -932,20 +933,46 @@ namespace Catalog
                 }
 
                 LOG_INFO(log, "finish createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
+                notifyTableCreated(storage_id.uuid, host_port);
+                LOG_DEBUG(log, "finish create table meta for {}", uuid_str);
             },
             ProfileEvents::CreateTableSuccess,
             ProfileEvents::CreateTableFailed);
     }
 
-    void Catalog::createUDF(const String & db, const String & name, const String & create_query)
+    void Catalog::notifyTableCreated(const UUID & uuid, const HostWithPorts & host_port) noexcept
+    {
+        try
+        {
+            if (!host_port.empty() && !isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort())))
+            {
+                context.getCnchServerClientPool().get(host_port)->notifyTableCreated(
+                    uuid, context.getSettings().cnch_notify_table_created_rpc_timeout_ms);
+                return;
+            }
+
+            auto storage = tryGetTableByUUID(context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+
+            if (auto pcm = context.getPartCacheManager(); pcm && storage)
+            {
+                pcm->mayUpdateTableMeta(*storage, host_port.topology_version, true);
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log);
+        }
+    }
+
+    void Catalog::createUDF(const String & prefix_name, const String & name, const String & create_query)
     {
         runWithMetricSupport(
             [&] {
                 Protos::DataModelUDF udf_data;
 
-                LOG_DEBUG(log, "start createUDF {}: {}.{}", name_space, db, name);
+                LOG_DEBUG(log, "start createUDF {}: {}.{}", name_space, prefix_name, name);
                 //:ToDo add version and other info separately.
-                udf_data.set_database(db);
+                udf_data.set_prefix_name(prefix_name);
                 udf_data.set_function_name(name);
                 udf_data.set_function_definition(create_query);
                 meta_proxy->createUDF(name_space, udf_data);
@@ -954,10 +981,10 @@ namespace Catalog
             ProfileEvents::CreateUDFFailed);
     }
 
-    void Catalog::dropUDF(const String & db, const String & name)
+    void Catalog::dropUDF(const String & resolved_name)
     {
         runWithMetricSupport(
-            [&] { meta_proxy->dropUDF(name_space, db, name); }, ProfileEvents::DropUDFSuccess, ProfileEvents::DropUDFFailed);
+            [&] { meta_proxy->dropUDF(name_space, resolved_name); }, ProfileEvents::DropUDFSuccess, ProfileEvents::DropUDFFailed);
     }
 
     void Catalog::dropTable(
@@ -1305,7 +1332,7 @@ namespace Catalog
                 if (is_host_server && cache_manager)
                 {
                     auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version);
-                    if (cached_storage && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
+                    if (cached_storage && cached_storage->commit_time <= ts && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
                     {
                         res = cached_storage;
                         return;
@@ -1376,7 +1403,7 @@ namespace Catalog
                     if (current_topology_version != PairInt64(0, 0))
                     {
                         auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(uuid), current_topology_version);
-                        if (cached_storage)
+                        if (cached_storage && cached_storage->commit_time <= ts)
                         {
                             auto host_server = current_topology.getTargetServer(uuid, cached_storage->getServerVwName());
                             if (isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort())))
@@ -4319,17 +4346,17 @@ namespace Catalog
         return res;
     }
 
-    Catalog::DataModelUDFs Catalog::getAllUDFs(const String & database_name, const String & function_name)
+    Catalog::DataModelUDFs Catalog::getAllUDFs(const String & prefix_name, const String & function_name)
     {
         DataModelUDFs res;
         runWithMetricSupport(
             [&] {
-                if (!database_name.empty() && !function_name.empty())
+                if (!prefix_name.empty() && !function_name.empty())
                 {
-                    res = getUDFByName({database_name + "." + function_name});
+                    res = getUDFByName({prefix_name + "." + function_name});
                     return;
                 }
-                const auto & it = meta_proxy->getAllUDFsMeta(name_space, database_name);
+                const auto & it = meta_proxy->getAllUDFsMeta(name_space, prefix_name);
                 while (it->next())
                 {
                     DB::Protos::DataModelUDF model;

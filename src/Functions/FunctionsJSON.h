@@ -829,7 +829,7 @@ namespace Traverse
         {
             FormatSettings settings;
             settings.json.escape_forward_slashes = false;
-            settings.json.named_tuples_as_objects = true;
+            settings.json.write_named_tuples_as_objects = true;
             return settings;
         }();
         return the_instance;
@@ -841,7 +841,7 @@ namespace Traverse
         {
             FormatSettings settings;
             settings.json.escape_forward_slashes = false;
-            settings.json.named_tuples_as_objects = true;
+            settings.json.write_named_tuples_as_objects = true;
             settings.json.quota_json_string = false;
             return settings;
         }();

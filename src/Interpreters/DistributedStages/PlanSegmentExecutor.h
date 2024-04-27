@@ -53,17 +53,22 @@ public:
 
     ~PlanSegmentExecutor() noexcept;
 
-    RuntimeSegmentsStatus execute(std::shared_ptr<ThreadGroupStatus> thread_group = nullptr);
+    RuntimeSegmentsStatus
+    execute();
     BlockIO lazyExecute(bool add_output_processors = false);
 
     static void registerAllExchangeReceivers(const QueryPipeline & pipeline, UInt32 register_timeout_ms);
 
 protected:
-    void doExecute(std::shared_ptr<ThreadGroupStatus> thread_group);
+    void doExecute();
     QueryPipelinePtr buildPipeline();
     void buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders);
 
 private:
+    // query_scope needs to be destructed before process_plan_segment_entry, because of memory_tracker
+    PlanSegmentProcessList::EntryPtr process_plan_segment_entry;
+    std::optional<CurrentThread::QueryScope> query_scope;
+
     ContextMutablePtr context;
     PlanSegmentInstancePtr plan_segment_instance;
     PlanSegment * plan_segment;

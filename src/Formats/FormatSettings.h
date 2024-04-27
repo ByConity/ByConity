@@ -130,7 +130,9 @@ struct FormatSettings
         bool quote_64bit_integers = false;
         bool quote_denormals = true;
         bool escape_forward_slashes = true;
-        bool named_tuples_as_objects = false;
+        bool read_named_tuples_as_objects = false;
+        bool write_named_tuples_as_objects = false;
+        bool defaults_for_missing_elements_in_named_tuple = false;
         bool serialize_as_strings = false;
         bool read_bools_as_numbers = true;
         bool quota_json_string = true;

@@ -136,6 +136,7 @@ message SubmitPlanSegmentRequest {
   optional AddressInfo execution_address = 7;
   optional uint32 source_task_index = 8;
   optional uint32 source_task_count = 9;
+  optional uint32 retry_id = 10;
 }
 
 message ExecutePlanSegmentRequest {

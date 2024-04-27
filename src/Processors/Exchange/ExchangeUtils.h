@@ -96,13 +96,6 @@ public:
         senders.emplace_back(std::move(merged_sender));
     }
 
-    static inline void transferThreadMemoryToGlobal(Int64 bytes)
-    {
-        CurrentMemoryTracker::free(bytes);
-        if (DB::MainThreadStatus::get())
-            total_memory_tracker.alloc(bytes);
-    }
-
     static inline void transferGlobalMemoryToThread(Int64 bytes)
     {
         if (DB::MainThreadStatus::get())

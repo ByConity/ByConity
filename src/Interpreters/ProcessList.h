@@ -29,6 +29,7 @@
 #include <Interpreters/QueryPriorities.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Storages/IStorage_fwd.h>
+#include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <Poco/Condition.h>
 #include <Common/CurrentMetrics.h>
@@ -467,6 +468,8 @@ public:
       * Don't count KILL QUERY queries.
       */
     EntryPtr insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force = false);
+
+    void checkRunningQuery(ContextPtr query_context, bool is_unlimited_query, bool force = false);
 
     /// Number of currently executing queries.
     size_t size() const { return processes.size(); }

@@ -79,6 +79,7 @@ namespace ProfileEvents
 {
     extern const Event SystemTimeMicroseconds;
     extern const Event UserTimeMicroseconds;
+    extern const Event PlanSegmentInstanceRetry;
 }
 
 namespace DB
@@ -156,12 +157,12 @@ PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
         RuntimeFilterManager::getInstance().removeDynamicValue(plan_segment->getQueryId(), id);
 }
 
-RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_group)
+RuntimeSegmentsStatus PlanSegmentExecutor::execute()
 {
     LOG_DEBUG(logger, "execute PlanSegment:\n" + plan_segment->toString());
     try
     {
-        doExecute(std::move(thread_group));
+        doExecute();
 
         runtime_segment_status.query_id = plan_segment->getQueryId();
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
@@ -239,10 +240,21 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
     if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
         throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
 
-    res.plan_segment_process_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
+    try
+    {
+        auto segment_group = context->getPlanSegmentProcessList().insertGroup(*plan_segment, context);
+        res.plan_segment_process_entry = context->getPlanSegmentProcessList().insertProcessList(std::move(segment_group), *plan_segment, context);
+    }
+    catch (Exception &)
+    {
+        auto instance_id = context->getPlanSegmentInstanceId();
+        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), instance_id, true);
+        throw;
+    }
 
-    res.pipeline = std::move(*buildPipeline());
+    // set entry before buildPipeline to control memory usage of exchange queue
     context->setPlanSegmentProcessListEntry(res.plan_segment_process_entry);
+    res.pipeline = std::move(*buildPipeline());
     return res;
 }
 
@@ -280,15 +292,17 @@ StepAggregatedOperatorProfiles collectStepRuntimeProfiles(int segment_id, const 
     return AggregatedStepOperatorProfile::aggregateStepOperatorProfileBetweenWorkers(step_profile);
 }
 
-void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
+void PlanSegmentExecutor::doExecute()
 {
-    std::optional<CurrentThread::QueryScope> query_scope;
-
-    if (!thread_group)
+    try
     {
+        auto segment_group = context->getPlanSegmentProcessList().insertGroup(*plan_segment, context);
         if (!CurrentThread::getGroup())
         {
-            query_scope.emplace(context); // Running as master query and not initialized
+            if (context->getSettingsRef().exchange_use_query_memory_tracker && !context->getSettingsRef().bsp_mode)
+                query_scope.emplace(context, &segment_group->memory_tracker); // Running as master query and not initialized
+            else
+                query_scope.emplace(context);
         }
         else
         {
@@ -296,27 +310,21 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
             if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
                 throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
         }
+        process_plan_segment_entry = context->getPlanSegmentProcessList().insertProcessList(std::move(segment_group), *plan_segment, context);
     }
-    else
+    catch (Exception &)
     {
-        // Running as slave query in a thread different from master query
-        if (CurrentThread::getGroup())
-            throw Exception("There is a query attacted to context", ErrorCodes::LOGICAL_ERROR);
-
-        if (CurrentThread::getQueryId() != plan_segment->getQueryId())
-            throw Exception("Not the same distributed query", ErrorCodes::LOGICAL_ERROR);
-
-        CurrentThread::attachTo(thread_group);
+        query_scope.reset();
+        auto instance_id = context->getPlanSegmentInstanceId();
+        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), instance_id, true);
+        throw;
     }
-
-    PlanSegmentProcessList::EntryPtr process_plan_segment_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
     context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
 
     if (context->getSettingsRef().bsp_mode)
     {
         auto query_unique_id = context->getCurrentTransactionID().toUInt64();
-        PlanSegmentInstanceId instance_id
-            = {static_cast<UInt32>(plan_segment->getPlanSegmentId()), plan_segment_instance->info.parallel_id};
+        auto instance_id = context->getPlanSegmentInstanceId();
         if (!context->getDiskExchangeDataManager()->cleanupPreviousSegmentInstance(query_unique_id, instance_id))
         {
             throw Exception(
@@ -327,6 +335,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
                     plan_segment->getPlanSegmentId(),
                     plan_segment_instance->info.parallel_id));
         }
+        CurrentThread::getProfileEvents().increment(ProfileEvents::PlanSegmentInstanceRetry, plan_segment_instance->info.retry_id);
     }
 
     // set process list before building pipeline, or else TableWriteTransform's output stream can't set its process list properly
@@ -344,7 +353,6 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         this->progress.incrementPiecewiseAtomically(value);
         this->final_progress.incrementPiecewiseAtomically(value);
     });
-
 
     size_t max_threads = context->getSettingsRef().max_threads;
     if (max_threads)
@@ -516,8 +524,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
             {
                 data_key->parallel_index = plan_segment_instance->info.parallel_id;
                 auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key);
-                PlanSegmentInstanceId instance_id
-                    = {static_cast<UInt32>(plan_segment->getPlanSegmentId()), plan_segment_instance->info.parallel_id};
+                auto instance_id = context->getPlanSegmentInstanceId();
                 disk_exchange_mgr->submitWriteTask(current_tx_id, instance_id, writer, thread_group);
                 sender = writer;
             }

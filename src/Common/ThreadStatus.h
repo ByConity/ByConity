@@ -73,10 +73,16 @@ using InternalTextLogsQueueWeakPtr = std::weak_ptr<InternalTextLogsQueue>;
 class ThreadGroupStatus
 {
 public:
+    ThreadGroupStatus(MemoryTracker * memory_tracker_ = nullptr)
+        : memory_tracker(memory_tracker_ ? *memory_tracker_ : private_memory_tracker)
+    {
+    }
+
     mutable bthread::Mutex mutex;
 
     ProfileEvents::Counters performance_counters{VariableContext::Process};
-    MemoryTracker memory_tracker{VariableContext::Process};
+    MemoryTracker private_memory_tracker{VariableContext::Process};
+    MemoryTracker & memory_tracker;
     /// for MaxIOThreadProfileEvents
     std::shared_ptr<ProfileEvents::Counters::Snapshot> max_io_thread_profile_counters;
     UInt64 max_io_time_us{0};
@@ -273,7 +279,7 @@ public:
     }
 
     /// Starts new query and create new thread group for it, current thread becomes master thread of the query
-    void initializeQuery();
+    void initializeQuery(MemoryTracker * memory_tracker_ = nullptr);
 
     /// Attaches slave thread to existing thread group
     void attachQuery(const ThreadGroupStatusPtr & thread_group_, bool check_detached = true);

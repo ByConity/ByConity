@@ -176,6 +176,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::pushDownBitmapProjection(), "PushDownBitMapProjection"),
         std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::pushIndexProjectionIntoTableScanRules(), "PushIndexProjectionIntoTableScan"),
 
         // rules after subquery removed, DO NOT change !!!.
 

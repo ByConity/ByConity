@@ -75,9 +75,8 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataWriteAndRead)
     write(context, header, manager, key);
 
     auto name = BrpcRemoteBroadcastReceiver::generateName(exchange_id, write_segment_id, read_segment_id, parallel_idx, rpc_host);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
     auto receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
-        key, rpc_host, context, header, true, name, std::move(queue), BrpcExchangeReceiverRegistryService::DISK_READER);
+        key, rpc_host, context, header, true, name, BrpcExchangeReceiverRegistryService::DISK_READER);
     receiver->registerToSenders(1000);
     auto packet = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver)->recv(1000);
     ASSERT_TRUE(std::holds_alternative<Chunk>(packet));
@@ -120,9 +119,8 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
 
     // register senders
     auto name = BrpcRemoteBroadcastReceiver::generateName(exchange_id, write_segment_id, read_segment_id, parallel_idx, rpc_host);
-    auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
     auto receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
-        key, rpc_host, context, header, true, name, queue, BrpcExchangeReceiverRegistryService::BRPC);
+        key, rpc_host, context, header, true, name, BrpcExchangeReceiverRegistryService::BRPC);
     receiver->registerToSenders(1000);
     // cancel executor
     manager->cancelReadTask(key->query_unique_id, key->exchange_id);

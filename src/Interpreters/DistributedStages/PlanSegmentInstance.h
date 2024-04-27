@@ -38,6 +38,7 @@ struct PlanSegmentExecutionInfo
     AddressInfo execution_address;
     std::optional<size_t> source_task_index;
     std::optional<size_t> source_task_count;
+    UInt32 retry_id = std::numeric_limits<UInt32>::max();
 };
 
 struct PlanSegmentInstance

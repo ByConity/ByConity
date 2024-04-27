@@ -230,6 +230,22 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
                     throw Exception("Illegal key: " + child->getColumnName(), ErrorCodes::BAD_ARGUMENTS);
             }
         }
+        if (command_ast->buckets)
+        {   
+            const auto & bucket_expr_list = command_ast->buckets->as<ASTExpressionList &>();
+            for (const auto &  child : bucket_expr_list.children)
+            {
+                if ( auto * literal = child->as<ASTLiteral>())
+                {   
+                    Int64 bucket_num = literal->value.safeGet<UInt64>();
+                    res.bucket_nums.push_back(bucket_num);
+                }
+                else
+                {
+                    throw Exception("Illegal Bucket number need Literal", ErrorCodes::BAD_ARGUMENTS);
+                }   
+            }
+        }
 
         res.from_database = command_ast->from_database;
         res.from_table = command_ast->from_table;

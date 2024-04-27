@@ -44,6 +44,15 @@ public:
         ContextPtr context_,
         Block header_,
         bool keep_order_,
+        const String &name_,
+        BrpcExchangeReceiverRegistryService::RegisterMode mode_ = BrpcExchangeReceiverRegistryService::RegisterMode::BRPC);
+
+    BrpcRemoteBroadcastReceiver(
+        ExchangeDataKeyPtr trans_key_,
+        String registry_address_,
+        ContextPtr context_,
+        Block header_,
+        bool keep_order_,
         const String & name_,
         MultiPathQueuePtr queue_,
         BrpcExchangeReceiverRegistryService::RegisterMode mode_ = BrpcExchangeReceiverRegistryService::RegisterMode::BRPC,

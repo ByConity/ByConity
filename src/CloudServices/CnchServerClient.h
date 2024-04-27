@@ -193,6 +193,7 @@ public:
 
     void forceRecalculateMetrics(const StorageID & storage_id);
     std::vector<Protos::LastModificationTimeHint> getLastModificationTimeHints(const StorageID & storage_id);
+    void notifyTableCreated(const UUID & storage_uuid, int64_t cnch_notify_table_created_rpc_timeout_ms);
 
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid);
 private:

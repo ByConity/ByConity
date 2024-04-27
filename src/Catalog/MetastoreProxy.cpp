@@ -392,27 +392,27 @@ void MetastoreProxy::createTable(const String & name_space, const UUID & db_uuid
 
 void MetastoreProxy::createUDF(const String & name_space, const DB::Protos::DataModelUDF & udf_data)
 {
-    const String & database = udf_data.database();
+    const String & prefix = udf_data.prefix_name();
     const String & name = udf_data.function_name();
     String serialized_meta;
     udf_data.SerializeToString(&serialized_meta);
 
     try
     {
-        metastore_ptr->put(udfStoreKey(name_space, database, name), serialized_meta, true);
+        metastore_ptr->put(udfStoreKey(name_space, prefix, name), serialized_meta, true);
     }
     catch (Exception & e)
     {
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE) {
-            throw Exception("UDF with function name - " + name + " in database - " +  database + " already exists.", ErrorCodes::FUNCTION_ALREADY_EXISTS);
+            throw Exception("UDF with function name - " + name + " with prefix - " +  prefix + " already exists.", ErrorCodes::FUNCTION_ALREADY_EXISTS);
         }
         throw;
     }
 }
 
-void MetastoreProxy::dropUDF(const String & name_space, const String &db_name, const String &function_name)
+void MetastoreProxy::dropUDF(const String & name_space, const String &resolved_name)
 {
-    metastore_ptr->drop(udfStoreKey(name_space, db_name, function_name));
+    metastore_ptr->drop(udfStoreKey(name_space, resolved_name));
 }
 
 void MetastoreProxy::updateTable(const String & name_space, const String & table_uuid, const String & table_info_new, const UInt64 & ts)
@@ -2232,8 +2232,12 @@ void MetastoreProxy::removeColumnStatistics(const String & name_space, const Str
             batch_write.AddDelete(iter->key());
         }
     }
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const String & uuid)
@@ -2256,8 +2260,11 @@ void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const 
             batch_write.AddDelete(iter->key());
         }
     }
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+    if (!batch_write.isEmpty()) 
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindingItemPtr& data)

@@ -146,6 +146,57 @@ TEST_F(CacheManagerTest, GetTableFromCache)
     cache_manager->shutDown();
 }
 
+TEST_F(CacheManagerTest, GetTableWithTSFromCache)
+{
+    UInt64 ts_1 = 1, ts_2 =2;
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(getContext().context, 0, true);
+    String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
+    StoragePtr storage_v1 = CacheTestMock::createTable(query, getContext().context);
+    storage_v1->commit_time = TxnTimestamp(ts_1);
+
+    String query_new = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32, s String) ENGINE=CnchMergeTree order by id";
+    StoragePtr storage_v2 = CacheTestMock::createTable(query_new, getContext().context);
+    storage_v2->commit_time = TxnTimestamp(ts_2);
+
+    auto current_topology_version = PairInt64{1, 1};
+
+    // mock some logic in Catalog::getTablexxx
+    auto get_storage_from_cache_with_ts = [&cache_manager](const UUID & uuid, const PairInt64 & topology_version, const TxnTimestamp & ts)
+    {
+        StoragePtr res;
+        auto cached = cache_manager->getStorageFromCache(uuid, topology_version);
+        if (cached && cached->commit_time <= ts)
+            res = cached;
+        return res;
+    };
+
+    // load active tables into CacheManager
+    cache_manager->mayUpdateTableMeta(*storage_v1, current_topology_version);
+    auto entry = cache_manager->getTableMeta(storage_v1->getStorageUUID());
+
+    // insert storage v1 into cache
+    cache_manager->insertStorageCache(storage_v1->getStorageID(), storage_v1, ts_1, current_topology_version);
+
+    StoragePtr storage_from_cache;
+    // try get storage v1 from cache
+    storage_from_cache = get_storage_from_cache_with_ts(storage_v1->getStorageUUID(), current_topology_version, ts_1);
+    EXPECT_NE(storage_from_cache, nullptr);
+    auto column_size = storage_from_cache->getInMemoryMetadataPtr()->getColumns().getAllPhysical().size();
+    EXPECT_EQ(column_size, 1);
+
+    // insert storage v2 into cache
+    cache_manager->insertStorageCache(storage_v2->getStorageID(), storage_v2, ts_2, current_topology_version);
+    // mock get storage with an earier ts.
+    storage_from_cache = get_storage_from_cache_with_ts(storage_v2->getStorageUUID(), current_topology_version, ts_1);
+    EXPECT_EQ(storage_from_cache, nullptr);
+
+    // mock get storage from cache with latest commit ts.
+    storage_from_cache = get_storage_from_cache_with_ts(storage_v2->getStorageUUID(), current_topology_version, ts_2);
+    EXPECT_NE(storage_from_cache, nullptr);
+    auto column_size_new = storage_from_cache->getInMemoryMetadataPtr()->getColumns().getAllPhysical().size();
+    EXPECT_EQ(column_size_new, 2);
+}
+
 /***
  * @brief Storage cache test 2
  * Test contensions between get storage from cache and alter table.
