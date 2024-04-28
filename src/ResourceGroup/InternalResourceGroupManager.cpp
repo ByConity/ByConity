@@ -250,11 +250,12 @@ int InternalResourceGroupManager::calcCGroupCpuUsage(const String & root_group, 
         return content;
     };
 
+    String cpu_quota_str, cpu_period_str, cpu_usage_str;
     try
     {
-        String cpu_quota_str = read_file_func("cpu.cfs_quota_us");
-        String cpu_period_str = read_file_func("cpu.cfs_period_us");
-        String cpu_usage_str = read_file_func("cpuacct.usage");
+        cpu_quota_str = read_file_func("cpu.cfs_quota_us");
+        cpu_period_str = read_file_func("cpu.cfs_period_us");
+        cpu_usage_str = read_file_func("cpuacct.usage");
     }
     catch(...)
     {
