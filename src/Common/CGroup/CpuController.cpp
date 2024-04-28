@@ -31,11 +31,13 @@ extern const int CREATE_CGROUP_DIRECTORY_FAILED;
 
 const String CpuController::SHARE = "cpu.shares";
 const String CpuController::TASK_FILE = "tasks";
+const String CpuController::CFS_QUOTA_FILE = "cpu.cfs_quota_us";
+const String CpuController::CFS_PERIOD_FILE = "cpu.cfs_period_us";
 
 void CpuController::init(UInt64 share)
 {
     std::error_code error_code;
-    bool res = std::filesystem::create_directory(dir_path, error_code);
+    bool res = std::filesystem::create_directories(dir_path, error_code);
     if (!res)
         throw Exception("create cgroup cpu directory " + dir_path +" failed, filesystem error code: " + std::to_string(error_code.value()), ErrorCodes::CREATE_CGROUP_DIRECTORY_FAILED);
     std::filesystem::path share_path = dir_path + "/" + SHARE;
@@ -100,5 +102,41 @@ void CpuController::setShare(UInt64 share)
     SystemUtils::writeStringToFile(share_path, toString(share), true);
 }
 
+UInt64 CpuController::getQuota()
+{
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    std::filesystem::path quota_path = dir_path + "/" + CFS_QUOTA_FILE;
+    ReadBufferFromFile input(quota_path);
+    String s;
+    readString(s, input);
+    return std::stoull(s);
 }
 
+void CpuController::setQuota(UInt64 cfs_quota)
+{
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    std::filesystem::path quota_path = dir_path + "/" + CFS_QUOTA_FILE;
+    SystemUtils::writeStringToFile(quota_path, toString(cfs_quota), true);
+    LOG_INFO(&Poco::Logger::get("CpuController"), "setQuota path {} value {}", quota_path.string(), cfs_quota);
+}
+
+UInt64 CpuController::getPeriod()
+{
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    std::filesystem::path period_path = dir_path + "/" + CFS_PERIOD_FILE;
+    ReadBufferFromFile input(period_path);
+    String s;
+    readString(s, input);
+    return std::stoull(s);
+}
+
+void CpuController::setPeriod(UInt64 cfs_period)
+{
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    std::filesystem::path period_path = dir_path + "/" + CFS_PERIOD_FILE;
+    SystemUtils::writeStringToFile(period_path, toString(cfs_period), true);
+
+    LOG_INFO(&Poco::Logger::get("CpuController"), "setPeriod path {} value {}", period_path.string(), cfs_period);
+}
+
+}

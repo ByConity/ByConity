@@ -29,6 +29,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <ResourceGroup/VWResourceGroup.h>
 #include <ResourceGroup/VWResourceGroupManager.h>
+#include <ResourceGroup/ResourceGroupSelectStrategy.h>
 
 namespace DB
 {
@@ -39,6 +40,11 @@ namespace ErrorCodes
     extern const int RESOURCE_GROUP_MISMATCH;
 }
 
+VWResourceGroupManager::VWResourceGroupManager(ContextPtr global_context_) 
+    : WithContext(global_context_)
+    , select_strategy(std::make_shared<VWSelectStrategy>(this))
+{
+}
 void VWResourceGroupManager::initialize([[maybe_unused]] const Poco::Util::AbstractConfiguration & config)
 {
     bool old_val= false;
@@ -55,42 +61,7 @@ void VWResourceGroupManager::initialize([[maybe_unused]] const Poco::Util::Abstr
 
 IResourceGroup* VWResourceGroupManager::selectGroup(const Context & query_context, const IAST *ast)
 {
-    auto lock = getReadLock();
-    const ClientInfo & client_info = query_context.getClientInfo();
-
-    if (auto vw = query_context.tryGetCurrentVW(); vw)
-    {
-        const String & vw_name = vw->getName();
-
-        //TODO: Optimize using UFDS when sub-groups are supported
-        for (const auto & [key, select_case] : select_cases)
-        {
-            String parent_resource_group = select_case.group->getName();
-
-            std::vector<IResourceGroup*> parent_groups {select_case.group};
-            auto parent = select_case.group->getParent();
-            while (parent)
-            {
-                parent_groups.push_back(parent);
-                parent_resource_group = parent->getName();
-                parent = parent->getParent();
-            }
-
-            if (parent_resource_group == vw_name
-                && (select_case.user == nullptr || std::regex_match(client_info.initial_user, *(select_case.user)))
-                && (select_case.query_id == nullptr || std::regex_match(client_info.initial_query_id, *(select_case.query_id)))
-                && (select_case.query_type == nullptr || *select_case.query_type == ResourceSelectCase::getQueryType(ast)))
-            {
-                for (const auto & group : parent_groups)
-                {
-                    group->setInUse(true);
-                }
-                return select_case.group;
-            }
-        }
-    }
-
-    return nullptr;
+    return select_strategy->selectGroup(query_context, ast);
 }
 
 IResourceGroup* VWResourceGroupManager::addGroup(const String & virtual_warehouse, const VirtualWarehouseData & vw_data) const

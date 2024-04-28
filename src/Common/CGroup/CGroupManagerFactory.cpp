@@ -15,6 +15,9 @@
 
 #include <Common/CGroup/CGroupManagerFactory.h>
 #include <iostream>
+#include <fcntl.h>
+#include <common/find_symbols.h>
+#include <Common/SystemUtils.h>
 
 namespace DB
 {
@@ -31,37 +34,42 @@ void CGroupManagerFactory::loadFromConfig(const Poco::Util::AbstractConfiguratio
     if (!config.has("enable_cgroup") || !config.getBool("enable_cgroup"))
         return;
 
-    if (!CGroupManagerFactory::instance().isInit() && config.has("enable_cpuset") && config.getBool("enable_cpuset"))
-    {
-        LOG_INFO(&Poco::Logger::get("CGroupManager"), "Init CGroupManager");
-        CGroupManagerFactory::instance().init();
-        if (config.has("root_cpuset_path") && !config.getString("root_cpuset_path").empty())
-        {
-            CGroupManagerFactory::instance().setCGroupCpuSetPath(config.getString("root_cpuset_path"));
-        }
+    LOG_INFO(&Poco::Logger::get("CGroupManager"), "Init CGroupManager");
 
-        if (cgroup_manager_instance->enable())
+    if (config.has("cgroup_root_path") && !config.getString("cgroup_root_path").empty())
+    {
+        CGroupManagerFactory::instance().setCGroupRootPath(config.getString("cgroup_root_path"));
+    }
+    String docker_path = getDockerPath();
+    if (!docker_path.empty() && (docker_path != "/"))
+    {
+        CGroupManagerFactory::instance().setDockerPath(docker_path);
+    }
+
+    CGroupManagerFactory::instance().init();
+}
+
+String CGroupManagerFactory::getDockerPath()
+{
+    String cgroup_content;
+    SystemUtils::ReadFileToString("/proc/" + std::to_string(getpid()) + "/cgroup", cgroup_content);
+
+    String result;
+
+    std::vector<String> split_lines;
+    splitInto<'\n'>(split_lines, cgroup_content);
+    for (auto & line : split_lines)
+    {
+        if (line.find("cpuacct") != std::string::npos)
         {
-            using Keys = Poco::Util::AbstractConfiguration::Keys;
-            Keys keys;
-            config.keys("cpuset", keys);
-            for (const String & key : keys)
-            {
-                const String & cpu_set_name = key;
-                String cpus = config.getString("cpuset."+key);
-                if (nullptr != cgroup_manager_instance->getCpuSet(cpu_set_name))
-                    continue;
-                LOG_INFO(&Poco::Logger::get("CGroupManager"), "create cpuset: " + cpu_set_name + " cpus: " + cpus);
-                cgroup_manager_instance->createCpuSet(cpu_set_name, cpus);
-            }
+            std::vector<String> split_line;
+            splitInto<':'>(split_line, line);
+            result = (split_line.size() == 3) ? split_line[2] : "";
+            break;
         }
     }
 
-    if (config.has("enable_cpu") && config.getBool("enable_cpu"))
-    {
-        if (config.has("root_cpu_path") && !config.getString("root_cpu_path").empty())
-            CGroupManagerFactory::instance().setCGgroupCpuPath(config.getString("root_cpu_path"));
-    }
+    return result;
 }
 
 }

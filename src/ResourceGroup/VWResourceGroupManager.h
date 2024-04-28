@@ -34,6 +34,8 @@
 namespace DB
 {
 
+class VWSelectStrategy;
+
 /** Manages VWResourceGroups, which track resource usage of each VW
   * Currently rely on Resource Manager for synchronisation of resource usages
   * across multiple servers.
@@ -42,7 +44,7 @@ namespace DB
 class VWResourceGroupManager : public IResourceGroupManager, protected WithContext
 {
 public:
-    VWResourceGroupManager(ContextPtr global_context_) : WithContext(global_context_) {}
+    VWResourceGroupManager(ContextPtr global_context_);
     ~VWResourceGroupManager() override;
 
     void initialize(const Poco::Util::AbstractConfiguration & config) override;
@@ -108,6 +110,8 @@ private:
     mutable std::mutex map_lock;
     ServerQueryQueueMap last_sync_queue_map;
     AggQueryQueueMap agg_query_queue_map;
+
+    std::shared_ptr<VWSelectStrategy> select_strategy;
 
     // Default values used for adding of resource groups
     Int32 default_soft_max_memory_usage = 0;

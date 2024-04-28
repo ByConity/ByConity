@@ -32,10 +32,35 @@ public:
 
     Int32 getCpuShares() const { return cpu_shares; }
     void setCpuShares(Int32 cpu_shares_) { cpu_shares = cpu_shares_; }
+    
+    Int64 getCfsQuota() const { return cfs_quota; }
+    void setCfsQuota(Int64 cfs_quota_) { cfs_quota = cfs_quota_; }
+    int initCfsQuota();
+
+    int setCfsQuotaPeriod(Int64 cfs_quota_, Int64 cfs_period_);
+
+    Int64 getCfsPeriod() const { return cfs_period; }
+    void setCfsPeriod(Int64 cfs_period_ ) { cfs_period = cfs_period_; }
+    int initCfsPeriod();
+
+    String getCGroupName()
+    {
+        String result = name;
+        IResourceGroup * group = this;
+        while (group->getParent())
+        {
+            group = group->getParent();
+            result.insert(0, group->getName() + "/");
+        }
+        return result;
+    }
 
 private:
-    Int32 cpu_shares{0};
     CpuControllerPtr cpu{nullptr};
+
+    Int32 cpu_shares{0};
+    Int64 cfs_quota{0};
+    Int64 cfs_period{0};
 };
 
 }

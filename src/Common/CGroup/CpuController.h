@@ -27,21 +27,33 @@ private:
     friend class CGroupManager;
     static const String SHARE;
     static const String TASK_FILE;
+    static const String CFS_QUOTA_FILE;
+    static const String CFS_PERIOD_FILE;
+
     String dir_path;
     String name;
     struct PassKey{};
     void init(UInt64 share);
     std::recursive_mutex mutex;
+
 public:
     CpuController(PassKey pass_key, String name, String dir_path, UInt64 share);
+
+public:
     void addTask(size_t tid);
     void addTasks(const std::vector<size_t> & tids);
     std::vector<size_t> getTasks();
+
     UInt64 getShare();
     void setShare(UInt64 share);
+    
+    UInt64 getQuota();
+    void setQuota(UInt64 cfs_quota);
+
+    UInt64 getPeriod();
+    void setPeriod(UInt64 cfs_period);
 };
 
 using CpuControllerPtr = std::shared_ptr<CpuController>;
 
 }
-

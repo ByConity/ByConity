@@ -31,8 +31,6 @@ namespace ErrorCodes
 }
 
 const String CGroupManager::CGROUP_ROOT_PATH = "/sys/fs/cgroup";
-const String CGroupManager::CGROUP_CPU_SET_PATH = CGROUP_ROOT_PATH + "/cpuset/tiger";
-const String CGroupManager::CGROUP_CPU_PATH = CGROUP_ROOT_PATH + "/cpu/tiger";
 const String CGroupManager::SYSTEM = "system";
 
 static String getDefaultMems()
@@ -236,12 +234,12 @@ void CGroupManager::init()
 {
     if (enable())
     {
-        initCpuSetRoot();
-        initClickhouseCpuSet();
-        std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
-        Cpus cpus(data);
-        createCpuSet(SYSTEM, cpus);
-        moveClickhouseProc();
+        //initCpuSetRoot();
+        //initClickhouseCpuSet();
+        //std::vector<bool> data(SystemUtils::getSystemCpuNum(), true);
+        //Cpus cpus(data);
+        //createCpuSet(SYSTEM, cpus);
+        //moveClickhouseProc();
         init_flag = true;
     }
 }
