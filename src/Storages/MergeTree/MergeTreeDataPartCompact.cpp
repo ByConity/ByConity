@@ -24,6 +24,7 @@
 #include <DataTypes/MapHelpers.h>
 #include <Storages/MergeTree/MergeTreeReaderCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterCompact.h>
+#include "IO/ReadSettings.h"
 
 
 namespace DB
@@ -165,7 +166,7 @@ void MergeTreeDataPartCompact::loadIndexGranularity()
 
     size_t marks_file_size = volume->getDisk()->getFileSize(marks_file_path);
 
-    auto buffer = volume->getDisk()->readFile(marks_file_path, {.buffer_size = marks_file_size});
+    auto buffer = volume->getDisk()->readFile(marks_file_path, ReadSettings().initializeReadSettings(marks_file_size));
     while (!buffer->eof())
     {
         /// Skip offsets for columns

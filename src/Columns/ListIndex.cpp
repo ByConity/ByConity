@@ -165,12 +165,13 @@ void BitmapIndexReader::init()
             });
         compressed_idx = std::make_unique<CompressedReadBufferFromFile>(
             std::move(raw_idx_buffer), false, idx_pos.file_offset, idx_pos.file_size, true);
-        irk_buffer = data_disk->readFile(data_rel_path, ReadSettings {
-            .enable_io_scheduler = static_cast<bool>(part->storage.getContext()->getSettingsRef().enable_io_scheduler),
-            .enable_io_pfra = static_cast<bool>(part->storage.getContext()->getSettingsRef().enable_io_pfra),
-            .buffer_size = irk_pos.file_size,
-            .estimated_size = irk_pos.file_size
-        });
+        irk_buffer = data_disk->readFile(
+            data_rel_path,
+            ReadSettings{
+                .enable_io_scheduler = static_cast<bool>(part->storage.getContext()->getSettingsRef().enable_io_scheduler),
+                .enable_io_pfra = static_cast<bool>(part->storage.getContext()->getSettingsRef().enable_io_pfra),
+                .estimated_size = irk_pos.file_size}
+                .initializeReadSettings(irk_pos.file_size));
     }
     catch(...)
     {

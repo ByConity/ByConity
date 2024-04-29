@@ -74,7 +74,7 @@ TEST(DiskTestHDFS, WriteReadHDFS)
 
     {
         DB::String result;
-        auto in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
+        auto in = disk.readFile(file_name, {.remote_fs_buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
         readString(result, *in);
         EXPECT_EQ("Test write to file", result);
     }
@@ -125,7 +125,7 @@ TEST(DiskTestHDFS, AppendFileHDFS)
 
     {
         String result, expected;
-        auto in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
+        auto in = disk.readFile(file_name, {.remote_fs_buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
 
         readString(result, *in);
         EXPECT_EQ("Text0123456789", result);
@@ -152,7 +152,7 @@ TEST(DiskTestHDFS, SeekHDFS)
     /// Test SEEK_SET
     {
         String buf(4, '0');
-        std::unique_ptr<DB::SeekableReadBuffer> in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
+        std::unique_ptr<DB::SeekableReadBuffer> in = disk.readFile(file_name, {.remote_fs_buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
 
         in->seek(5, SEEK_SET);
 
@@ -162,7 +162,7 @@ TEST(DiskTestHDFS, SeekHDFS)
 
     /// Test SEEK_CUR
     {
-        std::unique_ptr<DB::SeekableReadBuffer> in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
+        std::unique_ptr<DB::SeekableReadBuffer> in = disk.readFile(file_name, {.remote_fs_buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
         String buf(4, '0');
 
         in->readStrict(buf.data(), 4);

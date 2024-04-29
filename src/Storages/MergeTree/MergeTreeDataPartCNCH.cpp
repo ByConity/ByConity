@@ -1402,7 +1402,7 @@ void MergeTreeDataPartCNCH::dropDiskCache(ThreadPool & pool, bool drop_vw_disk_c
 std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(const DiskPtr & disk, const String & path, size_t file_size) const
 {
     ReadSettings settings = storage.getContext()->getReadSettings();
-    settings.buffer_size = std::min(settings.buffer_size, file_size);
+    settings.adjustBufferSize(file_size);
     return disk->readFile(path, settings);
 }
 
