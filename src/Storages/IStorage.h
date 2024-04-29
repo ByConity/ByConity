@@ -721,6 +721,7 @@ public:
     bool is_detached{false};
 
     TxnTimestamp commit_time;
+    TxnTimestamp latest_version;
     /// Parts metadata columns mapping related
     NamesAndTypesListPtr part_columns = std::make_shared<NamesAndTypesList>();
     std::map<UInt64, NamesAndTypesListPtr> previous_versions_part_columns;

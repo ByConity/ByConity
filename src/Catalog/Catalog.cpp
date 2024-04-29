@@ -5473,6 +5473,7 @@ namespace Catalog
         latest_version.ParseFromString(tables_meta.back());
         const String & latest_db_name = latest_version.database();
         const String & latest_table_name = latest_version.name();
+        const UInt64 & latest_version_commit_ts =  latest_version.commit_time();
 
         std::vector<std::shared_ptr<DB::Protos::DataModelTable>> table_versions;
         for (auto & table_meta : tables_meta)
@@ -5493,6 +5494,7 @@ namespace Catalog
             return {};
 
         auto & table = table_versions.back();
+        table->set_latest_version(latest_version_commit_ts);
 
         /// collect all previous version's definition
         if (with_prev_versions)
@@ -5706,32 +5708,6 @@ namespace Catalog
     StoragePtr Catalog::createTableFromDataModel(const Context & context, const Protos::DataModelTable & data_model)
     {
         StoragePtr res = CatalogFactory::getTableByDataModel(Context::createCopy(context.shared_from_this()), &data_model);
-
-        /// set worker group for StorageCnchMergeTree if virtual warehouse is exists.
-        ///FIXME: if StorageCnchMergeTree is ready
-        // if (data_model.has_vw_name())
-        // {
-        //     if (auto * table = dynamic_cast<StorageCnchMergeTree *>(res.get()))
-        //     {
-        //         String vw_name = data_model.vw_name();
-        //         String worker_group_name = data_model.worker_group_name();
-        //         UInt64 worker_topology_hash = data_model.worker_topology_hash();
-
-        //         HostWithPortsVec workers;
-
-        //         try
-        //         {
-        //             workers = getWorkersInWorkerGroup(worker_group_name);
-        //         }
-        //         catch (...)
-        //         {
-        //             tryLogDebugCurrentException(__PRETTY_FUNCTION__);
-        //         }
-
-        //         table->setWorkerGroupInfo(vw_name, worker_group_name, worker_topology_hash);
-        //     }
-        // }
-
         return res;
     }
 
