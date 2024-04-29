@@ -1412,6 +1412,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
     \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
+    M(Bool, enable_memory_efficient_ingest_partition, true, "Obsolete setting, does nothing.", 0) \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, multiple_joins_rewriter_version, 0, "Obsolete setting, does nothing.", 0) \
     M(Bool, enable_debug_queries, false, "Obsolete setting, does nothing.", 0) \
