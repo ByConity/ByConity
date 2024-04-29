@@ -23,6 +23,7 @@
 
 #include <Core/Defines.h>
 #include <Core/BaseSettings.h>
+#include <Core/SettingsEnums.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 
 
@@ -543,6 +544,10 @@ enum StealingCacheMode : UInt64
     M(Bool, enable_hybrid_allocation, false, "Whether or not enable hybrid allocation, default disabled", 0) \
     M(UInt64, min_rows_per_vp, 2000000, "Minimum size of a virtual part", 0) \
     M(Float, part_to_vw_size_ratio, 0.1, "Part to vw worker size's ration", 0) \
+    \
+    /** MYSQL related settings */ \
+    M(DialectType, storage_dialect_type, DialectType::CLICKHOUSE, "If the storage's dialect_type is not CLICKHOUSE, need to persist the information for creating/running queries on worker", 0) \
+    \
     /** JSON related settings start*/ \
     M(UInt64, json_subcolumns_threshold, 1000, "Max number of json sub columns", 0) \
     M(UInt64, json_partial_schema_assemble_batch_size, 100, "Batch size to assemble dynamic object column schema", 0) \
