@@ -124,7 +124,7 @@ private:
     void writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part) const;
     void writeDataFileFooter(WriteBuffer & to, const CNCHDataMeta & meta) const;
     size_t writeProjectionPart(const String & projection_name, const IMutableMergeTreeDataPartPtr projection_part, WriteBuffer * out, size_t data_file_offset) const;
-    size_t check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta) const;
+    size_t check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta, bool skip_check = false) const;
 
     NamesAndTypesList getKeyColumns() const;
 
