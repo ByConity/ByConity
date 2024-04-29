@@ -20,6 +20,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/InternalFunctionRuntimeFilter.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/join_common.h>
 #include <Optimizer/FunctionInvoker.h>
@@ -51,6 +52,12 @@ ASTPtr unwrapCastInComparison(const ConstASTPtr & expression, ContextMutablePtr 
 ASTPtr UnwrapCastInComparisonVisitor::visitASTFunction(ASTPtr & node, UnwrapCastInComparisonContext & context)
 {
     auto & function = node->as<ASTFunction &>();
+
+    /// skip runtime filter functions
+    if (function.name == InternalFunctionRuntimeFilter::name)
+    {
+        return node;
+    }
 
     if (!isComparisonFunction(function))
         return rewriteArgs(function, context);
@@ -162,7 +169,8 @@ ASTPtr UnwrapCastInComparisonVisitor::visitASTFunction(ASTPtr & node, UnwrapCast
         return rewriteArgs(function, context, true);
     }
 
-    auto casted_literal_type = isNullableOrLowCardinalityNullable(literal_type) ? JoinCommon::tryConvertTypeToNullable(source_type) : JoinCommon::removeTypeNullability(source_type);
+    auto casted_literal_type = isNullableOrLowCardinalityNullable(literal_type) ? JoinCommon::tryConvertTypeToNullable(source_type)
+                                                                                : JoinCommon::removeTypeNullability(source_type);
     auto ast_casted_literal = LiteralEncoder::encode(literal_in_source_type, casted_literal_type, context.context);
     compare_res = compare(literal, literal_type, round_trip_literal, literal_type, context.context);
 
@@ -315,7 +323,7 @@ bool UnwrapCastInComparisonVisitor::isComparableTypes(const DataTypePtr & left, 
     {
         compare(nonnull_left->getDefault(), nonnull_left, nonnull_right->getDefault(), nonnull_right, context);
     }
-    catch (Exception & )
+    catch (Exception &)
     {
         return false;
     }

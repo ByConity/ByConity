@@ -19,8 +19,7 @@
 #include <Optimizer/EqualityInference.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/PlanVisitor.h>
-#include "QueryPlan/CTEInfo.h"
-
+#include <QueryPlan/CTEInfo.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -36,10 +35,7 @@ public:
 
 private:
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
-    bool isEnabled(ContextMutablePtr context) const override
-    {
-        return context->getSettingsRef().enable_predicate_pushdown_rewrite;
-    }
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_predicate_pushdown_rewrite; }
     const bool pushdown_filter_into_cte;
     const bool simplify_common_filter;
 };
@@ -98,22 +94,20 @@ private:
 
     PlanNodePtr process(PlanNodeBase &, PredicateContext &);
     PlanNodePtr processChild(PlanNodeBase &, PredicateContext &);
-    static InnerJoinResult processInnerJoin(
+    InnerJoinResult processInnerJoin(
         ConstASTPtr & inherited_predicate,
         ConstASTPtr & left_predicate,
         ConstASTPtr & right_predicate,
         ConstASTPtr & join_predicate,
         std::set<String> & left_symbols,
-        std::set<String> & right_symbols,
-        ContextMutablePtr & context);
-    static OuterJoinResult processOuterJoin(
+        std::set<String> & right_symbols);
+    OuterJoinResult processOuterJoin(
         ConstASTPtr & inherited_predicate,
         ConstASTPtr & outer_predicate,
         ConstASTPtr & inner_predicate,
         ConstASTPtr & join_predicate,
         std::set<String> & outer_symbols,
-        std::set<String> & inner_symbols,
-        ContextMutablePtr & context);
+        std::set<String> & inner_symbols);
 
     // utils of outer join to inner join
     static void tryNormalizeOuterToInnerJoin(JoinNode & node, const ConstASTPtr & inherited_predicate, ContextMutablePtr context);

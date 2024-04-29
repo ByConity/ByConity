@@ -265,6 +265,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // final UnifyNullableType, make sure type is correct.
         std::make_shared<ColumnPruning>(),
         std::make_shared<UnifyNullableType>(),
+        /// Predicate pushdown (AddRuntimeFilters) may generate redundant filter.
+        std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
 
