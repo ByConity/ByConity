@@ -160,14 +160,14 @@ bool CnchLockHolder::tryLock()
     {
         if (!lock->tryLock())
             return false;
-    }
 
-    /// init heartbeat task if needed
-    if (!report_lock_heartbeat_task)
-    {
-        report_lock_heartbeat_task
-            = getContext()->getSchedulePool().createTask("reportLockHeartBeat", [this]() { reportLockHeartBeatTask(); });
-        report_lock_heartbeat_task->activateAndSchedule();
+        /// Init heartbeat task if needed
+        if (!report_lock_heartbeat_task)
+        {
+            report_lock_heartbeat_task
+                = getContext()->getSchedulePool().createTask("reportLockHeartBeat", [this]() { reportLockHeartBeatTask(); });
+            report_lock_heartbeat_task->activateAndSchedule();
+        }
     }
     return true;
 }

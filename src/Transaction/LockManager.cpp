@@ -71,6 +71,7 @@ void LockContext::unlock(LockRequest * request)
         waitingList.erase(request->getRequestItor());
         decConflictedModeCount(request->getMode());
         request->setLockResult(LockStatus::LOCK_INIT, waitingList.end());
+        request->notify();
     }
 
     /// ignore other cases;
@@ -238,8 +239,8 @@ void LockManager::lock(const LockInfoPtr & info, const Context & context)
     {
         // update txn_locks_map, which is a map of txn_id -> lock_ids;
         std::lock_guard lock(stripe.mutex);
-        // auto expire_tp = Clock::now() + ICnchTransaction::default_lock_expire_duration;
-        auto expire_tp = Clock::now() + std::chrono::milliseconds(30000);
+        auto expire_tp = Clock::now()
+            + std::chrono::milliseconds(context.getSettingsRef().cnch_txn_lock_expire_duration_seconds.value.totalMilliseconds());
         if (auto it = stripe.map.find(txn_id); it != stripe.map.end())
         {
             auto & txn_locks_info = it->second;
