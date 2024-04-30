@@ -338,9 +338,8 @@ BlockIO InterpreterInsertQuery::execute()
         /// Handle the insert commit for insert select/infile case in cnch server.
         BlockInputStreamPtr in = cnch_merge_tree->writeInWorker(query_ptr, metadata_snapshot, getContext());
 
-        bool enable_staging_area_for_write = settings.enable_staging_area_for_write;
         if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(table.get());
-            cnch_table && metadata_snapshot->hasUniqueKey() && !enable_staging_area_for_write)
+            cnch_table && cnch_table->commitTxnFromWorkerSide(metadata_snapshot, getContext()))
         {
             /// for unique table, insert select|infile is committed from worker side
             res.in = std::move(in);

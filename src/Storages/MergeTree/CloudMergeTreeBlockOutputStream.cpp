@@ -47,19 +47,36 @@ CloudMergeTreeBlockOutputStream::CloudMergeTreeBlockOutputStream(
     MergeTreeMetaBase & storage_,
     StorageMetadataPtr metadata_snapshot_,
     ContextPtr context_,
-    bool to_staging_area_,
     ASTPtr overwrite_partition_)
     : storage(storage_)
     , log(storage.getLogger())
     , metadata_snapshot(std::move(metadata_snapshot_))
     , context(std::move(context_))
-    , to_staging_area(to_staging_area_)
     , writer(storage, IStorage::StorageLocation::AUXILITY)
     , cnch_writer(storage, context, ManipulationType::Insert)
     , overwrite_partition(overwrite_partition_)
 {
-    if (!metadata_snapshot->hasUniqueKey() && to_staging_area)
-        throw Exception("Table doesn't have UNIQUE KEY specified, can't write to staging area", ErrorCodes::LOGICAL_ERROR);
+    checkAndInit();
+}
+
+void CloudMergeTreeBlockOutputStream::checkAndInit()
+{
+    if (metadata_snapshot->hasUniqueKey())
+    {
+        dedup_parameters.enable_staging_area = context->getSettingsRef().enable_staging_area_for_write.value || storage.getSettings()->cloud_enable_staging_area;
+        dedup_parameters.enable_append_mode = context->getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
+
+        if (dedup_parameters.enable_staging_area)
+        {
+            if (dedup_parameters.enable_append_mode)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "In APPEND dedup key mode, can't write to staging area.");
+            if (context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Insert VALUES into staging area with dedup_key_mode=DedupKeyMode::THROW is not allowed");
+            LOG_DEBUG(log, "enable staging area for write");
+        }
+        if (dedup_parameters.enable_append_mode)
+            LOG_DEBUG(log, "enable append dedup key mode");
+    }
 
     initOverwritePartitionPruner();
 }
@@ -101,21 +118,34 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
     /// Generate delete bitmaps, delete bitmap is valid only when using delete_flag info for unique table
     LocalDeleteBitmaps bitmaps;
     const auto & txn = context->getCurrentTransaction();
-    for (const auto & part : temp_parts)
+
+    if (metadata_snapshot->hasUniqueKey())
     {
-        auto delete_bitmap = part->getDeleteBitmap(/*allow_null*/ true);
-        if (delete_bitmap && delete_bitmap->cardinality())
+        /// Handle delete flag and generate emtpy bitmap for unique table in APPEND mode
+        for (const auto & part : temp_parts)
         {
-            bitmaps.emplace_back(LocalDeleteBitmap::createBase(
-                part->info, std::const_pointer_cast<Roaring>(delete_bitmap), txn->getPrimaryTransactionID().toUInt64()));
-            part->delete_flag = true;
+            auto delete_bitmap = part->getDeleteBitmap(/*allow_null*/ true);
+            if (delete_bitmap && delete_bitmap->cardinality())
+            {
+                if (dedup_parameters.enable_append_mode)
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Delete flag can not used in APPEND dedup key mode.");
+
+                bitmaps.emplace_back(LocalDeleteBitmap::createBase(
+                    part->info, std::const_pointer_cast<Roaring>(delete_bitmap), txn->getPrimaryTransactionID().toUInt64()));
+                part->delete_flag = true;
+            }
+            else if (dedup_parameters.enable_append_mode)
+            {
+                bitmaps.emplace_back(
+                    LocalDeleteBitmap::createBase(part->info, std::make_shared<Roaring>(), txn->getPrimaryTransactionID().toUInt64()));
+            }
         }
     }
     LOG_DEBUG(storage.getLogger(), "Finish converting block into parts, elapsed {} ms", watch.elapsedMilliseconds());
     watch.restart();
 
     IMutableMergeTreeDataPartsVector temp_staged_parts;
-    if (to_staging_area)
+    if (dedup_parameters.enable_staging_area)
     {
         temp_staged_parts.swap(temp_parts);
     }
@@ -300,11 +330,12 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
 {
     cnch_writer.preload(preload_parts);
 
-    if (!metadata_snapshot->hasUniqueKey() || to_staging_area)
+    if (!metadata_snapshot->hasUniqueKey() || dedup_parameters.enable_staging_area || dedup_parameters.enable_append_mode)
     {
         /// case1(normal table): commit all the temp parts as visible parts
         /// case2(unique table with async insert): commit all the temp parts as staged parts,
         ///     which will be converted to visible parts later by dedup worker
+        /// case3(unique table with append mode): just commit all the temp parts as visible parts with empty delete bitmaps.
         /// insert is lock-free and faster than upsert due to its simplicity.
         writeSuffixForInsert();
     }
