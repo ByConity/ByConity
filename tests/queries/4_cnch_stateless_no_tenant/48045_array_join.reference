@@ -1,0 +1,17 @@
+1	base_network_duration	0	[0,0,0,0,0]
+1	base_render_duration	0	[0,0,0,0,0]
+1	base_render_duration_to_start	0	[0,0,0,0,0]
+1	full_network_duration	671.4760065078735	[671.4760065078735,671.4760065078735,671.4760065078735,671.4760065078735,671.4760065078735]
+1	full_render_duration	37.65702247619629	[37.65702247619629,37.65702247619629,37.65702247619629,37.65702247619629,37.65702247619629]
+1	full_render_duration_to_start	709.1330289840698	[709.1330289840698,709.1330289840698,709.1330289840698,709.1330289840698,709.1330289840698]
+1	render_with_cache_duration	0	[0,0,0,0,0]
+Projection
+└─ Gather Exchange
+   └─ MergingAggregated
+      └─ Repartition Exchange
+         └─ Aggregating
+            └─ Projection
+               └─ ArrayJoin
+                  └─ Projection
+                     └─ Filter
+                        └─ TableScan test_48045.test_array_join

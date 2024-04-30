@@ -1,3 +1,8 @@
+drop DATABASE if exists test_48006;
+CREATE DATABASE test_48006;
+
+use test_48006;
+
 set enable_optimizer=1;
 
 SELECT x,arr FROM (SELECT arrayJoin(['Hello', 'Goodbye']) AS x, [1, 2, 3] AS arr) ARRAY JOIN arr;
@@ -11,7 +16,7 @@ SELECT arr, element FROM (SELECT emptyArrayUInt8() AS arr) LEFT ARRAY JOIN arr A
 SELECT arr, element FROM (SELECT arrayJoin([emptyArrayUInt8(), [1], [2, 3]]) AS arr) LEFT ARRAY JOIN arr AS element;
 
 DROP TABLE IF EXISTS array_test;
-use test;
+
 CREATE TABLE array_test(s String, arr1 Array(UInt8),arr2 Array(String)) ENGINE = CnchMergeTree() order by s;
 INSERT INTO array_test VALUES ('Hello', [1,2], ['1','2']), ('World', [3,4,5], ['3','4','5']), ('Goodbye', [], []);
 
