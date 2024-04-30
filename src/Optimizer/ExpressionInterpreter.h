@@ -157,6 +157,8 @@ public:
             return (*value)[0];
         }
         bool isNull() const;
+
+        // large literals has bad performance of AST operations(e.g. clone, compares, serialization) and should not be constant folding
         bool isSuitablyRepresentedByValue() const;
         ASTPtr convertToAST(const ContextMutablePtr & ctx) const;
     };
