@@ -155,7 +155,7 @@ void executePlanSegmentRemotely(
     request.set_coordinator_exchange_status_port(coordinator_address.getExchangePort());
 
     request.set_database(context->getCurrentDatabase());
-    request.set_check_session(!(context->getSettingsRef().enable_new_scheduler && context->getSettingsRef().bsp_mode));
+    request.set_check_session(!context->getSettingsRef().bsp_mode);
 
     const auto & client_info = context->getClientInfo();
     const String & quota_key = client_info.quota_key;
@@ -222,7 +222,7 @@ void prepareQueryCommonBuf(
     query_common.set_initial_client_port(client_info.initial_address.port());
     any_plan_segment.getCoordinatorAddress().toProto(*query_common.mutable_coordinator_address());
     query_common.set_database(context->getCurrentDatabase());
-    query_common.set_check_session(!(context->getSettingsRef().enable_new_scheduler && context->getSettingsRef().bsp_mode));
+    query_common.set_check_session(!context->getSettingsRef().bsp_mode);
     query_common.set_txn_id(context->getCurrentTransactionID().toUInt64());
     query_common.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64());
     const String & quota_key = client_info.quota_key;
