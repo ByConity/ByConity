@@ -86,12 +86,12 @@ EOF
 # optimization maybe unfinished even if add mutations_sync=1, sleep here is slow but can make ci stable
 sleep 80
 
-${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase() AND table = '00745_merge_tree_map_merge1' AND active;"
-${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase() AND table = '00745_merge_tree_map_merge2' AND active;"
-${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase() AND table = '00745_merge_tree_map_merge3' AND active;"
-${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase() AND table = '00745_merge_tree_map_merge4' AND active;"
-${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase() AND table = '00745_merge_tree_map_merge5' AND active;"
-${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase() AND table = '00745_merge_tree_map_merge6' AND active;"
+${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = '00745_merge_tree_map_merge1' AND active;"
+${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = '00745_merge_tree_map_merge2' AND active;"
+${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = '00745_merge_tree_map_merge3' AND active;"
+${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = '00745_merge_tree_map_merge4' AND active;"
+${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = '00745_merge_tree_map_merge5' AND active;"
+${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = '00745_merge_tree_map_merge6' AND active;"
 
 ${CLICKHOUSE_CLIENT} --query "SELECT * FROM 00745_merge_tree_map_merge1 ORDER BY n;"
 ${CLICKHOUSE_CLIENT} --query "SELECT * FROM 00745_merge_tree_map_merge2 ORDER BY n;"

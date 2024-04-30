@@ -20,7 +20,7 @@ INSERT INTO pi VALUES ('a', 'a', 1);
 
 SELECT equals(
     (
-        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi'
+        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 'pi'
     ),
     (
         SELECT last_modification_time FROM system.cnch_parts_info WHERE database = currentDatabase() AND table = 'pi'
@@ -36,7 +36,7 @@ SELECT number + sleepEachRow(3) from numbers(3) FORMAT Null;
 
 SELECT equals(
     (
-        SELECT count() FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi'
+        SELECT count() FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 'pi'
     ),
     (
        SELECT 2
@@ -45,7 +45,7 @@ SELECT equals(
 
 SELECT equals( 
     (
-        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi'
+        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 'pi'
     ), 
     (
         SELECT last_modification_time FROM system.cnch_parts_info WHERE database = currentDatabase() AND table = 'pi'
@@ -57,7 +57,7 @@ TRUNCATE TABLE pi;
 
 SELECT equals( 
     (
-        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi'
+        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 'pi'
     ), 
     (
         SELECT last_modification_time FROM system.cnch_parts_info WHERE database = currentDatabase() AND table = 'pi'
@@ -98,7 +98,7 @@ SELECT equals(
     
 SELECT equals(
     (
-        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi' and name like '%\_0\_%'
+        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 'pi' and name like '%\_0\_%'
     ),
     (
         SELECT last_modification_time FROM system.cnch_parts_info WHERE database = currentDatabase() AND table = 'pi'
@@ -112,7 +112,7 @@ TRUNCATE TABLE pi;
 
 SELECT equals(
     (
-        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi'
+        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 'pi'
     ),
     (
         SELECT last_modification_time FROM system.cnch_parts_info WHERE database = currentDatabase() AND table = 'pi'
@@ -125,7 +125,7 @@ SELECT number + sleepEachRow(3) from numbers(5) FORMAT Null;
 
 SELECT equals(
     (
-        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'pi'
+        SELECT max(commit_time) FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 'pi'
     ),
     (
         SELECT last_modification_time FROM system.cnch_parts_info WHERE database = currentDatabase() AND table = 'pi'

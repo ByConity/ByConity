@@ -641,8 +641,8 @@ static constexpr std::string_view partitions = R"(
         `subpartition_expression` Nullable(String),
         `partition_description` Nullable(String),
         `table_rows` Nullable(Int64),
-        `avg_row_length` Nullable(Int64),
         `data_length` Nullable(Int64),
+        `avg_row_length` Nullable(Int64),
         `max_data_length` Nullable(Int64),
         `index_length` Nullable(Int64),
         `data_free` Nullable(Int64),
@@ -683,9 +683,9 @@ static constexpr std::string_view partitions = R"(
     -- mysql considers catalog and schema roughly the same.
     -- However CNCH ClickHouse does have a *catalog* server.
     -- For now, stick with mysql interpretation.
-        database AS table_catalog,
-        database AS table_schema,
-        table AS table_name,
+        system.parts.database AS table_catalog,
+        system.parts.database AS table_schema,
+        system.parts.table AS table_name,
         partition AS partition_name,
         NULL AS subpartition_name,
         NULL AS partition_ordinal_position,
@@ -734,9 +734,10 @@ static constexpr std::string_view partitions = R"(
         nodegroup AS NODEGROUP,
         tablespace_name AS TABLESPACE_NAME
     FROM system.parts, system.tables
-    WHERE system.tables.name = system.parts.table
+    WHERE system.tables.database = system.parts.database
+    AND system.tables.name = system.parts.table
     AND system.parts.active
-    AND locate(system.tables.engine_full, 'PARTITION BY') > 0
+    AND position(system.tables.engine_full, 'PARTITION BY') > 0
     GROUP BY
     system.parts.partition,
     system.parts.database,
@@ -744,9 +745,9 @@ static constexpr std::string_view partitions = R"(
     system.tables.engine_full
     UNION ALL
     SELECT 
-        database AS table_catalog,
-        database AS table_schema,
-        table AS table_name,
+        system.cnch_parts.database AS table_catalog,
+        system.cnch_parts.database AS table_schema,
+        system.cnch_parts.table AS table_name,
         partition AS partition_name,
         NULL AS subpartition_name,
         NULL AS partition_ordinal_position,
@@ -798,9 +799,10 @@ static constexpr std::string_view partitions = R"(
         nodegroup AS NODEGROUP,
         tablespace_name AS TABLESPACE_NAME
     FROM system.cnch_parts, system.tables
-    WHERE system.tables.name = system.cnch_parts.table
-    AND system.cnch_parts.part_type = 1 -- visible
-    AND locate(system.tables.engine_full, 'PARTITION BY') > 0
+    WHERE system.tables.database = system.cnch_parts.database
+    AND system.tables.name = system.cnch_parts.table
+    AND toInt32(system.cnch_parts.part_type) = 1 -- visible
+    AND position(system.tables.engine_full, 'PARTITION BY') > 0
     GROUP BY
     system.cnch_parts.partition,
     system.cnch_parts.database,

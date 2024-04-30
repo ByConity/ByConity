@@ -12,12 +12,12 @@ SET max_string_size_for_unique_key = 9; -- throw exception (and abort txn) if si
 SELECT '# test commit of multi-block txn';
 INSERT INTO u10103_mb SELECT '', toString(number), number FROM system.numbers LIMIT 10240;
 SELECT count(1), sum(v) FROM u10103_mb;
-SELECT 'num parts', count(1) FROM system.cnch_parts WHERE database=currentDatabase() and table='u10103_mb' and active;
+SELECT 'num parts', count(1) FROM system.cnch_parts WHERE database=currentDatabase(1) and table='u10103_mb' and active;
 
 SELECT '# test rollback of multi-block txn';
 -- set k1 to 'kkkkk' so that the total key size will exceed max_string_size_for_unique_key for the last block
 INSERT INTO u10103_mb SELECT 'kkkkk', toString(number), number FROM system.numbers LIMIT 10240; -- { serverError 7200 }
 SELECT count(1), sum(v) FROM u10103_mb;
-SELECT 'num parts', count(1) FROM system.cnch_parts WHERE database=currentDatabase() and table='u10103_mb' and active;
+SELECT 'num parts', count(1) FROM system.cnch_parts WHERE database=currentDatabase(1) and table='u10103_mb' and active;
 
 DROP TABLE IF EXISTS u10103_mb;

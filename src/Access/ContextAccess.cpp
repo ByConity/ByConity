@@ -157,6 +157,7 @@ namespace
                 "databases",
                 "tables",
                 "columns",
+                "cnch_parts",
 
                 /// Specific to the current session
                 "settings",

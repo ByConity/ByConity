@@ -59,8 +59,8 @@ void StorageSystemCnchTrashItems::fillData(MutableColumns & res_columns, Context
     else
     {
         auto filtered_tables = filterTables(context, query_info);
-        for (const auto & [database_name, table_name] : filtered_tables)
-            request_storages.push_back(cnch_catalog->tryGetTable(*context, database_name, table_name, start_time));
+        for (const auto & [database_fullname, database_name, table_name] : filtered_tables)
+            request_storages.push_back(cnch_catalog->tryGetTable(*context, database_fullname, table_name, start_time));
     }
 
     /// Add one item into final results.

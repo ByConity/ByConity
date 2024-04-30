@@ -109,3 +109,9 @@ def	01161_information_schema	PRIMARY	def	01161_information_schema	kcu2	u	1	\N	\N
 partitioned	0	i % 3	2
 partitioned	1	i % 3	3
 partitioned	2	i % 3	2
+partitioned	0	i % 3	2
+partitioned	1	i % 3	3
+partitioned	2	i % 3	2
+partitioned	0	i % 3	2
+partitioned	1	i % 3	3
+partitioned	2	i % 3	2
