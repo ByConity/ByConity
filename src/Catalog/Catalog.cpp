@@ -3887,7 +3887,6 @@ namespace Catalog
             return false;
 
         bool ret = false;
-        const String ub_prefix{UNDO_BUFFER_PREFIX};
         while (true)
         {
             ret = metastore_iter->next();
@@ -3895,14 +3894,12 @@ namespace Catalog
                 break;
             cur_undo_resource = UndoResource::deserialize(metastore_iter->value());
             const String & key = metastore_iter->key();
-            auto pos = key.find(ub_prefix);
-            if (pos == std::string::npos || pos + ub_prefix.size() > key.size())
+            UInt64 txn_id;
+            if (!parseTxnIdFromUndoBufferKey(key, txn_id))
             {
                 LOG_ERROR(log, "Invalid undobuffer key: {}", metastore_iter->key());
                 continue;
             }
-
-            UInt64 txn_id = std::stoull(key.substr(pos + ub_prefix.size()));
             cur_undo_resource->txn_id = txn_id;
             valid = true;
             break;

@@ -552,6 +552,12 @@ public:
         return escapeString(name_space) + '_' + UNDO_BUFFER_PREFIX + toString(txn);
     }
 
+    /// Make sure only touch wanted transaction id's undo buffer keys
+    static std::string undoBufferKeyPrefix(const std::string & name_space, const UInt64 & txn, bool write_undo_buffer_new_key)
+    {
+        return undoBufferKey(name_space, txn, write_undo_buffer_new_key) + "_";
+    }
+
     static std::string undoBufferStoreKey(
         const std::string & name_space,
         const UInt64 & txn,
