@@ -2,6 +2,7 @@
 DROP TABLE IF EXISTS clicks;
 DROP TABLE IF EXISTS transactions;
 SET output_format_json_quote_64bit_integers = 1;
+set bsp_shuffle_reduce_locality_enabled=0; -- FIXME@wangtao.vip 
 
 CREATE TABLE clicks (domain String) ENGINE = CnchMergeTree ORDER BY domain;
 CREATE TABLE transactions (domain String) ENGINE = CnchMergeTree ORDER BY domain;

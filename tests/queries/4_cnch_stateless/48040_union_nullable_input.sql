@@ -1,5 +1,6 @@
 drop DATABASE if exists test_48040;
 CREATE DATABASE test_48040;
+set bsp_shuffle_reduce_locality_enabled=0; -- FIXME@wangtao.vip 
 
 use test_48040;
 
