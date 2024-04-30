@@ -27,7 +27,7 @@ Projection Est. ? rows
       └─ Projection Est. ? rows
          │     Expressions: [expr#uniqExact(l_partkey)]
          └─ Filter Est. ? rows
-            │     Condition: 10 = `expr#uniqExact(l_partkey)`
+            │     Condition: `expr#uniqExact(l_partkey)` = 10
             └─ Aggregating Est. ? rows
                │     Group by: {l_suppkey}
                │     Aggregates: expr#uniqExact(l_partkey):=AggNull(count)(l_partkey)
@@ -64,7 +64,7 @@ Projection Est. ? rows
       └─ Projection Est. ? rows
          │     Expressions: [expr#uniqExact(l_partkey)]
          └─ Filter Est. ? rows
-            │     Condition: 10 = `expr#uniqExact(l_partkey)`
+            │     Condition: `expr#uniqExact(l_partkey)` = 10
             └─ Aggregating Est. ? rows
                │     Group by: {l_suppkey}
                │     Aggregates: expr#uniqExact(l_partkey):=AggNull(count)(l_partkey)
@@ -86,7 +86,7 @@ Projection Est. ? rows
       └─ Projection Est. ? rows
          │     Expressions: [expr#uniqExact(l_orderkey)]
          └─ Filter Est. ? rows
-            │     Condition: 10 = `expr#uniqExact(l_orderkey)`
+            │     Condition: `expr#uniqExact(l_orderkey)` = 10
             └─ Aggregating Est. ? rows
                │     Group by: {l_suppkey}
                │     Aggregates: expr#uniqExact(l_orderkey):=AggNull(count)(l_orderkey)

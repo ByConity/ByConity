@@ -190,19 +190,23 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
 
     if (IO::Scheduler::IOSchedulerSet::instance().enabled() && settings.enable_io_scheduler) {
         if (settings.enable_io_pfra) {
-            return std::make_unique<PFRAWSReadBufferFromFS>(file_path,
+            return std::make_unique<PFRAWSReadBufferFromFS>(
+                file_path,
                 settings.byte_hdfs_pread ? pread_reader_opts : read_reader_opts,
                 IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(file_path),
-                PFRAWSReadBufferFromFS::Options {
-                    .min_buffer_size_ = settings.buffer_size,
+                PFRAWSReadBufferFromFS::Options{
+                    .min_buffer_size_ = settings.remote_fs_buffer_size,
                     .throttler_ = settings.throttler,
-                }
-            );
+                });
         } else {
-            return std::make_unique<WSReadBufferFromFS>(file_path,
+            return std::make_unique<WSReadBufferFromFS>(
+                file_path,
                 settings.byte_hdfs_pread ? pread_reader_opts : read_reader_opts,
                 IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(file_path),
-                settings.buffer_size, nullptr, 0, settings.throttler);
+                settings.remote_fs_buffer_size,
+                nullptr,
+                0,
+                settings.throttler);
         }
     }
     else

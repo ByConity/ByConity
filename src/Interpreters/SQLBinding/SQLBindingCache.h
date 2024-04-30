@@ -60,6 +60,10 @@ public:
     void setTimeStamp(long time_stamp) { global_update_time_stamp = time_stamp; }
 
     static void updateGlobalBindingsFromCatalog(const ContextPtr & context);
+
+    bool isReBindingEmpty() { return re_binding_cache->size() == 0; }
+
+    bool isSqlBindingEmpty() { return sql_binding_cache->size() == 0; }
 private:
     std::unique_ptr<CacheType> sql_binding_cache;
     std::unique_ptr<CacheType> re_binding_cache;

@@ -19,6 +19,7 @@
 #include <Common/filesystemHelpers.h>
 #include <Common/quoteString.h>
 #include <Common/formatReadable.h>
+#include "IO/ReadSettings.h"
 #include <Disks/IO/AsynchronousBoundedReadBuffer.h>
 #include <IO/Scheduler/IOScheduler.h>
 #include <IO/S3Common.h>
@@ -192,17 +193,23 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
     String object_key = std::filesystem::path(root_prefix) / path;
     if (IO::Scheduler::IOSchedulerSet::instance().enabled() && settings.enable_io_scheduler) {
         if (settings.enable_io_pfra) {
-            return std::make_unique<PFRAWSReadBufferFromFS>(object_key, reader_opts,
+            return std::make_unique<PFRAWSReadBufferFromFS>(
+                object_key,
+                reader_opts,
                 IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(object_key),
-                PFRAWSReadBufferFromFS::Options {
-                    .min_buffer_size_ = settings.buffer_size,
+                PFRAWSReadBufferFromFS::Options{
+                    .min_buffer_size_ = settings.remote_fs_buffer_size,
                     .throttler_ = settings.throttler,
-                }
-            );
+                });
         } else {
-            return std::make_unique<WSReadBufferFromFS>(object_key, reader_opts,
+            return std::make_unique<WSReadBufferFromFS>(
+                object_key,
+                reader_opts,
                 IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(object_key),
-                settings.buffer_size, nullptr, 0, settings.throttler);
+                settings.remote_fs_buffer_size,
+                nullptr,
+                0,
+                settings.throttler);
         }
     }
     else
@@ -267,7 +274,7 @@ static void checkWriteAccess(IDisk & disk)
 
 static void checkReadAccess(const String & disk_name, IDisk & disk)
 {
-    auto file = disk.readFile("test_acl", {.buffer_size = DBMS_DEFAULT_BUFFER_SIZE});
+    auto file = disk.readFile("test_acl", ReadSettings().initializeReadSettings(4));
     String buf(4, '0');
     file->readStrict(buf.data(), 4);
     if (buf != "test")

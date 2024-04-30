@@ -1139,6 +1139,17 @@ bool ParserCastAsExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         return true;
     }
 
+    if (ParserKeyword("CONVERT").ignore(pos, expected)
+        && ParserToken(TokenType::OpeningRoundBracket).ignore(pos, expected)
+        && ParserExpression(dt).parse(pos, expr_node, expected)
+        && ParserToken(TokenType::Comma).ignore(pos, expected)
+        && ParserDataType(dt).parse(pos, type_node, expected)
+        && ParserToken(TokenType::ClosingRoundBracket).ignore(pos, expected))
+    {
+        node = createFunctionCast(expr_node, type_node);
+        return true;
+    }
+
     return false;
 }
 

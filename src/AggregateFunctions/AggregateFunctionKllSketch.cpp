@@ -93,10 +93,6 @@ createAggregateFunctionKllSketch(const std::string & name, const DataTypes & arg
     {
         res.reset(createWithNumericBasedType<Function>(*data_type, argument_types, logK));
     }
-    else if (isStringOrFixedString(data_type))
-    {
-        res = std::make_shared<AggregateFunctionCboFamilyForString<KllData<String>>>(argument_types, logK);
-    }
 
     if (!res)
         throw Exception(

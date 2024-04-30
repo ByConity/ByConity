@@ -222,8 +222,11 @@ StorageID IStorage::getStorageID() const
 
 void IStorage::renameInMemory(const StorageID & new_table_id)
 {
+    /// Do not change server_vw_name here
+    auto old_server_vw_name = storage_id.server_vw_name;
     std::lock_guard lock(id_mutex);
     storage_id = new_table_id;
+    storage_id.server_vw_name = old_server_vw_name;
 }
 
 NamesAndTypesList IStorage::getVirtuals() const

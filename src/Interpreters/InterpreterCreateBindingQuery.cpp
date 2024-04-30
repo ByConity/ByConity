@@ -1,6 +1,6 @@
 #include <Catalog/Catalog.h>
 #include <DataStreams/OneBlockInputStream.h>
-#include <Interpreters/InterpreterCreateBinding.h>
+#include <Interpreters/InterpreterCreateBindingQuery.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Interpreters/SQLBinding/SQLBindingCatalog.h>
 #include <Interpreters/SQLBinding/SQLBindingUtils.h>
@@ -10,7 +10,7 @@
 namespace DB
 {
 
-BlockIO InterpreterCreateBinding::execute()
+BlockIO InterpreterCreateBindingQuery::execute()
 {
     const auto * create = query_ptr->as<const ASTCreateBinding>();
     if (!create)
@@ -68,32 +68,24 @@ BlockIO InterpreterCreateBinding::execute()
     else
         throw Exception("Create SQL Binding logical error", ErrorCodes::LOGICAL_ERROR);
 
+    String output = "Create SQL Binding succeeded";
     // Update the cache of all servers
     if (create->level == BindingLevel::GLOBAL)
     {
         BindingCatalogManager catalog(context);
         catalog.updateSQLBinding(binding);
-        for (int i = 0; i < 3; ++i)
+        try
         {
-            try
-            {
-                catalog.updateGlobalBindingCache(context);
-            }
-            catch (...)
-            {
-                if (i == 2)
-                    throw Exception(
-                        "The global binding is successfully written to catalog and the current server cache, But can't sync to some other "
-                        "server's cache",
-                        ErrorCodes::LOGICAL_ERROR);
-                continue;
-            }
-            break;
+            catalog.updateGlobalBindingCache(context);
+        }
+        catch (...)
+        {
+            output = "Create SQL Binding succeeded, But some nodes failed to refresh sql binding cache.";
+            LOG_ERROR(log, output);
         }
     }
 
     BlockIO res;
-    String output = "Create SQL Binding succeeded";
     Block block;
     ColumnWithTypeAndName col;
     col.type = std::make_shared<DataTypeString>();

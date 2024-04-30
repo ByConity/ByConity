@@ -823,8 +823,17 @@ PlanNodePtr ColumnPruningVisitor::visitDistinctNode(DistinctNode & node, ColumnP
             distinct_requrie_set.emplace(name_type.first);
     }
     bool can_convert_group_by = true;
-    if (distinct_requrie_set.size() > columns.size())
-        can_convert_group_by = false;
+    NameSet distinct_set{columns.begin(), columns.end()};
+    for (const auto & require_column : distinct_requrie_set)
+    {
+        if (!distinct_set.contains(require_column))
+        {
+            can_convert_group_by = false;
+            break;
+        }
+    }
+
+    child_require.insert(columns.begin(), columns.end());
 
     ColumnPruningContext child_column_pruning_context{.name_set = child_require};
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_column_pruning_context);

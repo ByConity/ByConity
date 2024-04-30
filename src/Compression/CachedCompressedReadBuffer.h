@@ -93,16 +93,19 @@ public:
         clock_type = clock_type_;
     }
 
+    // We have to initInput() here since read_until_position will be set before prefetch() or nextImpl().
+    // Otherwise, read_until_position can not be set, and after reading the necessary data, 
+    // the next prefetch task with wrong offset will be submitted incorrectly.
     void setReadUntilPosition(size_t position) override
     {
-        if (file_in)
-            file_in->setReadUntilPosition(position);
+        initInput();
+        file_in->setReadUntilPosition(position);
     }
 
     void setReadUntilEnd() override
     {
-        if (file_in)
-            file_in->setReadUntilEnd();
+        initInput();
+        file_in->setReadUntilEnd();
     }
 
     String getPath() const

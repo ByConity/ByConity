@@ -79,9 +79,7 @@ struct ReadSettings
 
     /// https://eklitzke.org/efficient-file-copying-on-linux
     size_t local_fs_buffer_size = 128 * 1024;
-
     size_t remote_fs_buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
-    size_t prefetch_buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
 
     bool remote_fs_prefetch = false;
     bool local_fs_prefetch = false;
@@ -99,7 +97,7 @@ struct ReadSettings
 
     bool enable_io_scheduler = false;
     bool enable_io_pfra = false;
-    size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
+
     size_t estimated_size = 0;
     bool byte_hdfs_pread = true;
     size_t filesystem_cache_max_download_size = (128UL * 1024 * 1024 * 1024);
@@ -112,6 +110,19 @@ struct ReadSettings
     size_t parquet_decode_threads = 48;
 
     size_t filtered_ratio_to_use_skip_read = 0;
+
+    void adjustBufferSize(size_t size)
+    {
+        local_fs_buffer_size = std::min(size, local_fs_buffer_size);
+        remote_fs_buffer_size = std::min(size, remote_fs_buffer_size);
+    }
+
+    ReadSettings initializeReadSettings(size_t size)
+    {
+        local_fs_buffer_size = std::min(size, local_fs_buffer_size);
+        remote_fs_buffer_size = std::min(size, remote_fs_buffer_size);
+        return *this;
+    }
 };
 
 }

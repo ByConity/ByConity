@@ -7,10 +7,10 @@
 
 namespace DB
 {
-class InterpreterShowBindings : public IInterpreter
+class InterpreterShowBindingsQuery : public IInterpreter
 {
 public:
-    explicit InterpreterShowBindings(const ASTPtr & query_ptr_, ContextMutablePtr & context_) : query_ptr(query_ptr_), context(context_) {}
+    explicit InterpreterShowBindingsQuery(const ASTPtr & query_ptr_, ContextMutablePtr & context_) : query_ptr(query_ptr_), context(context_) {}
 
     BlockIO execute() override;
 

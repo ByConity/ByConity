@@ -1912,14 +1912,7 @@ void PartCacheManager::insertDeleteBitmapsIntoCache(
         CnchDeleteBitmapCachePtr,
         DeleteBitmapModelsMap,
         std::function<String(const DataModelDeleteBitmapPtr &)>>(
-        table,
-        delete_bitmaps,
-        false,
-        false,
-        topology_version,
-        delete_bitmap_cache_ptr,
-        dataDeleteBitmapGetKeyFunc,
-        &partition_id_to_minmax);
+        table, delete_bitmaps, false, false, topology_version, delete_bitmap_cache_ptr, dataDeleteBitmapGetKeyFunc, &partition_id_to_minmax);
 }
 
 DeleteBitmapMetaPtrVector PartCacheManager::getOrSetDeleteBitmapInPartitions(

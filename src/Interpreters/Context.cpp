@@ -792,8 +792,10 @@ ReadSettings Context::getReadSettings() const
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
     res.enable_io_pfra = settings.enable_io_pfra;
-    res.buffer_size = settings.max_read_buffer_size;
-    res.remote_fs_buffer_size = settings.remote_fs_buffer_size;
+    res.local_fs_buffer_size
+        = settings.max_read_buffer_size_local_fs ? settings.max_read_buffer_size_local_fs : settings.max_read_buffer_size;
+    res.remote_fs_buffer_size
+        = settings.max_read_buffer_size_remote_fs ? settings.max_read_buffer_size_remote_fs : settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
     res.mmap_cache = getMMappedFileCache().get();
@@ -1580,7 +1582,7 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     applySettingsChanges(default_profile_info->settings);
 }
 
-void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
+String Context::formatUserName(const String & name)
 {
     //CNCH multi-tenant user name pattern from gateway client: {tenant_id}`{user_name}
     String user = name;
@@ -1596,9 +1598,12 @@ void Context::setUser(const String & name, const String & password, const Poco::
         else
             user = std::move(sub_user); ///{tenant_id}`default=>default
     }
-    setUser(BasicCredentials(user, password), address);
-    if (pushed)
-        popTenantId();
+    return user;
+}
+
+void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
+{
+    setUser(BasicCredentials(formatUserName(name), password), address);
 }
 
 void Context::setUserWithoutCheckingPassword(const String & name, const Poco::Net::SocketAddress & address)
