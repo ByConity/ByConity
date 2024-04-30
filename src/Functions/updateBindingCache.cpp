@@ -37,8 +37,15 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        BindingCacheManager::updateGlobalBindingsFromCatalog(context);
-        return result_type->createColumnConst(input_rows_count, 0);
+        try 
+        {
+            BindingCacheManager::updateGlobalBindingsFromCatalog(context);
+        }
+        catch (...)
+        {
+            return result_type->createColumnConst(input_rows_count, 0);
+        }
+        return result_type->createColumnConst(input_rows_count, 1);
     }
 
 private:

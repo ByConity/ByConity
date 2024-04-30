@@ -59,7 +59,7 @@ SELECT a + 1 FROM test.bindings ORDER BY a ASC
 Global Binding UUID: 2780354c-ba78-39b0-8dfd-0049a2c60573
 Pattern: ^select \'bbb\'
 Settings: enable_execute_query = 0
-0
+1
 Create SQL Binding succeeded
 Create SQL Binding succeeded
 Create SQL Binding succeeded
