@@ -34,7 +34,7 @@ bool Scheduler::addBatchTask(BatchTaskPtr batch_task)
 
 bool Scheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
 {
-    return queue.tryPop(task, timespec_to_duration(query_context->getQueryExpirationTimeStamp()).count() / 1000);
+    return queue.tryPop(task, query_expiration_ms);
 }
 
 void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
@@ -141,9 +141,15 @@ void Scheduler::schedule()
     /// Leave final segment alone.
     while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
     {
+        auto curr = time_in_milliseconds(std::chrono::system_clock::now());
         if (stopped.load(std::memory_order_relaxed))
         {
             LOG_INFO(log, "Schedule interrupted");
+            return;
+        }
+        else if (curr > query_expiration_ms)
+        {
+            LOG_INFO(log, "Schedule timeout current ts:{} expire ts:{}", curr, query_expiration_ms);
             return;
         }
         /// nullptr means invalid task

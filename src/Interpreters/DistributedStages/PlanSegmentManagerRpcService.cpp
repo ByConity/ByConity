@@ -323,7 +323,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         }
 
         // this means exception happened during execution.
-        if (!status.is_succeed && !status.is_cancelled)
+        if (!status.is_succeed)
         {
             auto coodinator = MPPQueryManager::instance().getCoordinator(request->query_id());
             if (coodinator)
