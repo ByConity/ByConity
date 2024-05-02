@@ -97,7 +97,7 @@ private:
 
     std::weak_ptr<ICnchBGThread> merge_thread;
 
-    time_t gc_labels_last_time{0};
+    String phase_two_start_key;
 };
 
 

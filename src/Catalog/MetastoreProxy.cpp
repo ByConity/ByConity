@@ -3035,9 +3035,9 @@ IMetaStore::IteratorPtr MetastoreProxy::getDetachedDeleteBitmapsInRange(
     return metastore_ptr->getByRange(prefix + range_start, prefix + range_end, include_start, include_end);
 }
 
-IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
+IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit, const String & start_key)
 {
-    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
+    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit, DEFAULT_SCAN_BATCH_COUNT, start_key);
 }
 
 String MetastoreProxy::extractTxnIDFromPartialSchemaKey(const String &partial_schema_key)

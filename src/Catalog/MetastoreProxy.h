@@ -1272,8 +1272,10 @@ public:
      * @brief Get all items in the trash state. This is a GC related function.
      *
      * @param limit Limit the results, disabled by passing 0.
+     * @param start_key KV Scan will begin from `start_key` if it's not empty.
      */
-    IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
+    IMetaStore::IteratorPtr
+    getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit, const String & start_key = "");
 
     //Object column schema related API
     static String extractTxnIDFromPartialSchemaKey(const String & partial_schema_key);

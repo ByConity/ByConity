@@ -4715,15 +4715,31 @@ namespace Catalog
             ProfileEvents::ClearDeleteBitmapsMetaForTableFailed);
     }
 
-    TrashItems Catalog::getDataItemsInTrash(const StoragePtr & storage, const size_t & limit)
+    TrashItems Catalog::getDataItemsInTrash(const StoragePtr & storage, const size_t & limit, String * start_key)
     {
         TrashItems res;
         auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*storage);
         String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
         size_t prefix_length = MetastoreProxy::trashItemsPrefix(name_space, uuid).length();
 
-        auto it = meta_proxy->getItemsInTrash(name_space, uuid, limit);
-        while (it->next())
+        /// Try iterate from the last checkpoint.
+        auto it = meta_proxy->getItemsInTrash(name_space, uuid, limit, start_key != nullptr ? *start_key : "");
+
+        if (!it->next())
+        {
+            if (start_key == nullptr || start_key->empty())
+                return res;
+
+            /// If we encounter the empty range, try to iterate from the start.
+            if (start_key)
+                *start_key = "";
+            it = meta_proxy->getItemsInTrash(name_space, uuid, limit, "");
+
+            if (!it->next())
+                return res;
+        }
+
+        do
         {
             const auto & key = it->key();
             String meta_key = key.substr(prefix_length, String::npos);
@@ -4741,7 +4757,14 @@ namespace Catalog
                 res.delete_bitmaps.push_back(std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr));
             }
             // not handling staged parts because we never move them to trash
-        }
+
+            // Save key so we can resume iteration in the next call.
+            if (start_key)
+                *start_key = key;
+        } while (it->next());
+
+        if (start_key && (res.size() < limit || limit == 0))
+            *start_key = "";
 
         return res;
     }

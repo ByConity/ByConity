@@ -608,9 +608,11 @@ public:
      * Trashed items including data parts, staged parts, and deleted bitmaps.
      *
      * @param limit Limit the result retured. Disabled with value `0`.
+     * @param start_key When provided, KV scan will start from the `start_key`,
+     * and it will be updated after calling this method.
      * @return Trashed parts.
      */
-    TrashItems getDataItemsInTrash(const StoragePtr & storage, const size_t & limit = 0);
+    TrashItems getDataItemsInTrash(const StoragePtr & storage, const size_t & limit = 0, String * start_key = nullptr);
 
     void markPartitionDeleted(const StoragePtr & table, const Strings & partitions);
     void deletePartitionsMetadata(const StoragePtr & table, const PartitionWithGCStatus & partitions);
