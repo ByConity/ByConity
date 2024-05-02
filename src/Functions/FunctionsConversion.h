@@ -323,8 +323,9 @@ struct ConvertImpl
                                         (*vec_null_map_to)[i] = true;
                                     continue;
                                 }
-                                else
-                                    throw Exception("Unexpected inf or nan to integer conversion", ErrorCodes::CANNOT_CONVERT_TYPE);
+                                // comment out for 1.4 compatability
+                                // else
+                                //     throw Exception("Unexpected inf or nan to integer conversion", ErrorCodes::CANNOT_CONVERT_TYPE);
                             }
                         }
 
