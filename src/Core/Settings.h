@@ -1184,6 +1184,7 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, query_plan_filter_push_down, true, "Allow to push down filter by predicate query plan step", 0) \
     M(Bool, enable_partition_filter_push_down, false, "Allow to push down partition filter to query info", 0) \
+    M(Bool, remove_partition_filter_on_worker, true, "Remove partition filter before worker execution, since partition pruning has been done on the server. This temp fix is used for not selecting partition key as prewhere", 0) \
     M(Bool, enable_optimizer_early_prewhere_push_down, false, "Allow to push down prewhere in the optimizer phase", 0) \
     M(UInt64, regexp_max_matches_per_row, 1000, "Max matches of any single regexp per row, used to safeguard 'extractAllGroupsHorizontal' against consuming too much memory with greedy RE.", 0) \
     \
