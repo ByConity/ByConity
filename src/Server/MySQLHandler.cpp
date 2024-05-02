@@ -263,9 +263,10 @@ void MySQLHandler::run()
                 if (!default_database.empty())
                     connection_context->setCurrentDatabase(default_database);
             }
-            connection_context->setSetting("dialect_type", String("MYSQL"));
-            /// Temporay fix, need to default enable it under mysql dialect
-            connection_context->setSetting("enable_implicit_arg_type_convert", 1);
+            SettingsChanges setting_changes;
+            setting_changes.emplace_back("dialect_type", String("MYSQL"));
+            connection_context->applySettingsChanges(setting_changes);
+
             connection_context->setCurrentQueryId(fmt::format("mysql:{}", connection_id));
 
         }
