@@ -1127,11 +1127,11 @@ String MergeTreeDataPartCNCH::getFullPath() const
         / "";
 }
 
-String MergeTreeDataPartCNCH::getFullRelativePathForDetachedPart(const String & prefix) const
+String MergeTreeDataPartCNCH::getRelativePathForDetachedPart(const String & prefix) const
 {
     /// no need to check file name conflict here because part name in CNCH is unique
     String part_dir = (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation();
-    return fs::path(storage.getRelativeDataPath(location)) / "detached" / part_dir;
+    return fs::path("detached") / part_dir;
 }
 
 void MergeTreeDataPartCNCH::updateCommitTimeForProjection()
