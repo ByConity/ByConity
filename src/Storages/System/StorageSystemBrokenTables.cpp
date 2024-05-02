@@ -17,6 +17,7 @@
 #include <Interpreters/Context.h>
 #include <Access/ContextAccess.h>
 #include <DataTypes/DataTypeString.h>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -33,6 +34,7 @@ NamesAndTypesList StorageSystemBrokenTables::getNamesAndTypes()
 
 void StorageSystemBrokenTables::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
+    DISABLE_VISIT_FOR_TENANTS();
     const auto access = context->getAccess();
     const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_DATABASES);
 
