@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <Poco/Logger.h>
+#include <Poco/Util/AbstractConfiguration.h>
 
 #include <Storages/DiskCache/AbstractCache.h>
 #include <Storages/DiskCache/BlockCacheReinsertionPolicy.h>
