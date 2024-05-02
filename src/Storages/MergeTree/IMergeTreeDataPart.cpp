@@ -1662,7 +1662,7 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
      }
  }
 
-String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
+String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix, bool is_detach) const
 {
     String res;
 
@@ -1673,9 +1673,9 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
         */
     for (int try_no = 0; try_no < 10; try_no++)
     {
-        res = (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation() + (try_no ? "_try" + DB::toString(try_no) : "");
+        res = (is_detach ? "detached/" : "") + (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation() + (try_no ? "_try" + DB::toString(try_no) : "");
 
-        if (!volume->getDisk()->exists(fs::path(getFullRelativePath()) / res))
+        if (!volume->getDisk()->exists(fs::path(storage.getRelativeDataPath(location)) / res))
             return res;
 
         LOG_WARNING(storage.log, "Directory {} (to detach to) already exists. Will detach to directory with '_tryN' suffix.", res);
@@ -1748,10 +1748,10 @@ String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix)
     assert(prefix.empty() || std::find(DetachedPartInfo::DETACH_REASONS.begin(),
                                        DetachedPartInfo::DETACH_REASONS.end(),
                                        prefix) != DetachedPartInfo::DETACH_REASONS.end());
-    return "detached/" + getRelativePathForPrefix(prefix);
+    return getRelativePathForPrefix(prefix, /*is_detach*/true);
 }
 
-String IMergeTreeDataPart::getRelativePathToDiskForDetachedPart(const String & prefix) const
+String IMergeTreeDataPart::getFullRelativePathForDetachedPart(const String & prefix) const
 {
     return fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
 }
@@ -1763,7 +1763,7 @@ void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 
 void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
 {
-    String destination_path = getRelativePathToDiskForDetachedPart(prefix);
+    String destination_path = getFullRelativePathForDetachedPart(prefix);
 
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);

@@ -2694,7 +2694,7 @@ void StorageCnchMergeTree::dropPartsImpl(
                         txn->getTransactionID(),
                         UndoResourceType::FileSystem,
                         part->getFullRelativePath(),
-                        part->getRelativePathToDiskForDetachedPart(""));
+                        part->getFullRelativePathForDetachedPart(""));
                     ub.setDiskName(part->volume->getDisk()->getName());
                     undo_resources.push_back(ub);
                 };
