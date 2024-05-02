@@ -821,7 +821,7 @@ void IMergeTreeDataPart::setProjectionPartsNames(const NameSet & projection_part
 void IMergeTreeDataPart::gatherProjections()
 {
     IMergeTreeDataPartPtr part = shared_from_this();
-    auto checksums = getChecksums();
+    ChecksumsPtr checksums_ptr_ = nullptr;
     while (part->isPartial())
     {
         if (part = part->tryGetPreviousPart(); !part)
@@ -829,8 +829,12 @@ void IMergeTreeDataPart::gatherProjections()
 
         for (const auto & [projection_name, projection_part] : part->projection_parts)
         {
+            /// Calling getChecksums() will store checksums smart pointer in part, so we do this lazy.
+            if (checksums_ptr_ == nullptr)
+                checksums_ptr_ = getChecksums();
+
             // if proj_with_name is absent in head part's checksums, it means that this projection is deleted and should not be loaded
-            if (auto it = checksums->files.find(projection_name + ".proj"); it != checksums->files.end())
+            if (auto it = checksums_ptr_->files.find(projection_name + ".proj"); it != checksums_ptr_->files.end())
             {
                 auto ret = projection_parts.emplace(projection_name, projection_part);
                 if (ret.second)
