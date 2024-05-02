@@ -2322,12 +2322,13 @@ void HashJoin::tryBuildRuntimeFilters(size_t total_rows) const
                 continue;
             }
 
+            size_t bf_size = pre_ht_size;
             if (runtime_filter_consumer->isDistributed(rf.first))
-                pre_ht_size
+                bf_size
                     *= runtime_filter_consumer
                            ->getGrfNdvEnlargeSize(); /// enlarge ndv in case error rate increase. TODO: shuffle-aware global runtime filter
 
-            buildBloomFilterRF(rf.second, rf.first, pre_ht_size, runtime_filter_consumer.get());
+            buildBloomFilterRF(rf.second, rf.first, bf_size, runtime_filter_consumer.get());
         }
         return;
     }
