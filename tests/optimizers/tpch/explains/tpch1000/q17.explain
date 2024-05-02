@@ -9,7 +9,7 @@ Projection Est. 1 rows
             │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
             └─ Inner Join Est. 6004189 rows
                │     Condition: l_partkey == l_partkey_1
-               │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)`)
+               │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)_1`)
                ├─ Repartition Exchange Est. 5999989709 rows
                │  │     Partition by: {l_partkey}
                │  └─ Filter Est. 5999989709 rows
@@ -31,7 +31,7 @@ Projection Est. 1 rows
                   │                 Outputs: [p_partkey, p_brand, p_container]
                   └─ Aggregating Est. 200140 rows
                      │     Group by: {l_partkey_1}
-                     │     Aggregates: expr#avg(l_quantity):=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
+                     │     Aggregates: expr#avg(l_quantity)_1:=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
                      └─ Projection Est. 6004189 rows
                         │     Expressions: [l_partkey_1, l_quantity_1], build_side_non_null_symbol:=1
                         └─ Inner Join Est. 6004189 rows

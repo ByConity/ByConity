@@ -19,7 +19,7 @@ Projection Est. 46 rows
                         │     Aggregates: expr#count():=AggNull(count)()
                         └─ Inner Join Est. 132654 rows
                            │     Condition: i_category == i_category_1
-                           │     Filter: i_current_price > ('1.2' * `expr#avg(j.i_current_price)`)
+                           │     Filter: i_current_price > ('1.2' * `expr#avg(j.i_current_price)_1`)
                            ├─ Inner Join Est. 120595 rows
                            │  │     Condition: ca_address_sk == c_current_addr_sk
                            │  │     Runtime Filters Builder: {c_current_addr_sk}
@@ -94,7 +94,7 @@ Projection Est. 46 rows
                                     │     Partition by: {i_category_1}
                                     └─ Aggregating Est. 11 rows
                                        │     Group by: {i_category_1}
-                                       │     Aggregates: expr#avg(j.i_current_price):=AggNull(avgIf)(i_current_price_1,build_side_non_null_symbol)
+                                       │     Aggregates: expr#avg(j.i_current_price)_1:=AggNull(avgIf)(i_current_price_1,build_side_non_null_symbol)
                                        └─ Projection Est. 204000 rows
                                           │     Expressions: [i_category_1, i_current_price_1], build_side_non_null_symbol:=1
                                           └─ TableScan tpcds100.item Est. 204000 rows

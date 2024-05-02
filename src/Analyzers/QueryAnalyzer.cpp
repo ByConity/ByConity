@@ -117,7 +117,8 @@ public:
     }
 
     QueryAnalyzerVisitor(ContextPtr context_, Analysis & analysis_, ScopePtr outer_query_scope_)
-        : context(std::move(context_))
+        : ASTVisitor(context_->getSettingsRef().max_ast_depth)
+        , context(std::move(context_))
         , analysis(analysis_)
         , outer_query_scope(outer_query_scope_)
         , use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)

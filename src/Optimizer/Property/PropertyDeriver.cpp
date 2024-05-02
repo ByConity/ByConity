@@ -67,7 +67,7 @@ Property PropertyDeriver::deriveProperty(QueryPlanStepPtr step, Property & input
 Property PropertyDeriver::deriveProperty(QueryPlanStepPtr step, PropertySet & input_properties, ContextMutablePtr & context)
 {
     DeriverContext deriver_context{input_properties, context};
-    static DeriverVisitor visitor{};
+    DeriverVisitor visitor{};
     auto result = VisitorUtil::accept(step, visitor, deriver_context);
     if (step->getType() != IQueryPlanStep::Type::Exchange)
     {

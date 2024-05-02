@@ -12,7 +12,7 @@ Projection Est. 1 rows
                │     Runtime Filters Builder: {d_date_sk}
                ├─ Inner Join Est. 441593 rows
                │  │     Condition: cs_item_sk == cs_item_sk_1
-               │  │     Filter: cs_ext_discount_amt > ('1.3' * `expr#avg(cs_ext_discount_amt)`)
+               │  │     Filter: cs_ext_discount_amt > ('1.3' * `expr#avg(cs_ext_discount_amt)_1`)
                │  ├─ Filter Est. 1439980416 rows
                │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
@@ -36,7 +36,7 @@ Projection Est. 1 rows
                │              │     Partition by: {cs_item_sk_1}
                │              └─ Aggregating Est. 92 rows
                │                 │     Group by: {cs_item_sk_1}
-               │                 │     Aggregates: expr#avg(cs_ext_discount_amt):=AggNull(avgIf)(cs_ext_discount_amt_1,build_side_non_null_symbol)
+               │                 │     Aggregates: expr#avg(cs_ext_discount_amt)_1:=AggNull(avgIf)(cs_ext_discount_amt_1,build_side_non_null_symbol)
                │                 └─ Projection Est. 21406 rows
                │                    │     Expressions: [cs_ext_discount_amt_1, cs_item_sk_1], build_side_non_null_symbol:=1
                │                    └─ Inner Join Est. 21406 rows
