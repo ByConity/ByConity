@@ -111,7 +111,7 @@ message DataModelPart {
   optional bytes min_unique_key = 14;
   optional bytes max_unique_key = 15;
   optional int64 bucket_number =
-      16; // bucket_number > 0 if the part is assigned to bucket
+      16; // bucket_number >= 0 if the part is assigned to bucket
   optional uint64 table_definition_hash =
       17; // hash code for key columns like partition by, order by and cluster
           // by
@@ -191,6 +191,7 @@ message DataModelDeleteBitmap {
   optional uint64 commit_time = 10;
   // commit ts of the txn removing this object
   optional uint64 end_time = 11;
+  optional int64 bucket_number = 12;
 }
 
 message DataModelPartVector { repeated DataModelPart parts = 1; }

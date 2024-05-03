@@ -1662,7 +1662,7 @@ bool CnchMergeMutateThread::removeTasksOnPartitions(const std::unordered_set<Str
             if (task->type == ManipulationType::Clustering || task->type == ManipulationType::Mutate || remove_all)
                 task_ids.push_back(task_id);
             else if (task->type == ManipulationType::Merge && partitions.contains(task->parts.front()->info().partition_id))
-                task_ids.push_back(task_id); 
+                task_ids.push_back(task_id);
         }
 
         for (const auto & task_id : task_ids)

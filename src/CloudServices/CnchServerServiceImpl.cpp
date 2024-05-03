@@ -582,30 +582,17 @@ void CnchServerServiceImpl::fetchDataParts(
             for (const auto & partition : request->partitions())
                 partition_list.emplace_back(partition);
 
+            std::set<Int64> bucket_numbers;
+            for (const auto & bucket_number : request->bucket_numbers())
+                bucket_numbers.insert(bucket_number);
+
             auto parts = gc->getCnchCatalog()->getServerDataPartsInPartitions(
                 storage,
                 partition_list,
                 TxnTimestamp{request->timestamp()},
                 nullptr,
-                /*visibility=*/Catalog::VisibilityLevel::All);
-
-            /// Filter parts by bucket numbers if table is bucket table and cluster ready
-            if (!parts.empty() && !request->bucket_numbers().empty() && storage->isBucketTable() && gc->getCnchCatalog()->isTableClustered(storage->getStorageUUID()))
-            {
-                std::set<Int64> bucket_numbers;
-                for (const auto & bucket_number : request->bucket_numbers())
-                    bucket_numbers.insert(bucket_number);
-                auto old_part_size = parts.size();
-                std::erase_if(parts, [&bucket_numbers](const ServerDataPartPtr & part) {
-                    /// Shoule skip parts with -1 as bucket_number since it's drop range parts
-                    return part->part_model().bucket_number() >= 0 && bucket_numbers.count(part->part_model().bucket_number()) == 0;
-                });
-                LOG_TRACE(log, "fetchDataParts for {} filtered by {} buckets from {} parts to {} parts."
-                    ,storage->getStorageID().getNameForLogs()
-                    ,bucket_numbers.size()
-                    ,old_part_size
-                    ,parts.size());
-            }
+                /*visibility=*/Catalog::VisibilityLevel::All,
+                bucket_numbers);
 
             auto & mutable_parts = *response->mutable_parts();
             for (const auto & part : parts)
@@ -649,8 +636,11 @@ void CnchServerServiceImpl::fetchDeleteBitmaps(
             for (const auto & partition : request->partitions())
                 partition_list.emplace_back(partition);
 
+            std::set<Int64> bucket_numbers;
+            for (const auto & bucket_number : request->bucket_numbers())
+                bucket_numbers.insert(bucket_number);
             auto bitmaps = gc->getCnchCatalog()->getDeleteBitmapsInPartitions(
-                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, Catalog::VisibilityLevel::All);
+                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, Catalog::VisibilityLevel::All, bucket_numbers);
             auto & mutable_parts = *response->mutable_delete_bitmaps();
             for (const auto & bitmap : bitmaps)
                 *mutable_parts.Add() = *bitmap->getModel();

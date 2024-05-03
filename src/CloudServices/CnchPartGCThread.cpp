@@ -640,7 +640,8 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Stor
 
     Stopwatch watch;
     // for gc thread, intermediate parts are required in case that TransactionCleaner fails to clean them.
-    auto all_parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, gc_timestamp, nullptr, Catalog::VisibilityLevel::All);
+    auto all_parts
+        = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, gc_timestamp, nullptr, Catalog::VisibilityLevel::All);
     items_count_in_partition += all_parts.size();
     LOG_TRACE(log, "[p1] Get {} parts for {} from Catalog cost {} us", all_parts.size(), partition_id, watch.elapsedMicroseconds());
     watch.restart();
@@ -796,7 +797,8 @@ void CnchPartGCThread::clearEmptyPartitions(const StoragePtr & istorage, Storage
     for (const auto & p : partitions)
     {
         // double check if the partition is truely empty. Get parts here should be lightweight since most of the partitions should be empty;
-        auto data_parts_in_partition = catalog->getServerDataPartsInPartitions(istorage, {p}, 0, nullptr, Catalog::VisibilityLevel::All);
+        auto data_parts_in_partition
+            = catalog->getServerDataPartsInPartitions(istorage, {p}, 0, nullptr, Catalog::VisibilityLevel::All);
         NameSet partition_filter{p};
         auto staged_parts_in_partition = catalog->getStagedServerDataParts(istorage, 0, &partition_filter);
         if (data_parts_in_partition.empty() && staged_parts_in_partition.empty())
