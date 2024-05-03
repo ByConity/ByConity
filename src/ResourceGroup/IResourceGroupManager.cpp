@@ -17,20 +17,21 @@
 #include <common/logger_useful.h>
 // #include <Parsers/ASTCreateMaskingPolicyQuery.h>
 #include <Interpreters/Context.h>
-#include <ResourceGroup/IResourceGroupManager.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTReproduceQuery.h>
-#include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTUpdateQuery.h>
-#include <Parsers/ASTRefreshQuery.h>
+#include <ResourceGroup/IResourceGroupManager.h>
 #include <Storages/AlterCommands.h>
 
 namespace DB
@@ -74,6 +75,16 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
         || ast->as<ASTRefreshQuery>()
     )
         return ResourceSelectCase::QueryType::DATA;
+    else if (const auto * explain = ast->as<ASTExplainQuery>(); explain
+             && (explain->getKind() == ASTExplainQuery::DistributedAnalyze || explain->getKind() == ASTExplainQuery::LogicalAnalyze
+                 || explain->getKind() == ASTExplainQuery::PipelineAnalyze))
+    {
+        const auto & query = explain->getExplainedQuery();
+        if (query->as<ASTInsertQuery>())
+            return ResourceSelectCase::QueryType::DATA;
+        else if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
+            return ResourceSelectCase::QueryType::SELECT;
+    }
 
     else if (const auto * ast_system = ast->as<ASTSystemQuery>(); ast_system
         && ast_system->type == ASTSystemQuery::Type::DEDUP

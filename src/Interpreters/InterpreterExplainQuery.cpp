@@ -111,28 +111,7 @@ BlockIO InterpreterExplainQuery::execute()
     if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze || ast.getKind() == ASTExplainQuery::PipelineAnalyze)
         && QueryUseOptimizerChecker::check(query, getContext(), true))
     {
-        if (!getContext()->getSettingsRef().log_processors_profiles || !getContext()->getSettingsRef().report_processors_profiles)
-        {
-            getContext()->setSetting("log_processors_profiles", true);
-            getContext()->setSetting("report_processors_profiles", true);
-        }
-        std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> consumer
-            = std::make_shared<ExplainConsumer>(getContext()->getCurrentQueryId());
-        ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(getContext()->getCurrentQueryId(), consumer);
-        getContext()->setProcessorProfileElementConsumer(consumer);
-        getContext()->setIsExplainQuery(true);
-        try
-        {
-            res = explainAnalyze();
-        }
-        catch (...)
-        {
-            if (getContext()->getProcessorProfileElementConsumer())
-                getContext()->getProcessorProfileElementConsumer()->stop();
-            throw;
-        }
-
-        return res;
+        return explainAnalyze();
     }
     // Explain in bsp mode makes no sense.
     getContext()->setSetting("bsp_mode", false);
@@ -238,6 +217,27 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
 {
     const auto & ast = query->as<ASTExplainQuery &>();
 
+    // if settings.enable_optimizer = true && query is supported by optimizer, print plan with optimizer.
+    // if query is not supported by optimizer, settings `settings.enable_optimizer` in context will be disabled.
+    if (ast.getKind() == ASTExplainQuery::MetaData)
+    {
+        return explainMetaData();
+    }
+    else if (getContext()->getSettingsRef().enable_optimizer
+        && QueryUseOptimizerChecker::check(query, getContext(), !getContext()->getSettingsRef().enable_optimizer_fallback))
+    {
+        return explainUsingOptimizer();
+    }
+    else
+    {
+        return explain();
+    }
+}
+
+BlockInputStreamPtr InterpreterExplainQuery::explain()
+{
+    const auto & ast = query->as<ASTExplainQuery &>();
+
     Block sample_block = getSampleBlock();
     MutableColumns res_columns = sample_block.cloneEmptyColumns();
 
@@ -246,13 +246,7 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
 
     // if settings.enable_optimizer = true && query is supported by optimizer, print plan with optimizer.
     // if query is not supported by optimizer, settings `settings.enable_optimizer` in context will be disabled.
-    if (QueryUseOptimizerChecker::check(query, getContext()))
-    {
-        if (ast.getKind() == ASTExplainQuery::MetaData)
-            return explainMetaData(query);
-        explainUsingOptimizer(query, buf, single_line);
-    }
-    else if (ast.getKind() == ASTExplainQuery::ParsedAST)
+    if (ast.getKind() == ASTExplainQuery::ParsedAST)
     {
         if (ast.getSettings())
             throw Exception("Settings are not supported for EXPLAIN AST query.", ErrorCodes::UNKNOWN_SETTING);
@@ -366,8 +360,9 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
         if (plan_segment_tree)
             buf << plan_segment_tree->toString();
     }
-    else if (ast.getKind() == ASTExplainQuery::MetaData)
-        return explainMetaData(query);
+    else
+        throw Exception(
+            "This explain syntax is not supported, you can try to open optimizer(enable_optimizer=1).", ErrorCodes::INCORRECT_QUERY);
 
     if (single_line)
         res_columns[0]->insertData(buf.str().data(), buf.str().size());
@@ -648,9 +643,11 @@ void InterpreterExplainQuery::elementGroupBy(const ASTPtr & group_by, WriteBuffe
     buffer << "]";
 }
 
-void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuffer & buffer, bool & single_line)
+BlockInputStreamPtr InterpreterExplainQuery::explainUsingOptimizer()
 {
-    const auto & explain = ast->as<ASTExplainQuery &>();
+    WriteBufferFromOwnString buffer;
+    bool single_line = false;
+    const auto & explain = query->as<ASTExplainQuery &>();
     auto context = getContext();
 
     if (explain.getKind() == ASTExplainQuery::AnalyzedSyntax)
@@ -661,7 +658,6 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
         auto query_ptr = explain.getExplainedQuery();
         query_ptr = QueryRewriter().rewrite(query_ptr, context);
         query_ptr->format(IAST::FormatSettings(buffer, false));
-        return;
     }
     else if (explain.getKind() == ASTExplainQuery::TraceOptimizer || explain.getKind() == ASTExplainQuery::TraceOptimizerRule)
     {
@@ -684,31 +680,65 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
             buffer << context->getOptimizerProfile(true);
         else
             buffer << context->getOptimizerProfile();
+    }
+    else
+    {
+        InterpreterSelectQueryUseOptimizer interpreter(explain.getExplainedQuery(), context, SelectQueryOptions());
+        auto query_plan = interpreter.getQueryPlan();
+        if (explain.getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan
+            || explain.getKind() == ASTExplainQuery::ExplainKind::QueryPlan)
+        {
+            explainPlanWithOptimizer(explain, *query_plan, buffer, context, single_line);
+        }
+        else if (explain.getKind() == ASTExplainQuery::ExplainKind::Distributed)
+        {
+            explainDistributedWithOptimizer(explain, *query_plan, buffer, context);
+        }
+        else if (explain.getKind() == ASTExplainQuery::ExplainKind::QueryPipeline)
+        {
+            explainPipelineWithOptimizer(explain, *query_plan, buffer, context);
+        }
+    }
 
-        return;
-    }
+    Block sample_block = getSampleBlock();
+    MutableColumns res_columns = sample_block.cloneEmptyColumns();
 
-    InterpreterSelectQueryUseOptimizer interpreter(explain.getExplainedQuery(), context, SelectQueryOptions());
-    auto query_plan = interpreter.getQueryPlan();
-    if (explain.getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan || explain.getKind() == ASTExplainQuery::ExplainKind::QueryPlan )
-    {
-        explainPlanWithOptimizer(explain, *query_plan, buffer, context, single_line);
-    }
-    else if (explain.getKind() == ASTExplainQuery::ExplainKind::Distributed)
-    {
-        explainDistributedWithOptimizer(explain, *query_plan, buffer, context);
-    }
-    else if (explain.getKind() == ASTExplainQuery::ExplainKind::QueryPipeline)
-    {
-        explainPipelineWithOptimizer(explain, *query_plan, buffer, context);
-    }
+    if (single_line)
+        res_columns[0]->insertData(buffer.str().data(), buffer.str().size());
+    else
+        fillColumn(*res_columns[0], buffer.str());
+
+    return std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns)));
 }
 
 BlockIO InterpreterExplainQuery::explainAnalyze()
 {
-    auto context = getContext();
-    auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
-    return interpreter->execute();
+    BlockIO res;
+
+    auto context_ptr = getContext();
+    if (!context_ptr->getSettingsRef().log_processors_profiles || !context_ptr->getSettingsRef().report_processors_profiles)
+    {
+        context_ptr->setSetting("log_processors_profiles", true);
+        context_ptr->setSetting("report_processors_profiles", true);
+    }
+    std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> consumer
+        = std::make_shared<ExplainConsumer>(context_ptr->getCurrentQueryId());
+    ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(context_ptr->getCurrentQueryId(), consumer);
+    context_ptr->setProcessorProfileElementConsumer(consumer);
+    context_ptr->setIsExplainQuery(true);
+    try
+    {
+        auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context_ptr, options);
+        res = interpreter->execute();
+    }
+    catch (...)
+    {
+        if (context_ptr->getProcessorProfileElementConsumer())
+            context_ptr->getProcessorProfileElementConsumer()->stop();
+        throw;
+    }
+
+    return res;
 }
 
 void InterpreterExplainQuery::explainPlanWithOptimizer(
@@ -764,9 +794,9 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(
         buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, settings.stats, settings.verbose, costs, {}, plan);
 }
 
-BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)
+BlockInputStreamPtr InterpreterExplainQuery::explainMetaData()
 {
-    const auto & explain = ast->as<ASTExplainQuery &>();
+    const auto & explain = query->as<ASTExplainQuery &>();
     auto context = Context::createCopy(getContext());
     auto query_ptr = explain.getExplainedQuery();
     query_ptr = QueryRewriter().rewrite(query_ptr, context);
