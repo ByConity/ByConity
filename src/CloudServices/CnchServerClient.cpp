@@ -189,7 +189,11 @@ ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_hos
 }
 
 DeleteBitmapMetaPtrVector CnchServerClient::fetchDeleteBitmaps(
-    const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts)
+    const String & remote_host,
+    const ConstStoragePtr & table,
+    const Strings & partition_list,
+    const TxnTimestamp & ts,
+    const std::set<Int64> & bucket_numbers)
 {
     brpc::Controller cntl;
     if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
@@ -204,6 +208,9 @@ DeleteBitmapMetaPtrVector CnchServerClient::fetchDeleteBitmaps(
     request.set_table(table->getTableName());
     request.set_table_commit_time(table->commit_time);
     request.set_timestamp(ts.toUInt64());
+
+    for (const auto & bucket_number : bucket_numbers)
+        request.add_bucket_numbers(bucket_number);
 
     for (const auto & partition_id : partition_list)
         request.add_partitions(partition_id);

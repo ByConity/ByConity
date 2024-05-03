@@ -243,6 +243,50 @@ TEST_F(CacheManagerTest, AlterTableContention)
 
 
 /***
+ * @brief Storage cache test 3
+ * Test reject cache non-latest version storage.
+ * The storage cache only accept storage with latest commit ts.
+*/
+TEST_F(CacheManagerTest, RejectCacheOldStorageTest)
+{
+    auto context = getContext().context;
+    std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, 0, true);
+    auto current_topology_version = PairInt64{1, 1};
+    UInt64 ts_commit = 1, ts_latest = 2;
+
+
+    String query = "create table gztest.test UUID '61f0c404-5cb3-11e7-907b-a6006ad3dba0' (id Int32) ENGINE=CnchMergeTree order by id";
+    StoragePtr storage = CacheTestMock::createTable(query, context);
+
+    // load active tables into CacheManager
+    cache_manager->mayUpdateTableMeta(*storage, current_topology_version);
+    auto entry = cache_manager->getTableMeta(storage->getStorageUUID());
+
+    // mock get storage with an earlier ts. Will get an old version storage with latest version set
+    storage->commit_time = TxnTimestamp{ts_commit};
+    storage->latest_version = TxnTimestamp{ts_latest};
+
+    cache_manager->insertStorageCache(storage->getStorageID(), storage, ts_commit, current_topology_version);
+
+    // get storate from cache. It should get nothing
+    auto storage_from_cache = cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version);
+    EXPECT_EQ(storage_from_cache, nullptr);
+
+    // update storage commit ts to latest. mock get latest storage from metastore.
+    storage->commit_time = TxnTimestamp{ts_latest};
+
+    // storage cache accept the new storage with latest commit ts
+    cache_manager->insertStorageCache(storage->getStorageID(), storage, storage->commit_time, current_topology_version);
+
+    // now should get storage from cache
+    auto storage_from_cache_2 = cache_manager->getStorageFromCache(storage->getStorageUUID(), current_topology_version);
+
+    EXPECT_NE(storage_from_cache_2, nullptr);
+
+    cache_manager->shutDown();
+}
+
+/***
  * @brief part cache test
  * 1. Test insert into part cache
  * 2. Test get parts from part cache

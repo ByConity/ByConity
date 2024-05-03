@@ -1450,7 +1450,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                             /// For convenience, we generate a new bitmap file here.
                             DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
                             deserializeDeleteBitmapInfo(part->storage, attach_meta, bitmap);
-                            auto new_delete_bitmap = LocalDeleteBitmap::createBase(part_info, bitmap, txn_id);
+                            auto new_delete_bitmap = LocalDeleteBitmap::createBase(part_info, bitmap, txn_id, part->bucket_number);
                             auto & new_bitmap_model = new_delete_bitmap->getModel();
                             UndoResource ub(
                                 txn_id,

@@ -13,8 +13,8 @@ SELECT name, is_detached, partition_key, sorting_key, primary_key, sampling_key,
 
 SELECT partition_key FROM system.cnch_tables WHERE database = currentDatabase();
 SELECT '-- test system.cnch_parts --'; 
-SELECT count() from system.cnch_parts where database = currentDatabase() and table = 'test'; 
-SELECT count() from system.cnch_parts where database = currentDatabase() and table = 'test' and partition_id = '20190101'; 
+SELECT count() from system.cnch_parts where database = currentDatabase(1) and table = 'test'; 
+SELECT count() from system.cnch_parts where database = currentDatabase(1) and table = 'test' and partition_id = '20190101'; 
 SELECT '-- test system.cnch_table_host --'; 
 SELECT count() from system.cnch_table_host where database = currentDatabase() and name = 'test'; 
 SELECT count() from system.cnch_table_host where database = currentDatabase(); 

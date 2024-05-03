@@ -367,7 +367,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                     aggregated_columns.emplace_back("__grouping_set", std::make_shared<DataTypeUInt64>());
 
                 bool ansi_enabled = getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE;
-
+                const bool non_trivial_grouping_sets = group_by_kind != GroupByKind::ORDINARY;
                 for (ssize_t i = 0; i < static_cast<ssize_t>(group_asts.size()); ++i)
                 {
                     ssize_t size = group_asts.size();
@@ -420,7 +420,7 @@ void ExpressionAnalyzer::analyzeAggregation()
 
                             /// When ANSI mode is on, aggregation keys must be nullable.
                             NameAndTypePair key{column_name, node->result_type};
-                            if (ansi_enabled && JoinCommon::canBecomeNullable(key.type))
+                            if (ansi_enabled && non_trivial_grouping_sets && JoinCommon::canBecomeNullable(key.type))
                                 key.type = JoinCommon::convertTypeToNullable(key.type);
 
                             grouping_set_list.push_back(key);
@@ -482,7 +482,7 @@ void ExpressionAnalyzer::analyzeAggregation()
 
                         /// When ANSI mode is on, aggregation keys must be nullable.
                         NameAndTypePair key{column_name, node->result_type};
-                        if (ansi_enabled && JoinCommon::canBecomeNullable(key.type))
+                        if (ansi_enabled && non_trivial_grouping_sets && JoinCommon::canBecomeNullable(key.type))
                             key.type = JoinCommon::convertTypeToNullable(key.type);
 
                         /// Aggregation keys are uniqued.
@@ -503,7 +503,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                 makeAggregateDescriptions(temp_actions);
 
                 // tmpfix, ANSI features should be implemented in the optimizer
-                if (ansi_enabled)
+                if (ansi_enabled && non_trivial_grouping_sets)
                 {
                     NameSet aggregate_arguments;
                     for (const auto & agg : aggregate_descriptions)
@@ -1628,28 +1628,31 @@ bool SelectQueryExpressionAnalyzer::appendGroupBy(
     /// When ANSI mode is on, converts group keys into nullable types if they are not. The purpose of conversion is to
     /// ensure that (default) values of empty keys are NULLs with the modifiers as GROUPING SETS, ROLLUP and CUBE.
     /// The conversion occurs before the aggregation to adapt different aggregation variants.
-    if (getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+    const bool non_trivial_grouping_sets = select_query->group_by_with_grouping_sets || select_query->group_by_with_rollup || select_query->group_by_with_cube;
+    if (non_trivial_grouping_sets)
     {
-        const auto & src_columns = step.actions()->getResultColumns();
-        ColumnsWithTypeAndName dst_columns;
-        dst_columns.reserve(src_columns.size());
-
-        for (const auto &src: src_columns)
+        if (getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
         {
-            DataTypePtr type = src.type;
-            if (aggregation_keys.contains(src.name) && JoinCommon::canBecomeNullable(type))
-                type = JoinCommon::convertTypeToNullable(type);
-            dst_columns.emplace_back(src.column, type, src.name);
+            const auto & src_columns = step.actions()->getResultColumns();
+            ColumnsWithTypeAndName dst_columns;
+            dst_columns.reserve(src_columns.size());
+
+            for (const auto &src: src_columns)
+            {
+                DataTypePtr type = src.type;
+                if (aggregation_keys.contains(src.name) && JoinCommon::canBecomeNullable(type))
+                    type = JoinCommon::convertTypeToNullable(type);
+                dst_columns.emplace_back(src.column, type, src.name);
+            }
+
+            auto nullify_dag = ActionsDAG::makeConvertingActions(
+                    src_columns, dst_columns, ActionsDAG::MatchColumnsMode::Position);
+
+            auto ret = ActionsDAG::merge(std::move(*step.actions()), std::move(*nullify_dag));
+
+            step.actions().swap(ret);
         }
-
-        auto nullify_dag = ActionsDAG::makeConvertingActions(
-                src_columns, dst_columns, ActionsDAG::MatchColumnsMode::Position);
-
-        auto ret = ActionsDAG::merge(std::move(*step.actions()), std::move(*nullify_dag));
-
-        step.actions().swap(ret);
     }
-
     if (optimize_aggregation_in_order)
     {
         for (auto & child : asts)

@@ -217,7 +217,7 @@ public:
         const TxnTimestamp & previous_version,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts,
-        const bool is_recluster);
+        const bool is_modify_cluster_by);
 
     void renameTable(
         const Settings & query_settings,
@@ -255,6 +255,9 @@ public:
      * @brief Get the Server Data Parts In Partitions With Delete Bitmap Metas.
      * For data consistency, data parts and delete bitmap metas must use the same transaction records to filter out. Otherwise it will get incorrect result.
      * Please see more detail in doc: https://bytedance.larkoffice.com/docx/Xo52dhoMnofCROxvXUUceyK9nQd
+     *
+     * @param bucket_numbers If empty fetch all bucket_numbers (by default),
+     * otherwise fetch the given bucket_numbers.
      */
     ServerDataPartsWithDBM getServerDataPartsInPartitionsWithDBM(
         const ConstStoragePtr & storage,
@@ -264,6 +267,7 @@ public:
         VisibilityLevel visibility = VisibilityLevel::Visible,
         const std::set<Int64> & bucket_numbers = {});
 
+    /// @param bucket_numbers If empty fetch all bucket_numbers, otherwise fetch the given bucket_numbers.
     ServerDataPartsVector getServerDataPartsInPartitions(
         const ConstStoragePtr & storage,
         const Strings & partitions,
@@ -294,12 +298,15 @@ public:
     /////////////////////////////
 
     /// fetch all delete bitmaps <= ts in the given partitions
+    ///
+    /// @param bucket_numbers If empty fetch all bucket_numbers, otherwise fetch the given bucket_numbers.
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitions(
         const ConstStoragePtr & storage,
         const Strings & partitions,
         const TxnTimestamp & ts,
         const Context * session_context = nullptr,
-        VisibilityLevel visibility = VisibilityLevel::Visible);
+        VisibilityLevel visibility = VisibilityLevel::Visible,
+        const std::set<Int64> & bucket_numbers = {});
     DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsFromMetastore(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility = VisibilityLevel::Visible);
     DeleteBitmapMetaPtrVector getTrashedDeleteBitmapsInPartitions(
@@ -608,9 +615,11 @@ public:
      * Trashed items including data parts, staged parts, and deleted bitmaps.
      *
      * @param limit Limit the result retured. Disabled with value `0`.
+     * @param start_key When provided, KV scan will start from the `start_key`,
+     * and it will be updated after calling this method.
      * @return Trashed parts.
      */
-    TrashItems getDataItemsInTrash(const StoragePtr & storage, const size_t & limit = 0);
+    TrashItems getDataItemsInTrash(const StoragePtr & storage, const size_t & limit = 0, String * start_key = nullptr);
 
     void markPartitionDeleted(const StoragePtr & table, const Strings & partitions);
     void deletePartitionsMetadata(const StoragePtr & table, const PartitionWithGCStatus & partitions);

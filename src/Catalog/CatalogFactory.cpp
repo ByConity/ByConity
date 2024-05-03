@@ -83,6 +83,7 @@ StoragePtr CatalogFactory::getTableByDataModel(
     const auto & create_query = table_model->definition();
     auto storage_ptr = getTableByDefinition(context, db, table, create_query);
     storage_ptr->commit_time = TxnTimestamp{table_model->commit_time()};
+    storage_ptr->latest_version = table_model->has_latest_version() ? TxnTimestamp{table_model->latest_version()} : TxnTimestamp::minTS();
     if (auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage_ptr.get()))
     {
         merge_tree->part_columns = std::make_shared<NamesAndTypesList>(merge_tree->getInMemoryMetadataPtr()->getColumns().getAllPhysical());

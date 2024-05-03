@@ -14,6 +14,7 @@
  */
 
 #include "Storages/HDFS/ReadBufferFromByteHDFS.h"
+#include <Interpreters/RemoteReadLog.h>
 
 #if USE_HDFS
 
@@ -115,22 +116,28 @@ static void doWithRetry(std::function<void()> func)
 
 struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
 {
-    String hdfs_file_path;
     HDFSConnectionParams hdfs_params;
+    bool pread {false};
+    RemoteReadLog * remote_read_log;
+    String remote_read_context;
+    size_t read_until_position = 0;
 
+    String hdfs_file_path;
     HDFSBuilderPtr builder;
     HDFSFSPtr fs;
     hdfsFile fin;
 
-    bool pread {false};
     size_t file_offset = 0;
-    size_t read_until_position = 0;
 
     ReadBufferFromHDFSImpl(
-        const String & hdfs_file_path_, bool pread_, const HDFSConnectionParams & hdfs_params_,
-        size_t read_until_position_)
+        const String & hdfs_file_path_,
+        const HDFSConnectionParams & hdfs_params_,
+        size_t read_until_position_,
+        const ReadSettings & settings_)
         : hdfs_params(hdfs_params_)
-        , pread(pread_)
+        , pread(settings_.byte_hdfs_pread)
+        , remote_read_log(settings_.remote_read_log)
+        , remote_read_context(settings_.remote_read_context)
         , read_until_position(read_until_position_)
     {
         Poco::URI uri(hdfs_file_path_);
@@ -172,6 +179,7 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
         }
 
         Stopwatch watch;
+        const auto request_time = std::chrono::system_clock::now();
         size_t total_bytes_read = 0;
         do
         {
@@ -195,11 +203,14 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
             total_bytes_read += bytes_read;
         } while (total_bytes_read < num_bytes_to_read);
 
+        auto duration_us = watch.elapsedMicroseconds();
+        if (remote_read_log)
+            remote_read_log->insert(request_time, hdfs_file_path, file_offset, total_bytes_read, duration_us, remote_read_context);
         file_offset += total_bytes_read;
 
         ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsRead, 1);
         ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsReadBytes, total_bytes_read);
-        ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMicroseconds, watch.elapsedMicroseconds());
+        ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMicroseconds, duration_us);
         return total_bytes_read;
     }
 
@@ -245,17 +256,16 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
 ReadBufferFromByteHDFS::ReadBufferFromByteHDFS(
     const String & hdfs_file_path_,
     const HDFSConnectionParams & hdfs_params_,
-    bool pread_,
-    size_t buf_size_,
+    const ReadSettings & read_settings,
     char * existing_memory_,
     size_t alignment_,
-    ThrottlerPtr total_network_throttler_,
     bool use_external_buffer_,
     off_t read_until_position_,
     std::optional<size_t> file_size_)
-    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : buf_size_, existing_memory_, alignment_, file_size_)
-    , impl(std::make_unique<ReadBufferFromHDFSImpl>(hdfs_file_path_, pread_, hdfs_params_, read_until_position_))
-    , total_network_throttler(total_network_throttler_)
+    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : read_settings.remote_fs_buffer_size, existing_memory_, alignment_, file_size_)
+    , settings(read_settings)
+    , impl(std::make_unique<ReadBufferFromHDFSImpl>(hdfs_file_path_, hdfs_params_, read_until_position_, settings))
+    , total_network_throttler(settings.remote_throttler)
 {
 }
 
@@ -380,7 +390,7 @@ size_t ReadBufferFromByteHDFS::readBigAt(char * to, size_t n, size_t range_begin
         return 0;
 
     /// make a impl copy
-    auto hdfs_impl = std::make_shared<ReadBufferFromHDFSImpl>(impl->hdfs_file_path, /*pread*/ true, impl->hdfs_params, 0);
+    auto hdfs_impl = std::make_shared<ReadBufferFromHDFSImpl>(impl->hdfs_file_path, impl->hdfs_params, 0, settings);
     hdfs_impl->seek(range_begin);
     size_t bytes_read = hdfs_impl->readImpl(to, n);
     if (bytes_read && progress_callback)

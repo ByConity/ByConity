@@ -21,6 +21,7 @@
 #include "Core/Defines.h"
 #include "Common/Throttler.h"
 #include "IO/ReadBufferFromFileBase.h"
+#include "IO/ReadSettings.h"
 
 namespace DB
 {
@@ -34,11 +35,9 @@ public:
     ReadBufferFromByteHDFS(
         const String & hdfs_file_path,
         const HDFSConnectionParams & hdfs_params,
-        bool pread = false,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        const ReadSettings & read_settings = {},
         char * existing_memory = nullptr,
         size_t alignment = 0,
-        ThrottlerPtr total_network_throttler = nullptr,
         bool use_external_buffer_ = false,
         off_t read_until_position_ = 0,
         std::optional<size_t> file_size = std::nullopt);
@@ -65,6 +64,7 @@ public:
     bool isSeekCheap() override { return true; }
 
 private:
+    ReadSettings settings;
     std::unique_ptr<ReadBufferFromHDFSImpl> impl;
     ThrottlerPtr total_network_throttler;
 };

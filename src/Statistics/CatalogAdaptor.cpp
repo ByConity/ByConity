@@ -20,6 +20,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include "DataTypes/MapHelpers.h"
 #include "DataTypes/Serializations/SerializationNamed.h"
+#include "Parsers/formatTenantDatabaseName.h"
 namespace DB::Statistics
 {
 CatalogAdaptorPtr createCatalogAdaptorMemory(ContextPtr context);
@@ -81,7 +82,7 @@ std::optional<UInt64> CatalogAdaptor::queryRowCount(const StatsTableIdentifier &
 
     auto sql = fmt::format(
         FMT_STRING("select sum(rows) from system.cnch_parts where database='{}' and table = '{}'"),
-        table_id.getDatabaseName(),
+        getOriginalDatabaseName(table_id.getDatabaseName()),
         table_id.getTableName());
     auto helper = SubqueryHelper::create(context, sql);
     Block block = getOnlyRowFrom(helper);

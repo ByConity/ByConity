@@ -19,12 +19,12 @@ INSERT INTO u10112_vertical VALUES (6, 106, 3, 'a', 1), (7, 107, 3, 'b', 1), (8,
 
 SELECT '-- before merge --';
 SELECT * FROM u10112_vertical order by k1, k2;
-SELECT '#parts:', count(1) FROM system.cnch_parts where database=currentDatabase() and table='u10112_vertical' and active;
+SELECT '#parts:', count(1) FROM system.cnch_parts where database=currentDatabase(1) and table='u10112_vertical' and active;
 
 optimize table u10112_vertical final SETTINGS mutations_sync = 1, disable_optimize_final = 0;;
 SELECT '-- after merge --';
 SELECT * FROM u10112_vertical order by k1, k2;
-SELECT '#parts:', count(1) FROM system.cnch_parts where database=currentDatabase() and table='u10112_vertical' and active;
+SELECT '#parts:', count(1) FROM system.cnch_parts where database=currentDatabase(1) and table='u10112_vertical' and active;
 
 DROP TABLE IF EXISTS u10112_vertical;
 
@@ -48,11 +48,11 @@ INSERT INTO u10112_vertical VALUES (0, 100, 1, 'a', 1);
 
 SELECT '-- before merge --';
 SELECT * FROM u10112_vertical order by k1, k2;
-SELECT '#parts:', count(1) FROM system.cnch_parts where database=currentDatabase() and table='u10112_vertical' and active;
+SELECT '#parts:', count(1) FROM system.cnch_parts where database=currentDatabase(1) and table='u10112_vertical' and active;
 
 optimize table u10112_vertical final SETTINGS mutations_sync = 1, disable_optimize_final = 0;
 SELECT '-- after merge --';
 SELECT * FROM u10112_vertical order by k1, k2;
-SELECT '#parts:', count(1) FROM system.cnch_parts where database=currentDatabase() and table='u10112_vertical' and active;
+SELECT '#parts:', count(1) FROM system.cnch_parts where database=currentDatabase(1) and table='u10112_vertical' and active;
 
 DROP TABLE IF EXISTS u10112_vertical;

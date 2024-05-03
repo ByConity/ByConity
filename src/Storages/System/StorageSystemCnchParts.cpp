@@ -98,8 +98,8 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
     auto cnch_catalog = context->getCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_parts only support cnch_server", ErrorCodes::NOT_IMPLEMENTED);
-
-    std::vector<std::pair<String, String>> tables;
+    
+    std::vector<std::tuple<String, String, String>> tables;
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery &>().where();
 
@@ -153,16 +153,32 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         tables = filterTables(context, query_info);
     }
     else
-        tables.emplace_back(only_selected_db, only_selected_table);
+    {
+        const String & tenant_id = context->getTenantId();
+        String only_selected_db_full;
+        if (!tenant_id.empty())
+        {
+            if (!DB::DatabaseCatalog::isDefaultVisibleSystemDatabase(only_selected_db))
+            {
+                only_selected_db_full = tenant_id + "." + only_selected_db;
+            }
+        }
+        else
+            only_selected_db_full = only_selected_db;
+        tables.emplace_back(
+                only_selected_db_full,
+                only_selected_db,
+                only_selected_table
+            );
+           
+    }
 
     TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
     TxnTimestamp start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{context->getTimestamp()};
 
-    for (const auto & it : tables)
+    for (const auto & [database_fullname, database_name, table_name] : tables)
     {
-        const String & database_name = it.first;
-        const String & table_name = it.second;
-        auto table = cnch_catalog->tryGetTable(*context, database_name, table_name, start_time);
+        auto table = cnch_catalog->tryGetTable(*context, database_fullname, table_name, start_time);
 
         /// Skip not exist table
         if (!table)

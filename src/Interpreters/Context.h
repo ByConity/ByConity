@@ -146,6 +146,7 @@ class KafkaLog;
 class CloudKafkaLog;
 class CloudMaterializedMySQLLog;
 class ProcessorsProfileLog;
+class RemoteReadLog;
 class ZooKeeperLog;
 class QueryMetricLog;
 class QueryWorkerMetricLog;
@@ -1289,6 +1290,7 @@ public:
     std::shared_ptr<CloudKafkaLog> getCloudKafkaLog() const;
     std::shared_ptr<CloudMaterializedMySQLLog> getCloudMaterializedMySQLLog() const;
     std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
+    std::shared_ptr<RemoteReadLog> getRemoteReadLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
 
     /// Returns an object used to log operations with parts if it possible.

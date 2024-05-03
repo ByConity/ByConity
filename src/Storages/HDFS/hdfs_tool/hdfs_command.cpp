@@ -124,7 +124,7 @@ int main(int argc, char ** argv) {
 
         auto path = options["read_entire_file"].as<string>();
 //        DB::HDFSConnectionParams hdfs_params(DB::HDFSConnectionParams::CONN_NNPROXY, "clickhouse", nnproxy);
-        DB::ReadBufferFromByteHDFS reader(path, hdfs_params, true);
+        DB::ReadBufferFromByteHDFS reader(path, hdfs_params, DB::ReadSettings{ .byte_hdfs_pread = true });
 
         while (!reader.eof())
         {
@@ -161,7 +161,7 @@ int main(int argc, char ** argv) {
         std::string src_path = params[0];
         std::string dst_path = params[1];
         Stopwatch watch;
-        DB::ReadBufferFromByteHDFS reader(src_path, hdfs_params, true);
+        DB::ReadBufferFromByteHDFS reader(src_path, hdfs_params, DB::ReadSettings{ .byte_hdfs_pread = true });
         DB::WriteBufferFromFile wb(dst_path);
         DB::copyData(reader, wb);
         wb.next();

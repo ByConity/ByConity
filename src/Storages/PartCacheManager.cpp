@@ -1779,6 +1779,9 @@ StoragePtr PartCacheManager::getStorageFromCache(const UUID & uuid, const PairIn
 void PartCacheManager::insertStorageCache(const StorageID & storage_id, const StoragePtr storage, const UInt64 commit_ts, const PairInt64 & topology_version)
 {
     TableMetaEntryPtr table_entry = getTableMeta(storage_id.uuid);
+    // reject insert old version storage into cache
+    if (storage && storage->latest_version > commit_ts)
+        return;
     if (table_entry && topology_version == table_entry->cache_version.get())
         storageCachePtr->insert(storage_id, commit_ts, storage);
 }

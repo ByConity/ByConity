@@ -93,12 +93,12 @@ public:
 
     inline PartitionLockHolder readLock() const
     {
-        return partition_mutex->getLock(RWLockImpl::Read, CurrentThread::getQueryId().toString());
+        return partition_mutex->getLock(RWLockImpl::Read, RWLockImpl::NO_QUERY);
     }
 
     inline PartitionLockHolder writeLock() const
     {
-        return partition_mutex->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString());
+        return partition_mutex->getLock(RWLockImpl::Write, RWLockImpl::NO_QUERY);
     }
 
 private:

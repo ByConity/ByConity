@@ -30,7 +30,6 @@
 #include <Storages/DiskCache/FileDiskCacheSegment.h>
 #include <Storages/DiskCache/MetaFileDiskCacheSegment.h>
 #include <Storages/DiskCache/PartFileDiskCacheSegment.h>
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
@@ -364,7 +363,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
 
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
     DiskPtr disk = volume->getDisk();
-    auto reader = openForReading(disk, data_rel_path, meta_info_pos.file_size);
+    auto reader = openForReading(disk, data_rel_path, meta_info_pos.file_size, "metainfo.txt");
     LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_pos.file_offset, meta_info_pos.file_size);
     loadMetaInfoFromBuffer(limit_reader, load_hint_mutation);
 
@@ -636,7 +635,7 @@ MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFoo
     const String data_file_path = fs::path(getFullRelativePath()) / DATA_FILE;
     size_t data_file_size = volume->getDisk()->getFileSize(data_file_path);
 
-    auto data_file = openForReading(volume->getDisk(), data_file_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+    auto data_file = openForReading(volume->getDisk(), data_file_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE, "footer");
 
     if (!parent_part)
     {
@@ -755,7 +754,7 @@ IMergeTreeDataPart::IndexPtr MergeTreeDataPartCNCH::loadIndexFromStorage() const
     auto checksums = getChecksums();
     auto [file_offset, file_size] = getFileOffsetAndSize(*this, "primary.idx");
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size);
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size, "primary.idx");
     LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
     res = loadIndexFromBuffer(buf, primary_key);
     if (enableDiskCache())
@@ -823,7 +822,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(
     if (checksum_file.file_size == 0 /* && isDeleted() */)
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_rel_path);
 
-    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size);
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size, "checksums.txt");
     LimitReadBuffer buf = readPartFile(*data_file, checksum_file.file_offset, checksum_file.file_size);
 
     if (checksums->read(buf))
@@ -933,7 +932,7 @@ void MergeTreeDataPartCNCH::getUniqueKeyIndexFilePosAndSize(const IMergeTreeData
     String data_rel_path = fs::path(part->getFullRelativePath()) / "data";
     String data_full_path = fs::path(part->getFullPath()) / "data";
 
-    auto reader = openForReading(volume->getDisk(), data_rel_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+    auto reader = openForReading(volume->getDisk(), data_rel_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE, "footer");
     size_t data_file_size = volume->getDisk()->getFileSize(data_rel_path);
     reader->seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE + 3 * (2 * sizeof(size_t) + sizeof(CityHash_v1_0_2::uint128)));
     readIntBinary(off, *reader);
@@ -973,7 +972,7 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
         /// TODO: use cache
         auto [file_off, file_size] = getFileOffsetAndSize(*this, marks_file_name);
         String data_path = fs::path(getFullRelativePath()) / DATA_FILE;
-        auto reader = openForReading(volume->getDisk(), data_path, file_size);
+        auto reader = openForReading(volume->getDisk(), data_path, file_size, marks_file_name + "[index granularity]");
         LimitReadBuffer buffer = readPartFile(*reader, file_off, file_size);
         while (!buffer.eof())
         {
@@ -1127,11 +1126,11 @@ String MergeTreeDataPartCNCH::getFullPath() const
         / "";
 }
 
-String MergeTreeDataPartCNCH::getFullRelativePathForDetachedPart(const String & prefix) const
+String MergeTreeDataPartCNCH::getRelativePathForDetachedPart(const String & prefix) const
 {
     /// no need to check file name conflict here because part name in CNCH is unique
     String part_dir = (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation();
-    return fs::path(storage.getRelativeDataPath(location)) / "detached" / part_dir;
+    return fs::path("detached") / part_dir;
 }
 
 void MergeTreeDataPartCNCH::updateCommitTimeForProjection()
@@ -1179,7 +1178,7 @@ void MergeTreeDataPartCNCH::fillProjectionNamesFromChecksums(const MergeTreeData
     if (checksum_file.file_size == 0 /* && isDeleted() */)
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_rel_path);
 
-    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size);
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size, "checksums.txt");
     LimitReadBuffer buf = readPartFile(*data_file, checksum_file.file_offset, checksum_file.file_size);
 
     ChecksumsPtr checksums = std::make_shared<Checksums>();
@@ -1411,10 +1410,13 @@ void MergeTreeDataPartCNCH::dropDiskCache(ThreadPool & pool, bool drop_vw_disk_c
     pool.scheduleOrThrowOnError(impl);
 }
 
-std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(const DiskPtr & disk, const String & path, size_t file_size) const
+std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(
+    const DiskPtr & disk, const String & path, size_t file_size, const String & remote_read_context) const
 {
     ReadSettings settings = storage.getContext()->getReadSettings();
     settings.adjustBufferSize(file_size);
+    if (settings.remote_read_log)
+        settings.remote_read_context = remote_read_context;
     return disk->readFile(path, settings);
 }
 

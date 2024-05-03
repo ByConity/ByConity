@@ -58,12 +58,14 @@ SELECT '-- information_schema.triggers';
 SELECT * FROM information_schema.triggers;
 
 SELECT '-- information_schema.partitions';
-SELECT * FROM information_schema.partitions WHERE table_schema = currentDatabase();
+SELECT * FROM information_schema.partitions WHERE table_schema = currentDatabase(1) > 0;
 INSERT INTO partitioned VALUES
     (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three'), (4, 'four'), (5, 'five'), (1000, 'one thousand');
 
 SELECT '-- information_schema.partitions (After INSERT)';
-SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase() ORDER BY table_name, partition_name;
+SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) > 0 ORDER BY table_name, partition_name SETTINGS enable_multiple_tables_for_cnch_parts=1;
+SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) > 0 ORDER BY table_name, partition_name SETTINGS dialect_type='ANSI',enable_multiple_tables_for_cnch_parts=1;
+SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) > 0 ORDER BY table_name, partition_name SETTINGS dialect_type='MYSQL',enable_multiple_tables_for_cnch_parts=1;
 
 --drop view mv;
 drop view v;

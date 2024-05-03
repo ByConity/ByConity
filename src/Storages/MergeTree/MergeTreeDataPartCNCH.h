@@ -92,7 +92,7 @@ public:
 
     String getFullPath() const override;
 
-    String getFullRelativePathForDetachedPart(const String & prefix) const override;
+    String getRelativePathForDetachedPart(const String & prefix) const override;
 
     /// @param allow_null whether allow delete bitmap to be nullptr
     /// @attention make sure this method is thread-safe.
@@ -153,7 +153,7 @@ private:
 
     void fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file);
 
-    std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr& disk, const String& path, size_t file_size) const;
+    std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t file_size, const String & remote_read_context = {}) const;
 };
 
 }

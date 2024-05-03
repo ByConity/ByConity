@@ -42,6 +42,7 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTCheckQuery.h>
@@ -1227,40 +1228,39 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
     if (parts.empty())
         return {};
 
-    MutableMergeTreeDataPartsCNCHVector cnch_parts;
-    cnch_parts.reserve(parts.size());
-    std::transform(
-        parts.begin(), parts.end(), std::back_inserter(cnch_parts), [this](const auto & part) { return part->toCNCHDataPart(*this); });
+    auto worker_group = getWorkerGroupForTable(*this, local_context);
+    auto worker_clients = worker_group->getWorkerClients();
+    const auto & shards_info = worker_group->getShardsInfo();
 
-    CheckResults results(cnch_parts.size());
-    ThreadPool pool(std::min(16UL, cnch_parts.size()));
-    for (size_t i = 0; i < cnch_parts.size(); ++i)
+    size_t num_of_workers = shards_info.size();
+    if (!num_of_workers)
+        throw Exception("No heathy worker available.",ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
+
+    std::mutex mutex;
+    CheckResults results;
+
+    auto assignment = assignCnchParts(worker_group, parts);
+
+    ThreadPool allocate_pool(std::min<UInt64>(local_context->getSettingsRef().parts_preallocate_pool_size, num_of_workers));
+
+    for (size_t i = 0; i < num_of_workers; ++i)
     {
-        pool.scheduleOrThrowOnError([i, &cnch_parts, &results] {
-            String message;
-            bool is_passed = false;
-            try
+        auto allocate_task = [&, i] {
+            auto it = assignment.find(shards_info[i].worker_id);
+            if (it == assignment.end())
+                return;
+
+            auto result = worker_clients[i]->checkDataParts(local_context, *this, local_table_name, create_table_query, it->second);
+
             {
-                cnch_parts[i]->loadFromFileSystem(false);
-                is_passed = true;
-                message.clear();
+               std::lock_guard lock(mutex);
+               results.insert(results.end(), result.begin(), result.end());
             }
-            catch (const Exception & e)
-            {
-                is_passed = false;
-                message = e.message();
-            }
-            catch (const Poco::Exception & e)
-            {
-                is_passed = false;
-                message = e.message();
-            }
-            results[i].fs_path = cnch_parts[i]->name;
-            results[i].success = is_passed;
-            results[i].failure_message = std::move(message);
-        });
+        };
+
+        allocate_pool.scheduleOrThrowOnError(allocate_task);
     }
-    pool.wait();
+    allocate_pool.wait();
 
     return results;
 }
@@ -1504,16 +1504,23 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForStagedParts(
         return;
 
     std::set<String> request_partitions;
+    std::set<int64_t> request_buckets;
     for (const auto & part : parts)
     {
         const auto & partition_id = part->info.partition_id;
         request_partitions.insert(partition_id);
+        request_buckets.insert(part->bucket_number);
     }
 
     /// NOTE: Get all the bitmap meta needed only once from kv instead of getting many times for every partition to save time.
     Stopwatch watch;
-    auto all_bitmaps
-        = catalog->getDeleteBitmapsInPartitions(shared_from_this(), {request_partitions.begin(), request_partitions.end()}, start_time);
+    auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(
+        shared_from_this(),
+        {request_partitions.begin(), request_partitions.end()},
+        start_time,
+        nullptr,
+        Catalog::VisibilityLevel::Visible,
+        request_buckets);
     ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
     LOG_DEBUG(
         log,
@@ -1527,7 +1534,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForStagedParts(
 
     /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
     auto bitmap_it = bitmaps.begin();
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         while (bitmap_it != bitmaps.end() && (*(*bitmap_it)) <= part->info)
         {
@@ -2973,13 +2980,14 @@ LocalDeleteBitmaps StorageCnchMergeTree::createDeleteBitmapTombstones(const IMut
         {
             if (part->isDropRangePart())
             {
-                auto temp_bitmap = LocalDeleteBitmap::createRangeTombstone(part->info.partition_id, part->info.max_block, txnID);
+                auto temp_bitmap
+                    = LocalDeleteBitmap::createRangeTombstone(part->info.partition_id, part->info.max_block, txnID, part->bucket_number);
                 bitmap_tombstones.push_back(std::move(temp_bitmap));
                 LOG_DEBUG(log, "Range tombstone of delete bitmap has been created for drop range part " + part->info.getPartName());
             }
             else
             {
-                auto temp_bitmap = LocalDeleteBitmap::createTombstone(part->info, txnID);
+                auto temp_bitmap = LocalDeleteBitmap::createTombstone(part->info, txnID, part->bucket_number);
                 bitmap_tombstones.push_back(std::move(temp_bitmap));
                 LOG_DEBUG(log, "Tombstone of delete bitmap has been created for part {}", part->info.getPartName());
             }

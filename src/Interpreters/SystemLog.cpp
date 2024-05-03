@@ -25,6 +25,7 @@
 #include <Interpreters/QueryExchangeLog.h>
 #include <Interpreters/PartLog.h>
 #include <Interpreters/PartMergeLog.h>
+#include <Interpreters/RemoteReadLog.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Interpreters/TextLog.h>
 #include <Interpreters/TraceLog.h>
@@ -145,6 +146,7 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     mutation_log = createSystemLog<MutationLog>(global_context, "system", "mutation_log", config, "mutation_log", true);
     kafka_log = createSystemLog<KafkaLog>(global_context, "system", "kafka_log", config, "kafka_log", true);
     processors_profile_log = createSystemLog<ProcessorsProfileLog>(global_context, "system", "processors_profile_log", config, "processors_profile_log", false);
+    remote_read_log = createSystemLog<RemoteReadLog>(global_context, "system", "remote_read_log", config, "remote_read_log", true);
     zookeeper_log = createSystemLog<ZooKeeperLog>(global_context, "system", "zookeeper_log", config, "zookeeper_log", false);
     auto_stats_task_log = createSystemLog<AutoStatsTaskLog>(global_context, "system", "auto_stats_task_log", config, "auto_stats_task_log", true);
 
@@ -179,6 +181,8 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(kafka_log.get());
     if (processors_profile_log)
         logs.emplace_back(processors_profile_log.get());
+    if (remote_read_log)
+        logs.emplace_back(remote_read_log.get());
     if (zookeeper_log)
         logs.emplace_back(zookeeper_log.get());
     if (auto_stats_task_log)

@@ -68,7 +68,7 @@ select 'drop s2, s3';
 drop snapshot s2;
 drop snapshot s3;
 system gc t1;
-select count(), countIf(visible), countIf(outdated) from system.cnch_parts where database = currentDatabase() and table = 't1';
+select count(), countIf(visible), countIf(outdated) from system.cnch_parts where database = currentDatabase(1) and table = 't1';
 
 -- test snapshot and mutation
 select 'delete i = 4';
@@ -93,7 +93,7 @@ select 't2 drop 20231101';
 alter table t2 drop partition id '20231101';
 select * from t2 order by d, i settings use_snapshot='s5'; -- { serverError 1152 }
 system gc t2; -- normal parts should be cleared
-select count() from system.cnch_parts where database = currentDatabase() and table = 't2'; -- expect only one tombstone part
+select count() from system.cnch_parts where database = currentDatabase(1) and table = 't2'; -- expect only one tombstone part
 select 'drop s5';
 drop snapshot s5;
 

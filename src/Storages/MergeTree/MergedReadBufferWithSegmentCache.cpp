@@ -155,6 +155,9 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
 }
 
 void MergedReadBufferWithSegmentCache::initialize() {
+    if (settings.read_settings.remote_read_log)
+        settings.read_settings.remote_read_context = stream_name + stream_extension;
+
     if (seekToMarkInSegmentCache(0, {0, 0}))
         return;
     // No segment cache, trying to use source reader
@@ -357,7 +360,7 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
         parsed_disk_cache_host = parseAddress(part_host.disk_cache_host_port, 0).first;
     LOG_TRACE(
         &Poco::Logger::get(__func__),
-        "Current node host vs disk cache host: {} vs {}", 
+        "Current node host vs disk cache host: {} vs {}",
         parsed_assign_compute_host.has_value() ? removeBracketsIfIpv6(parsed_assign_compute_host.value()) : "",
         parsed_disk_cache_host.has_value() ? removeBracketsIfIpv6(parsed_disk_cache_host.value()) : "");
 

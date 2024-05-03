@@ -792,6 +792,7 @@ ReadSettings Context::getReadSettings() const
     ReadSettings res;
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
+    res.remote_read_log = settings.enable_remote_read_log ? getRemoteReadLog().get() : nullptr;
     res.enable_io_scheduler = settings.enable_io_scheduler;
     res.enable_io_pfra = settings.enable_io_pfra;
     res.local_fs_buffer_size
@@ -3930,6 +3931,15 @@ std::shared_ptr<ProcessorsProfileLog> Context::getProcessorsProfileLog() const
     return shared->system_logs->processors_profile_log;
 }
 
+std::shared_ptr<RemoteReadLog> Context::getRemoteReadLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->remote_read_log;
+}
 
 std::shared_ptr<ZooKeeperLog> Context::getZooKeeperLog() const
 {

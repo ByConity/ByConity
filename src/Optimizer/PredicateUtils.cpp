@@ -411,6 +411,18 @@ bool PredicateUtils::containsAll(const Strings & partition_symbols, const std::s
     return contains;
 }
 
+bool PredicateUtils::containsAny(const Strings & partition_symbols, const std::set<String> & unique_symbols)
+{
+    for (const auto & unique : unique_symbols)
+    {
+        if (std::find(partition_symbols.begin(), partition_symbols.end(), unique) != partition_symbols.end())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool PredicateUtils::isInliningCandidate(ConstASTPtr & predicate, ProjectionNode & node)
 {
     // candidate symbols for inlining are

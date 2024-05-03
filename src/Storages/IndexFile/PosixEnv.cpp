@@ -7,7 +7,6 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/IndexFile/Env.h>
 #include <Common/Exception.h>
 #include <Common/Slice.h>

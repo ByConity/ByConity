@@ -27,6 +27,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
+#include <Storages/CheckResults.h>
 #include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 #include "Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h"
 #include <Storages/DataPart_fwd.h>
@@ -90,6 +91,20 @@ public:
         const std::set<Int64> & required_bucket_numbers,
         const ExceptionHandlerWithFailedInfoPtr & handler,
         const WorkerId & worker_id = WorkerId{});
+
+    brpc::CallId sendCnchFileDataParts(
+        const ContextPtr & context,
+        const StoragePtr & storage,
+        const String & local_table_name,
+        const FileDataPartsCNCHVector & parts,
+        const ExceptionHandlerPtr & handler);
+
+    CheckResults checkDataParts(
+        const ContextPtr & context,
+        const IStorage & storage,
+        const String & local_table_name,
+        const String & create_query,
+        const ServerDataPartsVector & parts);
 
     brpc::CallId preloadDataParts(
         const ContextPtr & context,

@@ -20,7 +20,7 @@ insert into pi values ('a', 'a', 2);
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info
@@ -43,7 +43,7 @@ OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
@@ -64,7 +64,7 @@ OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
@@ -106,7 +106,7 @@ insert into pi values ('a', 'a', 1);
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
@@ -129,7 +129,7 @@ OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
@@ -150,7 +150,7 @@ OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 

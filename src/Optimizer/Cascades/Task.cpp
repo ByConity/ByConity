@@ -776,11 +776,23 @@ void OptimizeCTE::execute()
     auto cte_def_group = context->getMemo().getCTEDefGroupByCTEId(cte_id);
 
     // 1. Check whether request property for this group_expr is invalid.
-    if (context->getRequiredProp().getCTEDescriptions().contains(cte_id)
-        && !context->getRequiredProp().getCTEDescriptions().at(cte_id).isShared())
+    if (context->getRequiredProp().getCTEDescriptions().contains(cte_id))
     {
-        // LOG_TRACE(log, "Invalid {}", group_expr->getGroupId());
-        return;
+        // It is invalid if cte require inline
+        auto cte_description = context->getRequiredProp().getCTEDescriptions().at(cte_id);
+        if (!cte_description.isShared())
+        {
+            LOG_TRACE(log, "Invalid {}", group_expr->getGroupId());
+            return;
+        }
+
+        // It is invalid if cte ref don't require broadcast but cte def output property require broadcast
+        if (cte_description.getNodePartitioning().getHandle() == Partitioning::Handle::FIXED_BROADCAST
+            && context->getRequiredProp().getNodePartitioning().getHandle() != Partitioning::Handle::FIXED_BROADCAST)
+        {
+            LOG_TRACE(log, "Invalid {}: BROADCAST", group_expr->getGroupId());
+            return;
+        }
     }
 
     // 2. CTERefStep output property can not be determined locally, it has been determined globally,
