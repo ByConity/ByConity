@@ -1120,7 +1120,7 @@ std::optional<MutationCommand> AlterCommand::tryConvertToMutationCommand(Storage
     }
     else if (type == MODIFY_CLUSTER_BY)
     {
-        result.type = MutationCommand::Type::RECLUSTER;
+        result.type = MutationCommand::Type::MODIFY_CLUSTER_BY;
     }
 
     result.ast = ast->clone();

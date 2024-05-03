@@ -135,3 +135,9 @@ DROP TABLE bucket_attach_2;
 DROP TABLE test_optimize;
 DROP TABLE test_optimize_with_date_column;
 DROP TABLE test_user_defined_expr;
+
+CREATE TABLE bucket (d UInt32, n UInt32) Engine = CnchMergeTree PARTITION BY d ORDER BY n;
+INSERT INTO bucket VALUES (1, 1), (2, 2);
+ALTER TABLE bucket MODIFY CLUSTER BY n INTO 2 BUCKETS;
+SELECT cluster_status FROM system.cnch_table_info WHERE database = currentDatabase() AND table = 'bucket';
+DROP TABLE bucket;

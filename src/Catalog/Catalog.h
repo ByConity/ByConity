@@ -217,7 +217,7 @@ public:
         const TxnTimestamp & previous_version,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts,
-        const bool is_recluster);
+        const bool is_modify_cluster_by);
 
     void renameTable(
         const Settings & query_settings,
