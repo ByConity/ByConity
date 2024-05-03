@@ -19,6 +19,7 @@
 #include <Common/formatIPv6.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/HostWithPorts.h>
+#include <Common/ProfileEvents.h>
 #include <Poco/URI.h>
 #include <Poco/Path.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
@@ -29,6 +30,15 @@
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
 #include "HDFSFileSystem.h"
+
+namespace ProfileEvents
+{
+    extern const int HdfsRequestErrors;
+    extern const int HdfsExists;
+    extern const int HdfsList;
+    extern const int HdfsRename;
+}
+
 namespace DB
 {
 
@@ -280,7 +290,7 @@ void HDFSFileSystem::reconnect() const
 
 void HDFSFileSystem::reconnectIfNecessary() const
 {
-    if (io_error_num_to_reconnect == 0 || (io_error_num != 0 && io_error_num % io_error_num_to_reconnect == 0))
+    if (io_error_num && (io_error_num_to_reconnect == 0 || io_error_num % io_error_num_to_reconnect == 0))
     {
         reconnect();
         io_error_num = 0;
@@ -486,6 +496,7 @@ bool HDFSFileSystem::setSize(const std::string& path, uint64_t size)
 
 bool HDFSFileSystem::exists(const std::string& path) const
 {
+    ProfileEvents::increment(ProfileEvents::HdfsExists);
     HDFSFSPtr fs_copy = getFS();
     String normalized_path = normalizePath(path);
     int ret = hdfsExists(fs_copy.get(), normalized_path.c_str());
@@ -535,6 +546,7 @@ ssize_t HDFSFileSystem::getCapacity() const
 void HDFSFileSystem::list(const std::string& path,
     std::vector<std::string>& filenames, std::vector<size_t> & sizes) const
 {
+    ProfileEvents::increment(ProfileEvents::HdfsList);
     HDFSFSPtr fs_copy = getFS();
     int num = 0;
     String normalized_path = normalizePath(path);
@@ -571,6 +583,7 @@ int64_t HDFSFileSystem::getLastModifiedInSeconds(
 bool HDFSFileSystem::renameTo(const std::string& path,
     const std::string& rpath) const
 {
+    ProfileEvents::increment(ProfileEvents::HdfsRename);
     HDFSFSPtr fs_copy = getFS();
     String normalized_path = normalizePath(path);
     String normalized_rpath = normalizePath(rpath);
@@ -639,6 +652,7 @@ String HDFSFileSystem::normalizePath(const String &path)
 
 void HDFSFileSystem::handleError(const String & func) const
 {
+    ProfileEvents::increment(ProfileEvents::HdfsRequestErrors);
     if (errno == EIO)
     {
         ++io_error_num;
@@ -1008,11 +1022,6 @@ HDFSBuilderPtr HDFSConnectionParams::createBuilder(const Poco::URI & uri) const
         else if (uri.getScheme() == "hdfs" && uri.getPort() != 0)
         {
             setHdfsDirectConfig(builder, hdfs_user, "hdfs://" + normalizedHost, uri.getPort());
-            return builder;
-        }
-        else if (uri.getScheme() == "hdfs")
-        {
-            setHdfsHaConfig(builder, normalizedHost, hdfs_user, std::vector<std::pair<String, int>>());
             return builder;
         }
     }

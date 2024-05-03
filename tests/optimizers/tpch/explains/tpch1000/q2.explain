@@ -29,8 +29,8 @@ Projection Est. 100 rows
                      ├─ Repartition Exchange Est. 11508806 rows
                      │  │     Partition by: {ps_suppkey}
                      │  └─ Inner (PARALLEL_HASH) Join Est. 11508806 rows
-                     │     │     Condition: ps_partkey == ps_partkey_1, ps_supplycost == expr#min(ps_supplycost)
-                     │     │     Runtime Filters Builder: {expr#min(ps_supplycost),ps_partkey_1}
+                     │     │     Condition: ps_partkey == ps_partkey_1, ps_supplycost == expr#min(ps_supplycost)_1
+                     │     │     Runtime Filters Builder: {expr#min(ps_supplycost)_1,ps_partkey_1}
                      │     ├─ Repartition Exchange Est. 800000000 rows
                      │     │  │     Partition by: {ps_partkey}
                      │     │  └─ Filter Est. 800000000 rows
@@ -43,7 +43,7 @@ Projection Est. 100 rows
                      │           │     Partition by: {ps_partkey_1}
                      │           └─ Aggregating Est. 3596502 rows
                      │              │     Group by: {ps_partkey_1}
-                     │              │     Aggregates: expr#min(ps_supplycost):=AggNull(minIf)(ps_supplycost_1,build_side_non_null_symbol)
+                     │              │     Aggregates: expr#min(ps_supplycost)_1:=AggNull(minIf)(ps_supplycost_1,build_side_non_null_symbol)
                      │              └─ Projection Est. 3596502 rows
                      │                 │     Expressions: [ps_partkey_1, ps_supplycost_1], build_side_non_null_symbol:=1
                      │                 └─ Inner Join Est. 2877200 rows

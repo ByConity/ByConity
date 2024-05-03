@@ -33,6 +33,7 @@
 #include <Databases/IDatabase.h>
 #include <Parsers/queryToString.h>
 #include <Common/hex.h>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {

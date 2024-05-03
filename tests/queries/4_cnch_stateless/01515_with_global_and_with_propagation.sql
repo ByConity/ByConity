@@ -1,3 +1,4 @@
+SET enable_optimizer = 0;
 SET enable_global_with_statement = 1;
 
 with 1 as x select x;

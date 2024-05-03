@@ -112,6 +112,8 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
     {
         for (const auto & rf : runtime_filters)
         {
+            if (rf.second.distribution != RuntimeFilterDistribution::Distributed)
+                continue;
             InternalDynamicData d;
             d.bypass = BypassType::BYPASS_LARGE_HT;
             res.emplace(rf.second.id, d);
@@ -124,6 +126,8 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
     {
         for (const auto & rf : runtime_filters)
         {
+            if (rf.second.distribution != RuntimeFilterDistribution::Distributed)
+                continue;
             InternalDynamicData d;
             d.bypass = BypassType::BYPASS_EMPTY_HT;
             res.emplace(rf.second.id, d);
@@ -136,6 +140,9 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
 
     for (const auto & runtime_filter : runtime_filters)
     {
+        if (runtime_filter.second.distribution != RuntimeFilterDistribution::Distributed)
+            continue;
+
         auto id = runtime_filter.second.id;
         InternalDynamicData filter;
 

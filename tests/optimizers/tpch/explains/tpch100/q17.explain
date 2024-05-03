@@ -9,7 +9,7 @@ Projection Est. 1 rows
             │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
             └─ Inner Join Est. 605236 rows
                │     Condition: l_partkey == l_partkey_1
-               │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)`)
+               │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)_1`)
                ├─ Filter Est. 600037902 rows
                │  │     Condition: Runtime Filters: {l_partkey}
                │  └─ TableScan tpch100.lineitem Est. 600037902 rows
@@ -33,7 +33,7 @@ Projection Est. 1 rows
                            │     Partition by: {l_partkey_1}
                            └─ Aggregating Est. 19917 rows
                               │     Group by: {l_partkey_1}
-                              │     Aggregates: expr#avg(l_quantity):=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
+                              │     Aggregates: expr#avg(l_quantity)_1:=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
                               └─ Projection Est. 601371 rows
                                  │     Expressions: [l_partkey_1, l_quantity_1], build_side_non_null_symbol:=1
                                  └─ Inner Join Est. 601371 rows

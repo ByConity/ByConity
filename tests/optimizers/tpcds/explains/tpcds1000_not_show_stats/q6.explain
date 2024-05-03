@@ -81,7 +81,7 @@ Projection
                               │     Partition by: {i_item_sk}
                               └─ Inner Join
                                  │     Condition: i_category == i_category_1
-                                 │     Filter: i_current_price > ('1.2' * `expr#avg(j.i_current_price)`)
+                                 │     Filter: i_current_price > ('1.2' * `expr#avg(j.i_current_price)_1`)
                                  ├─ TableScan tpcds1000.item
                                  │        Outputs: [i_item_sk, i_current_price, i_category]
                                  └─ Broadcast Exchange
@@ -90,7 +90,7 @@ Projection
                                           │     Partition by: {i_category_1}
                                           └─ Aggregating
                                              │     Group by: {i_category_1}
-                                             │     Aggregates: expr#avg(j.i_current_price):=AggNull(avgIf)(i_current_price_1,build_side_non_null_symbol)
+                                             │     Aggregates: expr#avg(j.i_current_price)_1:=AggNull(avgIf)(i_current_price_1,build_side_non_null_symbol)
                                              └─ Projection
                                                 │     Expressions: [i_category_1, i_current_price_1], build_side_non_null_symbol:=1
                                                 └─ TableScan tpcds1000.item

@@ -1,4 +1,5 @@
 SET optimize_duplicate_order_by_and_distinct = 1;
+SET enable_optimizer = 0;
 
 EXPLAIN SYNTAX SELECT DISTINCT number FROM numbers(1);
 EXPLAIN SYNTAX SELECT DISTINCT number FROM (SELECT DISTINCT number FROM numbers(1));

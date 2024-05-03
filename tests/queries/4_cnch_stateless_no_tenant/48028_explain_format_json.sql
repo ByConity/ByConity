@@ -32,5 +32,9 @@ explain analyze pipeline aggregate_profiles=0, json=1 with t1 as (select * from 
 
 explain analyze pipeline aggregate_profiles=0, json=0 select t1.a, t2.b, t2.a+1 from t48028 t1 join t480282 t2 on t1.a=t2.a format Null;
 
+explain analyze verbose = 0, profile = 0, stats = 0 insert into t48028 (*) select * from t480282;
+
+select count() from t48028;
+
 DROP TABLE IF EXISTS t48028;
 DROP TABLE IF EXISTS t480282;

@@ -189,12 +189,12 @@ public:
             }
             case Field::Types::UInt256:
             {
-                min_max = std::make_unique<MinMaxWrapper<UInt256>>(min.get<UInt128>(), max.get<UInt128>());
+                min_max = std::make_unique<MinMaxWrapper<UInt256>>(min.get<UInt256>(), max.get<UInt256>());
                 break ;
             }
             case Field::Types::Int256:
             {
-                min_max = std::make_unique<MinMaxWrapper<Int256>>(min.get<UInt128>(), max.get<UInt128>());
+                min_max = std::make_unique<MinMaxWrapper<Int256>>(min.get<Int256>(), max.get<Int256>());
                 break ;
             }
             default:
@@ -224,44 +224,65 @@ public:
         bf.addKeyUnhash(h);
     }
 
-    template <typename KeyType>
+    template <typename KeyType, bool range_precheck = false>
     bool probeKey(const KeyType & key) const
     {
-        if constexpr (std::is_same_v<Int128, KeyType>)
+        if constexpr (range_precheck)
         {
-            const auto * k = static_cast<const MinMaxWrapper<Int128> *>(min_max.get());
-            if (!k->probInRange(key))
-                return false;
-        }
-        else if constexpr (std::is_same_v<UInt128, KeyType>)
-        {
-            const auto * k = static_cast<const MinMaxWrapper<UInt128> *>(min_max.get());
-            if (!k->probInRange(key))
-                return false;
-        }
-        else if constexpr (std::is_same_v<UInt256, KeyType>)
-        {
-            const auto * k = static_cast<const MinMaxWrapper<UInt128> *>(min_max.get());
-            if (!k->probInRange(key))
-                return false;
-        }
-        else if constexpr (std::is_same_v<Int256, KeyType>)
-        {
-            const auto * k = static_cast<const MinMaxWrapper<Int256> *>(min_max.get());
-            if (!k->probInRange(key))
-                return false;
-        }
-        else if constexpr (std::is_signed_v<KeyType>)
-        {
-            const auto * k = static_cast<const MinMaxWrapper<Int64> *>(min_max.get());
-            if (!k->probInRange(key))
-                return false;
-        }
-        else if constexpr (std::is_unsigned_v<KeyType>)
-        {
-            const auto * k = static_cast<const MinMaxWrapper<UInt64> *>(min_max.get());
-            if (!k->probInRange(key))
-                return false;
+            if constexpr (std::is_same_v<Int128, KeyType>)
+            {
+                if (has_min_max)
+                {
+                    const auto * k = static_cast<const MinMaxWrapper<Int128> *>(min_max.get());
+                    if (!k->probInRange(key))
+                        return false;
+                }
+            }
+            else if constexpr (std::is_same_v<UInt128, KeyType>)
+            {
+                if (has_min_max)
+                {
+                    const auto * k = static_cast<const MinMaxWrapper<UInt128> *>(min_max.get());
+                    if (!k->probInRange(key))
+                        return false;
+                }
+            }
+            else if constexpr (std::is_same_v<UInt256, KeyType>)
+            {
+                if (has_min_max)
+                {
+                    const auto * k = static_cast<const MinMaxWrapper<UInt256> *>(min_max.get());
+                    if (!k->probInRange(key))
+                        return false;
+                }
+            }
+            else if constexpr (std::is_same_v<Int256, KeyType>)
+            {
+                if (has_min_max)
+                {
+                    const auto * k = static_cast<const MinMaxWrapper<Int256> *>(min_max.get());
+                    if (!k->probInRange(key))
+                        return false;
+                }
+            }
+            else if constexpr (std::is_signed_v<KeyType>)
+            {
+                if (has_min_max)
+                {
+                    const auto * k = static_cast<const MinMaxWrapper<Int64> *>(min_max.get());
+                    if (!k->probInRange(key))
+                        return false;
+                }
+            }
+            else if constexpr (std::is_unsigned_v<KeyType>)
+            {
+                if (has_min_max)
+                {
+                    const auto * k = static_cast<const MinMaxWrapper<UInt64> *>(min_max.get());
+                    if (!k->probInRange(key))
+                        return false;
+                }
+            }
         }
 
         size_t h = DefaultHash<KeyType>()(key);

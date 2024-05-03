@@ -30,11 +30,11 @@ Projection
                │     Group by: {ps_suppkey}
                └─ Inner (PARALLEL_HASH) Join
                   │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
-                  │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)`)
+                  │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)_1`)
                   │     Runtime Filters Builder: {p_partkey,ps_suppkey}
                   ├─ Aggregating
                   │  │     Group by: {l_partkey, l_suppkey}
-                  │  │     Aggregates: expr#sum(l_quantity):=AggNull(sumIf)(l_quantity,build_side_non_null_symbol_2)
+                  │  │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sumIf)(l_quantity,build_side_non_null_symbol_2)
                   │  └─ Projection
                   │     │     Expressions: [l_partkey, l_quantity, l_suppkey], build_side_non_null_symbol_2:=1
                   │     └─ Inner Join

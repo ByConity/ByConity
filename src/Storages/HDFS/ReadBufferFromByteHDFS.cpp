@@ -29,7 +29,7 @@
 namespace ProfileEvents
 {
     extern const int HdfsFileOpen;
-    extern const int HdfsFileOpenMs;
+    extern const int HdfsFileOpenMicroseconds;
     extern const int ReadBufferFromHdfsRead;
     extern const int HDFSReadElapsedMicroseconds;
     extern const int ReadBufferFromHdfsReadBytes;
@@ -148,7 +148,7 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
             if (!fin)
                 throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Fail to open hdfs file {}. Error: {}", hdfs_file_path, std::string(hdfsGetLastError()));
         });
-        ProfileEvents::increment(ProfileEvents::HdfsFileOpenMs, watch.elapsedMilliseconds());
+        ProfileEvents::increment(ProfileEvents::HdfsFileOpenMicroseconds, watch.elapsedMicroseconds());
     }
 
     ~ReadBufferFromHDFSImpl()

@@ -35,7 +35,23 @@
 namespace DB
 {
 
-NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationFuse", "attribution", "attributionCorrelation"};
+NameSet PushPartialAggThroughExchange::BLOCK_AGGS{
+    "pathCount",
+    "attributionAnalysis",
+    "attributionCorrelationFuse",
+    "attribution",
+    "attributionCorrelation",
+
+    // fixme: remove bitmap* if correctness problem fixed
+    "bitmapJoinAndCard",
+    "bitmapJoinAndCard2",
+    "bitmapJoin",
+    "bitmapCount",
+    "bitmapExtract",
+    "bitmapMultiCount",
+    "bitmapMultiCountWithDate",
+    "bitmapMaxLevel",
+    "bitmapColumnDiff"};
 
 static std::pair<bool, bool> canPushPartialWithHint(const AggregatingStep * step)
 {

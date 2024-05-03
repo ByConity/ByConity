@@ -21,7 +21,7 @@ class FunctionExtractor
 public:
     static std::set<String> extract(ConstASTPtr node)
     {
-        static FunctionExtractorVisitor visitor;
+        FunctionExtractorVisitor visitor;
         std::set<String> context;
         ASTVisitorUtil::accept(node, visitor, context);
         return context;

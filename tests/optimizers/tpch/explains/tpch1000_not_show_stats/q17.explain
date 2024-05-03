@@ -9,7 +9,7 @@ Projection
             │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
             └─ Inner Join
                │     Condition: l_partkey == l_partkey_1
-               │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)`)
+               │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)_1`)
                ├─ Repartition Exchange
                │  │     Partition by: {l_partkey}
                │  └─ Filter
@@ -31,7 +31,7 @@ Projection
                   │                 Outputs: [p_partkey, p_brand, p_container]
                   └─ Aggregating
                      │     Group by: {l_partkey_1}
-                     │     Aggregates: expr#avg(l_quantity):=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
+                     │     Aggregates: expr#avg(l_quantity)_1:=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
                      └─ Projection
                         │     Expressions: [l_partkey_1, l_quantity_1], build_side_non_null_symbol:=1
                         └─ Inner Join

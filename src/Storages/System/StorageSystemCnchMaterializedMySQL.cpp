@@ -1,4 +1,5 @@
 #include <Storages/System/StorageSystemCnchMaterializedMySQL.h>
+#include <Storages/System/TenantController.h>
 #if USE_MYSQL
 
 #include <Catalog/Catalog.h>
@@ -91,6 +92,7 @@ Pipe StorageSystemCnchMaterializedMySQL::read(
     const size_t /*max_block_size*/,
     const unsigned /*num_streams*/)
 {
+    DISABLE_VISIT_FOR_TENANTS();
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_materialized_mysql is only supported on cnch_server side", ErrorCodes::NOT_IMPLEMENTED);

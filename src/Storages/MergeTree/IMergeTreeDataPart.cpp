@@ -821,7 +821,7 @@ void IMergeTreeDataPart::setProjectionPartsNames(const NameSet & projection_part
 void IMergeTreeDataPart::gatherProjections()
 {
     IMergeTreeDataPartPtr part = shared_from_this();
-    auto checksums = getChecksums();
+    ChecksumsPtr checksums_ptr_ = nullptr;
     while (part->isPartial())
     {
         if (part = part->tryGetPreviousPart(); !part)
@@ -829,8 +829,12 @@ void IMergeTreeDataPart::gatherProjections()
 
         for (const auto & [projection_name, projection_part] : part->projection_parts)
         {
+            /// Calling getChecksums() will store checksums smart pointer in part, so we do this lazy.
+            if (checksums_ptr_ == nullptr)
+                checksums_ptr_ = getChecksums();
+
             // if proj_with_name is absent in head part's checksums, it means that this projection is deleted and should not be loaded
-            if (auto it = checksums->files.find(projection_name + ".proj"); it != checksums->files.end())
+            if (auto it = checksums_ptr_->files.find(projection_name + ".proj"); it != checksums_ptr_->files.end())
             {
                 auto ret = projection_parts.emplace(projection_name, projection_part);
                 if (ret.second)
@@ -1658,7 +1662,7 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
      }
  }
 
-String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
+String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix, bool is_detach) const
 {
     String res;
 
@@ -1669,9 +1673,9 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
         */
     for (int try_no = 0; try_no < 10; try_no++)
     {
-        res = (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation() + (try_no ? "_try" + DB::toString(try_no) : "");
+        res = (is_detach ? "detached/" : "") + (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation() + (try_no ? "_try" + DB::toString(try_no) : "");
 
-        if (!volume->getDisk()->exists(fs::path(getFullRelativePath()) / res))
+        if (!volume->getDisk()->exists(fs::path(storage.getRelativeDataPath(location)) / res))
             return res;
 
         LOG_WARNING(storage.log, "Directory {} (to detach to) already exists. Will detach to directory with '_tryN' suffix.", res);
@@ -1744,10 +1748,10 @@ String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix)
     assert(prefix.empty() || std::find(DetachedPartInfo::DETACH_REASONS.begin(),
                                        DetachedPartInfo::DETACH_REASONS.end(),
                                        prefix) != DetachedPartInfo::DETACH_REASONS.end());
-    return "detached/" + getRelativePathForPrefix(prefix);
+    return getRelativePathForPrefix(prefix, /*is_detach*/true);
 }
 
-String IMergeTreeDataPart::getRelativePathToDiskForDetachedPart(const String & prefix) const
+String IMergeTreeDataPart::getFullRelativePathForDetachedPart(const String & prefix) const
 {
     return fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
 }
@@ -1759,7 +1763,7 @@ void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 
 void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
 {
-    String destination_path = getRelativePathToDiskForDetachedPart(prefix);
+    String destination_path = getFullRelativePathForDetachedPart(prefix);
 
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);

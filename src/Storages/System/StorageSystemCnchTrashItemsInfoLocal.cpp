@@ -7,6 +7,7 @@
 #include <Storages/PartCacheManager.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Common/CurrentThread.h>
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -43,6 +44,7 @@ Pipe StorageSystemCnchTrashItemsInfoLocal::read(
     const size_t /*max_block_size*/,
     const unsigned /*max_block_size*/)
 {
+    DISABLE_VISIT_FOR_TENANTS();
     auto cache_manager = context->getPartCacheManager();
 
     if (context->getServerType() != ServerType::cnch_server || !cache_manager)

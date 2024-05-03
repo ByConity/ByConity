@@ -90,7 +90,8 @@ class QueryPlannerVisitor : public ASTVisitor<RelationPlan, const Void>
 {
 public:
     QueryPlannerVisitor(ContextMutablePtr context_, CTERelationPlans & cte_plans_, Analysis & analysis_, TranslationMapPtr outer_context_)
-        : context(std::move(context_))
+        : ASTVisitor(context_->getSettingsRef().max_ast_depth)
+        , context(std::move(context_))
         , cte_plans(cte_plans_)
         , analysis(analysis_)
         , outer_context(std::move(outer_context_))

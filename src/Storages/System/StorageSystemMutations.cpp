@@ -32,7 +32,7 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Common/Status.h>
-
+#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -186,6 +186,7 @@ void StorageSystemMutations::fillCnchData(MutableColumns & res_columns, ContextP
 
 void StorageSystemMutations::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
+    DISABLE_VISIT_FOR_TENANTS();
     if (context->getServerType() == ServerType::cnch_server)
     {
         fillCnchData(res_columns, context, query_info.query);
