@@ -17,8 +17,6 @@
 
 #include <Disks/IDisk.h>
 #include <IO/HashingWriteBuffer.h>
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
-#include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Disks/IDisk.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>

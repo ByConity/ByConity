@@ -18,8 +18,6 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
-#include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <Common/Coding.h>
 #include <Common/ThreadPool.h>
 #include <IO/ReadBufferFromFileBase.h>

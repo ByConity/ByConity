@@ -196,7 +196,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
                 IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(file_path),
                 PFRAWSReadBufferFromFS::Options{
                     .min_buffer_size_ = settings.remote_fs_buffer_size,
-                    .throttler_ = settings.throttler,
+                    .throttler_ = settings.remote_throttler,
                 });
         } else {
             return std::make_unique<WSReadBufferFromFS>(
@@ -206,26 +206,24 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
                 settings.remote_fs_buffer_size,
                 nullptr,
                 0,
-                settings.throttler);
+                settings.remote_throttler);
         }
     }
     else
     {
+        std::unique_ptr<ReadBufferFromFileBase> impl;
+
+        impl = std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params, settings,
+                nullptr, 0, /* use_external_buffer */ settings.remote_fs_prefetch);
+
         if (settings.remote_fs_prefetch)
         {
-            auto impl = std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params,
-                settings.byte_hdfs_pread, settings.remote_fs_buffer_size, nullptr, 0, nullptr,
-                /* use_external_buffer */true);
-
             auto global_context = Context::getGlobalContextInstance();
             auto reader = global_context->getThreadPoolReader();
             return std::make_unique<AsynchronousBoundedReadBuffer>(std::move(impl), *reader, settings);
         }
-        else
-        {
-            return std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params,
-                settings.byte_hdfs_pread, settings.remote_fs_buffer_size);
-        }
+
+        return impl;
     }
 }
 

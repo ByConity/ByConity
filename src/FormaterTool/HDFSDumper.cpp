@@ -205,7 +205,7 @@ void HDFSDumper::getFileFromRemote(const String & remote_path, const String & lo
 {
     LOG_DEBUG(log, "Downloading remote file {} to local {}", remote_path, local_path);
     // open remote file for read
-    ReadBufferFromByteHDFS read_buffer(remote_path, hdfs_params, false);
+    ReadBufferFromByteHDFS read_buffer(remote_path, hdfs_params);
 
     // open local file for write
     FILE * fout = std::fopen(local_path.data(), "w+");

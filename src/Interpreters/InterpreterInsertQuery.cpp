@@ -681,7 +681,9 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
 #if USE_HDFS
                 else if (DB::isHdfsOrCfsScheme(scheme))
                 {
-                    read_buf = std::make_unique<ReadBufferFromByteHDFS>(uriPrefix + name, context_ptr->getHdfsConnectionParams(), false, DBMS_DEFAULT_BUFFER_SIZE, nullptr, 0, context_ptr->getProcessList().getHDFSDownloadThrottler());
+                    ReadSettings read_settings;
+                    read_settings.remote_throttler = context_ptr->getProcessList().getHDFSDownloadThrottler();
+                    read_buf = std::make_unique<ReadBufferFromByteHDFS>(uriPrefix + name, context_ptr->getHdfsConnectionParams(), read_settings);
                 }
 #endif
 #if USE_AWS_S3

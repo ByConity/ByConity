@@ -153,7 +153,7 @@ private:
 
     void fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file);
 
-    std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr& disk, const String& path, size_t file_size) const;
+    std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t file_size, const String & remote_read_context = {}) const;
 };
 
 }

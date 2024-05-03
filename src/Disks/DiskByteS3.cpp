@@ -204,7 +204,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
                 IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(object_key),
                 PFRAWSReadBufferFromFS::Options{
                     .min_buffer_size_ = settings.remote_fs_buffer_size,
-                    .throttler_ = settings.throttler,
+                    .throttler_ = settings.remote_throttler,
                 });
         } else {
             return std::make_unique<WSReadBufferFromFS>(
@@ -214,7 +214,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
                 settings.remote_fs_buffer_size,
                 nullptr,
                 0,
-                settings.throttler);
+                settings.remote_throttler);
         }
     }
     else

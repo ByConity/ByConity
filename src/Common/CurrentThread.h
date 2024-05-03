@@ -88,6 +88,13 @@ public:
         return current_thread->getTransactionId();
     }
 
+    static UInt64 getThreadId()
+    {
+        if (unlikely(!current_thread))
+            return 0;
+        return current_thread->thread_id;
+    }
+
     /// Non-master threads call this method in destructor automatically
     static void detachQuery();
     static void detachQueryIfNotDetached();
