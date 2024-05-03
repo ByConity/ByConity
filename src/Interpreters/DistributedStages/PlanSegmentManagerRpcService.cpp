@@ -546,8 +546,6 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
 
         /// Authentication
         Poco::Net::SocketAddress current_socket_address(query_common->coordinator_address().host_name(), cntl->remote_side().port);
-        const auto & current_user = request->execution_address().user();
-        query_context->setUser(current_user, request->execution_address().password(), current_socket_address);
 
         PlanSegmentExecutionInfo execution_info;
 
@@ -586,9 +584,9 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         client_info.rpc_port = query_common->coordinator_address().exchange_port();
 
         /// Prepare settings.
+        butil::IOBuf settings_io_buf;
         if (request->query_settings_buf_size() > 0)
         {
-            butil::IOBuf settings_io_buf;
             auto query_settings_buf_size = attachment.cutn(&settings_io_buf, request->query_settings_buf_size());
             if (query_settings_buf_size != request->query_settings_buf_size())
             {
@@ -597,31 +595,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                         + "expected: " + std::to_string(request->query_settings_buf_size()),
                     ErrorCodes::LOGICAL_ERROR);
             }
-            ReadBufferFromBrpcBuf settings_read_buf(settings_io_buf);
-
-            /// Sets an extra row policy based on `client_info.initial_user`.
-            /// Not saft since KVAccessStorage will call rpc inside lock
-            // query_context->setInitialRowPolicy();
-
-            /// apply settings changed
-            const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::BINARY);
         }
-        /// Disable function name normalization when it's a secondary query, because queries are either
-        /// already normalized on initiator node, or not normalized and should remain unnormalized for
-        /// compatibility.
-        query_context->setSetting("normalize_function_names", Field(0));
-
-        if (query_context->getServerType() == ServerType::cnch_worker)
-            query_context->grantAllAccess();
-
-        /// Set quota
-        if (query_common->has_quota())
-            query_context->setQuotaKey(query_common->quota());
-
-        if (!query_context->hasQueryContext())
-            query_context->makeQueryContext();
-
-        query_context->setQueryExpirationTimeStamp();
 
         report_metrics_timer->getResourceData().fillProto(*response->mutable_worker_resource_data());
         LOG_TRACE(log, "adaptive scheduler worker status: {}", response->worker_resource_data().ShortDebugString());
@@ -639,11 +613,43 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                                            execution_info = std::move(execution_info),
                                            query_common = std::move(query_common),
                                            segment_id = request->plan_segment_id(),
-                                           plan_segment_buf = std::make_shared<butil::IOBuf>(plan_segment_buf.movable()) ]() {
+                                           plan_segment_buf = std::make_shared<butil::IOBuf>(plan_segment_buf.movable()),
+                                           settings_io_buf = std::make_shared<butil::IOBuf>(settings_io_buf.movable())]() {
             bool before_execute = true;
             auto coordinator_address = query_common->coordinator_address();
             try
             {
+                /// Authentication
+                const auto & current_user = execution_info.execution_address.getUser();
+                query_context->setUser(
+                    current_user, execution_info.execution_address.getPassword(), query_context->getClientInfo().current_address);
+
+                if (!settings_io_buf->empty())
+                {
+                    ReadBufferFromBrpcBuf settings_read_buf(*settings_io_buf);
+                    /// Sets an extra row policy based on `client_info.initial_user`
+                    query_context->setInitialRowPolicy();
+                    /// apply settings changed
+                    const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::BINARY);
+                }
+
+                /// Disable function name normalization when it's a secondary query, because queries are either
+                /// already normalized on initiator node, or not normalized and should remain unnormalized for
+                /// compatibility.
+                query_context->setSetting("normalize_function_names", Field(0));
+
+                if (query_context->getServerType() == ServerType::cnch_worker)
+                    query_context->grantAllAccess();
+
+                /// Set quota
+                if (query_common->has_quota())
+                    query_context->setQuotaKey(query_common->quota());
+
+                if (!query_context->hasQueryContext())
+                    query_context->makeQueryContext();
+
+                query_context->setQueryExpirationTimeStamp();
+
                 /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
                 butil::IOBufAsZeroCopyInputStream plansegment_buf_wrapper(*plan_segment_buf);
                 Protos::PlanSegment plan_segment_proto;
