@@ -923,6 +923,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 LOG_DEBUG(
                     &Poco::Logger::get("executeQuery"), "Will reroute query {} to {}", query, host_ports.toDebugString());
                 context->initializeExternalTablesIfSet();
+                context->setSetting("enable_auto_query_forwarding", Field(0));
                 executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
                 LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query forwarded to remote server done");
                 return std::make_tuple(ast, std::move(res));
