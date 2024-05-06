@@ -21,7 +21,7 @@ ${CLICKHOUSE_CLIENT} --query "ALTER TABLE attach_bug2 ATTACH DETACHED PARTITION 
 echo `${CLICKHOUSE_CLIENT} --query "SELECT (kv_commit_time > 0) FROM system.cnch_parts WHERE (database = currentDatabase(1)) AND (table = 'attach_bug2') AND active;"`
 
 # get the txn id
-TXN_ID=$(${CLICKHOUSE_CLIENT} --query "SELECT txn_id FROM system.cnch_transactions WHERE main_table_uuid = (SELECT uuid FROM system.cnch_tables WHERE database = currentDatabase() AND name = 'attach_bug2') SETTINGS enable_optimizer=0, allow_full_scan_txn_records=1;")
+TXN_ID=$(${CLICKHOUSE_CLIENT} --query "SELECT txn_id FROM system.cnch_transactions WHERE main_table_uuid = (SELECT uuid FROM system.cnch_tables WHERE database = currentDatabase(1) AND name = 'attach_bug2') SETTINGS enable_optimizer=0, allow_full_scan_txn_records=1;")
 
 # trigger txn cleaner from dm
 ${CLICKHOUSE_CLIENT} --query "SYSTEM CLEAN TRANSACTION ${TXN_ID}" & sleep 3s

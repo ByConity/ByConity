@@ -200,12 +200,19 @@ Pipe StorageSystemCnchTables::read(
     }
 
     Catalog::Catalog::DataModelTables table_models;
+    const String & tenant_id = context->getTenantId();
 
     std::vector<std::pair<String, String>> db_table_pairs;
     auto predicates = parsePredicatesFromWhere(query_info, context);
     bool get_db_tables_ok = getDBTablesFromPredicates(predicates, db_table_pairs);
     if (get_db_tables_ok && (db_table_pairs.size() <= GET_ALL_TABLES_LIMIT))
     {
+        if (!tenant_id.empty())
+        {
+            for (auto & pair : db_table_pairs)
+                pair.first = formatTenantDatabaseNameWithTenantId(pair.first, tenant_id);
+        }
+
         auto table_ids = cnch_catalog->getTableIDsByNames(db_table_pairs);
         if (table_ids)
             table_models = cnch_catalog->getTablesByIDs(*table_ids);
@@ -216,7 +223,7 @@ Pipe StorageSystemCnchTables::read(
     Block block_to_filter;
 
     /// Add `database` column.
-    MutableColumnPtr database_column_mut = ColumnString::create();
+    MutableColumnPtr db_column_mut = ColumnString::create();
     /// Add `name` column.
     MutableColumnPtr name_column_mut = ColumnString::create();
     /// Add `uuid` column
@@ -226,13 +233,36 @@ Pipe StorageSystemCnchTables::read(
 
     for (size_t i=0; i<table_models.size(); i++)
     {
-        database_column_mut->insert(table_models[i].database());
+        const String& non_stripped_db_name = table_models[i].database();
+        if (!tenant_id.empty())
+        {
+            if (startsWith(non_stripped_db_name, tenant_id + "."))
+            {
+                db_column_mut->insert(getOriginalDatabaseName(non_stripped_db_name, tenant_id));
+            }
+            else
+            {
+                // Will skip database of other tenants and default user (without tenantid prefix)
+                if (non_stripped_db_name.find(".") != std::string::npos)
+                    continue;
+
+                if (!DatabaseCatalog::isDefaultVisibleSystemDatabase(non_stripped_db_name))
+                    continue;
+
+                db_column_mut->insert(non_stripped_db_name);
+            }
+        }
+        else
+        {
+            db_column_mut->insert(non_stripped_db_name);
+        }
+
         name_column_mut->insert(table_models[i].name());
         uuid_column_mut->insert(RPCHelpers::createUUID(table_models[i].uuid()));
         index_column_mut->insert(i);
     }
 
-    block_to_filter.insert(ColumnWithTypeAndName(std::move(database_column_mut), std::make_shared<DataTypeString>(), "database"));
+    block_to_filter.insert(ColumnWithTypeAndName(std::move(db_column_mut), std::make_shared<DataTypeString>(), "database"));
     block_to_filter.insert(ColumnWithTypeAndName(std::move(name_column_mut), std::make_shared<DataTypeString>(), "name"));
     block_to_filter.insert(ColumnWithTypeAndName(std::move(uuid_column_mut), std::make_shared<DataTypeUUID>(), "uuid"));
     block_to_filter.insert(ColumnWithTypeAndName(std::move(index_column_mut), std::make_shared<DataTypeUInt64>(), "index"));
@@ -249,6 +279,7 @@ Pipe StorageSystemCnchTables::read(
     for (size_t i = 0; i<filtered_index_column->size(); i++)
     {
         auto table_model = table_models[(*filtered_index_column)[i].get<UInt64>()];
+        table_model.set_database(getOriginalDatabaseName(table_model.database(), tenant_id));
         if (Status::isDeleted(table_model.status()) || !matchAnyPredicate(predicates, table_model))
             continue;
 

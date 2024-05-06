@@ -25,7 +25,7 @@ select * from information_schema.schemata where schema_name ilike 'information_s
 SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (table_schema = currentDatabase(1) OR table_schema = '') AND table_name NOT LIKE '%inner%';
 SELECT * FROM information_schema.views WHERE table_schema = currentDatabase(1);
 -- SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE (TABLE_SCHEMA=currentDatabase(1) OR TABLE_SCHEMA='') AND TABLE_NAME NOT LIKE '%inner%'
-SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE (table_schema = currentDatabase() OR table_schema = '') AND table_name NOT LIKE '%inner%';
+SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE (table_schema = currentDatabase(1) OR table_schema = '') AND table_name NOT LIKE '%inner%';
 SET enable_optimizer=1;
 -- FIXME #28687
 select * from information_schema.schemata where schema_name ilike 'information_schema';
@@ -33,14 +33,14 @@ select * from information_schema.schemata where schema_name ilike 'information_s
 SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (table_schema = currentDatabase(1) OR table_schema = '') AND table_name NOT LIKE '%inner%';
 SELECT * FROM information_schema.views WHERE table_schema = currentDatabase(1);
 -- SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE (TABLE_SCHEMA=currentDatabase(1) OR TABLE_SCHEMA='') AND TABLE_NAME NOT LIKE '%inner%'
-SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE (table_schema = currentDatabase() OR table_schema = '') AND table_name NOT LIKE '%inner%';
+SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE (table_schema = currentDatabase(1) OR table_schema = '') AND table_name NOT LIKE '%inner%';
 SET enable_optimizer=0;
 -- mixed upper/lowercase schema and table name:
 SELECT count() FROM information_schema.TABLES WHERE table_schema = currentDatabase(1) AND table_name = 't';
 SELECT count() FROM INFORMATION_SCHEMA.tables WHERE table_schema = currentDatabase(1) AND table_name = 't';
 
-SELECT * FROM information_schema.key_column_usage WHERE table_schema = currentDatabase() AND table_name = 'kcu';
-SELECT * FROM information_schema.key_column_usage WHERE table_schema = currentDatabase() AND table_name = 'kcu2';
+SELECT * FROM information_schema.key_column_usage WHERE table_schema = currentDatabase(1) AND table_name = 'kcu';
+SELECT * FROM information_schema.key_column_usage WHERE table_schema = currentDatabase(1) AND table_name = 'kcu2';
 
 SELECT '-- information_schema.referential_constraints';
 SELECT * FROM information_schema.referential_constraints;

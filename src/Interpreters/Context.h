@@ -1492,7 +1492,6 @@ public:
             return settings.tenant_id.toString();
     }
 
-
     void setTenantId(const String & id)
     {
         tenant_id = id;
@@ -1672,6 +1671,7 @@ public:
     PreparedStatementManager * getPreparedStatementManager();
 
 private:
+    bool has_tenant_id_in_username = false;
     String tenant_id;
     String current_catalog;
 

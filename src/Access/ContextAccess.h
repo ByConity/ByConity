@@ -38,6 +38,7 @@ struct ContextAccessParams
     UInt64 readonly = 0;
     bool allow_ddl = false;
     bool allow_introspection = false;
+    bool has_tenant_id_in_username = false;
     String current_database;
     ClientInfo::Interface interface = ClientInfo::Interface::TCP;
     ClientInfo::HTTPMethod http_method = ClientInfo::HTTPMethod::UNKNOWN;

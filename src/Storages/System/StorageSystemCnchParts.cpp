@@ -96,7 +96,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
     auto cnch_catalog = context->getCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_parts only support cnch_server", ErrorCodes::NOT_IMPLEMENTED);
-    
+
     std::vector<std::tuple<String, String, String>> tables;
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery &>().where();
@@ -153,7 +153,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
     else
     {
         const String & tenant_id = context->getTenantId();
-        String only_selected_db_full;
+        String only_selected_db_full = only_selected_db;
         if (!tenant_id.empty())
         {
             if (!DB::DatabaseCatalog::isDefaultVisibleSystemDatabase(only_selected_db))
@@ -161,14 +161,11 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 only_selected_db_full = tenant_id + "." + only_selected_db;
             }
         }
-        else
-            only_selected_db_full = only_selected_db;
         tables.emplace_back(
                 only_selected_db_full,
                 only_selected_db,
                 only_selected_table
             );
-           
     }
 
     TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
