@@ -55,6 +55,9 @@ IDiskCacheSegmentsVector DiskCacheSimpleStrategy::getCacheSegments(const IDiskCa
             if ((!mark_name.empty() && !disk_cache->getMetaCache()->get(mark_name).second.empty())
                 && !disk_cache->getDataCache()->get(segment_name).second.empty())
                 return false;
+            
+            if (segment_hits_to_cache == 1)
+                return true;
 
             auto segment_hit_count = ++stats.access_stats[segment_name];
             if (segment_hit_count >= segment_hits_to_cache)
