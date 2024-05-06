@@ -22,7 +22,6 @@
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -55,7 +54,6 @@ NamesAndTypesList StorageSystemCnchPartsColumns::getNamesAndTypes()
 
 void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     Poco::Logger * log = &Poco::Logger::get(getName());
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();

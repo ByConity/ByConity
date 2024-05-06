@@ -14,8 +14,6 @@
 #include "Parsers/ASTIdentifier.h"
 #include "Parsers/ASTLiteral.h"
 #include "Parsers/ASTSelectQuery.h"
-#include <Storages/System/CollectWhereClausePredicate.h>
-#include <Storages/System/TenantController.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -34,7 +32,6 @@ NamesAndTypesList StorageSystemExternalTables::getNamesAndTypes()
 
 void StorageSystemExternalTables::fillData(MutableColumns & res_columns, [[maybe_unused]] ContextPtr context, const SelectQueryInfo & query_info) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     const auto & select = query_info.query->as<ASTSelectQuery>();
     if (!select->where() && !select->prewhere())
     {

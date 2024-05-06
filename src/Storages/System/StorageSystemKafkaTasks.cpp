@@ -13,7 +13,6 @@
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
 #include <Storages/Kafka/StorageCloudKafka.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -147,7 +146,6 @@ static void fillDataOnServer(MutableColumns & res_columns, ContextPtr context)
 
 void StorageSystemKafkaTasks::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & ) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     if (context->getServerType() == ServerType::cnch_worker)
         fillDataOnWorker(res_columns, context);
     else if (context->getServerType() == ServerType::cnch_server)

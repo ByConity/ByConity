@@ -23,7 +23,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <CloudServices/CnchBGThreadCommon.h>
-#include <Storages/System/TenantController.h>
 
 
 namespace DB
@@ -46,7 +45,6 @@ namespace DB
 
     void StorageSystemDMBGJobs::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
     {
-        DISABLE_VISIT_FOR_TENANTS();
         if (context->getServerType() != ServerType::cnch_server)
             return;
         /// TODO: can optimize further to reduce number of request by checking where condition

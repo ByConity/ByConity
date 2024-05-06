@@ -11,7 +11,7 @@
 #include <Access/ContextAccess.h>
 #include <Common/typeid_cast.h>
 #include <Databases/IDatabase.h>
-#include <Storages/System/TenantController.h>
+
 
 namespace DB
 {
@@ -49,7 +49,6 @@ NamesAndTypesList StorageSystemReplicationQueue::getNamesAndTypes()
 
 void StorageSystemReplicationQueue::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     const auto access = context->getAccess();
     const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
 

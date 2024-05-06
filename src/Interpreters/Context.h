@@ -1368,9 +1368,6 @@ public:
     void setIsRestrictSettingsToWhitelist(bool is_restrict);
     void addRestrictSettingsToWhitelist(const std::vector<String>& name) const;
 
-    bool getIsRestrictSystemTables() const;
-    void setIsRestrictSystemTables(bool is_restrict);
-
     /// Sets default_profile and system_profile, must be called once during the initialization
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;

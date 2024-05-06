@@ -6,7 +6,6 @@
 #include <Storages/System/CollectWhereClausePredicate.h>
 #include <Storages/System/StorageSystemCnchCommon.h>
 #include <Storages/System/StorageSystemCnchTrashItems.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -29,7 +28,6 @@ NamesAndTypesList StorageSystemCnchTrashItems::getNamesAndTypes()
 
 void StorageSystemCnchTrashItems::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     auto cnch_catalog = context->getCnchCatalog();
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();

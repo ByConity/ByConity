@@ -7,7 +7,6 @@
 #include <Storages/IStorage.h>
 #include <Storages/System/StorageSystemPartsBase.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -39,7 +38,6 @@ Pipe StorageSystemDetachedParts::read(
     const size_t /*max_block_size*/,
     const unsigned /*num_streams*/)
 {
-    DISABLE_VISIT_FOR_TENANTS();
     StoragesInfoStream stream(query_info, context);
 
     /// Create the result.

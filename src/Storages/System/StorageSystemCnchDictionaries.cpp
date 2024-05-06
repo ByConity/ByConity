@@ -21,7 +21,6 @@
 #include <DataTypes/DataTypeDateTime.h>
 #include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Common/Status.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -40,7 +39,6 @@ NamesAndTypesList StorageSystemCnchDictionaries::getNamesAndTypes()
 
 void StorageSystemCnchDictionaries::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & ) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
 
     if (context->getServerType() == ServerType::cnch_server && cnch_catalog)

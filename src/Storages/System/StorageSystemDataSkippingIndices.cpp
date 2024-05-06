@@ -9,7 +9,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Parsers/queryToString.h>
 #include <Processors/Sources/SourceWithProgress.h>
-#include <Storages/System/TenantController.h>
+
 
 namespace DB
 {
@@ -153,7 +153,6 @@ Pipe StorageSystemDataSkippingIndices::read(
     size_t max_block_size,
     unsigned int /* num_streams */)
 {
-    DISABLE_VISIT_FOR_TENANTS();
     storage_snapshot->check(column_names);
 
     NameSet names_set(column_names.begin(), column_names.end());

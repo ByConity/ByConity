@@ -23,7 +23,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/System/CollectWhereClausePredicate.h>
-#include <Storages/System/TenantController.h>
 namespace DB
 {
 
@@ -67,7 +66,6 @@ NamesAndAliases StorageSystemCnchStagedParts::getNamesAndAliases()
 
 void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     auto cnch_catalog = context->getCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_staged_parts only support cnch_server", ErrorCodes::NOT_IMPLEMENTED);

@@ -578,7 +578,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setIsRestrictSettingsToWhitelist(config().getBool("restrict_tenanted_users_to_whitelist_settings", false));
-    global_context->setIsRestrictSystemTables(config().getBool("restrict_tenanted_users_to_system_tables", true));
     if (global_context->getIsRestrictSettingsToWhitelist())
     {
         auto setting_names = getMultipleValuesFromConfig(config(), "tenant_whitelist_settings", "name");

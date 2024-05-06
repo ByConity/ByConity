@@ -22,7 +22,6 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -44,7 +43,6 @@ NamesAndTypesList StorageSystemBGThreads::getNamesAndTypes()
 
 void StorageSystemBGThreads::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     for (auto i = CnchBGThreadType::ServerMinType; i <= CnchBGThreadType::ServerMaxType; i = CnchBGThreadType(size_t(i) + 1))
     {
         for (auto && [_, t] : context->getCnchBGThreadsMap(i)->getAll())

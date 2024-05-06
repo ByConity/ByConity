@@ -7,7 +7,6 @@
 #include <Protos/RPCHelpers.h>
 #include <Storages/System/StorageSystemCnchSnapshots.h>
 #include <Transaction/TxnTimestamp.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -39,7 +38,6 @@ NamesAndAliases StorageSystemCnchSnapshots::getNamesAndAliases()
 
 void StorageSystemCnchSnapshots::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & ) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     auto cnch_catalog = context->tryGetCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "system.cnch_snapshots can only be accessed from cnch server");
