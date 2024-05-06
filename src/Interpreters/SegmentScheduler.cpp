@@ -44,8 +44,6 @@ namespace ErrorCodes
     extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
 }
 
-constexpr int MIN_VERSION_USE_SUBMIT_MPP_QUERY_RPC = 2;
-
 PlanSegmentsStatusPtr
 SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * plan_segments_ptr, ContextPtr query_context)
 {
@@ -85,16 +83,18 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
         server_resource->sendResources(query_context);
     }
 
-    if (query_context->getSettingsRef().min_compatible_brpc_minor_version >= MIN_VERSION_USE_SUBMIT_MPP_QUERY_RPC)
+    auto * final_segment = plan_segments_ptr->getRoot()->getPlanSegment();
+    auto local_address = getLocalAddress(*query_context);
+    final_segment->setCoordinatorAddress(local_address);
+    //fast path for single node query
+    if (plan_segments_ptr->getNodes().size() == 1)
     {
-        auto * final_segment = plan_segments_ptr->getRoot()->getPlanSegment();
-        auto local_address = getLocalAddress(*query_context);
-        final_segment->setCoordinatorAddress(local_address);
-        prepareQueryCommonBuf(dag_ptr->query_common_buf, *final_segment, query_context);
-        WriteBufferFromBrpcBuf settings_write_buf;
-        query_context->getSettingsRef().write(settings_write_buf, SettingsWriteFormat::BINARY);
-        dag_ptr->query_settings_buf.append(settings_write_buf.getFinishedBuf().movable());
+        return dag_ptr->plan_segment_status_ptr;
     }
+    prepareQueryCommonBuf(dag_ptr->query_common_buf, *final_segment, query_context);
+    WriteBufferFromBrpcBuf settings_write_buf;
+    query_context->getSettingsRef().write(settings_write_buf, SettingsWriteFormat::BINARY);
+    dag_ptr->query_settings_buf.append(settings_write_buf.getFinishedBuf().movable());
 
     if (!dag_ptr->plan_segment_status_ptr->is_final_stage_start)
     {
