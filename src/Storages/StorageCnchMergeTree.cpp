@@ -1730,7 +1730,7 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
 
 void StorageCnchMergeTree::sendDropDiskCacheTasks(ContextPtr local_context, const ServerDataPartsVector & parts, bool sync, bool drop_vw_disk_cache)
 {
-    TxnTimestamp txn_id = local_context->getCurrentTransactionID();
+    TxnTimestamp txn_id(local_context->getTimestamp());
     String create_table_query = genCreateTableQueryForWorker(txn_id.toString());
 
     auto worker_group = getWorkerGroupForTable(*this, local_context);
