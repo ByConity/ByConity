@@ -67,6 +67,39 @@ void ThreadStatus::applyQuerySettings()
 #endif
 }
 
+ThreadGroupStatusPtr ThreadGroupStatus::createForBackgroundProcess(ContextPtr storage_context)
+{
+    auto group = std::make_shared<ThreadGroupStatus>();
+
+    group->memory_tracker.setDescription("background process to apply mutate/merge in table");
+    /// However settings from storage context have to be applied
+    const Settings & settings = storage_context->getSettingsRef();
+    group->memory_tracker.setProfilerStep(settings.memory_profiler_step);
+    group->memory_tracker.setSampleProbability(settings.memory_profiler_sample_probability);
+    group->memory_tracker.setParent(&background_memory_tracker);
+    if (settings.memory_tracker_fault_probability > 0.0)
+        group->memory_tracker.setFaultProbability(settings.memory_tracker_fault_probability);
+
+    return group;
+}
+
+ThreadGroupSwitcher::ThreadGroupSwitcher(ThreadGroupStatusPtr thread_group)
+{
+    chassert(thread_group);
+
+    /// might be nullptr
+    prev_thread_group = CurrentThread::getGroup();
+
+    CurrentThread::detachQueryIfNotDetached();
+    CurrentThread::attachTo(thread_group);
+}
+
+ThreadGroupSwitcher::~ThreadGroupSwitcher()
+{
+    CurrentThread::detachQueryIfNotDetached();
+    if (prev_thread_group)
+        CurrentThread::attachTo(prev_thread_group);
+}
 
 void ThreadStatus::attachQueryContext(ContextPtr query_context_)
 {

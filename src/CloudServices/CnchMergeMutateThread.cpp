@@ -936,7 +936,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
     task_record.task_id = params.task_id;
     task_record.worker = worker_client;
     task_record.result_part_name = params.new_part_names.front();
-    task_record.manipulation_entry = local_context->getGlobalContext()->getManipulationList().insert(params, true);
+    task_record.manipulation_entry = local_context->getGlobalContext()->getManipulationList().insert(params, true, getContext());
     task_record.manipulation_entry->get()->related_node = worker_client->getRPCAddress();
 
     try

@@ -108,14 +108,14 @@ struct ManipulationListElement : boost::noncopyable
     /// Updated only for Vertical algorithm
     std::atomic<UInt64> columns_written{};
 
-    MemoryTracker memory_tracker{VariableContext::Process};
-    MemoryTracker * background_thread_memory_tracker = nullptr;
-    MemoryTracker * background_thread_memory_tracker_prev_parent = nullptr;
+    ThreadGroupStatusPtr thread_group;
+
+    const MemoryTracker & getMemoryTracker() const { return thread_group->memory_tracker; }
 
     /// Poco thread number used in logs
     UInt64 thread_id;
 
-    ManipulationListElement(const ManipulationTaskParams & params, bool disable_memory_tracker);
+    ManipulationListElement(const ManipulationTaskParams & params, bool disable_memory_tracker, const ContextPtr & context);
 
     ~ManipulationListElement();
 
