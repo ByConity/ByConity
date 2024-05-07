@@ -477,11 +477,11 @@ Void PlanNodePrinter::visitTotalsHavingNode(TotalsHavingNode & node, PrinterCont
 
 Void PlanNodePrinter::visitFinalSampleNode(FinalSampleNode & node, PrinterContext & context)
 {
-    auto stepPtr = node.getStep();
-    String label{"FinalSamplingNode"};
-    String details{"FinalSamplingNode"};
-    String color{NODE_COLORS[stepPtr->getType()]};
-    printNode(node, label, details, color, context);
+    auto step_ptr = node.getStep();
+    String label{"FinalSampleNode"};
+    const auto & step = dynamic_cast<const FinalSampleStep &>(*step_ptr);
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printFinalSampleStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1063,11 +1063,11 @@ Void PlanSegmentNodePrinter::visitTotalsHavingNode(QueryPlan::Node * node, Print
 
 Void PlanSegmentNodePrinter::visitFinalSampleNode(QueryPlan::Node * node, PrinterContext & context)
 {
-    auto & stepPtr = node->step;
-    String label{"FinalSamplingNode"};
-    String details{"FinalSamplingNode"};
-    String color{NODE_COLORS[stepPtr->getType()]};
-    printNode(node, label, details, color, context);
+    auto & step_ptr = node->step;
+    String label{"FinalSampleNode"};
+    const auto & step = dynamic_cast<const FinalSampleStep &>(*step_ptr);
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printFinalSampleStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1957,6 +1957,19 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
         details << "|";
     }
 
+    if (query->sampleSize())
+    {
+        ASTSampleRatio * sample = query->sampleSize()->as<ASTSampleRatio>();
+        details << "Sample : \\n";
+        details << "Sample Size : " << ASTSampleRatio::toString(sample->ratio)<< "\\n";
+        if (query->sampleOffset())
+        {
+            ASTSampleRatio * offset = query->sampleOffset()->as<ASTSampleRatio>();
+            details << "Sample Offset : " << ASTSampleRatio::toString(offset->ratio)<< "\\n";
+        }
+        details << "|";
+    }
+
     if (query_info.partition_filter)
     {
         details << "Partition Filter : \\n";
@@ -2078,6 +2091,14 @@ String StepPrinter::printValuesStep(const ValuesStep & step)
     }
     details << "|";
     details << "Rows :" << step.getRows();
+    return details.str();
+}
+
+String StepPrinter::printFinalSampleStep(const FinalSampleStep & step)
+{
+    std::stringstream details;
+    details << "Sample Size: " << step.getSampleSize() << "\\n";
+    details << "Max Chunk Size: " << step.getMaxChunkSize();
     return details.str();
 }
 
@@ -2647,7 +2668,7 @@ void cleanDotFiles(const ContextMutablePtr & context)
 void cleanDotFiles(const ContextPtr & context)
 {
     // when in the processing of sub query, DO NOT clean graphviz files.
-    if (context->getExecuteSubQueryPath() != "")
+    if (!context->getExecuteSubQueryPath().empty())
     {
         return;
     }
@@ -3271,6 +3292,8 @@ void appendAST(
                     result.push_back(table_subquery->children[0]);
                 if (table_expr->table_function)
                     result.push_back(table_expr->table_function);
+                if (table_expr->sample_size)
+                    result.push_back(table_expr->sample_size);
             }
             if (table_elem->table_join)
             {

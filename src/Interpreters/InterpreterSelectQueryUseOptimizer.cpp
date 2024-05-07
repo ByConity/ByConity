@@ -54,6 +54,7 @@
 #include <DataTypes/ObjectUtils.h>
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
+#include <QueryPlan/FinalSampleStep.h>
 
 #include <memory>
 
@@ -278,6 +279,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
         log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
     ProfileEvents::increment(ProfileEvents::PlanSegmentSplitterTime, stage_watch.elapsedMilliseconds());
 
+    resetFinalSampleSize(plan_segment_tree);
     setPlanSegmentInfoForExplainAnalyze(plan_segment_tree);
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
     context->logOptimizerProfile(
@@ -585,6 +587,25 @@ void InterpreterSelectQueryUseOptimizer::setPlanSegmentInfoForExplainAnalyze(Pla
     {
         ExplainAnalyzeVisitor explain_visitor;
         VisitorUtil::accept(final_segment->getQueryPlan().getRoot(), explain_visitor, plan_segment_tree->getNodes());
+    }
+}
+
+void InterpreterSelectQueryUseOptimizer::resetFinalSampleSize(PlanSegmentTreePtr & plan_segment_tree)
+{
+    for (auto & plan_segment : plan_segment_tree->getNodes())
+    {
+        if (plan_segment.getPlanSegment())
+        {
+            for (auto & node : plan_segment.getPlanSegment()->getQueryPlan().getNodes())
+            {
+                if (auto * sample = dynamic_cast<FinalSampleStep *>(node.step.get()))
+                {
+                    size_t sample_size = (sample->getSampleSize() + 1) / plan_segment.getPlanSegment()->getParallelSize();
+                    sample->setSampleSize(sample_size);
+                }
+                    
+            }
+        }
     }
 }
 

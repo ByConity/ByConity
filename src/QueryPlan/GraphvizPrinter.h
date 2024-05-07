@@ -209,6 +209,7 @@ public:
     static String printExceptStep(const ExceptStep & step);
     static String printExchangeStep(const ExchangeStep & step);
     static String printRemoteExchangeSourceStep(const RemoteExchangeSourceStep & step);
+    static String printFinalSampleStep(const FinalSampleStep & step);
     static String printTableScanStep(const TableScanStep & step);
     static String printTableWriteStep(const TableWriteStep & step);
     static String printTableFinishStep(const TableFinishStep & step);

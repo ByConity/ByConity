@@ -177,11 +177,6 @@ Property DeriverVisitor::visitStep(const IQueryPlanStep &, DeriverContext & cont
     return context.getInput()[0].clearSorting();
 }
 
-Property  DeriverVisitor::visitFinalSampleStep(const FinalSampleStep &, DeriverContext &)
-{
-    throw Exception("Not impl property deriver", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 Property DeriverVisitor::visitOffsetStep(const OffsetStep &, DeriverContext & context)
 {
     return Property{
@@ -212,6 +207,11 @@ Property DeriverVisitor::visitPartitionTopNStep(const PartitionTopNStep &, Deriv
 }
 
 Property DeriverVisitor::visitBufferStep(const BufferStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
+Property DeriverVisitor::visitFinalSampleStep(const FinalSampleStep &, DeriverContext & context)
 {
     return context.getInput()[0];
 }

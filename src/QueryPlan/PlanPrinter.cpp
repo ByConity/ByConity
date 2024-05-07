@@ -933,6 +933,12 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             },
             limit->getOffset());
     }
+    if (plan->getType() == IQueryPlanStep::Type::FinalSample)
+    {
+        const auto * sample = dynamic_cast<const FinalSampleStep *>(plan.get());
+        out << intent.detailIntent() << "Sample Size: " << sample->getSampleSize();
+        out << intent.detailIntent() << "Max Chunk Size: " << sample->getMaxChunkSize();
+    }
 
     if (plan->getType() == IQueryPlanStep::Type::Offset)
     {
@@ -1043,6 +1049,17 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << intent.detailIntent() << "Limit: ";
             Field converted = convertFieldToType(query->refLimitLength()->as<ASTLiteral>()->value, DataTypeUInt64());
             out << converted.safeGet<UInt64>();
+        }
+
+        if (query->sampleSize())
+        {
+            ASTSampleRatio * sample = query->sampleSize()->as<ASTSampleRatio>();
+            out << intent.detailIntent() << "Sample Size: " << ASTSampleRatio::toString(sample->ratio);
+            if (query->sampleOffset())
+            {
+                ASTSampleRatio * sample_offset = query->sampleOffset()->as<ASTSampleRatio>();
+                out << " Offset: " << ASTSampleRatio::toString(sample_offset->ratio);
+            }
         }
 
         std::vector<String> inline_expressions;
@@ -1234,6 +1251,13 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
             step_detail["Offset"] = std::to_string(offset->getOffset());
     }
 
+    if (step->getType() == IQueryPlanStep::Type::FinalSample)
+    {
+        const auto * sample = dynamic_cast<const FinalSampleStep *>(step.get());
+        step_detail["SampleSize"] = std::to_string(sample->getSampleSize());
+        step_detail["MaxChunkSize"] =  std::to_string(sample->getMaxChunkSize());
+    }
+
     if (step->getType() == IQueryPlanStep::Type::Aggregating)
     {
         const auto * agg = dynamic_cast<const AggregatingStep *>(step.get());
@@ -1361,6 +1385,18 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
         {
             Field converted = convertFieldToType(query->refLimitLength()->as<ASTLiteral>()->value, DataTypeUInt64());
             step_detail["Limit"] = std::to_string(converted.safeGet<UInt64>());
+        }
+
+        std::sort(assignments.begin(), assignments.end());
+        if (query->sampleSize())
+        {
+            ASTSampleRatio * sample = query->sampleSize()->as<ASTSampleRatio>();
+            step_detail["SampleSize"] = ASTSampleRatio::toString(sample->ratio);
+            if (query->sampleOffset())
+            {
+                ASTSampleRatio * sample_offset = query->sampleOffset()->as<ASTSampleRatio>();
+                step_detail["SampleOffset"] = ASTSampleRatio::toString(sample_offset->ratio);
+            }
         }
 
         if (!identities.empty())
