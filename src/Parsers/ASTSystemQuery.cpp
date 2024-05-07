@@ -234,6 +234,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "STOP VIEW";
         case Type::DROP_VIEW_META:
             return "DROP VIEW META";
+        case Type::RELEASE_MEMORY_LOCK:
+            return "RELEASE MEMORY LOCK";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");
@@ -411,6 +413,13 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if(type == Type::START_MATERIALIZEDMYSQL || type == Type::STOP_MATERIALIZEDMYSQL)
     {
         print_database();
+    }
+    else if (type == Type::RELEASE_MEMORY_LOCK)
+    {
+        if (specify_txn)
+            settings.ostr << " OF TXN " << txn_id;
+        else
+            print_database_table();
     }
 }
 
