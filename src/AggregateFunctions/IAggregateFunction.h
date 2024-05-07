@@ -182,6 +182,12 @@ public:
     /// Returns true if a function requires Arena to handle own states (see add(), merge(), deserialize()).
     virtual bool allocatesMemoryInArena() const = 0;
 
+    // return false if mid-state won't be very large or not supported yet in current agg func.
+    virtual bool mayAggStateVeryLarge() const { 
+        return false;
+    }
+
+
     /// To calculate step result and store it back to aggregation states
     virtual inline bool needCalculateStep(AggregateDataPtr) const {return true;}
 
