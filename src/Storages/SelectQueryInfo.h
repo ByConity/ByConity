@@ -259,9 +259,6 @@ struct SelectQueryInfo
     {
         return const_cast<ASTSelectQuery *>((const_cast<const SelectQueryInfo *>(this))->getSelectQuery());
     }
-
-    /// caller must hold the interpreter to prevent some resources in query_info from being released
-    static std::shared_ptr<InterpreterSelectQuery> buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info);
 };
 
 /// Collect all query 's predicates from query info, mainly used for collecting index.
