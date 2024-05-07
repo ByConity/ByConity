@@ -552,6 +552,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerDisks();
     registerFormats();
     registerServiceDiscovery();
+    initMetrics2();
 
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::getVersionRevision());
     CurrentMetrics::set(CurrentMetrics::VersionInteger, ClickHouseRevision::getVersionInteger());
