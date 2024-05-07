@@ -155,6 +155,10 @@ IMPLEMENT_SETTING_ENUM(ExpandMode, ErrorCodes::BAD_ARGUMENTS,
      {"UNION", ExpandMode::UNION},
      {"CTE", ExpandMode::CTE}})
 
+IMPLEMENT_SETTING_ENUM(SpillMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"manual", SpillMode::MANUAL},
+     {"auto", SpillMode::AUTO}})
+
 IMPLEMENT_SETTING_ENUM(StatisticsAccurateSampleNdvMode, ErrorCodes::BAD_ARGUMENTS,
     {{"NEVER", StatisticsAccurateSampleNdvMode::NEVER},
      {"AUTO", StatisticsAccurateSampleNdvMode::AUTO},

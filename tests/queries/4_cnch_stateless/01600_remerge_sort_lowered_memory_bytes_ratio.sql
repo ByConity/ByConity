@@ -5,6 +5,7 @@ set max_memory_usage='300Mi';
 set max_bytes_before_remerge_sort='10Mi';
 -- more blocks
 set max_block_size=40960;
+set external_sort_max_block_size=40960;
 
 -- remerge_sort_lowered_memory_bytes_ratio default 2, slightly not enough
 --     MergeSortingTransform: Re-merging intermediate ORDER BY data (20 blocks with 819200 rows) to save memory consumption

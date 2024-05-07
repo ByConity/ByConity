@@ -24,6 +24,7 @@
 #include <QueryPlan/SortingStep.h>
 #include <Protos/PreparedStatementHelper.h>
 #include <Common/JSONBuilder.h>
+#include "Core/SettingsEnums.h"
 #include "QueryPlan/PlanSerDerHelper.h"
 
 namespace DB
@@ -48,14 +49,17 @@ SortingStep::SortingStep(
     SortDescription result_description_,
     SizeOrVariable limit_,
     Stage stage_,
-    SortDescription prefix_description_)
+    SortDescription prefix_description_,
+    bool enable_adaptive_spill_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_, stage_ != Stage::PARTIAL))
     , result_description(result_description_)
     , limit(limit_)
     , stage(stage_)
     , prefix_description(prefix_description_)
+    , enable_adaptive_spill(enable_adaptive_spill_)
 {
     /// TODO: check input_stream is partially sorted by the same description.
+    /// TODO: support mannual/auto spill
     output_stream->sort_description = result_description;
     output_stream->sort_mode
         = (input_stream_.has_single_port || stage_ != Stage::PARTIAL) ? DataStream::SortMode::Stream : DataStream::SortMode::Port;
@@ -148,7 +152,8 @@ void SortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPi
                 local_settings.remerge_sort_lowered_memory_bytes_ratio,
                 local_settings.max_bytes_before_external_sort,
                 settings.context->getTemporaryVolume(),
-                local_settings.min_free_disk_space_for_temporary_data);
+                local_settings.min_free_disk_space_for_temporary_data,
+                local_settings.spill_mode == SpillMode::AUTO);
         });
     }
 
@@ -237,7 +242,7 @@ void SortingStep::toProto(Protos::SortingStep & proto, bool) const
 
 std::shared_ptr<IQueryPlanStep> SortingStep::copy(ContextPtr) const
 {
-    return std::make_shared<SortingStep>(input_streams[0], result_description, limit, stage, prefix_description);
+    return std::make_shared<SortingStep>(input_streams[0], result_description, limit, stage, prefix_description, enable_adaptive_spill);
 }
 
 void SortingStep::prepare(const PreparedStatementContext & prepared_context)

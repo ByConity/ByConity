@@ -280,6 +280,7 @@ message MergeSortingStep {
   required double remerge_lowered_memory_bytes_ratio = 6;
   required uint64 max_bytes_before_external_sort = 7;
   required uint64 min_free_disk_space = 8;
+  required bool enable_adaptive_spill = 9;
 }
 
 message MergingAggregatedStep {

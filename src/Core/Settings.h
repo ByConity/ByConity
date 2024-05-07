@@ -711,19 +711,11 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_rows_to_sort, 0, "", 0) \
     M(UInt64, max_bytes_to_sort, 0, "", 0) \
     M(OverflowMode, sort_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
-    M(UInt64, max_bytes_before_external_sort, 0, "", 0) \
-    M(UInt64, \
-      max_bytes_before_remerge_sort, \
-      1000000000, \
-      "In case of ORDER BY with LIMIT, when memory usage is higher than specified threshold, perform additional steps of merging blocks " \
-      "before final merge to keep just top LIMIT rows.", \
-      0) \
-    M(Float, \
-      remerge_sort_lowered_memory_bytes_ratio, \
-      2., \
-      "If memory usage after remerge does not reduced by this ratio, remerge will be disabled.", \
-      0) \
-\
+    M(UInt64, max_bytes_before_external_sort, 0, "Max bytes before external sort", 0) \
+    M(UInt64, external_sort_max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for external sort", 0) \
+    M(UInt64, max_bytes_before_remerge_sort, 1000000000, "In case of ORDER BY with LIMIT, when memory usage is higher than specified threshold, perform additional steps of merging blocks before final merge to keep just top LIMIT rows.", 0) \
+    M(Float, remerge_sort_lowered_memory_bytes_ratio, 2., "If memory usage after remerge does not reduced by this ratio, remerge will be disabled.", 0) \
+    \
     M(UInt64, max_result_rows, 0, "Limit on result size in rows. Also checked for intermediate data sent from remote servers.", 0) \
     M(UInt64, \
       max_result_bytes, \
@@ -1679,6 +1671,9 @@ enum PreloadLevelSettings : UInt64
     M(Float, magic_set_rows_factor, 0.6, "The minimum rows of source node in magic set, used for early pruning", 0) \
     M(Bool, enable_magic_set_cte, true, "Whether enable magic set rewriting build as cte", 0) \
     M(CTEMode, cte_mode, CTEMode::AUTO, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
+    M(SpillMode, spill_mode, SpillMode::MANUAL, "SpillMode: MANUAL(default)|AUTO", 0) \
+    M(UInt64, max_allowed_mem_size_in_join_spill, 512000000, "Max allowed memory-size(estimated) in join spill", 0) \
+    M(Float, spill_triger_threshold, 0.7, "Threshold to triger spill then memory usage reach a certain ratio of memory quota", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(Bool, enable_windows_parallel, false, "Whether run windows in parallel", 0) \

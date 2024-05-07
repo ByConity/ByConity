@@ -363,6 +363,7 @@ Aggregator::Params SymbolMapper::map(const Aggregator::Params & params)
         params.group_by_two_level_threshold,
         params.group_by_two_level_threshold_bytes,
         params.max_bytes_before_external_group_by,
+        params.enable_adaptive_spill,
         params.spill_buffer_bytes_before_external_group_by,
         params.empty_result_for_aggregation_by_empty_set,
         params.tmp_volume,
@@ -620,7 +621,8 @@ std::shared_ptr<MergeSortingStep> SymbolMapper::map(const MergeSortingStep & sor
         sorting.getRemergeLoweredMemoryBytesRatio(),
         sorting.getMaxBytesBeforeExternalSort(),
         sorting.getVolumPtr(),
-        sorting.getMinFreeDiskSpace());
+        sorting.getMinFreeDiskSpace(),
+        sorting.isAdaptiveSpillEnabled());
 }
 
 std::shared_ptr<MarkDistinctStep> SymbolMapper::map(const MarkDistinctStep & mark_distinct)

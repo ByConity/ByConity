@@ -24,7 +24,8 @@ public:
                           size_t max_bytes_before_remerge_,
                           double remerge_lowered_memory_bytes_ratio_,
                           size_t max_bytes_before_external_sort_, VolumePtr tmp_volume_,
-                          size_t min_free_disk_space_);
+                          size_t min_free_disk_space_,
+                          bool enable_adaptive_spill_);
 
     String getName() const override { return "MergeSortingTransform"; }
 
@@ -57,6 +58,7 @@ private:
     void remerge();
 
     ProcessorPtr external_merging_sorted;
+    bool enable_adaptive_spill;
 };
 
 }

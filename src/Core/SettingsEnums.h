@@ -260,6 +260,14 @@ enum class ExpandMode
 
 DECLARE_SETTING_ENUM(ExpandMode)
 
+enum class SpillMode
+{
+    MANUAL,
+    AUTO,
+};
+
+DECLARE_SETTING_ENUM(SpillMode)
+
 enum class StatisticsAccurateSampleNdvMode
 {
     NEVER,
