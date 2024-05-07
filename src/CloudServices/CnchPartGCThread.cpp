@@ -84,8 +84,9 @@ void CnchPartGCThread::stop()
     ICnchBGThread::stop();
 }
 
-void CnchPartGCThread::doPhaseOneGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions)
+bool CnchPartGCThread::doPhaseOneGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions)
 {
+    bool items_removed = false;
     Strings may_empty_partitions;
     auto storage_settings = storage.getSettings();
     bool in_wakeup = inWakeup() || static_cast<bool>(storage_settings->gc_ignore_running_transactions_for_test);
@@ -100,7 +101,7 @@ void CnchPartGCThread::doPhaseOneGC(const StoragePtr & istorage, StorageCnchMerg
         /// Do GC partition by partition to avoid holding too many ServerParts.
         for (const auto & p : partitions)
         {
-            size_t items_in_partition = doPhaseOnePartitionGC(istorage, storage, p, in_wakeup, gc_timestamp);
+            size_t items_in_partition = doPhaseOnePartitionGC(istorage, storage, p, in_wakeup, gc_timestamp, items_removed);
             if (items_in_partition == 0)
                 may_empty_partitions.emplace_back(p);
         }
@@ -112,6 +113,7 @@ void CnchPartGCThread::doPhaseOneGC(const StoragePtr & istorage, StorageCnchMerg
         clearEmptyPartitions(istorage, storage, may_empty_partitions);
 
     clearOldInsertionLabels(istorage, storage);
+    return items_removed;
 }
 
 void CnchPartGCThread::runImpl()
@@ -141,15 +143,19 @@ void CnchPartGCThread::runImpl()
         try
         {
             Strings partitions = inWakeup() ? catalog->getPartitionIDs(istorage, nullptr) : selectPartitions(istorage);
-            doPhaseOneGC(istorage, storage, partitions);
+            auto hit = doPhaseOneGC(istorage, storage, partitions);
+            phase_one_continuous_hits = hit ? phase_one_continuous_hits + 1 : 0;
         }
         catch (...)
         {
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
 
-        sleep_ms = storage_settings->cleanup_delay_period * 1000
-            + std::uniform_int_distribution<UInt64>(0, storage_settings->cleanup_delay_period_random_add * 1000)(rng);
+        if (phase_one_continuous_hits != 0)
+            sleep_ms = std::uniform_int_distribution<UInt64>(0, storage_settings->cleanup_delay_period_random_add * 1000)(rng);
+        else
+            sleep_ms = storage_settings->cleanup_delay_period * 1000
+                + std::uniform_int_distribution<UInt64>(0, storage_settings->cleanup_delay_period_random_add * 1000)(rng);
     }
     catch (...)
     {
@@ -366,7 +372,7 @@ void CnchPartGCThread::clearOldInsertionLabels(const StoragePtr &, StorageCnchMe
 
 void CnchPartGCThread::runDataRemoveTask()
 {
-    UInt64 sleep_ms = 30 * 1000;
+    size_t sleep_ms = 30 * 1000;
 
     try
     {
@@ -380,13 +386,17 @@ void CnchPartGCThread::runDataRemoveTask()
             auto storage_settings = storage.getSettings();
             if (removed_size)
             {
-                sleep_ms = std::uniform_int_distribution<UInt64>(0, storage_settings->cleanup_delay_period_random_add * 1000)(rng);
+                sleep_ms
+                    = std::uniform_int_distribution<UInt64>(0, storage_settings->cleanup_delay_period_random_add * 1000)(rng);
                 round_removing_no_data = 0;
+                phase_two_continuous_hits++;
             }
             else
             {
                 round_removing_no_data++;
-                sleep_ms = std::min(storage_settings->cleanup_delay_period * 1000 * std::pow(1.2, round_removing_no_data), 60 * 60 * 1000.0);
+                phase_two_continuous_hits = 0;
+                sleep_ms
+                    = std::min(storage_settings->cleanup_delay_period * 1000 * std::pow(1.4, round_removing_no_data), 5 * 60 * 1000.0);
                 LOG_TRACE(log, "[p2] Removed no data for {} round(s). Delay schedule for {} ms.", round_removing_no_data, sleep_ms);
             }
         }
@@ -455,7 +465,9 @@ size_t CnchPartGCThread::doPhaseTwoGC(const StoragePtr & istorage, StorageCnchMe
         return false;
     };
 
-    size_t pool_size = std::max(static_cast<size_t>(storage.getSettings()->gc_remove_part_thread_pool_size), static_cast<size_t>(1));
+    size_t pool_size = std::min(
+        static_cast<size_t>(2 * std::pow(2.0, phase_two_continuous_hits)),
+        static_cast<size_t>(storage.getSettings()->gc_remove_part_thread_pool_size));
     /// If batch_size <= 1, then round-robin may never move forward.
     size_t batch_size = std::max(static_cast<size_t>(storage.getSettings()->gc_remove_part_batch_size), static_cast<size_t>(2));
     LOG_TRACE(
@@ -632,7 +644,13 @@ std::pair<ServerDataPartsVector, ServerDataPartsVector> CnchPartGCThread::proces
     return {zombie_metadata_only_parts, zombie_parts};
 }
 
-size_t CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
+size_t CnchPartGCThread::doPhaseOnePartitionGC(
+    const StoragePtr & istorage,
+    StorageCnchMergeTree & storage,
+    const String & partition_id,
+    bool in_wakeup,
+    TxnTimestamp gc_timestamp,
+    bool & items_removed)
 {
     size_t items_count_in_partition = 0;
     auto storage_settings = storage.getSettings();
@@ -651,6 +669,7 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Stor
     if (!zombie_metadata_only_parts.empty())
     {
         LOG_TRACE(log, "[p1] Get {} zombie metadata-only parts to remove for {} ", zombie_metadata_only_parts.size(), partition_id);
+        items_removed = true;
         movePartsToTrash(
             istorage,
             zombie_metadata_only_parts,
@@ -663,6 +682,7 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Stor
     if (!zombie_parts.empty())
     {
         LOG_TRACE(log, "[p1] Get {} zombie parts to remove for {} ", zombie_parts.size(), partition_id);
+        items_removed = true;
         movePartsToTrash(
             istorage,
             zombie_parts,
@@ -724,8 +744,17 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Stor
             }
         }
 
-        movePartsToTrash(istorage, parts_to_gc, /*is_staged*/ false, "parts",
-            storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size);
+        if (!parts_to_gc.empty())
+        {
+            items_removed = true;
+            movePartsToTrash(
+                istorage,
+                parts_to_gc,
+                /*is_staged*/ false,
+                "parts",
+                storage_settings->gc_trash_part_thread_pool_size,
+                storage_settings->gc_trash_part_batch_size);
+        }
     }
 
     /// clear delete bitmaps
@@ -749,7 +778,15 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Stor
         std::erase_if(bitmaps_to_gc, [&](auto & bitmap) {
             return !bitmap->getEndTime() || static_cast<UInt64>(now) < TxnTimestamp(bitmap->getEndTime()).toSecond() + old_parts_lifetime;
         });
-        moveDeleteBitmapsToTrash(istorage, bitmaps_to_gc, storage_settings->gc_remove_bitmap_thread_pool_size, storage_settings->gc_remove_bitmap_batch_size);
+        if (!bitmaps_to_gc.empty())
+        {
+            items_removed = true;
+            moveDeleteBitmapsToTrash(
+                istorage,
+                bitmaps_to_gc,
+                storage_settings->gc_remove_bitmap_thread_pool_size,
+                storage_settings->gc_remove_bitmap_batch_size);
+        }
     }
 
     /// clear staged parts
@@ -777,10 +814,19 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Stor
         if (size_t limit = storage_settings->gc_trash_part_limit; limit && staged_parts_to_gc.size() > limit)
             staged_parts_to_gc.resize(limit);
 
-        /// due to its temporary nature, staged parts don't actually have a trash,
-        /// `Catalog::moveDataItemsToTrash` will removes its metadata directly.
-        movePartsToTrash(istorage, staged_parts_to_gc, /*is_staged*/ true, "staged parts",
-            storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size);
+        if (!staged_parts_to_gc.empty())
+        {
+            items_removed = true;
+            /// due to its temporary nature, staged parts don't actually have a trash,
+            /// `Catalog::moveDataItemsToTrash` will removes its metadata directly.
+            movePartsToTrash(
+                istorage,
+                staged_parts_to_gc,
+                /*is_staged*/ true,
+                "staged parts",
+                storage_settings->gc_trash_part_thread_pool_size,
+                storage_settings->gc_trash_part_batch_size);
+        }
     }
 
     return items_count_in_partition;
@@ -809,7 +855,7 @@ void CnchPartGCThread::clearEmptyPartitions(const StoragePtr & istorage, Storage
 
     if (partitions_with_gctime.empty())
         return;
-    
+
     UInt64 batch_size = storage.getSettings()->gc_partition_batch_size;
     // lifetime of deleting partitions should be more than ttl for trash items since it may be still referenced by a snapshot.
     UInt64 partition_life_time = std::max(storage.getSettings()->ttl_for_trash_items.totalSeconds() * 2, storage.getSettings()->gc_partition_lifetime_before_remove.totalSeconds());
