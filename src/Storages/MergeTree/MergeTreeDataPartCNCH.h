@@ -92,7 +92,7 @@ public:
 
     String getFullPath() const override;
 
-    String getFullRelativePathForDetachedPart(const String & prefix) const override;
+    String getRelativePathForDetachedPart(const String & prefix) const override;
 
     /// @param allow_null whether allow delete bitmap to be nullptr
     /// @attention make sure this method is thread-safe.
