@@ -2367,6 +2367,23 @@ namespace
                         if (column->size() > old_size)
                             column->assumeMutableRef().popBack(column->size() - old_size);
                     }
+
+                    /// Must reset `field_read` status here, or the chunk may be in-consistent for some edge cases. e.g:
+                    /// PB data with fields: A, B(optional), C
+                    /// 1. for #n row:
+                    ///     1.1: A & B are read normally and the `field_read` status is set as `true`;
+                    ///     1.2: C has a bad value which results in exception in `readRow` and process reaches here;
+                    /// 2. `IRowInputFormat` may take the exception as PARSE_ERROR and continue reading the next row;
+                    /// 3. for #n+1 row:
+                    ///     3.1: field B is missing, which is allowed as it is decleared as `optional`;
+                    ///     3.2: but it will not `insertDefaults` as its status has been set `true` before;
+                    /// Finally, the column `B` will have a row missing
+                    for (auto & info : field_infos)
+                    {
+                        if (info.field_read)
+                            info.field_read = false;
+                    }
+
                     throw;
                 }
             }
