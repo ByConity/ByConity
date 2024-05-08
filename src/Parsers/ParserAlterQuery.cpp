@@ -882,6 +882,14 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 if (!parseDatabaseAndTableName(pos, expected, command->from_database, command->from_table))
                     return false;
 
+                if (ParserKeyword("BUCKETS").ignore(pos, expected))
+                {   
+                    ParserList parser_bucket_num_list(std::make_unique<ParserLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+            
+                    if (!parser_bucket_num_list.parse(pos, command->buckets, expected))
+                        return false;
+                }
+
                 command->type = ASTAlterCommand::INGEST_PARTITION;
             }
             else if (s_attach_part.ignore(pos, expected))

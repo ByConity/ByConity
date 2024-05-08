@@ -105,6 +105,7 @@ struct PartitionCommand
     /// columns for INGEST PARTITION
     Names column_names;
     Names key_names;
+    std::vector<Int64> bucket_nums;
 
     /// expression for sample / split / resharding
     ASTPtr sharding_exp;
