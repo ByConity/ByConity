@@ -1037,6 +1037,8 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
                 throw Exception("TopicPartitionList is required for starting consume", ErrorCodes::BAD_ARGUMENTS);
             for (const auto & tpl : request->tpl())
                 command->tpl.emplace_back(tpl.topic(), tpl.partition(), tpl.offset());
+            for (const auto & tpl: request->sample_partitions())
+                command->sample_partitions.emplace(tpl.topic(), tpl.partition());
         }
 
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
