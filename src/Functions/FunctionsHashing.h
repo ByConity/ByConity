@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <type_traits>
 #include <city.h>
 #include <farmhash.h>
 #include <metrohash.h>
@@ -688,6 +689,30 @@ struct MurmurHash3Impl128WithSeed
     static constexpr bool use_int_hash_for_pods = false;
 };
 
+/// for datatype of Int8/Int16/Int32/Int64/Ascii String,
+/// the result is same with hash() in Spark-3.2
+/// and notice that unsigned numer is ok, but Spark only has signed integer
+struct SparkHashSimpleImpl
+{
+    static constexpr auto name = "sparkHashSimple";
+    using ReturnType = Int32;
+    static constexpr Int32 seed = 42;
+
+    static Int32 apply(const char * data, const size_t size)
+    {
+        char bytes[16];
+        MurmurHash3_x86_32_spark_compatible(data, size, seed, bytes);
+        return *reinterpret_cast<Int32 *>(bytes);
+    }
+
+    static Int32 combineHashes(Int32 h1, Int32 h2)
+    {
+        return IntHash32Impl::apply(h1) ^ h2;
+    }
+
+    static constexpr bool use_int_hash_for_pods = false;
+};
+
 #endif
 
 /// http://hg.openjdk.java.net/jdk8u/jdk8u/jdk/file/478a4add975b/src/share/classes/java/lang/String.java#l1452
@@ -1298,7 +1323,15 @@ private:
                             reverseMemcpy(&tmp_v, &v, sizeof(v));
                             v = tmp_v;
                         }
-                        h = applyWithSeed(key, reinterpret_cast<const char *>(&v), sizeof(v));
+                        if constexpr (std::is_same_v<Impl, SparkHashSimpleImpl> && sizeof(FromType) <= 4)
+                        {
+                            Int32 vv = static_cast<Int32>(v);
+                            h = applyWithSeed(key, reinterpret_cast<const char *>(&vv), sizeof(vv));
+                        }
+                        else
+                        {
+                            h = applyWithSeed(key, reinterpret_cast<const char *>(&v), sizeof(v));
+                        }
                     }
                 }
 
@@ -2343,6 +2376,7 @@ using FunctionMurmurHash3_128 = FunctionAnyHash<MurmurHash3Impl128>;
 using FunctionMurmurHash3_32WithSeed = FunctionAnyHash<MurmurHash3Impl32WithSeed, true>;
 using FunctionMurmurHash3_64WithSeed = FunctionAnyHash<MurmurHash3Impl64WithSeed, true>;
 using FunctionMurmurHash3_128WithSeed = FunctionAnyHash<MurmurHash3Impl128WithSeed, true>;
+using FunctionSparkHashSimple = FunctionAnyHash<SparkHashSimpleImpl>;
 
 using FunctionMurmurHash2_32V2 = FunctionAnyHash<MurmurHash2Impl32, false, false>;
 using FunctionMurmurHash2_64V2 = FunctionAnyHash<MurmurHash2Impl64, false, false>;
