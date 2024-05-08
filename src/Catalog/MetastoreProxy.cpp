@@ -1488,13 +1488,13 @@ void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & t
 void MetastoreProxy::clearUndoBuffer(const String & name_space, const UInt64 & txnID)
 {
     /// Clean both new and old keys
-    metastore_ptr->clean(undoBufferKey(name_space, txnID, true));
-    metastore_ptr->clean(undoBufferKey(name_space, txnID, false));
+    metastore_ptr->clean(undoBufferKeyPrefix(name_space, txnID, true));
+    metastore_ptr->clean(undoBufferKeyPrefix(name_space, txnID, false));
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getUndoBuffer(const String & name_space, UInt64 txnID, bool write_undo_buffer_new_key)
 {
-    return metastore_ptr->getByPrefix(undoBufferKey(name_space, txnID, write_undo_buffer_new_key));
+    return metastore_ptr->getByPrefix(undoBufferKeyPrefix(name_space, txnID, write_undo_buffer_new_key));
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getAllUndoBuffer(const String & name_space)

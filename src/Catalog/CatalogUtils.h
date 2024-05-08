@@ -131,5 +131,8 @@ struct BatchedCommitIndex
 
 size_t getMaxThreads();
 size_t getMinParts();
+
+bool parseTxnIdFromUndoBufferKey(const String & key, UInt64 & txn_id);
+
 }
 }
