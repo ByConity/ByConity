@@ -86,6 +86,21 @@ protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+class RemoveRedundantCastRewriteRule : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_CAST_REWRITE; }
+    String getName() const override { return "REMOVE_REDUNDANT_CAST_REWRITE"; }
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_remove_redundant_cast; }    
+    bool excludeIfTransformSuccess() const override { return true; }
+    bool excludeIfTransformFailure() const override { return true; }    
+
+    PatternPtr getPattern() const override;
+
+protected:
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
 class SimplifyJoinFilterRewriteRule : public Rule
 {
 public:

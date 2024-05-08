@@ -1,0 +1,49 @@
+Projection Est. ? rows
+│     Expressions: [id, server_time, string_params]
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: [id, server_time, string_params]
+      └─ Filter Est. ? rows
+         │     Condition: `__string_params__\'name_list\'` = \'a\'
+         └─ TableScan test.table_48029 Est. ? rows
+                  Where: `__string_params__\'name_list\'` = \'a\'
+                  Outputs: [id, server_time, string_params, __string_params__\'name_list\']
+Projection Est. ? rows
+│     Expressions: [id, server_time, string_params]
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: [id, server_time, string_params]
+      └─ Filter Est. ? rows
+         │     Condition: `__string_params__\'name_list\'` = \'a\'
+         └─ TableScan test.table_48029 Est. ? rows
+                  Where: `__string_params__\'name_list\'` = \'a\'
+                  Outputs: [id, server_time, string_params, __string_params__\'name_list\']
+Projection Est. ? rows
+│     Expressions: [id, server_time, string_params]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: server_time = 1
+      └─ TableScan test.table_48029 Est. ? rows
+               Where: server_time = 1
+               Outputs: [id, server_time, string_params]
+Projection Est. ? rows
+│     Expressions: CAST(mapElement(string_params, \'name_list\'), \'Nullable(String)\'):=`expr#CAST(mapElement(string_params, \'name_list\'), \'Nullable(String)\')`
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: expr#CAST(mapElement(string_params, \'name_list\'), \'Nullable(String)\'):=CAST(`__string_params__\'name_list\'`, \'Nullable(String)\')
+      └─ TableScan test.table_48029 Est. ? rows
+               Outputs: [__string_params__\'name_list\']
+Projection Est. ? rows
+│     Expressions: CAST(mapElement(string_params, \'name_list\'), \'LowCardinality(Nullable(String))\'):=`expr#CAST(mapElement(string_params, \'name_list\'), \'LowCardinality(Nullable(String))\')`
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: expr#CAST(mapElement(string_params, \'name_list\'), \'LowCardinality(Nullable(String))\'):=CAST(`__string_params__\'name_list\'`, \'LowCardinality(Nullable(String))\')
+      └─ TableScan test.table_48029 Est. ? rows
+               Outputs: [__string_params__\'name_list\']
+Projection Est. ? rows
+│     Expressions: CAST(server_time, \'UInt64\'):=`expr#CAST(server_time, \'UInt64\')`
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: expr#CAST(server_time, \'UInt64\'):=CAST(server_time, \'UInt64\')
+      └─ TableScan test.table_48029 Est. ? rows
+               Outputs: [server_time]

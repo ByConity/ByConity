@@ -19,6 +19,7 @@
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/SimplePlanRewriter.h>
+#include "Core/NamesAndTypes.h"
 
 namespace DB
 {
@@ -63,6 +64,14 @@ public:
     static ConstASTPtr rewrite(const ConstASTPtr & predicate, ContextMutablePtr & context);
     ConstASTPtr visitNode(const ConstASTPtr & node, Void & context) override;
     ConstASTPtr visitASTFunction(const ConstASTPtr & node, Void & context) override;
+};
+
+class RemoveRedundantCastRewriter : public ConstASTVisitor<ConstASTPtr, NameToType>
+{
+public:
+    static ConstASTPtr rewrite(const ConstASTPtr & predicate, NameToType & column_types);
+    ConstASTPtr visitNode(const ConstASTPtr & node, NameToType & column_types) override;
+    ConstASTPtr visitASTFunction(const ConstASTPtr & node, NameToType & column_types) override;
 };
 
 }
