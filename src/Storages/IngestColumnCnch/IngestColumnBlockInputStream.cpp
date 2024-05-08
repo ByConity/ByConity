@@ -55,6 +55,20 @@ MergeTreeDataPartsVector getAndLoadPartsInWorker(
 
 }
 
+void IngestColumnBlockInputStream::logIngestWithBucketStatus()
+{
+    LOG_TRACE(
+        log,
+        fmt::format(
+            "Ingest Column with bucket: {}, cur_bucket_index {} with source parts: {}/{}  target parts: {}/{}",
+            buckets_for_ingest[cur_bucket_index],
+            cur_bucket_index,
+            getCurrentVisibleSourceParts().size(),
+            visible_source_parts.size(),
+            getCurrentVisibleTargetParts().size(),
+            visible_target_parts.size()));
+}
+
 IngestColumnBlockInputStream::IngestColumnBlockInputStream(
     StoragePtr target_storage_,
     const PartitionCommand & command,
@@ -95,14 +109,68 @@ IngestColumnBlockInputStream::IngestColumnBlockInputStream(
     LOG_DEBUG(log, "number of visible source parts: {}", visible_source_parts.size());
     visible_target_parts = CnchPartsHelper::calcVisibleParts(target_parts, false, CnchPartsHelper::EnableLogging);
     LOG_DEBUG(log, "number of visible target parts: {}", visible_target_parts.size());
+
+    if (context->getSettingsRef().optimize_ingest_with_bucket
+        && checkIngestWithBucketTable(*source_cloud_merge_tree, *target_cloud_merge_tree, ordered_key_names, ingest_column_names))
+    {
+        if (command.bucket_nums.empty())
+            throw Exception("Receive empty bucket for ingest on worker", ErrorCodes::LOGICAL_ERROR);
+
+        LOG_TRACE(log, "try ingest with bucket table");
+        cur_bucket_index = 0;
+        buckets_for_ingest = command.bucket_nums;
+        visible_source_parts_with_bucket = clusterDataPartWithBucketTable(*source_cloud_merge_tree, visible_source_parts);
+        visible_target_parts_with_bucket = clusterDataPartWithBucketTable(*target_cloud_merge_tree, visible_target_parts);
+
+        if (visible_source_parts_with_bucket.empty() || visible_target_parts_with_bucket.empty())
+        {
+            cur_bucket_index = -1;
+            LOG_DEBUG(log, "try ingest with bucket table Failed, use ordinary ingest.");
+        }
+    }
 }
+
+
+IMergeTreeDataPartsVector & IngestColumnBlockInputStream::getCurrentVisibleSourceParts()
+{
+    if (cur_bucket_index == -1)
+    {
+        return visible_source_parts;
+    }
+    return visible_source_parts_with_bucket[buckets_for_ingest[cur_bucket_index]];
+}
+
+IMergeTreeDataPartsVector & IngestColumnBlockInputStream::getCurrentVisibleTargetParts()
+{
+    if (cur_bucket_index == -1)
+    {
+        return visible_target_parts;
+    }
+    return visible_target_parts_with_bucket[buckets_for_ingest[cur_bucket_index]];
+}
+
 
 Block IngestColumnBlockInputStream::readImpl()
 {
-    MemoryEfficientIngestColumn executor{*this};
-    executor.execute();
+    if (cur_bucket_index == -1)
+    {
+        MemoryEfficientIngestColumn executor{*this};
+        executor.execute();
+    }
+    else
+    {
+        for (; static_cast<size_t>(cur_bucket_index) < buckets_for_ingest.size(); cur_bucket_index++)
+        {
+            logIngestWithBucketStatus();
+
+            if (getCurrentVisibleSourceParts().empty())
+                continue;
+            
+            MemoryEfficientIngestColumn executor{*this};
+            executor.execute();
+        }
+    }
 
     return Block{};
 }
-
 }

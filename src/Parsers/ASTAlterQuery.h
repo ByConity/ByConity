@@ -246,6 +246,8 @@ public:
     ASTPtr columns;
     /// For Ingestion columns
     ASTPtr keys;
+    /// The INGEST PARTITION query here optionally stores the buckets that going to be ingested
+    ASTPtr buckets;
 
     /// For sample / split / resharding expression
     ASTPtr with_sharding_exp;
