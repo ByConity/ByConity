@@ -230,7 +230,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
             rpc_address,
             retry_id,
             cnt);
-        if (is_table_write && retry_id >= 1)
+        if (is_table_write)
         {
             // execute undos and clear part cache before execution
             auto catalog = query_context->getCnchCatalog();
