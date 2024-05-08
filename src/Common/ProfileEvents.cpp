@@ -1034,7 +1034,9 @@
     M(GetMvBaseTableVersionSuccess, "") \
     M(GetMvBaseTableVersionFailed, "") \
     M(UpdateMvMetaIDSuccess, "") \
-    M(UpdateMvMetaIDFailed, "")
+    M(UpdateMvMetaIDFailed, "") \
+\
+    M(AfterPrewhereNumRows, "Number of rows after filtered by prewhere")
 
 namespace ProfileEvents
 {

@@ -31,6 +31,11 @@
 #include <emmintrin.h>
 #endif
 
+namespace ProfileEvents
+{
+extern const Event AfterPrewhereNumRows;
+}
+
 namespace DB
 {
 namespace ErrorCodes
@@ -840,6 +845,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
     if (prewhere_info)
     {
         executePrewhereActionsAndFilterColumns(read_result);
+        ProfileEvents::increment(ProfileEvents::AfterPrewhereNumRows, read_result.num_rows);
     }
     else if (!prev_reader && read_result.getFilter())
     {
