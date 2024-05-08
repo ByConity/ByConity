@@ -33,6 +33,9 @@
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
 #include <DataTypes/ObjectUtils.h>
+#include <Parsers/ASTSerDerHelper.h>
+#include <IO/ReadBufferFromString.h>
+#include <Optimizer/SelectQueryInfoHelper.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchRefreshMaterializedViewThread.h>
@@ -683,10 +686,11 @@ void CnchServerServiceImpl::fetchPartitions(
             Names column_names;
             for (const auto & name : request->column_name_filter())
                 column_names.push_back(name);
-            SelectQueryInfo query_info;
             auto session_context = Context::createCopy(gc);
             session_context->setCurrentDatabase(request->database());
-            auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(session_context, storage, request->predicate(), query_info);
+            ReadBufferFromString rb(request->predicate());
+            ASTPtr query_ptr = deserializeAST(rb);
+            SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
             auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);

@@ -22,7 +22,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <WorkerTasks/ManipulationList.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -57,7 +56,6 @@ NamesAndTypesList StorageSystemManipulations::getNamesAndTypes()
 
 void StorageSystemManipulations::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     auto manipulation_list = context->getManipulationList().get();
 
     String tenant_id = context->getTenantId();

@@ -18,7 +18,7 @@ namespace
 {
 
 // Get current database name. Parameter decides if the return db name contains tenantID.
-// currentDatabase(0)/currentDatabase() returns `dbname`. currentDatabase(1) returns `tenantid.dbname`
+// currentDatabase(0)/currentDatabase() returns `tenantid.dbname`. currentDatabase(1) returns `dbname`
 class FunctionCurrentDatabase : public IFunction
 {
     const String db_name;

@@ -15,7 +15,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Interpreters/Context.h>
-#include <Storages/System/TenantController.h>
 
 
 namespace DB
@@ -243,7 +242,6 @@ Pipe StorageSystemPartsBase::read(
     const size_t /*max_block_size*/,
     const unsigned /*num_streams*/)
 {
-    DISABLE_VISIT_FOR_TENANTS();
     bool has_state_column = hasStateColumn(column_names, storage_snapshot);
 
     StoragesInfoStream stream(query_info, context);

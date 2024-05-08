@@ -861,6 +861,7 @@ TEST_F(ProtobufTest, MergeSortingStep)
         auto max_bytes_before_external_sort = eng() % 1000;
         auto tmp_volume = context ? context->getTemporaryVolume() : nullptr;
         auto min_free_disk_space = eng() % 1000;
+        auto enable_auto_spill = eng() % 2;
         auto s = std::make_shared<MergeSortingStep>(
             base_input_stream,
             description,
@@ -870,7 +871,8 @@ TEST_F(ProtobufTest, MergeSortingStep)
             remerge_lowered_memory_bytes_ratio,
             max_bytes_before_external_sort,
             tmp_volume,
-            min_free_disk_space);
+            min_free_disk_space,
+            enable_auto_spill);
         s->setStepDescription(step_description);
         return s;
     }();

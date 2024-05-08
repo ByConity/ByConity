@@ -2,7 +2,7 @@
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/System/StorageSystemMerges.h>
 #include <Access/ContextAccess.h>
-#include <Storages/System/TenantController.h>
+
 
 namespace DB
 {
@@ -39,7 +39,6 @@ NamesAndTypesList StorageSystemMerges::getNamesAndTypes()
 
 void StorageSystemMerges::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     const auto access = context->getAccess();
     const bool check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES);
 

@@ -75,11 +75,6 @@ PropertySets DeterminerVisitor::visitLocalExchangeStep(const LocalExchangeStep &
     return visitStep(step, ctx);
 }
 
-PropertySets DeterminerVisitor::visitFinalSampleStep(const FinalSampleStep &, DeterminerContext &)
-{
-    throw Exception("Not impl property determiner", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 PropertySets DeterminerVisitor::visitOffsetStep(const OffsetStep &, DeterminerContext &)
 {
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
@@ -88,6 +83,11 @@ PropertySets DeterminerVisitor::visitOffsetStep(const OffsetStep &, DeterminerCo
 PropertySets DeterminerVisitor::visitFinishSortingStep(const FinishSortingStep &, DeterminerContext &)
 {
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
+}
+
+PropertySets DeterminerVisitor::visitFinalSampleStep(const FinalSampleStep & step, DeterminerContext & ctx)
+{
+    return visitStep(step, ctx);
 }
 
 PropertySets DeterminerVisitor::visitProjectionStep(const ProjectionStep & step, DeterminerContext & ctx)

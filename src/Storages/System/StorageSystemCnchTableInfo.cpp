@@ -29,7 +29,6 @@
 #include <TSO/TSOClient.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Protos/DataModelHelpers.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -142,7 +141,6 @@ Pipe StorageSystemCnchTableInfo::read(
     const size_t max_block_size,
     const unsigned /*num_streams*/)
 {
-    DISABLE_VISIT_FOR_TENANTS();
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_table_info only support cnch_server", ErrorCodes::LOGICAL_ERROR);

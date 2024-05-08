@@ -49,19 +49,19 @@ SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) 
 INSERT INTO bucket_with_split_number VALUES ('vivek', 10);
 SELECT * FROM bucket_with_split_number ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) and table = 'bucket_with_split_number' FORMAT CSV;
-SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase() and name = 'bucket_with_split_number' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase(1) and name = 'bucket_with_split_number' FORMAT CSV;
 
 -- Ensure bucket number is assigned to a part in bucket table with shard ratio and range
 INSERT INTO bucket_with_split_number_n_range VALUES ('vivek', 20);
 SELECT * FROM bucket_with_split_number_n_range ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) and table = 'bucket_with_split_number_n_range' FORMAT CSV;
-SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase() and name = 'bucket_with_split_number_n_range' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase(1) and name = 'bucket_with_split_number_n_range' FORMAT CSV;
 
 -- Ensure bucket number is assigned using DTSPartition with shard ratio and range
 INSERT INTO dts_bucket_with_split_number_n_range VALUES ('vivek', 30);
 SELECT * FROM dts_bucket_with_split_number_n_range ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) and table = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
-SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase() and name = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase(1) and name = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
 
 -- Ensure optimize_skip_unused_workers 
 INSERT INTO TABLE test_optimize select toUInt32(number/10), toUInt32(number/10), concat('record', toString(number)) from system.numbers limit 30;

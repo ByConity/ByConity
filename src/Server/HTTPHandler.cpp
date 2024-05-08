@@ -373,18 +373,7 @@ bool HTTPHandler::authenticateUser(
         if (!basic_credentials)
             throw Exception("Invalid authentication: unexpected 'Basic' HTTP Authorization scheme", ErrorCodes::AUTHENTICATION_FAILED);
 
-        if (auto pos = user.find('`'); pos != String::npos)
-        {
-            auto tenant_id_from_user = String(user.c_str(), pos);
-            context->setSetting("tenant_id", tenant_id_from_user);
-            context->setTenantId(tenant_id_from_user);
-            if (user.substr(pos + 1) == "default")
-                user = user.substr(pos + 1);
-            else
-                user[pos] = '.';
-        }
-
-        basic_credentials->setUserName(user); // add tenant_id to user here
+        basic_credentials->setUserName(context->formatUserName(user)); // add tenant_id to user here
         basic_credentials->setPassword(password);
     }
     else

@@ -4,7 +4,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Access/ContextAccess.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -33,7 +32,6 @@ NamesAndTypesList StorageSystemReplicatedFetches::getNamesAndTypes()
 
 void StorageSystemReplicatedFetches::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     const auto access = context->getAccess();
     const bool check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES);
 

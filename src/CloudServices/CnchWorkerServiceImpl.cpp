@@ -311,6 +311,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         auto task = data->manipulate(params, rpc_context);
         auto event = std::make_shared<Poco::Event>();
 
+        // TODO(shiyuze): limit running tasks by soft limit (using canEnqueueBackgroundTask)
         ThreadFromGlobalPool([task = std::move(task), all_parts = std::move(all_parts), event]() mutable {
             try
             {
@@ -421,7 +422,7 @@ void CnchWorkerServiceImpl::getManipulationTasksStatus(
                 task_info->set_rows_read(e.rows_read.load(std::memory_order_relaxed));
                 task_info->set_rows_written(e.rows_written.load(std::memory_order_relaxed));
                 task_info->set_columns_written(e.columns_written.load(std::memory_order_relaxed));
-                task_info->set_memory_usage(e.memory_tracker.get());
+                task_info->set_memory_usage(e.getMemoryTracker().get());
                 task_info->set_thread_id(e.thread_id);
             }
         });

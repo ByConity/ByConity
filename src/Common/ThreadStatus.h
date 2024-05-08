@@ -70,6 +70,8 @@ using InternalTextLogsQueueWeakPtr = std::weak_ptr<InternalTextLogsQueue>;
   * Create via CurrentThread::initializeQuery (for queries) or directly (for various background tasks).
   * Use via CurrentThread::getGroup.
   */
+class ThreadGroupStatus;
+using ThreadGroupStatusPtr = std::shared_ptr<ThreadGroupStatus>;
 class ThreadGroupStatus
 {
 public:
@@ -97,6 +99,8 @@ public:
 
     std::vector<UInt64> thread_ids;
 
+    static ThreadGroupStatusPtr createForBackgroundProcess(ContextPtr storage_context);
+    
     /// The first thread created this thread group
     UInt64 master_thread_id = 0;
 
@@ -106,7 +110,20 @@ public:
     UInt64 normalized_query_hash = 0;
 };
 
-using ThreadGroupStatusPtr = std::shared_ptr<ThreadGroupStatus>;
+
+/**
+ * Since merge is executed with multiple threads, this class
+ * switches the parent MemoryTracker as part of the thread group to account all the memory used.
+ */
+class ThreadGroupSwitcher : private boost::noncopyable
+{
+public:
+    explicit ThreadGroupSwitcher(ThreadGroupStatusPtr thread_group);
+    ~ThreadGroupSwitcher();
+
+private:
+    ThreadGroupStatusPtr prev_thread_group;
+};
 
 
 extern thread_local ThreadStatus * current_thread;

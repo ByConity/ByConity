@@ -162,7 +162,8 @@ private:
     void planLimitBy(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planTotalsAndHaving(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planLimitAndOffset(PlanBuilder & builder, ASTSelectQuery & select_query);
-    // void planSampling(PlanBuilder & builder, ASTSelectQuery & select_query);
+    void planSampling(PlanBuilder & builder, ASTSelectQuery & select_query);
+
     RelationPlan planFinalSelect(PlanBuilder & builder, ASTSelectQuery & select_query);
 
     // the routine to plan expressions in most scenarios, which handle non-deterministic function & subqueries within expressions
@@ -404,7 +405,7 @@ RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void 
 
     planLimitAndOffset(builder, select_query);
 
-    // planSampling(builder, select_query);
+    planSampling(builder, select_query);
 
     return planFinalSelect(builder, select_query);
 }
@@ -1834,24 +1835,24 @@ void QueryPlannerVisitor::planLimitAndOffset(PlanBuilder & builder, ASTSelectQue
     }
 }
 
-/*
-PlanNodePtr QueryPlannerVisitor::planSampling(PlanNodePtr plan, ASTSelectQuery & select_query)
+void QueryPlannerVisitor::planSampling(PlanBuilder & builder, ASTSelectQuery & select_query)
 {
-    if (select_query.sample_size() && context->getSettingsRef().enable_final_sample)
+    if (select_query.sampleSize() && context->getSettingsRef().enable_final_sample)
     {
-        ASTSampleRatio * sample = select_query.sample_size()->as<ASTSampleRatio>();
+        ASTSampleRatio * sample = select_query.sampleSize()->as<ASTSampleRatio>();
         ASTSampleRatio::BigNum numerator = sample->ratio.numerator;
         ASTSampleRatio::BigNum denominator = sample->ratio.denominator;
         if (numerator <= 1 || denominator > 1)
-            return plan;
-
-        auto step = std::make_shared<FinalSamplingStep>(plan->getCurrentDataStream(), numerator);
-        plan = plan->addStep(context->nextNodeId(), std::move(step));
-        PRINT_PLAN(plan, plan_sampling);
+        {
+            return;
+        }
+        else
+        {
+            auto sampling = std::make_unique<FinalSampleStep>(builder.getCurrentDataStream(), numerator, context->getSettingsRef().max_block_size);
+            builder.addStep(std::move(sampling));
+        }
     }
-    return plan;
 }
-*/
 
 RelationPlan QueryPlannerVisitor::planFinalSelect(PlanBuilder & builder, ASTSelectQuery & select_query)
 {

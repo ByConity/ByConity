@@ -23,6 +23,7 @@
 #include <Optimizer/CardinalityEstimate/JoinEstimator.h>
 #include <Optimizer/CardinalityEstimate/LimitEstimator.h>
 #include <Optimizer/CardinalityEstimate/ProjectionEstimator.h>
+#include <Optimizer/CardinalityEstimate/SampleEstimator.h>
 #include <Optimizer/CardinalityEstimate/SortingEstimator.h>
 #include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 #include <Optimizer/CardinalityEstimate/UnionEstimator.h>
@@ -89,11 +90,6 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitStep(const IQueryPlanStep &, Card
     return context.children_stats[0];
 }
 
-PlanNodeStatisticsPtr CardinalityVisitor::visitFinalSampleStep(const FinalSampleStep &, CardinalityContext &)
-{
-    throw Exception("Not impl card estimate", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 PlanNodeStatisticsPtr CardinalityVisitor::visitOffsetStep(const OffsetStep & step, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
@@ -140,6 +136,12 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitOutfileFinishStep(const OutfileFi
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
     return child_stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitFinalSampleStep(const FinalSampleStep & step, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return SampleEstimator::estimate(child_stats, step);
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitLocalExchangeStep(const LocalExchangeStep &, CardinalityContext & context)

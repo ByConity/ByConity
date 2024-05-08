@@ -92,7 +92,11 @@
 #include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/AutoStatsTaskLog.h>
-#include "common/sleep.h"
+#include <common/sleep.h>
+#include <Core/UUID.h>
+#include <Interpreters/StorageID.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Transaction/LockManager.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -556,6 +560,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::DROP_VIEW_META:
             dropMvMeta(query);
+            break;
+        case Type::RELEASE_MEMORY_LOCK:
+            releaseMemoryLock(query, table_id, system_context);
             break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
@@ -1761,6 +1768,24 @@ void InterpreterSystemQuery::lockMemoryLock(const ASTSystemQuery & query, const 
     cnch_lock->lock();
     LOG_DEBUG(log, "Acquired lock in {} ms", lock_watch.elapsedMilliseconds());
     sleepForSeconds(query.seconds);
+}
+
+void InterpreterSystemQuery::releaseMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context)
+{
+    if (query.specify_txn)
+    {
+        /// SYSTEM RELEASE MEMORY LOCK OF TXN xxx;
+        LockManager::instance().releaseLocksForTxn(query.txn_id, *local_context);
+    }
+    else
+    {
+        /// SYSTEM RELEASE MEMORY LOCK db.table;
+        auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
+        if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+            throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+
+        LockManager::instance().releaseLocksForTable(storage->getCnchStorageID(), *local_context);
+    }
 }
 
 }

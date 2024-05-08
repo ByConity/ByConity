@@ -831,7 +831,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         // we use a new merge_entry for projection merge
         // Here, projection_manipulation_entry use the parent_parent's params to initilize itself, which is not accurate.
         // THe most accurate way is to construct a new params by the projection_parts.
-        ManipulationListElement projection_manipulation_entry(params, false);
+        ManipulationListElement projection_manipulation_entry(params, false, context);
 
         auto merged_projection_part = mergePartsToTemporaryPartImpl(
             std::move(projection_parts), projection.metadata, projection_merging_params, &projection_manipulation_entry, new_data_part.get());

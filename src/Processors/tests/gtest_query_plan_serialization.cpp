@@ -121,6 +121,7 @@ Aggregator::Params createAggregatorParams()
         2,
         3,
         4,
+        false,
         4,
         true,
         nullptr,
@@ -221,7 +222,7 @@ QueryPlanStepPtr createMergeSortingStep()
 {
     DataStream stream = createDataStream();
     SortDescription desc = createSortDescription();
-    return std::make_unique<MergeSortingStep>(stream, desc, 0, 0, 0, 0, 0, nullptr, 0);
+    return std::make_unique<MergeSortingStep>(stream, desc, 0, 0, 0, 0, 0, nullptr, 0, false);
 }
 
 QueryPlanStepPtr createLimitStep()

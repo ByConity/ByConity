@@ -527,7 +527,7 @@ enum StealingCacheMode : UInt64
     M(UInt64, gc_trash_part_batch_size, 5000, "Batch size to remove stale parts to trash in background tasks", 0) \
     M(UInt64, gc_trash_part_limit, 0, "Maximum number of stale parts to process per GC round, zero means no limit", 0) \
     M(UInt64, gc_trash_part_thread_pool_size, 4, "Turn up the thread pool size to speed up trashing of parts", 0) \
-    M(UInt64, gc_remove_part_thread_pool_size, 2, "Turn up the thread pool size to speed up trash cleaning of parts", 0) \
+    M(UInt64, gc_remove_part_thread_pool_size, 20, "Turn up the thread pool size to speed up trash cleaning of parts", 0) \
     M(UInt64, gc_remove_part_batch_size, 200, "Batch size to remove trash parts from storage in background tasks", 0) \
 \
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \

@@ -34,7 +34,7 @@ public:
         (PARTIAL)
     );
 
-    explicit SortingStep(const DataStream & input_stream, SortDescription description_, SizeOrVariable limit_, Stage stage_, SortDescription prefix_description_ = {});
+    explicit SortingStep(const DataStream & input_stream, SortDescription description_, SizeOrVariable limit_, Stage stage_, SortDescription prefix_description_ = {}, bool enable_adaptive_spill_ = false);
 
     String getName() const override { return "Sorting"; }
 
@@ -78,6 +78,7 @@ private:
     SizeOrVariable limit;
     Stage stage;
     SortDescription prefix_description;
+    bool enable_adaptive_spill = false;
 };
 
 }

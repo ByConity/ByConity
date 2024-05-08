@@ -326,8 +326,8 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
     }
 
     Aggregator::Params params(header_before_aggregation, keys, aggregates,
-                              overflow_row,
-                              settings.max_threads);
+                              overflow_row, 
+                              settings.max_threads); // TODO support agg spill param
 
     auto merge_threads = interpreter.getMaxStreams();
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads

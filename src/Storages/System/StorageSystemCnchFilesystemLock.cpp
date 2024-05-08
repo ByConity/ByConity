@@ -4,7 +4,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Catalog/Catalog.h>
 #include <Interpreters/Context.h>
-#include <Storages/System/TenantController.h>
 
 
 namespace DB
@@ -22,7 +21,6 @@ NamesAndTypesList StorageSystemCnchFilesystemLock::getNamesAndTypes()
 
 void StorageSystemCnchFilesystemLock::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    DISABLE_VISIT_FOR_TENANTS();
     /// get all filesys lock record from kv
     auto lock_records = context->getCnchCatalog()->getAllFilesysLock();
     std::for_each(lock_records.begin(), lock_records.end(), [&res_columns](auto & record)

@@ -457,7 +457,6 @@ struct ContextSharedPart
 
     bool shutdown_called = false;
     bool restrict_tenanted_users_to_whitelist_settings = false;
-    bool restrict_tenanted_users_to_system_tables = true;
 
     Stopwatch uptime_watch;
 
@@ -1573,7 +1572,8 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     /// so Context::getLock() must be unlocked while we're doing this.
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
     auto new_access = getAccessControlManager().getContextAccess(
-        new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info);
+        new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
+        has_tenant_id_in_username);
 
     auto lock = getLock();
     user_id = new_user_id;
@@ -1598,9 +1598,14 @@ String Context::formatUserName(const String & name)
         this->setTenantId(tenant_id);
         auto sub_user = user.substr(pos + 1);
         if (sub_user != "default")
+        {
+            has_tenant_id_in_username = true;
             user[pos] = '.';            ///{tenant_id}`{user_name}=>{tenant_id}.{user_name}
+        }
         else
+        {
             user = std::move(sub_user); ///{tenant_id}`default=>default
+        }
     }
     return user;
 }
@@ -1612,7 +1617,7 @@ void Context::setUser(const String & name, const String & password, const Poco::
 
 void Context::setUserWithoutCheckingPassword(const String & name, const Poco::Net::SocketAddress & address)
 {
-    setUser(AlwaysAllowCredentials(name), address);
+    setUser(AlwaysAllowCredentials(formatUserName(name)), address);
 }
 
 std::shared_ptr<const User> Context::getUser() const
@@ -1679,7 +1684,8 @@ void Context::calculateAccessRights()
     auto lock = getLock();
     if (user_id)
         access = getAccessControlManager().getContextAccess(
-            *user_id, current_roles, use_default_roles, settings, current_database, client_info);
+            *user_id, current_roles, use_default_roles, settings, current_database, client_info,
+            has_tenant_id_in_username);
 }
 
 
@@ -2179,7 +2185,7 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
         {
             if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
                 throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
-                    " for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
         }
     }
@@ -4349,17 +4355,6 @@ void Context::setIsRestrictSettingsToWhitelist(bool is_restrict)
 {
     /// Lock isn't required, you should set it at start
     shared->restrict_tenanted_users_to_whitelist_settings = is_restrict;
-}
-
-bool Context::getIsRestrictSystemTables() const
-{
-    return shared->restrict_tenanted_users_to_system_tables;
-}
-
-void Context::setIsRestrictSystemTables(bool is_restrict)
-{
-    /// Lock isn't required, you should set it at start
-    shared->restrict_tenanted_users_to_system_tables = is_restrict;
 }
 
 void Context::addRestrictSettingsToWhitelist(const std::vector<String>& setting_names) const

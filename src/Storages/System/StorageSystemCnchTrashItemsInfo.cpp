@@ -11,7 +11,6 @@
 #include <boost/algorithm/string/join.hpp>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -42,7 +41,6 @@ Pipe StorageSystemCnchTrashItemsInfo::read(
     const size_t /*max_block_size*/,
     const unsigned /*max_block_size*/)
 {
-    DISABLE_VISIT_FOR_TENANTS();
     if (context->getServerType() != ServerType::cnch_server)
         throw Exception("Table system.cnch_trash_items_info only support cnch_server", ErrorCodes::NOT_IMPLEMENTED);
 

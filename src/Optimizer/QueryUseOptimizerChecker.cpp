@@ -227,9 +227,6 @@ bool QueryUseOptimizerVisitor::visitNode(ASTPtr & node, QueryUseOptimizerContext
 
 static bool checkDatabaseAndTable(const ASTTableExpression & table_expression, const ContextMutablePtr & context, const NameSet & ctes)
 {
-    if (table_expression.sample_size || table_expression.sample_offset)
-        return false;
-
     if (table_expression.database_and_table_name)
     {
         auto db_and_table = DatabaseAndTableWithAlias(table_expression.database_and_table_name);

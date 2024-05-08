@@ -711,19 +711,11 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_rows_to_sort, 0, "", 0) \
     M(UInt64, max_bytes_to_sort, 0, "", 0) \
     M(OverflowMode, sort_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
-    M(UInt64, max_bytes_before_external_sort, 0, "", 0) \
-    M(UInt64, \
-      max_bytes_before_remerge_sort, \
-      1000000000, \
-      "In case of ORDER BY with LIMIT, when memory usage is higher than specified threshold, perform additional steps of merging blocks " \
-      "before final merge to keep just top LIMIT rows.", \
-      0) \
-    M(Float, \
-      remerge_sort_lowered_memory_bytes_ratio, \
-      2., \
-      "If memory usage after remerge does not reduced by this ratio, remerge will be disabled.", \
-      0) \
-\
+    M(UInt64, max_bytes_before_external_sort, 0, "Max bytes before external sort", 0) \
+    M(UInt64, external_sort_max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for external sort", 0) \
+    M(UInt64, max_bytes_before_remerge_sort, 1000000000, "In case of ORDER BY with LIMIT, when memory usage is higher than specified threshold, perform additional steps of merging blocks before final merge to keep just top LIMIT rows.", 0) \
+    M(Float, remerge_sort_lowered_memory_bytes_ratio, 2., "If memory usage after remerge does not reduced by this ratio, remerge will be disabled.", 0) \
+    \
     M(UInt64, max_result_rows, 0, "Limit on result size in rows. Also checked for intermediate data sent from remote servers.", 0) \
     M(UInt64, \
       max_result_bytes, \
@@ -1353,6 +1345,7 @@ enum PreloadLevelSettings : UInt64
     M(Milliseconds, brpc_data_parts_timeout_ms, 30000, "Timeout for transmitting data parts in brpc", 0) \
     M(UInt64, scan_all_table_threshold, 20, "The upper limit to avoid scan all tables in some system tables, like tables and cnch_tables.", 0) \
     M(Seconds, cnch_txn_lock_expire_duration_seconds, 30, "Transaction lock expire duration.", 0) \
+    M(Seconds, cnch_lock_manager_txn_checker_schedule_seconds, 30, "LockManager txn checker schedule seconds.", 0) \
     M(UInt64, parts_preallocate_pool_size, 16, "Number of threads for part preallocate", 0) \
     /** Settings for hive */ \
     M(Bool, use_hive_metastore_filter, true, "", 0) \
@@ -1370,6 +1363,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_unique_table_attach_without_dedup, false, "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", 0) \
     M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
     M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND. THROW mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
+    M(Seconds, unique_sleep_seconds_after_acquire_lock, 0, "Only for test", 0) \
     \
     /** Settings for Map */ \
     M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
@@ -1679,6 +1673,9 @@ enum PreloadLevelSettings : UInt64
     M(Float, magic_set_rows_factor, 0.6, "The minimum rows of source node in magic set, used for early pruning", 0) \
     M(Bool, enable_magic_set_cte, true, "Whether enable magic set rewriting build as cte", 0) \
     M(CTEMode, cte_mode, CTEMode::AUTO, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
+    M(SpillMode, spill_mode, SpillMode::MANUAL, "SpillMode: MANUAL(default)|AUTO", 0) \
+    M(UInt64, max_allowed_mem_size_in_join_spill, 512000000, "Max allowed memory-size(estimated) in join spill", 0) \
+    M(Float, spill_triger_threshold, 0.7, "Threshold to triger spill then memory usage reach a certain ratio of memory quota", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(Bool, enable_windows_parallel, false, "Whether run windows in parallel", 0) \

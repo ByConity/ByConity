@@ -18,6 +18,7 @@
 #include <Processors/Transforms/MergeSortingTransform.h>
 #include <IO/Operators.h>
 #include <Common/JSONBuilder.h>
+#include "Core/SettingsEnums.h"
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -48,7 +49,8 @@ MergeSortingStep::MergeSortingStep(
     double remerge_lowered_memory_bytes_ratio_,
     size_t max_bytes_before_external_sort_,
     VolumePtr tmp_volume_,
-    size_t min_free_disk_space_)
+    size_t min_free_disk_space_,
+    bool enable_adaptive_spill_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_))
     , description(description_)
     , max_merged_block_size(max_merged_block_size_)
@@ -57,6 +59,7 @@ MergeSortingStep::MergeSortingStep(
     , remerge_lowered_memory_bytes_ratio(remerge_lowered_memory_bytes_ratio_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_), tmp_volume(tmp_volume_)
     , min_free_disk_space(min_free_disk_space_)
+    , enable_adaptive_spill(enable_adaptive_spill_)
 {
     /// TODO: check input_stream is partially sorted by the same description.
     output_stream->sort_description = description;
@@ -81,7 +84,7 @@ void MergeSortingStep::updateLimit(size_t limit_)
 
 void MergeSortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
-    max_merged_block_size = settings.context->getSettingsRef().max_block_size;
+    max_merged_block_size = settings.context->getSettingsRef().external_sort_max_block_size;
     max_bytes_before_remerge = settings.context->getSettingsRef().max_bytes_before_remerge_sort;
     remerge_lowered_memory_bytes_ratio = settings.context->getSettingsRef().remerge_sort_lowered_memory_bytes_ratio;
     max_bytes_before_external_sort = settings.context->getSettingsRef().max_bytes_before_external_sort;
@@ -92,6 +95,7 @@ void MergeSortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQu
     {
         if (stream_type == QueryPipeline::StreamType::Totals)
             return nullptr;
+        enable_adaptive_spill = settings.context->getSettingsRef().spill_mode == SpillMode::AUTO;
 
         return std::make_shared<MergeSortingTransform>(
                 header, description, max_merged_block_size, limit,
@@ -99,7 +103,8 @@ void MergeSortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQu
                 remerge_lowered_memory_bytes_ratio,
                 max_bytes_before_external_sort,
                 tmp_volume,
-                min_free_disk_space);
+                min_free_disk_space,
+                enable_adaptive_spill);
     });
 }
 
@@ -133,7 +138,8 @@ std::shared_ptr<IQueryPlanStep> MergeSortingStep::copy(ContextPtr) const
         remerge_lowered_memory_bytes_ratio,
         max_bytes_before_external_sort,
         tmp_volume,
-        max_bytes_before_external_sort);
+        min_free_disk_space,
+        enable_adaptive_spill);
 }
 
 
@@ -149,6 +155,7 @@ void MergeSortingStep::toProto(Protos::MergeSortingStep & proto, bool) const
     proto.set_max_bytes_before_external_sort(max_bytes_before_external_sort);
 
     proto.set_min_free_disk_space(min_free_disk_space);
+    proto.set_enable_adaptive_spill(enable_adaptive_spill);
 }
 
 std::shared_ptr<MergeSortingStep> MergeSortingStep::fromProto(const Protos::MergeSortingStep & proto, ContextPtr context)
@@ -166,6 +173,7 @@ std::shared_ptr<MergeSortingStep> MergeSortingStep::fromProto(const Protos::Merg
     auto max_bytes_before_remerge = proto.max_bytes_before_remerge();
     auto remerge_lowered_memory_bytes_ratio = proto.remerge_lowered_memory_bytes_ratio();
     auto max_bytes_before_external_sort = proto.max_bytes_before_external_sort();
+    auto enable_adaptive_spill = proto.enable_adaptive_spill();
     VolumePtr tmp_volume = context ? context->getTemporaryVolume() : nullptr;
     auto min_free_disk_space = proto.min_free_disk_space();
     auto step = std::make_shared<MergeSortingStep>(
@@ -177,7 +185,8 @@ std::shared_ptr<MergeSortingStep> MergeSortingStep::fromProto(const Protos::Merg
         remerge_lowered_memory_bytes_ratio,
         max_bytes_before_external_sort,
         tmp_volume,
-        min_free_disk_space);
+        min_free_disk_space,
+        enable_adaptive_spill);
     step->setStepDescription(step_description);
     return step;
 }

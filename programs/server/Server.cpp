@@ -187,6 +187,7 @@ namespace CurrentMetrics
     extern const Metric Revision;
     extern const Metric VersionInteger;
     extern const Metric MemoryTracking;
+    extern const Metric MergesMutationsMemoryTracking;
     extern const Metric MaxDDLEntryID;
 }
 
@@ -577,7 +578,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->setIsRestrictSettingsToWhitelist(config().getBool("restrict_tenanted_users_to_whitelist_settings", false));
-    global_context->setIsRestrictSystemTables(config().getBool("restrict_tenanted_users_to_system_tables", true));
     if (global_context->getIsRestrictSettingsToWhitelist())
     {
         auto setting_names = getMultipleValuesFromConfig(config(), "tenant_whitelist_settings", "name");
@@ -1011,6 +1011,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
             total_memory_tracker.setHardLimit(max_server_memory_usage);
             total_memory_tracker.setDescription("(total)");
             total_memory_tracker.setMetric(CurrentMetrics::MemoryTracking);
+
+            size_t merges_mutations_memory_usage_soft_limit = config->getUInt64("merges_mutations_memory_usage_soft_limit", 0);
+            double merges_mutations_memory_usage_to_ram_ratio = config->getDouble("merges_mutations_memory_usage_to_ram_ratio", 0.9);
+            size_t default_merges_mutations_server_memory_usage = static_cast<size_t>(memory_amount * merges_mutations_memory_usage_to_ram_ratio);
+            if (merges_mutations_memory_usage_soft_limit == 0 || merges_mutations_memory_usage_soft_limit > default_merges_mutations_server_memory_usage)
+            {
+                merges_mutations_memory_usage_soft_limit = default_merges_mutations_server_memory_usage;
+                LOG_WARNING(log, "Setting merges_mutations_memory_usage_soft_limit was set to {}"
+                    " ({} available * {:.2f} merges_mutations_memory_usage_to_ram_ratio)",
+                    formatReadableSizeWithBinarySuffix(merges_mutations_memory_usage_soft_limit),
+                    formatReadableSizeWithBinarySuffix(memory_amount),
+                    merges_mutations_memory_usage_to_ram_ratio);
+            }
+
+            LOG_INFO(log, "Merges and mutations memory limit is set to {}",
+                formatReadableSizeWithBinarySuffix(merges_mutations_memory_usage_soft_limit));
+            background_memory_tracker.setSoftLimit(merges_mutations_memory_usage_soft_limit);
+            background_memory_tracker.setDescription("(background)");
+            background_memory_tracker.setMetric(CurrentMetrics::MergesMutationsMemoryTracking);
 
             // FIXME logging-related things need synchronization -- see the 'Logger * log' saved
             // in a lot of places. For now, disable updating log configuration without server restart.

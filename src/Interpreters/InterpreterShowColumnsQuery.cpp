@@ -8,7 +8,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
-
+#include <Parsers/formatTenantDatabaseName.h>
 
 namespace DB
 {
@@ -26,10 +26,10 @@ String InterpreterShowColumnsQuery::getRewrittenQuery()
     const auto & query = query_ptr->as<ASTShowColumnsQuery &>();
     const DialectType dialect_type = getContext()->getSettingsRef().dialect_type;
     ClientInfo::Interface client_interface = getContext()->getClientInfo().interface;
-    const bool use_mysql_types = 
+    const bool use_mysql_types =
         (client_interface == ClientInfo::Interface::MYSQL) // connection made through MySQL wire protocol
         || (dialect_type == DialectType::MYSQL) // for ease of unit-testing
-        ; 
+        ;
 
     const auto & settings = getContext()->getSettingsRef();
     const bool remap_string_as_text = settings.mysql_map_string_to_text_in_show_columns;
@@ -142,7 +142,7 @@ FROM (SELECT name AS name_,
       FROM system.columns)
 WHERE
     database_ = '{}'
-    AND table_ = '{}' )", database, table);
+    AND table_ = '{}' )", getOriginalDatabaseName(database), table);
 
     if (!query.like.empty())
     {

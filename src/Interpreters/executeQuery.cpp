@@ -24,6 +24,7 @@
 #include <Interpreters/executeQueryHelper.h>
 #include <Common/HistogramMetrics.h>
 #include <Common/Config/VWCustomizedSettings.h>
+#include <Common/SettingsChanges.h>
 #include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
 #include <Common/PODArray.h>
@@ -923,6 +924,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 LOG_DEBUG(
                     &Poco::Logger::get("executeQuery"), "Will reroute query {} to {}", query, host_ports.toDebugString());
                 context->initializeExternalTablesIfSet();
+                context->setSetting("enable_auto_query_forwarding", Field(0));
                 executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
                 LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query forwarded to remote server done");
                 return std::make_tuple(ast, std::move(res));
@@ -944,6 +946,32 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
+        if (context->getSettingsRef().spill_mode == SpillMode::AUTO) {
+            SettingsChanges changes;
+            changes.insertSetting("join_algorithm", Field("grace_hash"));
+            changes.insertSetting("grace_hash_join_read_result_block_size", Field(4096));
+            changes.insertSetting("external_sort_max_block_size", Field(4096));
+            changes.insertSetting("grace_hash_join_initial_buckets", Field(1));
+            changes.insertSetting("enable_optimize_aggregate_memory_efficient", Field(true));
+            changes.insertSetting("spill_buffer_bytes_before_external_group_by", Field(104857600));
+            changes.insertSetting("max_bytes_before_external_group_by", Field(10485760));
+            changes.insertSetting("max_bytes_before_external_sort", Field(104857600));
+            changes.insertSetting("exchange_queue_bytes", Field(1073741824)); // !!!! TODO @luocongkai support it
+            for(auto &change: changes) {
+                LOG_WARNING(&Poco::Logger::get("executeQuery"), "SpillMode is AUTO, this setting will be overwriten, {}: {}->{}", change.name, context->getSettings().get(change.name).toString(), change.value.toString());
+                context->setSetting(change.name, change.value);
+            }
+
+            //// recommanded misc settings
+            // context->setSetting("distributed_max_parallel_size_denominator", Field(1));
+            // context->setSetting("use_uncompressed_cache", Field(0));
+            // context->setSetting("exchange_timeout_ms", Field(36000000));
+            // context->setSetting("send_timeout", Field(36000));
+            // context->setSetting("max_execution_time", Field(36000));
+            // context->setSetting("timeout_before_checking_execution_speed", Field(0));
+            //// other recommanded misc settings: max threads slim down
+            // context->setSetting("max_threads", Field(std::min(context->getSettingsRef().max_threads.value, static_cast<UInt64>(16))));
+        }
 
         if (const auto * query_with_table_output = dynamic_cast<const ASTQueryWithTableAndOutput *>(ast.get()))
         {

@@ -33,7 +33,6 @@
 #include <Storages/VirtualColumnUtils.h>
 #include <Databases/IDatabase.h>
 #include <Processors/Sources/SourceFromInputStream.h>
-#include <Storages/System/TenantController.h>
 
 namespace DB
 {
@@ -80,7 +79,6 @@ Pipe StorageSystemKafkaTables::read(
     const size_t /*max_block_size*/,
     const unsigned /*num_streams*/)
 {
-    DISABLE_VISIT_FOR_TENANTS();
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.kafka_tables is only supported on cnch_server side", ErrorCodes::NOT_IMPLEMENTED);

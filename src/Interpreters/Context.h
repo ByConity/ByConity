@@ -1368,9 +1368,6 @@ public:
     void setIsRestrictSettingsToWhitelist(bool is_restrict);
     void addRestrictSettingsToWhitelist(const std::vector<String>& name) const;
 
-    bool getIsRestrictSystemTables() const;
-    void setIsRestrictSystemTables(bool is_restrict);
-
     /// Sets default_profile and system_profile, must be called once during the initialization
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
@@ -1494,7 +1491,6 @@ public:
         else
             return settings.tenant_id.toString();
     }
-
 
     void setTenantId(const String & id)
     {
@@ -1675,6 +1671,7 @@ public:
     PreparedStatementManager * getPreparedStatementManager();
 
 private:
+    bool has_tenant_id_in_username = false;
     String tenant_id;
     String current_catalog;
 

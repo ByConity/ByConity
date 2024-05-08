@@ -433,6 +433,7 @@ public:
         auto group_by_two_level_threshold = eng() % 1000;
         auto group_by_two_level_threshold_bytes = eng() % 1000;
         auto max_bytes_before_external_group_by = eng() % 1000;
+        auto enable_adaptive_spill = eng() % 2;
         auto spill_buffer_bytes_before_external_group_by = eng() % 1000;
         auto empty_result_for_aggregation_by_empty_set = eng() % 2 == 1;
         auto tmp_volume = context ? context->getTemporaryVolume() : nullptr;
@@ -451,6 +452,7 @@ public:
             group_by_two_level_threshold,
             group_by_two_level_threshold_bytes,
             max_bytes_before_external_group_by,
+            enable_adaptive_spill,
             spill_buffer_bytes_before_external_group_by,
             empty_result_for_aggregation_by_empty_set,
             tmp_volume,

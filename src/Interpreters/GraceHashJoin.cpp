@@ -332,9 +332,11 @@ GraceHashJoin::GraceHashJoin(
     const Block & right_sample_block_,
     TemporaryDataOnDiskScopePtr tmp_data_,
     int left_side_parallel_,
+    bool enable_adaptive_spill,
     bool any_take_last_row_)
     : log{&Poco::Logger::get("GraceHashJoin")}
     , context{context_}
+    , adaptive_spill_mode(enable_adaptive_spill)
     , table_join{std::move(table_join_)}
     , left_sample_block{left_sample_block_}
     , right_sample_block{right_sample_block_}
@@ -347,6 +349,7 @@ GraceHashJoin::GraceHashJoin(
     , tmp_data(std::make_unique<TemporaryDataOnDisk>(tmp_data_, CurrentMetrics::TemporaryFilesForJoin))
     , hash_join(makeInMemoryJoin())
     , hash_join_sample_block(hash_join->savedBlockSample())
+    , max_allowed_mem_size_in_spill(context->getSettingsRef().max_allowed_mem_size_in_join_spill)
 {
     if (left_side_parallel_ == 0)
         left_side_parallel = context->getSettingsRef().max_threads;
@@ -401,8 +404,28 @@ bool GraceHashJoin::hasMemoryOverflow(size_t total_rows, size_t total_bytes) con
     /// One row can't be split, avoid loop
     if (total_rows < 2)
         return false;
+    if (getNumBuckets() >=1024) {
+        return false;
+    }
 
-    bool has_overflow = !table_join->sizeLimits().softCheck(total_rows, total_bytes);
+    bool has_overflow;
+    if (adaptive_spill_mode) {
+        if (last_mem_size_triger_spill && total_bytes >= last_mem_size_triger_spill) {
+            has_overflow = false;
+        } else {
+            double spill_triger_threshold = context->getSettingsRef().spill_triger_threshold.value;
+            bool adaptive_spill_trigered = total_memory_tracker.getHardLimit() * spill_triger_threshold < total_memory_tracker.get();
+            size_t bucket_index = current_bucket->idx;
+            if (bucket_index) {
+                has_overflow = adaptive_spill_trigered && total_bytes > max_allowed_mem_size_in_spill*2;
+            } else {
+                has_overflow = adaptive_spill_trigered && total_bytes > max_allowed_mem_size_in_spill;
+            }
+        }
+    } else {
+        has_overflow = !table_join->sizeLimits().softCheck(total_rows, total_bytes);
+    }
+
 
     if (has_overflow)
         LOG_DEBUG(log, "Grace hash join memory overflow, size exceeded {} / {} bytes, {} / {} rows",
@@ -432,14 +455,14 @@ bool GraceHashJoin::hasMemoryOverflow(const InMemoryJoinPtr & hash_join_) const
     return hasMemoryOverflow(total_rows, total_bytes);
 }
 
-GraceHashJoin::Buckets GraceHashJoin::rehashBuckets()
+GraceHashJoin::Buckets GraceHashJoin::rehashBuckets(size_t grow_multiplier)
 {
     std::unique_lock lock(rehash_mutex);
 
     if (!isPowerOf2(buckets.size()))
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Number of buckets should be power of 2 but it's {}", buckets.size());
 
-    const size_t to_size = buckets.size() * 2;
+    const size_t to_size = buckets.size() * grow_multiplier;
     size_t current_size = buckets.size();
 
     if (to_size > max_num_buckets)
@@ -471,6 +494,7 @@ void GraceHashJoin::addBuckets(const size_t bucket_count)
     Buckets tmp_buckets;
     tmp_buckets.reserve(bucket_count);
     for (size_t i = 0; i < bucket_count; ++i)
+    {
         try
         {
             std::shared_ptr<TemporaryFileStreams> left_files = std::make_shared<TemporaryFileStreams>();
@@ -494,6 +518,7 @@ void GraceHashJoin::addBuckets(const size_t bucket_count)
                 getCurrentExceptionMessage(false));
             throw;
         }
+    }
 
     buckets.reserve(buckets.size() + bucket_count);
     for (auto & bucket : tmp_buckets)
@@ -535,7 +560,7 @@ void GraceHashJoin::joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_p
     /// number of buckets doesn't change after right table is split to buckets, i.e. read-only access to buckets
     /// so, no need to copy buckets here
     size_t num_buckets = getNumBuckets();
-       if (num_buckets != 1) {
+    if (num_buckets != 1) {
         Blocks blocks = JoinCommon::scatterBlockByHash(left_key_names, block, num_buckets);
 
         block = std::move(blocks[current_bucket->idx]);
@@ -763,7 +788,7 @@ void GraceHashJoin::addJoinedBlockImpl(Block block, bool is_delay_read)
     Buckets buckets_snapshot = getCurrentBuckets();
     size_t bucket_index = current_bucket->idx;
     Block current_block;
-    if(!is_delay_read || rehash)
+    if(buckets_snapshot.size() != 1 && (!is_delay_read || rehash))
     {
         Blocks blocks = JoinCommon::scatterBlockByHash(right_key_names, block, buckets_snapshot.size());
         flushBlocksToBuckets<JoinTableSide::Right>(blocks, buckets_snapshot, bucket_index);
@@ -802,21 +827,32 @@ void GraceHashJoin::addJoinedBlockImpl(Block block, bool is_delay_read)
         if (!hasMemoryOverflow(hash_join))
             return;
 
-        current_block = {};
+        last_mem_size_triger_spill = hash_join->getTotalByteCount();
 
+        current_block = {};
+        size_t grow_multiplier = 2;
+        if (adaptive_spill_mode) {
+            while(hash_join->getTotalByteCount()*2 / (grow_multiplier * current_buckets.size()) > max_allowed_mem_size_in_spill) {
+                grow_multiplier *= 2;
+            }
+        }
+
+        LOG_DEBUG(log, "ready to rehashing, mem_bytes:{} grow_multiplier:{} current_bkt_idx:{} current_buckets_num:{}", hash_join->getTotalByteCount(), grow_multiplier, bucket_index, current_buckets.size());
         // Must use the latest buckets snapshot in case that it has been rehashed by other threads.
-        buckets_snapshot = rehashBuckets();
+        buckets_snapshot = rehashBuckets(grow_multiplier);
         auto right_blocks = hash_join->releaseJoinedBlocks(/* restructure */ false);
         hash_join = nullptr;
 
         {
             Blocks current_blocks;
             current_blocks.reserve(right_blocks.size());
-            for (const auto & right_block : right_blocks)
+            while(!right_blocks.empty())
             {
+                const auto & right_block = right_blocks.front();
                 Blocks blocks = JoinCommon::scatterBlockByHash(right_key_names, right_block, buckets_snapshot.size());
                 flushBlocksToBuckets<JoinTableSide::Right>(blocks, buckets_snapshot, bucket_index);
                 current_blocks.emplace_back(std::move(blocks[bucket_index]));
+                right_blocks.pop_front();
             }
 
             if (current_blocks.size() == 1)

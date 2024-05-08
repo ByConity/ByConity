@@ -32,14 +32,13 @@ std::optional<String> DB::filterAndStripDatabaseNameIfTenanted(const String & te
         stripped_database_name = database_name;
     }
     } while (false);
-    
+
     return stripped_database_name;
 }
 
 std::vector<std::tuple<String, String, String>> DB::filterTables(const ContextPtr & context, const SelectQueryInfo & query_info)
 {
     auto catalog = context->getCnchCatalog();
-    const String & tenant_id = context->getTenantId();
     auto table_models = catalog->getAllTables();
 
     Block block_to_filter;
@@ -49,8 +48,11 @@ std::vector<std::tuple<String, String, String>> DB::filterTables(const ContextPt
     MutableColumnPtr table_name_column = ColumnString::create();
     MutableColumnPtr table_uuid_column = ColumnUUID::create();
 
+    const String & tenant_id = context->getTenantId();
+
     for (const auto & table_model : table_models)
     {
+
         if (Status::isDeleted(table_model.status()))
             continue;
         const String & database_name = table_model.database();

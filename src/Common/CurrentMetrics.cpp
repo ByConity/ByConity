@@ -143,6 +143,7 @@
     M(RWLockWaitingReaders, "Number of threads waiting for read on a table RWLock.") \
     M(RWLockWaitingWriters, "Number of threads waiting for write on a table RWLock.") \
     M(RWLockActiveReaders, "Number of threads holding read lock in a table RWLock.") \
+    M(MergesMutationsMemoryTracking, "Total amount of memory (bytes) allocated by background tasks (merges and mutations).") \
     M(RWLockActiveWriters, "Number of threads holding write lock in a table RWLock.") \
     M(GlobalThread, "Number of threads in global thread pool.") \
     M(GlobalThreadActive, "Number of threads in global thread pool running a task.") \
