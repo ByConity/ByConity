@@ -73,6 +73,7 @@
 #include <Common/time.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
+#include <common/scope_guard_safe.h>
 #include <common/types.h>
 
 namespace ProfileEvents
@@ -294,6 +295,10 @@ StepAggregatedOperatorProfiles collectStepRuntimeProfiles(int segment_id, const 
 
 void PlanSegmentExecutor::doExecute()
 {
+    SCOPE_EXIT_SAFE({
+        if (context->getSettingsRef().log_queries && process_plan_segment_entry)
+            collectSegmentQueryRuntimeMetric(&process_plan_segment_entry->get());
+    });
     try
     {
         auto segment_group = context->getPlanSegmentProcessList().insertGroup(*plan_segment, context);
@@ -426,9 +431,6 @@ void PlanSegmentExecutor::doExecute()
             }
         }
     }
-
-    if (context->getSettingsRef().log_queries)
-        collectSegmentQueryRuntimeMetric(query_status);
 
     if (context->getSettingsRef().log_segment_profiles)
     {
