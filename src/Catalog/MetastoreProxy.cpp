@@ -2187,8 +2187,12 @@ void MetastoreProxy::removeColumnStatistics(const String & name_space, const Str
             batch_write.AddDelete(iter->key());
         }
     }
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const String & uuid)
@@ -2211,8 +2215,11 @@ void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const 
             batch_write.AddDelete(iter->key());
         }
     }
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+    if (!batch_write.isEmpty()) 
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindingItemPtr& data)
