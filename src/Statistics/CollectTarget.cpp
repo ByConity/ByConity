@@ -33,7 +33,7 @@ void CollectTarget::init(const ContextPtr & context, const std::vector<String> &
         columns_desc = catalog->getAllCollectableColumns(table_identifier);
     }
     else
-        columns_desc = catalog->filterCollectableColumns(table_identifier, columns_name);
+        columns_desc = catalog->filterCollectableColumns(table_identifier, columns_name, true);
 }
 
 }

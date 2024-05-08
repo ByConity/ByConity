@@ -5,6 +5,9 @@ create table t(id UInt64, params Map(String, UInt64)) ENGINE=CnchMergeTree order
 create stats t;
 show stats t;
 
+create stats t(id2); -- { serverError 36 }
+create stats t(params); -- { serverError 36 }
+
 create stats t(`__params__'a'`, `__params__'b'`, `__params__'c'`, `__params__'d'`);
 show stats t;
 

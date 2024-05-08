@@ -48,7 +48,10 @@ ColumnDescVector CatalogAdaptor::filterCollectableColumns(
     {
         auto col_opt = snapshot->getColumns().tryGetColumn(GetColumnsOptions::All, col_name);
         if (!col_opt)
+        {
+            unsupported_columns.emplace_back(col_name);
             continue;
+        }
         const auto & col = col_opt.value();
         if (Statistics::isCollectableType(col.type))
         {
