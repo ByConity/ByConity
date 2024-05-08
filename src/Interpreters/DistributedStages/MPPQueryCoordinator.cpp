@@ -320,7 +320,7 @@ void MPPQueryCoordinator::tryUpdateRootErrorCause(const QueryError & query_error
     if (query_status.success)
         return;
 
-    if (isAmbiguosError(query_error.code) && query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
+    if (isAmbiguosError(query_error.code))
     {
         if (query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
             query_status.additional_errors.emplace_back(std::move(query_error));
