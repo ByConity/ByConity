@@ -16,6 +16,7 @@
 #include <CloudServices/RpcClientBase.h>
 
 #include <errno.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <brpc/errno.pb.h>
@@ -34,8 +35,21 @@ namespace ErrorCodes
 
 static auto getDefaultChannelOptions()
 {
-    brpc::ChannelOptions options;
-    options.timeout_ms = 3000;
+    // brpc::ChannelOptions options;
+    // options.timeout_ms = 3000;
+    // return options;
+
+    // TODO: getting config dynamically implementation below has flaws.
+    // This is a IDEMPOTENT method!!! It always returns the options when it's first called.
+    // Besides, it can be called from RpcClientBase::initChannel.
+    // Mutex is needed for getting options dynamically in RpcChannelPool's member.
+    //
+    static std::once_flag init_flag;
+    static brpc::ChannelOptions options;
+    std::call_once(init_flag, []() {
+        options
+            = RpcChannelPool::getInstance().getDefaultChannelPoolOptions().at(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY).channel_options;
+    });
     return options;
 }
 
