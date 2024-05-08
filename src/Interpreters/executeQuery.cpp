@@ -683,7 +683,7 @@ static void doSomeReplacementForSettings(ContextMutablePtr context)
     if (settings.max_rows_to_read_local)
         context->setSetting("max_rows_to_read_leaf", Field(settings.max_rows_to_read_local));
     if (settings.max_bytes_to_read_local)
-        context->setSetting("max_bytes_to_read_leaf", Field(settings.max_bytes_to_read_local));
+        context->setSetting("max_bytes_to_read_leaf", Field(std::max(settings.max_bytes_to_read_local, settings.max_bytes_to_read_leaf)));
     if (settings.read_overflow_mode_local != OverflowMode::THROW)
         context->setSetting("read_overflow_mode_leaf", Field(settings.read_overflow_mode_local));
 }
