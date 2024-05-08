@@ -1253,6 +1253,10 @@ String StepPrinter::printProjectionStep(const ProjectionStep & step, bool includ
         }
     }
 
+    if (step.isIndexProject())
+        details << "|"
+                << "index";
+
     if (step.isFinalProject())
         details << "|"
                 << "final";
