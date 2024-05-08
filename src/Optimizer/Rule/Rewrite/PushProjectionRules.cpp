@@ -143,13 +143,16 @@ TransformResult PushProjectionThroughProjection::transformImpl(PlanNodePtr node,
         }
     }
 
+    NameToNameMap transform_map;
     for (const auto & item : require_symbols)
     {
-        if (!bottom_projection->getAssignments().at(item)->as<ASTIdentifier>())
-        {
+        const auto * id = bottom_projection->getAssignments().at(item)->as<ASTIdentifier>();
+        if (!id)
             return {};
-        }
+        if (id->name() != item)
+            transform_map.emplace(item, id->name());
     }
+    SymbolMapper mapper = SymbolMapper::simpleMapper(transform_map);
 
     auto bottom_projection_node = [&] {
         auto new_ass = projection->getAssignments();
@@ -170,7 +173,7 @@ TransformResult PushProjectionThroughProjection::transformImpl(PlanNodePtr node,
                 new_ass.emplace_back(item.name, std::make_shared<ASTIdentifier>(item.name));
             }
         }
-        auto step = std::make_shared<ProjectionStep>(bottom_projection->getInputStreams()[0], new_ass, name_to_type);
+        auto step = std::make_shared<ProjectionStep>(bottom_projection->getInputStreams()[0], mapper.map(new_ass), mapper.map(name_to_type), projection->isFinalProject(), projection->isIndexProject());
         return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), step, node->getChildren()[0]->getChildren());
     }();
 
