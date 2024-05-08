@@ -1784,7 +1784,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
         ranges,
         reader_settings,
         context->getMarkCache().get(),
-        context->getInternalProgressCallback());
+        context->getProgressCallback());
 
     MarkRanges res;
 

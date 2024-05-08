@@ -1067,12 +1067,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             query_type = process_list_elem.getType();
             is_unlimited_query = process_list_elem.isUnlimitedQuery();
             context->setProcessListEntry(process_list_entry);
-            context->setInternalProgressCallback([query_state_callback = context->getProgressCallback(), process_list_elem_ptr = context->getProcessListElement()](const Progress & value) {
-                if (query_state_callback)
-                    query_state_callback(value);
-                if (process_list_elem_ptr)
-                    process_list_elem_ptr->updateProgressIn(value);
-            });
         }
 
         /// Calculate the time duration of building query pipeline, start right after creating processing list to make it consistent with the calcuation of query latency.
@@ -1287,7 +1281,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             /// Limits apply only to the final result.
             pipeline.setProgressCallback(context->getProgressCallback());
             pipeline.setProcessListElement(context->getProcessListElement());
-            pipeline.setInternalProgressCallback(context->getInternalProgressCallback());
             if (stage == QueryProcessingStage::Complete && !pipeline.isCompleted())
             {
                 pipeline.resize(1);
@@ -2093,7 +2086,7 @@ void executeQuery(
     WriteBuffer & ostr,
     bool allow_into_outfile,
     ContextMutablePtr context,
-    std::function<void(const String &, const String &, const String &, const String &)> set_result_details,
+    std::function<void(const String &, const String &, const String &, const String &, MPPQueryCoordinatorPtr)> set_result_details,
     const std::optional<FormatSettings> & output_format_settings,
     bool internal)
 {
@@ -2217,16 +2210,16 @@ void executeQuery(
             auto previous_progress_callback = context->getProgressCallback();
 
             /// NOTE Progress callback takes shared ownership of 'out'.
-            streams.in->setProgressCallback(
-                [out, cb = std::move(previous_progress_callback)](const Progress & progress) {
+            auto progress_callback = [out, cb = std::move(previous_progress_callback)](const Progress & progress) {
                 if (cb)
                     cb(progress);
                 out->onProgress(progress);
-            });
+            };
+            streams.in->setProgressCallback(std::move(progress_callback));
 
             if (set_result_details)
                 set_result_details(
-                    context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::instance().getTimeZone());
+                    context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::instance().getTimeZone(), streams.coordinator);
 
             copyData(
                 *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
@@ -2269,20 +2262,21 @@ void executeQuery(
                         format_name, ostr, pipeline.getHeader(), context, false, {}, output_format_settings);
                 }
                 out->setAutoFlush();
-
+                out->setMPPQueryCoordinator(streams.coordinator);
                 /// Save previous progress callback if any. TODO Do it more conveniently.
                 auto previous_progress_callback = context->getProgressCallback();
 
                 /// NOTE Progress callback takes shared ownership of 'out'.
-                pipeline.setProgressCallback([out, previous_progress_callback](const Progress & progress) {
+                auto progress_callback = [out, previous_progress_callback](const Progress & progress) {
                     if (previous_progress_callback)
                         previous_progress_callback(progress);
                     out->onProgress(progress);
-                });
+                };
+                pipeline.setProgressCallback(std::move(progress_callback));
 
                 if (set_result_details)
                     set_result_details(
-                        context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::instance().getTimeZone());
+                        context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::instance().getTimeZone(), streams.coordinator);
 
                 pipeline.setOutputFormat(std::move(out));
             }
@@ -2396,15 +2390,13 @@ void executeHttpQueryInAsyncMode(
     ReadBuffer * istr1,
     bool has_query_tail,
     const std::optional<FormatSettings> & f,
-    std::function<void(const String &, const String &, const String &, const String &)> set_result_details)
+    std::function<void(const String &, const String &, const String &, const String &, MPPQueryCoordinatorPtr)> set_result_details)
 {
     const auto * ast_query_with_output1 = dynamic_cast<const ASTQueryWithOutput *>(ast1.get());
     String format_name1 = ast_query_with_output1 && (ast_query_with_output1->format != nullptr)
         ? getIdentifierName(ast_query_with_output1->format)
         : c->getDefaultFormat();
-    if (set_result_details)
-        set_result_details(
-            c->getClientInfo().current_query_id, "text/plain; charset=UTF-8", format_name1, DateLUT::instance().getTimeZone());
+    auto query_id_tmp = c->getClientInfo().current_query_id;
 
     c->getAsyncQueryManager()->insertAndRun(
         query1,
@@ -2422,7 +2414,7 @@ void executeHttpQueryInAsyncMode(
             out->write(res);
             out->flush();
         },
-        [f, has_query_tail](String & query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
+        [f, has_query_tail, set_result_details_cp=std::move(set_result_details), query_id=query_id_tmp, format_name1_cp=format_name1](String & query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
             ASTPtr ast_output;
             BlockIO streams;
             try
@@ -2430,6 +2422,8 @@ void executeHttpQueryInAsyncMode(
                 std::tie(ast_output, streams) = executeQueryImpl(
                     query.data(), query.data() + query.size(), ast, context, false, QueryProcessingStage::Complete, has_query_tail, istr);
                 auto & pipeline = streams.pipeline;
+                if (set_result_details_cp)
+                    set_result_details_cp(query_id, "text/plain; charset=UTF-8", format_name1_cp, DateLUT::instance().getTimeZone(), streams.coordinator);
                 if (streams.in)
                 {
                     const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());

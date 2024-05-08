@@ -591,7 +591,7 @@ void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
         /* index_executor */ {},
         /*avg_value_size_hints*/ {},
         /*profile_callback*/ {},
-        /*internal_progress_callback*/ {}
+        /*progress_callback*/ {}
     );
 
     size_t deleted_count = 0;

@@ -20,7 +20,7 @@
  */
 
 #include <iomanip>
-#include "common/types.h"
+#include <common/types.h>
 #include <common/scope_guard.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/LayeredConfiguration.h>
@@ -837,6 +837,11 @@ void TCPHandler::processOrdinaryQuery()
         sendData({});
     }
 
+    auto coordinator = state.io.coordinator;
+    if (coordinator && query_context->getSettings().enable_wait_for_post_processing)
+    {
+        coordinator->waitUntilAllPostProcessingRPCReceived();
+    }
     sendProgress();
 }
 
@@ -914,6 +919,11 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
         sendData({});
     }
 
+    auto coordinator = state.io.coordinator;
+    if (coordinator && query_context->getSettings().enable_wait_for_post_processing)
+    {
+        coordinator->waitUntilAllPostProcessingRPCReceived();
+    }
     sendProgress();
 }
 
@@ -2081,12 +2091,14 @@ void TCPHandler::updateProgress(const Progress & value)
 
 void TCPHandler::sendProgress()
 {
-    writeVarUInt(Protocol::Server::Progress, *out);
     auto increment = state.progress.fetchAndResetPiecewiseAtomically();
-    increment.write(*out, client_tcp_protocol_version);
-    out->next();
+    if (!increment.empty())
+    {
+        writeVarUInt(Protocol::Server::Progress, *out);
+        increment.write(*out, client_tcp_protocol_version);
+        out->next();
+    }
 }
-
 
 void TCPHandler::sendLogs()
 {
