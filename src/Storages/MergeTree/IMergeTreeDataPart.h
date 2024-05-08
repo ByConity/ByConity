@@ -442,10 +442,10 @@ public:
     void renameToDetached(const String & prefix) const;
 
     /// Generate unique path to detach part relative to table path
-    String getRelativePathForDetachedPart(const String & prefix) const;
+    virtual String getRelativePathForDetachedPart(const String & prefix) const;
 
     /// Generate unique path to detach part relative to disk path
-    virtual String getFullRelativePathForDetachedPart(const String & prefix) const;
+    String getFullRelativePathForDetachedPart(const String & prefix) const;
 
     void createDeleteBitmapForDetachedPart() const;
 
