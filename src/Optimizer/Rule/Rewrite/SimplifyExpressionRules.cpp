@@ -197,6 +197,35 @@ TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node
     return filter_node;
 }
 
+PatternPtr RemoveRedundantCastRewriteRule::getPattern() const
+{
+    return Patterns::filter().result();
+}
+
+TransformResult RemoveRedundantCastRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    auto * old_filter_node = dynamic_cast<FilterNode *>(node.get());
+    if (!old_filter_node)
+        return {};
+    
+    const auto & step = *old_filter_node->getStep();
+    auto predicate = step.getFilter();
+
+    auto column_types = node->getChildren()[0]->getCurrentDataStream().getNamesToTypes();
+    ConstASTPtr rewritten = RemoveRedundantCastRewriter::rewrite(predicate, column_types);
+
+    if (rewritten->getColumnName() == predicate->getColumnName())
+    {
+        return {};
+    }
+
+    auto filter_step
+        = std::make_shared<FilterStep>(node->getChildren()[0]->getStep()->getOutputStream(), rewritten, step.removesFilterColumn());
+    auto filter_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(filter_step), PlanNodes{node->getChildren()[0]});
+
+    return filter_node;
+}
+
 PatternPtr SimplifyJoinFilterRewriteRule::getPattern() const
 {
     return Patterns::join().matchingStep<JoinStep>([&](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); }).result();

@@ -62,6 +62,7 @@ std::vector<RulePtr> Rules::swapPredicateRules()
 std::vector<RulePtr> Rules::simplifyExpressionRules()
 {
     return {
+        std::make_shared<RemoveRedundantCastRewriteRule>(),
         std::make_shared<SimplifyPredicateRewriteRule>(),
         std::make_shared<UnWarpCastInPredicateRewriteRule>(),
         std::make_shared<SimplifyJoinFilterRewriteRule>(),

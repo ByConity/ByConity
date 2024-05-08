@@ -17,6 +17,9 @@
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SimplifyExpressions.h>
 #include <Parsers/formatAST.h>
+#include "Parsers/ASTExpressionList.h"
+#include "Parsers/ASTFunction.h"
+#include "Parsers/ASTIdentifier.h"
 
 namespace DB
 {
@@ -175,6 +178,78 @@ ConstASTPtr SwapPredicateRewriter::visitASTFunction(const ConstASTPtr & predicat
         return predicate->clone();
     }
     return predicate;
+}
+
+ConstASTPtr RemoveRedundantCastRewriter::rewrite(const ConstASTPtr & predicate, NameToType & column_types)
+{
+    RemoveRedundantCastRewriter rewriter;
+    return ASTVisitorUtil::accept(predicate, rewriter, column_types);
+}
+
+ConstASTPtr RemoveRedundantCastRewriter::visitNode(const ConstASTPtr & node, NameToType & column_types)
+{
+    ASTs children;
+    for (ConstASTPtr child : node->children)
+    {
+        ASTPtr ast = ASTVisitorUtil::accept(child, *this, column_types)->clone();
+        children.emplace_back(ast);
+    }
+    auto new_node = node->clone();
+    new_node->replaceChildren(children);
+
+    return new_node;
+}
+
+ConstASTPtr RemoveRedundantCastRewriter::visitASTFunction(const ConstASTPtr & node, NameToType & column_types)
+{
+    auto * func = node->as<ASTFunction>();
+
+    if (Poco::toLower(func->name) == "cast")
+    {
+        auto * cast_source = func->arguments->as<ASTExpressionList &>().children[0]->as<ASTIdentifier>();
+        auto * target_name = func->arguments->getChildren()[1]->as<ASTLiteral>();
+        if (cast_source && target_name)
+        {
+            auto target_type = DataTypeFactory::instance().get(target_name->value.safeGet<String>());
+            if (column_types.contains(cast_source->name()))
+            {
+                const auto & source_type = column_types.at(cast_source->name());
+                if (source_type->equals(*target_type))
+                {
+                    return std::make_shared<ASTIdentifier>(*cast_source);
+                }
+                // convert CAST(xxx, 'Nullable(String)') to xxx, where type of xxx is LowCardinality(Nullable(String)).
+                else if (source_type->isLowCardinalityNullable() && target_type->isNullable())
+                {
+                    const auto & dict_type = std::dynamic_pointer_cast<const DataTypeLowCardinality>(source_type)->getDictionaryType();
+
+                    if (dict_type->equals(*target_type))
+                    {
+                        return std::make_shared<ASTIdentifier>(*cast_source);
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        ASTs children;
+        // NOTE: use func->arguments->children instead of func->children, because func->children[0] is an ASTExpressionList, which children is real arguments.
+        for (ConstASTPtr child : func->arguments->getChildren())
+        {
+            ASTPtr ast = ASTVisitorUtil::accept(child, *this, column_types)->clone();
+            children.emplace_back(ast);
+        }
+    
+        auto new_func = std::make_shared<ASTFunction>(*func);
+        new_func->children.clear();
+        new_func->arguments = std::make_shared<ASTExpressionList>();
+        new_func->arguments->children = std::move(children);
+        new_func->children.push_back(new_func->arguments);
+        return new_func;
+    }
+
+    return node;
 }
 
 }
