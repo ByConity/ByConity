@@ -19,8 +19,9 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <Processors/Formats/IOutputFormat.h>
 #include <IO/WriteBuffer.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
+#include <Processors/Formats/IOutputFormat.h>
 #include <common/scope_guard.h>
 
 
@@ -97,6 +98,13 @@ void IOutputFormat::work()
     {
         if (rows_before_limit_counter && rows_before_limit_counter->hasAppliedLimit())
             setRowsBeforeLimit(rows_before_limit_counter->get());
+
+        /// needed for http json, as out->onProgress(out is json format) is not set in coordinator's progress_callback
+        if (coordinator)
+        {
+            coordinator->waitUntilAllPostProcessingRPCReceived();
+            onProgress(coordinator->getFinalProgress());
+        }
 
         finalize();
         finalized = true;
