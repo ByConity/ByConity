@@ -47,6 +47,7 @@
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/HTTPHandlerRequestFilter.h>
 #include <Server/IServer.h>
+#include <common/logger_useful.h>
 #include <Common/SettingsChanges.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
@@ -127,7 +128,6 @@ namespace ErrorCodes
     extern const int REQUIRED_PASSWORD;
     extern const int AUTHENTICATION_FAILED;
 
-    extern const int BAD_REQUEST_PARAMETER;
     extern const int INVALID_SESSION_TIMEOUT;
     extern const int HTTP_LENGTH_REQUIRED;
 }
@@ -528,9 +528,8 @@ void HTTPHandler::processQuery(
         if (!context->getClientInfo().client_trace_context.parseTraceparentHeader(
             opentelemetry_traceparent, error))
         {
-            throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER,
-                "Failed to parse OpenTelemetry traceparent header '{}': {}",
-                opentelemetry_traceparent, error);
+             LOG_WARNING(log, "Failed to parse OpenTelemetry traceparent header '{}': {}, "
+                "probably due to other service also requests traceparent.", opentelemetry_traceparent, error);
         }
 
         context->getClientInfo().client_trace_context.tracestate = request.get("tracestate", "");
