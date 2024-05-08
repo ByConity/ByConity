@@ -99,9 +99,11 @@ PropertySets DeterminerVisitor::visitProjectionStep(const ProjectionStep & step,
     return {{translated}};
 }
 
-PropertySets DeterminerVisitor::visitArrayJoinStep(const ArrayJoinStep &, DeterminerContext &)
+PropertySets DeterminerVisitor::visitArrayJoinStep(const ArrayJoinStep &, DeterminerContext & context)
 {
-    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
+    auto require = context.getRequired();
+    require.setPreferred(true);
+    return {{require}};
 }
 
 PropertySets DeterminerVisitor::visitFilterStep(const FilterStep &, DeterminerContext & context)
@@ -150,7 +152,7 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
         set.emplace_back(right);
         return {set};
     }
-    
+
     std::vector<std::tuple<String, String>> join_key_pairs;
     for (size_t i = 0; i < left_keys.size(); ++i)
     {
@@ -272,7 +274,7 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     return sets;
 }
 
-PropertySets DeterminerVisitor::visitTotalsHavingStep(const TotalsHavingStep & , DeterminerContext & )
+PropertySets DeterminerVisitor::visitTotalsHavingStep(const TotalsHavingStep &, DeterminerContext &)
 {
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
@@ -477,8 +479,7 @@ PropertySets DeterminerVisitor::visitWindowStep(const WindowStep & step, Determi
     else
     {
         PropertySet set;
-        set.emplace_back(Property{
-            Partitioning{Partitioning::Handle::FIXED_HASH, group_bys, false}});
+        set.emplace_back(Property{Partitioning{Partitioning::Handle::FIXED_HASH, group_bys, false}});
         sets.emplace_back(set);
     }
     return sets;
@@ -556,4 +557,5 @@ PropertySets DeterminerVisitor::visitOutfileFinishStep(const OutfileFinishStep &
     node.setComponent(Partitioning::Component::WORKER);
     return {{Property{node}}};
 }
+
 }

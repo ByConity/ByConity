@@ -73,6 +73,7 @@ public:
     PlanNodePtr visitAggregatingNode(AggregatingNode &, PredicateContext &) override;
     PlanNodePtr visitMarkDistinctNode(MarkDistinctNode & node, PredicateContext & predicate_context) override;
     PlanNodePtr visitJoinNode(JoinNode &, PredicateContext &) override;
+    PlanNodePtr visitArrayJoinNode(ArrayJoinNode &, PredicateContext &) override;
     PlanNodePtr visitExchangeNode(ExchangeNode & node, PredicateContext & predicate_context) override;
     PlanNodePtr visitWindowNode(WindowNode &, PredicateContext &) override;
     PlanNodePtr visitMergeSortingNode(MergeSortingNode &, PredicateContext &) override;
