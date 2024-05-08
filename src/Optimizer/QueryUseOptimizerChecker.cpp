@@ -150,7 +150,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
 
     if (node->as<ASTSelectQuery>() || node->as<ASTSelectWithUnionQuery>() || node->as<ASTSelectIntersectExceptQuery>())
     {
-        // disable system query, array join, table function, no merge tree table
+        // disable system query, table function, no merge tree table
         NameSet with_tables;
 
         QueryUseOptimizerVisitor checker;
