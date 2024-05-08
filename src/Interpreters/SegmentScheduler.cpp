@@ -30,6 +30,7 @@
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
 #include <common/types.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 
 namespace ProfileEvents
 {
@@ -122,7 +123,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
 
 
 CancellationCode SegmentScheduler::cancelPlanSegmentsFromCoordinator(
-    const String query_id, const Int32 & code, const String & exception, ContextPtr query_context)
+    const String & query_id, const Int32 & code, const String & exception, ContextPtr query_context)
 {
     const String & coordinator_host = getHostIPFromEnv();
     return cancelPlanSegments(query_id, code, exception, coordinator_host, query_context);
@@ -304,6 +305,15 @@ void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_s
 
 void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment_status)
 {
+    LOG_TRACE(
+        log,
+        "updateSegmentStatus, query_id:{}, segment_id:{}, parallel_id:{}, is_succeed:{} is_cancelled:{} cpu:{}",
+        segment_status.query_id,
+        segment_status.segment_id,
+        segment_status.parallel_index,
+        segment_status.is_succeed,
+        segment_status.is_cancelled,
+        segment_status.metrics.cpu_micros);
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto segment_status_iter = segment_status_map.find(segment_status.query_id);
     if (segment_status_iter == segment_status_map.end())
@@ -562,7 +572,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
     {
         if (!it->second->getPlanSegmentInputs().empty())
         {
-            for (auto plan_segment_input_ptr : it->second->getPlanSegmentInputs())
+            for (const auto & plan_segment_input_ptr : it->second->getPlanSegmentInputs())
             {
                 // only check when input is from an another exchange
                 if (plan_segment_input_ptr->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
@@ -907,4 +917,26 @@ AddressInfos SegmentScheduler::sendPlanSegment(
     return addresses;
 }
 
+PlanSegmentSet SegmentScheduler::getIOPlanSegmentInstanceIDs(const String & query_id) const
+{
+    std::unique_lock<bthread::Mutex> lock(mutex);
+    auto iter = query_map.find(query_id);
+    if (iter == query_map.end() || !iter->second)
+        throw Exception("query_id-" + query_id + " does not exist in scheduler query map", ErrorCodes::LOGICAL_ERROR);
+    const auto & dag_ptr = iter->second;
+    PlanSegmentSet res;
+    for (auto && segment_id : dag_ptr->any_tables)
+    {
+        /// wont wait for final segment, because it is already logged in progress_callback
+        if (segment_id != dag_ptr->final)
+        {
+            for (size_t parallel_id = 0; parallel_id < dag_ptr->segment_parallel_size_map[segment_id]; parallel_id++)
+            {
+                res.insert({static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_id)});
+            }
+        }
+    }
+
+    return res;
+}
 }

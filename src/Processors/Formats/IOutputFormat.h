@@ -13,6 +13,8 @@ namespace DB
 class WriteBuffer;
 class OutfileTarget;
 using OutfileTargetPtr = std::shared_ptr<OutfileTarget>;
+class MPPQueryCoordinator;
+using MPPQueryCoordinatorPtr = std::shared_ptr<MPPQueryCoordinator>;
 
 /** Output format have three inputs and no outputs. It writes data from WriteBuffer.
   *
@@ -105,6 +107,10 @@ public:
     static Chunk prepareTotals(Chunk chunk);
 
     void setOutFileTarget(OutfileTargetPtr outfile_target);
+    void setMPPQueryCoordinator(MPPQueryCoordinatorPtr coordinator_)
+    {
+        coordinator = std::move(coordinator_);
+    }
 
 private:
     /// Counters for consumed chunks. Are used for QueryLog.
@@ -112,6 +118,7 @@ private:
     size_t result_bytes = 0;
 
     bool prefix_written = false;
+    MPPQueryCoordinatorPtr coordinator = nullptr;
 };
 }
 
