@@ -109,7 +109,7 @@ BroadcastStatus LocalBroadcastChannel::sendImpl(Chunk chunk)
 
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
-        "Send to channel " + name + " timeout after ms: " + std::to_string(options.max_timeout_ts.tv_sec));
+        "Query send to local exchange channel " + name + " timeout after ms: " + std::to_string(options.max_timeout_ts.tv_sec));
     return current_status;
 }
 
