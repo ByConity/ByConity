@@ -1395,22 +1395,22 @@ inline bool tryParseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer &
 
 /** Conversion of DateTime to Date: throw off time component.
   */
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeUInt32, DataTypeDate, ToDateTransform32Or64<UInt32, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeUInt64, DataTypeDate, ToDateTransform32Or64<UInt64, UInt16>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeUInt32, DataTypeDate, ToDateTransform32Or64<UInt32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeUInt64, DataTypeDate, ToDateTransform32Or64<UInt64, UInt16, Adaptive>> {};
 template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt8, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
     : DateTimeTransformForNullImpl<DataTypeInt8, DataTypeDate, ToDateTransform8Or16Signed<Int8, UInt16>> {};
 template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt16, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
     : DateTimeTransformForNullImpl<DataTypeInt16, DataTypeDate, ToDateTransform8Or16Signed<Int16, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeInt32, DataTypeDate, ToDateTransform32Or64Signed<Int32, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeInt64, DataTypeDate, ToDateTransform32Or64Signed<Int64, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeFloat32, DataTypeDate, ToDateTransform32Or64Signed<Float32, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeFloat64, DataTypeDate, ToDateTransform32Or64Signed<Float64, UInt16>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeInt32, DataTypeDate, ToDateTransform32Or64Signed<Int32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeInt64, DataTypeDate, ToDateTransform32Or64Signed<Int64, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeFloat32, DataTypeDate, ToDateTransform32Or64Signed<Float32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeFloat64, DataTypeDate, ToDateTransform32Or64Signed<Float64, UInt16, Adaptive>> {};
 
 template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt32, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
     : DateTimeTransformForNullImpl<DataTypeUInt32, DataTypeDate32, ToDate32Transform32Or64<UInt32, Int32>> {};
