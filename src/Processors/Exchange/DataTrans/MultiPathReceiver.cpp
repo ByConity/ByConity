@@ -33,7 +33,6 @@ namespace ErrorCodes
 {
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int LOGICAL_ERROR;
-    extern const int TIMEOUT_EXCEEDED;
 }
 
 MultiPathReceiver::MultiPathReceiver(
@@ -104,7 +103,7 @@ void MultiPathReceiver::registerToSendersAsync(UInt32 timeout_ms)
     {
         std::unique_lock lock(wait_register_mutex);
         if (!wait_register_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms + 100), [&] { return inited.load(std::memory_order_acquire); }))
-            throw Exception("Wait register timeout for " + name + " for query" + CurrentThread::getQueryId().toString(), ErrorCodes::TIMEOUT_EXCEEDED);
+            throw Exception("Wait register timeout for " + name + " for query" + CurrentThread::getQueryId().toString(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     }
 }
 
@@ -239,7 +238,7 @@ void MultiPathReceiver::registerToSenders(UInt32 timeout_ms)
     {
         std::unique_lock lock(wait_register_mutex);
         if (!wait_register_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms + 100), [&] { return inited.load(std::memory_order_acquire); }))
-            throw Exception("Wait register timeout for " + name, ErrorCodes::TIMEOUT_EXCEEDED);
+            throw Exception("Wait register timeout for " + name, ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     }
 }
 

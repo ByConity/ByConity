@@ -164,7 +164,8 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
 {
     if (io_buffer.size() > brpc::FLAGS_max_body_size)
         throw Exception(
-            "Write stream-" + std::to_string(stream_id) + " buffer fail, io buffer size is bigger than "
+            CurrentThread::getQueryId().toString() +
+            " write stream-" + std::to_string(stream_id) + " buffer fail, io buffer size is bigger than "
                 + std::to_string(brpc::FLAGS_max_body_size) + " current is " + std::to_string(io_buffer.size()),
             ErrorCodes::BRPC_EXCEPTION);
 
