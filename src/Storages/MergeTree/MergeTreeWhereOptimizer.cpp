@@ -105,6 +105,7 @@ MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
     , column_sizes{std::move(column_sizes_)}
     , metadata_snapshot{metadata_snapshot_}
     , enable_ab_index_optimization{context_->getSettingsRef().enable_ab_index_optimization}
+    , enable_implicit_column_prewhere_push{context_->getSettingsRef().enable_implicit_column_prewhere_push}
     , materialize_strategy{materialize_strategy_}
     , aggresive_pushdown{context_->getSettingsRef().late_materialize_aggressive_push_down}
     , partition_columns(metadata_snapshot_->getPartitionKey().column_names)
@@ -217,8 +218,10 @@ void MergeTreeWhereOptimizer::analyzeImpl(Conditions & res, const ASTPtr & node,
                 || cond.identifiers.size() < queried_columns.size());
 
         if (cond.viable)
+        {
             cond.good = isConditionGood(node);
-
+            LOG_DEBUG(log, "MergeTreeWhereOptimizer: analyzeImpl identifiers: {}, column_size:{}", boost::join(cond.identifiers, ","), std::to_string(cond.columns_size));
+        }
         res.emplace_back(std::move(cond));
     }
 }
@@ -685,7 +688,7 @@ bool MergeTreeWhereOptimizer::isConstant(const ASTPtr & expr) const
 bool MergeTreeWhereOptimizer::isSubsetOfTableColumns(const NameSet & identifiers) const
 {
     for (const auto & identifier : identifiers)
-        if (table_columns.count(identifier) == 0)
+        if (table_columns.count(identifier) == 0 && !(enable_implicit_column_prewhere_push && isMapImplicitKey(identifier)))
             return false;
 
     return true;
