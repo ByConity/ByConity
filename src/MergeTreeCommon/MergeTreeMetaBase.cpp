@@ -58,6 +58,14 @@
 #include <QueryPlan/QueryIdHolder.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/parseQuery.h>
+#include <Interpreters/PartitionPredicateVisitor.h>
+#include <Optimizer/CardinalityEstimate/FilterEstimator.h>
+#include <Optimizer/EqualityASTMap.h>
+#include <Optimizer/PredicateUtils.h>
+#include <Optimizer/SelectQueryInfoHelper.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
+#include <MergeTreeCommon/IMergeTreePartMeta.h>
 
 
 namespace
@@ -1544,12 +1552,12 @@ UUID MergeTreeMetaBase::getCnchStorageUUID() const
     }
 }
 
-void MergeTreeMetaBase::calculateColumnSizesImpl()
+using DataPart = IMergeTreeDataPart;
+using DataPartPtr = std::shared_ptr<const DataPart>;
+using DataPartsVector = std::vector<DataPartPtr>;
+
+std::pair<DataPartsVector, double> MergeTreeMetaBase::getCalculatedPartsAndRatio() const
 {
-    Stopwatch stopwatch;
-
-    column_sizes.clear();
-
     /// Take into account only committed parts
     auto committed_parts_range = getDataPartsStateRange(DataPartState::Committed);
     DataPartsVector committed_parts{committed_parts_range.begin(), committed_parts_range.end()};
@@ -1570,6 +1578,18 @@ void MergeTreeMetaBase::calculateColumnSizesImpl()
     {
         calculated_parts = committed_parts;
     }
+    return std::make_pair(calculated_parts, ratio);
+}
+
+void MergeTreeMetaBase::calculateColumnSizesImpl()
+{
+    Stopwatch stopwatch;
+
+    column_sizes.clear();
+
+    auto parts_and_ratio = getCalculatedPartsAndRatio();
+    DataPartsVector calculated_parts = parts_and_ratio.first;
+    double ratio = parts_and_ratio.second;
 
     for (const auto & part : calculated_parts)
         addPartContributionToColumnSizes(part);
@@ -1839,4 +1859,51 @@ bool MergeTreeMetaBase::commitTxnFromWorkerSide(const StorageMetadataPtr & metad
     bool enable_append_mode = query_context->getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
     return !enable_append_mode && !enable_staging_area;
 }
+
+ColumnSize MergeTreeMetaBase::getMapColumnSizes(const DataPartPtr & part, const String & map_implicit_column_name) const
+{
+    auto part_checksums = part->getChecksums();
+    if (part_checksums->empty())
+        return {};
+
+    // we don't modify anything, maybe we do not need this lock
+    auto lock = lockPartsRead();
+
+    // __string_params__'btm' -> string_params
+    auto name = parseMapNameFromImplicitColName(map_implicit_column_name) ;
+    auto pair = part->columns_ptr->tryGetByName(name);
+    if (pair.has_value())
+    {
+        auto part_column_size = part->getMapColumnSize(map_implicit_column_name, *(pair->type));
+        return part_column_size;
+    }
+    return {};
+}
+
+ColumnSize MergeTreeMetaBase::calculateMapColumnSizesImpl(const String & map_implicit_column_name) const
+{
+    Stopwatch stopwatch;
+    auto parts_and_ratio = getCalculatedPartsAndRatio();
+    DataPartsVector calculated_parts = parts_and_ratio.first;
+    double ratio = parts_and_ratio.second;
+
+    ColumnSize map_column_size;
+    for (const auto & part : calculated_parts)
+    {
+        const ColumnSize & map_col_size = getMapColumnSizes(part, map_implicit_column_name);
+        map_column_size.add(map_col_size);
+    }
+
+    if (ratio > 1.0)
+    {
+        map_column_size.marks = map_column_size.marks * ratio;
+        map_column_size.data_compressed = map_column_size.data_compressed * ratio;
+        map_column_size.data_uncompressed = map_column_size.data_uncompressed * ratio;
+    }
+
+    LOG_DEBUG(log, "Calculate columns size elapsed: {} ms.", stopwatch.elapsedMilliseconds());
+
+    return map_column_size;
+}
+
 }

@@ -116,7 +116,8 @@
 #include "Interpreters/TreeRewriter.h"
 #include "Storages/SelectQueryInfo.h"
 #include <sstream>
-
+#include <Optimizer/PredicateUtils.h>
+#include <Storages/StorageCloudMergeTree.h>
 
 namespace DB
 {
@@ -494,6 +495,21 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                 SelectQueryInfo current_info;
                 current_info.query = query_ptr;
                 current_info.syntax_analyzer_result = syntax_analyzer_result;
+
+                if (const auto * merge_tree_data = dynamic_cast<const StorageCloudMergeTree *>(storage.get()))
+                {
+                    for (const auto & column_name : current_info.syntax_analyzer_result->requiredSourceColumns())
+                    {
+                        UInt64 size = merge_tree_data->getColumnCompressedSize(column_name);
+                        // Now get implicit column size only for prewhere pushdown
+                        if (size == 0 && context->getSettingsRef().enable_implicit_column_prewhere_push && isMapImplicitKey(column_name))
+                        {
+                            size = merge_tree_data->calculateMapColumnSizesImpl(column_name).data_compressed;
+                        }
+                        column_compressed_sizes[column_name] = size;
+                    }
+
+                }
                 if (storage_support_late_materialize)
                 {
 #ifndef NDEBUG
