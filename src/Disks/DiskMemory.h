@@ -53,11 +53,11 @@ public:
 
     ReservationPtr reserve(UInt64 bytes) override;
 
-    UInt64 getTotalSpace() const override;
+    DiskStats getTotalSpace([[maybe_unused]]bool with_keep_free = false) const override;
 
-    UInt64 getAvailableSpace() const override;
+    DiskStats getAvailableSpace() const override;
 
-    UInt64 getUnreservedSpace() const override;
+    DiskStats getUnreservedSpace() const override;
 
     bool exists(const String & path) const override;
 

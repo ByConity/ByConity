@@ -187,7 +187,7 @@ void throwFromErrno(const std::string & s, int code, int the_errno)
 
 void throwFromErrnoWithPath(const std::string & s, const std::string & path, int code, int the_errno)
 {
-    throw ErrnoException(s + ", " + errnoToString(code, the_errno), code, the_errno, path);
+    throw ErrnoException(s + ", " + errnoToString(code, the_errno) + ", path = " + path, code, the_errno, path);
 }
 
 static void tryLogCurrentExceptionImpl(Poco::Logger * logger, const std::string & start_of_message)

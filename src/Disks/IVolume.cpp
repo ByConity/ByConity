@@ -23,6 +23,7 @@
 
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/quoteString.h>
+#include <Disks/IDisk.h>
 
 #include <memory>
 
@@ -97,8 +98,17 @@ UInt64 IVolume::getMaxUnreservedFreeSpace() const
 {
     UInt64 res = 0;
     for (const auto & disk : disks)
-        res = std::max(res, disk->getUnreservedSpace());
+        res = std::max(res, disk->getUnreservedSpace().bytes);
     return res;
+}
+
+DiskStats IVolume::getTotalSpace(bool with_keep_free) const
+{
+    DiskStats total;
+    for (const auto & disk : disks)
+        total += disk->getTotalSpace(with_keep_free);
+
+    return total;
 }
 
 MultiDiskReservation::MultiDiskReservation(Reservations & reservations_, UInt64 size_)

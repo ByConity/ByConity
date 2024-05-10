@@ -49,22 +49,22 @@ const String & DiskDecorator::getPath() const
     return delegate->getPath();
 }
 
-UInt64 DiskDecorator::getTotalSpace() const
+DiskStats DiskDecorator::getTotalSpace(bool) const
 {
     return delegate->getTotalSpace();
 }
 
-UInt64 DiskDecorator::getAvailableSpace() const
+DiskStats DiskDecorator::getAvailableSpace() const
 {
     return delegate->getAvailableSpace();
 }
 
-UInt64 DiskDecorator::getUnreservedSpace() const
+DiskStats DiskDecorator::getUnreservedSpace() const
 {
     return delegate->getUnreservedSpace();
 }
 
-UInt64 DiskDecorator::getKeepingFreeSpace() const
+DiskStats DiskDecorator::getKeepingFreeSpace() const
 {
     return delegate->getKeepingFreeSpace();
 }

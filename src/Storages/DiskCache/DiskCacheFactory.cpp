@@ -14,6 +14,7 @@
  */
 
 #include "DiskCacheFactory.h"
+#include <cstddef>
 #include <memory>
 
 #include <Disks/IStoragePolicy.h>
@@ -21,8 +22,9 @@
 #include <Storages/DiskCache/DiskCacheLRU.h>
 #include <Storages/DiskCache/DiskCacheSettings.h>
 #include <Storages/DiskCache/DiskCacheSimpleStrategy.h>
-#include "common/logger_useful.h"
-#include "Storages/DiskCache/IDiskCache.h"
+#include <common/logger_useful.h>
+#include <Disks/SingleDiskVolume.h>
+#include <Storages/DiskCache/IDiskCache.h>
 
 namespace DB
 {
@@ -48,8 +50,23 @@ void DiskCacheFactory::init(Context & context)
         {
             DiskCacheSettings cache_settings;
             cache_settings.loadFromConfig(config, key);
-            LOG_DEBUG(log, fmt::format("Creating DiskCache of {} kind by setting: {}", key, cache_settings.toString()));
             VolumePtr disk_cache_volume = context.getStoragePolicy(cache_settings.disk_policy)->getVolumeByName("local", true);
+
+            auto total_space_unlimited = disk_cache_volume->getTotalSpace(true);
+            auto total_space_limited = disk_cache_volume->getTotalSpace(false);
+            cache_settings.lru_max_size = std::min(
+                total_space_limited.bytes,
+                std::min(
+                    static_cast<size_t>(total_space_unlimited.bytes * (cache_settings.lru_max_percent * 1.0 / 100)),
+                    cache_settings.lru_max_size));
+            cache_settings.lru_max_nums = std::min(
+                total_space_limited.inodes,
+                std::min(
+                    static_cast<size_t>(total_space_unlimited.inodes * (cache_settings.lru_max_percent * 1.0 / 100)),
+                    cache_settings.lru_max_nums));
+
+            LOG_DEBUG(log, fmt::format("Creating DiskCache of {} kind by setting: {}", key, cache_settings.toString()));
+
             if (!cache_settings.meta_cache_size_ratio)
             {
                 auto disk_cache = std::make_shared<DiskCacheLRU>(
@@ -78,6 +95,12 @@ void DiskCacheFactory::init(Context & context)
     DiskCacheSettings cache_settings;
     cache_settings.loadFromConfig(config, "MergeTree");
     VolumePtr disk_cache_volume = context.getStoragePolicy(cache_settings.disk_policy)->getVolumeByName("local", true);
+    auto total_space = disk_cache_volume->getTotalSpace(true);
+    cache_settings.lru_max_size = std::min(
+        static_cast<size_t>(total_space.bytes * (cache_settings.lru_max_percent * 1.0 / 100)), cache_settings.lru_max_size);
+    cache_settings.lru_max_nums = std::min(
+        static_cast<size_t>(total_space.inodes * (cache_settings.lru_max_percent * 1.0 / 100)), cache_settings.lru_max_nums);
+
     if (caches.find(DiskCacheType::MergeTree) == caches.end())
     {
         LOG_TRACE(

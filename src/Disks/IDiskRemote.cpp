@@ -502,7 +502,7 @@ bool IDiskRemote::tryReserve(UInt64 bytes)
         return true;
     }
 
-    auto available_space = getAvailableSpace();
+    auto available_space = getAvailableSpace().bytes;
     UInt64 unreserved_space = available_space - std::min(available_space, reserved_bytes);
     if (unreserved_space >= bytes)
     {
@@ -514,5 +514,7 @@ bool IDiskRemote::tryReserve(UInt64 bytes)
     }
     return false;
 }
+
+
 
 }

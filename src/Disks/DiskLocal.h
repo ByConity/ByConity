@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <common/types.h>
 #include <common/logger_useful.h>
 #include <Disks/IDisk.h>
 #include <IO/ReadBufferFromFile.h>
@@ -42,8 +43,8 @@ class DiskLocal : public IDisk
 public:
     friend class DiskLocalReservation;
 
-    DiskLocal(const String & name_, const String & path_, UInt64 keep_free_space_bytes_)
-        : name(name_), disk_path(path_), keep_free_space_bytes(keep_free_space_bytes_)
+    DiskLocal(const String & name_, const String & path_, const DiskStats & keep_free_disk_stats_)
+        : name(name_), disk_path(path_), keep_free_disk_stats(keep_free_disk_stats_)
     {
         if (disk_path.back() != '/')
             throw Exception("Disk path must end with '/', but '" + disk_path + "' doesn't.", ErrorCodes::LOGICAL_ERROR);
@@ -57,13 +58,13 @@ public:
 
     ReservationPtr reserve(UInt64 bytes) override;
 
-    UInt64 getTotalSpace() const override;
+    DiskStats getTotalSpace(bool with_keep_free = false) const override;
 
-    UInt64 getAvailableSpace() const override;
+    DiskStats getAvailableSpace() const override;
 
-    UInt64 getUnreservedSpace() const override;
+    DiskStats getUnreservedSpace() const override;
 
-    UInt64 getKeepingFreeSpace() const override { return keep_free_space_bytes; }
+    DiskStats getKeepingFreeSpace() const override { return keep_free_disk_stats; }
 
     bool exists(const String & path) const override;
 
@@ -126,9 +127,10 @@ private:
 private:
     const String name;
     const String disk_path;
-    const UInt64 keep_free_space_bytes;
+    const DiskStats keep_free_disk_stats;
 
     UInt64 reserved_bytes = 0;
+    UInt64 reserved_inodes = 0;
     UInt64 reservation_count = 0;
 
     static std::mutex reservation_mutex;

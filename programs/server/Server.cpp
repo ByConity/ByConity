@@ -1320,7 +1320,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::File disk_path(disk->getPath());
             if (!disk_path.canRead() || !disk_path.canWrite())
                 throw Exception("There is no RW access to disk " + name + " (" + disk->getPath() + ")", ErrorCodes::PATH_ACCESS_DENIED);
-            uki_disk_cache_max_bytes = std::min<size_t>(0.25 * disk->getAvailableSpace(), uki_disk_cache_max_bytes);
+            uki_disk_cache_max_bytes = std::min<size_t>(0.25 * disk->getAvailableSpace().bytes, uki_disk_cache_max_bytes);
             break;
         }
     }

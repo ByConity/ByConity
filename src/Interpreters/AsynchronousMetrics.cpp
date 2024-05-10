@@ -1380,14 +1380,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         DisksMap disks_map = getContext()->getDisksMap();
         for (const auto & [name, disk] : disks_map)
         {
-            auto total = disk->getTotalSpace();
+            auto total = disk->getTotalSpace().bytes;
 
             /// Some disks don't support information about the space.
             if (!total)
                 continue;
 
-            auto available = disk->getAvailableSpace();
-            auto unreserved = disk->getUnreservedSpace();
+            auto available = disk->getAvailableSpace().bytes;
+            auto unreserved = disk->getUnreservedSpace().bytes;
 
             new_values[fmt::format("DiskTotal_{}", name)] = total;
             new_values[fmt::format("DiskUsed_{}", name)] = total - available;

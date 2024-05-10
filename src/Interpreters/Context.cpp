@@ -1178,7 +1178,7 @@ VolumePtr Context::setTemporaryStorage(const String & path, const String & polic
         if (!shared->tmp_path.ends_with('/'))
             shared->tmp_path += '/';
 
-        auto disk = std::make_shared<DiskLocal>("_tmp_default", shared->tmp_path, 0);
+        auto disk = std::make_shared<DiskLocal>("_tmp_default", shared->tmp_path, DiskStats{});
         shared->tmp_volume = std::make_shared<SingleDiskVolume>("_tmp_default", disk, 0);
     }
     else
@@ -1233,7 +1233,7 @@ catch (...)
 
 static VolumePtr createLocalSingleDiskVolume(const std::string & path)
 {
-    auto disk = std::make_shared<DiskLocal>("_tmp_default", path, 0);
+    auto disk = std::make_shared<DiskLocal>("_tmp_default", path, DiskStats{});
     VolumePtr volume = std::make_shared<SingleDiskVolume>("_tmp_default", disk, 0);
     return volume;
 }
