@@ -206,3 +206,5 @@ Projection Est. ? rows
             │     Group by: {id4, m2, k3}
             └─ TableScan test_distinct.unique_4 Est. ? rows
                      Outputs: [id4, m2, k3]
+1
+1
