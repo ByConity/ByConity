@@ -1446,7 +1446,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, operator_profile_receive_timeout, 3000, "Max waiting time for operator profile in ms", 0) \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, true, "Whether enable query optimizer", 0) \
-    M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
+    M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
     M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
