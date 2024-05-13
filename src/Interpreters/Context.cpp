@@ -2259,6 +2259,21 @@ String Context::getInitialQueryId() const
 }
 
 
+void Context::setCoordinatorAddress(const Protos::AddressInfo & address)
+{
+    coordinator_address = address;
+}
+
+void Context::setCoordinatorAddress(const AddressInfo & address)
+{
+    coordinator_address = address;
+}
+
+AddressInfo Context::getCoordinatorAddress() const
+{
+    return coordinator_address;
+}
+
 void Context::setPlanSegmentInstanceId(const PlanSegmentInstanceId & instance_id)
 {
     plan_segment_instance_id = instance_id;
@@ -2268,6 +2283,16 @@ PlanSegmentInstanceId Context::getPlanSegmentInstanceId() const
 {
     return plan_segment_instance_id;
 };
+
+void Context::initPlanSegmentExHandler()
+{
+    plan_segment_ex_handler = std::make_shared<ExceptionHandler>();
+}
+
+ExceptionHandlerPtr Context::getPlanSegmentExHandler() const
+{
+    return plan_segment_ex_handler;
+}
 
 void Context::setCurrentDatabaseNameInGlobalContext(const String & name)
 {

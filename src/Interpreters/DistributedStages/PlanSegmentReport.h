@@ -12,5 +12,20 @@
 namespace DB
 {
 
-void reportPlanSegmentStatus(const AddressInfo & coordinator_address, const RuntimeSegmentsStatus & status) noexcept;
+void reportFailurePlanSegmentStatus(
+    ContextPtr query_context,
+    const AddressInfo & execution_address,
+    int exception_code,
+    const String & exception_message,
+    Progress final_progress = {},
+    SenderMetrics sender_metrics = {},
+    PlanSegmentOutputs plan_segment_outputs = {});
+
+void reportSuccessPlanSegmentStatus(
+    ContextPtr query_context,
+    const AddressInfo & execution_address,
+    Progress & final_progress,
+    SenderMetrics & sender_metrics,
+    PlanSegmentOutputs & plan_segment_outputs);
+
 }

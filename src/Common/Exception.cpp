@@ -631,11 +631,15 @@ std::string ParsingException::displayText() const
     }
 }
 
-void ExceptionHandler::setException(std::exception_ptr && exception)
+bool ExceptionHandler::setException(std::exception_ptr && exception)
 {
     std::unique_lock lock(mutex);
     if (!first_exception)
+    {
         first_exception = std::move(exception);
+        return true;
+    }
+    return false;
 }
 
 void ExceptionHandler::throwIfException()

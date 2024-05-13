@@ -78,6 +78,14 @@ void PlanSegmentManagerRpcService::executeQuery(
                 "brpc protocol major version different - current is " + std::to_string(request->has_brpc_protocol_major_revision())
                     + "remote is " + std::to_string(DBMS_BRPC_PROTOCOL_MAJOR_VERSION) + ", plan segment is not compatible",
                 ErrorCodes::BRPC_PROTOCOL_VERSION_UNSUPPORT);
+
+        AddressInfo coordinator_address(
+            request->coordinator_host(),
+            request->coordinator_port(),
+            request->user(),
+            request->password(),
+            request->coordinator_exchange_port());
+
         ContextMutablePtr query_context;
         UInt64 txn_id = request->txn_id();
         UInt64 primary_txn_id = request->primary_txn_id();
@@ -94,6 +102,7 @@ void PlanSegmentManagerRpcService::executeQuery(
             query_context = Context::createCopy(context);
             query_context->setTemporaryTransaction(txn_id, primary_txn_id, false);
         }
+        query_context->setCoordinatorAddress(coordinator_address);
 
         /// TODO: Authentication supports inter-server cluster secret, see https://github.com/ClickHouse/ClickHouse/commit/0159c74f217ec764060c480819e3ccc9d5a99a63
         Poco::Net::SocketAddress initial_socket_address(request->coordinator_host(), request->coordinator_port());
@@ -173,17 +182,10 @@ void PlanSegmentManagerRpcService::executeQuery(
         report_metrics_timer->getResourceData().fillProto(*response->mutable_worker_resource_data());
         LOG_DEBUG(log, "adaptive scheduler worker status: {}", response->worker_resource_data().ShortDebugString());
 
-        AddressInfo coordinator_address(
-            request->coordinator_host(),
-            request->coordinator_port(),
-            request->user(),
-            request->password(),
-            request->coordinator_exchange_port());
         ThreadFromGlobalPool async_thread([log = log, query_context = std::move(query_context),
-                                            execution_info = std::move(execution_info),
+                                           execution_info = std::move(execution_info),
                                            plan_segment_buf = std::make_shared<butil::IOBuf>(cntl->request_attachment().movable()),
-                                           segment_id = request->plan_segment_id(),
-                                           coordinator_address = std::move(coordinator_address)]() {
+                                           segment_id = request->plan_segment_id()]() {
             bool before_execute = true;
             try
             {
@@ -212,16 +214,7 @@ void PlanSegmentManagerRpcService::executeQuery(
                     int exception_code = getCurrentExceptionCode();
                     auto exception_message = getCurrentExceptionMessage(false);
 
-                    const auto & host = extractExchangeHostPort(execution_info.execution_address);
-                    RuntimeSegmentsStatus runtime_segment_status;
-                    runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
-                    runtime_segment_status.segment_id = segment_id;
-                    runtime_segment_status.is_succeed = false;
-                    runtime_segment_status.is_cancelled = false;
-                    runtime_segment_status.code = exception_code;
-                    runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
-
-                    reportPlanSegmentStatus(coordinator_address, runtime_segment_status);
+                    reportFailurePlanSegmentStatus(query_context, execution_info.execution_address, exception_code, exception_message);
                 }
             }
         });
@@ -543,6 +536,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
             query_context = Context::createCopy(context);
             query_context->setTemporaryTransaction(txn_id, primary_txn_id, false);
         }
+        query_context->setCoordinatorAddress(query_common->coordinator_address());
 
         /// Authentication
         Poco::Net::SocketAddress current_socket_address(query_common->coordinator_address().host_name(), cntl->remote_side().port);
@@ -616,7 +610,6 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                                            plan_segment_buf = std::make_shared<butil::IOBuf>(plan_segment_buf.movable()),
                                            settings_io_buf = std::make_shared<butil::IOBuf>(settings_io_buf.movable())]() {
             bool before_execute = true;
-            auto coordinator_address = query_common->coordinator_address();
             try
             {
                 /// Authentication
@@ -677,16 +670,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     int exception_code = getCurrentExceptionCode();
                     auto exception_message = getCurrentExceptionMessage(false);
 
-                    const auto & host = extractExchangeHostPort(execution_info.execution_address);
-                    RuntimeSegmentsStatus runtime_segment_status;
-                    runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
-                    runtime_segment_status.segment_id = segment_id;
-                    runtime_segment_status.is_succeed = false;
-                    runtime_segment_status.is_cancelled = false;
-                    runtime_segment_status.code = exception_code;
-                    runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
-
-                    reportPlanSegmentStatus(coordinator_address, runtime_segment_status);
+                    reportFailurePlanSegmentStatus(query_context, execution_info.execution_address, exception_code, exception_message);
                 }
             }
         });

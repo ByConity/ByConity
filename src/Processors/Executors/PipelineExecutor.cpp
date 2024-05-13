@@ -33,6 +33,7 @@
 #include <Processors/ISource.h>
 #include <Processors/ReadProgressCallback.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Interpreters/DistributedStages/PlanSegmentReport.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -148,14 +149,33 @@ void PipelineExecutor::addJob(ExecutingGraph::Node * execution_state)
     {
         try
         {
-            // Stopwatch watch;
             executeJob(execution_state->processor);
-            // execution_state->execution_time_ns += watch.elapsed();
-
             ++execution_state->num_executed_jobs;
         }
         catch (...)
         {
+            auto query_context = DB::CurrentThread::get().getQueryContext();
+            if (query_context)
+            {
+                bool bsp_mode = query_context->getSettingsRef().bsp_mode;
+                auto segment_id = query_context->getPlanSegmentInstanceId().segment_id;
+                auto exception_handler = query_context->getPlanSegmentExHandler();
+                if (!bsp_mode && segment_id != std::numeric_limits<UInt32>::max() && segment_id != 0 
+                    && exception_handler->setException(std::current_exception()))
+                {
+                    int exception_code = getCurrentExceptionCode();
+                    auto exception_message = getCurrentExceptionMessage(false);
+
+                    auto execution_address = AddressInfo(
+                        getHostIPFromEnv(),
+                        query_context->getTCPPort(),
+                        "",
+                        "",
+                        query_context->getExchangePort());
+                    reportFailurePlanSegmentStatus(query_context, execution_address, exception_code, exception_message);
+                }
+            }
+
             execution_state->exception = std::current_exception();
         }
     };
