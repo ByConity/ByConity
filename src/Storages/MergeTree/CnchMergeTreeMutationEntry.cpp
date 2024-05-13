@@ -85,6 +85,11 @@ bool CnchMergeTreeMutationEntry::isReclusterMutation() const
     return commands.size() == 1 && commands[0].type==MutationCommand::Type::RECLUSTER;
 }
 
+bool CnchMergeTreeMutationEntry::isModifyClusterBy() const
+{
+    return commands.size() == 1 && commands[0].type==MutationCommand::Type::MODIFY_CLUSTER_BY;
+}
+
 void CnchMergeTreeMutationEntry::setPartitionIDs(const Strings & _partition_ids)
 {
     partition_ids.emplace(_partition_ids);

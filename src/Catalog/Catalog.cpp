@@ -1072,7 +1072,7 @@ namespace Catalog
         const TxnTimestamp & previous_version,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts,
-        const bool is_recluster)
+        const bool is_modify_cluster_by)
     {
         runWithMetricSupport(
             [&] {
@@ -1134,7 +1134,7 @@ namespace Catalog
                     throw Exception("Alter table failed.", ErrorCodes::CATALOG_ALTER_TABLE_FAILURE);
 
                 // Set cluster status after Alter table is successful to update PartCacheManager with new table metadata
-                if (is_recluster)
+                if (is_modify_cluster_by)
                     setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy().getDeterminHash());
 
                 if (auto cache_manager = context.getPartCacheManager(); cache_manager)
