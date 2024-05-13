@@ -380,6 +380,14 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 return false;
             if (ParserKeyword{"PARTITION"}.ignore(pos, expected) && !parser_partition.parse(pos, res->partition, expected))
                 return false;
+            if (ParserKeyword{"BUCKET"}.ignore(pos, expected))
+            {
+                ASTPtr ast;
+                if (!ParserUnsignedInteger().parse(pos, ast, expected))
+                    return false;
+                res->specify_bucket = true;
+                res->bucket_number = safeGet<UInt64>(ast->as<ASTLiteral>()->value);
+            }
             if (!ParserKeyword{"FOR REPAIR"}.ignore(pos, expected))
                 return false;
             break;

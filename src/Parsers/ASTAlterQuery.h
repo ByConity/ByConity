@@ -316,6 +316,10 @@ public:
     /// Which property user want to remove
     String remove_property;
 
+    /// For DETACH/ATTACH PARTITION commands
+    bool specify_bucket = false;
+    UInt64 bucket_number;
+
     String getID(char delim) const override { return "AlterCommand" + (delim + std::to_string(static_cast<int>(type))); }
 
     ASTPtr clone() const override;

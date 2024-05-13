@@ -1400,6 +1400,10 @@ static void selectColumnNames(
             sample_factor_column_queried = true;
             virt_column_names.push_back(name);
         }
+        else if (name == "_bucket_number")
+        {
+            virt_column_names.push_back(name);
+        }
         else
         {
             real_column_names.push_back(name);

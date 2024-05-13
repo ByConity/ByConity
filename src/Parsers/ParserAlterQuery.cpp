@@ -723,6 +723,15 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 if (!parser_partition.parse(pos, command->partition, expected))
                     return false;
 
+                if (ParserKeyword{"BUCKET"}.ignore(pos, expected))
+                {
+                    ASTPtr ast;
+                    if (!ParserUnsignedInteger().parse(pos, ast, expected))
+                        return false;
+                    command->specify_bucket = true;
+                    command->bucket_number = safeGet<UInt64>(ast->as<ASTLiteral>()->value);
+                }
+
                 command->type = ASTAlterCommand::DROP_PARTITION;
                 command->detach = true;
             }
@@ -802,6 +811,15 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             {
                 if (!parser_partition.parse(pos, command->partition, expected))
                     return false;
+
+                if (ParserKeyword{"BUCKET"}.ignore(pos, expected))
+                {
+                    ASTPtr ast;
+                    if (!ParserUnsignedInteger().parse(pos, ast, expected))
+                        return false;
+                    command->specify_bucket = true;
+                    command->bucket_number = safeGet<UInt64>(ast->as<ASTLiteral>()->value);
+                }
 
                 if (s_from.ignore(pos))
                 {

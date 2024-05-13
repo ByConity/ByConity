@@ -1252,7 +1252,7 @@ void InterpreterSystemQuery::executeDedup(const ASTSystemQuery & query)
 
     auto storage = DatabaseCatalog::instance().getTable(table_id, getContext());
     if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
-        cnch_table->executeDedupForRepair(query.partition, getContext());
+        cnch_table->executeDedupForRepair(query, getContext());
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table {} is not a CnchMergeTree", table_id.getNameForLogs());
 }

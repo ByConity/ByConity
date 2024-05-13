@@ -30,6 +30,8 @@ namespace DB
 {
 
 struct PrepareContextResult;
+class ASTSystemQuery;
+
 class StorageCnchMergeTree final : public shared_ptr_helper<StorageCnchMergeTree>, public MergeTreeMetaBase, public CnchStorageCommonHelper
 {
     friend struct shared_ptr_helper<StorageCnchMergeTree>;
@@ -144,7 +146,7 @@ public:
     void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
 
     /// Used by the "SYSTEM DEDUP" command to repair unique table by removing duplicate keys in visible parts.
-    void executeDedupForRepair(const ASTPtr & partition, ContextPtr context);
+    void executeDedupForRepair(const ASTSystemQuery & query, ContextPtr context);
 
     /// Used by the "SYSTEM SYNC DEDUP WORKER" command to wait for all staged parts to publish
     void waitForStagedPartsToPublish(ContextPtr context);

@@ -396,6 +396,9 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " PARTITION " << (settings.hilite ? hilite_none : "");
             partition->formatImpl(settings, state, frame);
+
+            if (specify_bucket)
+                settings.ostr << " BUCKET " << bucket_number;
         }
         settings.ostr << " FOR REPAIR";
     }

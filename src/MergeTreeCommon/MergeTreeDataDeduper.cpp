@@ -568,17 +568,24 @@ LocalDeleteBitmaps MergeTreeDataDeduper::repairParts(TxnTimestamp txn_id, IMerge
 
     LocalDeleteBitmaps res;
     auto prepare_bitmaps_to_dump
-        = [txn_id, this, &res](const IMergeTreeDataPartsVector & visible_parts, const DeleteBitmapVector & delta_bitmaps) -> size_t {
+        = [txn_id, this, &res](const IMergeTreeDataPartsVector & visible_parts, DeleteBitmapVector & delta_bitmaps) -> size_t {
         size_t num_bitmaps = 0;
         size_t max_delete_bitmap_meta_depth = data.getSettings()->max_delete_bitmap_meta_depth;
         for (size_t i = 0; i < delta_bitmaps.size(); ++i)
         {
+            auto base_bitmap = visible_parts[i]->getDeleteBitmap(/*allow_null*/ true);
             if (!delta_bitmaps[i])
-                continue;
+            {
+                if (base_bitmap)
+                    continue;
+                /// If delete bitmap is nullptr and base bitmap doesn't exist, bitmap meta is broken, it's necessary to create a new empty bitmap.
+                delta_bitmaps[i] = std::make_shared<Roaring>();
+            }
+
             size_t bitmap_meta_depth = visible_parts[i]->getDeleteBitmapMetaDepth();
             res.push_back(LocalDeleteBitmap::createBaseOrDelta(
                 visible_parts[i]->info,
-                visible_parts[i]->getDeleteBitmap(/*allow_null*/ true),
+                base_bitmap,
                 delta_bitmaps[i],
                 txn_id.toUInt64(),
                 bitmap_meta_depth >= max_delete_bitmap_meta_depth,
@@ -588,55 +595,60 @@ LocalDeleteBitmaps MergeTreeDataDeduper::repairParts(TxnTimestamp txn_id, IMerge
         return num_bitmaps;
     };
 
-    if (data.getSettings()->partition_level_unique_keys)
-    {
-        Stopwatch overall_watch;
-        std::sort(all_visible_parts.begin(), all_visible_parts.end(), [](auto & lhs, auto & rhs) {
-            return std::forward_as_tuple(lhs->info.partition_id, lhs->commit_time)
-                < std::forward_as_tuple(rhs->info.partition_id, rhs->commit_time);
-        });
-
-        size_t num_partitions = 0;
-        for (size_t i = 0; i < all_visible_parts.size(); ++num_partitions)
+    auto log_repair_detail = [&](const DedupTaskPtr & task, const IMergeTreeDataPartsVector & visible_parts) {
+        WriteBufferFromOwnString msg;
+        msg << "Start to repair in txn_id: " << txn_id.toUInt64() << ", dedup level info: " << task->getDedupLevelInfo()
+            << ", visible_parts: [";
+        for (size_t i = 0; i < visible_parts.size(); ++i)
         {
-            Stopwatch watch;
-            String partition_id = all_visible_parts[i]->info.partition_id;
-            IMergeTreeDataPartsVector visible_parts;
-            while (i < all_visible_parts.size() && all_visible_parts[i]->info.partition_id == partition_id)
-                visible_parts.push_back(all_visible_parts[i++]);
-
-            DeleteBitmapVector delta_bitmaps = repairImpl(visible_parts);
-            size_t num_bitmaps_to_dump = prepare_bitmaps_to_dump(visible_parts, delta_bitmaps);
-            LOG_INFO(
-                log,
-                "Repair partition {} in {} ms, visible parts={}, result bitmaps={}",
-                partition_id,
-                watch.elapsedMilliseconds(),
-                visible_parts.size(),
-                num_bitmaps_to_dump);
+            if (i > 0)
+                msg << ", ";
+            msg << visible_parts[i]->name;
         }
-        LOG_INFO(
-            log,
-            "Repair table in {} ms, partitions={}, result bitmaps={}",
-            overall_watch.elapsedMilliseconds(),
-            num_partitions,
-            res.size());
-    }
-    else
-    {
-        Stopwatch watch;
-        std::sort(
-            all_visible_parts.begin(), all_visible_parts.end(), [](auto & lhs, auto & rhs) { return lhs->commit_time < rhs->commit_time; });
+        msg << "].";
+        LOG_DEBUG(log, msg.str());
+    };
 
-        DeleteBitmapVector delta_bitmaps = repairImpl(all_visible_parts);
-        size_t num_bitmaps_to_dump = prepare_bitmaps_to_dump(all_visible_parts, delta_bitmaps);
-        LOG_INFO(
-            log,
-            "Repair table in {} ms, visible parts={}, result bitmaps={}",
-            watch.elapsedMilliseconds(),
-            all_visible_parts.size(),
-            num_bitmaps_to_dump);
+    Stopwatch watch;
+    bool bucket_level_dedup = data.getSettings()->enable_bucket_level_unique_keys;
+    /// Take visible parts as staged parts here.
+    DedupTasks repair_tasks = convertIntoSubDedupTasks({}, all_visible_parts, {}, bucket_level_dedup, txn_id);
+
+    size_t dedup_pool_size = std::min(static_cast<size_t>(data.getSettings()->unique_table_dedup_threads), repair_tasks.size());
+    ThreadPool dedup_pool(dedup_pool_size);
+    std::mutex mutex;
+    for (auto & dedup_task : repair_tasks)
+    {
+        if (bucket_level_dedup && !dedup_task->bucket_valid)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Enable bucket level unique keys, but dedup task is bucket invalid, it's a bug!");
+
+        dedup_pool.scheduleOrThrowOnError([&]() {
+            Stopwatch sub_task_watch;
+            log_repair_detail(dedup_task, dedup_task->new_parts);
+            DeleteBitmapVector delta_bitmaps = repairImpl(dedup_task->new_parts);
+
+            std::lock_guard lock(mutex);
+            size_t num_bitmaps_to_dump = prepare_bitmaps_to_dump(dedup_task->new_parts, delta_bitmaps);
+
+            LOG_DEBUG(
+                log,
+                "Repair {} in {} ms, visible parts={}, result bitmaps={}",
+                dedup_task->getDedupLevelInfo(),
+                sub_task_watch.elapsedMilliseconds(),
+                dedup_task->new_parts.size(),
+                num_bitmaps_to_dump);
+        });
     }
+    dedup_pool.wait();
+
+    LOG_DEBUG(
+        log,
+        "Repair {} tasks in {} ms, thread pool={}, visible parts={}, result bitmaps={}",
+        repair_tasks.size(),
+        watch.elapsedMilliseconds(),
+        dedup_pool_size,
+        all_visible_parts.size(),
+        res.size());
     return res;
 }
 

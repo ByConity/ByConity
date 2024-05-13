@@ -295,6 +295,8 @@ void ASTAlterCommand::formatImpl(
                       << (detach ? "DETACH" : "DROP") << (staging_area ? " STAGED " : "") << (part ? " PART " : " PARTITION ")
                       << (settings.hilite ? hilite_none : "");
         partition->formatImpl(settings, state, frame);
+        if (specify_bucket)
+            settings.ostr << " BUCKET " << bucket_number;
     }
     else if (type == ASTAlterCommand::DROP_PARTITION_WHERE)
     {
@@ -329,6 +331,9 @@ void ASTAlterCommand::formatImpl(
                       << (parts ? "PARTS" : part ? "PART " : "PARTITION ") << (settings.hilite ? hilite_none : "");
         if (!parts)
             partition->formatImpl(settings, state, frame);
+
+        if (specify_bucket)
+            settings.ostr << " BUCKET " << bucket_number;
     }
     else if (type == ASTAlterCommand::ATTACH_DETACHED_PARTITION)
     {

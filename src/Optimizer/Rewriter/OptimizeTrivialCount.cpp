@@ -79,6 +79,7 @@ PlanNodePtr TrivialCountVisitor::visitAggregatingNode(AggregatingNode & node, Vo
             partition_columns.push_back("_partition_id");
             partition_columns.push_back("_part_uuid");
             partition_columns.push_back("_partition_value");
+            partition_columns.push_back("_bucket_number");
             for (const auto & required_column : required)
             {
                 if (std::find(partition_columns.begin(), partition_columns.end(), required_column) == partition_columns.end())

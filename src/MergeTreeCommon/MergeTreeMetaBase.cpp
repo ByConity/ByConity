@@ -699,6 +699,7 @@ NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
         NameAndTypePair("_partition_value", getPartitionValueType()),
         NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
         NameAndTypePair("_part_row_number", std::make_shared<DataTypeUInt64>()),
+        NameAndTypePair("_bucket_number", std::make_shared<DataTypeInt64>()),
         RowExistsColumn::ROW_EXISTS_COLUMN,
     };
 }
@@ -744,7 +745,8 @@ ASTs MergeTreeMetaBase::getPartVirtualExpr() const
         std::make_shared<ASTIdentifier>("_part"),
         std::make_shared<ASTIdentifier>("_partition_id"),
         std::make_shared<ASTIdentifier>("_part_uuid"),
-        std::make_shared<ASTIdentifier>("_partition_value")};
+        std::make_shared<ASTIdentifier>("_partition_value"),
+        std::make_shared<ASTIdentifier>("_bucket_number")};
 }
 
 Block MergeTreeMetaBase::getSampleBlockWithVirtualColumns() const
@@ -754,7 +756,8 @@ Block MergeTreeMetaBase::getSampleBlockWithVirtualColumns() const
         ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_part"),
         ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
         ColumnWithTypeAndName(ColumnUUID::create(), std::make_shared<DataTypeUUID>(), "_part_uuid"),
-        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")};
+        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value"),
+        ColumnWithTypeAndName(ColumnInt64::create(), std::make_shared<DataTypeInt64>(), "_bucket_number")};
 }
 
 Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & parts, bool one_part) const
@@ -765,7 +768,8 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
         ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_part"),
         ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
         ColumnWithTypeAndName(ColumnUUID::create(), std::make_shared<DataTypeUUID>(), "_part_uuid"),
-        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")};
+        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value"),
+        ColumnWithTypeAndName(ColumnInt64::create(), std::make_shared<DataTypeInt64>(), "_bucket_number")};
 
     MutableColumns columns = block.mutateColumns();
 
@@ -773,6 +777,7 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
     auto & partition_id_column = columns[1];
     auto & part_uuid_column = columns[2];
     auto & partition_value_column = columns[3];
+    auto & bucket_number_column = columns[4];
 
     for (const auto & part_or_projection : parts)
     {
@@ -780,6 +785,7 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
         part_column->insert(part->name);
         partition_id_column->insert(part->info.partition_id);
         part_uuid_column->insert(part->uuid);
+        bucket_number_column->insert(part->bucket_number);
         // coverity[mismatched_iterator]
         Tuple tuple(part->partition.value.begin(), part->partition.value.end());
         if (has_partition_value)
@@ -790,6 +796,7 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
             part_column = ColumnConst::create(std::move(part_column), 1);
             partition_id_column = ColumnConst::create(std::move(partition_id_column), 1);
             part_uuid_column = ColumnConst::create(std::move(part_uuid_column), 1);
+            bucket_number_column = ColumnConst::create(std::move(bucket_number_column), 1);
             if (has_partition_value)
                 partition_value_column = ColumnConst::create(std::move(partition_value_column), 1);
             break;

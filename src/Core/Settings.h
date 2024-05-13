@@ -1380,6 +1380,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, use_grace_hash_only_repartition, false, "Only use grace hash join when exchange type is repartition", 0) \
     M(UInt64, filesystem_cache_max_download_size, (128UL * 1024 * 1024 * 1024), "Max remote filesystem cache size that can be downloaded by a single query", 0) \
     M(Bool, skip_download_if_exceeds_query_cache, true, "Skip download from remote filesystem if exceeds query cache size", 0) \
+    M(UInt64, expected_table_definition_hash, 0, "If not zero, filter parts by table_definition hash, such as ALTER DETACH PARTITION BUCKET xxx commands.", 0) \
     \
     /** Complex query settings **/\
     M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\

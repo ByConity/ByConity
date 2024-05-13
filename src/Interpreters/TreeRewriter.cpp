@@ -1074,6 +1074,7 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
             partition_source_columns.push_back("_partition_id");
             partition_source_columns.push_back("_part_uuid");
             partition_source_columns.push_back("_partition_value");
+            partition_source_columns.push_back("_bucket_number");
             optimize_trivial_count = true;
             for (const auto & required_column : required)
             {
