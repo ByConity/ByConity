@@ -1886,7 +1886,10 @@ ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(Ser
             && check_success_txn(part->part_model_wrapper->part_model->secondary_txn_id()))
             target_parts.push_back(part);
     });
-    getVisibleServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()), /*TransactionRecords *=*/nullptr);
+
+    auto * txn_record_cache = 
+        local_context->getServerType() == ServerType::cnch_server ? local_context->getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache() : nullptr;
+    getVisibleServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()), /*TransactionRecords *=*/nullptr, txn_record_cache);
     std::move(data_parts.begin(), data_parts.end(), std::back_inserter(target_parts));
     return target_parts;
 }

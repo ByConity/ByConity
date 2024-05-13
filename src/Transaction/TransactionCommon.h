@@ -270,6 +270,13 @@ struct CommitExtraInfo
 {
 };
 
+struct TransactionRecordLite
+{
+    UInt64 commit_ts;
+    CnchTransactionStatus status;
+    TransactionRecordLite() = default;
+    TransactionRecordLite(UInt64 _commit_ts, CnchTransactionStatus _status) : commit_ts(_commit_ts), status(_status) {}
+}; 
 
 /// Transaction Record provide an abstract layer on top of Protos::DataModelTransactionRecord
 /// User getters and setters, DO NOT create custom constructors
