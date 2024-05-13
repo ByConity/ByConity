@@ -104,6 +104,9 @@ using AggregatedDataWithKeys64 = AggregatedDataWithUInt64Key;
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
+using AggregatedDataWithUInt8KeyTwoLevel = TwoLevelHashMap<UInt8, AggregateDataPtr, HashCRC32<UInt8>>;
+using AggregatedDataWithUInt16KeyTwoLevel = TwoLevelHashMap<UInt16, AggregateDataPtr, HashCRC32<UInt16>>;
+
 using AggregatedDataWithUInt32KeyTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
 
@@ -560,10 +563,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256>>                   keys256;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKey>>                serialized;
 
+    std::unique_ptr<AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8KeyTwoLevel, false>>           key8_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16KeyTwoLevel, false>>         key16_two_level;
     std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>> key32_two_level;
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>> key64_two_level;
     std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>       key_string_two_level;
     std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>  key_fixed_string_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt16KeyTwoLevel, false, false, false>>  keys16_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel>>           keys32_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel>>           keys64_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>           keys128_two_level;
@@ -617,10 +623,13 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys128,                    false) \
         M(keys256,                    false) \
         M(serialized,                 false) \
+        M(key8_two_level,             true) \
+        M(key16_two_level,            true) \
         M(key32_two_level,            true) \
         M(key64_two_level,            true) \
         M(key_string_two_level,       true) \
         M(key_fixed_string_two_level, true) \
+        M(keys16_two_level,          true) \
         M(keys32_two_level,          true) \
         M(keys64_two_level,          true) \
         M(keys128_two_level,          true) \
@@ -772,10 +781,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     }
 
     #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M) \
+        M(key8)             \
+        M(key16)            \
         M(key32)            \
         M(key64)            \
         M(key_string)       \
         M(key_fixed_string) \
+        M(keys16)           \
         M(keys32)           \
         M(keys64)           \
         M(keys128)          \
@@ -792,9 +804,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_key_fixed_string) \
 
     #define APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_TWO_LEVEL(M) \
-        M(key8)             \
-        M(key16)            \
-        M(keys16)           \
         M(key64_hash64)     \
         M(key_string_hash64)\
         M(key_fixed_string_hash64) \
@@ -826,10 +835,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     void convertToTwoLevel();
 
     #define APPLY_FOR_VARIANTS_TWO_LEVEL(M) \
+        M(key8_two_level)             \
+        M(key16_two_level)            \
         M(key32_two_level)            \
         M(key64_two_level)            \
         M(key_string_two_level)       \
         M(key_fixed_string_two_level) \
+        M(keys16_two_level)           \
         M(keys32_two_level)           \
         M(keys64_two_level)           \
         M(keys128_two_level)          \
@@ -869,6 +881,25 @@ struct AggregatedDataVariants : private boost::noncopyable
             case Type::NAME: return true;
 
             APPLY_FOR_LOW_CARDINALITY_VARIANTS(M)
+        #undef M
+            default:
+                return false;
+        }
+    }
+
+    #define APPLY_FOR_VARIANTS_SMALL_KEYS(M) \
+        M(key8) \
+        M(key16) \
+        M(keys16) \
+
+    bool isSmallKeys() const
+    {
+        switch (type)
+        {
+        #define M(NAME) \
+            case Type::NAME: return true;
+
+            APPLY_FOR_VARIANTS_SMALL_KEYS(M)
         #undef M
             default:
                 return false;
@@ -1176,6 +1207,10 @@ private:
 
     /// For external aggregation.
     mutable TemporaryFiles temporary_files;
+
+    constexpr static const double large_midstate_estimate_by_input_ratio = 10.0;
+
+    mutable size_t delta_bytes_of_large_midstate_agg_inputs = 0;
 
 #if USE_EMBEDDED_COMPILER
     std::shared_ptr<CompiledAggregateFunctionsHolder> compiled_aggregate_functions_holder;

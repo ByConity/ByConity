@@ -1016,6 +1016,10 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     {
         for (size_t j = 0; j < aggregate_columns[i].size(); ++j)
         {
+            if (params.aggregates[i].function && params.aggregates[i].function->mayAggStateVeryLarge()) 
+            {
+                delta_bytes_of_large_midstate_agg_inputs += columns.at(params.aggregates[i].arguments[j])->byteSize();
+            }
             materialized_columns.push_back(columns.at(params.aggregates[i].arguments[j])->convertToFullColumnIfConst());
             aggregate_columns[i][j] = materialized_columns.back().get();
 
@@ -1142,9 +1146,14 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     /// Here all the results in the sum are taken into account, from different threads.
     auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation;
 
-    bool worth_convert_to_two_level
+    bool should_spill = params.max_bytes_before_external_group_by && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by);
+
+    bool bigkeys_worth_convert_to_two_level
         = (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
         || (params.group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(params.group_by_two_level_threshold_bytes));
+
+    bool worth_convert_to_two_level = (result.isSmallKeys() && should_spill) || 
+        (!result.isSmallKeys() && bigkeys_worth_convert_to_two_level);
 
     /** Converting to a two-level data structure. (Adaptive)
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
@@ -1167,7 +1176,8 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
         && result.isTwoLevel()
         && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)
         && worth_convert_to_two_level
-        && result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by)
+        && (result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by 
+            || delta_bytes_of_large_midstate_agg_inputs > params.spill_buffer_bytes_before_external_group_by * large_midstate_estimate_by_input_ratio))
     {
         size_t size = current_memory_usage + params.min_free_disk_space;
 
@@ -1186,6 +1196,7 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
             throw Exception("Not enough space for external aggregation in " + tmp_path, ErrorCodes::NOT_ENOUGH_SPACE);
 
         writeToTemporaryFile(result, tmp_path);
+        delta_bytes_of_large_midstate_agg_inputs = 0;
     }
 
     return true;
@@ -2352,6 +2363,9 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     {
         const auto & aggregate_column_name = params.aggregates[i].column_name;
         aggregate_columns[i] = &typeid_cast<const ColumnAggregateFunction &>(*block.getByName(aggregate_column_name).column).getData();
+        if (params.aggregates[i].function && params.aggregates[i].function->mayAggStateVeryLarge()) {
+            delta_bytes_of_large_midstate_agg_inputs += typeid_cast<const ColumnAggregateFunction &>(*block.getByName(aggregate_column_name).column).byteSize();
+        }
     }
 
     typename Method::State state(key_columns, key_sizes, aggregation_state_cache);
@@ -2488,9 +2502,14 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
     /// Here all the results in the sum are taken into account, from different threads.
     auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation;
 
-    bool worth_convert_to_two_level
+    bool should_spill = params.max_bytes_before_external_group_by && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by);
+
+    bool bigkeys_worth_convert_to_two_level
         = (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
         || (params.group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(params.group_by_two_level_threshold_bytes));
+
+    bool worth_convert_to_two_level = (result.isSmallKeys() && should_spill) || 
+        (!result.isSmallKeys() && bigkeys_worth_convert_to_two_level);
 
     /** Converting to a two-level data structure. (Adaptive)
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
@@ -2513,7 +2532,8 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
         && result.isTwoLevel()
         && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)
         && worth_convert_to_two_level
-        && result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by)
+        && (result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by 
+            || delta_bytes_of_large_midstate_agg_inputs > params.spill_buffer_bytes_before_external_group_by * large_midstate_estimate_by_input_ratio))
     {
         size_t size = current_memory_usage + params.min_free_disk_space;
 
@@ -2532,6 +2552,7 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
             throw Exception("Not enough space for external aggregation in " + tmp_path, ErrorCodes::NOT_ENOUGH_SPACE);
 
         writeToTemporaryFile(result, tmp_path);
+        delta_bytes_of_large_midstate_agg_inputs = 0;
     }
 
     return true;
