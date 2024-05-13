@@ -629,7 +629,8 @@
         "01500_attach_from_path_with_exception",
         "10027_bucket",
         "11007_atomic_attach_parts",
-        "11007_attach_commit_time_bug"
+        "11007_attach_commit_time_bug",
+        "00828_test_bitmap_format_parquet"
     ],
     
     /// Please do not add new tests to this list. It is only for backward compatibility.
