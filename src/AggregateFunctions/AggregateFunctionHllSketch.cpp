@@ -78,10 +78,6 @@ createAggregateFunctionHllSketch(const std::string & name, const DataTypes & arg
     {
         res.reset(createWithNumericBasedType<Function>(*data_type, argument_types));
     }
-    else if (which.isStringOrFixedString())
-    {
-        res = std::make_shared<AggregateFunctionCboFamilyForString<CpcDataAdaptor<String>>>(argument_types);
-    }
 
     if (!res)
     {
