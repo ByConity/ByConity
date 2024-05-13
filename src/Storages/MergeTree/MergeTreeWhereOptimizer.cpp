@@ -337,7 +337,7 @@ bool MergeTreeWhereOptimizer::isArraySetCheck(const ASTPtr & condition, bool) co
 
                 const ColumnDescription & column = columns.get(identifier_name);
 
-                if (!column.type->isBitmapIndex())
+                if (!column.type->isBitmapIndex() && !column.type->isSegmentBitmapIndex())
                     return false;
             }
 
@@ -398,7 +398,7 @@ void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, AS
         size_t array_set_check_function_numbers = 0;
         for (auto it = where_conditions.begin(); it != where_conditions.end();)
         {
-            if (containsArraySetCheck(it->node))
+            if (isArraySetCheck(it->node))
             {
                 array_set_check_function_numbers++;
             }
@@ -432,7 +432,7 @@ void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, AS
         if (!it->viable)
             break;
 
-        if (containsArraySetCheck(it->node))
+        if (isArraySetCheck(it->node))
             break;
 
         bool moved_enough = false;
