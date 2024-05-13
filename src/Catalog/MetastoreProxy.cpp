@@ -28,10 +28,10 @@
 #include <Protos/DataModelHelpers.h>
 #include <common/types.h>
 #include <common/logger_useful.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 #include <Catalog/MetastoreByteKVImpl.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/MergeTree/IMetastore.h>
-#include <Storages/StorageSnapshot.h>
 #include <Statistics/StatisticsBase.h>
 
 namespace DB::ErrorCodes
@@ -1791,6 +1791,11 @@ void MetastoreProxy::setBGJobStatus(const String & name_space, const String & uu
         metastore_ptr->put(
             refreshViewBGJobStatusKey(name_space, uuid),
             String{BGJobStatusInCatalog::serializeToChar(status)});
+    else if (type == CnchBGThreadType::PartMover)
+        metastore_ptr->put(
+            partMoverBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 }
@@ -1814,6 +1819,8 @@ std::optional<CnchBGThreadStatus> MetastoreProxy::getBGJobStatus(const String & 
         metastore_ptr->get(objectSchemaAssembleBGJobStatusKey(name_space, uuid), status_store_data);
     else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
         metastore_ptr->get(refreshViewBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::PartMover)
+        metastore_ptr->get(partMoverBGJobStatusKey(name_space, uuid), status_store_data);
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 
@@ -1852,6 +1859,8 @@ std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(co
                 return metastore_ptr->getByPrefix(allObjectSchemaAssembleBGJobStatusKeyPrefix(name_space));
             else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
                 return metastore_ptr->getByPrefix(allRefreshViewJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::PartMover)
+                return metastore_ptr->getByPrefix(allPartMoverBGJobStatusKeyPrefix(name_space));
             else
                 throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
         };
@@ -1898,6 +1907,9 @@ void MetastoreProxy::dropBGJobStatus(const String & name_space, const String & u
             break;
         case CnchBGThreadType::CnchRefreshMaterializedView:
             metastore_ptr->drop(dedupWorkerBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::PartMover:
+            metastore_ptr->drop(partMoverBGJobStatusKey(name_space, uuid));
             break;
         default:
             throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);

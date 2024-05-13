@@ -21,6 +21,7 @@
 #include <Common/RowExistsColumnInfo.h>
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Storages/DataDestinationType.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -535,6 +536,9 @@ void MergeTreeMetaBase::checkTTLExpressions(const StorageInMemoryMetadata & new_
     {
         for (const auto & move_ttl : new_table_ttl.move_ttl)
         {
+            if (move_ttl.destination_type == DataDestinationType::BYTECOOL)
+                continue;
+
             if (!getDestinationForMoveTTL(move_ttl))
             {
                 String message;

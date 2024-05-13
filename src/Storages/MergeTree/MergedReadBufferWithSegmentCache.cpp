@@ -297,6 +297,7 @@ void MergedReadBufferWithSegmentCache::seekToStart()
 
 void MergedReadBufferWithSegmentCache::seekToMark(size_t mark)
 {
+    LOG_TRACE(logger, "Seek {} with stream {} mark index {} by buffer size {}", part_name, stream_name, mark, settings.read_settings.remote_fs_buffer_size);
     seekToPosition(mark / cache_segment_size, marks_loader.getMark(mark));
 }
 

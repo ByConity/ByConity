@@ -16,6 +16,7 @@
 #include <DaemonManager/DaemonJob.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 #include <DaemonManager/Metrics.h>
 #include <Interpreters/Context.h>
 
@@ -59,6 +60,8 @@ bvar::Adder<int> & getExecuteMetric(CnchBGThreadType type)
             return g_executeImpl_MaterializedMySQL;
         case CnchBGThreadType::CnchRefreshMaterializedView:
             return g_executeImpl_CnchRefreshMaterializedView;
+        case CnchBGThreadType::PartMover:
+            return g_executeImpl_PartMover;
         default:
             throw Exception(String{"No metric add for daemon job type "} + toString(type) + ", this is coding mistake", ErrorCodes::LOGICAL_ERROR);
     }
@@ -91,6 +94,8 @@ bvar::Adder<int> & getExecuteErrorMetric(CnchBGThreadType type)
             return g_executeImpl_MaterializedMySQL_error;
         case CnchBGThreadType::CnchRefreshMaterializedView:
             return g_executeImpl_CnchRefreshMaterializedView_error;
+        case DB::CnchBGThreadType::PartMover:
+            return g_executeImpl_PartMover_error;
         default:
             throw Exception(String{"No error metric add for daemon job type "} + toString(type) + ", this is coding mistake", ErrorCodes::LOGICAL_ERROR);
     }
