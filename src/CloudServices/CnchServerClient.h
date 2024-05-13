@@ -72,7 +72,12 @@ public:
     void removeIntermediateData(const TxnTimestamp & txn_id);
 
     ServerDataPartsVector fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts, const std::set<Int64> & bucket_numbers);
-    DeleteBitmapMetaPtrVector fetchDeleteBitmaps(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
+    DeleteBitmapMetaPtrVector fetchDeleteBitmaps(
+        const String & remote_host,
+        const ConstStoragePtr & table,
+        const Strings & partition_list,
+        const TxnTimestamp & ts,
+        const std::set<Int64> & bucket_numbers = {});
 
     PrunedPartitions fetchPartitions(
         const String & remote_host,

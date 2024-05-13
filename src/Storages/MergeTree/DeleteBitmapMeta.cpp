@@ -44,34 +44,41 @@ std::shared_ptr<LocalDeleteBitmap> LocalDeleteBitmap::createBaseOrDelta(
     const ImmutableDeleteBitmapPtr & base_bitmap,
     const DeleteBitmapPtr & delta_bitmap,
     UInt64 txn_id,
-    bool force_create_base_bitmap)
+    bool force_create_base_bitmap,
+    int64_t bucket_number)
 {
     if (!delta_bitmap)
         throw Exception("base_bitmap and delta_bitmap cannot be null", ErrorCodes::LOGICAL_ERROR);
 
     /// In repair mode, base delete bitmap may not exists due to some bugs, just return delta bitmap.
     if (!base_bitmap)
-        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, delta_bitmap);
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, delta_bitmap, bucket_number);
 
     if (!force_create_base_bitmap && delta_bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
     {
-        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Delta, txn_id, delta_bitmap);
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Delta, txn_id, delta_bitmap, bucket_number);
     }
     else
     {
         *delta_bitmap |= *base_bitmap; // change delta_bitmap to the new base bitmap
-        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, delta_bitmap);
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, delta_bitmap, bucket_number);
     }
 }
 
 LocalDeleteBitmap::LocalDeleteBitmap(
-    const MergeTreePartInfo & info, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap_)
-    : LocalDeleteBitmap(info.partition_id, info.min_block, info.max_block, type, txn_id, std::move(bitmap_))
+    const MergeTreePartInfo & info, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap_, int64_t bucket_number)
+    : LocalDeleteBitmap(info.partition_id, info.min_block, info.max_block, type, txn_id, std::move(bitmap_), bucket_number)
 {
 }
 
 LocalDeleteBitmap::LocalDeleteBitmap(
-    const String & partition_id, Int64 min_block, Int64 max_block, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap_)
+    const String & partition_id,
+    Int64 min_block,
+    Int64 max_block,
+    DeleteBitmapMetaType type,
+    UInt64 txn_id,
+    DeleteBitmapPtr bitmap_,
+    int64_t bucket_number)
     : model(std::make_shared<Protos::DataModelDeleteBitmap>()), bitmap(std::move(bitmap_))
 {
     model->set_partition_id(partition_id);
@@ -80,6 +87,8 @@ LocalDeleteBitmap::LocalDeleteBitmap(
     model->set_type(static_cast<Protos::DataModelDeleteBitmap_Type>(type));
     model->set_txn_id(txn_id);
     model->set_cardinality(bitmap ? bitmap->cardinality() : 0);
+    if (bucket_number >= 0)
+        model->set_bucket_number(bucket_number);
 }
 
 UndoResource LocalDeleteBitmap::getUndoResource(const TxnTimestamp & new_txn_id, UndoResourceType type) const

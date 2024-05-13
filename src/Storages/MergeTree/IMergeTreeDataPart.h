@@ -591,7 +591,7 @@ public:
     /// If true it means that the part is belongs to unique table engine and from dumper tool
     bool low_priority = false;
 
-    Int64 bucket_number = -1;               /// bucket_number > 0 if the part is assigned to bucket
+    Int64 bucket_number = -1;               /// bucket_number >= 0 if the part is assigned to bucket
     UInt64 table_definition_hash = 0;       // cluster by definition hash for data file
 
     /************** Unique Table Delete Bitmap ***********/

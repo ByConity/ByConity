@@ -1503,16 +1503,23 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForStagedParts(
         return;
 
     std::set<String> request_partitions;
+    std::set<int64_t> request_buckets;
     for (const auto & part : parts)
     {
         const auto & partition_id = part->info.partition_id;
         request_partitions.insert(partition_id);
+        request_buckets.insert(part->bucket_number);
     }
 
     /// NOTE: Get all the bitmap meta needed only once from kv instead of getting many times for every partition to save time.
     Stopwatch watch;
-    auto all_bitmaps
-        = catalog->getDeleteBitmapsInPartitions(shared_from_this(), {request_partitions.begin(), request_partitions.end()}, start_time);
+    auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(
+        shared_from_this(),
+        {request_partitions.begin(), request_partitions.end()},
+        start_time,
+        nullptr,
+        Catalog::VisibilityLevel::Visible,
+        request_buckets);
     ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
     LOG_DEBUG(
         log,
@@ -1526,7 +1533,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForStagedParts(
 
     /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
     auto bitmap_it = bitmaps.begin();
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         while (bitmap_it != bitmaps.end() && (*(*bitmap_it)) <= part->info)
         {
@@ -2972,13 +2979,14 @@ LocalDeleteBitmaps StorageCnchMergeTree::createDeleteBitmapTombstones(const IMut
         {
             if (part->isDropRangePart())
             {
-                auto temp_bitmap = LocalDeleteBitmap::createRangeTombstone(part->info.partition_id, part->info.max_block, txnID);
+                auto temp_bitmap
+                    = LocalDeleteBitmap::createRangeTombstone(part->info.partition_id, part->info.max_block, txnID, part->bucket_number);
                 bitmap_tombstones.push_back(std::move(temp_bitmap));
                 LOG_DEBUG(log, "Range tombstone of delete bitmap has been created for drop range part " + part->info.getPartName());
             }
             else
             {
-                auto temp_bitmap = LocalDeleteBitmap::createTombstone(part->info, txnID);
+                auto temp_bitmap = LocalDeleteBitmap::createTombstone(part->info, txnID, part->bucket_number);
                 bitmap_tombstones.push_back(std::move(temp_bitmap));
                 LOG_DEBUG(log, "Tombstone of delete bitmap has been created for part {}", part->info.getPartName());
             }
