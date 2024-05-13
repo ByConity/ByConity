@@ -1539,6 +1539,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
     M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
     M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
+    M(UInt64, max_prewhere_or_expression_size, 0, "Max depth of condition which can push down to prewhere", 0) \
     M(Bool, enable_add_exchange, true, "Whether to enable AddExchange rule", 0) \
     M(Bool, enable_bitmap_index_splitter, true, "Whether to enable BitMapIndexSplitter", 0) \
     M(Bool, enable_column_pruning, true, "Whether to enable ColumnPruning", 0) \
