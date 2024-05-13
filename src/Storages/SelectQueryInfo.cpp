@@ -15,6 +15,7 @@
 
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <Protos/PreparedStatementHelper.h>
 #include <Protos/plan_node_utils.pb.h>
@@ -81,10 +82,13 @@ std::shared_ptr<InterpreterSelectQuery> SelectQueryInfo::buildQueryInfoFromQuery
 ASTPtr getFilterFromQueryInfo(const SelectQueryInfo & query_info, bool clone)
 {
     const ASTSelectQuery & select = query_info.query->as<ASTSelectQuery &>();
+    ASTs conjuncts;
     if (select.where())
-        return clone ? select.where()->clone() : select.where();
+        conjuncts.emplace_back(clone ? select.where()->clone() : select.where());
     if (select.prewhere())
-        return clone ? select.prewhere()->clone() : select.prewhere();
+        conjuncts.emplace_back(clone ? select.prewhere()->clone() : select.prewhere());
+    if (!conjuncts.empty())
+        return PredicateUtils::combineConjuncts(conjuncts);
     if (!query_info.atomic_predicates_expr.empty())
     {
         ASTPtr filter_query;
