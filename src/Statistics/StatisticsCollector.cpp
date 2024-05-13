@@ -65,11 +65,17 @@ void StatisticsCollector::writeToCatalog()
     }
     StatsData data;
     data.table_stats = table_stats.writeToCollection();
+    std::vector<String> columns;
     for (auto & [name, stats] : columns_stats)
     {
+        columns.emplace_back(name);
         data.column_stats[name] = stats.writeToCollection();
     }
     auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
+    auto cols_desc = catalog->filterCollectableColumns(table_info, columns);
+    // drop old columns to ensure other data is deleted
+    // especially when collecting statistics_collect_histogram=0
+    proxy->dropColumns(table_info, cols_desc);
     proxy->put(table_info, std::move(data));
     catalog->invalidateClusterStatsCache(table_info);
     // clear udi whenever it is to create/drop stats

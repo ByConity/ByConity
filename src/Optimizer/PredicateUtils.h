@@ -101,6 +101,7 @@ public:
     static bool isFalsePredicate(const T & predicate);
 
     static bool containsAll(const Strings & partition_symbols, const std::set<String> & unique_symbols);
+    static bool containsAny(const Strings & partition_symbols, const std::set<String> & unique_symbols);
 
     static bool isInliningCandidate(ConstASTPtr & predicate, ProjectionNode & node);
     static ASTPtr extractJoinPredicate(JoinNode &);

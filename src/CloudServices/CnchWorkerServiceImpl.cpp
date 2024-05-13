@@ -568,31 +568,36 @@ void CnchWorkerServiceImpl::checkDataParts(
 
         LOG_DEBUG(log, "Receiving parts for table {} to check.", cloud_merge_tree.getStorageID().getNameForLogs());
 
-        // auto data_parts = createPartVectorFromModelsForSend<MutableDataPartPtr>(cloud_merge_tree, request->parts());
-        MutableMergeTreeDataPartsCNCHVector data_parts = {};
+        auto data_parts = createPartVectorFromModelsForSend<MutableMergeTreeDataPartCNCHPtr>(cloud_merge_tree, request->parts());
 
-        bool is_passed = false;
-        String message;
+        ThreadPool check_pool(std::min<UInt64>(query_context->getSettingsRef().parts_preallocate_pool_size, data_parts.size()));
+        std::mutex mutex;
 
         for (auto & part : data_parts)
         {
-            try
-            {
-                // TODO: checkDataParts(part);
-                // dynamic_cast<MergeTreeDataPartCNCH*>(part.get())->loadFromFileSystem(storage.get());
-                is_passed = true;
-                message.clear();
-            }
-            catch (const Exception & e)
-            {
-                is_passed = false;
-                message = e.message();
-            }
-
-            *response->mutable_part_path()->Add() = part->name;
-            *response->mutable_is_passed()->Add() = is_passed;
-            *response->mutable_message()->Add() = message;
+            check_pool.scheduleOrThrowOnError([&, part]() {
+                bool is_passed = false;
+                String message;
+                try
+                {
+                    // TODO: checkDataParts(part);
+                    dynamic_cast<MergeTreeDataPartCNCH*>(part.get())->loadFromFileSystem(storage.get());
+                    is_passed = true;
+                    message.clear();
+                }
+                catch (const Exception & e)
+                {
+                    is_passed = false;
+                    message = e.message();
+                }
+                std::lock_guard lock(mutex);
+                *response->mutable_part_path()->Add() = part->name;
+                *response->mutable_is_passed()->Add() = is_passed;
+                *response->mutable_message()->Add() = message;
+            });
         }
+
+        check_pool.wait();
 
         session->release();
         LOG_DEBUG(log, "Send check results back for {} parts.", data_parts.size());
@@ -1037,6 +1042,8 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
                 throw Exception("TopicPartitionList is required for starting consume", ErrorCodes::BAD_ARGUMENTS);
             for (const auto & tpl : request->tpl())
                 command->tpl.emplace_back(tpl.topic(), tpl.partition(), tpl.offset());
+            for (const auto & tpl: request->sample_partitions())
+                command->sample_partitions.emplace(tpl.topic(), tpl.partition());
         }
 
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);

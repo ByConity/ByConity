@@ -257,9 +257,24 @@ void OptimizeInput::execute()
             auto cte_def_group = context->getMemo().getCTEDefGroupByCTEId(cte_id);
 
             // 1. Check whether request property for this group_expr is invalid.
-            if (context->getRequiredProp().getCTEDescriptions().contains(cte_id)
-                && !context->getRequiredProp().getCTEDescriptions().isShared(cte_id))
-                return;
+            if (context->getRequiredProp().getCTEDescriptions().contains(cte_id))
+            {
+                // It is invalid if cte require inline
+                if (!context->getRequiredProp().getCTEDescriptions().isShared(cte_id))
+                {
+                    // LOG_TRACE(log, "Invalid {}", group_expr->getGroupId());
+                    return;
+                }
+
+                auto cte_description = context->getRequiredProp().getCTEDescriptions().getSharedDescription(cte_id);
+                // It is invalid if cte ref don't require broadcast but cte def output property require broadcast
+                if (cte_description.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::FIXED_BROADCAST
+                    && context->getRequiredProp().getNodePartitioning().getPartitioningHandle() != Partitioning::Handle::FIXED_BROADCAST)
+                {
+                    // LOG_TRACE(log, "Invalid {}: BROADCAST", group_expr->getGroupId());
+                    return;
+                }
+            }
 
             // 1-1. CTE may have not been explored in common ancestor if it is reference only once.
             if (!context->getRequiredProp().getCTEDescriptions().contains(cte_id))

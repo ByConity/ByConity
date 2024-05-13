@@ -1563,14 +1563,13 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 {
     MarkRanges res;
 
+    /// Do NOT need to load index if it is not used.
     size_t marks_count = part->index_granularity.getMarksCount();
-    const auto & index = *(part->getIndex());
     if (marks_count == 0)
         return res;
 
     bool has_final_mark = part->index_granularity.hasFinalMark();
 
-    /// If index is not used.
     if (key_condition.alwaysUnknownOrTrue())
     {
         if (has_final_mark)
@@ -1580,6 +1579,9 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 
         return res;
     }
+
+    /// Here, index is needed and we try to load it
+    const auto & index = *(part->getIndex());
 
     size_t used_key_size = key_condition.getMaxKeyColumn() + 1;
 
@@ -1784,7 +1786,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
         ranges,
         reader_settings,
         context->getMarkCache().get(),
-        context->getInternalProgressCallback());
+        context->getProgressCallback());
 
     MarkRanges res;
 

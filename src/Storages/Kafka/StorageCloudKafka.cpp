@@ -212,6 +212,8 @@ void StorageCloudKafka::subscribeBuffer(BufferPtr &buffer)
 {
     auto *consumer_buf = buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>();
     consumer_buf->assign(consumer_context.assignment);
+    if (unlikely(!consumer_context.sample_partitions.empty()))
+        consumer_buf->setSampleConsumingPartitionList(consumer_context.sample_partitions);
 
     consumer_buf->reset();
 }
@@ -283,7 +285,8 @@ BufferPtr StorageCloudKafka::createBuffer()
             settings.row_delimiter);
 }
 
-void StorageCloudKafka::createStreamThread(const cppkafka::TopicPartitionList & assignment)
+void StorageCloudKafka::createStreamThread(const cppkafka::TopicPartitionList & assignment,
+                                           const std::set<cppkafka::TopicPartition> & sample_partitions)
 {
     if (consumer_context.initialized)
     {
@@ -294,6 +297,7 @@ void StorageCloudKafka::createStreamThread(const cppkafka::TopicPartitionList & 
     LOG_TRACE(log, "Creating stream thread and buffer");
     consumer_context.mutex = std::make_unique<std::timed_mutex>();
     consumer_context.assignment = assignment;
+    consumer_context.sample_partitions = sample_partitions;
     auto task = getContext()->getConsumeSchedulePool().createTask(
             log->name(),[this] { streamThread(); });
     task->deactivate();
@@ -329,12 +333,13 @@ void StorageCloudKafka::checkStagedArea()
     }
 }
 
-void StorageCloudKafka::startConsume(size_t consumer_index, const cppkafka::TopicPartitionList & tpl)
+void StorageCloudKafka::startConsume(size_t consumer_index, const cppkafka::TopicPartitionList & tpl,
+                                    const std::set<cppkafka::TopicPartition> & sample_partitions)
 {
     std::lock_guard lock_thread(table_status_mutex);
 
     assigned_consumer_index = consumer_index;
-    createStreamThread(tpl);
+    createStreamThread(tpl, sample_partitions);
 
     LOG_TRACE(log, "Activating stream thread");
     stream_run = true;
@@ -993,7 +998,7 @@ void executeKafkaConsumeTaskImpl(const KafkaTaskCommand & command, ContextMutabl
     {
         case KafkaTaskCommand::Type::START_CONSUME:
             storage->setCnchStorageID(command.cnch_storage_id);
-            storage->startConsume(command.assigned_consumer, command.tpl);
+            storage->startConsume(command.assigned_consumer, command.tpl, command.sample_partitions);
             break;
         case KafkaTaskCommand::Type::STOP_CONSUME:
             storage->stopConsume();

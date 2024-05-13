@@ -427,6 +427,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             {
                 case DataDestinationType::DISK: [[fallthrough]];
                 case DataDestinationType::VOLUME:
+                case DataDestinationType::BYTECOOL:
                     required_access.emplace_back(AccessType::ALTER_MOVE_PARTITION, database, table);
                     break;
                 case DataDestinationType::TABLE:

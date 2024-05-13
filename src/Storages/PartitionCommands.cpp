@@ -126,6 +126,9 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
             case DataDestinationType::VOLUME:
                 res.move_destination_type = PartitionCommand::MoveDestinationType::VOLUME;
                 break;
+            case DataDestinationType::BYTECOOL:
+                res.move_destination_type = PartitionCommand::MoveDestinationType::BYTECOOL;
+                break;
             case DataDestinationType::TABLE:
                 res.move_destination_type = PartitionCommand::MoveDestinationType::TABLE;
                 res.to_database = command_ast->to_database;
@@ -225,6 +228,22 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
                     res.key_names.push_back(identifier->name());
                 else
                     throw Exception("Illegal key: " + child->getColumnName(), ErrorCodes::BAD_ARGUMENTS);
+            }
+        }
+        if (command_ast->buckets)
+        {   
+            const auto & bucket_expr_list = command_ast->buckets->as<ASTExpressionList &>();
+            for (const auto &  child : bucket_expr_list.children)
+            {
+                if ( auto * literal = child->as<ASTLiteral>())
+                {   
+                    Int64 bucket_num = literal->value.safeGet<UInt64>();
+                    res.bucket_nums.push_back(bucket_num);
+                }
+                else
+                {
+                    throw Exception("Illegal Bucket number need Literal", ErrorCodes::BAD_ARGUMENTS);
+                }   
             }
         }
 

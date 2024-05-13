@@ -1072,7 +1072,7 @@ namespace Catalog
         const TxnTimestamp & previous_version,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts,
-        const bool is_recluster)
+        const bool is_modify_cluster_by)
     {
         runWithMetricSupport(
             [&] {
@@ -1134,7 +1134,7 @@ namespace Catalog
                     throw Exception("Alter table failed.", ErrorCodes::CATALOG_ALTER_TABLE_FAILURE);
 
                 // Set cluster status after Alter table is successful to update PartCacheManager with new table metadata
-                if (is_recluster)
+                if (is_modify_cluster_by)
                     setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy().getDeterminHash());
 
                 if (auto cache_manager = context.getPartCacheManager(); cache_manager)
@@ -1576,6 +1576,7 @@ namespace Catalog
         ServerDataPartsVector res;
         runWithMetricSupport(
             [&] {
+                Stopwatch watch;
                 const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get());
                 if (!storage)
                     throw Exception("Table is not a merge tree", ErrorCodes::BAD_ARGUMENTS);
@@ -1622,10 +1623,36 @@ namespace Catalog
                     res.push_back(std::make_shared<ServerDataPart>(createPartWrapperFromModel(*storage, std::move(*model))));
                 }
 
+                size_t size_before = res.size();
+
                 if (ts && execute_filter)
                 {
+                    LOG_TRACE(
+                        log,
+                        "{} Start handle intermediate staged data parts. Total number of staged parts is {}, timestamp: {}",
+                        storage->getStorageID().getNameForLogs(),
+                        res.size(),
+                        ts.toString());
+
                     getVisibleServerDataParts(res, ts, this, nullptr);
+
+                    LOG_TRACE(
+                        log,
+                        "{} Finish handle intermediate staged data parts. Total number of staged parts is {}, timestamp: {}",
+                        storage->getStorageID().getNameForLogs(),
+                        res.size(),
+                        ts.toString());
                 }
+
+                LOG_DEBUG(
+                    log,
+                    "Elapsed {}ms to get {}/{} staged data parts for table : {}, ts : {}, execute_filter: {}"
+                    ,watch.elapsedMilliseconds()
+                    ,res.size()
+                    ,size_before
+                    ,storage->getStorageID().getNameForLogs()
+                    ,ts.toString()
+                    ,execute_filter);
             },
             ProfileEvents::GetStagedPartsSuccess,
             ProfileEvents::GetStagedPartsFailed);
@@ -1919,18 +1946,38 @@ namespace Catalog
                     }
                 }
 
+                size_t size_before = res.size();
+
                 /// filter out invisible bitmaps (uncommitted or invisible to current txn)
                 if (execute_filter)
+                {
+                    LOG_TRACE(
+                        log,
+                        "{} Start handle intermediate delete bitmap metas. Total number of delete bitmap metas is {}, timestamp: {}",
+                        storage->getStorageID().getNameForLogs(),
+                        res.size(),
+                        ts.toString());
+
                     getVisibleBitmaps(res, ts, this, nullptr);
+
+                    LOG_TRACE(
+                        log,
+                        "{} Finish handle intermediate delete bitmap metas. Total number of delete bitmap metas is {}, timestamp: {}",
+                        storage->getStorageID().getNameForLogs(),
+                        res.size(),
+                        ts.toString());
+                }
                 LOG_DEBUG(
                     log,
-                    "Elapsed {}ms to get {} delete bitmaps in {} partitions for table : {} , source : {}, ts : {}"
+                    "Elapsed {}ms to get {}/{} delete bitmaps in {} partitions for table : {} , source : {}, ts : {}, execute_filter: {}"
                     ,watch.elapsedMilliseconds()
                     ,res.size()
+                    ,size_before
                     ,partitions.size()
                     ,storage->getStorageID().getNameForLogs()
                     ,source
-                    ,ts.toString());
+                    ,ts.toString()
+                    ,execute_filter);
             },
             ProfileEvents::GetDeleteBitmapsFromCacheInPartitionsSuccess,
             ProfileEvents::GetDeleteBitmapsFromCacheInPartitionsFailed);
@@ -3678,7 +3725,6 @@ namespace Catalog
             return false;
 
         bool ret = false;
-        const String ub_prefix{UNDO_BUFFER_PREFIX};
         while (true)
         {
             ret = metastore_iter->next();
@@ -3686,14 +3732,12 @@ namespace Catalog
                 break;
             cur_undo_resource = UndoResource::deserialize(metastore_iter->value());
             const String & key = metastore_iter->key();
-            auto pos = key.find(ub_prefix);
-            if (pos == std::string::npos || pos + ub_prefix.size() > key.size())
+            UInt64 txn_id;
+            if (!parseTxnIdFromUndoBufferKey(key, txn_id))
             {
                 LOG_ERROR(log, "Invalid undobuffer key: {}", metastore_iter->key());
                 continue;
             }
-
-            UInt64 txn_id = std::stoull(key.substr(pos + ub_prefix.size()));
             cur_undo_resource->txn_id = txn_id;
             valid = true;
             break;

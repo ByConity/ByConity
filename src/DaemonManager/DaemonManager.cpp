@@ -12,35 +12,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include <chrono>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
+#include <CloudServices/CnchServerClient.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
-#include <Common/getMultipleKeysFromConfig.h>
+#include <DaemonManager/DMDefines.h>
 #include <DaemonManager/DaemonFactory.h>
-#include <DaemonManager/DaemonManager.h>
-#include <DaemonManager/registerDaemons.h>
+#include <DaemonManager/DaemonHelper.h>
 #include <DaemonManager/DaemonJobGlobalGC.h>
+#include <DaemonManager/DaemonManager.h>
+#include <DaemonManager/DaemonManagerServiceImpl.h>
+#include <DaemonManager/FixCatalogMetaDataTask.h>
+#include <DaemonManager/registerDaemons.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <Functions/registerFunctions.h>
-#include <CloudServices/CnchServerClient.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <brpc/server.h>
 #include <gflags/gflags.h>
-#include <Poco/Util/HelpFormatter.h>
 #include <Poco/Environment.h>
-#include <Common/StringUtils/StringUtils.h>
+#include <Poco/Util/HelpFormatter.h>
+#include <Common/Brpc/BrpcApplication.h>
 #include <Common/Config/MetastoreConfig.h>
-#include <DaemonManager/DMDefines.h>
-#include <DaemonManager/DaemonHelper.h>
-#include <DaemonManager/DaemonManagerServiceImpl.h>
-#include <DaemonManager/FixCatalogMetaDataTask.h>
-#include <chrono>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/getMultipleKeysFromConfig.h>
 
 using namespace std::chrono_literals;
 
@@ -86,6 +86,8 @@ void DaemonManager::uninitialize()
 
 int DaemonManager::run()
 {
+    // Init Brpc config. It's a must before you construct a RpcClientBase.
+    BrpcApplication::getInstance().initialize(config());
     if (config().hasOption("help"))
     {
         Poco::Util::HelpFormatter help_formatter(DaemonManager::options());
@@ -180,7 +182,8 @@ std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> createDaemonJob
         { "PART_CLUSTERING", 10000},
         { "OBJECT_SCHEMA_ASSEMBLE", 10000},
         { "MATERIALIZED_MYSQL", 10000},
-        { "CNCH_REFRESH_MATERIALIZED_VIEW", 10000}
+        { "CNCH_REFRESH_MATERIALIZED_VIEW", 10000},
+        { "PART_MOVER", 10000}
     };
 
     std::map<std::string, unsigned int> config = updateConfig(std::move(default_config), app_config);

@@ -175,6 +175,10 @@ MutableMergeTreeDataPartCNCHPtr ServerDataPart::toCNCHDataPart(
 {
     auto res = createPartFromModel(storage, part_model(), /*id_full_paths,*/ relative_path);
 
+    /// Here we need to use the commit time of the server part to set the commit time, otherwise the commit time detected from the transaction may be lost which will affect the visibility.
+    if (getCommitTime() != IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+        res->commit_time = getCommitTime();
+
     if (prev_part)
         res->setPreviousPart(prev_part->toCNCHDataPart(storage, /*id_full_paths,*/ relative_path));
 

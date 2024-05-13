@@ -106,6 +106,16 @@ ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQuer
                 column_compressed_sizes[name] = sizes.data_compressed;
 
             auto current_info = buildSelectQueryInfoForQuery(query_info.query, context);
+            for (const auto & column_name : current_info.syntax_analyzer_result->requiredSourceColumns())
+            {
+                UInt64 size = merge_tree_data->getColumnCompressedSize(column_name);
+                // Now get implicit column size only for prewhere pushdown
+                if (size == 0 && context->getSettingsRef().enable_implicit_column_prewhere_push && isMapImplicitKey(column_name))
+                {
+                    size = merge_tree_data->calculateMapColumnSizesImpl(column_name).data_compressed;
+                }
+                column_compressed_sizes[column_name] = size;
+            }            
             MergeTreeWhereOptimizer{
                 current_info,
                 context,

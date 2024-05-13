@@ -34,8 +34,10 @@
 #include <Optimizer/SymbolUtils.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
+#include <QueryPlan/ArrayJoinStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/MarkDistinctStep.h>
@@ -43,7 +45,6 @@
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/UnionStep.h>
 #include <Common/FieldVisitorConvertToNumber.h>
-#include <Parsers/ASTIdentifier.h>
 
 namespace DB
 {
@@ -718,6 +719,64 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         output_node = output_expression_node;
     }
     return output_node;
+}
+
+PlanNodePtr PredicateVisitor::visitArrayJoinNode(ArrayJoinNode & node, PredicateContext & predicate_context)
+{
+    const auto & step = *node.getStep();
+
+    ConstASTPtr inherited_predicate = predicate_context.predicate;
+    EqualityInference equality_inference = EqualityInference::newInstance(inherited_predicate, context);
+
+    // filter with array join result column, can't push down
+    std::vector<String> array_join_columns;
+    for (const auto & input : step.getResultNameSet())
+    {
+        array_join_columns.emplace_back(input);
+    }
+
+    std::vector<ConstASTPtr> pushdown_array_join_conjuncts;
+    std::vector<ConstASTPtr> post_array_join_conjuncts;
+
+    for (auto & conjunct : PredicateUtils::extractConjuncts(inherited_predicate))
+    {
+        // Strip out non-deterministic conjuncts
+        if (!ExpressionDeterminism::isDeterministic(conjunct, context))
+        {
+            post_array_join_conjuncts.emplace_back(conjunct);
+            continue;
+        }
+
+        /// for predicate contains array join column, can't preform push down.
+        std::set<String> predicate_symbols = SymbolsExtractor::extract(conjunct);
+        if (PredicateUtils::containsAny(array_join_columns, predicate_symbols))
+        {
+            post_array_join_conjuncts.emplace_back(conjunct);
+        }
+        else
+        {
+            pushdown_array_join_conjuncts.emplace_back(conjunct);
+        }
+    }
+
+    PredicateContext array_join_context{
+        .predicate = PredicateUtils::combineConjuncts(pushdown_array_join_conjuncts),
+        .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE,
+        .context = predicate_context.context};
+    PlanNodePtr rewritten = process(*node.getChildren()[0], array_join_context);
+
+    PlanNodePtr output = node.shared_from_this();
+    if (rewritten != node.getChildren()[0])
+    {
+        output = PlanNodeBase::createPlanNode(context->nextNodeId(), node.getStep(), PlanNodes{rewritten}, node.getStatistics());
+    }
+    if (!post_array_join_conjuncts.empty())
+    {
+        auto filter_step = std::make_shared<FilterStep>(
+            output->getStep()->getOutputStream(), PredicateUtils::combineConjuncts(post_array_join_conjuncts));
+        output = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{output});
+    }
+    return output;
 }
 
 PlanNodePtr PredicateVisitor::visitExchangeNode(ExchangeNode & node, PredicateContext & predicate_context)
@@ -1509,7 +1568,7 @@ ASTPtr EffectivePredicateVisitor::visitFilterNode(FilterNode & node, ContextMuta
      * have different type, left type is Date, right type is String.
      */
     const NameToType & name_types = step.getOutputStream().getNamesToTypes();
-    auto is_inconsistent= [&](ConstASTPtr & ptr) {
+    auto is_inconsistent = [&](ConstASTPtr & ptr) {
         if (ptr->as<ASTFunction>())
         {
             const auto & fun = ptr->as<ASTFunction &>();
@@ -1529,7 +1588,7 @@ ASTPtr EffectivePredicateVisitor::visitFilterNode(FilterNode & node, ContextMuta
     };
 
     std::vector<ConstASTPtr> removed_inconsistent_type_filters;
-    for (auto & ptr: removed_dynamic_filters)
+    for (auto & ptr : removed_dynamic_filters)
     {
         if (is_inconsistent(ptr))
             continue;
@@ -1634,5 +1693,4 @@ ASTPtr EffectivePredicateVisitor::visitCTERefNode(CTERefNode &, ContextMutablePt
 {
     return PredicateConst::TRUE_VALUE;
 }
-
 }

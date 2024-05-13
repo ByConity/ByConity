@@ -95,6 +95,7 @@ REGISTER_FUNCTION(Hashing)
     factory.registerFunction<FunctionMurmurHash3_32WithSeedV2>("murmurHash3_32WithSeedV2");
     factory.registerFunction<FunctionMurmurHash3_64WithSeedV2>("murmurHash3_64WithSeedV2");
 
+    factory.registerFunction<FunctionSparkHashSimple>();
 #endif
 
     factory.registerFunction<FunctionXxHash32>();

@@ -23,6 +23,10 @@ struct PlanSegmentInstanceId
         else
             return parallel_id < other.parallel_id;
     }
+    String toString() const
+    {
+        return fmt::format("instance_id[{}, {}]", segment_id, parallel_id);
+    }
 };
 
 class PlanSegment;

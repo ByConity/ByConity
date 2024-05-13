@@ -1962,6 +1962,40 @@ ColumnSize IMergeTreeDataPart::getColumnSize(const String & column_name, const I
     return ColumnSize{};
 }
 
+ColumnSize IMergeTreeDataPart::getMapColumnSize(const String & map_implicit_column_name, const IDataType & type) const
+{
+    auto checksums = getChecksums();
+    ColumnSize size;
+    if (checksums->empty())
+        return size;
+
+    // special handling flattened map type
+    if (type.isByteMap())
+    {
+        const auto & implicit_map_type = typeid_cast<const DataTypeMap &>(type).getValueTypeForImplicitColumn();
+        implicit_map_type->getDefaultSerialization()->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path) {
+            auto filename = ISerialization::getFileNameForStream({map_implicit_column_name, implicit_map_type}, substream_path);
+            const String & implicit_col_name_bin = filename + DATA_FILE_EXTENSION;
+            const String & implicit_col_name_mrk = filename + getMarksFileExtension();
+
+            // we get name, and we direct find in map
+            auto pos1 = checksums->files.find(implicit_col_name_bin);
+            auto pos2 = checksums->files.find(implicit_col_name_mrk);
+            if (pos1 != checksums->files.end())
+            {
+                size.data_compressed += pos1->second.file_size;
+                size.data_uncompressed += pos1->second.uncompressed_size;
+            }
+            if (pos2 != checksums->files.end())
+            {
+                size.marks += pos2->second.file_size;
+            }
+
+        });
+    }
+    return size;
+}
+
 void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) const
 {
     auto checksums = getChecksums();

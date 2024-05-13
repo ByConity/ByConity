@@ -100,6 +100,7 @@ namespace DB::Catalog
 #define CLUSTER_BG_JOB_STATUS "CLUSTER_BGJS_"
 #define MERGE_BG_JOB_STATUS "MERGE_BGJS_"
 #define PARTGC_BG_JOB_STATUS "PARTGC_BGJS_"
+#define PARTMOVER_BG_JOB_STATUS "PARTMOVER_BGJS_"
 #define CONSUMER_BG_JOB_STATUS "CONSUMER_BGJS_"
 #define DEDUPWORKER_BG_JOB_STATUS "DEDUPWORKER_BGJS_"
 #define OBJECT_SCHEMA_ASSEMBLE_BG_JOB_STATUS "OBJECT_SCHEMA_ASSEMBLE_BGJS_"
@@ -548,6 +549,12 @@ public:
         return escapeString(name_space) + '_' + UNDO_BUFFER_PREFIX + toString(txn);
     }
 
+    /// Make sure only touch wanted transaction id's undo buffer keys
+    static std::string undoBufferKeyPrefix(const std::string & name_space, const UInt64 & txn, bool write_undo_buffer_new_key)
+    {
+        return undoBufferKey(name_space, txn, write_undo_buffer_new_key) + "_";
+    }
+
     static std::string undoBufferStoreKey(const std::string & name_space, const UInt64 & txn, const String & rpc_address, const UndoResource & resource, bool write_undo_buffer_new_key)
     {
         return undoBufferKey(name_space, txn, write_undo_buffer_new_key) + '_' + escapeString(rpc_address) + '_' + escapeString(toString(resource.id));
@@ -600,6 +607,16 @@ public:
     static std::string partGCBGJobStatusKey(const std::string & name_space, const std::string & uuid)
     {
         return allPartGCBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
+    static std::string allPartMoverBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + PARTMOVER_BG_JOB_STATUS;
+    }
+
+    static std::string partMoverBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allPartMoverBGJobStatusKeyPrefix(name_space) + uuid;
     }
 
     static std::string allConsumerBGJobStatusKeyPrefix(const std::string & name_space)

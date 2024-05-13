@@ -140,7 +140,7 @@ InlineProjections::inlineProjections(PlanNodePtr & parent_node, PlanNodePtr & ch
     else
     {
         auto new_child_step = std::make_shared<ProjectionStep>(
-            child->getChildren()[0]->getStep()->getOutputStream(), new_child_assignments, new_child_types);
+            child->getChildren()[0]->getStep()->getOutputStream(), new_child_assignments, new_child_types, false, child_step.isIndexProject());
         new_child_node = std::make_shared<ProjectionNode>(child->getId(), std::move(new_child_step), PlanNodes{child->getChildren()[0]});
     }
 

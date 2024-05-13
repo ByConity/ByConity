@@ -222,6 +222,60 @@ void CnchWorkerClient::sendCreateQueries(
     RPCHelpers::checkResponse(response);
 }
 
+brpc::CallId CnchWorkerClient::sendCnchFileDataParts(
+    const ContextPtr & context,
+    const StoragePtr & storage,
+    const String & local_table_name,
+    const DB::FileDataPartsCNCHVector & parts,
+    const ExceptionHandlerPtr & handler)
+{
+    Protos::SendCnchFileDataPartsReq request;
+    request.set_txn_id(context->getCurrentTransactionID());
+    request.set_database_name(storage->getDatabaseName());
+    request.set_table_name(local_table_name);
+    fillCnchFilePartsModel(parts, *request.mutable_parts());
+
+    auto * cntl = new brpc::Controller;
+    const auto call_id = cntl->call_id();
+    auto * response = new Protos::SendCnchFileDataPartsResp;
+    stub->sendCnchFileDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
+    return call_id;
+}
+
+CheckResults CnchWorkerClient::checkDataParts(
+    const ContextPtr & context,
+    const IStorage & storage,
+    const String & local_table_name,
+    const String & create_query,
+    const ServerDataPartsVector & parts)
+{
+    brpc::Controller cntl;
+    Protos::CheckDataPartsReq request;
+    Protos::CheckDataPartsResp response;
+
+    const auto & settings = context->getSettingsRef();
+    auto timeout = settings.max_execution_time.value.totalSeconds();
+    cntl.set_timeout_ms(timeout ? timeout*1000 : 180000);
+
+    request.set_txn_id(context->getCurrentTransactionID());
+    request.set_database_name(storage.getDatabaseName());
+    request.set_table_name(local_table_name);
+    request.set_create_query(create_query);
+
+    fillPartsModelForSend(storage, parts, *request.mutable_parts());
+
+    stub->checkDataParts(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    CheckResults res;
+
+    for (size_t i = 0, size = response.part_path().size(); i < size; ++i)
+        res.emplace_back(response.part_path()[i], response.is_passed()[i], response.message()[i]);
+
+    return res;
+}
+
 brpc::CallId CnchWorkerClient::preloadDataParts(
     const ContextPtr & context,
     const TxnTimestamp & txn_id,
@@ -546,6 +600,13 @@ void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
     for (const auto & tpl : command.tpl)
     {
         auto * cur_tpl = request.add_tpl();
+        cur_tpl->set_topic(toString(tpl.get_topic()));
+        cur_tpl->set_partition(tpl.get_partition());
+        cur_tpl->set_offset(tpl.get_offset());
+    }
+    for (const auto & tpl : command.sample_partitions)
+    {
+        auto * cur_tpl = request.add_sample_partitions();
         cur_tpl->set_topic(toString(tpl.get_topic()));
         cur_tpl->set_partition(tpl.get_partition());
         cur_tpl->set_offset(tpl.get_offset());

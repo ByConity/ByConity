@@ -1395,22 +1395,22 @@ inline bool tryParseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer &
 
 /** Conversion of DateTime to Date: throw off time component.
   */
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeUInt32, DataTypeDate, ToDateTransform32Or64<UInt32, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeUInt64, DataTypeDate, ToDateTransform32Or64<UInt64, UInt16>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeUInt32, DataTypeDate, ToDateTransform32Or64<UInt32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeUInt64, DataTypeDate, ToDateTransform32Or64<UInt64, UInt16, Adaptive>> {};
 template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt8, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
     : DateTimeTransformForNullImpl<DataTypeInt8, DataTypeDate, ToDateTransform8Or16Signed<Int8, UInt16>> {};
 template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt16, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
     : DateTimeTransformForNullImpl<DataTypeInt16, DataTypeDate, ToDateTransform8Or16Signed<Int16, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeInt32, DataTypeDate, ToDateTransform32Or64Signed<Int32, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeInt64, DataTypeDate, ToDateTransform32Or64Signed<Int64, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeFloat32, DataTypeDate, ToDateTransform32Or64Signed<Float32, UInt16>> {};
-template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
-    : DateTimeTransformForNullImpl<DataTypeFloat64, DataTypeDate, ToDateTransform32Or64Signed<Float64, UInt16>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeInt32, DataTypeDate, ToDateTransform32Or64Signed<Int32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeInt64, DataTypeDate, ToDateTransform32Or64Signed<Int64, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeFloat32, DataTypeDate, ToDateTransform32Or64Signed<Float32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeFloat64, DataTypeDate, ToDateTransform32Or64Signed<Float64, UInt16, Adaptive>> {};
 
 template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt32, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
     : DateTimeTransformForNullImpl<DataTypeUInt32, DataTypeDate32, ToDate32Transform32Or64<UInt32, Int32>> {};
@@ -2100,21 +2100,22 @@ public:
     static FunctionPtr create(ContextPtr context)
     {
         const bool mysql_mode = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
+        const bool to_string_extra_arguments = context && context->getSettingsRef().to_string_extra_arguments;
         if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
         {
             if constexpr (forceAdaptive)
-                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, true));
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, mysql_mode));
+                return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, true, false, to_string_extra_arguments));
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, mysql_mode, to_string_extra_arguments));
         }
         /// Template variable forceAdaptive is to co-work with the rewriting of toDate-like functions
         /// in terms of query parsing stage, so as to enforce the apply of adaptive timestamp.
         /// Here, the original toDate-like functions shall be replaced with counterparts whose are built with
         /// the true value of forceAdaptive: toDateAdaptive/toDateTimeAdaptive
         if constexpr (forceAdaptive)
-            return std::make_shared<FunctionConvert>(context,true);
+            return std::make_shared<FunctionConvert>(context,true, false, to_string_extra_arguments);
         if (!context)
-            return std::make_shared<FunctionConvert>(context, false);
-        return std::make_shared<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, mysql_mode);
+            return std::make_shared<FunctionConvert>(context, false, false, false);
+        return std::make_shared<FunctionConvert>(context, context->getSettingsRef().adaptive_type_cast, mysql_mode, to_string_extra_arguments);
     }
     static FunctionPtr create(bool adaptive = false) { return std::make_shared<FunctionConvert>(nullptr, adaptive, false); }
 
@@ -2129,7 +2130,9 @@ public:
         return ArgType::UNDEFINED;
     }
 
-    explicit FunctionConvert(ContextPtr context_ = nullptr, bool adaptive = false, bool mysql_mode_ = false) : context(context_), adaptive_conversion(adaptive), mysql_mode(mysql_mode_)
+    explicit FunctionConvert(
+        ContextPtr context_ = nullptr, bool adaptive = false, bool mysql_mode_ = false, bool to_string_extra_arguments_ = false)
+        : context(context_), adaptive_conversion(adaptive), mysql_mode(mysql_mode_), to_string_extra_arguments(to_string_extra_arguments_)
     {
     }
 
@@ -2219,6 +2222,12 @@ public:
             || std::is_same_v<ToDataType, DataTypeDateTime64>)
         {
             optional_args.push_back({"timezone", &isString, &isColumnConst, "const String"});
+        }
+
+        // We need this for 1.4 compatability :(
+        if (to_string_extra_arguments && optional_args.empty())
+        {
+            optional_args.push_back({"dummy string", &isString, &isColumnConst, "const String"});
         }
 
         validateFunctionArgumentTypes(*this, arguments, mandatory_args, optional_args);
@@ -2352,6 +2361,7 @@ private:
     ContextPtr context;
     bool adaptive_conversion = false;
     bool mysql_mode = false;
+    bool to_string_extra_arguments = false;
     mutable bool checked_return_type = false;
     mutable bool to_nullable = false;
 

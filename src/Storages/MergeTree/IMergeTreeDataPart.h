@@ -170,6 +170,8 @@ public:
     /// Otherwise return information about column size on disk.
     ColumnSize getColumnSize(const String & column_name, const IDataType & /* type */) const;
 
+    ColumnSize getMapColumnSize(const String & map_implicit_column_name, const IDataType & type) const;
+
     /// Return information about column size on disk for all columns in part
     ColumnSize getTotalColumnsSize() const { return total_columns_size; }
 
@@ -440,10 +442,10 @@ public:
     void renameToDetached(const String & prefix) const;
 
     /// Generate unique path to detach part relative to table path
-    String getRelativePathForDetachedPart(const String & prefix) const;
+    virtual String getRelativePathForDetachedPart(const String & prefix) const;
 
     /// Generate unique path to detach part relative to disk path
-    virtual String getFullRelativePathForDetachedPart(const String & prefix) const;
+    String getFullRelativePathForDetachedPart(const String & prefix) const;
 
     void createDeleteBitmapForDetachedPart() const;
 
