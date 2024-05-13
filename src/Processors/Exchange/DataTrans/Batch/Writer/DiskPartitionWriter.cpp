@@ -4,10 +4,12 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <Compression/CompressedWriteBuffer.h>
 #include <Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
+#include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/time.h>
@@ -192,8 +194,13 @@ void DiskPartitionWriter::runWriteTask()
     auto manager = mgr.lock();
     if (!manager)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid disk exchange manager when creating disk partition writer {}", *key);
+
+    /// create buffer and set compression codec
     auto buf = manager->createFileBufferForWrite(key);
-    auto stream = std::make_unique<NativeChunkOutputStream>(*buf, header);
+    auto codec = context->getSettingsRef().disk_shuffle_files_codec;
+    std::shared_ptr<CompressedWriteBuffer> compressed_out
+        = std::make_shared<CompressedWriteBuffer>(*buf, CompressionCodecFactory::instance().get(codec, {}));
+    std::shared_ptr<NativeChunkOutputStream> stream = std::make_shared<NativeChunkOutputStream>(*compressed_out, header);
     if (enable_disk_writer_metrics)
     {
         writer_metrics.create_file_ms << s.elapsedMilliseconds();
@@ -232,10 +239,20 @@ void DiskPartitionWriter::runWriteTask()
     if (enable_disk_writer_metrics)
         s.restart();
 
+    compressed_out->next();
+    if (enable_disk_writer_metrics)
+    {
+        writer_metrics.write_ms << s.elapsedMilliseconds();
+        s.restart();
+    }
+
     buf->sync();
 
     if (enable_disk_writer_metrics)
+    {
+        sender_metrics.send_bytes << buf->count();
         writer_metrics.sync_ms << s.elapsedMilliseconds();
+    }
 
     SCOPE_EXIT({
         {

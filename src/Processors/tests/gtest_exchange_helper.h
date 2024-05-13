@@ -62,6 +62,7 @@ protected:
         auto context = getContext().context;
         Coordination::SettingsChanges config_settings;
         config_settings.emplace_back("exchange_timeout_ms", 20000);
+        config_settings.emplace_back("temporary_files_codec", "NONE");
         context->applySettingsChanges(config_settings);
         /// gc_interval_seconds is set to zero for testing
         DB::ContextWeakMutablePtr context_weak = std::weak_ptr<DB::Context>(context);
