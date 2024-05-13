@@ -11,6 +11,7 @@
 #include <Common/memcpySmall.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Allocator.h>
+#include <Common/HuAllocator.h>
 
 
 namespace ProfileEvents
@@ -38,7 +39,11 @@ private:
     static constexpr size_t pad_right = 15;
 
     /// Contiguous MemoryChunk of memory and pointer to free space inside it. Member of single-linked list.
+    #if USE_HUALLOC
+    struct alignas(16) MemoryChunk : private HuAllocator<false>    /// empty base optimization
+    #else
     struct alignas(16) MemoryChunk : private Allocator<false>    /// empty base optimization
+    #endif
     {
         char * begin;
         char * pos;
@@ -51,7 +56,11 @@ private:
             ProfileEvents::increment(ProfileEvents::ArenaAllocChunks);
             ProfileEvents::increment(ProfileEvents::ArenaAllocBytes, size_);
 
+            #if USE_HUALLOC
+            begin = reinterpret_cast<char *>(HuAllocator<false>::alloc(size_));
+            #else
             begin = reinterpret_cast<char *>(Allocator<false>::alloc(size_));
+            #endif
             pos = begin;
             end = begin + size_ - pad_right;
             prev = prev_;
@@ -66,8 +75,11 @@ private:
             /// memory would stay poisoned forever. If the allocator supports
             /// asan, it will correctly poison the memory by itself.
             ASAN_UNPOISON_MEMORY_REGION(begin, size());
-
+            #if USE_HUALLOC
+            HuAllocator<false>::free(begin, size());
+            #else
             Allocator<false>::free(begin, size());
+            #endif
 
             if (prev)
                 delete prev;

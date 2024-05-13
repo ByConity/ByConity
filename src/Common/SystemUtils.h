@@ -62,6 +62,8 @@ struct CpuUsageInfo
 
 size_t buffer_to_number(const std::string & buffer);
 
+void init_numa_nodes_cpu_mask();
+
 class SystemUtils
 {
 public:
@@ -160,6 +162,8 @@ public:
         return 0;
     }
 
+    static std::vector<cpu_set_t> getNumaNodesCpuMask();
+
     static void getCpuUsageInfo(const std::unordered_set<size_t> & cpu_nodes, std::vector<CpuUsageInfo> & cpu_usage_info_vec)
     {
 #if defined(__linux__)
@@ -194,4 +198,7 @@ public:
 #endif
     }
 };
+
+std::vector<size_t> parse_cpu_list(const std::string & cpu_list_str);
+
 }

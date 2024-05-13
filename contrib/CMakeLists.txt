@@ -436,3 +436,7 @@ endif()
 if (USE_TSQUERY)
     add_subdirectory(TSQuery-cmake)
 endif()
+
+if (ENABLE_HUALLOC)
+add_subdirectory (hualloc-cmake)
+endif()
