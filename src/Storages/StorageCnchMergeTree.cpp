@@ -43,6 +43,7 @@
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTCheckQuery.h>
@@ -1473,7 +1474,16 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForCnchParts(const MergeTreeDataPa
                 bitmap_it++;
 
             if (bitmap_it == bitmaps.end())
+            {
+                if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+                {
+                    auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                    current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                    current_log.event_msg = "Delete bitmap metadata of " + part->name + " is not found";
+                    unique_table_log->add(current_log);
+                }
                 throw Exception("Delete bitmap metadata of " + part->name + " is not found", ErrorCodes::LOGICAL_ERROR);
+            }
 
             /// add all visible bitmaps (from new to old) part
             part->setDeleteBitmapMeta(*bitmap_it);
@@ -1564,7 +1574,16 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForServerParts(const ServerDataPar
             bitmap_it++;
 
         if (bitmap_it == bitmaps.end())
+        {
+            if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+            {
+                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                current_log.event_msg = "Delete bitmap metadata of " + part->name() + " is not found";
+                unique_table_log->add(current_log);
+            }
             throw Exception("Delete bitmap metadata of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
+        }
 
         /// add all visible bitmaps (from new to old) part
         bool found_base = false;
@@ -1579,7 +1598,16 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForServerParts(const ServerDataPar
             }
         }
         if (!found_base)
+        {
+            if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+            {
+                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                current_log.event_msg = "Base delete bitmap of " + part->name() + " is not found";
+                unique_table_log->add(current_log);
+            }
             throw Exception("Base delete bitmap of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
+        }
 
         bitmap_it++;
     }

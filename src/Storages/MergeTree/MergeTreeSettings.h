@@ -479,6 +479,7 @@ enum StealingCacheMode : UInt64
     M(UInt64, max_dedup_worker_number, 1, "", 0) \
     M(UInt64, max_staged_part_number_per_task, 100, "", 0) \
     M(UInt64, max_staged_part_rows_per_task, 15000000, "", 0) \
+    M(Bool, enable_duplicate_check_while_writing, true, "Whether to check duplicate keys while writing for unique table. Although turning it on may have a certain impact on the tps of writing, it is recommended to enable it by default.", 0) \
     /**Whether block the actual dedup progress, Attention: set this value to true only in ci **/               \
     M(Bool, disable_dedup_parts, false, "", 0) \
     \

@@ -25,6 +25,7 @@
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <Interpreters/StorageID.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <IO/LimitReadBuffer.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/FileDiskCacheSegment.h>
@@ -475,8 +476,15 @@ ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getCombinedDeleteBitmapForUnique
                         }
                         else
                         {
+                            if (auto unique_table_log = storage.getContext()->getCloudUniqueTableLog())
+                            {
+                                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, storage.getCnchStorageID());
+                                current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                                current_log.event_msg = "Part " + name + " doesn't contain delete bitmap meta at " + toString(cached_version) + ", request bitmap meta at " + toString(meta->commit_time());
+                                unique_table_log->add(current_log);
+                            }
                             throw Exception(
-                                "Part " + name + " doesn't contain delete bitmap meta at " + toString(cached_version),
+                                "Part " + name + " doesn't contain delete bitmap meta at " + toString(cached_version) + ", request bitmap meta at " + toString(meta->commit_time()),
                                 ErrorCodes::LOGICAL_ERROR);
                         }
                     }

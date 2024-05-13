@@ -145,6 +145,7 @@ class MutationLog;
 class KafkaLog;
 class CloudKafkaLog;
 class CloudMaterializedMySQLLog;
+class CloudUniqueTableLog;
 class ProcessorsProfileLog;
 class RemoteReadLog;
 class ZooKeeperLog;
@@ -1289,6 +1290,7 @@ public:
     std::shared_ptr<KafkaLog> getKafkaLog() const;
     std::shared_ptr<CloudKafkaLog> getCloudKafkaLog() const;
     std::shared_ptr<CloudMaterializedMySQLLog> getCloudMaterializedMySQLLog() const;
+    std::shared_ptr<CloudUniqueTableLog> getCloudUniqueTableLog() const;
     std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<RemoteReadLog> getRemoteReadLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;

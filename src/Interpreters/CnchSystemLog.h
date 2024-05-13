@@ -19,6 +19,7 @@
 #include <Interpreters/KafkaLog.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/MaterializedMySQLLog.h>
+#include <Interpreters/UniqueTableLog.h>
 #include <Storages/MaterializedView/ViewRefreshTaskLog.h>
 
 
@@ -35,6 +36,7 @@ constexpr auto CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME = "query_worker_m
 constexpr auto CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME = "cnch_kafka_log";
 constexpr auto CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME = "cnch_query_log";
 constexpr auto CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME = "cnch_materialized_mysql_log";
+constexpr auto CNCH_SYSTEM_LOG_UNIQUE_TABLE_LOG_TABLE_NAME = "cnch_unique_table_log";
 constexpr auto CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME = "cnch_view_refresh_task_log";
 
 static inline bool isQueryMetricsTable(const String & database, const String & table)
@@ -66,6 +68,12 @@ public:
         return cloud_materialized_mysql_log;
     }
 
+    std::shared_ptr<CloudUniqueTableLog> getUniqueTableLog() const
+    {
+        std::lock_guard<std::mutex> g(mutex);
+        return cloud_unique_table_log;
+    }
+
     std::shared_ptr<QueryMetricLog> getQueryMetricLog() const
     {
         std::lock_guard<std::mutex> g(mutex);
@@ -95,6 +103,7 @@ public:
 private:
     std::shared_ptr<CloudKafkaLog> cloud_kafka_log;
     std::shared_ptr<CloudMaterializedMySQLLog> cloud_materialized_mysql_log;
+    std::shared_ptr<CloudUniqueTableLog> cloud_unique_table_log;
     std::shared_ptr<QueryMetricLog> query_metrics;                /// Used to log query metrics.
     std::shared_ptr<QueryWorkerMetricLog> query_worker_metrics;   /// Used to log query worker metrics.
     std::shared_ptr<CnchQueryLog> cnch_query_log;
@@ -132,6 +141,7 @@ constexpr auto QUERY_WORKER_METRICS_CONFIG_PREFIX = "query_worker_metrics";
 constexpr auto CNCH_KAFKA_LOG_CONFIG_PREFIX = "cnch_kafka_log";
 constexpr auto CNCH_QUERY_LOG_CONFIG_PREFIX = "cnch_query_log";
 constexpr auto CNCH_MATERIALIZED_MYSQL_LOG_CONFIG_PREFIX = "cnch_materialized_mysql_log";
+constexpr auto CNCH_UNIQUE_TABLE_LOG_CONFIG_PREFIX = "cnch_unique_table_log";
 constexpr auto CNCH_VIEW_REFRESH_TASK_PREFIX = "cnch_view_refresh_task_log";
 
 /// Instead of typedef - to allow forward declaration.
@@ -147,6 +157,13 @@ class CloudMaterializedMySQLLog : public CnchSystemLog<MaterializedMySQLLogEleme
 {
 public:
     using CnchSystemLog<MaterializedMySQLLogElement>::CnchSystemLog;
+};
+
+/// Instead of typedef - to allow forward declaration.
+class CloudUniqueTableLog : public CnchSystemLog<UniqueTableLogElement>
+{
+public:
+    using CnchSystemLog<UniqueTableLogElement>::CnchSystemLog;
 };
 
 } // end namespace

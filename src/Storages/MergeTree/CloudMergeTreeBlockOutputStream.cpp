@@ -22,6 +22,7 @@
 #include <Interpreters/PartLog.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTPartition.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
@@ -473,7 +474,17 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
         lock_watch.restart();
         cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
         if (!cnch_lock->tryLock())
+        {
+            if (auto unique_table_log = context->getCloudUniqueTableLog())
+            {
+                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, cnch_table->getCnchStorageID());
+                current_log.txn_id = txn->getTransactionID();
+                current_log.metric = ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED;
+                current_log.event_msg = "Failed to acquire lock for txn " + txn->getTransactionID().toString();
+                unique_table_log->add(current_log);
+            }
             throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
+        }
 
         lock_watch.restart();
         ts = context->getTimestamp(); /// must get a new ts after locks are acquired

@@ -137,4 +137,14 @@ Status IndexFileMergeIterator::status() const
     return status;
 }
 
+int IndexFileMergeIterator::checkDuplicateForKey(const Slice & target) const
+{
+    if (!min_heap_.empty())
+    {
+        if (Compare(children_[min_heap_.top()].key(), target) == 0)
+            return min_heap_.top();
+    }
+    return -1;
+}
+
 }

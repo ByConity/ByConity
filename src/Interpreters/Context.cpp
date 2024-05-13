@@ -3916,6 +3916,15 @@ std::shared_ptr<CloudMaterializedMySQLLog> Context::getCloudMaterializedMySQLLog
     return shared->cnch_system_logs->getMaterializedMySQLLog();
 }
 
+std::shared_ptr<CloudUniqueTableLog> Context::getCloudUniqueTableLog() const
+{
+    auto lock = getLock();
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getUniqueTableLog();
+}
+
 std::shared_ptr<MutationLog> Context::getMutationLog() const
 {
     auto lock = getLock();

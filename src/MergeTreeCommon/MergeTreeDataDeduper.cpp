@@ -16,6 +16,7 @@
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/IndexFile/IndexFileMergeIterator.h>
@@ -30,6 +31,7 @@ namespace ErrorCodes
     extern const int CORRUPTED_DATA;
     extern const int INCORRECT_DATA;
     extern const int LOGICAL_ERROR;
+    extern const int UNIQUE_TABLE_DUPLICATE_KEY_FOUND;
 }
 
 using IndexFileIteratorPtr = std::unique_ptr<IndexFile::Iterator>;
@@ -106,6 +108,7 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
     const IMergeTreeDataPartsVector & parts,
     DeleteBitmapVector & delta_bitmaps,
     DedupTaskProgressReporter reporter,
+    DedupTaskPtr & dedup_task,
     DedupKeyMode dedup_key_mode)
 {
     const IndexFile::Comparator * comparator = IndexFile::BytewiseComparator();
@@ -125,6 +128,34 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
     keys->SeekToFirst();
     if (keys->Valid())
         base_iter.Seek(keys->CurrentKey());
+
+    /**
+     * check have time complexity limit: O(m)
+     * see more dedup time complexity in unique table Tech Share
+     */
+    bool found_duplicate = false;
+    auto check_duplicate_key = [&] () {
+        if (!data.getSettings()->enable_duplicate_check_while_writing || found_duplicate)
+            return;
+
+        auto potential_duplicate_part_index = base_iter.child_index();
+        auto duplicate_part_index = base_iter.checkDuplicateForKey(keys->CurrentKey());
+        if (duplicate_part_index != -1)
+        {
+            found_duplicate = true;
+            if (auto unique_table_log = context->getCloudUniqueTableLog())
+            {
+                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, data.getCnchStorageID());
+                current_log.txn_id = dedup_task->txn_id;
+                current_log.metric = ErrorCodes::UNIQUE_TABLE_DUPLICATE_KEY_FOUND;
+                current_log.event_msg = "Dedup task " + dedup_task->getDedupLevelInfo() + " found duplication";
+                current_log.event_info = "Duplicate key: " + UniqueTable::formatUniqueKey(keys->CurrentKey(), data.getInMemoryMetadataPtr()) +
+                    ", part names: [" + parts[potential_duplicate_part_index]->get_name() + ", " + parts[duplicate_part_index]->get_name() + "]";
+                current_log.dedup_task_info = dedup_task->getDedupLevelInfo();
+                unique_table_log->add(current_log);
+            }
+        }
+    };
 
     Stopwatch watch;
     while (keys->Valid() && !isCancelled())
@@ -200,6 +231,10 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
                         addRowIdToBitmap(delta_bitmaps[rhs.child + parts.size()], rhs.rowid);
                 }
             }
+
+            /// The write-time check can only check the duplication of newly written keys in visible parts.
+            /// This may miss some cases, but it will undoubtedly be of great help in troubleshooting the first scene.
+            check_duplicate_key();
 
             exact_match = false;
             keys->Next();
@@ -641,7 +676,7 @@ MergeTreeDataDeduper::dedupImpl(const IMergeTreeDataPartsVector & visible_parts,
         return os.str();
     };
 
-    dedupKeysWithParts(dedup_task->iter, visible_parts, res, task_progress_reporter, context->getSettings().dedup_key_mode);
+    dedupKeysWithParts(dedup_task->iter, visible_parts, res, task_progress_reporter, dedup_task, context->getSettings().dedup_key_mode);
     return res;
 }
 

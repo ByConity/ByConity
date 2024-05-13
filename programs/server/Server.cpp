@@ -1175,7 +1175,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setChecksumsCache(checksum_cache_settings);
 
 
-    /// A cache for gin index store 
+    /// A cache for gin index store
     GinIndexStoreCacheSettings ginindex_store_cache_settings;
     ginindex_store_cache_settings.lru_max_size = config().getUInt64("ginindex_store_cache_size", 5368709120); //5GB
     ginindex_store_cache_settings.mapping_bucket_size = config().getUInt64("ginindex_store_cache_bucket", 5000); //5000

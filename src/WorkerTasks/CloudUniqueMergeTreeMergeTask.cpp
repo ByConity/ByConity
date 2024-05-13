@@ -17,6 +17,7 @@
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchDataWriter.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/Actions/MergeMutateAction.h>
@@ -70,7 +71,16 @@ CloudUniqueMergeTreeMergeTask::getDeleteBitmapMetas(Catalog::Catalog & catalog, 
             bitmap_it++;
 
         if (bitmap_it == bitmaps.end())
+        {
+            if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+            {
+                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, params.storage->getCnchStorageID());
+                current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                current_log.event_msg = "Missing delete bitmap metadata for part " + part->name;
+                unique_table_log->add(current_log);
+            }
             throw Exception("Missing delete bitmap metadata for part " + part->name, ErrorCodes::LOGICAL_ERROR);
+        }
 
         res.push_back(*bitmap_it);
         bitmap_it++;
