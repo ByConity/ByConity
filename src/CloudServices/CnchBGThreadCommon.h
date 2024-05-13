@@ -37,8 +37,10 @@ namespace CnchBGThread
         MaterializedMySQL = 7,
         ObjectSchemaAssemble = 8,
         CnchRefreshMaterializedView = 9,
+        PartMover = 10,
+
         ServerMinType = PartGC,
-        ServerMaxType = CnchRefreshMaterializedView,
+        ServerMaxType = PartMover,
 
         GlobalGC = 20, /// reserve several entries
         TxnGC = 21,
@@ -105,6 +107,8 @@ constexpr auto toString(CnchBGThreadType type)
             return "MaterializedMySQL";
         case CnchBGThreadType::CnchRefreshMaterializedView:
             return "CnchRefreshMaterializedView";
+        case CnchBGThreadType::PartMover:
+            return "PartMoverThread";
     }
     __builtin_unreachable();
 }

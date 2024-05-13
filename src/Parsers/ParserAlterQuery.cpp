@@ -20,6 +20,7 @@
  */
 
 #include <Common/typeid_cast.h>
+#include <Storages/DataDestinationType.h>
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
@@ -158,6 +159,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
     ParserKeyword s_to_disk("TO DISK");
     ParserKeyword s_to_volume("TO VOLUME");
+    ParserKeyword s_to_bytecool("TO BYTECOOL");
     ParserKeyword s_to_table("TO TABLE");
     ParserKeyword s_to_shard("TO SHARD");
 
@@ -576,6 +578,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                     command->move_destination_type = DataDestinationType::DISK;
                 else if (s_to_volume.ignore(pos))
                     command->move_destination_type = DataDestinationType::VOLUME;
+                else if (s_to_bytecool.ignore(pos))
+                    command->move_destination_type = DataDestinationType::BYTECOOL;
                 else if (s_to_table.ignore(pos))
                 {
                     if (!parseDatabaseAndTableName(pos, expected, command->to_database, command->to_table))
@@ -617,6 +621,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                         command->move_destination_type = DataDestinationType::DISK;
                     else if (s_to_volume.ignore(pos))
                         command->move_destination_type = DataDestinationType::VOLUME;
+                    else if (s_to_bytecool.ignore(pos))
+                        command->move_destination_type = DataDestinationType::BYTECOOL;
                     else if (s_to_table.ignore(pos))
                     {
                         if (!parseDatabaseAndTableName(pos, expected, command->to_database, command->to_table))

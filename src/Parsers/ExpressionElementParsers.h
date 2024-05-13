@@ -599,7 +599,7 @@ public:
 };
 
 /** Element of TTL expression - same as expression element, but in addition,
- *   TO DISK 'xxx' | TO VOLUME 'xxx' | DELETE could be specified
+ *   TO DISK 'xxx' | TO VOLUME 'xxx' | TO BYTECOOL 'xxx' | DELETE could be specified
   */
 class ParserTTLElement : public IParserDialectBase
 {

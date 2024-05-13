@@ -254,7 +254,7 @@ TTLDescription TTLDescription::getTTLFromAST(
         result.destination_name = ttl_element->destination_name;
         result.mode = ttl_element->mode;
 
-        if (ttl_element->mode == TTLMode::DELETE)
+        if (ttl_element->mode == TTLMode::DELETE || ttl_element->mode == TTLMode::MOVE)
         {
             if (ASTPtr where_expr_ast = ttl_element->where())
             {

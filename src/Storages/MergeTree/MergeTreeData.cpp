@@ -2939,7 +2939,8 @@ Pipe MergeTreeData::alterPartition(
                     case PartitionCommand::MoveDestinationType::VOLUME:
                         movePartitionToVolume(command.partition, command.move_destination_name, command.part, query_context);
                         break;
-
+                    case PartitionCommand::MoveDestinationType::BYTECOOL:
+                        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Can't support alter move part into bytecool by commond!");
                     case PartitionCommand::MoveDestinationType::TABLE:
                     {
                         checkPartitionCanBeDropped(command.partition);

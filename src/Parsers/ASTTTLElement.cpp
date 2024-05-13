@@ -36,6 +36,10 @@ void ASTTTLElement::formatImpl(const FormatSettings & settings, FormatState & st
     {
         settings.ostr << " TO VOLUME " << quoteString(destination_name);
     }
+    else if (mode == TTLMode::MOVE && destination_type == DataDestinationType::BYTECOOL)
+    {
+        settings.ostr << " TO BYTECOOL " << quoteString(destination_name);
+    }
     else if (mode == TTLMode::GROUP_BY)
     {
         settings.ostr << " GROUP BY ";
