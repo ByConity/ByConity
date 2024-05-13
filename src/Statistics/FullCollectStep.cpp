@@ -225,7 +225,7 @@ public:
 
         auto sql = table_handler.getFullSql();
 
-        auto helper = SubqueryHelper::create(context, sql);
+        auto helper = SubqueryHelper::create(context, sql, true);
         auto block = getOnlyRowFrom(helper);
         table_handler.parse(block);
     }
@@ -252,7 +252,7 @@ public:
         }
         auto sql = table_handler.getFullSql();
 
-        auto helper = SubqueryHelper::create(context, sql);
+        auto helper = SubqueryHelper::create(context, sql, true);
         auto block = getOnlyRowFrom(helper);
         table_handler.parse(block);
     }

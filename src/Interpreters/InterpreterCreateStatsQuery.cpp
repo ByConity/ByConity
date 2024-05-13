@@ -26,6 +26,7 @@
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsTableBasic.h>
 #include <Statistics/TypeUtils.h>
+#include <Poco/Exception.h>
 #include <Common/Stopwatch.h>
 
 
@@ -38,6 +39,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
     extern const int INCORRECT_DATA;
     extern const int PARAMETER_OUT_OF_BOUND;
+    extern const int QUERY_WAS_CANCELLED;
 }
 using namespace Statistics;
 using namespace Statistics::AutoStats;
@@ -132,9 +134,26 @@ namespace
         {
             auto context = getContext();
             Stopwatch watch;
+            auto * logger = &Poco::Logger::get("CreateStats");
             while (counter < collect_targets.size())
             {
                 auto collect_target = collect_targets.at(counter++);
+                auto exception_handler = [&] {
+                    auto elapsed_time = watch.elapsedSeconds();
+                    auto err_info_with_stack = getCurrentExceptionMessage(true);
+                    LOG_ERROR(logger, err_info_with_stack);
+
+                    auto err_info = getCurrentExceptionMessage(false);
+                    error_infos.emplace(collect_target.table_identifier.getDbTableName(), err_info_with_stack);
+
+                    return constructInfoBlock(
+                        context,
+                        collect_target.table_identifier.getTableName(),
+                        collect_target.columns_desc.size(),
+                        err_info,
+                        elapsed_time);
+                };
+
                 try
                 {
                     auto row_count_opt = collectStatsOnTarget(context, collect_target);
@@ -144,17 +163,19 @@ namespace
                     auto elapsed_time = watch.elapsedSeconds();
                     return constructInfoBlock(context, collect_target.table_identifier.getTableName(), collect_target.columns_desc.size(), std::to_string(row_count), elapsed_time);
                 }
+                catch (Poco::Exception & e)
+                {
+                    if (e.code() == ErrorCodes::QUERY_WAS_CANCELLED)
+                    {
+                        LOG_INFO(logger, "create stast is cancelled");
+                        throw;
+                    }
+
+                    return exception_handler();
+                }
                 catch (...)
                 {
-                    auto logger = &Poco::Logger::get("CreateStats");
-                    auto elapsed_time = watch.elapsedSeconds();
-                    auto err_info_with_stack = getCurrentExceptionMessage(true);
-                    LOG_ERROR(logger, err_info_with_stack);
-
-                    auto err_info = getCurrentExceptionMessage(false);
-                    error_infos.emplace(collect_target.table_identifier.getDbTableName(), err_info_with_stack);
-
-                    return constructInfoBlock(context, collect_target.table_identifier.getTableName(), collect_target.columns_desc.size(), err_info, elapsed_time);
+                    return exception_handler();
                 }
             }
 

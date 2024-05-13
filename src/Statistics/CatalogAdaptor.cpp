@@ -19,8 +19,8 @@
 #include <Statistics/SubqueryHelper.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include "DataTypes/MapHelpers.h"
-#include "DataTypes/Serializations/SerializationNamed.h"
 #include "Parsers/formatTenantDatabaseName.h"
+#include <boost/regex.hpp>
 namespace DB::Statistics
 {
 CatalogAdaptorPtr createCatalogAdaptorMemory(ContextPtr context);
@@ -71,6 +71,57 @@ ColumnDescVector CatalogAdaptor::filterCollectableColumns(
     }
 
     return result;
+}
+
+CatalogAdaptor::TableOptions CatalogAdaptor::getTableOptions(const StatsTableIdentifier & table)
+{
+    const auto unsupported = TableOptions{false, false};
+    const auto full_supported = TableOptions{true, true};
+    const auto only_manual = TableOptions{true, false};
+
+    if (table.getDatabaseName() == "system" || table.getDatabaseName() == "cnch_system")
+    {
+        return unsupported;
+    }
+
+    auto storage = getStorageByTableId(table);
+
+    auto options = [&] {
+        auto engine = storage->getName();
+        if (dynamic_cast<StorageCnchMergeTree*>(storage.get()))
+        {
+            return full_supported;
+        }
+        else if (engine == "Memory")
+            return only_manual;
+        else if (engine == "CnchHive")
+            return only_manual;
+        else
+            return unsupported;
+    }();
+
+    if (!options.is_collectable)
+        return options;
+
+    const auto & pattern = context->getSettingsRef().statistics_exclude_tables_regex.value;
+    if (!pattern.empty())
+    {
+        try
+        {
+            boost::regex re(pattern);
+            boost::cmatch tmp;
+            if (boost::regex_match(table.getTableName().data(), tmp, re))
+            {
+                return unsupported;
+            }
+        }
+        catch (boost::wrapexcept<boost::regex_error> & e)
+        {
+            auto err_msg = std::string("statistics_exclude_tables_regex match error: ") + e.what();
+            throw Exception(err_msg, ErrorCodes::BAD_ARGUMENTS);
+        }
+    }
+    return options;
 }
 
 std::optional<UInt64> CatalogAdaptor::queryRowCount(const StatsTableIdentifier & table_id)

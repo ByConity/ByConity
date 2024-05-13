@@ -59,21 +59,25 @@ public:
 
     virtual UInt64 fetchAddUdiCount(const StatsTableIdentifier & table, UInt64 count) = 0;
     virtual void removeUdiCount(const StatsTableIdentifier & table) = 0;
+    struct TableOptions
+    {
+        bool is_collectable = false;
+        bool is_auto_updatable = false;
+    };
 
     ColumnDescVector filterCollectableColumns(
         const StatsTableIdentifier & table, const std::vector<String> & target_columns, bool exception_on_unsupported = false);
 
-
-    virtual bool isTableCollectable(const StatsTableIdentifier & table)
+    bool isTableCollectable(const StatsTableIdentifier & table)
     {
-        (void)table;
-        return true;
+        return getTableOptions(table).is_collectable;
     }
 
-    virtual bool isTableAutoUpdated(const StatsTableIdentifier & table)
+    TableOptions getTableOptions(const StatsTableIdentifier & table);
+
+    bool isTableAutoUpdatable(const StatsTableIdentifier & table)
     {
-        (void)table;
-        return false;
+        return getTableOptions(table).is_auto_updatable;
     }
 
     virtual void checkHealth(bool is_write) { (void)is_write; }
