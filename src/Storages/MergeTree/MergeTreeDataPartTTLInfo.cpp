@@ -243,8 +243,16 @@ time_t MergeTreeDataPartTTLInfos::getMinimalMaxRecompressionTTL() const
     return max;
 }
 
+void MergeTreeDataPartTTLInfos::evalPartFinished()
+{
+    part_finished = !hasAnyNonFinishedTTLs();
+}
+
 bool MergeTreeDataPartTTLInfos::hasAnyNonFinishedTTLs() const
 {
+    if (part_finished.has_value())
+        return !part_finished.value();
+
     auto has_non_finished_ttl = [] (const TTLInfoMap & map) -> bool
     {
         for (const auto & [name, info] : map)

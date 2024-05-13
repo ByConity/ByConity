@@ -75,6 +75,7 @@ inline std::vector<T> createPartVectorFromModels(
 void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time = false, UInt64 txn_id = 0);
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model);
+void fillPartTTLInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartTTLInfo & part_ttl_info_model);
 
 template <class T>
 inline void fillPartsModel(const IStorage & storage, const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, UInt64 txn_id = 0)

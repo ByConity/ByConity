@@ -1220,8 +1220,16 @@ void InterpreterSystemQuery::executeGc(const ASTSystemQuery & query)
     if (auto server_type = local_context->getServerType(); server_type != ServerType::cnch_server)
         throw Exception("SYSTEM GC is only available on CNCH server", ErrorCodes::NOT_IMPLEMENTED);
 
-    auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
-    CnchPartGCThread gc_thread(local_context, storage->getStorageID());
+    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+    /// Try to forward query to the target server if needed
+    if (getContext()->getSettings().enable_auto_query_forwarding)
+    {
+        auto cnch_table_helper = CnchStorageCommonHelper(table->getStorageID(), table->getDatabaseName(), table->getTableName());
+        if (cnch_table_helper.forwardQueryToServerIfNeeded(getContext(), table->getStorageID()))
+            return;
+    }
+
+    CnchPartGCThread gc_thread(local_context, table->getStorageID());
     gc_thread.executeManually(query.partition, local_context);
 }
 

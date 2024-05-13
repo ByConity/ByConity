@@ -89,6 +89,21 @@ message DataModelPartInfo {
   required int64 hint_mutation = 6;
 }
 
+/// Part-level ttl info {min_ttl, max_ttl}, aggregated from:
+/// Table ttl (ROW TTL)
+/// Columns ttls
+/// Row where ttls
+/// Group by ttls
+/// Move ttls ...
+message DataModelPartTTLInfo {
+  required uint64 part_min_ttl = 1;
+  required uint64 part_max_ttl = 2;
+  
+  /// part_finished is true means all max_ttl of all ttl_infos are smaller than current time.
+  /// and it means the part is completely expired.
+  required bool part_finished = 3;
+}
+
 /**
  Any new added filed should be appended behind the last filed of current message
  definition. Do not change current fields' index.
@@ -146,6 +161,9 @@ message DataModelPart {
   // Store the actuall modification time of a part (merge actions are not
   // included). So only merged part will contains this field.
   optional uint64 last_modification_time = 39;
+
+  /// Aggregated part ttl info. Used for selecting parts to do ttl merge.
+  optional DataModelPartTTLInfo part_ttl_info = 40;
 };
 
 message CnchFilePartInfo { required string name = 1; }

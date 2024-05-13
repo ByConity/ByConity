@@ -220,6 +220,8 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     low_priority = local_part.low_priority;
     projection_parts = local_part.getProjectionParts();
     projection_parts_names = local_part.getProjectionPartsNames();
+    ttl_infos = local_part.ttl_infos;
+    ttl_infos.evalPartFinished();
 }
 
 String MergeTreeDataPartCNCH::getFileNameForColumn(const NameAndTypePair & column) const

@@ -248,11 +248,11 @@ bool StorageInMemoryMetadata::hasPartitionLevelTTL() const
         if (partition_columns.count(name))
             return true;
 
-        if (auto literal = expr->as<ASTLiteral>())
+        if (auto * literal = expr->as<ASTLiteral>())
             return true;
-        if (auto identifier = expr->as<ASTIdentifier>())
+        if (auto * identifier = expr->as<ASTIdentifier>())
             return false;
-        if (auto func = expr->as<ASTFunction>())
+        if (auto * func = expr->as<ASTFunction>())
         {
             bool res = true;
             for (auto & arg : func->arguments->children)
