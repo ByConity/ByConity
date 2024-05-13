@@ -37,6 +37,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeBitMap64.h>
 #include <Common/DateLUTImpl.h>
 #include <common/types.h>
 #include <Core/Block.h>
@@ -48,6 +49,8 @@
 #include <Columns/ColumnUnique.h>
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnNothing.h>
+#include <Columns/ColumnBitMap64.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/castColumn.h>
 #include <algorithm>
 #include <fmt/format.h>
@@ -94,6 +97,7 @@ namespace ErrorCodes
     extern const int THERE_IS_NO_COLUMN;
     extern const int UNKNOWN_EXCEPTION;
     extern const int INCORRECT_DATA;
+    extern const int CANNOT_CONVERT_TYPE;
 }
 
 /// Inserts numeric data right into internal column data to reduce an overhead
@@ -1137,7 +1141,10 @@ void ArrowColumnToCHColumn::arrowColumnsToCHChunk(Chunk & res, NameToColumnPtr &
 
         try
         {
-            column.column = castColumn(column, header_column.type);
+            if (isBitmap64(header_column.type))
+                column.column = castArrayColumnToBitmapColumn(column, header_column.type);
+            else
+                column.column = castColumn(column, header_column.type);
         }
         catch (Exception & e)
         {
@@ -1154,6 +1161,35 @@ void ArrowColumnToCHColumn::arrowColumnsToCHChunk(Chunk & res, NameToColumnPtr &
     }
 
     res.setColumns(columns_list, num_rows);
+}
+
+ColumnPtr ArrowColumnToCHColumn::castArrayColumnToBitmapColumn(ColumnWithTypeAndName & column, const DataTypePtr & target_type)
+{
+    /// For Bitmap64 in ClickHouse, we can only express it via Array in other engine generally
+    /// transform numeric array here, it calls arrayToBitmap(array) here.
+    /// And before that, if internal type of array is Decimal, transform it into UInt64 first
+    const auto * array = checkAndGetDataType<DataTypeArray>(column.type.get());
+    if (!array)
+        throw Exception(
+            ErrorCodes::CANNOT_CONVERT_TYPE,
+            "ClickHouse BitMap64 can only be converted from Array, but column {} is {}",
+            column.name,
+            column.type->getName());
+    DataTypePtr internal_nested = array->getNestedType();
+    if (isString(internal_nested))
+    {
+        throw Exception("String list to Bitmap is not support In cnch", ErrorCodes::NOT_IMPLEMENTED);
+    }
+    else
+    {
+        if (isDecimal(internal_nested))
+        {
+            DataTypePtr adapter_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>());
+            column.column = castColumn(column, adapter_type);
+            column.type = adapter_type;
+        }
+        return castToBitmap64Column(column, target_type);
+    }
 }
 
 }
