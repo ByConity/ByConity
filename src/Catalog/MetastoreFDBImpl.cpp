@@ -126,10 +126,19 @@ MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getAll()
     return std::make_shared<FDBIterator>(fdb_iter);
 }
 
-MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByPrefix(const String & prefix, const size_t &, uint32_t)
+MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByPrefix(const String & prefix, const size_t & limit, uint32_t, const String & start_key)
 {
     FDB::ScanRequest scan_req;
-    scan_req.start_key = prefix;
+
+    if (likely(start_key.empty()))
+    {
+        scan_req.start_key = prefix;
+    }
+    else
+    {
+        scan_req.start_key = start_key;
+    }
+    scan_req.row_limit = limit;
     scan_req.end_key = getNextKey(prefix);
 
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
