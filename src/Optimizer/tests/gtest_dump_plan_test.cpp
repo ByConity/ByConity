@@ -89,9 +89,6 @@ TEST_F(PlanDumpTest, testDumpWithoutStats)
 
     ddl_dumper.addTableFromSelectQuery(ast, query_context);
 
-    std::string explain = DB::ReproduceUtils::obtainExplainString(workload_query.query, query_context);
-    workload_query.info.emplace(DB::DumpUtils::QueryInfo::explain, explain);
-
     // test dump ddl
     Poco::JSON::Object::Ptr dump_json(new Poco::JSON::Object);
     dump_json = ddl_dumper.getJsonDumpResult();
