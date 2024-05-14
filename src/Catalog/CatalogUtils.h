@@ -61,6 +61,8 @@ struct TrashItems
     {
         return data_parts.empty() && delete_bitmaps.empty() && staged_parts.empty();
     }
+
+    size_t size() const { return data_parts.size() + delete_bitmaps.size() + staged_parts.size(); }
 };
 
 /// keep partitions sorted as bytekv manner;
