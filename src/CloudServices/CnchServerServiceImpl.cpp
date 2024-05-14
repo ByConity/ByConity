@@ -1781,29 +1781,31 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
     Protos::notifyAccessEntityChangeResp * response,
     google::protobuf::Closure *done)
 {
-    brpc::ClosureGuard done_guard(done);
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
 
-    try
-    {
-        String entity_type = request->type();
-        String name = request->name();
-        UUID id = RPCHelpers::createUUID(request->uuid());
-        for (auto type : collections::range(IAccessEntity::Type::MAX))
+        try
         {
-            // KVAccessStorage::onAccessEntityChanged will find the newly update/deleted access entity and notify all subscribers
-            if (toString(type) == entity_type)
+            String entity_type = request->type();
+            String name = request->name();
+            UUID id = RPCHelpers::createUUID(request->uuid());
+            for (auto type : collections::range(IAccessEntity::Type::MAX))
             {
-                if (auto kv_access_storage = std::dynamic_pointer_cast<KVAccessStorage>(getContext()->getAccessControlManager().getStorage(id)))
-                    kv_access_storage->onAccessEntityChanged(type, name);
-            }
+                // KVAccessStorage::onAccessEntityChanged will find the newly update/deleted access entity and notify all subscribers
+                if (toString(type) == entity_type)
+                {
+                    if (auto kv_access_storage = std::dynamic_pointer_cast<KVAccessStorage>(gc->getAccessControlManager().getStorage(id)))
+                        kv_access_storage->onAccessEntityChanged(type, name);
+                }
 
+            }
         }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
 }
 
 
