@@ -181,6 +181,8 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
             }
         }
     }
+    if (partition_infos.empty())
+        return;
 
     ContextMutablePtr query_context = Context::createCopy(storage.getContext());
 
@@ -644,7 +646,16 @@ void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, Storag
 
     /// Generate DROP_RANGE for expired partitions by the TTL
     if (!visible_parts.empty())
-        tryMarkExpiredPartitions(storage, visible_parts);
+    {
+        try
+        {
+            tryMarkExpiredPartitions(storage, visible_parts);
+        }
+        catch(...)
+        {
+            LOG_DEBUG(log, "Failed to mark expired partitions, just skip.");
+        }
+    }
 
     /// Clear special old parts
     UInt64 old_parts_lifetime = in_wakeup ? 0ull : static_cast<UInt64>(storage_settings->old_parts_lifetime.totalSeconds());
