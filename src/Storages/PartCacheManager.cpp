@@ -50,6 +50,7 @@ namespace ErrorCodes
     extern const int TIMEOUT_EXCEEDED;
     extern const int LOGICAL_ERROR;
     extern const int UNKNOWN_TABLE;
+    extern const int BAD_ARGUMENTS;
 }
 
 /// Mock function for `getTimestamp`/`tryGetTimestamp`.
@@ -158,20 +159,6 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
     const auto * cnch_table = dynamic_cast<const MergeTreeMetaBase*>(&storage);
     if (!cnch_table)
         return;
-
-    // auto load_nhut = [&](TableMetaEntryPtr & meta_ptr)
-    // {
-    //     if (getContext()->getSettingsRef().server_write_ha)
-    //     {
-    //         UInt64 pts = getContext()->getPhysicalTimestamp();
-    //         if (pts)
-    //         {
-    //             UInt64 fetched_nhut = getContext()->getCnchCatalog()->getNonHostUpdateTimestampFromByteKV(storage.getStorageUUID());
-    //             if (pts - fetched_nhut > 9)
-    //                 meta_ptr->cached_non_host_update_ts = fetched_nhut;
-    //         }
-    //     }
-    // };
 
     auto load_table_partitions = [&](TableMetaEntryPtr & meta_ptr) -> bool
     {
@@ -595,20 +582,42 @@ void PartCacheManager::invalidDataCache(
     const std::unordered_map<String, Strings> & partition_to_data_list,
     DataCachePtr cache_ptr)
 {
-    auto lock = meta_ptr->writeLock();
+    Strings partitions;
+    for (auto & [partition_id, data] : partition_to_data_list)
+        partitions.push_back(partition_id);
+
+    auto meta_partitions = meta_ptr->getPartitions(partitions);
 
     for (const auto & partition_to_data : partition_to_data_list)
     {
-        auto cached = cache_ptr->get({uuid, partition_to_data.first});
-
-        for (const auto & name : partition_to_data.second)
+        auto & partition_id = partition_to_data.first;
+        auto cached = cache_ptr->get({uuid, partition_id});
+        if (!cached)
+            continue;
+        // cannot find partition info, directly drop the data cache of this partition
+        if (!meta_partitions.contains(partition_id))
         {
-            if (cached)
+            cache_ptr->remove({uuid, partition_id});
+            continue;
+        }
+
+        auto partition_info_ptr = meta_partitions[partition_id];
+        DataCacheStatus * cache_status = getCacheStatus<DataCachePtr>(partition_info_ptr);
+        auto partition_write_lock = partition_info_ptr->writeLock();
+        if (cache_status->isLoaded())
+        {
+            for (const auto & name : partition_to_data.second)
             {
                 auto got = cached->find(name);
                 if (got != cached->end())
                     cached->erase(name);
             }
+        }
+        // reset cache status to UInit because other loading threads may load outdated data when deleing happens during the loading.
+        else if (cache_status->isLoading())
+        {
+            cache_status->reset();
+            cache_ptr->remove({uuid, partition_id});
         }
     }
 }
@@ -792,10 +801,10 @@ void PartCacheManager::insertDataIntoCache(
             static_assert(DependentFalse<CachePtr>::value, "invalid template type for CachePtr");
         }
         auto & partition_info_ptr = meta_partitions[partition_id];
-        std::atomic<UInt32> * cache_status = nullptr;
+        DataCacheStatus * cache_status = nullptr;
         if constexpr (std::is_same_v<CachePtr, CnchDataPartCachePtr>)
         {
-            cache_status = &partition_info_ptr->cache_status;
+            cache_status = &partition_info_ptr->part_cache_status;
         }
         else if constexpr (std::is_same_v<CachePtr, CnchDeleteBitmapCachePtr>)
         {
@@ -809,16 +818,16 @@ void PartCacheManager::insertDataIntoCache(
         auto partition_write_lock = partition_info_ptr->writeLock();
         bool need_insert_into_cache = false;
         /// Check if new parts should be inserted into cache; Skip if cache status is UINIT
-        if (*cache_status != CacheStatus::UINIT)
+        if (!cache_status->isUnInit())
         {
             need_insert_into_cache = true;
             /// Check whether the partition cache has been invalidate by LRU.
-            if (*cache_status == CacheStatus::LOADED)
+            if (cache_status->isLoaded())
             {
                 auto cached = cache_ptr->get({uuid, partition_id});
                 if (!cached)
                 {
-                    *cache_status = CacheStatus::UINIT;
+                    cache_status->reset();
                     need_insert_into_cache = false;
                 }
             }
@@ -992,11 +1001,14 @@ static void logPartsVector(const MergeTreeMetaBase & storage, const ServerDataPa
 
 /// A helper function for getting right CacheStatus.
 template <typename CachePtr>
-std::atomic<UInt32> * getCacheStatus(const PartitionInfoPtr & partition_info_ptr)
+DataCacheStatus * getCacheStatus(const PartitionInfoPtr & partition_info_ptr)
 {
+    if (!partition_info_ptr)
+        throw Exception("Invailid partition info (nullptr) while getting cache status.", ErrorCodes::BAD_ARGUMENTS);
+
     if constexpr (std::is_same_v<CachePtr, CnchDataPartCachePtr>)
     {
-        return &partition_info_ptr->cache_status;
+        return &partition_info_ptr->part_cache_status;
     }
     else if constexpr (std::is_same_v<CachePtr, CnchDeleteBitmapCachePtr>)
     {
@@ -1048,11 +1060,11 @@ RetValueVec PartCacheManager::getDataInternal(
     auto process_partition
         = [&, thread_group = CurrentThread::getGroup()](
               const String & partition_id, const PartitionInfoPtr & partition_info_ptr, RetValueVec & parts, bool & hit_cache) {
-              std::atomic<UInt32> * cache_status = getCacheStatus<CachePtr>(partition_info_ptr);
+              DataCacheStatus * cache_status = getCacheStatus<CachePtr>(partition_info_ptr);
 
               hit_cache = false;
               {
-                  if (*cache_status == CacheStatus::LOADED)
+                  if (cache_status->isLoaded())
                   {
                       auto cached = cache_ptr->get({uuid, partition_id});
                       if (cached)
@@ -1074,7 +1086,8 @@ RetValueVec PartCacheManager::getDataInternal(
               if (!hit_cache)
               {
                   auto partition_write_lock = partition_info_ptr->writeLock();
-                  *cache_status = CacheStatus::LOADING;
+                  if (!cache_status->isLoading())
+                    cache_status->setToLoading();
               }
           };
 
@@ -1136,16 +1149,20 @@ RetValueVec PartCacheManager::getDataInternal(
     if (partitions_not_cached.empty())
         return res;
 
-    auto fallback_cache_status = [&partitions_not_cached, &meta_partitions]() {
-        // change the partitino cache status to UINIT if loading failed.
+    auto fallback_cache_status = [&partitions_not_cached, &meta_partitions, &cache_ptr, &uuid]() {
+        // reset partition data cache status to UINIT if loading failed.
         for (auto & partition_id : partitions_not_cached)
         {
             auto & partition_info = meta_partitions[partition_id];
             auto partition_write_lock = partition_info->writeLock();
 
-            std::atomic<UInt32> * cache_status = getCacheStatus<CachePtr>(partition_info);
-            if (*cache_status == CacheStatus::LOADING)
-                *cache_status = CacheStatus::UINIT;
+            DataCacheStatus * cache_status = getCacheStatus<CachePtr>(partition_info);
+            if (cache_status->isLoadingByCurrentThread())
+            {
+                cache_status->reset();
+                // clear new inserted data during loading after reset cache status.
+                cache_ptr->remove({uuid, partition_id});
+            }
         }
     };
 
@@ -1181,13 +1198,14 @@ RetValueVec PartCacheManager::getDataInternal(
                 auto & partition_info_ptr = meta_partitions[partition_id];
                 auto partition_write_lock = partition_info_ptr->writeLock();
 
-                std::atomic<UInt32> * cache_status = getCacheStatus<CachePtr>(partition_info_ptr);
+                DataCacheStatus * cache_status = getCacheStatus<CachePtr>(partition_info_ptr);
 
                 /// Other other task may fail to fetch and change CacheStatus to UINIT before.
                 /// If so, do not touch the cache since insert parts may be missed.
                 /// Also, other task may success to fetch and change CacheStatus to LOADED before.
                 /// If so, no need to modify cache again.
-                if (*cache_status != CacheStatus::LOADING)
+                /// If the loading thread has changed, do not update the cache.
+                if (!cache_status->isLoadingByCurrentThread())
                     continue;
 
                 RetValueVec * parts_wrapper_vector;
@@ -1234,7 +1252,7 @@ RetValueVec PartCacheManager::getDataInternal(
                     cache_ptr->insert({uuid, partition_id}, cached);
                 }
 
-                *cache_status = CacheStatus::LOADED;
+                cache_status->setToLoaded();
             }
 
             /// Add fetched parts to result outside to reduce write lock time
@@ -1309,7 +1327,7 @@ template <
         auto meta_partitions = meta_ptr->getPartitions(partitions);
 
         auto process_partition = [&](const String & partition_id, const PartitionInfoPtr & partition_info_ptr, RetValueVec & parts) {
-            std::atomic<UInt32> * cache_status = getCacheStatus<CachePtr>(partition_info_ptr);
+            DataCacheStatus * cache_status = getCacheStatus<CachePtr>(partition_info_ptr);
 
             while (true)
             {
@@ -1318,7 +1336,7 @@ template <
 
                 bool need_load_parts = false;
                 {
-                    if (*cache_status == CacheStatus::LOADED)
+                    if (cache_status->isLoaded())
                     {
                         auto cached = cache_ptr->get({uuid, partition_id});
                         if (cached)
@@ -1341,9 +1359,9 @@ template <
 
                     auto partition_write_lock = partition_info_ptr->writeLock();
                     /// Double check
-                    if (*cache_status != CacheStatus::LOADING)
+                    if (!cache_status->isLoading())
                     {
-                        *cache_status = CacheStatus::LOADING;
+                        cache_status->setToLoading();
                         need_load_parts = true;
                     }
                 }
@@ -1368,36 +1386,39 @@ template <
                         /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make
                         /// sure the cache contains all parts of the partition.
                         auto partition_write_lock = partition_info_ptr->writeLock();
-                        auto cached = cache_ptr->get({uuid, partition_id});
-                        if (!cached)
+                        if (cache_status->isLoadingByCurrentThread())
                         {
-                            /// directly insert all fetched parts into cache
-                            cached = std::make_shared<CacheValueMap>();
-                            for (auto & data_wrapper_ptr : fetched)
+                            auto cached = cache_ptr->get({uuid, partition_id});
+                            if (!cached)
                             {
-                                Adapter adapter(storage, data_wrapper_ptr);
-                                cached->update(adapter.getName(), data_wrapper_ptr);
-                            }
-                            cache_ptr->insert({uuid, partition_id}, cached);
-                        }
-                        else
-                        {
-                            for (auto & data_wrapper_ptr : fetched)
-                            {
-                                Adapter adapter(storage, data_wrapper_ptr);
-                                auto it = cached->find(adapter.getName());
-                                Adapter it_adapter(storage, *it);
-                                /// do not update cache if the cached data is newer than bytekv.
-                                if (it == cached->end() || it_adapter.getCommitTime() < adapter.getCommitTime())
+                                /// directly insert all fetched parts into cache
+                                cached = std::make_shared<CacheValueMap>();
+                                for (auto & data_wrapper_ptr : fetched)
                                 {
+                                    Adapter adapter(storage, data_wrapper_ptr);
                                     cached->update(adapter.getName(), data_wrapper_ptr);
                                 }
+                                cache_ptr->insert({uuid, partition_id}, cached);
                             }
-                            /// Force LRU cache update status(weight/evict).
-                            cache_ptr->insert({uuid, partition_id}, cached);
-                        }
+                            else
+                            {
+                                for (auto & data_wrapper_ptr : fetched)
+                                {
+                                    Adapter adapter(storage, data_wrapper_ptr);
+                                    auto it = cached->find(adapter.getName());
+                                    Adapter it_adapter(storage, *it);
+                                    /// do not update cache if the cached data is newer than bytekv.
+                                    if (it == cached->end() || it_adapter.getCommitTime() < adapter.getCommitTime())
+                                    {
+                                        cached->update(adapter.getName(), data_wrapper_ptr);
+                                    }
+                                }
+                                /// Force LRU cache update status(weight/evict).
+                                cache_ptr->insert({uuid, partition_id}, cached);
+                            }
 
-                        *cache_status = CacheStatus::LOADED;
+                            cache_status->setToLoaded();
+                        }
 
                         /// Release partition lock before construct ServerDataPart
                         partition_write_lock.reset();
@@ -1423,7 +1444,8 @@ template <
                     {
                         /// change cache status to UINIT if exception occurs during fetch.
                         auto partition_write_lock = partition_info_ptr->writeLock();
-                        *cache_status = CacheStatus::UINIT;
+                        cache_status->reset();
+                        cache_ptr->remove({uuid, partition_id});
                         throw;
                     }
                 }
@@ -1432,7 +1454,7 @@ template <
                     {
                         std::unique_lock<std::mutex> lock(meta_ptr->fetch_mutex);
                         if (!meta_ptr->fetch_cv.wait_for(
-                                lock, std::chrono::milliseconds(5000), [&cache_status]() { return *cache_status == CacheStatus::LOADED; }))
+                                lock, std::chrono::milliseconds(5000), [&cache_status]() { return cache_status->isLoaded(); }))
                         {
                             LOG_TRACE(
                                 &Poco::Logger::get("PartCacheManager"),
@@ -1443,7 +1465,7 @@ template <
                         }
                     }
 
-                    if (*cache_status == CacheStatus::LOADED)
+                    if (cache_status->isLoaded())
                     {
                         auto cached = cache_ptr->get({uuid, partition_id});
                         if (!cached)
