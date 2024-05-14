@@ -32,15 +32,12 @@ void AddExchange::rewrite(QueryPlan & plan, ContextMutablePtr context) const
     Property required{Partitioning{Partitioning::Handle::SINGLE}};
 
     required.getNodePartitioningRef().setComponent(Partitioning::Component::COORDINATOR);
-    if (context->getSettingsRef().offloading_with_query_plan)
-        required.setEnforceNotMatch(true);
     ExchangeContext cxt{context, required};
     ExchangeResult result = VisitorUtil::accept(plan.getPlanNode(), visitor, cxt);
 
     PlanNodePtr node = result.getNodePtr();
     Property output = result.getOutputProperty();
-    if (!PropertyMatcher::matchNodePartitioning(
-            *context, required.getNodePartitioningRef(), required.isEnforceNotMatch(), output.getNodePartitioning()))
+    if (!PropertyMatcher::matchNodePartitioning(*context, required.getNodePartitioningRef(), output.getNodePartitioning()))
     {
         Utils::checkArgument(node->getChildren().size() == 1, "Output node has more than 1 child");
 
@@ -49,6 +46,10 @@ void AddExchange::rewrite(QueryPlan & plan, ContextMutablePtr context) const
         PlanNodes enforced_children{enforced_node};
         node->replaceChildren(enforced_children);
     }
+
+    // enforce a gather with keep_order if offloading_with_query_plan enabled
+    if (context->getSettingsRef().offloading_with_query_plan)
+        node = PropertyEnforcer::enforceOffloadingGatherNode(node, *context);
     plan.update(node);
 }
 
@@ -97,7 +98,6 @@ ExchangeResult ExchangeVisitor::visitJoinNode(JoinNode & node, ExchangeContext &
     if (!PropertyMatcher::matchNodePartitioning(
             *cxt.getContext(),
             left_property.getNodePartitioningRef(),
-            left_property.isEnforceNotMatch(),
             left_result.getOutputProperty().getNodePartitioning()))
     {
         PlanNodePtr enforced_node = PropertyEnforcer::enforceNodePartitioning(
@@ -111,7 +111,6 @@ ExchangeResult ExchangeVisitor::visitJoinNode(JoinNode & node, ExchangeContext &
     if (!PropertyMatcher::matchNodePartitioning(
             *cxt.getContext(),
             right_property.getNodePartitioningRef(),
-            right_property.isEnforceNotMatch(),
             right_result.getOutputProperty().getNodePartitioning()))
     {
         PlanNodePtr enforced_node = PropertyEnforcer::enforceNodePartitioning(
@@ -389,7 +388,6 @@ ExchangeResult ExchangeVisitor::enforceNodeAndStream(PlanNodeBase & node, Exchan
         && !PropertyMatcher::matchNodePartitioning(
             *cxt.getContext(),
             preferred.getNodePartitioningRef(),
-            preferred.isEnforceNotMatch(),
             result.getOutputProperty().getNodePartitioning()))
     {
         PlanNodePtr enforced_node
@@ -445,7 +443,6 @@ ExchangeResult ExchangeVisitor::enforceNode(PlanNodeBase & node, ExchangeContext
         && PropertyMatcher::matchNodePartitioning(
             *cxt.getContext(),
             preferred.getNodePartitioningRef(),
-            preferred.isEnforceNotMatch(),
             result.getOutputProperty().getNodePartitioning()))
     {
         return rebaseAndDeriveProperties(ptr, result, cxt.getContext());

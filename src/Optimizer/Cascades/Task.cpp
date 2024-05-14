@@ -564,7 +564,6 @@ void OptimizeInput::execute()
             bool node_partition_matched = PropertyMatcher::matchNodePartitioning(
                 *context->getOptimizerContext().getContext(),
                 require.getNodePartitioningRef(),
-                require.isEnforceNotMatch(),
                 output_prop.getNodePartitioning(),
                 *equivalences,
                 constants);

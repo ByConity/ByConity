@@ -25,14 +25,10 @@ namespace DB
 bool PropertyMatcher::matchNodePartitioning(
     const Context & context,
     Partitioning & required,
-    bool enforce_not_match,
     const Partitioning & actual,
     const SymbolEquivalences & equivalences,
     const Constants & constants)
 {
-    if (enforce_not_match)
-        return false; 
-
     if (required.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
         return true;
 

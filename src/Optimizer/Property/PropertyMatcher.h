@@ -26,7 +26,7 @@ class PropertyMatcher
 {
 public:
     static bool matchNodePartitioning(
-        const Context & context, Partitioning & required, bool enforce_not_match, const Partitioning & actual, const SymbolEquivalences & equivalences = {}, const Constants & constants = {});
+        const Context & context, Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences = {}, const Constants & constants = {});
 
     static bool matchStreamPartitioning(
         const Context & context, const Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences = {});
