@@ -60,12 +60,13 @@ CREATE TABLE mysql_create_ddl4
 (
     `id` Int32 NULL,
     `val1` timestamp NOT NULL COMMENT '中文',
-    `val2` varchar NOT NULL DEFAULT 'a'
+    `val2` varchar NOT NULL DEFAULT 'a',
+    UNIQUE KEY(id) USING BTREE
 );
 
 CREATE TABLE mysql_create_ddl5
 (
-    `id` Int32 NOT NULL,
+    `id` Int32 NOT NULL PRIMARY KEY,
     `val1` timestamp NOT NULL COMMENT '中文',
     `val2` varchar NOT NULL DEFAULT 'a',
     constraint un1 unique(id)
