@@ -49,18 +49,18 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & argument, const DataTypePtr &,  size_t) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & argument, const DataTypePtr &, size_t input_rows_count) const override
     {
         const ColumnWithTypeAndName & elem = argument[0];
         if (auto const * low_lc = checkAndGetColumn<ColumnLowCardinality>(*elem.column))
         {
             if (low_lc->isFullState())
             {
-                return  DataTypeUInt8().createColumnConst(elem.column->size(), 1u);
+                return ColumnUInt8::create(input_rows_count, 1);
             }
         }
 
-        return DataTypeUInt8().createColumnConst(elem.column->size(), 0u);
+        return ColumnUInt8::create(input_rows_count, 0);
     }
 };
 
