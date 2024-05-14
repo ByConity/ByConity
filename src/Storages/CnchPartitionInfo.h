@@ -22,6 +22,7 @@
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include <Common/RWLock.h>
+#include <common/getThreadId.h>
 
 namespace DB
 {
@@ -31,6 +32,46 @@ namespace CacheStatus
     static constexpr UInt32 LOADING = 1;
     static constexpr UInt32 LOADED = 2;
 }
+
+struct DataCacheStatus
+{
+    std::atomic<UInt32> load_status = CacheStatus::UINIT;
+    std::atomic<UInt64> loading_thread_id = 0;
+
+    bool isUnInit()
+    {
+        return load_status == CacheStatus::UINIT;
+    }
+    bool isLoaded()
+    {
+        return load_status == CacheStatus::LOADED;
+    }
+    bool isLoading()
+    {
+        return load_status == CacheStatus::LOADING;
+    }
+    bool isLoadingByCurrentThread()
+    {
+        return load_status == CacheStatus::LOADING && loading_thread_id == getThreadId();
+    }
+
+    /// calls to setXXX should always be protected by partition write lock
+    void setToLoading()
+    {
+        load_status = CacheStatus::LOADING;
+        loading_thread_id = getThreadId();
+    }
+    void setToLoaded()
+    {
+        load_status = CacheStatus::LOADED;
+        loading_thread_id = 0;
+    }
+    void reset()
+    {
+        load_status = CacheStatus::UINIT;
+        loading_thread_id = 0;
+    }
+};
 
 class CnchPartitionInfo
 {
@@ -45,8 +86,11 @@ public:
 
     std::shared_ptr<MergeTreePartition> partition_ptr;
     std::string partition_id;
-    std::atomic<UInt32> cache_status = CacheStatus::UINIT;
-    std::atomic<UInt32> delete_bitmap_cache_status = CacheStatus::UINIT;
+
+    //std::atomic<UInt32> cache_status = CacheStatus::UINIT;
+    //std::atomic<UInt32> delete_bitmap_cache_status = CacheStatus::UINIT;
+    DataCacheStatus part_cache_status;
+    DataCacheStatus delete_bitmap_cache_status;
     std::shared_ptr<PartitionMetrics> metrics_ptr;
 
     inline PartitionLockHolder readLock() const
