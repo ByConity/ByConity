@@ -17,21 +17,22 @@
 
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 #include <Optimizer/Cascades/Task.h>
+#include <Optimizer/Property/PropertyEnforcer.h>
 #include <Optimizer/Rule/Implementation/SetJoinDistribution.h>
 #include <Optimizer/Rule/Rewrite/PushAggThroughJoinRules.h>
+#include <Optimizer/Rule/Transformation/CardinalityBasedJoinReorder.h>
 #include <Optimizer/Rule/Transformation/InlineCTE.h>
 #include <Optimizer/Rule/Transformation/InnerJoinCommutation.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
+#include <Optimizer/Rule/Transformation/JoinToMultiJoin.h>
 #include <Optimizer/Rule/Transformation/LeftJoinToRightJoin.h>
 #include <Optimizer/Rule/Transformation/MagicSetForAggregation.h>
 #include <Optimizer/Rule/Transformation/MagicSetPushDown.h>
 #include <Optimizer/Rule/Transformation/PullOuterJoin.h>
-#include <Optimizer/Rule/Transformation/CardinalityBasedJoinReorder.h>
 #include <Optimizer/Rule/Transformation/SelectivityBasedJoinReorder.h>
-#include <Optimizer/Rule/Transformation/JoinToMultiJoin.h>
-#include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/PlanPattern.h>
 #include <Storages/StorageDistributed.h>
 
@@ -53,8 +54,8 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 
     auto root_id = root->getGroupId();
     auto single = Property{Partitioning{Partitioning::Handle::SINGLE}};
-    if (context->getSettingsRef().offloading_with_query_plan)
-        single.setEnforceNotMatch(true);
+
+    single.getNodePartitioningRef().setComponent(Partitioning::Component::COORDINATOR);
 
     WinnerPtr winner;
     try
@@ -71,6 +72,11 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
     GraphvizPrinter::printMemo(cascades_context.getMemo(), root_id, context, std::to_string(id) + "_CascadesOptimizer-Memo-Graph");
 
     auto result = buildPlanNode(root_id, cascades_context, single);
+
+    // enforce a gather with keep_order if offloading_with_query_plan enabled
+    if (context->getSettingsRef().offloading_with_query_plan)
+        result = PropertyEnforcer::enforceOffloadingGatherNode(result, *context);
+
     for (const auto & item : winner->getCTEActualProperties())
     {
         auto cte_id = item.first;

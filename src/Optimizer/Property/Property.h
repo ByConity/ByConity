@@ -390,7 +390,6 @@ public:
     const Sorting & getSorting() const { return sorting; }
     const CTEDescriptions & getCTEDescriptions() const { return cte_descriptions; }
     CTEDescriptions & getCTEDescriptions() { return cte_descriptions; }
-    bool isEnforceNotMatch() const { return enforce_not_match; }
     const TableLayout & getTableLayout() const { return table_layout; }
 
     void setPreferred(bool preferred_) { preferred = preferred_; }
@@ -398,7 +397,6 @@ public:
     void setStreamPartitioning(Partitioning stream_partitioning_) { stream_partitioning = std::move(stream_partitioning_); }
     void setCTEDescriptions(CTEDescriptions descriptions) { cte_descriptions = std::move(descriptions); }
     void setSorting(Sorting sorting_) { sorting = std::move(sorting_); }
-    void setEnforceNotMatch(bool enforce_not_match_) { enforce_not_match = enforce_not_match_; }
     void setTableLayout(TableLayout table_layout_) { table_layout = std::move(table_layout_); }
 
     Property clearSorting() const
@@ -435,8 +433,6 @@ private:
     // Grouping grouping;
     // Description of the requirements of the common table expressions.
     CTEDescriptions cte_descriptions;
-    // used by offloading
-    bool enforce_not_match = false;
     // Description of the what-if table layout
     TableLayout table_layout;
 };
