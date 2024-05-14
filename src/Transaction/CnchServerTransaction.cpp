@@ -154,22 +154,18 @@ TxnTimestamp CnchServerTransaction::commitV2()
         if (!(getContext()->getSettings().ignore_duplicate_insertion_label && e.code() == ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS))
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
 
-        if (e.code() == ErrorCodes::BRPC_TIMEOUT)
+        try
         {
-            try
-            {
-                auto commit_ts = abort();
-                /// the txn has been sucessfully committed for the timeout case
-                if (txn_record.status() == CnchTransactionStatus::Finished)
-                    return commit_ts;
-            }
-            catch (...)
-            {
-                tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            }
+            auto commit_ts = abort();
+            /// the txn has been sucessfully committed for the timeout case
+            if (txn_record.status() == CnchTransactionStatus::Finished)
+                return commit_ts;
+        }
+        catch (...)
+        {   
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
 
-        rollback();
         throw;
     }
     catch (...)
@@ -416,7 +412,8 @@ TxnTimestamp CnchServerTransaction::abort()
     SCOPE_EXIT_SAFE({ tryCleanMergeTagger(); });
 
     auto lock = getLock();
-    if (isReadOnly())
+    // Abort successful primary txn shouldn't be allowed unless we mean to do so with rollback.
+    if (isReadOnly() || (txn_record.isPrimary() && txn_record.status() == CnchTransactionStatus::Finished))
         throw Exception("Invalid commit operation", ErrorCodes::LOGICAL_ERROR);
 
     TransactionRecord target_record = getTransactionRecord();

@@ -87,6 +87,10 @@ struct PartitionCommand
     /// true for DETACH/DROP STAGED PARTITION/PART, only used by unique table
     bool staging_area = false;
 
+    /// true for DETACH/ATTACH PARTITION xxx BUCKET xxx
+    bool specify_bucket = false;
+    UInt64 bucket_number;
+
     /// For ATTACH PARTITION partition FROM db.table
     String from_database;
     String from_table;

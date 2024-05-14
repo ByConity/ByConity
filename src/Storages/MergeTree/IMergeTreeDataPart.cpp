@@ -49,6 +49,7 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
+#include <Interpreters/CnchSystemLog.h>
 
 namespace CurrentMetrics
 {
@@ -1706,7 +1707,16 @@ void IMergeTreeDataPart::setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta, bo
     if (!found_base)
     {
         if (force_set)
+        {
+            if (auto unique_table_log = storage.getContext()->getCloudUniqueTableLog())
+            {
+                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, storage.getCnchStorageID());
+                current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                current_log.event_msg = "Base delete bitmap of part " + name + " is not found";
+                unique_table_log->add(current_log);
+            }
             throw Exception("Base delete bitmap of part " + name + " is not found", ErrorCodes::LOGICAL_ERROR);
+        }
         else
         {
             LOG_ERROR(storage.log, "Base delete bitmap of part " + name + " is not found");

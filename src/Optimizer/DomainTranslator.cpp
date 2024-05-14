@@ -809,6 +809,9 @@ ExtractionResult<T> DomainVisitor<T>::visitInFunction(ASTPtr & node, const bool 
     if (value_list.empty())
         throw Exception("InListExpression should never be empty", DB::ErrorCodes::LOGICAL_ERROR);
 
+    if (value_list.size() >= 100)
+        return visitNode(node, complement);
+
     auto dir_extraction_result = processSimpleInPredicate(node, complement);
 
     if (dir_extraction_result.has_value())

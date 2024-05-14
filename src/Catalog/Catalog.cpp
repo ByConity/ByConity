@@ -1571,11 +1571,13 @@ namespace Catalog
                 res.second.size(),
                 ts.toString());
 
+            auto * txn_record_cache =
+                context.getServerType() == ServerType::cnch_server ? context.getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache() : nullptr;
             /// Make sure they use the same records of transactions list.
             auto txn_records = getTransactionRecords(res.first, res.second);
-            getVisibleServerDataParts(res.first, ts, this, &txn_records);
+            getVisibleServerDataParts(res.first, ts, this, &txn_records, txn_record_cache);
             if (is_unique_table)
-                getVisibleBitmaps(res.second, ts, this, &txn_records);
+                getVisibleBitmaps(res.second, ts, this, &txn_records, txn_record_cache);
 
             LOG_DEBUG(
                 log,
@@ -1655,7 +1657,10 @@ namespace Catalog
                         res.size(),
                         ts.toString());
 
-                    getVisibleServerDataParts(res, ts, this, nullptr);
+                    auto * txn_record_cache = context.getServerType() == ServerType::cnch_server
+                        ? context.getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache()
+                        : nullptr;
+                    getVisibleServerDataParts(res, ts, this, nullptr, txn_record_cache);
 
                     LOG_TRACE(
                         log,
@@ -1711,18 +1716,21 @@ namespace Catalog
                 res.second.size(),
                 ts.toString());
 
-             auto txn_records = getTransactionRecords(res.first, res.second);
+            auto * txn_record_cache =
+                context.getServerType() == ServerType::cnch_server ? context.getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache() : nullptr;
+
+            auto txn_records = getTransactionRecords(res.first, res.second);
             if (visibility == VisibilityLevel::Visible)
             {
-                getVisibleServerDataParts(res.first, ts, this, &txn_records);
+                getVisibleServerDataParts(res.first, ts, this, &txn_records, txn_record_cache);
                 if (is_unique_table)
-                    getVisibleBitmaps(res.second, ts, this, &txn_records);
+                    getVisibleBitmaps(res.second, ts, this, &txn_records, txn_record_cache);
             }
             else
             {
-                getCommittedServerDataParts(res.first, ts, this, &txn_records);
+                getCommittedServerDataParts(res.first, ts, this, &txn_records, txn_record_cache);
                 if (is_unique_table)
-                    getCommittedBitmaps(res.second, ts, this, &txn_records);
+                    getCommittedBitmaps(res.second, ts, this, &txn_records, txn_record_cache);
             }
 
             LOG_DEBUG(
@@ -1842,10 +1850,13 @@ namespace Catalog
                         ,res.size()
                         ,ts.toString());
 
+                    auto * txn_record_cache =
+                        context.getServerType() == ServerType::cnch_server ? context.getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache() : nullptr;
+
                     if (visibility == VisibilityLevel::Visible)
-                        getVisibleServerDataParts(res, ts, this, nullptr);
+                        getVisibleServerDataParts(res, ts, this, nullptr, txn_record_cache);
                     else
-                        getCommittedServerDataParts(res, ts, this, nullptr);
+                        getCommittedServerDataParts(res, ts, this, nullptr, txn_record_cache);
 
                     LOG_TRACE(
                         log,
@@ -1992,7 +2003,10 @@ namespace Catalog
                 {
                     visibility_filtered = res.size();
                     filter_executed = true;
-                    getVisibleBitmaps(res, ts, this, nullptr);
+                    auto * txn_record_cache = context.getServerType() == ServerType::cnch_server
+                        ? context.getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache()
+                        : nullptr;
+                    getVisibleBitmaps(res, ts, this, nullptr, txn_record_cache);
                     visibility_filtered -= res.size();
                 }
 
@@ -2058,11 +2072,13 @@ namespace Catalog
                 res.second.size(),
                 ts.toString());
 
+            auto * txn_record_cache =
+                context.getServerType() == ServerType::cnch_server ? context.getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache() : nullptr;
             /// Make sure they use the same records of transactions list.
             auto txn_records = getTransactionRecords(res.first, res.second);
-            getVisibleServerDataParts(res.first, ts, this, &txn_records);
+            getVisibleServerDataParts(res.first, ts, this, &txn_records, txn_record_cache);
             if (is_unique_table)
-                getVisibleBitmaps(res.second, ts, this, &txn_records);
+                getVisibleBitmaps(res.second, ts, this, &txn_records, txn_record_cache);
 
             LOG_DEBUG(
                 log,
@@ -2098,7 +2114,12 @@ namespace Catalog
 
                 // TODO: should we remove the visibility check logic for trashed parts?
                 if (ts && visibility != VisibilityLevel::All)
-                    getVisibleServerDataParts(res, ts, this, nullptr);
+                {
+                    auto * txn_record_cache = context.getServerType() == ServerType::cnch_server
+                        ? context.getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache()
+                        : nullptr;
+                    getVisibleServerDataParts(res, ts, this, nullptr, txn_record_cache);
+                }
 
                 LOG_DEBUG(
                     log,
@@ -5988,8 +6009,10 @@ namespace Catalog
 
                 if (visibility != VisibilityLevel::All)
                 {
+                    auto * txn_record_cache =
+                        context.getServerType() == ServerType::cnch_server ? context.getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache() : nullptr;
                     /// filter out invisible bitmaps (uncommitted or invisible to current txn)
-                    getVisibleBitmaps(res, ts, this, nullptr);
+                    getVisibleBitmaps(res, ts, this, nullptr, txn_record_cache);
                 }
             },
             ProfileEvents::GetDeleteBitmapsInPartitionsSuccess,

@@ -54,6 +54,8 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.cascading = command_ast->cascading;
         res.part = command_ast->part;
         res.staging_area = command_ast->staging_area;
+        res.specify_bucket = command_ast->specify_bucket;
+        res.bucket_number = command_ast->bucket_number;
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::DROP_DETACHED_PARTITION)
@@ -98,6 +100,8 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.parts = command_ast->parts;
         res.replace = command_ast->replace;
         res.from_zookeeper_path = command_ast->from;
+        res.specify_bucket = command_ast->specify_bucket;
+        res.bucket_number = command_ast->bucket_number;
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::ATTACH_DETACHED_PARTITION)

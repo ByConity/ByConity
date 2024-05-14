@@ -145,6 +145,7 @@ class MutationLog;
 class KafkaLog;
 class CloudKafkaLog;
 class CloudMaterializedMySQLLog;
+class CloudUniqueTableLog;
 class ProcessorsProfileLog;
 class RemoteReadLog;
 class ZooKeeperLog;
@@ -565,7 +566,7 @@ private:
     // worker status
     WorkerGroupStatusPtr worker_group_status;
 
-    std::shared_ptr<OptimizerProfile> optimizer_profile =  nullptr;
+    std::shared_ptr<OptimizerProfile> optimizer_profile = nullptr;
     /// Temporary data for query execution accounting.
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
 
@@ -619,7 +620,9 @@ private:
 
     String async_query_id;
 
+    AddressInfo coordinator_address;
     PlanSegmentInstanceId plan_segment_instance_id;
+    ExceptionHandlerPtr plan_segment_ex_handler = nullptr;
 
     bool read_from_client_finished = false;
 
@@ -896,8 +899,15 @@ public:
     /// Id of initiating query for distributed queries; or current query id if it's not a distributed query.
     String getInitialQueryId() const;
 
+    void setCoordinatorAddress(const Protos::AddressInfo & address);
+    void setCoordinatorAddress(const AddressInfo & address);
+    AddressInfo getCoordinatorAddress() const;
+
     void setPlanSegmentInstanceId(const PlanSegmentInstanceId & instance_id);
     PlanSegmentInstanceId getPlanSegmentInstanceId() const;
+
+    void initPlanSegmentExHandler();
+    ExceptionHandlerPtr getPlanSegmentExHandler() const;
 
     void setCurrentDatabase(const String & name);
     void setCurrentDatabase(const String & name, ContextPtr local_context);
@@ -1289,6 +1299,7 @@ public:
     std::shared_ptr<KafkaLog> getKafkaLog() const;
     std::shared_ptr<CloudKafkaLog> getCloudKafkaLog() const;
     std::shared_ptr<CloudMaterializedMySQLLog> getCloudMaterializedMySQLLog() const;
+    std::shared_ptr<CloudUniqueTableLog> getCloudUniqueTableLog() const;
     std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<RemoteReadLog> getRemoteReadLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;

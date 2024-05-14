@@ -174,8 +174,19 @@ const size_t MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 3;
 
 bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
 {
-    if (retry_count.load(std::memory_order_acquire) >= query_context->getSettings().bsp_max_retry_num)
-        return false;
+    auto instance_id = PlanSegmentInstanceId{static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index)};
+    size_t retry_id;
+    String rpc_address;
+    {
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        auto & cnt = segment_instance_retry_cnt[instance_id];
+        if (cnt >= query_context->getSettingsRef().bsp_max_retry_num)
+            return false;
+        cnt++;
+        retry_id = cnt;
+        rpc_address = extractExchangeHostPort(segment_parallel_locations[instance_id.segment_id][instance_id.parallel_id]);
+    }
+
     /// currently disable retry for TableFinish
     bool is_table_write = false;
     auto * plansegment = dag_graph_ptr->getPlanSegmentPtr(segment_id);
@@ -211,70 +222,54 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
             return false;
         }
     }
-    auto cnt = retry_count.fetch_add(1, std::memory_order_acq_rel);
-    if (cnt < query_context->getSettingsRef().bsp_max_retry_num)
+
+    LOG_INFO(
+        log,
+        "Retrying segment instance(query_id:{} {} rpc_address:{}) {} times",
+        plansegment->getQueryId(),
+        instance_id.toString(),
+        rpc_address,
+        retry_id);
+    if (is_table_write)
     {
-        String rpc_address;
-        auto instance_id = PlanSegmentInstanceId{static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index)};
-        size_t retry_id;
+        // execute undos and clear part cache before execution
+        auto catalog = query_context->getCnchCatalog();
+        auto txn = query_context->getCurrentTransaction();
+        auto txn_id = txn->getTransactionID();
+        auto undo_buffer = catalog->getUndoBuffer(txn_id, rpc_address, instance_id);
+        for (const auto & [uuid, resources] : undo_buffer)
         {
-            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            retry_id = (segment_instance_retry_cnt[instance_id]++);
-            rpc_address = extractExchangeHostPort(segment_parallel_locations[instance_id.segment_id][instance_id.parallel_id]);
-        }
-        LOG_INFO(
-            log,
-            "bsp retry segment instance(query_id:{} {} rpc_address:{}) with instance_retry_id:{}, query has retried {} times",
-            plansegment->getQueryId(),
-            instance_id.toString(),
-            rpc_address,
-            retry_id,
-            cnt);
-        if (is_table_write)
-        {
-            // execute undos and clear part cache before execution
-            auto catalog = query_context->getCnchCatalog();
-            auto txn = query_context->getCurrentTransaction();
-            auto txn_id = txn->getTransactionID();
-            auto undo_buffer = catalog->getUndoBuffer(txn_id, rpc_address, instance_id);
-            for (const auto & [uuid, resources] : undo_buffer)
+            StoragePtr table = catalog->tryGetTableByUUID(*query_context, uuid, TxnTimestamp::maxTS(), true);
+            if (table)
             {
-                StoragePtr table = catalog->tryGetTableByUUID(*query_context, uuid, TxnTimestamp::maxTS(), true);
-                if (table)
-                {
-                    bool clean_fs_lock_by_scan;
-                    catalog->applyUndos(txn->getTransactionRecord(), table, resources, clean_fs_lock_by_scan);
-                }
-            }
-            catalog->clearUndoBuffer(txn_id, rpc_address, instance_id);
-        }
-        {
-            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            if (dag_graph_ptr->any_tables.contains(segment_id) ||
-                // for local no repartion and local may no repartition, schedule to original node
-                NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)) ||
-                // in case all workers except servers are occupied, simply retry at last node
-                failed_workers[segment_id].size() == cluster_nodes.rank_workers.size())
-            {
-                auto available_worker = segment_parallel_locations[segment_id][parallel_index];
-                occupied_workers[segment_id].erase(available_worker);
-                pending_task_instances.for_nodes[available_worker].insert({segment_id, parallel_index});
-                lk.unlock();
-                triggerDispatch({WorkerNode{available_worker}});
-            }
-            else
-            {
-                pending_task_instances.no_prefs.insert({segment_id, parallel_index});
-                lk.unlock();
-                triggerDispatch(cluster_nodes.rank_workers);
+                bool clean_fs_lock_by_scan;
+                catalog->applyUndos(txn->getTransactionRecord(), table, resources, clean_fs_lock_by_scan);
             }
         }
-        return true;
+        catalog->clearUndoBuffer(txn_id, rpc_address, instance_id);
     }
-    else
     {
-        return false;
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        if (dag_graph_ptr->any_tables.contains(segment_id) ||
+            // for local no repartion and local may no repartition, schedule to original node
+            NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)) ||
+            // in case all workers except servers are occupied, simply retry at last node
+            failed_workers[segment_id].size() == cluster_nodes.rank_workers.size())
+        {
+            auto available_worker = segment_parallel_locations[segment_id][parallel_index];
+            occupied_workers[segment_id].erase(available_worker);
+            pending_task_instances.for_nodes[available_worker].insert({segment_id, parallel_index});
+            lk.unlock();
+            triggerDispatch({WorkerNode{available_worker}});
+        }
+        else
+        {
+            pending_task_instances.no_prefs.insert({segment_id, parallel_index});
+            lk.unlock();
+            triggerDispatch(cluster_nodes.rank_workers);
+        }
     }
+    return true;
 }
 
 const AddressInfo & BSPScheduler::getSegmentParallelLocation(PlanSegmentInstanceId instance_id)

@@ -26,6 +26,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Poco/Exception.h>
+#include "IO/WriteBufferFromString.h"
 
 namespace CurrentMetrics
 {
@@ -170,33 +171,101 @@ void CnchPartGCThread::clearData()
     removeCandidatePartitions();
 }
 
+/// Calculate partition's ttl value and drop expired partitions.
+/// There are two ways to get a partition's ttl:
+/// - If TTL expression is matched with PARTITION BY expression, just evaluate the TTL expression on PARTITION keys.
+/// - Otherwise, scan all parts and get the max ttl value as the result.
 void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts)
 {
     time_t now = time(nullptr);
 
-    StorageCnchMergeTree::PartitionDropInfos partition_infos;
-    for (const auto & part : visible_parts)
-    {
-        if (part->deleted())
-            continue;
+    bool use_partition_ttl = storage.getInMemoryMetadataPtr()->hasPartitionLevelTTL();
+    bool use_partition_ttl_fallback = storage.getInMemoryMetadataPtr()->hasRowsTTL() && storage.getSettings()->enable_partition_ttl_fallback;
+    if (!use_partition_ttl && !use_partition_ttl_fallback)
+        return;
 
-        if (auto iter = partition_infos.find(part->info().partition_id); iter != partition_infos.end())
+    StorageCnchMergeTree::PartitionDropInfos partition_infos;
+    
+    /// Option 1. Get ttl by evaluating TTL expression on partition keys.
+    /// And update max_block (for generating DROP_RANGE) if ttl is expired.
+    if (use_partition_ttl)
+    {
+        NameSet skip_partitions;
+        for (const auto & part : visible_parts)
         {
-            iter->second.max_block = std::max(iter->second.max_block, part->info().max_block);
-        }
-        else
-        {
-            auto ttl = storage.getTTLForPartition(part->get_partition());
-            if (ttl && ttl < now)
+            if (part->deleted())
+                continue;
+
+            const auto partition_id = part->info().partition_id;
+            if (skip_partitions.contains(partition_id))
+                continue;
+
+            if (auto iter = partition_infos.find(partition_id); iter != partition_infos.end())
             {
-                auto it = partition_infos.try_emplace(part->info().partition_id).first;
-                it->second.max_block = part->info().max_block;
-                it->second.value.assign(part->partition());
+                iter->second.max_block = std::max(iter->second.max_block, part->info().max_block);
+            }
+            else
+            {
+                auto ttl = storage.getTTLForPartition(part->get_partition());
+                if (ttl && ttl < now)
+                {
+                    LOG_TRACE(log, "[partition] {} is expired, ttl value is {}", partition_id, ttl);
+                    auto it = partition_infos.try_emplace(partition_id).first;
+                    it->second.max_block = part->info().max_block;
+                    it->second.value.assign(part->partition());
+                }
+                else
+                {
+                    skip_partitions.insert(partition_id);
+                }
             }
         }
     }
+    /// Option 2. Get ttl by scanning parts' max_ttl.
+    else if (use_partition_ttl_fallback)
+    {
+        NameSet skip_partitions;
+        for (const auto & part : visible_parts)
+        {
+            if (part->deleted())
+                continue;
+
+            const auto partition_id = part->info().partition_id;
+            if (skip_partitions.contains(partition_id))
+                continue;
+
+            auto ttl = part->part_model().has_part_ttl_info() ? part->part_model().part_ttl_info().part_max_ttl() : 0;
+            if (ttl == 0 || ttl >= static_cast<UInt64>(now))
+            {
+                skip_partitions.insert(partition_id);
+                continue;
+            }
+
+            if (auto iter = partition_infos.find(partition_id); iter != partition_infos.end())
+            {
+                iter->second.max_block = std::max(iter->second.max_block, part->info().max_block);
+            }
+            else
+            {
+                auto it = partition_infos.try_emplace(partition_id).first;
+                it->second.max_block = part->info().max_block;
+                it->second.value.assign(part->partition());
+            }
+        } 
+
+        for (const auto & p : skip_partitions)
+        {
+            partition_infos.erase(p);
+        }
+    }
+
     if (partition_infos.empty())
         return;
+
+    WriteBufferFromOwnString wb;
+    for (const auto & [partition, info]: partition_infos)
+        wb << partition << ", " << info.max_block << "; ";
+    LOG_TRACE(log, "[partition] expired partitions and corresponding max_block list: {}", wb.str());
 
     ContextMutablePtr query_context = Context::createCopy(storage.getContext());
 

@@ -19,6 +19,8 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+
+#include <Storages/System/StorageSystemHuAllocStats.h>
 #include <Databases/IDatabase.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachSystemTablesImpl.h>
@@ -277,6 +279,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemPersistentBGJobStatus>(system_database, "persistent_bg_job_status");
     attach<StorageSystemGlobalGCManager>(system_database, "global_gc_manager");
     attach<StorageSystemLockMap>(system_database, "lock_map");
+    attach<StorageSystemHuAllocStats>( system_database, "hualloc_stats");
 
     attach<StorageSystemWorkers>(system_database, "workers");
     attach<StorageSystemWorkerGroups>(system_database, "worker_groups");

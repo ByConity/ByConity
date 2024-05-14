@@ -132,7 +132,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 
 void ExchangeSource::onCancel()
 {
-    LOG_TRACE(logger, "ExchangeSource {} onCancel", getName());
+    LOG_TRACE(logger, "{} onCancel", getName());
     was_query_canceled = true;
     receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
 }

@@ -25,6 +25,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Interpreters/DistributedStages/PlanSegmentReport.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/ProcessorProfile.h>
 #include <Interpreters/ProcessorsProfileLog.h>
@@ -158,28 +159,21 @@ PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
         RuntimeFilterManager::getInstance().removeDynamicValue(plan_segment->getQueryId(), id);
 }
 
-RuntimeSegmentsStatus PlanSegmentExecutor::execute()
+void PlanSegmentExecutor::execute()
 {
     LOG_DEBUG(logger, "execute PlanSegment:\n" + plan_segment->toString());
     try
     {
+        context->initPlanSegmentExHandler();
         doExecute();
-
-        runtime_segment_status.query_id = plan_segment->getQueryId();
-        runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
-        runtime_segment_status.parallel_index = plan_segment_instance->info.parallel_id;
-        runtime_segment_status.is_succeed = true;
-        runtime_segment_status.is_cancelled = false;
-        runtime_segment_status.code = 0;
-        runtime_segment_status.message = "execute success";
-        runtime_segment_status.metrics.final_progress = final_progress.toProto();
 
         query_log_element->type = QueryLogElementType::QUERY_FINISH;
         const auto finish_time = std::chrono::system_clock::now();
         query_log_element->event_time = time_in_seconds(finish_time);
         query_log_element->event_time_microseconds = time_in_microseconds(finish_time);
-        sendSegmentStatus(runtime_segment_status);
-        return runtime_segment_status;
+
+        if (options.need_send_plan_segment_status)
+            reportSuccessPlanSegmentStatus(context, plan_segment_instance->info.execution_address, final_progress, sender_metrics, plan_segment_outputs);
     }
     catch (...)
     {
@@ -195,15 +189,6 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute()
         query_log_element->event_time = time_in_seconds(time_now);
         query_log_element->event_time_microseconds = time_in_microseconds(time_now);
 
-        const auto & host = extractExchangeHostPort(plan_segment_instance->info.execution_address);
-        runtime_segment_status.query_id = plan_segment->getQueryId();
-        runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
-        runtime_segment_status.parallel_index = plan_segment_instance->info.parallel_id;
-        runtime_segment_status.is_succeed = false;
-        runtime_segment_status.is_cancelled = false;
-        runtime_segment_status.code = exception_code;
-        runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
-        runtime_segment_status.metrics.final_progress = final_progress.toProto();
         if (exception_code == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
         {
             // ErrorCodes::MEMORY_LIMIT_EXCEEDED don't print stack trace.
@@ -225,10 +210,10 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute()
                     plan_segment->getPlanSegmentId(),
                     exception_code));
         }
-        if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
-            runtime_segment_status.is_cancelled = true;
-        sendSegmentStatus(runtime_segment_status);
-        return runtime_segment_status;
+        auto exception_handler = context->getPlanSegmentExHandler();
+        if (options.need_send_plan_segment_status && exception_handler && exception_handler->setException(std::current_exception()))
+            reportFailurePlanSegmentStatus(
+                context, plan_segment_instance->info.execution_address, exception_code, exception_message, std::move(final_progress), sender_metrics, plan_segment_outputs);
     }
 
     //TODO notify segment scheduler with finished or exception status.
@@ -395,7 +380,7 @@ void PlanSegmentExecutor::doExecute()
 
     if (CurrentThread::getGroup())
     {
-        runtime_segment_status.metrics.cpu_micros = CurrentThread::getGroup()->performance_counters[ProfileEvents::SystemTimeMicroseconds]
+        metrics.cpu_micros = CurrentThread::getGroup()->performance_counters[ProfileEvents::SystemTimeMicroseconds]
                 + CurrentThread::getGroup()->performance_counters[ProfileEvents::UserTimeMicroseconds];
     }
     GraphvizPrinter::printPipeline(pipeline_executor->getProcessors(), pipeline_executor->getExecutingGraph(), context, plan_segment->getPlanSegmentId(), extractExchangeHostPort(plan_segment_instance->info.execution_address));
@@ -924,75 +909,6 @@ Processors PlanSegmentExecutor::buildLoadBalancedExchangeSink(BroadcastSenderPtr
     }
 
     return new_processors;
-}
-
-void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status) noexcept
-{
-    try
-    {
-        if (!options.need_send_plan_segment_status)
-            return;
-        auto address = extractExchangeHostPort(plan_segment->getCoordinatorAddress());
-
-        std::shared_ptr<RpcClient> rpc_client
-            = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
-        Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
-        brpc::Controller cntl;
-        Protos::SendPlanSegmentStatusRequest request;
-        Protos::SendPlanSegmentStatusResponse response;
-        request.set_query_id(status.query_id);
-        request.set_segment_id(status.segment_id);
-        request.set_parallel_index(status.parallel_index);
-        request.set_is_succeed(status.is_succeed);
-        request.set_is_canceled(status.is_cancelled);
-        status.metrics.setProtos(*request.mutable_metrics());
-        request.set_code(status.code);
-        request.set_message(status.message);
-        if (!sender_metrics.bytes_sent.empty())
-        {
-            plan_segment_instance->info.execution_address.toProto(*request.mutable_sender_metrics()->mutable_address());
-            for (const auto & cur_plan_segment_output : plan_segment_outputs)
-            {
-                size_t exchange_parallel_size = cur_plan_segment_output->getExchangeParallelSize();
-                size_t parallel_size = cur_plan_segment_output->getParallelSize();
-                size_t exchange_id = cur_plan_segment_output->getExchangeId();
-                const auto & output_for_exchange = sender_metrics.bytes_sent[exchange_id];
-                std::vector<size_t> bytes_sum(parallel_size);
-                std::generate(bytes_sum.begin(), bytes_sum.end(), []() { return 0; });
-                for (const auto & [p_id, b] : output_for_exchange)
-                {
-                    bytes_sum[p_id / exchange_parallel_size] += b;
-                }
-                auto & b = *request.mutable_sender_metrics()->mutable_send_bytes()->Add();
-                b.set_exchange_id(exchange_id);
-                for (size_t i = 0; i < bytes_sum.size(); i++)
-                {
-                    auto & b_i = *b.mutable_bytes_by_index()->Add();
-                    b_i.set_parallel_index(i);
-                    b_i.set_bytes_sent(bytes_sum[i]);
-                }
-            }
-        }
-
-        manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
-        rpc_client->assertController(cntl);
-        LOG_INFO(
-            logger,
-            "PlanSegment-{} send status to coordinator successfully, query id-{} parallel_index-{} cpu_micros-{} is_succeed:{} "
-            "is_cancelled:{} code:{} final_progress:{}",
-            request.segment_id(),
-            request.query_id(),
-            status.parallel_index,
-            status.metrics.cpu_micros,
-            status.is_succeed,
-            status.is_cancelled,
-            status.code,
-            final_progress.getValues().toString());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
 }
 
 void PlanSegmentExecutor::sendProgress()

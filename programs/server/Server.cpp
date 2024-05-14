@@ -138,6 +138,7 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 #include <Common/ChineseTokenExtractor.h>
+#include <Common/HuAllocator.h>
 
 #include <CloudServices/CnchServerClientPool.h>
 
@@ -227,7 +228,6 @@ namespace DB::ErrorCodes
 int mainEntryClickHouseServer(int argc, char ** argv)
 {
     DB::Server app;
-
     if (jemallocOptionEnabled("opt.background_thread"))
     {
         LOG_ERROR(&app.logger(),
@@ -532,6 +532,12 @@ void checkForUsersNotInMainConfig(
 #else
     _exit(0);
 #endif
+}
+
+void huallocLogPrint(std::string s)
+{
+    static Poco::Logger * logger = &Poco::Logger::get("HuallocDebug");
+    LOG_INFO(logger, s);
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -1008,6 +1014,37 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             BrpcApplication::getInstance().reloadConfig(*config);
 
+            #if USE_HUALLOC
+            if (config->getBool("hualloc_numa_aware", false))
+            {
+                size_t max_numa_node = SystemUtils::getMaxNumaNode();
+                std::vector<cpu_set_t> numa_nodes_cpu_mask = SystemUtils::getNumaNodesCpuMask();
+                bool hualloc_enable_mbind = config->getBool("hualloc_enable_mbind", false);
+                int mbind_mode = config->getInt("hualloc_mbind_mode", 1);
+
+                /*
+                *mbind mode
+                    #define MPOL_DEFAULT     0
+                    #define MPOL_PREFERRED   1
+                    #define MPOL_BIND        2
+                    #define MPOL_INTERLEAVE  3
+                    #define MPOL_LOCAL       4
+                    #define MPOL_MAX         5
+                */
+                huallocSetNumaInfo(
+                    max_numa_node,
+                    numa_nodes_cpu_mask,
+                    hualloc_enable_mbind,
+                    mbind_mode,
+                    huallocLogPrint
+                );
+            }
+
+            double default_hualloc_cache_ratio = config->getDouble("hualloc_cache_ratio", 0.25);
+            LOG_INFO(log, "HuAlloc cache memory size:{}",
+                    formatReadableSizeWithBinarySuffix(max_server_memory_usage * default_hualloc_cache_ratio));
+            HuAllocator<false>::InitHuAlloc(max_server_memory_usage * default_hualloc_cache_ratio);
+            #endif
             total_memory_tracker.setHardLimit(max_server_memory_usage);
             total_memory_tracker.setDescription("(total)");
             total_memory_tracker.setMetric(CurrentMetrics::MemoryTracking);
@@ -1175,7 +1212,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setChecksumsCache(checksum_cache_settings);
 
 
-    /// A cache for gin index store 
+    /// A cache for gin index store
     GinIndexStoreCacheSettings ginindex_store_cache_settings;
     ginindex_store_cache_settings.lru_max_size = config().getUInt64("ginindex_store_cache_size", 5368709120); //5GB
     ginindex_store_cache_settings.mapping_bucket_size = config().getUInt64("ginindex_store_cache_bucket", 5000); //5000
@@ -1320,7 +1357,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::File disk_path(disk->getPath());
             if (!disk_path.canRead() || !disk_path.canWrite())
                 throw Exception("There is no RW access to disk " + name + " (" + disk->getPath() + ")", ErrorCodes::PATH_ACCESS_DENIED);
-            uki_disk_cache_max_bytes = std::min<size_t>(0.25 * disk->getAvailableSpace(), uki_disk_cache_max_bytes);
+            uki_disk_cache_max_bytes = std::min<size_t>(0.25 * disk->getAvailableSpace().bytes, uki_disk_cache_max_bytes);
             break;
         }
     }

@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Disks/IDisk.h>
 #if !defined(ARCADIA_BUILD)
     #include <Common/config.h>
 #endif
@@ -234,7 +235,7 @@ void registerDiskS3(DiskFactory & factory)
             if (metadata_path == cache_path)
                 throw Exception("Metadata and cache path should be different: " + metadata_path, ErrorCodes::BAD_ARGUMENTS);
 
-            auto cache_disk = std::make_shared<DiskLocal>("s3-cache", cache_path, 0);
+            auto cache_disk = std::make_shared<DiskLocal>("s3-cache", cache_path, DiskStats{});
             auto cache_file_predicate = [] (const String & path)
             {
                 return path.ends_with("idx") // index files.

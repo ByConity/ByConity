@@ -442,6 +442,8 @@
     M(CnchTxnCleanElapsedMilliseconds, "Total number of milliseconds spent to clean transactions") \
     M(CnchTxnAllTransactionRecord, "Total number of transaction records") \
     M(CnchTxnFinishedTransactionRecord, "Total number of finished transaction records") \
+    M(CnchTxnRecordCacheHits, "Total number of txn record hits in cache") \
+    M(CnchTxnRecordCacheMisses, "Total number of txn record misses in cache") \
     M(CnchWriteDataElapsedMilliseconds, "") \
     M(CnchDumpParts, "") \
     M(CnchDumpPartsElapsedMilliseconds, "") \

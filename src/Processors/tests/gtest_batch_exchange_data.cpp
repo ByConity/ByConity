@@ -188,7 +188,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByExpire)
     auto key = std::make_shared<ExchangeDataKey>(query_unique_id_4, exchange_id, parallel_idx);
     ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
     write(context, header, manager, key);
-    ASSERT_EQ(manager->getDiskWrittenBytes(), 13);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 39);
 
     manager->setFileExpireSeconds(0);
     manager->gc();
@@ -221,7 +221,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeSizeLimit)
         std::unique_lock<std::mutex> lock(mu);
         cv.wait_for(lock, std::chrono::milliseconds((10)), [&]() { return manager->getDiskWrittenBytes() == 13; });
     }
-    ASSERT_EQ(manager->getDiskWrittenBytes(), 13);
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 39);
     manager->setMaxDiskBytes(1);
     auto query_unique_id_6 = 666;
     auto key2 = std::make_shared<ExchangeDataKey>(query_unique_id_6, exchange_id, parallel_idx);

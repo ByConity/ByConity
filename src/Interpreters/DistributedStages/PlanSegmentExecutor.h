@@ -53,8 +53,7 @@ public:
 
     ~PlanSegmentExecutor() noexcept;
 
-    RuntimeSegmentsStatus
-    execute();
+    void execute();
     BlockIO lazyExecute(bool add_output_processors = false);
 
     static void registerAllExchangeReceivers(const QueryPipeline & pipeline, UInt32 register_timeout_ms);
@@ -75,7 +74,7 @@ private:
     PlanSegmentOutputs plan_segment_outputs;
     ExchangeOptions options;
     Poco::Logger * logger;
-    RuntimeSegmentsStatus runtime_segment_status;
+    RuntimeSegmentsMetrics metrics;
     std::unique_ptr<QueryLogElement> query_log_element;
     SenderMetrics sender_metrics;
     Progress progress;
@@ -86,8 +85,6 @@ private:
     Processors buildBroadcastExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
     Processors buildLoadBalancedExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
-
-    void sendSegmentStatus(const RuntimeSegmentsStatus & status) noexcept;
 
     void collectSegmentQueryRuntimeMetric(const QueryStatus * query_status);
     void prepareSegmentInfo() const;

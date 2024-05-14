@@ -27,6 +27,7 @@
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/sortBlock.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
@@ -44,6 +45,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int CANNOT_OPEN_FILE;
+    extern const int UNIQUE_TABLE_DUPLICATE_KEY_FOUND;
 }
 
 namespace
@@ -485,7 +487,16 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
 
     /// Prevent merge task from creating merged part with duplicated keys
     if (rows_count != keys_count)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "rows count {} doesn't match unique keys count {}", rows_count, keys_count);
+    {
+        if (auto unique_table_log = storage.getContext()->getCloudUniqueTableLog())
+        {
+            auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, storage.getCnchStorageID());
+            current_log.metric = ErrorCodes::UNIQUE_TABLE_DUPLICATE_KEY_FOUND;
+            current_log.event_msg = fmt::format("rows count {} doesn't match unique keys count {}", rows_count, keys_count);
+            unique_table_log->add(current_log);
+        }
+        throw Exception(ErrorCodes::UNIQUE_TABLE_DUPLICATE_KEY_FOUND, "rows count {} doesn't match unique keys count {}", rows_count, keys_count);
+    }
 
     status = index_writer.Finish(&file_info);
     if (!status.ok())

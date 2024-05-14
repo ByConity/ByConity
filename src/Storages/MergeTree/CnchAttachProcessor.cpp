@@ -521,6 +521,38 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
         }
     }
 
+    if (command.specify_bucket)
+    {
+        Int64 bucket_number = static_cast<Int64>(command.bucket_number);
+        UInt64 expected_table_definition_hash = query_ctx->getSettingsRef().expected_table_definition_hash;
+        for (auto & parts_from_source : chained_parts_from_sources)
+        {
+            std::erase_if(parts_from_source, [&](const MutableMergeTreeDataPartCNCHPtr & part) {
+                if (expected_table_definition_hash > 0 && part->table_definition_hash != expected_table_definition_hash)
+                {
+                    LOG_DEBUG(
+                        logger,
+                        "Table definition hash {} of part {} is mismatch with expected_table_definition_hash {}, ignore it.",
+                        part->table_definition_hash,
+                        part->name,
+                        expected_table_definition_hash);
+                    return true;
+                }
+                else if (part->bucket_number != bucket_number)
+                {
+                    LOG_DEBUG(
+                        logger,
+                        "Bucket number {} of part {} is mismatch with acquired bucket number {}, ignore it.",
+                        part->bucket_number,
+                        part->name,
+                        bucket_number);
+                    return true;
+                }
+                return false;
+            });
+        }
+    }
+
     injectFailure(AttachFailurePoint::CHECK_FILTER_RESULT);
 
     filter.checkFilterResult(chained_parts_from_sources, query_ctx->getSettingsRef().cnch_part_attach_limit);

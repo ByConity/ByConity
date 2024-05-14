@@ -24,6 +24,7 @@
 #include <Common/tests/gtest_utils.h>
 #include <Common/filesystemHelpers.h>
 #include "Core/Defines.h"
+#include "Disks/IDisk.h"
 #include "Disks/VolumeJBOD.h"
 #include "IO/LimitReadBuffer.h"
 #include "IO/ReadBufferFromFile.h"
@@ -108,8 +109,8 @@ DB::VolumePtr newDualDiskVolume()
     fs::create_directory("tmp/local1/");
     fs::create_directory("tmp/local2/");
     DB::Disks disks;
-    disks.emplace_back(std::make_shared<DB::DiskLocal>("local1", "tmp/local1/", 0));
-    disks.emplace_back(std::make_shared<DB::DiskLocal>("local2", "tmp/local2/", 0));
+    disks.emplace_back(std::make_shared<DB::DiskLocal>("local1", "tmp/local1/", DB::DiskStats{}));
+    disks.emplace_back(std::make_shared<DB::DiskLocal>("local2", "tmp/local2/", DB::DiskStats{}));
     return std::make_shared<DB::VolumeJBOD>("dual_disk", disks, disks.front()->getName(), 0, false);
 }
 // TODO: more volume

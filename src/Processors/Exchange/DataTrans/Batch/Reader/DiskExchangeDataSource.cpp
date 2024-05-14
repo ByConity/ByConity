@@ -20,7 +20,7 @@ Chunk DiskExchangeDataSource::generate()
         bufs = context->getDiskExchangeDataManager()->readFiles(*key);
         if (bufs.empty())
             throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format("empty files to read {}", *key));
-        stream = std::make_unique<NativeChunkInputStream>(*bufs[0], getOutputs().front().getHeader());
+        initStream();
         LOG_DEBUG(&Poco::Logger::get("DiskExchangeDataSource"), "Start to read file {}", bufs[0]->getFileName());
     }
     auto c = stream->readImpl();
@@ -31,13 +31,19 @@ Chunk DiskExchangeDataSource::generate()
     return c;
 }
 
+void DiskExchangeDataSource::initStream()
+{
+    compressed_input = std::make_unique<CompressedReadBuffer>(*bufs[idx]);
+    stream = std::make_unique<NativeChunkInputStream>(*compressed_input, getOutputs().front().getHeader());
+}
+
 Chunk DiskExchangeDataSource::readNextFile()
 {
     Chunk res;
     while (idx != bufs.size() - 1 && !res)
     {
         idx++;
-        stream = std::make_unique<NativeChunkInputStream>(*bufs[idx], getOutputs().front().getHeader());
+        initStream();
         LOG_DEBUG(&Poco::Logger::get("DiskExchangeDataSource"), "Start to read file {}", bufs[idx]->getFileName());
         res = stream->readImpl();
     }

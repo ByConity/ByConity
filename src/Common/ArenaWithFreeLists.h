@@ -21,7 +21,11 @@ namespace DB
   * When allocating, we take the head of the list of free blocks,
   *  or, if the list is empty - allocate a new block using Arena.
   */
+#if USE_HUALLOC
+class ArenaWithFreeLists : private HuAllocator<false>, private boost::noncopyable
+#else
 class ArenaWithFreeLists : private Allocator<false>, private boost::noncopyable
+#endif
 {
 private:
     /// If the block is free, then the pointer to the next free block is stored at its beginning, or nullptr, if there are no more free blocks.
@@ -58,8 +62,13 @@ public:
 
     char * alloc(const size_t size)
     {
+        #if USE_HUALLOC
+        if (size > max_fixed_block_size)
+            return static_cast<char *>(HuAllocator<false>::alloc(size));
+        #else
         if (size > max_fixed_block_size)
             return static_cast<char *>(Allocator<false>::alloc(size));
+        #endif
 
         /// find list of required size
         const auto list_idx = findFreeListIndex(size);
@@ -90,8 +99,13 @@ public:
 
     void free(char * ptr, const size_t size)
     {
+        #if USE_HUALLOC
+        if (size > max_fixed_block_size)
+            return HuAllocator<false>::free(ptr, size);
+        #else
         if (size > max_fixed_block_size)
             return Allocator<false>::free(ptr, size);
+        #endif
 
         /// find list of required size
         const auto list_idx = findFreeListIndex(size);

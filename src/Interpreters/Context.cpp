@@ -1178,7 +1178,7 @@ VolumePtr Context::setTemporaryStorage(const String & path, const String & polic
         if (!shared->tmp_path.ends_with('/'))
             shared->tmp_path += '/';
 
-        auto disk = std::make_shared<DiskLocal>("_tmp_default", shared->tmp_path, 0);
+        auto disk = std::make_shared<DiskLocal>("_tmp_default", shared->tmp_path, DiskStats{});
         shared->tmp_volume = std::make_shared<SingleDiskVolume>("_tmp_default", disk, 0);
     }
     else
@@ -1233,7 +1233,7 @@ catch (...)
 
 static VolumePtr createLocalSingleDiskVolume(const std::string & path)
 {
-    auto disk = std::make_shared<DiskLocal>("_tmp_default", path, 0);
+    auto disk = std::make_shared<DiskLocal>("_tmp_default", path, DiskStats{});
     VolumePtr volume = std::make_shared<SingleDiskVolume>("_tmp_default", disk, 0);
     return volume;
 }
@@ -2259,6 +2259,21 @@ String Context::getInitialQueryId() const
 }
 
 
+void Context::setCoordinatorAddress(const Protos::AddressInfo & address)
+{
+    coordinator_address = address;
+}
+
+void Context::setCoordinatorAddress(const AddressInfo & address)
+{
+    coordinator_address = address;
+}
+
+AddressInfo Context::getCoordinatorAddress() const
+{
+    return coordinator_address;
+}
+
 void Context::setPlanSegmentInstanceId(const PlanSegmentInstanceId & instance_id)
 {
     plan_segment_instance_id = instance_id;
@@ -2268,6 +2283,16 @@ PlanSegmentInstanceId Context::getPlanSegmentInstanceId() const
 {
     return plan_segment_instance_id;
 };
+
+void Context::initPlanSegmentExHandler()
+{
+    plan_segment_ex_handler = std::make_shared<ExceptionHandler>();
+}
+
+ExceptionHandlerPtr Context::getPlanSegmentExHandler() const
+{
+    return plan_segment_ex_handler;
+}
 
 void Context::setCurrentDatabaseNameInGlobalContext(const String & name)
 {
@@ -3914,6 +3939,15 @@ std::shared_ptr<CloudMaterializedMySQLLog> Context::getCloudMaterializedMySQLLog
         return {};
 
     return shared->cnch_system_logs->getMaterializedMySQLLog();
+}
+
+std::shared_ptr<CloudUniqueTableLog> Context::getCloudUniqueTableLog() const
+{
+    auto lock = getLock();
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getUniqueTableLog();
 }
 
 std::shared_ptr<MutationLog> Context::getMutationLog() const

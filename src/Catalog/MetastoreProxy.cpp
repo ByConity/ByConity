@@ -2108,8 +2108,12 @@ void MetastoreProxy::removeTableStatistics(const String & name_space, const Stri
             batch_write.AddDelete(iter->key());
         }
     }
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+
+    if (!batch_write.isEmpty()) 
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 

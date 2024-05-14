@@ -55,6 +55,11 @@ storage_configuration:
         hdfs:
           default: hdfs_disk
           disk: hdfs_disk
+cnch_unique_table_log:
+  database: cnch_system
+  table: cnch_unique_table_log
+  flush_max_row_count: 10000
+  flush_interval_milliseconds: 7500
 cnch_kafka_log:
   database: cnch_system
   table: cnch_kafka_log

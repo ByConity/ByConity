@@ -92,7 +92,7 @@ private:
     TxnTimestamp calculateGCTimestamp(UInt64 delay_second, bool in_wakeup);
     Strings selectPartitions(const StoragePtr & istorage);
 
-    static void tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts);
+    void tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts);
 
     std::pair<ServerDataPartsVector, ServerDataPartsVector> processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp);
 

@@ -43,11 +43,13 @@
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTSystemQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
@@ -585,14 +587,21 @@ ServerDataPartsVector StorageCnchMergeTree::getServerPartsByPredicate(
 }
 
 
-static Block getBlockWithPartColumn(ServerDataPartsVector & parts)
+static Block getBlockWithPartAndBucketColumn(ServerDataPartsVector & parts)
 {
-    auto column = ColumnString::create();
+    auto part_column = ColumnString::create();
+    auto bucket_column = ColumnInt64::create();
 
     for (const auto & part : parts)
-        column->insert(part->part_model_wrapper->name);
+    {
+        part_column->insert(part->part_model_wrapper->name);
+        bucket_column->insert(part->part_model().bucket_number());
+    }
 
-    return Block{ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), "_part")};
+    Block res;
+    res.insert({ColumnWithTypeAndName(std::move(part_column), std::make_shared<DataTypeString>(), "_part")});
+    res.insert({ColumnWithTypeAndName(std::move(bucket_column), std::make_shared<DataTypeInt64>(), "_bucket_number")});
+    return res;
 }
 
 void StorageCnchMergeTree::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context) const
@@ -787,11 +796,12 @@ void StorageCnchMergeTree::filterPartsByPartition(
         }
     }
 
-    /// If `_part` virtual column is requested, we try to use it as an index.
-    Block virtual_columns_block = getBlockWithPartColumn(parts);
-    bool part_column_queried
-        = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) { return name == "_part"; });
-    if (part_column_queried)
+    /// If `_part` or `_bucket_number` virtual column is requested, we try to use it as an index.
+    Block virtual_columns_block = getBlockWithPartAndBucketColumn(parts);
+    bool part_filter_queried = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) {
+        return name == "_part" || name == "_bucket_number";
+    });
+    if (part_filter_queried)
         VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context);
     auto part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
 
@@ -1473,7 +1483,16 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForCnchParts(const MergeTreeDataPa
                 bitmap_it++;
 
             if (bitmap_it == bitmaps.end())
+            {
+                if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+                {
+                    auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                    current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                    current_log.event_msg = "Delete bitmap metadata of " + part->name + " is not found";
+                    unique_table_log->add(current_log);
+                }
                 throw Exception("Delete bitmap metadata of " + part->name + " is not found", ErrorCodes::LOGICAL_ERROR);
+            }
 
             /// add all visible bitmaps (from new to old) part
             part->setDeleteBitmapMeta(*bitmap_it);
@@ -1564,7 +1583,16 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForServerParts(const ServerDataPar
             bitmap_it++;
 
         if (bitmap_it == bitmaps.end())
+        {
+            if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+            {
+                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                current_log.event_msg = "Delete bitmap metadata of " + part->name() + " is not found";
+                unique_table_log->add(current_log);
+            }
             throw Exception("Delete bitmap metadata of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
+        }
 
         /// add all visible bitmaps (from new to old) part
         bool found_base = false;
@@ -1579,19 +1607,32 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForServerParts(const ServerDataPar
             }
         }
         if (!found_base)
+        {
+            if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+            {
+                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                current_log.event_msg = "Base delete bitmap of " + part->name() + " is not found";
+                unique_table_log->add(current_log);
+            }
             throw Exception("Base delete bitmap of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
+        }
 
         bitmap_it++;
     }
 }
 
-void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, ContextPtr local_context)
+void StorageCnchMergeTree::executeDedupForRepair(const ASTSystemQuery & query, ContextPtr local_context)
 {
     if (!getInMemoryMetadataPtr()->hasUniqueKey())
         throw Exception("SYSTEM DEDUP can only be executed on table with UNIQUE KEY", ErrorCodes::BAD_ARGUMENTS);
 
+    const auto & partition = query.partition;
+    Int64 bucket_number = static_cast<Int64>(query.bucket_number);
     if (partition && !getSettings()->partition_level_unique_keys)
         throw Exception("SYSTEM DEDUP PARTITION can only be used on table with partition_level_unique_keys=1", ErrorCodes::BAD_ARGUMENTS);
+    if (!partition && getSettings()->partition_level_unique_keys && query.specify_bucket)
+        throw Exception("SYSTEM DEDUP BUCKET without partition can only be used on table with partition_level_unique_keys=0", ErrorCodes::BAD_ARGUMENTS);
 
     auto txn = local_context->getCurrentTransaction();
     if (!txn)
@@ -1603,9 +1644,24 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
     CnchDedupHelper::DedupScope scope = CnchDedupHelper::DedupScope::TableDedup();
     if (partition)
     {
-        NameOrderedSet partitions;
-        partitions.insert(getPartitionIDFromQuery(partition, local_context));
-        scope = CnchDedupHelper::DedupScope::PartitionDedup(partitions);
+        if (query.specify_bucket)
+        {
+            CnchDedupHelper::DedupScope::BucketWithPartitionSet bucket_with_partition_set;
+            bucket_with_partition_set.insert({getPartitionIDFromQuery(partition, local_context), bucket_number});
+            scope = CnchDedupHelper::DedupScope::PartitionDedupWithBucket(bucket_with_partition_set);
+        }
+        else
+        {
+            NameOrderedSet partitions;
+            partitions.insert(getPartitionIDFromQuery(partition, local_context));
+            scope = CnchDedupHelper::DedupScope::PartitionDedup(partitions);
+        }
+    }
+    else if (query.specify_bucket)
+    {
+        CnchDedupHelper::DedupScope::BucketSet buckets;
+        buckets.insert(bucket_number);
+        scope = CnchDedupHelper::DedupScope::TableDedupWithBucket(buckets);
     }
 
     auto cnch_lock = txn->createLockHolder(CnchDedupHelper::getLocksToAcquire(
@@ -1614,6 +1670,34 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
 
     TxnTimestamp ts = local_context->getTimestamp();
     MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *this, ts, /*force_bitmap*/ false);
+    if (scope.isBucketLock())
+    {
+        UInt64 expected_table_definition_hash = local_context->getSettingsRef().expected_table_definition_hash;
+        std::erase_if(visible_parts, [&](const MergeTreeDataPartCNCHPtr & part) {
+            if (expected_table_definition_hash > 0 && part->table_definition_hash != expected_table_definition_hash)
+            {
+                LOG_DEBUG(
+                    log,
+                    "Table definition hash {} of part {} is mismatch with expected_table_definition_hash {}, ignore it.",
+                    part->table_definition_hash,
+                    part->name,
+                    expected_table_definition_hash);
+                return true;
+            }
+            else if (part->bucket_number != bucket_number)
+            {
+                LOG_DEBUG(
+                    log,
+                    "Bucket number {} of part {} is mismatch with acquired bucket number {}, ignore it.",
+                    part->bucket_number,
+                    part->name,
+                    bucket_number);
+                return true;
+            }
+            return false;
+        });
+    }
+
     MergeTreeDataDeduper deduper(*this, local_context);
     LocalDeleteBitmaps bitmaps_to_dump
         = deduper.repairParts(txn->getTransactionID(), CnchPartsHelper::toIMergeTreeDataPartsVector(visible_parts));
@@ -1802,7 +1886,10 @@ ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(Ser
             && check_success_txn(part->part_model_wrapper->part_model->secondary_txn_id()))
             target_parts.push_back(part);
     });
-    getVisibleServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()), /*TransactionRecords *=*/nullptr);
+
+    auto * txn_record_cache = 
+        local_context->getServerType() == ServerType::cnch_server ? local_context->getCnchTransactionCoordinator().getFinishedOrFailedTxnRecordCache() : nullptr;
+    getVisibleServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()), /*TransactionRecords *=*/nullptr, txn_record_cache);
     std::move(data_parts.begin(), data_parts.end(), std::back_inserter(target_parts));
     return target_parts;
 }
@@ -2575,9 +2662,13 @@ void StorageCnchMergeTree::overwritePartition(const ASTPtr & overwrite_partition
 /// 2. cancel existing merge tasks (make sure all tasks are aborted or committed before step 3).
 /// 3. get data parts from catalog using the newest timestamp.
 /// 4. generate DropRange parts based on parts from step 3.
-void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
-    ContextPtr local_context, IMergeTreeDataPartsVector* dropped_parts,
-    bool do_commit, CnchLockHolderPtrs * lock_holders, size_t max_threads)
+void StorageCnchMergeTree::dropPartitionOrPart(
+    const PartitionCommand & command,
+    ContextPtr local_context,
+    IMergeTreeDataPartsVector * dropped_parts,
+    bool do_commit,
+    CnchLockHolderPtrs * lock_holders,
+    size_t max_threads)
 {
     if (!command.part)
     {
@@ -2639,6 +2730,37 @@ void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
 
     /// 3. get data parts
     auto svr_parts = selectPartsByPartitionCommand(local_context, command);
+
+    /// 4. Filter bucket
+    if (command.specify_bucket)
+    {
+        Int64 bucket_number = static_cast<Int64>(command.bucket_number);
+        UInt64 expected_table_definition_hash = local_context->getSettingsRef().expected_table_definition_hash;
+        std::erase_if(svr_parts.first, [&](const ServerDataPartPtr & part) {
+            if (expected_table_definition_hash > 0 && part->part_model().table_definition_hash() != expected_table_definition_hash)
+            {
+                LOG_DEBUG(
+                    log,
+                    "Table definition hash {} of part {} is mismatch with expected_table_definition_hash {}. ignore it.",
+                    part->part_model().table_definition_hash(),
+                    part->name(),
+                    expected_table_definition_hash);
+                return true;
+            }
+            else if (part->part_model().bucket_number() != bucket_number)
+            {
+                LOG_DEBUG(
+                    log,
+                    "Bucket number {} of part {} is mismatch with acquired bucket number {}, ignore it.",
+                    part->part_model().bucket_number(),
+                    part->name(),
+                    bucket_number);
+                return true;
+            }
+            return false;
+        });
+    }
+
     if (svr_parts.first.empty())
     {
         if (command.part)

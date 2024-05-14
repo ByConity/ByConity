@@ -102,6 +102,7 @@ private:
         const IMergeTreeDataPartsVector & parts,
         DeleteBitmapVector & delta_bitmaps,
         DedupTaskProgressReporter reporter,
+        DedupTaskPtr & dedup_task,
         DedupKeyMode dedup_key_mode = DedupKeyMode::REPLACE);
 
     /// Convert dedup task into multiple sub dedup tasks. If valid_bucket_table is true, it will split dedup task into bucket granule.

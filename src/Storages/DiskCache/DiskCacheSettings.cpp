@@ -27,6 +27,7 @@ void DiskCacheSettings::loadFromConfig(const Poco::Util::AbstractConfiguration &
     lru_max_nums = config.getUInt64(config_prefix + ".lru_max_object_num", std::numeric_limits<size_t>::max());
     // Todo: process the case which disk not have 2 TB free space
     lru_max_size = config.getUInt64(config_prefix + ".lru_max_size", static_cast<uint64_t>(2) * 1024 * 1024 * 1024 * 1024);
+    lru_max_percent = config.getUInt64(config_prefix + ".lru_max_percent", 80);
     random_drop_threshold = config.getUInt64(config_prefix + ".random_drop_threshold", 50);
     mapping_bucket_size = config.getUInt64(config_prefix + ".mapping_bucket_size", 5000);
     lru_update_interval = config.getUInt64(config_prefix + ".lru_update_interval", 60);
@@ -56,7 +57,9 @@ std::string DiskCacheSettings::toString() const
     return fmt::format(
         R"({{
             "disk_policy": {},
+            "lru_max_percent": {},
             "lru_max_size": {},
+            "lru_max_nums": {},
             "random_drop_threshold": {},
             "mapping_bucket_size": {},
             "lru_update_interval": {},
@@ -75,7 +78,9 @@ std::string DiskCacheSettings::toString() const
             "meta_cache_nums_ratio": "{}"
         }})",
         disk_policy,
+        lru_max_percent,
         lru_max_size,
+        lru_max_nums,
         random_drop_threshold,
         mapping_bucket_size,
         lru_update_interval,

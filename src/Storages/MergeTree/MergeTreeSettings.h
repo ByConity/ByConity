@@ -345,6 +345,8 @@ enum StealingCacheMode : UInt64
       "Minimal time in seconds, when merge with recompression TTL can be repeated.", \
       0) \
     M(Bool, ttl_only_drop_parts, false, "Only drop altogether the expired parts and not partially prune them.", 0) \
+    M(Bool, enable_partition_ttl_fallback, true, "When TTL expression doesn't match partition expression, Try to calculate partition's TTL value and mark expired partitions by scanning parts' ttl info", 0) \
+    \
     M(Bool, write_final_mark, 1, "Write final mark after end of column (0 - disabled, do nothing if index_granularity_bytes=0)", 0) \
     M(Bool, enable_mixed_granularity_parts, 1, "Enable parts with adaptive and non adaptive granularity", 0) \
     M(MaxThreads, max_part_loading_threads, 0, "The number of threads to load data parts at startup.", 0) \
@@ -479,6 +481,7 @@ enum StealingCacheMode : UInt64
     M(UInt64, max_dedup_worker_number, 1, "", 0) \
     M(UInt64, max_staged_part_number_per_task, 100, "", 0) \
     M(UInt64, max_staged_part_rows_per_task, 15000000, "", 0) \
+    M(Bool, enable_duplicate_check_while_writing, true, "Whether to check duplicate keys while writing for unique table. Although turning it on may have a certain impact on the tps of writing, it is recommended to enable it by default.", 0) \
     /**Whether block the actual dedup progress, Attention: set this value to true only in ci **/               \
     M(Bool, disable_dedup_parts, false, "", 0) \
     \

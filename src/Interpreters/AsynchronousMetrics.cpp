@@ -49,6 +49,7 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 #include <common/errnoToString.h>
+#include <Common/HuAllocator.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -730,17 +731,37 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             Int64 amount = total_memory_tracker.get();
             Int64 peak = total_memory_tracker.getPeak();
             Int64 new_amount = data.resident;
+            [[maybe_unused]]Int64 free_memory_in_allocator_arenas = 0;
 
+#if USE_HUALLOC
+            /// During hualloc, the cached memory should be treat as free memory, for safety keep 0.2 as buffer for concurrent alloc
+            /// Which assume the alloc size shoule be less than cached_memory * 1.2
+            Int64 hualloc_cache = (SegmentCached() + LargeCached()) * 0.8;
+            new_amount -= hualloc_cache;
             Int64 difference = new_amount - amount;
-
+            /// Log only if difference is high. This is for convenience. The threshold is arbitrary.
+            // if (difference >= 1048576 || difference <= -1048576)
+            LOG_DEBUG(&Poco::Logger::get("AsynchronousMetrics"),
+                "MemoryTracking: was {}, peak {}, free memory in arenas {}, hard limit will set to {}, RSS: {}, difference: {}, hualloc cache:{}",
+                ReadableSize(amount),
+                ReadableSize(peak),
+                ReadableSize(free_memory_in_allocator_arenas),
+                ReadableSize(new_amount),
+                ReadableSize(new_amount + hualloc_cache),
+                ReadableSize(difference),
+                ReadableSize(hualloc_cache));
+#else
+            Int64 difference = new_amount - amount;
             /// Log only if difference is high. This is for convenience. The threshold is arbitrary.
             if (difference >= 1048576 || difference <= -1048576)
-                LOG_TRACE(&Poco::Logger::get("AsynchronousMetrics"),
-                    "MemoryTracking: was {}, peak {}, will set to {} (RSS), difference: {}",
-                    ReadableSize(amount),
-                    ReadableSize(peak),
-                    ReadableSize(new_amount),
-                    ReadableSize(difference));
+                LOG_DEBUG(&Poco::Logger::get("AsynchronousMetrics"),
+                        "MemoryTracking: was {}, peak {}, will set to {} (RSS), difference: {}",
+                        ReadableSize(amount),
+                        ReadableSize(peak),
+                        ReadableSize(new_amount),
+                        ReadableSize(difference));
+
+#endif
 
             total_memory_tracker.set(new_amount);
             CurrentMetrics::set(CurrentMetrics::MemoryTracking, new_amount);
@@ -1380,14 +1401,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         DisksMap disks_map = getContext()->getDisksMap();
         for (const auto & [name, disk] : disks_map)
         {
-            auto total = disk->getTotalSpace();
+            auto total = disk->getTotalSpace().bytes;
 
             /// Some disks don't support information about the space.
             if (!total)
                 continue;
 
-            auto available = disk->getAvailableSpace();
-            auto unreserved = disk->getUnreservedSpace();
+            auto available = disk->getAvailableSpace().bytes;
+            auto unreserved = disk->getUnreservedSpace().bytes;
 
             new_values[fmt::format("DiskTotal_{}", name)] = total;
             new_values[fmt::format("DiskUsed_{}", name)] = total - available;

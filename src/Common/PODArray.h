@@ -32,6 +32,7 @@
 #include <common/strong_typedef.h>
 
 #include <Common/Allocator.h>
+#include <Common/HuAllocator.h>
 #include <Common/Exception.h>
 #include <Common/BitHelpers.h>
 #include <Common/memcpySmall.h>
@@ -843,7 +844,17 @@ void swap(PODArray<T, initial_bytes, TAllocator, pad_right_, pad_left_> & lhs, P
 #pragma GCC diagnostic pop
 
 /// Prevent implicit template instantiation of PODArray for common numeric types
+#if USE_HUALLOC
+extern template class PODArray<UInt8, 4096, HuAllocator<false>, 15, 16>;
+extern template class PODArray<UInt16, 4096, HuAllocator<false>, 15, 16>;
+extern template class PODArray<UInt32, 4096, HuAllocator<false>, 15, 16>;
+extern template class PODArray<UInt64, 4096, HuAllocator<false>, 15, 16>;
 
+extern template class PODArray<Int8, 4096, HuAllocator<false>, 15, 16>;
+extern template class PODArray<Int16, 4096, HuAllocator<false>, 15, 16>;
+extern template class PODArray<Int32, 4096, HuAllocator<false>, 15, 16>;
+extern template class PODArray<Int64, 4096, HuAllocator<false>, 15, 16>;
+#else
 extern template class PODArray<UInt8, 4096, Allocator<false>, 15, 16>;
 extern template class PODArray<UInt16, 4096, Allocator<false>, 15, 16>;
 extern template class PODArray<UInt32, 4096, Allocator<false>, 15, 16>;
@@ -853,5 +864,5 @@ extern template class PODArray<Int8, 4096, Allocator<false>, 15, 16>;
 extern template class PODArray<Int16, 4096, Allocator<false>, 15, 16>;
 extern template class PODArray<Int32, 4096, Allocator<false>, 15, 16>;
 extern template class PODArray<Int64, 4096, Allocator<false>, 15, 16>;
-
+#endif
 }

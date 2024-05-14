@@ -190,6 +190,10 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     std::unordered_set<std::string> projection_parts_names(part_model.projections().begin(), part_model.projections().end());
     part->setProjectionPartsNames(projection_parts_names);
     part->setHostPort(part_model.disk_cache_host_port(), part_model.assign_compute_host_port());
+    
+    part->ttl_infos.part_min_ttl = part_model.part_ttl_info().part_min_ttl();
+    part->ttl_infos.part_max_ttl = part_model.part_ttl_info().part_max_ttl();
+    part->ttl_infos.part_finished = part_model.part_ttl_info().part_finished();
 
     return part;
 }
@@ -241,6 +245,9 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     /// fill part info
     Protos::DataModelPartInfo * model_info = part_model.mutable_part_info();
     fillPartInfoModel(part, *model_info);
+
+    Protos::DataModelPartTTLInfo * model_ttl_info = part_model.mutable_part_ttl_info();
+    fillPartTTLInfoModel(part, *model_ttl_info);
 
     part_model.set_size(part.bytes_on_disk);
     part_model.set_rows_count(part.rows_count);
@@ -371,6 +378,13 @@ void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInf
     part_info_model.set_level(part.info.level);
     part_info_model.set_mutation(part.info.mutation);
     part_info_model.set_hint_mutation(part.info.hint_mutation);
+}
+
+void fillPartTTLInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartTTLInfo & part_ttl_info_model)
+{
+    part_ttl_info_model.set_part_min_ttl(part.ttl_infos.part_min_ttl);
+    part_ttl_info_model.set_part_max_ttl(part.ttl_infos.part_max_ttl);
+    part_ttl_info_model.set_part_finished(!part.ttl_infos.hasAnyNonFinishedTTLs());
 }
 
 void fillPartsModelForSend(

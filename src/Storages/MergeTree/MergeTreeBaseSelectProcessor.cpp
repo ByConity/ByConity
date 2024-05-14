@@ -399,6 +399,7 @@ namespace
         virtual void insertArrayOfStringsColumn(const ColumnPtr & column, const String & name) = 0;
         virtual void insertStringColumn(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUInt64Column(const ColumnPtr & column, const String & name) = 0;
+        virtual void insertInt64Column(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUInt8Column(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUUIDColumn(const ColumnPtr & column, const String & name) = 0;
 
@@ -484,6 +485,16 @@ static void injectVirtualColumnsImpl(
 
                 inserter.insertArrayOfStringsColumn(column, virtual_column_name);
             }
+            else if (virtual_column_name == "_bucket_number")
+            {
+                ColumnPtr column;
+                if (rows)
+                    column = DataTypeInt64().createColumnConst(rows, task->data_part->bucket_number)->convertToFullColumnIfConst();
+                else
+                    column = DataTypeInt64().createColumn();
+
+                inserter.insertInt64Column(column, virtual_column_name);
+            }
             else if (virtual_column_name == "_partition_id")
             {
                 ColumnPtr column;
@@ -524,6 +535,11 @@ namespace
         void insertUInt64Column(const ColumnPtr & column, const String & name) final
         {
             block.insert({column, std::make_shared<DataTypeUInt64>(), name});
+        }
+
+        void insertInt64Column(const ColumnPtr & column, const String & name) final
+        {
+            block.insert({column, std::make_shared<DataTypeInt64>(), name});
         }
         
         void insertUInt8Column(const ColumnPtr & column, const String & name) final
@@ -574,6 +590,11 @@ namespace
         }
 
         void insertUInt64Column(const ColumnPtr & column, const String &) final
+        {
+            columns.push_back(column);
+        }
+
+        void insertInt64Column(const ColumnPtr & column, const String &) final
         {
             columns.push_back(column);
         }

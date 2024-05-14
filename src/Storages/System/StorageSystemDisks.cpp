@@ -43,6 +43,9 @@ StorageSystemDisks::StorageSystemDisks(const StorageID & table_id_)
         {"free_space", std::make_shared<DataTypeUInt64>()},
         {"total_space", std::make_shared<DataTypeUInt64>()},
         {"keep_free_space", std::make_shared<DataTypeUInt64>()},
+        {"free_inodes", std::make_shared<DataTypeUInt64>()},
+        {"total_inodes", std::make_shared<DataTypeUInt64>()},
+        {"keep_free_inodes", std::make_shared<DataTypeUInt64>()},
         {"type", std::make_shared<DataTypeString>()},
     }));
     setInMemoryMetadata(storage_metadata);
@@ -62,9 +65,12 @@ Pipe StorageSystemDisks::read(
     MutableColumnPtr col_name = ColumnString::create();
     MutableColumnPtr col_id = ColumnUInt64::create();
     MutableColumnPtr col_path = ColumnString::create();
-    MutableColumnPtr col_free = ColumnUInt64::create();
-    MutableColumnPtr col_total = ColumnUInt64::create();
-    MutableColumnPtr col_keep = ColumnUInt64::create();
+    MutableColumnPtr col_free_bytes = ColumnUInt64::create();
+    MutableColumnPtr col_total_bytes = ColumnUInt64::create();
+    MutableColumnPtr col_keep_bytes = ColumnUInt64::create();
+    MutableColumnPtr col_free_inodes = ColumnUInt64::create();
+    MutableColumnPtr col_total_inodes = ColumnUInt64::create();
+    MutableColumnPtr col_keep_inodes = ColumnUInt64::create();
     MutableColumnPtr col_type = ColumnString::create();
 
     for (const auto & [disk_name, disk_ptr] : context->getDisksMap())
@@ -72,9 +78,12 @@ Pipe StorageSystemDisks::read(
         col_name->insert(disk_name);
         col_id->insert(disk_ptr->getID());
         col_path->insert(disk_ptr->getPath());
-        col_free->insert(disk_ptr->getAvailableSpace());
-        col_total->insert(disk_ptr->getTotalSpace());
-        col_keep->insert(disk_ptr->getKeepingFreeSpace());
+        col_free_bytes->insert(disk_ptr->getAvailableSpace().bytes);
+        col_total_bytes->insert(disk_ptr->getTotalSpace().bytes);
+        col_keep_bytes->insert(disk_ptr->getKeepingFreeSpace().bytes);
+        col_free_inodes->insert(disk_ptr->getAvailableSpace().inodes);
+        col_total_inodes->insert(disk_ptr->getTotalSpace().inodes);
+        col_keep_inodes->insert(disk_ptr->getKeepingFreeSpace().inodes);
         col_type->insert(DiskType::toString(disk_ptr->getType()));
     }
 
@@ -82,9 +91,12 @@ Pipe StorageSystemDisks::read(
     res_columns.emplace_back(std::move(col_name));
     res_columns.emplace_back(std::move(col_id));
     res_columns.emplace_back(std::move(col_path));
-    res_columns.emplace_back(std::move(col_free));
-    res_columns.emplace_back(std::move(col_total));
-    res_columns.emplace_back(std::move(col_keep));
+    res_columns.emplace_back(std::move(col_free_bytes));
+    res_columns.emplace_back(std::move(col_total_bytes));
+    res_columns.emplace_back(std::move(col_keep_bytes));
+    res_columns.emplace_back(std::move(col_free_inodes));
+    res_columns.emplace_back(std::move(col_total_inodes));
+    res_columns.emplace_back(std::move(col_keep_inodes));
     res_columns.emplace_back(std::move(col_type));
 
     UInt64 num_rows = res_columns.at(0)->size();
