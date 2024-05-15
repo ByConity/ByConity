@@ -144,6 +144,7 @@ public:
         START_VIEW,
         STOP_VIEW,
         DROP_VIEW_META,
+        RELEASE_MEMORY_LOCK, /// RELEASE MEMORY LOCK [db.tb]/[OF TXN xxx]
         END
     };
 
@@ -180,7 +181,8 @@ public:
     // For GC and DEDUP
     ASTPtr partition; // The value or ID of the partition is stored here.
 
-    /// for CLEAN TRANSACTION txn_id
+    /// for CLEAN TRANSACTION txn_id, RELEASE MEMORY LOCK [db.tb]/[OF TXN xxx]
+    bool specify_txn = false;
     UInt64 txn_id;
 
     String getID(char) const override { return "SYSTEM query"; }

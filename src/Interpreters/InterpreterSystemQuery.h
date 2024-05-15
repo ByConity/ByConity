@@ -121,8 +121,11 @@ private:
     /// a command to test MemoryLock
     void lockMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
 
+    void releaseMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
+
     /// drop materialized view previous meta
     void dropMvMeta(ASTSystemQuery & query);
+
 };
 
 

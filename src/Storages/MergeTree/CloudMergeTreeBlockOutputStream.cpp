@@ -498,6 +498,12 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
         }
     } while (true);
 
+    if (unlikely(context->getSettingsRef().unique_sleep_seconds_after_acquire_lock.totalSeconds()))
+    {
+        /// Test purpose only
+        std::this_thread::sleep_for(std::chrono::seconds(context->getSettingsRef().unique_sleep_seconds_after_acquire_lock.totalSeconds()));
+    }
+
     MergeTreeDataDeduper deduper(*cnch_table, context);
     LocalDeleteBitmaps bitmaps_to_dump = deduper.dedupParts(
         txn->getTransactionID(),
