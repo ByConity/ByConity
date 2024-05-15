@@ -232,6 +232,8 @@ public:
 
     ~StringHashTable() = default;
 
+    static constexpr bool IS_SPECIAL_HT_FOR_SMALL_KEYS = false;
+
 public:
     // Dispatch is written in a way that maximizes the performance:
     // 1. Always memcpy 8 times bytes

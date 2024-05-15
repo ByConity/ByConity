@@ -67,6 +67,8 @@ public:
     };
 
 private:
+    static ColumnPtr castArrayColumnToBitmapColumn(ColumnWithTypeAndName & column, const DataTypePtr & target_type);
+
     const Block & header;
     const std::string format_name;
     bool import_nested;

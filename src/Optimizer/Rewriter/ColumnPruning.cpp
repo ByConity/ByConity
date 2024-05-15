@@ -154,11 +154,6 @@ PlanNodePtr ColumnPruningVisitor::visitFinishSortingNode(FinishSortingNode & nod
     return visitPlanNode(node, column_pruning_context);
 }
 
-PlanNodePtr ColumnPruningVisitor::visitFinalSampleNode(FinalSampleNode &, ColumnPruningContext &)
-{
-    throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 PlanNodePtr ColumnPruningVisitor::visitOffsetNode(OffsetNode & node, ColumnPruningContext & column_pruning_context)
 {
     return visitDefault<false>(node, column_pruning_context);
@@ -224,9 +219,14 @@ PlanNodePtr ColumnPruningVisitor::visitIntersectOrExceptNode(IntersectOrExceptNo
     return intersect_except_node;
 }
 
-PlanNodePtr ColumnPruningVisitor::visitMultiJoinNode(MultiJoinNode &, ColumnPruningContext &)
+PlanNodePtr ColumnPruningVisitor::visitMultiJoinNode(MultiJoinNode & node, ColumnPruningContext & column_pruning_context)
 {
-    throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
+    return visitDefault<false>(node, column_pruning_context);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitFinalSampleNode(FinalSampleNode & node, ColumnPruningContext & column_pruning_context)
+{
+    return visitDefault<false>(node, column_pruning_context);
 }
 
 PlanNodePtr ColumnPruningVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode & node, ColumnPruningContext & column_pruning_context)

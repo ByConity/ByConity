@@ -88,7 +88,11 @@ public:
 
     IteratorPtr getAll() override;
 
-    IteratorPtr getByPrefix(const String &, const size_t & limit = 0, uint32_t scan_batch_size = DEFAULT_SCAN_BATCH_COUNT) override;
+    IteratorPtr getByPrefix(
+        const String &,
+        const size_t & limit = 0,
+        uint32_t scan_batch_size = DEFAULT_SCAN_BATCH_COUNT,
+        const String & start_key = "") override;
 
     IteratorPtr getByRange(const String & range_start, const String & range_end, const bool include_start, const bool include_end) override;
 

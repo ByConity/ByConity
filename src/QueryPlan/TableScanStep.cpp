@@ -1581,13 +1581,13 @@ void TableScanStep::allocate(ContextPtr context)
         query_info.syntax_analyzer_result = tree_rewriter_result;
     }
 
+    query_info = fillQueryInfo(context);
     original_table = storage_id.table_name;
     storage_id = storage->prepareTableRead(getRequiredColumns(), query_info, context);
 
     // update query info
     if (query_info.query)
     {
-        query_info = fillQueryInfo(context);
         /// trigger preallocate tables
         // if (!cnch->isOnDemandMode())
         // cnch->read(column_names, query_info, context, processed_stage, max_block_size, 1);

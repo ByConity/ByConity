@@ -521,7 +521,8 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
                     visible_parts[i]->getDeleteBitmap(),
                     bitmap,
                     txn_id.toUInt64(),
-                    bitmap_meta_depth >= max_delete_bitmap_meta_depth));
+                    bitmap_meta_depth >= max_delete_bitmap_meta_depth,
+                    visible_parts[i]->bucket_number));
             }
             else /// new part
             {
@@ -541,10 +542,15 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
                         base_bitmap,
                         bitmap,
                         txn_id.toUInt64(),
-                        bitmap_meta_depth >= max_delete_bitmap_meta_depth));
+                        bitmap_meta_depth >= max_delete_bitmap_meta_depth,
+                        new_parts[i - visible_parts.size()]->bucket_number));
                 }
                 else
-                    res.push_back(LocalDeleteBitmap::createBase(new_parts[i - visible_parts.size()]->info, bitmap, txn_id.toUInt64()));
+                    res.push_back(LocalDeleteBitmap::createBase(
+                        new_parts[i - visible_parts.size()]->info,
+                        bitmap,
+                        txn_id.toUInt64(),
+                        new_parts[i - visible_parts.size()]->bucket_number));
             }
             num_bitmaps++;
         }
@@ -764,7 +770,8 @@ LocalDeleteBitmaps MergeTreeDataDeduper::repairParts(TxnTimestamp txn_id, IMerge
                 visible_parts[i]->getDeleteBitmap(/*allow_null*/ true),
                 delta_bitmaps[i],
                 txn_id.toUInt64(),
-                bitmap_meta_depth >= max_delete_bitmap_meta_depth));
+                bitmap_meta_depth >= max_delete_bitmap_meta_depth,
+                visible_parts[i]->bucket_number));
             num_bitmaps++;
         }
         return num_bitmaps;

@@ -101,7 +101,8 @@ private:
            {"time_zone", {std::make_shared<DataTypeString>(), "UTC"}},
            {"wait_timeout", {std::make_shared<DataTypeInt32>(), 28800}},
            {"ssl_cipher", {std::make_shared<DataTypeString>(), "TLS_AES_256_GCM_SHA384"}},
-           {"transaction_isolation", {std::make_shared<DataTypeString>(), "READ-UNCOMMITTED"}}};
+           {"transaction_isolation", {std::make_shared<DataTypeString>(), "READ-UNCOMMITTED"}},
+           {"tx_isolation", {std::make_shared<DataTypeString>(), "READ-UNCOMMITTED"}}};
 };
 
 }

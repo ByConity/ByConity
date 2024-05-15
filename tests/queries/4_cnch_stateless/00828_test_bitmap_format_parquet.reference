@@ -1,0 +1,22 @@
+from array	0	100000
+from array	1	100000
+from array	2	100000
+from array	3	100000
+from array	4	100000
+from array	5	100000
+from array	6	100000
+from array	7	100000
+from array	8	100000
+from array	9	100000
+from bitmap	0	100000
+from bitmap	1	100000
+from bitmap	2	100000
+from bitmap	3	100000
+from bitmap	4	100000
+from bitmap	5	100000
+from bitmap	6	100000
+from bitmap	7	100000
+from bitmap	8	100000
+from bitmap	9	100000
+valid decimal	100	{18446744073709551613,18446744073709551614}	2024-01-02
+OK - Overflow decimal not allowed

@@ -1835,7 +1835,7 @@ LocalDeleteBitmapPtr IMergeTreeDataPart::createNewBaseDeleteBitmap(const UInt64 
     }
 
     auto new_bitmap = std::make_shared<Roaring>(*bitmap);
-    auto base_delete_bitmap = LocalDeleteBitmap::createBase(info, new_bitmap, txn_id);
+    auto base_delete_bitmap = LocalDeleteBitmap::createBase(info, new_bitmap, txn_id, bucket_number);
     LOG_DEBUG(storage.log, "Generate a new base delete bitmap for part {}", name);
     return base_delete_bitmap;
 }

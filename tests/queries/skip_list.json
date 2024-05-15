@@ -622,14 +622,18 @@
         "46016_outfile_failed_select",
         "46017_distributed_outfile",
         "02114_compression_in_query",
+        "01495_attach_from_other",
+        "01495_attach_from_other_without_delta",
         "01496_attach_from_path_without_delta",
         "01498_attach_from_self_with_exception",
         "01499_attach_from_other_with_exception",
         "01497_attach_with_delta",
         "01500_attach_from_path_with_exception",
+        "10024_alter_replace_partition",
         "10027_bucket",
         "11007_atomic_attach_parts",
-        "11007_attach_commit_time_bug"
+        "11007_attach_commit_time_bug",
+        "00828_test_bitmap_format_parquet"
     ],
     
     /// Please do not add new tests to this list. It is only for backward compatibility.

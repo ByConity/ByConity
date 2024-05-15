@@ -71,7 +71,6 @@ public:
     // server side only
     void commitPreparedCnchParts(const DumpedData & data, const std::unique_ptr<S3AttachPartsInfo>& s3_parts_info = nullptr);
 
-
     /// Convert staged parts to visible parts along with the given delete bitmaps.
     void publishStagedParts(const MergeTreeDataPartsCNCHVector & staged_parts, const LocalDeleteBitmaps & bitmaps_to_dump);
 

@@ -131,13 +131,16 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
                     throw Exception(ErrorCodes::BAD_ARGUMENTS, "Delete flag can not used in APPEND dedup key mode.");
 
                 bitmaps.emplace_back(LocalDeleteBitmap::createBase(
-                    part->info, std::const_pointer_cast<Roaring>(delete_bitmap), txn->getPrimaryTransactionID().toUInt64()));
+                    part->info,
+                    std::const_pointer_cast<Roaring>(delete_bitmap),
+                    txn->getPrimaryTransactionID().toUInt64(),
+                    part->bucket_number));
                 part->delete_flag = true;
             }
             else if (dedup_parameters.enable_append_mode)
             {
-                bitmaps.emplace_back(
-                    LocalDeleteBitmap::createBase(part->info, std::make_shared<Roaring>(), txn->getPrimaryTransactionID().toUInt64()));
+                bitmaps.emplace_back(LocalDeleteBitmap::createBase(
+                    part->info, std::make_shared<Roaring>(), txn->getPrimaryTransactionID().toUInt64(), part->bucket_number));
             }
         }
     }
@@ -494,6 +497,12 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
             break;
         }
     } while (true);
+
+    if (unlikely(context->getSettingsRef().unique_sleep_seconds_after_acquire_lock.totalSeconds()))
+    {
+        /// Test purpose only
+        std::this_thread::sleep_for(std::chrono::seconds(context->getSettingsRef().unique_sleep_seconds_after_acquire_lock.totalSeconds()));
+    }
 
     MergeTreeDataDeduper deduper(*cnch_table, context);
     LocalDeleteBitmaps bitmaps_to_dump = deduper.dedupParts(

@@ -32,6 +32,9 @@
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
+#include <Parsers/ASTSerDerHelper.h>
+#include <IO/ReadBufferFromString.h>
+#include <Optimizer/SelectQueryInfoHelper.h>
 #include <DataTypes/ObjectUtils.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
@@ -582,31 +585,17 @@ void CnchServerServiceImpl::fetchDataParts(
             for (const auto & partition : request->partitions())
                 partition_list.emplace_back(partition);
 
+            std::set<Int64> bucket_numbers;
+            for (const auto & bucket_number : request->bucket_numbers())
+                bucket_numbers.insert(bucket_number);
+
             auto parts = gc->getCnchCatalog()->getServerDataPartsInPartitions(
                 storage,
                 partition_list,
                 TxnTimestamp{request->timestamp()},
                 nullptr,
                 /*visibility=*/Catalog::VisibilityLevel::All,
-                /*execute_filter=*/false);
-
-            /// Filter parts by bucket numbers if table is bucket table and cluster ready
-            if (!parts.empty() && !request->bucket_numbers().empty() && storage->isBucketTable() && gc->getCnchCatalog()->isTableClustered(storage->getStorageUUID()))
-            {
-                std::set<Int64> bucket_numbers;
-                for (const auto & bucket_number : request->bucket_numbers())
-                    bucket_numbers.insert(bucket_number);
-                auto old_part_size = parts.size();
-                std::erase_if(parts, [&bucket_numbers](const ServerDataPartPtr & part) {
-                    /// Shoule skip parts with -1 as bucket_number since it's drop range parts
-                    return part->part_model().bucket_number() >= 0 && bucket_numbers.count(part->part_model().bucket_number()) == 0;
-                });
-                LOG_TRACE(log, "fetchDataParts for {} filtered by {} buckets from {} parts to {} parts."
-                    ,storage->getStorageID().getNameForLogs()
-                    ,bucket_numbers.size()
-                    ,old_part_size
-                    ,parts.size());
-            }
+                bucket_numbers);
 
             auto & mutable_parts = *response->mutable_parts();
             for (const auto & part : parts)
@@ -650,8 +639,11 @@ void CnchServerServiceImpl::fetchDeleteBitmaps(
             for (const auto & partition : request->partitions())
                 partition_list.emplace_back(partition);
 
+            std::set<Int64> bucket_numbers;
+            for (const auto & bucket_number : request->bucket_numbers())
+                bucket_numbers.insert(bucket_number);
             auto bitmaps = gc->getCnchCatalog()->getDeleteBitmapsInPartitions(
-                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, /*execute_filter=*/false);
+                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, Catalog::VisibilityLevel::All, bucket_numbers);
             auto & mutable_parts = *response->mutable_delete_bitmaps();
             for (const auto & bitmap : bitmaps)
                 *mutable_parts.Add() = *bitmap->getModel();
@@ -694,10 +686,11 @@ void CnchServerServiceImpl::fetchPartitions(
             Names column_names;
             for (const auto & name : request->column_name_filter())
                 column_names.push_back(name);
-            SelectQueryInfo query_info;
             auto session_context = Context::createCopy(gc);
             session_context->setCurrentDatabase(request->database());
-            auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(session_context, storage, request->predicate(), query_info);
+            ReadBufferFromString rb(request->predicate());
+            ASTPtr query_ptr = deserializeAST(rb);
+            SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
             auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
@@ -1788,29 +1781,32 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
     Protos::notifyAccessEntityChangeResp * response,
     google::protobuf::Closure *done)
 {
-    brpc::ClosureGuard done_guard(done);
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
 
-    try
-    {
-        String entity_type = request->type();
-        String name = request->name();
-        UUID id = RPCHelpers::createUUID(request->uuid());
-        for (auto type : collections::range(IAccessEntity::Type::MAX))
+        try
         {
-            // KVAccessStorage::onAccessEntityChanged will find the newly update/deleted access entity and notify all subscribers
-            if (toString(type) == entity_type)
+            String entity_type = request->type();
+            String name = request->name();
+            UUID id = RPCHelpers::createUUID(request->uuid());
+            for (auto type : collections::range(IAccessEntity::Type::MAX))
             {
-                if (auto kv_access_storage = std::dynamic_pointer_cast<KVAccessStorage>(getContext()->getAccessControlManager().getStorage(id)))
-                    kv_access_storage->onAccessEntityChanged(type, name);
-            }
+                // KVAccessStorage::onAccessEntityChanged will find the newly update/deleted access entity and notify all subscribers
+                if (toString(type) == entity_type)
+                {
+                    const auto storage = gc->getAccessControlManager().getStorage(id);
+                    if (storage)
+                        storage->find(type, name);
+                }
 
+            }
         }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
 }
 
 

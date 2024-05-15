@@ -1532,14 +1532,29 @@ namespace Catalog
     ServerDataPartsWithDBM Catalog::getStagedServerDataPartsWithDBM(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
         ServerDataPartsWithDBM res;
-        res.first = getStagedServerDataParts(table, ts, partitions, /*execute_filter=*/false);
+        res.first = getStagedServerDataParts(table, ts, partitions, VisibilityLevel::All);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = table->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getDeleteBitmapsInPartitions(table, {partitions->begin(), partitions->end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+        {
+            std::set<Int64> bucket_numbers;
+            if (table->isBucketTable())
+            {
+                for (const auto & part : res.first)
+                    bucket_numbers.insert(part->part_model().bucket_number());
+            }
+
+            res.second = getDeleteBitmapsInPartitions(
+                table,
+                {partitions->begin(), partitions->end()},
+                ts,
+                /*session_context=*/nullptr,
+                /*visibility=*/VisibilityLevel::All,
+                bucket_numbers);
+        }
 
         if (ts)
         {
@@ -1571,7 +1586,7 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions, bool execute_filter)
+    ServerDataPartsVector Catalog::getStagedServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions, VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1624,9 +1639,10 @@ namespace Catalog
                 }
 
                 size_t size_before = res.size();
-
-                if (ts && execute_filter)
+                auto execute_filter = false;
+                if (ts && visibility != VisibilityLevel::All)
                 {
+                    execute_filter = true;
                     LOG_TRACE(
                         log,
                         "{} Start handle intermediate staged data parts. Total number of staged parts is {}, timestamp: {}",
@@ -1660,17 +1676,23 @@ namespace Catalog
     }
 
     DB::ServerDataPartsWithDBM Catalog::getServerDataPartsInPartitionsWithDBM(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility, const std::set<Int64> & bucket_numbers)
+        const ConstStoragePtr & storage,
+        const Strings & partitions,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        const VisibilityLevel visibility,
+        const std::set<Int64> & bucket_numbers)
     {
         ServerDataPartsWithDBM res;
-        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, visibility, /*execute_filter=*/false, bucket_numbers);
+        res.first = getServerDataPartsInPartitions(storage, partitions, ts, session_context, VisibilityLevel::All, bucket_numbers);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getDeleteBitmapsInPartitions(storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, /*execute_filter=*/false);
+            res.second = getDeleteBitmapsInPartitions(
+                storage, {partitions.begin(), partitions.end()}, ts, /*session_context=*/nullptr, VisibilityLevel::All, bucket_numbers);
 
         /// Make sure they use the same records of transactions list.
         if (ts && visibility != VisibilityLevel::All)
@@ -1715,8 +1737,7 @@ namespace Catalog
         const Strings & partitions,
         const TxnTimestamp & ts,
         const Context * session_context,
-        VisibilityLevel visibility,
-        bool execute_filter,
+        const VisibilityLevel visibility,
         const std::set<Int64> & bucket_numbers)
     {
         ServerDataPartsVector res;
@@ -1805,8 +1826,7 @@ namespace Catalog
                         source = "KV(cannot reach target server)";
                     }
                 }
-
-                if (execute_filter && ts && visibility != VisibilityLevel::All)
+                if (ts && visibility != VisibilityLevel::All)
                 {
                     LOG_TRACE(
                         log,
@@ -1833,7 +1853,7 @@ namespace Catalog
                 {
                     auto old_part_size = res.size();
                     std::erase_if(res, [&bucket_numbers](const ServerDataPartPtr & part) {
-                        return part->part_model().bucket_number() >=0 && bucket_numbers.count(part->part_model().bucket_number()) == 0;
+                        return part->part_model().bucket_number() >= 0 && bucket_numbers.count(part->part_model().bucket_number()) == 0;
                     });
                     LOG_TRACE(log, "{} filter parts by {} buckets from {} parts to {} parts."
                         ,storage->getStorageID().getNameForLogs()
@@ -1864,13 +1884,15 @@ namespace Catalog
         const Strings & partitions,
         const TxnTimestamp & ts,
         const Context * session_context,
-        bool execute_filter)
+        const VisibilityLevel visibility,
+        const std::set<Int64> & bucket_numbers)
     {
         DeleteBitmapMetaPtrVector res;
         String source;
         runWithMetricSupport(
             [&] {
                 Stopwatch watch;
+                bool filtered_with_bucket_numbers = false;
                 auto fall_back = [&]() {
                     DeleteBitmapMetaPtrVector res;
                     const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
@@ -1935,8 +1957,11 @@ namespace Catalog
                 {
                     try
                     {
-                        res = context.getCnchServerClientPool().get(host_with_rpc)->fetchDeleteBitmaps(host_with_rpc, storage, partitions, ts);
+                        res = context.getCnchServerClientPool()
+                                  .get(host_with_rpc)
+                                  ->fetchDeleteBitmaps(host_with_rpc, storage, partitions, ts, bucket_numbers);
                         source = "TargetServer(" + host_with_rpc + ")";
+                        filtered_with_bucket_numbers = true;
                     }
                     catch (...)
                     {
@@ -1949,35 +1974,49 @@ namespace Catalog
                 size_t size_before = res.size();
 
                 /// filter out invisible bitmaps (uncommitted or invisible to current txn)
-                if (execute_filter)
+                size_t visibility_filtered = 0;
+                bool filter_executed = false;
+                if (visibility != VisibilityLevel::All)
                 {
-                    LOG_TRACE(
-                        log,
-                        "{} Start handle intermediate delete bitmap metas. Total number of delete bitmap metas is {}, timestamp: {}",
-                        storage->getStorageID().getNameForLogs(),
-                        res.size(),
-                        ts.toString());
-
+                    visibility_filtered = res.size();
+                    filter_executed = true;
                     getVisibleBitmaps(res, ts, this, nullptr);
+                    visibility_filtered -= res.size();
+                }
 
+                size_t bucket_filtered = 0;
+                if (!res.empty() && !filtered_with_bucket_numbers && !bucket_numbers.empty() && storage->isBucketTable()
+                    && isTableClustered(storage->getStorageUUID()))
+                {
+                    auto old_delete_bitmap_size = res.size();
+                    std::erase_if(res, [&bucket_numbers](const DeleteBitmapMetaPtr & bitmap) {
+                        return bitmap->getModel()->has_bucket_number() && bitmap->getModel()->bucket_number() >= 0
+                            && bucket_numbers.count(bitmap->getModel()->bucket_number()) == 0;
+                    });
                     LOG_TRACE(
                         log,
-                        "{} Finish handle intermediate delete bitmap metas. Total number of delete bitmap metas is {}, timestamp: {}",
+                        "{} filter delete bitmaps by {} buckets from {} bitmaps to {} bitmaps.",
                         storage->getStorageID().getNameForLogs(),
-                        res.size(),
-                        ts.toString());
+                        bucket_numbers.size(),
+                        old_delete_bitmap_size,
+                        res.size());
+                    bucket_filtered = old_delete_bitmap_size - res.size();
                 }
+
                 LOG_DEBUG(
                     log,
-                    "Elapsed {}ms to get {}/{} delete bitmaps in {} partitions for table : {} , source : {}, ts : {}, execute_filter: {}"
-                    ,watch.elapsedMilliseconds()
-                    ,res.size()
-                    ,size_before
-                    ,partitions.size()
-                    ,storage->getStorageID().getNameForLogs()
-                    ,source
-                    ,ts.toString()
-                    ,execute_filter);
+                    "Elapsed {}ms to get {}/{} delete bitmaps in {} partitions for table: {} , source: {}, ts: {}, visibility filtered "
+                    "{} bitmaps (executed: {}), bucket filtered {} bitmaps.",
+                    watch.elapsedMilliseconds(),
+                    res.size(),
+                    size_before,
+                    partitions.size(),
+                    storage->getStorageID().getNameForLogs(),
+                    source,
+                    ts.toString(),
+                    visibility_filtered,
+                    filter_executed,
+                    bucket_filtered);
             },
             ProfileEvents::GetDeleteBitmapsFromCacheInPartitionsSuccess,
             ProfileEvents::GetDeleteBitmapsFromCacheInPartitionsFailed);
@@ -1987,14 +2026,14 @@ namespace Catalog
     ServerDataPartsWithDBM Catalog::getTrashedPartsInPartitionsWithDBM(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
         ServerDataPartsWithDBM res;
-        res.first = getTrashedPartsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+        res.first = getTrashedPartsInPartitions(storage, partitions, ts, VisibilityLevel::All);
 
         if (res.first.empty())
             return res;
 
         bool is_unique_table = storage->getInMemoryMetadataPtr()->hasUniqueKey();
         if (is_unique_table)
-            res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, /*execute_filter=*/ false);
+            res.second = getTrashedDeleteBitmapsInPartitions(storage, partitions, ts, VisibilityLevel::All);
 
         if (ts)
         {
@@ -2025,7 +2064,7 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -2046,7 +2085,7 @@ namespace Catalog
                 size_t size_before = res.size();
 
                 // TODO: should we remove the visibility check logic for trashed parts?
-                if (ts && execute_filter)
+                if (ts && visibility != VisibilityLevel::All)
                     getVisibleServerDataParts(res, ts, this, nullptr);
 
                 LOG_DEBUG(
@@ -2064,7 +2103,7 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
+    ServerDataPartsVector Catalog::getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, const VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -4553,15 +4592,31 @@ namespace Catalog
             ProfileEvents::ClearDeleteBitmapsMetaForTableFailed);
     }
 
-    TrashItems Catalog::getDataItemsInTrash(const StoragePtr & storage, const size_t & limit)
+    TrashItems Catalog::getDataItemsInTrash(const StoragePtr & storage, const size_t & limit, String * start_key)
     {
         TrashItems res;
         auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*storage);
         String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
         size_t prefix_length = MetastoreProxy::trashItemsPrefix(name_space, uuid).length();
 
-        auto it = meta_proxy->getItemsInTrash(name_space, uuid, limit);
-        while (it->next())
+        /// Try iterate from the last checkpoint.
+        auto it = meta_proxy->getItemsInTrash(name_space, uuid, limit, start_key != nullptr ? *start_key : "");
+
+        if (!it->next())
+        {
+            if (start_key == nullptr || start_key->empty())
+                return res;
+
+            /// If we encounter the empty range, try to iterate from the start.
+            if (start_key)
+                *start_key = "";
+            it = meta_proxy->getItemsInTrash(name_space, uuid, limit, "");
+
+            if (!it->next())
+                return res;
+        }
+
+        do
         {
             const auto & key = it->key();
             String meta_key = key.substr(prefix_length, String::npos);
@@ -4579,7 +4634,14 @@ namespace Catalog
                 res.delete_bitmaps.push_back(std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr));
             }
             // not handling staged parts because we never move them to trash
-        }
+
+            // Save key so we can resume iteration in the next call.
+            if (start_key)
+                *start_key = key;
+        } while (it->next());
+
+        if (start_key && (res.size() < limit || limit == 0))
+            *start_key = "";
 
         return res;
     }
@@ -5706,18 +5768,18 @@ namespace Catalog
         return res;
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitionsFromMetastore(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false, execute_filter);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false, visibility);
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool execute_filter)
+    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility)
     {
-        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true, execute_filter);
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true, visibility);
     }
 
     DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash, bool execute_filter)
+    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash, VisibilityLevel visibility)
     {
         DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
@@ -5746,7 +5808,7 @@ namespace Catalog
                     create_func,
                     ts);
 
-                if (execute_filter)
+                if (visibility != VisibilityLevel::All)
                 {
                     /// filter out invisible bitmaps (uncommitted or invisible to current txn)
                     getVisibleBitmaps(res, ts, this, nullptr);
@@ -6754,6 +6816,8 @@ namespace Catalog
         return data;
     }
 
+    static void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, const UUID & uuid);
+
     void Catalog::dropAccessEntity(EntityType type, const UUID & uuid, const String & name)
     {
         bool isSuccessful = false;
@@ -6772,7 +6836,7 @@ namespace Catalog
         }
     }
 
-    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, AccessEntityModel & old_access_entity, bool replace_if_exists)
+    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists)
     {
         new_access_entity.set_commit_time(context.getTimestamp());
         bool isSuccessful = false;

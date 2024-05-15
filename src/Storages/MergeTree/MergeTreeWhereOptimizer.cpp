@@ -86,6 +86,20 @@ static bool containIdentifiers(const ASTPtr & expr)
     return false;
 }
 
+size_t getNumberOfOrExpression(const ASTPtr & node)
+{
+    size_t number = 0;
+    if (const auto * func_or = node->as<ASTFunction>(); func_or && func_or->name == "or")
+    {
+        number += func_or->arguments->children.size();
+    }
+
+    for (const auto & child : node->children)
+    {
+        number += getNumberOfOrExpression(child);
+    }
+    return number;
+}
 
 MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
     SelectQueryInfo & query_info_,
@@ -109,6 +123,7 @@ MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
     , materialize_strategy{materialize_strategy_}
     , aggresive_pushdown{context_->getSettingsRef().late_materialize_aggressive_push_down}
     , partition_columns(metadata_snapshot_->getPartitionKey().column_names)
+    , max_prewhere_or_expression_size{context_->getSettingsRef().max_prewhere_or_expression_size}
 {
     ASTSelectQuery & query = query_info_.query->as<ASTSelectQuery &>();
 
@@ -337,7 +352,7 @@ bool MergeTreeWhereOptimizer::isArraySetCheck(const ASTPtr & condition, bool) co
 
                 const ColumnDescription & column = columns.get(identifier_name);
 
-                if (!column.type->isBitmapIndex())
+                if (!column.type->isBitmapIndex() && !column.type->isSegmentBitmapIndex())
                     return false;
             }
 
@@ -398,7 +413,7 @@ void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, AS
         size_t array_set_check_function_numbers = 0;
         for (auto it = where_conditions.begin(); it != where_conditions.end();)
         {
-            if (containsArraySetCheck(it->node))
+            if (isArraySetCheck(it->node))
             {
                 array_set_check_function_numbers++;
             }
@@ -432,9 +447,20 @@ void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, AS
         if (!it->viable)
             break;
 
-        if (containsArraySetCheck(it->node))
+        if (isArraySetCheck(it->node))
             break;
-
+        
+        // check conditon depth
+        if (max_prewhere_or_expression_size)
+        {
+            auto number_of_ors = getNumberOfOrExpression(it->node);
+            if (number_of_ors > max_prewhere_or_expression_size)
+            {
+                LOG_DEBUG(
+                    log, "MergeTreeWhereOptimizer: condition {}. Number of `or` expressions is {}", it->node->dumpTree(), number_of_ors);
+                break;
+            }
+        }
         bool moved_enough = false;
         if (total_size_of_queried_columns > 0)
         {

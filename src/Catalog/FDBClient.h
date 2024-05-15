@@ -55,7 +55,7 @@ struct ScanRequest
     std::string start_key;
     std::string end_key;
 
-    uint32_t row_limit = 20000;
+    uint32_t row_limit = 0;
     fdb_bool_t reverse_order = 0;
 };
 
@@ -103,6 +103,7 @@ private:
     fdb_bool_t has_more = false;
     const FDBKeyValue *batch_kvs = nullptr;
     int batch_read_index = 0;
+    uint read_count = 0;
 };
 
 class FDBClient;
