@@ -6816,6 +6816,8 @@ namespace Catalog
         return data;
     }
 
+    static void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, const UUID & uuid);
+
     void Catalog::dropAccessEntity(EntityType type, const UUID & uuid, const String & name)
     {
         bool isSuccessful = false;
@@ -6834,7 +6836,7 @@ namespace Catalog
         }
     }
 
-    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, AccessEntityModel & old_access_entity, bool replace_if_exists)
+    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists)
     {
         new_access_entity.set_commit_time(context.getTimestamp());
         bool isSuccessful = false;
