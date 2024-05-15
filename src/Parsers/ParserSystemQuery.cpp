@@ -438,6 +438,21 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 return false;
             break;
 
+        case Type::RELEASE_MEMORY_LOCK:
+        {
+            if (ParserKeyword{"OF"}.ignore(pos, expected))
+            {
+                if (!ParserKeyword{"TXN"}.ignore(pos, expected))
+                    return false;
+                if (!parse_uint(pos, expected, res->txn_id))
+                    return false;
+                res->specify_txn = true;
+            }
+            else
+                parseDatabaseAndTableName(pos, expected, res->database, res->table);
+            break;
+        }
+
         default:
             /// There are no [db.table] after COMMAND NAME
             break;
