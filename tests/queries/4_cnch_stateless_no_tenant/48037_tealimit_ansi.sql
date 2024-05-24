@@ -1,4 +1,4 @@
-use test;
+set tealimit_order_keep=1;
 drop table if exists tealimit_ansi;
 CREATE TABLE tealimit_ansi
 (
