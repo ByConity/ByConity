@@ -252,6 +252,13 @@ int DaemonManager::main(const std::vector<std::string> &)
     std::string path = getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH));
     global_context->setPath(path);
 
+    /// Init HDFS3 client config path
+    std::string hdfs_config = global_context->getCnchConfigRef().getString("hdfs3_config", "");
+    if (!hdfs_config.empty())
+    {
+        setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
+    }
+
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
 
