@@ -462,7 +462,9 @@ namespace S3
             ("s3.root_prefix", po::value<String>(&root_prefix)->required(), "root prefix")
             ("s3.is_virtual_hosted_style", po::value<bool>(&is_virtual_hosted_style)->default_value(false)->implicit_value(false), "is virtual hosted style or not")
             ("s3.http_keep_alive_timeout_ms", po::value<uint32_t>(&http_keep_alive_timeout_ms)->default_value(5000)->implicit_value(5000), "http keep alive time")
-            ("s3.http_connection_pool_size", po::value<size_t>(&http_connection_pool_size)->implicit_value(1024)->default_value(1024), "http pool size");
+            ("s3.http_connection_pool_size", po::value<size_t>(&http_connection_pool_size)->implicit_value(1024)->default_value(1024), "http pool size")
+            ("s3.min_upload_part_size", po::value<UInt64>(&min_upload_part_size)->implicit_value(16 * 1024 * 1024)->default_value(16 * 1024 * 1024), "min upload part size")
+            ("s3.max_single_part_upload_size", po::value<UInt64>(&max_single_part_upload_size)->implicit_value(16 * 1024 * 1024)->default_value(16 * 1024 * 1024), "max single part upload size");
 
         po::parsed_options opts = po::parse_config_file(ini_file_path.c_str(), s3_opts);
         po::variables_map vm;
@@ -515,6 +517,8 @@ namespace S3
         is_virtual_hosted_style = cfg.getBool(cfg_prefix + ".is_virtual_hosted_style", true);
         http_keep_alive_timeout_ms = cfg.getUInt(cfg_prefix + ".http_keep_alive_timeout_ms", 5000);
         http_connection_pool_size = cfg.getUInt(cfg_prefix + ".http_connection_pool_size", 1024);
+        min_upload_part_size = cfg.getUInt64(cfg_prefix + ".min_upload_part_size", 16 * 1024 * 1024);
+        max_single_part_upload_size = cfg.getUInt64(cfg_prefix + ".max_single_part_upload_size", 16 * 1024 * 1024);
 
         if (ak_id.empty())
             collectCredentialsFromEnv();
