@@ -827,9 +827,9 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
             }
         });
 
-    /// It's safe to use commit() to release the txn as there is no actions to do.
+    /// It's safe to use commitV2() (not abort()) to release the txn as there is no actions to do.
     /// And finishTransaction in the SCOPE_EXIT make sure the txn is clean by server but not DM.
-    transaction->commit();
+    transaction->commitV2();
     UInt64 milliseconds = watch.elapsedMilliseconds();
     if (milliseconds >= SLOW_THRESHOLD_MS)
         LOG_INFO(log, "removeLockedPartition took {} ms.", milliseconds);
