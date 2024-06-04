@@ -163,7 +163,8 @@ void PartWriter::execute()
     {
         /// S3 remote disk.
         std::shared_ptr<Aws::S3::S3Client> client = s3_output_config->create();
-        remote_disk = std::make_shared<DiskByteS3>("s3_disk", s3_output_config->root_prefix, s3_output_config->bucket, client);
+        remote_disk = std::make_shared<DiskByteS3>("s3_disk", s3_output_config->root_prefix, s3_output_config->bucket, client,
+            s3_output_config->min_upload_part_size, s3_output_config->max_single_part_upload_size);
         s3_attach_meta = std::make_unique<S3PartsAttachMeta>(
             client, s3_output_config->bucket, std::filesystem::path(s3_output_config->root_prefix) / "", dest_path);
 

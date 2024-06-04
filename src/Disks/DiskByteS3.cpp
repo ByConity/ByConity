@@ -139,10 +139,11 @@ private:
 };
 
 DiskByteS3::DiskByteS3(const String& name_, const String& root_prefix_, const String& bucket_,
-    const std::shared_ptr<Aws::S3::S3Client>& client_):
+    const std::shared_ptr<Aws::S3::S3Client>& client_, const UInt64 min_upload_part_size_, const UInt64 max_single_part_upload_size_):
         disk_id(next_disk_id.fetch_add(1)), name(name_), root_prefix(root_prefix_),
         s3_util(client_, bucket_, true), reader_opts(std::make_shared<S3RemoteFSReaderOpts>(client_, bucket_)),
-        reserved_bytes(0), reservation_count(0)
+        reserved_bytes(0), reservation_count(0),
+        min_upload_part_size(min_upload_part_size_), max_single_part_upload_size(max_single_part_upload_size_)
 {
 }
 
@@ -241,8 +242,8 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String & path, const WriteSettings & settings)
 {
     return std::make_unique<WriteBufferFromByteS3>(s3_util.getClient(), s3_util.getBucket(),
-        std::filesystem::path(root_prefix) / path, 16 * 1024 * 1024,
-        16 * 1024 * 1024, settings.file_meta, settings.buffer_size, false, nullptr, 0, true);
+        std::filesystem::path(root_prefix) / path, max_single_part_upload_size,
+        min_upload_part_size, settings.file_meta, settings.buffer_size, false, nullptr, 0, true);
 }
 
 void DiskByteS3::removeFile(const String& path)
@@ -297,7 +298,8 @@ void registerDiskByteS3(DiskFactory& factory)
         S3::S3Config s3_cfg(config, config_prefix);
         std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
 
-        auto s3disk = std::make_shared<DiskByteS3>(name, s3_cfg.root_prefix, s3_cfg.bucket, client);
+        auto s3disk = std::make_shared<DiskByteS3>(name, s3_cfg.root_prefix, s3_cfg.bucket, client,
+                                                   s3_cfg.min_upload_part_size, s3_cfg.max_single_part_upload_size);
 
         if (!config.getBool(config_prefix + ".skip_access_check", true))
         {
