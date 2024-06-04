@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Access/ContextAccess.h>
 #include <map>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchPartsHelper.h>
@@ -171,8 +172,15 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
     TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
     TxnTimestamp start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{context->getTimestamp()};
 
+    const auto access = context->getAccess();
+    const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
+
     for (const auto & [database_fullname, database_name, table_name] : tables)
     {
+        const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, database_fullname);
+        if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, database_fullname, table_name))
+            continue;
+
         auto table = cnch_catalog->tryGetTable(*context, database_fullname, table_name, start_time);
 
         /// Skip not exist table

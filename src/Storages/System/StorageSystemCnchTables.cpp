@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Access/ContextAccess.h>
 #include <Catalog/Catalog.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/ParserQuery.h>
@@ -276,10 +277,19 @@ Pipe StorageSystemCnchTables::read(
 
     MutableColumns res_columns = header.cloneEmptyColumns();
 
+    const auto access = context->getAccess();
+    const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
+
     for (size_t i = 0; i<filtered_index_column->size(); i++)
     {
         auto table_model = table_models[(*filtered_index_column)[i].get<UInt64>()];
+
+        const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, table_model.database());
+        if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, table_model.database(), table_model.name()))
+            continue;
+
         table_model.set_database(getOriginalDatabaseName(table_model.database(), tenant_id));
+
         if (Status::isDeleted(table_model.status()) || !matchAnyPredicate(predicates, table_model))
             continue;
 

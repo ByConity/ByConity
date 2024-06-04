@@ -34,6 +34,46 @@ namespace ErrorCodes
 
 namespace
 {
+    static const std::unordered_set<std::string_view> always_accessible_tables {
+        /// Constant tables
+        "one",
+
+        /// "numbers", "numbers_mt", "zeros", "zeros_mt" were excluded because they can generate lots of values and
+        /// that can decrease performance in some cases.
+
+        "contributors",
+        "licenses",
+        "time_zones",
+        "collations",
+
+        "formats",
+        "privileges",
+        "data_type_families",
+        "table_engines",
+        "table_functions",
+        "aggregate_function_combinators",
+
+        "functions", /// Can contain user-defined functions
+
+        /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
+        "databases",
+        "tables",
+        "columns",
+
+        /// Specific to the current session
+        "settings",
+        "current_roles",
+        "enabled_roles",
+        "quota_usage",
+
+        /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
+        /// For IDE tools to get schema info
+        "cnch_databases",
+        "cnch_tables",
+        "cnch_columns",
+        "cnch_parts",
+    };
+
     AccessRights mixAccessRightsFromUserAndRoles(const User & user, const EnabledRolesInfo & roles_info)
     {
         AccessRights res = user.access;
@@ -131,46 +171,7 @@ namespace
         /// If "select_from_system_db_requires_grant" is enabled we provide implicit grants only for a few tables in the system database.
         if (manager.doesSelectFromSystemDatabaseRequireGrant() || has_tenant_id_in_username)
         {
-            const char * always_accessible_tables[] = {
-                /// Constant tables
-                "one",
-
-                /// "numbers", "numbers_mt", "zeros", "zeros_mt" were excluded because they can generate lots of values and
-                /// that can decrease performance in some cases.
-
-                "contributors",
-                "licenses",
-                "time_zones",
-                "collations",
-
-                "formats",
-                "privileges",
-                "data_type_families",
-                "table_engines",
-                "table_functions",
-                "aggregate_function_combinators",
-
-                "functions", /// Can contain user-defined functions
-
-                /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
-                "databases",
-                "tables",
-                "columns",
-                "cnch_parts",
-
-                /// Specific to the current session
-                "settings",
-                "current_roles",
-                "enabled_roles",
-                "quota_usage",
-
-                /// For IDE tools to get schema info
-                "cnch_columns",
-                "cnch_parts",
-                "cnch_tables"
-            };
-
-            for (const auto * table_name : always_accessible_tables)
+            for (const auto & table_name : always_accessible_tables)
                 res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE, table_name);
 
             if (max_flags.contains(AccessType::SHOW_USERS))
