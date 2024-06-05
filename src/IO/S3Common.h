@@ -150,7 +150,9 @@ public:
         int max_connections_ = 100,
         uint32_t http_keep_alive_timeout_ms_ = 5000,
         size_t http_connection_pool_size_ = 1024,
-        size_t slow_read_ms_ = 100)
+        size_t slow_read_ms_ = 100,
+        UInt64 min_upload_part_size_ = 16 * 1024 * 1024,
+        UInt64 max_single_part_upload_size_ = 16 * 1024 * 1024)
         : max_redirects(max_redirects_)
         , connect_timeout_ms(connect_timeout_ms_)
         , request_timeout_ms(request_timeout_ms_)
@@ -166,6 +168,8 @@ public:
         , http_keep_alive_timeout_ms(http_keep_alive_timeout_ms_)
         , http_connection_pool_size(http_connection_pool_size_)
         , slow_read_ms(slow_read_ms_)
+        , min_upload_part_size(min_upload_part_size_)
+        , max_single_part_upload_size(max_single_part_upload_size_)
     {
     }
 
@@ -194,6 +198,8 @@ public:
     uint32_t http_keep_alive_timeout_ms;
     size_t http_connection_pool_size;
     size_t slow_read_ms{100};
+    UInt64 min_upload_part_size;
+    UInt64 max_single_part_upload_size;
 };
 
 class S3Util
