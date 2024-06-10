@@ -70,6 +70,7 @@
 #include <Common/time.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
+#include <common/scope_guard_safe.h>
 #include <common/types.h>
 #include <Processors/Executors/ExecutingGraph.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
@@ -279,7 +280,12 @@ StepAggregatedOperatorProfiles collectStepRuntimeProfiles(int segment_id, const 
 
 void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 {
+    PlanSegmentProcessList::EntryPtr process_plan_segment_entry;
     std::optional<CurrentThread::QueryScope> query_scope;
+    SCOPE_EXIT_SAFE({
+        if (context->getSettingsRef().log_queries && process_plan_segment_entry)
+            collectSegmentQueryRuntimeMetric(&process_plan_segment_entry->get());
+    });
 
     if (!thread_group)
     {
@@ -306,7 +312,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         CurrentThread::attachTo(thread_group);
     }
 
-    PlanSegmentProcessList::EntryPtr process_plan_segment_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
+    process_plan_segment_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
     context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
 
     if (context->getSettingsRef().bsp_mode)
@@ -415,9 +421,6 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
             }
         }
     }
-
-    if (context->getSettingsRef().log_queries)
-        collectSegmentQueryRuntimeMetric(query_status);
 
     if (context->getSettingsRef().log_segment_profiles)
     {
