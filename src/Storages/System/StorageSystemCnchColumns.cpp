@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Access/ContextAccess.h>
 #include <Storages/System/StorageSystemCnchColumns.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
@@ -150,6 +151,7 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
             table_models = cnch_catalog->getAllTables();
         }
 
+        std::vector<String> full_db_name;
         for (auto it = table_models.begin(); it != table_models.end();)
         {
             String non_stripped_db_name = it->database();
@@ -175,6 +177,7 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
                     }
                 }
             }
+            full_db_name.push_back(non_stripped_db_name);
             it++;
         }
 
@@ -182,6 +185,9 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
         if (time_pass_ms > 2000)
             LOG_INFO(&Poco::Logger::get("StorageSystemCnchColumns"),
                 "cnch_catalog->getAllTables() took {} ms", time_pass_ms);
+
+        const auto access = context->getAccess();
+        const bool check_access_for_tables = !access->isGranted(AccessType::SHOW_COLUMNS);
 
         ContextMutablePtr mutable_context = Context::createCopy(context);
         for (size_t i = 0, size = table_models.size(); i != size; ++i)
@@ -216,8 +222,13 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
                     column_sizes = storage->getColumnSizes();
                 }
 
+                bool check_access_for_columns = check_access_for_tables && !access->isGranted(AccessType::SHOW_COLUMNS, full_db_name[i], table_models[i].name());
+
                 for (const auto & column : columns)
                 {
+                    if (check_access_for_columns && !access->isGranted(AccessType::SHOW_COLUMNS, full_db_name[i], table_models[i].name(), column.name))
+                        continue;
+
                     size_t res_index = 0;
                     res_columns[res_index++]->insert(db);
                     res_columns[res_index++]->insert(table_name);

@@ -61,7 +61,6 @@ namespace
         "databases",
         "tables",
         "columns",
-        "cnch_parts",
 
         /// Specific to the current session
         "settings",
@@ -69,10 +68,12 @@ namespace
         "enabled_roles",
         "quota_usage",
 
+        /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
         /// For IDE tools to get schema info
+        "cnch_databases",
+        "cnch_tables",
         "cnch_columns",
         "cnch_parts",
-        "cnch_tables"
     };
 
     AccessRights mixAccessRightsFromUserAndRoles(const User & user, const EnabledRolesInfo & roles_info)
