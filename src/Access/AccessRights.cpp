@@ -1,9 +1,11 @@
 #include <Access/AccessRights.h>
+#include <Access/ContextAccess.h>
 #include <common/logger_useful.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/algorithm/sort.hpp>
 #include <unordered_map>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -934,6 +936,28 @@ bool AccessRights::isGrantedImpl(const AccessFlags & flags, const Args &... args
     {
         if (!root_node)
             return flags.isEmpty();
+
+        if constexpr (sizeof...(args) >= 2)
+        {
+            const auto & tuple = std::make_tuple(args...);
+            const auto & database = std::get<0>(tuple);
+            if (database == "system")
+            {
+                const auto & table = std::get<1>(tuple);
+                if (current_thread)
+                {
+                    const auto ctx = current_thread->getQueryContext();
+
+                    if (ctx)
+                    {
+                        if (!ctx->getAccess()->isAlwaysAccessibleTableInSystem(table))
+                            return false;
+                    }
+                }
+
+            }
+        }
+
         return root_node->isGranted(flags, args...);
     };
     if constexpr (grant_option)

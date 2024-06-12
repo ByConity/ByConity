@@ -29,7 +29,6 @@ class AccessControlManager;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 
-
 struct ContextAccessParams
 {
     std::optional<UUID> user_id;
@@ -153,6 +152,8 @@ public:
     /// Makes an instance of ContextAccess which provides full access to everything
     /// without any limitations. This is used for the global context.
     static std::shared_ptr<const ContextAccess> getFullAccess();
+
+    bool isAlwaysAccessibleTableInSystem(const std::string_view & table) const;
 
 private:
     friend class AccessControlManager;
