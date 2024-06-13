@@ -65,7 +65,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 2000 * 1000000;
-    ExchangeOptions exchange_options{.exchange_timeout_ts = ts, .need_send_plan_segment_status = false};
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts};
 
     const String query_id = "PlanSegmentExecutor_test";
     const UInt64 query_tx_id = 12345;
@@ -170,7 +170,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 2000 * 1000000;
-    ExchangeOptions exchange_options{.exchange_timeout_ts = ts, .need_send_plan_segment_status = false};
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts};
 
     const String query_id = "PlanSegmentExecutor_test";
     const UInt64 query_tx_id = 11111;
@@ -281,7 +281,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 1000 * 1000000;
-    ExchangeOptions exchange_options{.exchange_timeout_ts = ts, .need_send_plan_segment_status = false};
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts};
 
     const String query_id = "PlanSegmentExecutor_test";
     const UInt64 query_tx_id = 11111;
