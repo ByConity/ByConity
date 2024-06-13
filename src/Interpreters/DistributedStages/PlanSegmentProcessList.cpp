@@ -80,12 +80,12 @@ PlanSegmentProcessList::insertGroup(const PlanSegment & plan_segment, ContextMut
                         initial_query_id,
                         plan_segment.getCoordinatorAddress().toString());
 
-                    need_wait_cancel = segment_group->tryCancel();
+                    need_wait_cancel = segment_group->tryCancel(false);
                 }
             }
         }
 
-        if (found && bsp_mode && segment_group->coordinator_address == coordinator_address && segment_group->tryCancel(instance_id))
+        if (found && bsp_mode && segment_group->coordinator_address == coordinator_address && segment_group->tryCancelInstance(instance_id, false))
         {
             std::unique_lock lock(mutex);
             auto query_expiration_ts = query_context->getQueryExpirationTimeStamp();
@@ -185,7 +185,7 @@ PlanSegmentProcessList::EntryPtr PlanSegmentProcessList::insertProcessList(const
     return res;
 }
 
-bool PlanSegmentGroup::tryCancel()
+bool PlanSegmentGroup::tryCancel(bool internal)
 {
     std::vector<std::shared_ptr<ProcessListEntry>> to_cancel;
     std::unique_lock lock(mutex);
@@ -198,13 +198,13 @@ bool PlanSegmentGroup::tryCancel()
 
     for (auto & entry : to_cancel)
     {
-        entry->get().cancelQuery(true);
+        entry->get().cancelQuery(true, internal);
     }
 
     return !to_cancel.empty();
 }
 
-bool PlanSegmentGroup::tryCancel(PlanSegmentInstanceId instance_id)
+bool PlanSegmentGroup::tryCancelInstance(PlanSegmentInstanceId instance_id, bool internal)
 {
     std::unique_lock lock(mutex);
     auto iter = segment_queries.find(instance_id);
@@ -212,7 +212,7 @@ bool PlanSegmentGroup::tryCancel(PlanSegmentInstanceId instance_id)
     lock.unlock();
 
     if (to_cancel)
-        to_cancel->get().cancelQuery(true);
+        to_cancel->get().cancelQuery(true, internal);
 
     return to_cancel != nullptr;
 }
@@ -309,7 +309,7 @@ CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String 
     if (segment_group.get())
     {
         if (coordinator_address.empty() || segment_group->coordinator_address == coordinator_address)
-            found = segment_group->tryCancel();
+            found = segment_group->tryCancel(true);
         else
         {
             LOG_WARNING(

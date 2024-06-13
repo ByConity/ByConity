@@ -37,6 +37,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int BRPC_PROTOCOL_VERSION_UNSUPPORT;
+    extern const int QUERY_WAS_CANCELLED;
+    extern const int QUERY_WAS_CANCELLED_INTERNAL;
 }
 
 WorkerNodeResourceData ResourceMonitorTimer::getResourceData() const {
@@ -260,7 +262,6 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
 {
     brpc::ClosureGuard done_guard(done);
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
-
     LOG_INFO(
         log,
         "Received status of query {}, segment {}, parallel index {}, succeed: {}, cancelled: {}, code is {}",
@@ -273,12 +274,13 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
 
     try
     {
+        bool is_cancelled = (request->code() == ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL) || (request->code() == ErrorCodes::QUERY_WAS_CANCELLED);
         RuntimeSegmentsStatus status{
             request->query_id(),
             request->segment_id(),
             request->parallel_index(),
             request->is_succeed(),
-            request->is_canceled(),
+            is_cancelled,
             RuntimeSegmentsMetrics(request->metrics()),
             request->message(),
             request->code()};

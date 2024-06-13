@@ -80,9 +80,9 @@ public:
         return segment_queries.find(instance_id) != segment_queries.end();
     }
 
-    bool tryCancel();
+    bool tryCancel(bool internal);
 
-    bool tryCancel(PlanSegmentInstanceId instance_id);
+    bool tryCancelInstance(PlanSegmentInstanceId instance_id, bool internal);
 
     mutable bthread::Mutex mutex;
     String coordinator_address;

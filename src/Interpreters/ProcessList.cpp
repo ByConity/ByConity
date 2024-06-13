@@ -29,6 +29,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/queryNormalization.h>
+#include <common/types.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/LabelledMetrics.h>
@@ -72,6 +73,7 @@ namespace ErrorCodes
     extern const int TIMEOUT_EXCEEDED;
     extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
     extern const int QUERY_WAS_CANCELLED;
+    extern const int QUERY_WAS_CANCELLED_INTERNAL;
 }
 
 
@@ -400,7 +402,7 @@ void ProcessList::checkRunningQuery(ContextPtr query_context, bool is_unlimited_
                     ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
 
             /// Ask queries to cancel. They will check this flag.
-            running_query->second->is_killed.store(true, std::memory_order_relaxed);
+            running_query->second->is_killed.store(QueryStatus::EXTERNAL_KILL_BIT, std::memory_order_relaxed);
 
             const auto replace_running_query_max_wait_ms = settings.replace_running_query_max_wait_ms.totalMilliseconds();
             if (!replace_running_query_max_wait_ms || !have_space.wait_for(lock, std::chrono::milliseconds(replace_running_query_max_wait_ms),
@@ -409,7 +411,7 @@ void ProcessList::checkRunningQuery(ContextPtr query_context, bool is_unlimited_
                     running_query = user_process_list->second.queries.find(client_info.current_query_id);
                     if (running_query == user_process_list->second.queries.end())
                         return true;
-                    running_query->second->is_killed.store(true, std::memory_order_relaxed);
+                    running_query->second->is_killed.store(QueryStatus::EXTERNAL_KILL_BIT, std::memory_order_relaxed);
                     return false;
                 }))
             {
@@ -548,8 +550,9 @@ bool QueryStatus::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStream
     return true;
 }
 
-CancellationCode QueryStatus::cancelQuery(bool kill)
+CancellationCode QueryStatus::cancelQuery(bool kill, bool internal)
 {
+    UInt8 kill_flag = internal ? INTERNAL_KILL_BIT : EXTERNAL_KILL_BIT;
     {
         std::lock_guard lock(executors_mutex);
         if (!executors.empty())
@@ -557,7 +560,7 @@ CancellationCode QueryStatus::cancelQuery(bool kill)
             if (is_killed.load())
                 return CancellationCode::CancelSent;
 
-            is_killed.store(true);
+            is_killed.store(kill_flag);
 
             for (auto * e : executors)
                 e->cancel();
@@ -583,7 +586,7 @@ CancellationCode QueryStatus::cancelQuery(bool kill)
         return CancellationCode::CancelCannotBeSent;
     }
     /// Query is not even started
-    is_killed.store(true);
+    is_killed.store(kill_flag);
     return CancellationCode::CancelSent;
 }
 
@@ -653,8 +656,11 @@ void QueryStatus::throwKilledException()
 
 bool QueryStatus::checkTimeLimit()
 {
-    if (is_killed.load())
-        throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
+    if (auto kill_flag = is_killed.load(); kill_flag)
+    {
+        throw Exception(
+            "Query was cancelled", kill_flag & INTERNAL_KILL_BIT ? ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL : ErrorCodes::QUERY_WAS_CANCELLED);
+    }
 
     return limits.checkTimeLimit(watch, overflow_mode);
 }
@@ -729,7 +735,7 @@ CancellationCode ProcessList::sendCancelToQuery(const String & current_query_id,
         cancelled_cv.notify_all();
     });
 
-    return elem->cancelQuery(kill);
+    return elem->cancelQuery(kill, false);
 }
 
 
@@ -758,7 +764,16 @@ void ProcessList::killAllQueries()
     }
 
     for (auto & cancelled_process : cancelled_processes)
-        cancelled_process->cancelQuery(true);
+    {
+        try
+        {
+            cancelled_process->cancelQuery(true, false);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__, "Kill query failed with id: "+ cancelled_process->client_info.current_query_id + "");
+        }
+    }
 }
 
 
