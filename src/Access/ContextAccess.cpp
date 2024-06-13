@@ -18,6 +18,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/range/algorithm/set_algorithm.hpp>
 #include <assert.h>
+#include <unordered_set>
 
 
 namespace DB
@@ -219,6 +220,13 @@ namespace
     std::string_view getDatabase(const std::string_view & arg1, const OtherArgs &...) { return arg1; }
 }
 
+bool ContextAccess::isAlwaysAccessibleTableInSystem(const std::string_view & table) const
+{
+    if (!params.has_tenant_id_in_username)
+        return true;
+
+    return always_accessible_tables.contains(table);
+}
 
 ContextAccess::ContextAccess(const AccessControlManager & manager_, const Params & params_)
     : manager(&manager_)
