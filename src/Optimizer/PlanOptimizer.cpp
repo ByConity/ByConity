@@ -62,6 +62,8 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // rules for normalize plan (DO NOT change !!!)
         std::make_shared<HintsPropagator>(),
         std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::sumIfToCountIf(), "SumIfToCountIf"),
+
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
@@ -141,6 +143,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<HintsPropagator>(),
         std::make_shared<ColumnPruning>(),
         std::make_shared<UnifyNullableType>(),
+
+        std::make_shared<IterativeRewriter>(Rules::sumIfToCountIf(), "SumIfToCountIf"),
 
         // remove subquery rely on specific pattern
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),

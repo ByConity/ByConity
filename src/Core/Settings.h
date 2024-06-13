@@ -1700,6 +1700,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, only_push_agg_with_functions, false, "Only use eager aggregation with functions", 0) \
     M(Float, agg_push_down_threshold, 40.0, "Which ratio is greater than threshold can be push down", 0) \
     M(String, eager_agg_join_id_blocklist, "", "Which join in blocklist can't be push down through", 0) \
+    M(Bool, enable_sum_if_to_count_if, false, "Whether enable rewrite sumIf to countIf", 0) \
     M(Bool, enable_eliminate_join_by_fk, false, "Whether to enable RBO -- eliminate join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join, false, "Whether to eliminate complicated join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join_without_top_join, false, "Whether to allow eliminate complicated join by fk pull through pass the multi-child node even if no top join", 0) \

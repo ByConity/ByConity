@@ -41,6 +41,7 @@
 #include <Optimizer/Rule/Rewrite/TopNRules.h>
 #include <Optimizer/Rule/Rewrite/EagerAggregation.h>
 #include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
+#include <Optimizer/Rule/Rewrite/SumIfToCountIf.h>
 
 namespace DB
 {
@@ -62,6 +63,11 @@ std::vector<RulePtr> Rules::normalizeExpressionRules()
 std::vector<RulePtr> Rules::swapPredicateRules()
 {
     return {std::make_shared<SwapPredicateRewriteRule>()};
+}
+
+std::vector<RulePtr> Rules::sumIfToCountIf()
+{
+    return {std::make_shared<SumIfToCountIf>()};
 }
 
 std::vector<RulePtr> Rules::simplifyExpressionRules()
