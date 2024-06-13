@@ -62,6 +62,15 @@ struct LengthImpl
             res[i] = offsets[i] - offsets[i - 1];
     }
 
+    static void map(const ColumnString::Offsets & offsets, PaddedPODArray<UInt64> & res, bool is_mysql)
+    {
+        /// In mysql dialect, we need to return sum of both key and value numbers.
+        size_t left_shift_bits = is_mysql ? 1 : 0;
+        size_t size = offsets.size();
+        for (size_t i = 0; i < size; ++i)
+            res[i] = (offsets[i] - offsets[i - 1]) << left_shift_bits;
+    }
+
     [[noreturn]] static void uuid(const ColumnUUID::Container &, size_t &, PaddedPODArray<UInt64> &)
     {
         throw Exception("Cannot apply function length to UUID argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -138,7 +147,8 @@ public:
 
     FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
     {
-        if (isArray(removeNullable(arguments.at(0).type)))
+        auto arg0_type_without_nullable = removeNullable(arguments.at(0).type);
+        if (isArray(arg0_type_without_nullable) || isMap(arg0_type_without_nullable))
             return FunctionFactory::instance().getImpl("arraySize", context)->build(arguments);
         else
             return std::make_unique<FunctionToFunctionBaseAdaptor>(
@@ -149,7 +159,8 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (isArray(removeNullable(arguments.at(0))))
+        auto arg0_type_without_nullable = removeNullable(arguments.at(0));
+        if (isArray(arg0_type_without_nullable) || isMap(arg0_type_without_nullable))
             return FunctionArraySize::create(context)->getReturnTypeImpl(arguments);
         else
             return FunctionLength::create(context)->getReturnTypeImpl(arguments);

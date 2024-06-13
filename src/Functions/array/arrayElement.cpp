@@ -25,6 +25,7 @@
 #include <Functions/array/arrayElement.h>
 #include <Functions/castTypeToEither.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
@@ -716,7 +717,7 @@ ColumnPtr FunctionArrayElement::executeTuple(const ColumnsWithTypeAndName & argu
         array_of_tuple_section.type = std::make_shared<DataTypeArray>(tuple_types[i]);
         temporary_results[0] = array_of_tuple_section;
 
-        auto type = getReturnTypeImpl({temporary_results[0].type, temporary_results[1].type});
+        auto type = getReturnTypeImpl(temporary_results);
         auto col = executeImpl(temporary_results, type, input_rows_count);
         result_tuple_columns[i] = std::move(col);
     }
@@ -949,7 +950,7 @@ bool FunctionArrayElement::matchKeyToIndexNumber(
 }
 
 ColumnPtr FunctionArrayElement::executeMap(
-    const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
+    const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, ColumnPtr index_null_map_col) const
 {
     const auto * col_map = checkAndGetColumn<ColumnMap>(arguments[0].column.get());
     const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(arguments[0].column.get());
@@ -995,7 +996,19 @@ ColumnPtr FunctionArrayElement::executeMap(
             "Illegal types of arguments: {}, {} for function {}",
             arguments[0].type->getName(), arguments[1].type->getName(), getName());
 
-    ColumnPtr values_array = ColumnArray::create(values_data.getPtr(), nested_column.getOffsetsPtr());
+    ColumnPtr values_array_nested = values_data.getPtr();
+    DataTypePtr result_value_type = map_type->getValueType();
+
+    // TODO(shiyuze): Map can be nested in Map but cannot wrapped in Nullable
+    if (is_mysql_dialect && result_type->isNullable())
+    {
+        /// In MYSQL dialect type, non-exists indices will return Null, so we need to wrap
+        /// new arguments in nullable
+        values_array_nested = makeNullable(values_array_nested);
+        result_value_type = makeNullable(result_value_type);
+    }
+
+    ColumnPtr values_array = ColumnArray::create(values_array_nested, nested_column.getOffsetsPtr());
     if (col_const_map)
         values_array = ColumnConst::create(values_array, input_rows_count);
 
@@ -1004,7 +1017,7 @@ ColumnPtr FunctionArrayElement::executeMap(
     {
         {
             values_array,
-            std::make_shared<DataTypeArray>(result_type),
+            std::make_shared<DataTypeArray>(result_value_type),
             ""
         },
         {
@@ -1014,14 +1027,22 @@ ColumnPtr FunctionArrayElement::executeMap(
         }
     };
 
+    /// In MYSQL dialect type, we also need to set is_mysql to false to get Null result of all non-exists
+    /// indices. Indices returned by matchKeyToIndexXXX using 0 for mismatched, after we set is_mysql to false
+    /// and wrap array nested column in nullable, so all the indices with value 0 will return default value
+    /// of Nullable (which is Null).
     auto res = executeImpl(new_arguments, result_type, input_rows_count, false);
-    /// executeImpl may have wrapped the result into nullable column due to is_mysql_dialect=true
-    /// for such case, need to take the nested column out and return
-    if (!result_type->isNullable())
+
+    /// If index is nullable, we need to update its null map to result column
+    if (is_mysql_dialect && result_type->isNullable() && index_null_map_col)
     {
-        if (const auto * nullable_res = checkAndGetColumn<ColumnNullable>(res.get()); nullable_res)
-            res = nullable_res->getNestedColumnPtr();
+        UInt8 * res_null_map_data = typeid_cast<ColumnNullable &>(*(res->assumeMutable())).getNullMapData().data();
+        const UInt8 * index_null_map_data = typeid_cast<const ColumnUInt8 &>(*index_null_map_col).getData().data();
+
+        for (size_t i = 0; i < index_null_map_col->size(); i++)
+            res_null_map_data[i] |= index_null_map_data[i];
     }
+
     return res;
 }
 
@@ -1030,28 +1051,33 @@ String FunctionArrayElement::getName() const
     return name;
 }
 
-DataTypePtr FunctionArrayElement::getReturnTypeImpl(const DataTypes & arguments) const
+DataTypePtr FunctionArrayElement::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
 {
-    auto arg0_no_null = arguments[0];
+    NullPresence null_presence = getNullPresense(arguments);
+    if (null_presence.has_null_constant)
+        return makeNullable(std::make_shared<DataTypeNothing>());
+
+    auto arg0_no_null = arguments[0].type;
     if (is_mysql_dialect)
-        arg0_no_null = removeNullable(arguments[0]);
+        arg0_no_null = removeNullable(arguments[0].type);
 
     if (const auto * map_type = checkAndGetDataType<DataTypeMap>(arg0_no_null.get()))
-        return is_mysql_dialect && arguments[0]->isNullable() ? makeNullable(map_type->getValueType()) : map_type->getValueType();
+        return is_mysql_dialect ? makeNullable(map_type->getValueType()) : map_type->getValueType();
 
     const auto * array_type = checkAndGetDataType<DataTypeArray>(arg0_no_null.get());
     if (!array_type)
     {
         throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
             "First argument for function '{}' must be array, got '{}' instead",
-            getName(), arguments[0]->getName());
+            getName(), arguments[0].type->getName());
     }
 
-    if (!(isInteger(arguments[1]) || (is_mysql_dialect && (isInteger(removeNullable(arguments[1])) || arguments[1]->onlyNull()))))
+    auto arg1_type = arguments[1].type;
+    if (!(isInteger(arg1_type) || (is_mysql_dialect && (isInteger(removeNullable(arg1_type)) || arg1_type->onlyNull()))))
     {
         throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
             "Second argument for function '{}' must be integer, got '{}' instead",
-            getName(), arguments[1]->getName());
+            getName(), arg1_type->getName());
     }
 
     auto ret_type = array_type->getNestedType();
@@ -1107,14 +1133,9 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
 
     if (col_map || col_const_map)
     {
-        auto res = executeMap(tmp_args, tmp_result_type, input_rows_count);
-        /// wrap the result into nullable column only if the map column itself is nullalbe.
-        /// if the index is NULL or out of bound, return the default value instead of NULL;
-        /// to get NULL results, use mapElement()
-        if (is_mysql && arguments[0].type->isNullable())
-            return wrapInNullable(res, arguments, result_type, input_rows_count);
-        else
-            return res;
+        /// In MYSQL dialect, arrayElement will always return Nullable(ValueType) is args0 is Map,
+        /// so we need to use result_type here.
+        return executeMap(tmp_args, result_type, input_rows_count, index_null_map_col);
     }
 
     /// Check nullability.
@@ -1124,7 +1145,9 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
 
     col_array = checkAndGetColumn<ColumnArray>(tmp_args[0].column.get());
     if (col_array)
+    {
         is_array_of_nullable = isColumnNullable(col_array->getData());
+    }
     else
     {
         col_const_array = checkAndGetColumnConstData<ColumnArray>(tmp_args[0].column.get());

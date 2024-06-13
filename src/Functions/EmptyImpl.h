@@ -55,6 +55,11 @@ struct EmptyImpl
         }
     }
 
+    static void map(const ColumnString::Offsets & offsets, PaddedPODArray<UInt8> & res, bool /*is_mysql*/)
+    {
+        array(offsets, res);
+    }
+
     static void uuid(const ColumnUUID::Container & container, size_t n, PaddedPODArray<UInt8> & res)
     {
         for (size_t i = 0; i < n; ++i)
