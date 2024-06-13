@@ -184,9 +184,9 @@ String formatTenantEntityName(const String & name)
     return formatTenantUserNameImpl(name, '.');
 }
 
-bool isTenantMatchedEntityName(const String & tenant_entity_name)
+bool isTenantMatchedEntityName(const String & tenant_entity_name, const String & tenant_id_arg)
 {
-    auto tenant_id = getCurrentTenantId();
+    const String & tenant_id = tenant_id_arg.empty() ? getCurrentTenantId() : tenant_id_arg;
     if (!tenant_id.empty())
     {
         auto size = tenant_id.size();
@@ -198,9 +198,9 @@ bool isTenantMatchedEntityName(const String & tenant_entity_name)
     return true;
 }
 
-String getOriginalEntityName(const String & tenant_entity_name)
+String getOriginalEntityName(const String & tenant_entity_name, const String & tenant_id_arg)
 {
-    auto tenant_id = getCurrentTenantId();
+    const String & tenant_id = tenant_id_arg.empty() ? getCurrentTenantId() : tenant_id_arg;
     if (!tenant_id.empty()) {
         auto size = tenant_id.size();
         if (tenant_entity_name.size() > size + 1 && tenant_entity_name[size] == '.'
