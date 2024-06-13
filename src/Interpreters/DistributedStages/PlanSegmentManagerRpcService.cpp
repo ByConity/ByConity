@@ -216,7 +216,9 @@ void PlanSegmentManagerRpcService::executeQuery(
                     int exception_code = getCurrentExceptionCode();
                     auto exception_message = getCurrentExceptionMessage(false);
 
-                    reportFailurePlanSegmentStatus(query_context, execution_info.execution_address, exception_code, exception_message);
+                    auto result = convertFailurePlanSegmentStatusToResult(
+                        query_context, execution_info.execution_address, exception_code, exception_message);
+                    reportExecutionResult(result);
                 }
             }
         });
@@ -672,7 +674,9 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     int exception_code = getCurrentExceptionCode();
                     auto exception_message = getCurrentExceptionMessage(false);
 
-                    reportFailurePlanSegmentStatus(query_context, execution_info.execution_address, exception_code, exception_message);
+                    auto result = convertFailurePlanSegmentStatusToResult(
+                        query_context, execution_info.execution_address, exception_code, exception_message);
+                    reportExecutionResult(result);
                 }
             }
         });

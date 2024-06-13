@@ -24,14 +24,16 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Interpreters/DistributedStages/PlanSegmentReport.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
-#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Protos/plan_segment_manager.pb.h>
@@ -68,16 +70,26 @@ void executePlanSegmentInternal(PlanSegmentInstancePtr plan_segment_instance, Co
     if (context->getSettingsRef().debug_plan_generation)
         return;
 
-    auto executor = std::make_shared<PlanSegmentExecutor>(std::move(plan_segment_instance), std::move(context));
-
     if (async)
     {
-        ThreadFromGlobalPool async_thread([executor = std::move(executor)]() { executor->execute(); });
+        ThreadFromGlobalPool async_thread(
+            [executor = std::make_shared<PlanSegmentExecutor>(std::move(plan_segment_instance), std::move(context))]() mutable {
+                auto result = executor->execute();
+                executor.reset(); /// release executor
+                if (result)
+                    reportExecutionResult(*result);
+            });
         async_thread.detach();
         return;
     }
-
-    executor->execute();
+    else
+    {
+        auto executor = std::make_shared<PlanSegmentExecutor>(std::move(plan_segment_instance), std::move(context));
+        auto result = executor->execute();
+        executor.reset(); /// release executor
+        if (result)
+            reportExecutionResult(*result);
+    }
 }
 
 static void OnSendPlanSegmentCallback(
