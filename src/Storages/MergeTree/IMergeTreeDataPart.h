@@ -264,6 +264,8 @@ public:
 
     size_t rows_count = 0;
 
+    /// How many rows in the part are marked as existing after DELETE mutation.
+    std::optional<size_t> row_exists_count = std::nullopt;
 
     time_t modification_time = 0;
     /// When the part is removed from the working set. Changes once.

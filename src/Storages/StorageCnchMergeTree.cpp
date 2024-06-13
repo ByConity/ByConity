@@ -1231,7 +1231,7 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
         }
         else
         {
-            parts = getAllParts(local_context);
+            parts = getAllPartsWithDBM(local_context).first;
         }
     }
 
@@ -1305,31 +1305,29 @@ CheckResults StorageCnchMergeTree::autoRemoveData(const ASTPtr & query, ContextP
     return error_results;
 }
 
-ServerDataPartsVector StorageCnchMergeTree::getAllParts(ContextPtr local_context) const
+ServerDataPartsWithDBM StorageCnchMergeTree::getAllPartsWithDBM(ContextPtr local_context) const
 {
-    // TEST_START(testlog);
-    ServerDataPartsVector all_parts;
+    ServerDataPartsWithDBM res;
     if (local_context->getCnchCatalog())
     {
         TransactionCnchPtr cur_txn = local_context->getCurrentTransaction();
         if (cur_txn->isSecondary())
         {
             /// Get all parts in the partition list
-            LOG_DEBUG(log, "Current transaction is secondary transaction, result may include uncommited data");
-            all_parts = local_context->getCnchCatalog()->getAllServerDataParts(shared_from_this(), {0}, local_context.get());
+            LOG_DEBUG(log, "Current transaction is secondary transaction, result may include uncommitted data");
+            res = local_context->getCnchCatalog()->getAllServerDataPartsWithDBM(shared_from_this(), {0}, local_context.get());
             /// Fillter by commited parts and parts written by same explicit transaction
-            all_parts = filterPartsInExplicitTransaction(all_parts, local_context);
+            res.first = filterPartsInExplicitTransaction(res.first, local_context);
         }
         else
         {
-            all_parts = local_context->getCnchCatalog()->getAllServerDataParts(
+            res = local_context->getCnchCatalog()->getAllServerDataPartsWithDBM(
                 shared_from_this(), cur_txn->getTransactionID(), local_context.get());
         }
-        return CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
+        res.first = CnchPartsHelper::calcVisibleParts(res.first, false, CnchPartsHelper::getLoggingOption(*local_context));
     }
-    // TEST_END(testlog, "Get all parts from Catalog Service");
-    LOG_INFO(log, "Number of parts get from catalog: {}", all_parts.size());
-    return {};
+    LOG_INFO(log, "Number of parts get from catalog: {}", res.first.size());
+    return res;
 }
 
 ServerDataPartsWithDBM StorageCnchMergeTree::getAllPartsInPartitionsWithDBM(
@@ -3387,83 +3385,75 @@ String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
     return getCreateQueryForCloudTable(getCreateTableSql(), worker_table_name);
 }
 
-std::optional<UInt64> StorageCnchMergeTree::totalRows([[maybe_unused]] const ContextPtr & query_context) const
+std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_context) const
 {
-    /// TODO: (zuochuang.zema) How to get the info of _row_exists on server?
-    return std::nullopt;
+    auto parts_with_dbm = getAllPartsWithDBM(query_context);
+    if (parts_with_dbm.first.empty())
+        return 0;
+    const auto & metadata_snapshot = getInMemoryMetadataPtr();
+    if (metadata_snapshot->hasUniqueKey())
+        getDeleteBitmapMetaForServerParts(parts_with_dbm.first, parts_with_dbm.second);
+    size_t rows = 0;
+    for (const auto & part : parts_with_dbm.first)
+        rows += part->rowsCount() - part->deletedRowsCount(*this);
 
-    // auto parts = getAllParts(query_context);
-    // if (parts.empty())
-    //     return 0;
-    // const auto & metadata_snapshot = getInMemoryMetadataPtr();
-    // if (metadata_snapshot->hasUniqueKey())
-    //     getDeleteBitmapMetaForServerParts(parts, query_context);
-    // size_t rows = 0;
-    // for (const auto & part : parts)
-    // {
-    //     if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
-    //         rows += part->rowsCount() - delete_bitmap->cardinality();
-    //     else
-    //         rows += part->rowsCount();
-    // }
-    // return rows;
+    LOG_TRACE(log, "Shortcut: calculate total_rows from metadata {}", rows);
+    return rows;
 }
 
-std::optional<UInt64>
-StorageCnchMergeTree::totalRowsByPartitionPredicate([[maybe_unused]] const SelectQueryInfo & query_info, [[maybe_unused]] ContextPtr local_context) const
+std::optional<UInt64> StorageCnchMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr local_context) const
 {
-    /// TODO: (zuochuang.zema) How to get the info of _row_exists on server?
-    return std::nullopt;
+    /// Similar to selectPartsToRead, but will return {} if the predicate is not a partition predicate or _part
+    auto column_names_to_return = query_info.syntax_analyzer_result->requiredSourceColumns();
+    auto parts_with_dbm = getAllPartsInPartitionsWithDBM(column_names_to_return, local_context, query_info);
+    auto & parts = parts_with_dbm.first;
+    if (parts.empty())
+        return 0;
+    const auto & metadata_snapshot = getInMemoryMetadataPtr();
+    if (metadata_snapshot->hasUniqueKey())
+        getDeleteBitmapMetaForServerParts(parts, parts_with_dbm.second);
 
-    // /// Similar to selectPartsToRead, but will return {} if the predicate is not a partition predicate or _part
-    // auto column_names_to_return = query_info.syntax_analyzer_result->requiredSourceColumns();
-    // auto parts = getAllPartsInPartitions(column_names_to_return, local_context, query_info);
-    // if (parts.empty())
-    //     return 0;
-    // const auto & metadata_snapshot = getInMemoryMetadataPtr();
-    // if (metadata_snapshot->hasUniqueKey())
-    //     getDeleteBitmapMetaForServerParts(parts, local_context);
+    bool partition_column_valid = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) {
+        return name == "_partition_id" || name == "_partition_value";
+    });
 
-    // bool partition_column_valid = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) {
-    //     return name == "_partition_id" || name == "_partition_value";
-    // });
+    if (partition_column_valid)
+    {
+        auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
+        Block partition_block = getBlockWithVirtualPartitionColumns(partition_list);
+        ASTPtr expression_ast;
 
-    // if (partition_column_valid)
-    // {
-    //     auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
-    //     Block partition_block = getBlockWithVirtualPartitionColumns(partition_list);
-    //     ASTPtr expression_ast;
+        /// Generate valid expressions for filtering
+        partition_column_valid = partition_column_valid
+            && VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, partition_block, expression_ast);
+    }
 
-    //     /// Generate valid expressions for filtering
-    //     partition_column_valid = partition_column_valid
-    //         && VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, partition_block, expression_ast);
-    // }
+    PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
 
-    // PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
+    if (!partition_column_valid && partition_pruner.isUseless())
+        return {};
 
-    // if (!partition_column_valid && partition_pruner.isUseless())
-    //     return {};
+    Block virtual_columns_block = getBlockWithPartAndBucketColumn(parts);
+    bool part_column_queried
+        = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) { return name == "_part"; });
+    if (part_column_queried)
+        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context);
+    auto part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
+    if (part_values.empty())
+        return 0;
 
-    // Block virtual_columns_block = getBlockWithPartColumn(parts);
-    // bool part_column_queried
-    //     = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) { return name == "_part"; });
-    // if (part_column_queried)
-    //     VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context);
-    // auto part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
-    // if (part_values.empty())
-    //     return 0;
+    size_t rows = 0;
+    for (const auto & part : parts)
+    {
+        if ((part_values.empty() || part_values.find(part->name()) != part_values.end())
+            && !partition_pruner.canBePruned(*part))
+        {
+            rows += part->rowsCount() - part->deletedRowsCount(*this);
+        }
+    }
 
-    // size_t rows = 0;
-    // for (const auto & part : parts)
-    //     if (!part->isPartial() && (part_values.empty() || part_values.find(part->name()) != part_values.end())
-    //         && !partition_pruner.canBePruned(*part))
-    //     {
-    //         if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
-    //             rows += part->rowsCount() - delete_bitmap->cardinality();
-    //         else
-    //             rows += part->rowsCount();
-    //     }
-    // return rows;
+    LOG_TRACE(log, "Shortcut: calculate [partition] total_rows from metadata {}", rows);
+    return rows;
 }
 
 void StorageCnchMergeTree::checkMutationIsPossible(const MutationCommands & commands, const Settings & /*settings*/) const
@@ -3490,13 +3480,16 @@ void StorageCnchMergeTree::checkMutationIsPossible(const MutationCommands & comm
 
         if (command.type == MutationCommand::DELETE || command.type == MutationCommand::FAST_DELETE)
         {
+            if (getInMemoryMetadataPtr()->hasUniqueKey() && !getSettings()->enable_delete_mutation_on_unique_table)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "`ALTER TABLE DELETE` is disabled for unique table. To delete data from unique table, please use `DELETE FROM` or set table setting `enable_delete_mutation_on_unique_table` before running `ALTER TABLE DELETE`.");
+
             if (contains_delete)
-                throw Exception("It's not allowed to execute multiple DELETE|FASTDELETE commands", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute multiple DELETE|FASTDELETE commands");
             contains_delete = true;
         }
         else if (contains_delete)
         {
-            throw Exception("It's not allowed to execute DELETE|FASTDELETE with other commands", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute DELETE|FASTDELETE with other commands");
         }
     }
 }

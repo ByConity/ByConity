@@ -12,8 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <memory>
+#include <optional>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Disks/DiskHelpers.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
@@ -144,6 +144,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
 
     part->bytes_on_disk = part_model.size();
     part->rows_count = part_model.rows_count();
+    part->row_exists_count = part_model.has_row_exists_count() ? part_model.row_exists_count() : part_model.rows_count();
     if (!part_model.has_marks_count())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cnch parts must have mark count");
     if (!part->isPartial() || !part->isEmpty())
@@ -251,6 +252,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
 
     part_model.set_size(part.bytes_on_disk);
     part_model.set_rows_count(part.rows_count);
+    part_model.set_row_exists_count(part.row_exists_count.has_value() ? part.row_exists_count.value() : part.rows_count);
     ///TODO: if we need marks_count in ce?
     if (part.index_granularity_info.is_adaptive)
     {

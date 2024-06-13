@@ -216,8 +216,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     /// For the delete bitmap, it's always be dumped to the default disk
     std::vector<DiskPtr> part_disks;
     part_disks.reserve(temp_parts.size() + temp_staged_parts.size());
-
-    for (auto & part : temp_parts)
+    for (const auto & part : temp_parts)
     {
         String part_name = part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();

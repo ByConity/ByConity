@@ -223,7 +223,8 @@ public:
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
     // get all Visible Parts
-    ServerDataPartsVector getAllParts(ContextPtr local_context) const;
+    ServerDataPartsWithDBM getAllPartsWithDBM(ContextPtr local_context) const;
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,
