@@ -51,6 +51,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTSetSensitiveQuery.h>
 #include <Parsers/ASTSetRoleQuery.h>
 #include <Parsers/ASTShowAccessEntitiesQuery.h>
 #include <Parsers/ASTShowAccessQuery.h>
@@ -118,6 +119,7 @@
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSetQuery.h>
+#include <Interpreters/InterpreterSetSensitiveQuery.h>
 #include <Interpreters/InterpreterSetRoleQuery.h>
 #include <Interpreters/InterpreterShowAccessEntitiesQuery.h>
 #include <Interpreters/InterpreterShowAccessQuery.h>
@@ -291,6 +293,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         /// readonly is checked inside InterpreterSetQuery
         return std::make_unique<InterpreterSetQuery>(query, context);
+    }
+    else if (query->as<ASTSetSensitiveQuery>())
+    {
+        return std::make_unique<InterpreterSetSensitiveQuery>(query, context);
     }
     else if (query->as<ASTSetRoleQuery>())
     {

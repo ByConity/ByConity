@@ -165,4 +165,7 @@
             <replace>[hidden]</replace>
         </rule>
     </query_masking_rules>
+
+    <!-- Comma-separated list of tentants which support sensitive permission (due to KV performance issue it shouldn't be enabled for all tenants) -->
+    <sensitive_permission_tenants>1234</sensitive_permission_tenants>
 </yandex>

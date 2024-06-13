@@ -44,6 +44,7 @@
 #include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/ParserRenameQuery.h>
 #include <Parsers/ParserSetQuery.h>
+#include <Parsers/ParserSetSensitiveQuery.h>
 #include <Parsers/ParserSetRoleQuery.h>
 #include <Parsers/ParserSQLBinding.h>
 #include <Parsers/ParserShowWarehousesQuery.h>
@@ -63,6 +64,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserUseQuery use_p;
     ParserSwitchQuery switch_p;
     ParserSetQuery set_p(false);
+    ParserSetSensitiveQuery set_sensitive_p;
     ParserSystemQuery system_p(dt);
     ParserAdviseQuery advise_p(dt);
     ParserCreateUserQuery create_user_p;
@@ -91,7 +93,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserAlterAnalyticalMySQLQuery alter_mysql_p(dt);
 
     bool res = query_with_output_p.parse(pos, node, expected) || insert_p.parse(pos, node, expected) || use_p.parse(pos, node, expected)
-        || switch_p.parse(pos, node, expected) || set_role_p.parse(pos, node, expected) || set_p.parse(pos, node, expected)
+        || switch_p.parse(pos, node, expected) || set_role_p.parse(pos, node, expected) || set_p.parse(pos, node, expected) || set_sensitive_p.parse(pos, node, expected)
         || advise_p.parse(pos, node, expected) || system_p.parse(pos, node, expected) || create_user_p.parse(pos, node, expected)
         || create_role_p.parse(pos, node, expected) || create_quota_p.parse(pos, node, expected)
         || create_row_policy_p.parse(pos, node, expected) || create_settings_profile_p.parse(pos, node, expected)

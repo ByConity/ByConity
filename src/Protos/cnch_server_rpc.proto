@@ -634,6 +634,7 @@ service CnchServerService {
 
   rpc notifyAccessEntityChange(notifyAccessEntityChangeReq)
       returns(notifyAccessEntityChangeResp);
+
   rpc getLastModificationTimeHints(getLastModificationTimeHintsReq)
       returns(getLastModificationTimeHintsResp);
   rpc notifyTableCreated(notifyTableCreatedReq) returns(notifyTableCreatedResp);
