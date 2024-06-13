@@ -195,7 +195,9 @@
     M(SelectedMarks, "Number of marks (index granules) selected to read from a MergeTree table.") \
     M(SelectedRows, "Number of rows SELECTed from all tables.") \
     M(SelectedBytes, "Number of bytes (uncompressed; for columns as they stored in memory) SELECTed from all tables.") \
-    \
+    M(PrewhereSelectedMarks, "Number of marks (index granules) selected to read from a MergeTree table after apply prewhere conditions, must <= SelectedMarks.") \
+    M(PrewhereSelectedRows, "Number of rows selected after apply prewhere conditions, must be <= SelectedRows") \
+\
     M(Manipulation, "Number of manipulations.") \
     M(ManipulationSuccess, "Number of success manipulations.") \
 \
@@ -1064,9 +1066,6 @@
     M(GetMvBaseTableVersionFailed, "") \
     M(UpdateMvMetaIDSuccess, "") \
     M(UpdateMvMetaIDFailed, "") \
-\
-    M(AfterPrewhereNumRows, "Number of rows after filtered by prewhere") \
-\
     M(PlanSegmentInstanceRetry, "How many times this plan segment has been retried, only valid under bsp mode")
 
 namespace ProfileEvents
