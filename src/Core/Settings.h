@@ -1767,8 +1767,6 @@ enum PreloadLevelSettings : UInt64
     M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0)\
     M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0)\
     \
-    /** gateway simplication settings*/ \
-    M(Bool, block_privileged_operations, 0, "Whether to disable tenant to access specific functions or not", 0)\
     /** Sample setttings */ \
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \

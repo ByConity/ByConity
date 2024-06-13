@@ -305,5 +305,7 @@ udf_processor:
   timeout_ms: 10000
   max_retry: 1
 cnch_config: "/config/cnch-config.yml"
+restrict_tenanted_users_to_whitelist_settings: false
+restrict_tenanted_users_to_privileged_operations: false
 additional_services:
   FullTextSearch: true
