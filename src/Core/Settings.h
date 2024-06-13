@@ -288,6 +288,7 @@ enum PreloadLevelSettings : UInt64
       0, \
       "Which replica to preferably send a query when FIRST_OR_RANDOM load balancing strategy is used.", \
       0) \
+      M(UInt64, load_balancing_offset, 0, "Offset for load balancing priority calc.", 0) \
 \
     M(TotalsMode, \
       totals_mode, \
