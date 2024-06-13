@@ -188,7 +188,7 @@ static ColumnPtr combineFilterEqualSize(ColumnPtr first, ColumnPtr second)
 
     if (first_const_descr.always_true)
         return second;
-    
+
     if (first_const_descr.always_false)
         return first;
 
