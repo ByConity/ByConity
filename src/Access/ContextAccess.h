@@ -38,6 +38,7 @@ struct ContextAccessParams
     bool allow_ddl = false;
     bool allow_introspection = false;
     bool has_tenant_id_in_username = false;
+    bool enable_sensitive_permission = false;
     String current_database;
     ClientInfo::Interface interface = ClientInfo::Interface::TCP;
     ClientInfo::HTTPMethod http_method = ClientInfo::HTTPMethod::UNKNOWN;
@@ -92,6 +93,7 @@ public:
     /// Returns the current access rights.
     std::shared_ptr<const AccessRights> getAccessRights() const;
     std::shared_ptr<const AccessRights> getAccessRightsWithImplicit() const;
+    std::shared_ptr<const SensitiveAccessRights> getSensitiveAccessRights() const;
 
     /// Checks if a specified access is granted, and throws an exception if not.
     /// Empty database means the current database.
@@ -112,6 +114,14 @@ public:
     void checkGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) const;
     void checkGrantOption(const AccessRightsElement & element) const;
     void checkGrantOption(const AccessRightsElements & elements) const;
+
+    bool isSensitiveImpl(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
+    bool isSensitive(std::unordered_set<std::string_view> & cols) const;
+    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database) const;
+    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table) const;
+    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::string_view & column) const;
+    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
+    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const Strings & columns) const;
 
     /// Checks if a specified access is granted, and returns false if not.
     /// Empty database means the current database.
@@ -205,6 +215,9 @@ private:
     template <bool throw_if_denied, typename Container, typename GetNameFunction>
     bool checkAdminOptionImplHelper(const Container & role_ids, const GetNameFunction & get_name_function) const;
 
+    template <typename... Args>
+    bool checkSensitivePermissions(std::unordered_set<std::string_view> & cols, const Args &... args) const;
+
     const AccessControlManager * manager = nullptr;
     const Params params;
     bool is_full_access = false;
@@ -217,6 +230,7 @@ private:
     mutable std::shared_ptr<const EnabledRolesInfo> roles_info;
     mutable std::shared_ptr<const AccessRights> access;
     mutable std::shared_ptr<const AccessRights> access_with_implicit;
+    mutable std::shared_ptr<const SensitiveAccessRights> sensitive_access;
     mutable std::shared_ptr<const EnabledRowPolicies> enabled_row_policies;
     mutable std::shared_ptr<const EnabledQuota> enabled_quota;
     mutable std::shared_ptr<const EnabledSettings> enabled_settings;

@@ -114,6 +114,7 @@ class ReadBuffer;
     M(ASTSelectQuery) \
     M(ASTSelectWithUnionQuery) \
     M(ASTSetQuery) \
+    M(ASTSetSensitiveQuery) \
     M(ASTSetRoleQuery) \
     M(ASTSettingsProfileElement) \
     M(ASTSettingsProfileElements) \

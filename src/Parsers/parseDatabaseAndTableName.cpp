@@ -126,6 +126,7 @@ bool parseDatabase(IParser::Pos & pos, Expected & expected, String & database_st
     if (!identifier_parser.parse(pos, database, expected))
         return false;
 
+    tryRewriteCnchDatabaseName(database, pos.getContext());
     tryGetIdentifierNameInto(database, database_str);
     return true;
 }

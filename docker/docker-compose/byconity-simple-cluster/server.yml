@@ -313,3 +313,4 @@ custom_settings_prefixes: SQL_
 cnch_config: "/config/cnch-config.yml"
 restrict_tenanted_users_to_whitelist_settings: false
 restrict_tenanted_users_to_privileged_operations: false
+sensitive_permission_tenants: 1234
