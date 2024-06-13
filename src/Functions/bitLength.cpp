@@ -39,6 +39,11 @@ struct BitLengthImpl
             res[i] = (offsets[i] - offsets[i - 1]) * 8;
     }
 
+    static void map(const ColumnString::Offsets & offsets, PaddedPODArray<UInt64> & res, bool /*is_mysql*/)
+    {
+        array(offsets, res);
+    }
+
     [[noreturn]] static void uuid(const ColumnUUID::Container &, size_t &, PaddedPODArray<UInt64> &)
     {
         throw Exception("Cannot apply function bit_length to UUID argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
