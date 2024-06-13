@@ -191,6 +191,7 @@ namespace ErrorCodes
 {
     extern const int INTO_OUTFILE_NOT_ALLOWED;
     extern const int QUERY_WAS_CANCELLED;
+    extern const int QUERY_WAS_CANCELLED_INTERNAL;
     extern const int CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
     extern const int CNCH_QUEUE_QUERY_FAILURE;
     extern const int UNKNOWN_EXCEPTION;
@@ -1201,6 +1202,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         ErrorCodes::SOCKET_TIMEOUT, 
                         ErrorCodes::TOO_MANY_PARTS,
                         ErrorCodes::QUERY_WAS_CANCELLED,
+                        ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL,
                         ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION,
                         ErrorCodes::TOO_MANY_PLAN_SEGMENTS,
                         ErrorCodes::QUERY_CPU_TIMEOUT_EXCEEDED,
@@ -1306,7 +1308,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             if ((*process_list_entry)->isKilled())
                 throw Exception(
                     "Query '" + (*process_list_entry)->getInfo().client_info.current_query_id + "' is killed in pending state",
-                    ErrorCodes::QUERY_WAS_CANCELLED);
+                    (*process_list_entry)->isInternalKill() ? ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL : ErrorCodes::QUERY_WAS_CANCELLED);
             else if (!use_processors)
                 (*process_list_entry)->setQueryStreams(res);
         }
