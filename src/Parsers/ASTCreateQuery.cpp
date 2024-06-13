@@ -298,6 +298,8 @@ ASTPtr ASTCreateQuery::clone() const
         res->set(res->storage, storage->clone());
     if (select)
         res->set(res->select, select->clone());
+    if (refresh_strategy)
+        res->set(res->refresh_strategy, refresh_strategy->clone());
     if (tables)
         res->set(res->tables, tables->clone());
     if (table_overrides)
