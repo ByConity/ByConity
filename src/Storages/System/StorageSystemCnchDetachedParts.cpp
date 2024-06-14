@@ -1,6 +1,7 @@
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeUUID.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/System/StorageSystemCnchDetachedParts.h>
 #include <Storages/MergeTree/CnchAttachProcessor.h>
@@ -17,7 +18,7 @@ NamesAndTypesList StorageSystemCnchDetachedParts::getNamesAndTypes()
         {"table", std::make_shared<DataTypeString>()},
         {"partition_id", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>())},
         {"name", std::make_shared<DataTypeString>()},
-        {"part_id", std::make_shared<DataTypeString>()},
+        {"part_id", std::make_shared<DataTypeUUID>()},
         {"disk", std::make_shared<DataTypeString>()},
         {"min_block_number", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>())},
         {"max_block_number", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>())},
