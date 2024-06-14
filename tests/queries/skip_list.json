@@ -70,7 +70,8 @@
         "hyperscan",
         "01193_metadata_loading",
         "01473_event_time_microseconds",
-        "01396_inactive_replica_cleanup_nodes"
+        "01396_inactive_replica_cleanup_nodes",
+	"60000_rbac_sensitive"
     ],
     "unbundled-build": [
         "00429",
@@ -99,7 +100,8 @@
         "01676_clickhouse_client_autocomplete",
         "01193_metadata_loading",
         "01455_time_zones",
-        "01755_client_highlight_multi_line_comment_regression"
+        "01755_client_highlight_multi_line_comment_regression",
+	"60000_rbac_sensitive"
     ],
     "release-build": [
        "01801_s3_cluster",
@@ -145,9 +147,13 @@
         "10033_zookeeper_test_uniquekey_partition_level_unique",
         "08000_test_multi_join_distributed_stages",
         "08000_test_in_distributed_stages",
-        "08000_test_join_distributed_stages"
+        "08000_test_join_distributed_stages",
+
+	//Rbac sensitive permission
+        "60000_rbac_sensitive"
     ],
     "database-ordinary": [
+	"60000_rbac_sensitive",
         "00604_show_create_database",
         "00609_mv_index_in_in",
         "00510_materizlized_view_and_deduplication_zookeeper",
