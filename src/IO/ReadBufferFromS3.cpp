@@ -422,7 +422,7 @@ size_t ReadBufferFromS3::readBigAt(char * to, size_t n, size_t range_begin, cons
 
         try
         {
-            result = sendRequest(range_begin, range_begin + n - 1);
+            result = sendRequest(range_begin, range_begin + n);
             std::istream & istr = result->GetBody();
 
             size_t bytes = copyFromIStreamWithProgressCallback(istr, to, n, progress_callback);
