@@ -5,7 +5,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . $CURDIR/../shell_config.sh
 
-set -e
+set -xe
 
 $CLICKHOUSE_CLIENT --query "DROP USER IF EXISTS my_user;"
 $CLICKHOUSE_CLIENT --query "DROP DATABASE IF EXISTS db;"
@@ -22,6 +22,7 @@ $CLICKHOUSE_CLIENT --query "SET SENSITIVE COLUMN db.tb(id) = 0;"
 $CLICKHOUSE_CLIENT --query "SET SENSITIVE COLUMN db.tb(a) = 0;"
 $CLICKHOUSE_CLIENT --query "SET SENSITIVE COLUMN db.tb(b) = 0;"
 
+NEW_USER=${NEW_USER:="my_user"}
 [ -v TENANT_ID ] && NEW_USER="${TENANT_ID}\`my_user"
 $CLICKHOUSE_CLIENT --query "SET SENSITIVE DATABASE db = 1;"
 $CLICKHOUSE_CLIENT --query "GRANT DROP DATABASE ON *.* TO my_user"
