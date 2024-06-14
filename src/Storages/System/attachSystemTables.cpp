@@ -147,6 +147,7 @@
 #include <Storages/System/StorageSystemWorkers.h>
 #include <Storages/System/StorageSystemIOSchedulers.h>
 #include <Storages/System/StorageSystemIOWorkers.h>
+#include <Storages/System/StorageSystemCnchDetachedParts.h>
 #if USE_HIVE
 #include <Storages/System/StorageSystemExternalCatalogs.h>
 #include <Storages/System/StorageSystemExternalDatabases.h>
@@ -289,6 +290,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchDedupWorkers>(system_database, "cnch_dedup_workers");
     attach<StorageSystemCnchAsyncQueries>(system_database, "cnch_async_queries");
     attach<StorageSystemCnchTrashItems>(system_database, "cnch_trash_items");
+    attach<StorageSystemCnchDetachedParts>(system_database, "cnch_detached_parts");
 #if USE_HIVE
     attach<StorageSystemExternalCatalogs>(system_database, "external_catalogs");
     attach<StorageSystemExternalDatabases>(system_database, "external_databases");

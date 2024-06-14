@@ -331,8 +331,6 @@ void CnchAttachProcessor::exec()
 
     AttachContext attach_ctx(*query_ctx, 8,
         query_ctx->getSettingsRef().cnch_part_attach_max_threads, logger);
-
-
     NameSet staged_part_names;
     NameSet partitions_filter;
     std::vector<ASTPtr> attached_partitions;
@@ -402,6 +400,12 @@ void CnchAttachProcessor::exec()
     }
 
     attach_ctx.commit();
+}
+
+std::vector<MutableMergeTreeDataPartsCNCHVector> CnchAttachProcessor::getDetachedParts(const AttachFilter& filter)
+{
+  AttachContext attach_ctx(*query_ctx, 8, query_ctx->getSettingsRef().cnch_part_attach_max_threads, logger);
+    return collectPartsFromTableDetached(target_tbl, filter, attach_ctx);
 }
 
 // Return relative path from 'from' to 'to'
@@ -623,7 +627,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTable
         }
         default:
             throw Exception(
-                fmt::format("Unsupported remote volume type {} when attach", DiskType::toString(remote_disk_type)),
+                fmt::format("Unsupported remote volume type {} when collect parts", DiskType::toString(remote_disk_type)),
                 ErrorCodes::BAD_ARGUMENTS);
     }
 }

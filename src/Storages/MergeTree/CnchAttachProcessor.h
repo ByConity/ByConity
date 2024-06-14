@@ -184,6 +184,9 @@ public:
 
     void exec();
 
+    std::vector<MutableMergeTreeDataPartsCNCHVector> getDetachedParts(const AttachFilter& filter);
+
+
 private:
     using PartsFromSources = std::vector<MutableMergeTreeDataPartsCNCHVector>;
     // Origin part and new parts
