@@ -23,6 +23,7 @@
 #include <Core/Block.h>
 #include <common/logger_useful.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <optional>
 
 namespace DB
 {
@@ -277,6 +278,8 @@ private:
     bool is_initialized = false;
 
     size_t filtered_ratio_to_use_skip_read = 0;
+    /// used by last reader to track how many marks are selected
+    std::optional<size_t> last_selected_mark {std::nullopt};
 };
 
 }

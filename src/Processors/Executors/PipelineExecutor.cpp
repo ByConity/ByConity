@@ -172,7 +172,9 @@ void PipelineExecutor::addJob(ExecutingGraph::Node * execution_state)
                         "",
                         "",
                         query_context->getExchangePort());
-                    reportFailurePlanSegmentStatus(query_context, execution_address, exception_code, exception_message);
+                    auto result
+                        = convertFailurePlanSegmentStatusToResult(query_context, execution_address, exception_code, exception_message);
+                    reportExecutionResult(result);
                 }
             }
 

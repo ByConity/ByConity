@@ -18,6 +18,7 @@ struct User : public IAccessEntity
     Authentication authentication;
     AllowedClientHosts allowed_client_hosts = AllowedClientHosts::AnyHostTag{};
     AccessRights access;
+    SensitiveAccessRights sensitive_access;
     GrantedRoles granted_roles;
     RolesOrUsersSet default_roles = RolesOrUsersSet::AllTag{};
     SettingsProfileElements settings;

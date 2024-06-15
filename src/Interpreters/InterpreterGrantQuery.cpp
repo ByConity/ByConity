@@ -31,9 +31,15 @@ namespace
         if (!query.access_rights_elements.empty())
         {
             if (query.is_revoke)
+            {
                 grantee.access.revoke(query.access_rights_elements);
+                grantee.sensitive_access.revoke(query.access_rights_elements);
+            }
             else
+            {
                 grantee.access.grant(query.access_rights_elements);
+                grantee.sensitive_access.grant(query.access_rights_elements);
+            }
         }
 
         if (!roles_to_grant_or_revoke.empty())

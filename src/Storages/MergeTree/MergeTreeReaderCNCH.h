@@ -87,6 +87,7 @@ private:
     IDiskCachePtr segment_cache;
 
     Poco::Logger * log;
+    String reader_id;
 };
 
 }

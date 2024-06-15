@@ -288,6 +288,7 @@ enum PreloadLevelSettings : UInt64
       0, \
       "Which replica to preferably send a query when FIRST_OR_RANDOM load balancing strategy is used.", \
       0) \
+      M(UInt64, load_balancing_offset, 0, "Offset for load balancing priority calc.", 0) \
 \
     M(TotalsMode, \
       totals_mode, \
@@ -1700,6 +1701,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, only_push_agg_with_functions, false, "Only use eager aggregation with functions", 0) \
     M(Float, agg_push_down_threshold, 40.0, "Which ratio is greater than threshold can be push down", 0) \
     M(String, eager_agg_join_id_blocklist, "", "Which join in blocklist can't be push down through", 0) \
+    M(Bool, enable_sum_if_to_count_if, false, "Whether enable rewrite sumIf to countIf", 0) \
     M(Bool, enable_eliminate_join_by_fk, false, "Whether to enable RBO -- eliminate join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join, false, "Whether to eliminate complicated join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join_without_top_join, false, "Whether to allow eliminate complicated join by fk pull through pass the multi-child node even if no top join", 0) \
@@ -1714,8 +1716,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
-    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
-    M(UInt64, exchange_wait_accept_max_timeout_ms, 10000, "Exchange receiver wait accept max timeout ms",0) \
+    M(UInt64, exchange_timeout_ms, 1000000, "Exchange request timeout ms",0) \
+    M(UInt64, exchange_wait_accept_max_timeout_ms, 20000, "Exchange receiver wait accept max timeout ms",0) \
     M(UInt64, exchange_queue_bytes, 209715200, "Queue size(bytes) for exchange queue, 0 means disable", 0) \
     M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver",0) \
     M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
@@ -1737,7 +1739,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_use_query_memory_tracker, true, "Use query-level memory tracker", 0) \
     M(UInt64, wait_for_post_processing_timeout_ms, 1000, "Timeout for waiting post processing rpc from workers.", 0) \
-    M(UInt64, distributed_query_wait_exception_ms, 1000,"Wait final planSegment exception from segmentScheduler.", 0) \
+    M(UInt64, distributed_query_wait_exception_ms, 2000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
     \
     /** Runtime Filter settings */ \
@@ -1767,8 +1769,6 @@ enum PreloadLevelSettings : UInt64
     M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0)\
     M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0)\
     \
-    /** gateway simplication settings*/ \
-    M(Bool, block_privileged_operations, 0, "Whether to disable tenant to access specific functions or not", 0)\
     /** Sample setttings */ \
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \

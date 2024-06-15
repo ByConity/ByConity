@@ -45,7 +45,7 @@ public:
             throw Exception("Incorrect number of arguments for aggregate function with " + getName() + " suffix",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (!isUInt8(arguments.back()))
+        if (!isUInt8(arguments.back()) && !arguments.back()->onlyNull())
             throw Exception("Illegal type " + arguments.back()->getName() + " of last argument for aggregate function with " + getName() + " suffix",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -72,6 +72,7 @@ class AggregateFunctionIfNullUnary final
 {
 private:
     size_t num_arguments;
+    bool filter_is_only_null = false;
 
     /// The name of the nested function, including combinators (i.e. *If)
     ///
@@ -106,6 +107,8 @@ public:
         if (num_arguments == 0)
             throw Exception("Aggregate function " + getName() + " require at least one argument",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        
+        filter_is_only_null = arguments[num_arguments - 1]->onlyNull();
     }
 
     static inline bool singleFilter(const IColumn ** columns, size_t row_num, size_t num_arguments)
@@ -118,7 +121,10 @@ public:
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
-    {
+    {        
+        if (filter_is_only_null)
+            return;
+
         const ColumnNullable * column = assert_cast<const ColumnNullable *>(columns[0]);
         const IColumn * nested_column = &column->getNestedColumn();
         if (!column->isNullAt(row_num) && singleFilter(columns, row_num, num_arguments))
@@ -129,6 +135,11 @@ public:
     }
 
 #if USE_EMBEDDED_COMPILER
+    
+    bool isCompilable() const override
+    {
+        return canBeNativeType(*this->argument_types.back()) && this->nested_function->isCompilable();
+    }
 
     void compileAdd(llvm::IRBuilderBase & builder, llvm::Value * aggregate_data_ptr, const DataTypes & arguments_types, const std::vector<llvm::Value *> & argument_values) const override
     {
@@ -232,6 +243,11 @@ public:
     }
 
 #if USE_EMBEDDED_COMPILER
+    
+    bool isCompilable() const override
+    {
+        return canBeNativeType(*this->argument_types.back()) && this->nested_function->isCompilable();
+    }
 
     void compileAdd(llvm::IRBuilderBase & builder, llvm::Value * aggregate_data_ptr, const DataTypes & arguments_types, const std::vector<llvm::Value *> & argument_values) const override
     {

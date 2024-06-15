@@ -28,7 +28,8 @@ namespace
     ASTs getGrantQueriesImpl(
         const T & grantee,
         const AccessControlManager * manager /* not used if attach_mode == true */,
-        bool attach_mode = false)
+        bool attach_mode = false,
+        bool sensitive_mode = false)
     {
         ASTs res;
 
@@ -37,7 +38,9 @@ namespace
 
         std::shared_ptr<ASTGrantQuery> current_query = nullptr;
 
-        for (const auto & element : grantee.access.getElements())
+        // NOTE: do this if attach_mode = true only?
+        const auto & access_elements = sensitive_mode ? grantee.sensitive_access.getElements() : grantee.access.getElements();
+        for (const auto & element : access_elements)
         {
             if (element.empty())
                 continue;
@@ -85,12 +88,13 @@ namespace
     ASTs getGrantQueriesImpl(
         const IAccessEntity & entity,
         const AccessControlManager * manager /* not used if attach_mode == true */,
-        bool attach_mode = false)
+        bool attach_mode = false,
+        bool sensitive_mode = false)
     {
         if (const User * user = typeid_cast<const User *>(&entity))
-            return getGrantQueriesImpl(*user, manager, attach_mode);
+            return getGrantQueriesImpl(*user, manager, attach_mode, sensitive_mode);
         if (const Role * role = typeid_cast<const Role *>(&entity))
-            return getGrantQueriesImpl(*role, manager, attach_mode);
+            return getGrantQueriesImpl(*role, manager, attach_mode, sensitive_mode);
         throw Exception(entity.outputTypeAndName() + " is expected to be user or role", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -175,9 +179,9 @@ ASTs InterpreterShowGrantsQuery::getGrantQueries(const IAccessEntity & user_or_r
 }
 
 
-ASTs InterpreterShowGrantsQuery::getAttachGrantQueries(const IAccessEntity & user_or_role)
+ASTs InterpreterShowGrantsQuery::getAttachGrantQueries(const IAccessEntity & user_or_role, bool sensitive_mode)
 {
-    return getGrantQueriesImpl(user_or_role, nullptr, true);
+    return getGrantQueriesImpl(user_or_role, nullptr, true, sensitive_mode);
 }
 
 }

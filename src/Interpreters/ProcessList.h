@@ -188,8 +188,13 @@ protected:
     /// ProcessListEntry should not be destroyed if is_cancelling is true
     /// Flag changes is synced with ProcessListBase::mutex and notified with ProcessList::cancelled_cv
     bool is_cancelling { false };
+
+    /// Highest bit indicates the kill signal is sended by query itself (internal)
+    static constexpr UInt8 INTERNAL_KILL_BIT = 0x80;
+    /// Lowest bit indicates the kill signal is sended by exteranl
+    static constexpr UInt8 EXTERNAL_KILL_BIT = 0x01;
     /// KILL was send to the query
-    std::atomic<bool> is_killed { false };
+    std::atomic<UInt8> is_killed{0};
 
     void setUserProcessList(ProcessListForUser * user_process_list_);
     /// Be careful using it. For example, queries field of ProcessListForUser could be modified concurrently.
@@ -310,9 +315,11 @@ public:
     /// Get query in/out pointers from BlockIO
     bool tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStreamPtr & out) const;
 
-    CancellationCode cancelQuery(bool kill);
+    CancellationCode cancelQuery(bool kill, bool internal);
 
     bool isKilled() const { return is_killed; }
+
+    bool isInternalKill() const { return is_killed & 0x80; }
 
     /// Adds a pipeline to the QueryStatus
     void addPipelineExecutor(PipelineExecutor * e);

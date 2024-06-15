@@ -208,15 +208,37 @@ namespace
         }
         return buf.str();
     }
+
+    class ConcurrentAccessGuard {
+    public:
+        ConcurrentAccessGuard(const UUID &uuid)
+        {
+            {
+                std::scoped_lock lock(map_mtx);
+                current_mtx = &access[uuid];
+            }
+            current_mtx->lock();
+        }
+
+        ~ConcurrentAccessGuard()
+        {
+            current_mtx->unlock();
+        }
+
+    private:
+        static std::unordered_map<UUID, std::mutex> access TSA_GUARDED_BY(map_mtx);
+        static std::mutex map_mtx;
+        std::mutex * current_mtx;
+    };
+
+    std::unordered_map<UUID, std::mutex> ConcurrentAccessGuard::access;
+    std::mutex ConcurrentAccessGuard::map_mtx;
 }
 
-KVAccessStorage::KVAccessStorage(const ContextPtr & context) 
+KVAccessStorage::KVAccessStorage(const ContextPtr & context)
     : IAccessStorage(STORAGE_TYPE)
     , catalog(context->getCnchCatalog())
-    , ttl_ms(context->getSettingsRef().access_entity_ttl.value.totalMilliseconds())
 {
-    // Init all entities from KV
-    clear();
     // Preload entities only on server nodes. Worker nodes loads entities on need only basis (eg. when perfer_cnch_catalog = 1)
     if (context->getServerType() == ServerType::cnch_server)
     {
@@ -225,117 +247,145 @@ KVAccessStorage::KVAccessStorage(const ContextPtr & context)
     }
 }
 
-KVAccessStorage::~KVAccessStorage()
+void KVAccessStorage::dropEntry(const Entry &e) const
 {
-    clear();
-}
+    auto name_shard = getShard(e.name);
+    auto id_shard = getShard(e.id);
+    auto & name_map = entries_by_name_and_type[static_cast<size_t>(e.type)][name_shard];
+    auto & uuid_map = entries_by_id[id_shard];
 
-void KVAccessStorage::clear()
-{
-    bool first = false;
-    do
     {
-        if (!first)
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        first = true;
         std::lock_guard lock{mutex};
-        if (prepared_entities > 0)
-            continue;
-        for (auto & entry_map :entries_by_id)
-            entry_map.clear();
-        for (auto type : collections::range(EntityType::MAX))
-            // collections::range(MAX_CONDITION_TYPE) give us a range of [0, MAX_CONDITION_TYPE) 
-            // coverity[overrun-local]
-            for (auto & entry_name_map: entries_by_name_and_type[static_cast<size_t>(type)])
-                entry_name_map.clear();
-        break;
-    } while(true);
+        name_map.erase(e.name);
+        uuid_map.erase(e.id);
+    }
+
+    Notifications notifications;
+    prepareNotifications(e.id, e, true, notifications);
+    notify(notifications);
 }
 
+bool KVAccessStorage::getEntryByUUID(const UUID &uuid, Entry &entry) const
+{
+    auto id_shard = getShard(uuid);
+    const auto & uuid_map = entries_by_id[id_shard];
 
-UUID KVAccessStorage::addEntry(EntityType type, const AccessEntityModel & entity_model, Notifications & notifications, AccessEntityPtr access_ptr) const
+    std::lock_guard lock{mutex};
+    const auto & it = uuid_map.find(uuid);
+
+    if (it == uuid_map.end())
+        return false;
+
+    entry = it->second;
+    return true;
+}
+
+struct KVAccessStorage::Entry * KVAccessStorage::getEntryReferenceByUUID(const UUID &uuid) const
+{
+    auto id_shard = getShard(uuid);
+    auto & uuid_map = entries_by_id[id_shard];
+
+    auto it = uuid_map.find(uuid);
+
+    if (it == uuid_map.end())
+        return nullptr;
+
+    return &it->second;
+}
+
+bool KVAccessStorage::getEntityModelByNameAndType(const String & name, EntityType type, AccessEntityModel &model) const
+{
+    auto name_shard = getShard(name);
+    const auto & name_map = entries_by_name_and_type[static_cast<size_t>(type)][name_shard];
+
+    std::lock_guard lock{mutex};
+    const auto & it = name_map.find(name);
+
+    if (it == name_map.end())
+        return false;
+
+    model = it->second->entity_model;
+    return true;
+}
+
+bool KVAccessStorage::getEntryByNameAndType(const String &name, EntityType type, Entry &entry) const
+{
+    auto name_shard = getShard(name);
+    const auto & name_map = entries_by_name_and_type[static_cast<size_t>(type)][name_shard];
+
+    std::lock_guard lock{mutex};
+    const auto & it = name_map.find(name);
+
+    if (it == name_map.end())
+        return false;
+
+    entry = *it->second;
+    return true;
+}
+
+UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & entity_model, const AccessEntityPtr & entity) const
+{
+    Notifications notifications;
+    SCOPE_EXIT({ notify(notifications); });
+
+    return updateCache(type, entity_model, notifications, entity);
+}
+
+UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications & notifications, const AccessEntityPtr & entity_) const
 {
     UUID uuid = RPCHelpers::createUUID(entity_model.uuid());
-    auto & entry = entries_by_id[getShard(uuid)][uuid];
-    if (!entry.name.empty())
+    auto id_shard = getShard(uuid);
+    auto & uuid_map = entries_by_id[id_shard];
+
+    std::unique_lock lock{mutex};
+
+    if (uuid_map.contains(uuid))
     {
-        entry.refreshTime();
-        if(entry.commit_time == entity_model.commit_time())
+        /* memory entry matches KV store*/
+        if (uuid_map[uuid].commit_time == entity_model.commit_time())
             return uuid;
-        if (entry.prepare_verison != entry.commit_version)
-        {
-            // We do not deal with concurrent insert/update conflict.
-            throw Exception("Concurrent rbac update: " + entity_model.name(), ErrorCodes::CONCURRENT_RBAC_UPDATE);
-        }
     }
+
+    lock.unlock();
+    auto name_shard = getShard(entity_model.name());
+    auto & name_map = entries_by_name_and_type[static_cast<size_t>(type)][name_shard];
+    const auto & entity = entity_ ? entity_ : convertFromSqlToEntity(entity_model.create_sql());
+
+    lock.lock();
+    auto & entry = uuid_map[uuid];
     entry.type = type;
     entry.name = entity_model.name();
     entry.id = uuid;
     entry.commit_time = entity_model.commit_time();
-    entry.entity = access_ptr ? access_ptr : convertFromSqlToEntity(entity_model.create_sql());
+    entry.entity = entity;
     entry.entity_model = entity_model;
-    auto & entries_by_name_map = entries_by_name_and_type[static_cast<size_t>(type)][getShard(entry.name)];
-    entries_by_name_map[entry.name] = &entry;
-    prepareNotifications(uuid, entry, false, notifications);
+    name_map[entry.name] = &entry;
+
+    auto entry_copy = entry;
+    lock.unlock();
+
+    prepareNotifications(uuid, entry_copy, false, notifications);
     return uuid;
 }
+
 
 // Always get entity from KV to ensure that we have the most updated Entity at all times
 std::optional<UUID> KVAccessStorage::findImpl(EntityType type, const String & name) const
 {
-    Notifications notifications;
-    SCOPE_EXIT({ notify(notifications); });
     auto entity_model = catalog->tryGetAccessEntity(type, name);
-    std::lock_guard lock{mutex};
-    if (entity_model)
-        return addEntry(type, *entity_model, notifications);
-    return {};
-}
 
-
-
-void KVAccessStorage::onAccessEntityChanged(EntityType type, const String & name) const
-{
-    Notifications notifications;
-    SCOPE_EXIT({ notify(notifications); });
-    int retry = 4;
-    std::optional<AccessEntityModel> entity_model;
-    do
+    if (!entity_model)
     {
-        try
-        {
-            entity_model = catalog->tryGetAccessEntity(type, name);
-            AccessEntityPtr access_entity = nullptr;
-            if (entity_model)
-                access_entity = convertFromSqlToEntity(entity_model->create_sql());
-            std::lock_guard lock{mutex};
-            if (entity_model)
-                addEntry(type, *entity_model, notifications, access_entity);
-            else
-            {
-                auto & entries_by_name = entries_by_name_and_type[static_cast<size_t>(type)][getShard(name)];
-                auto it = entries_by_name.find(name);
-                if (it != entries_by_name.end())
-                {
-                    Entry & entry = *(it->second);
-                    if (entry.prepare_verison != entry.commit_version)
-                        return;
-                    prepareNotifications(entry.id, entry, true, notifications);
-                    entries_by_name.erase(it);
-                    entries_by_id[getShard(entry.id)].erase(entry.id);
-                }
-            }
-            break;
-        }
-        catch (...)
-        {
-            //May be an concurrent update is executing; or catalog visiting failure
-            //silently wait for it to finish or recovery
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    } while(retry-- > 0);
-}
+        Entry entry;
 
+        if (getEntryByNameAndType(name, type, entry))
+            dropEntry(entry);
+
+        return std::nullopt;
+    }
+
+    return updateCache(type, *entity_model);
+}
 
 
 std::vector<UUID> KVAccessStorage::findAllImpl(EntityType type) const
@@ -345,30 +395,35 @@ std::vector<UUID> KVAccessStorage::findAllImpl(EntityType type) const
     auto entity_models = catalog->getAllAccessEntities(type);
     std::vector<UUID> res;
     res.reserve(entity_models.size());
-    std::lock_guard lock{mutex};
+
     for (const auto & entity_model : entity_models)
-        res.emplace_back(addEntry(type, entity_model, notifications));
+        res.emplace_back(updateCache(type, entity_model, notifications));
+
     return res;
 }
 
 bool KVAccessStorage::existsImpl(const UUID & id) const
 {
     {
-        auto & entries_map = entries_by_id[getShard(id)];
+        auto id_shard = getShard(id);
+        auto & entries_map = entries_by_id[id_shard];
+
         std::lock_guard lock{mutex};
-        if (entries_map.count(id))
+        if (entries_map.contains(id))
             return true;
     }
     if (catalog->tryGetAccessEntityName((id)))
         return true;
-        
+
     return false;
 }
 
 
 AccessEntityPtr KVAccessStorage::readImpl(const UUID & id, bool throw_if_not_exists) const
 {
-    auto & entries_map = entries_by_id[getShard(id)];
+    auto id_shard = getShard(id);
+    auto & entries_map = entries_by_id[id_shard];
+
     std::lock_guard lock{mutex};
     auto it = entries_map.find(id);
     if (it == entries_map.end())
@@ -392,240 +447,136 @@ bool KVAccessStorage::canInsertImpl(const AccessEntityPtr &) const
 
 UUID KVAccessStorage::insertImpl(const AccessEntityPtr & new_entity, bool replace_if_exists)
 {
-    Notifications notifications;
-    SCOPE_EXIT({ notify(notifications); });
-
-    Int64 current_version = -1;
     const String & name = new_entity->getName();
     EntityType type = new_entity->getType();
     AccessEntityModel old_entity_model;
-    Entry *entry_ptr = nullptr;
-    bool rollback = true;
-    auto & entries_by_name_map = entries_by_name_and_type[static_cast<size_t>(type)][getShard(name)];
+    bool replace;
+    UUID uuid;
+
+    if (getEntityModelByNameAndType(name, type, old_entity_model))
     {
-        std::lock_guard lock{mutex};
-        auto old_it = entries_by_name_map.find(name);
-        if (old_it != entries_by_name_map.end())
+        if (!replace_if_exists)
+            throwNameCollisionCannotInsert(type, name);
+
+        uuid = RPCHelpers::createUUID(old_entity_model.uuid());
+        replace = true;
+    }
+    else
+    {
+        uuid = UUIDHelpers::generateV4();
+        replace = false;
+    }
+
+
+    ConcurrentAccessGuard guard(uuid);
+    if (replace)
+    {
+        if (getEntityModelByNameAndType(name, type, old_entity_model))
         {
             if (!replace_if_exists)
                 throwNameCollisionCannotInsert(type, name);
-            entry_ptr = old_it->second;
-            if (entry_ptr->prepare_verison != entry_ptr->commit_version)
-            {
-                // We do not deal with concurrent creating conflict.
-                throw Exception("Concurrent rbac insert: " + name, ErrorCodes::CONCURRENT_RBAC_UPDATE);
-            }
-            ++entry_ptr->prepare_verison;
-            current_version = entry_ptr->prepare_verison;
-            old_entity_model = entry_ptr->entity_model;
         }
     }
-    ++prepared_entities;
-    SCOPE_EXIT({
-        //We always gurantee this is a valid pointer.
-        if (rollback)
-        {
-            std::lock_guard lock{mutex};
-            --prepared_entities;
-            if (entry_ptr)
-                --entry_ptr->prepare_verison;
-        }
-    });
 
-    UUID id = UUIDHelpers::generateV4();
-    auto & entries_id_map = entries_by_id[getShard(id)];
     AccessEntityModel new_entity_model;
-    RPCHelpers::fillUUID(id, *(new_entity_model.mutable_uuid()));
+    RPCHelpers::fillUUID(uuid, *(new_entity_model.mutable_uuid()));
     new_entity_model.set_name(name);
     new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity));
     catalog->putAccessEntity(type, new_entity_model, old_entity_model, replace_if_exists);
 
-    {
-        std::lock_guard lock{mutex};
-        /// Add entry.
-        auto it = entries_by_name_map.find(name);
-        if (it != entries_by_name_map.end() && !entry_ptr) 
-        {
-            // We do not deal with concurrent creating conflict.
-            // Here the insert maybe sucessful, but we could not easily know the accurate update order.
-            // So we reject to update the local cache here.
-            throw Exception("Concurrent rbac insert: " + name, ErrorCodes::CONCURRENT_RBAC_UPDATE);
-        }
-
-        rollback = false;
-        auto & entry = entries_id_map[id];
-        entry.refreshTime();
-        entry.id = id;
-        entry.type = type;
-        entry.name = name;
-        entry.commit_time = new_entity_model.commit_time();
-        entry.entity = new_entity;
-        entry.entity_model = new_entity_model;
-        entries_by_name_map[entry.name] = &entry;
-        prepareNotifications(id, entry, false, notifications);
-        if (entry_ptr)
-        {
-            ++entry_ptr->commit_version;
-        }
-        --prepared_entities;
-    }
-    return id;
+    updateCache(type, new_entity_model, new_entity);
+    return uuid;
 }
 
-void KVAccessStorage::removeImpl(const UUID & id)
+void KVAccessStorage::removeImpl(const UUID & uuid)
 {
-    Notifications notifications;
-    SCOPE_EXIT({ notify(notifications); });
+    Entry e;
 
-    Int64 current_version = -1;
-    EntityType type;
-    String name;
-    Entry* entry_ptr = nullptr;
-    auto & entries_map = entries_by_id[getShard(id)];
-    bool rollback = true;
-    std::unordered_map<UUID, Entry>::iterator it;
-    {
-        std::lock_guard lock{mutex};
-        it = entries_map.find(id);
-        if (it == entries_map.end())
-            throwNotFound(id);
+    ConcurrentAccessGuard guard(uuid);
+    if (!getEntryByUUID(uuid, e))
+        throwNotFound(uuid);
 
-        Entry & entry = it->second;
-        entry_ptr = &entry;
-        if (entry_ptr->prepare_verison != entry_ptr->commit_version)
-        {
-            // We do not deal with concurrent creating conflict.
-            throw Exception("Concurrent rbac remove: " + name, ErrorCodes::CONCURRENT_RBAC_UPDATE);
-        }
-        type = entry.type;
-        name = entry.name;
-        ++entry_ptr->prepare_verison;
-        current_version = entry_ptr->prepare_verison;
-        prepared_entities++;
-    }
+    catalog->dropAccessEntity(e.type, e.id, e.name);
 
-    SCOPE_EXIT({
-        if (rollback)
-        {
-            //Rollback
-            std::lock_guard lock{mutex};
-            --prepared_entities;
-            if (entry_ptr)
-                --entry_ptr->prepare_verison;
-        }
-    });
-
-    catalog->dropAccessEntity(type, id, name);
-    auto & entries_name_map = entries_by_name_and_type[static_cast<size_t>(type)][getShard(name)];
-
-    rollback = false;
-    std::lock_guard lock{mutex};
-    /// Do removing.
-    prepareNotifications(id, *entry_ptr, true, notifications);
-    entries_name_map.erase(name);
-    entries_map.erase(it);
-    //entry_ptr is already become invalid, so ++entry_ptr->commit_version is not needed.
-    --prepared_entities;
+    dropEntry(e);
 }
 
-void KVAccessStorage::updateImpl(const UUID & id, const UpdateFunc & update_func)
+void KVAccessStorage::updateImpl(const UUID & uuid, const UpdateFunc & update_func)
 {
-    Notifications notifications;
-    SCOPE_EXIT({ notify(notifications); });
-    AccessEntityPtr old_entity, new_entity;
-    Entry* entry_ptr = nullptr;
-    Int64 current_version = -1;
-    AccessEntityModel *old_entity_model_ptr = nullptr;
-    String new_name;
-    EntityType type;
-    bool name_changed = false;
-    bool rollback = true;
-    auto & entries_map = entries_by_id[getShard(id)];
-    std::unordered_map<String, Entry *> *entries_by_new_name = nullptr, *entries_by_old_name = nullptr;
-    {
-        std::lock_guard lock{mutex};
-        auto it = entries_map.find(id);
-        if (it == entries_map.end())
-            throwNotFound(id);
+    bool name_changed;
+    Entry old_entry;
 
-        // apply updates on old entity object
-        Entry & entry = it->second;
-        if (entry.prepare_verison != entry.commit_version)
-        {
-            // We do not deal with concurrent insert/update conflict.
-            throw Exception("Concurrent rbac update: " + entry.name, ErrorCodes::CONCURRENT_RBAC_UPDATE);
-        }
-        
-        entry_ptr = &entry;
-        type = entry.type;
-        old_entity = entry.entity;
-        old_entity_model_ptr = &entry.entity_model;
-        new_entity = update_func(old_entity);// NOTE: new entity object now contains sensitive permissions
+    ConcurrentAccessGuard guard(uuid);
+    if (!getEntryByUUID(uuid, old_entry))
+        throwNotFound(uuid);
 
-        new_name = new_entity->getName();
-        const String & old_name = old_entity->getName();
-        
-        entries_by_new_name = &entries_by_name_and_type[static_cast<size_t>(type)][getShard(new_name)];
+    AccessEntityPtr new_entity = update_func(old_entry.entity);
 
-        // check if newly renamed entity clashes with another name that we have stored
-        name_changed = (new_name != old_name);
-        if (name_changed)
-        {
-            if (entries_by_new_name->count(new_name))
-                throwNameCollisionCannotRename(type, old_name, new_name);
-        }
+    const String new_name = new_entity->getName();
+    name_changed = new_name != old_entry.name;
 
-        // check if new and old entity are of different types
-        if (!new_entity->isTypeOf(old_entity->getType()))
-            throwBadCast(id, new_entity->getType(), new_entity->getName(), old_entity->getType());
+    if (!new_entity->isTypeOf(old_entry.type))
+        throwBadCast(uuid, new_entity->getType(), new_name, old_entry.type);
 
-        ++entry_ptr->prepare_verison;
-        current_version = entry_ptr->prepare_verison;
-        prepared_entities++;
-    }
-
-    SCOPE_EXIT({
-        if (rollback)
-        {
-            //Rollback
-            std::lock_guard lock{mutex};
-            --prepared_entities;
-            if (entry_ptr)
-                --entry_ptr->prepare_verison;
-        }
-    });
-
-    if (*new_entity == *old_entity)
-        return;
-
-    // write to KV
-    AccessEntityModel new_entity_model;
-    RPCHelpers::fillUUID(id, *(new_entity_model.mutable_uuid()));
-    new_entity_model.set_name(new_name);
-    new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity));
-
-    catalog->putAccessEntity(type, new_entity_model, *old_entity_model_ptr);
-
-    rollback = false;
-    std::lock_guard lock{mutex};
-    entry_ptr->refreshTime();
-    entry_ptr->entity = new_entity;
-    entry_ptr->commit_time = new_entity_model.commit_time();
-
-    entry_ptr->entity_model = new_entity_model;
-
-    // if renamed, change entry in memory
     if (name_changed)
     {
-        entries_by_old_name = &entries_by_name_and_type[static_cast<size_t>(type)][getShard(old_entity->getName())];
-        entries_by_old_name->erase(entry_ptr->name);
-        entry_ptr->name = new_entity->getName();
-        (*entries_by_new_name)[entry_ptr->name] = entry_ptr;
+        auto name_shard = getShard(new_name);
+        const auto & name_map = entries_by_name_and_type[static_cast<size_t>(old_entry.type)][name_shard];
+        std::lock_guard lock{mutex};
+        if (name_map.contains(new_name))
+            throwNameCollisionCannotRename(old_entry.type, old_entry.name, new_name);
     }
 
-    prepareNotifications(id, *entry_ptr, false, notifications);
-    ++entry_ptr->commit_version;
-    --prepared_entities;
+    if (*new_entity == *old_entry.entity && !name_changed)
+        return;
+
+    /* update KV */
+    AccessEntityModel new_entity_model;
+    RPCHelpers::fillUUID(uuid, *(new_entity_model.mutable_uuid()));
+    new_entity_model.set_name(new_name);
+    new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity));
+    catalog->putAccessEntity(old_entry.type, new_entity_model, old_entry.entity_model);
+
+    Notifications notifications;
+    int old_name_shard = -1;
+    int new_name_shard = -1;
+    if (name_changed)
+    {
+        old_name_shard = getShard(old_entry.name);
+        new_name_shard = getShard(new_name);
+    }
+
+    std::unique_lock lock{mutex};
+    Entry *entry = getEntryReferenceByUUID(uuid);
+    if (entry)
+    {
+        if (new_entity_model.commit_time() < entry->commit_time)
+            throw Exception("Concurrent rbac update, model had been overwritten by another server",  ErrorCodes::CONCURRENT_RBAC_UPDATE);
+
+        entry->entity = new_entity;
+        entry->commit_time = new_entity_model.commit_time();
+        entry->entity_model = new_entity_model;
+
+        if (name_changed)
+        {
+            chassert(old_name_shard != -1 && new_name_shard != -1);
+            entry->name = new_name;
+            auto & old_name_map = entries_by_name_and_type[static_cast<size_t>(old_entry.type)][old_name_shard];
+            auto & new_name_map = entries_by_name_and_type[static_cast<size_t>(old_entry.type)][new_name_shard];
+
+            old_name_map.erase(old_entry.name);
+            new_name_map[new_name] = entry;
+        }
+
+        prepareNotifications(uuid, *entry, false, notifications);
+    }
+    else
+    {
+        throw Exception("Concurrent rbac update, possibly dropped from another server",  ErrorCodes::CONCURRENT_RBAC_UPDATE);
+    }
+    lock.unlock();
+
+    notify(notifications);
 }
 
 void KVAccessStorage::prepareNotifications(const UUID & id, const Entry & entry, bool remove, Notifications & notifications) const
@@ -637,26 +588,34 @@ void KVAccessStorage::prepareNotifications(const UUID & id, const Entry & entry,
     for (const auto & handler : entry.handlers_by_id)
         notifications.push_back({handler, id, entity});
 
-    for (const auto & handler : handlers_by_type[static_cast<size_t>(entry.type)])
+    const auto & handlers = handlers_by_type[static_cast<size_t>(entry.type)];
+    if (handlers.empty())
+        return;
+
+    std::lock_guard lock{hdl_mutex};
+    for (const auto & handler : handlers)
         notifications.push_back({handler, id, entity});
 }
 
 
 scope_guard KVAccessStorage::subscribeForChangesImpl(const UUID & id, const OnChangedHandler & handler) const
 {
-    auto & entries_map = entries_by_id[getShard(id)];
+    auto id_shard = getShard(id);
+    auto & uuid_map = entries_by_id[id_shard];
+
     std::lock_guard lock{mutex};
-    auto it = entries_map.find(id);
-    if (it == entries_map.end())
+    auto it = uuid_map.find(id);
+    if (it == uuid_map.end())
         return {};
+
     const Entry & entry = it->second;
     auto handler_it = entry.handlers_by_id.insert(entry.handlers_by_id.end(), handler);
 
-    return [this, id, handler_it, &entries_map]
+    return [this, id, handler_it, &uuid_map]
     {
         std::lock_guard lock2{mutex};
-        auto it2 = entries_map.find(id);
-        if (it2 != entries_map.end())
+        auto it2 = uuid_map.find(id);
+        if (it2 != uuid_map.end())
         {
             const Entry & entry2 = it2->second;
             entry2.handlers_by_id.erase(handler_it);
@@ -666,25 +625,29 @@ scope_guard KVAccessStorage::subscribeForChangesImpl(const UUID & id, const OnCh
 
 scope_guard KVAccessStorage::subscribeForChangesImpl(EntityType type, const OnChangedHandler & handler) const
 {
-    std::lock_guard lock{mutex};
     auto & handlers = handlers_by_type[static_cast<size_t>(type)];
+
+    std::lock_guard lock{hdl_mutex};
     handlers.push_back(handler);
     auto handler_it = std::prev(handlers.end());
 
     return [this, type, handler_it]
     {
-        std::lock_guard lock2{mutex};
         auto & handlers2 = handlers_by_type[static_cast<size_t>(type)];
+
+        std::lock_guard lock2{hdl_mutex};
         handlers2.erase(handler_it);
     };
 }
 
 bool KVAccessStorage::hasSubscriptionImpl(const UUID & id) const
 {
-    auto & entries_map = entries_by_id[getShard(id)];
+    auto id_shard = getShard(id);
+    auto & uuid_map = entries_by_id[id_shard];
+
     std::lock_guard lock{mutex};
-    auto it = entries_map.find(id);
-    if (it != entries_map.end())
+    auto it = uuid_map.find(id);
+    if (it != uuid_map.end())
     {
         const Entry & entry = it->second;
         return !entry.handlers_by_id.empty();
@@ -694,8 +657,9 @@ bool KVAccessStorage::hasSubscriptionImpl(const UUID & id) const
 
 bool KVAccessStorage::hasSubscriptionImpl(EntityType type) const
 {
-    std::lock_guard lock{mutex};
     const auto & handlers = handlers_by_type[static_cast<size_t>(type)];
+
+    std::lock_guard lock{hdl_mutex};
     return !handlers.empty();
 }
 

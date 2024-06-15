@@ -277,6 +277,15 @@ Pipe ReadFromMergeTree::readFromPool(
     };
     if (!query_info.atomic_predicates.empty())
     {
+        LOG_DEBUG(logger, "readFromPool: There are {} stages that will be in LM read path, max_streams: {}", query_info.atomic_predicates.size(), max_streams);
+        if (reader_settings.read_settings.remote_read_log)
+        {
+            for (size_t i = 0; i < query_info.atomic_predicates.size(); ++i)
+            {
+                const auto & p = query_info.atomic_predicates[i];
+                LOG_TRACE(logger, "atomic predicate[{}]: {}", i, (p ? p->dump() : "null"));
+            }
+        }
         for (size_t i = 0; i < max_streams; ++i)
         {
             auto source = std::make_shared<MergeTreeThreadSelectProcessorLM>(

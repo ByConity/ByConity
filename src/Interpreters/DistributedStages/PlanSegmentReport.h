@@ -12,7 +12,9 @@
 namespace DB
 {
 
-void reportFailurePlanSegmentStatus(
+void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result) noexcept;
+
+PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
     ContextPtr query_context,
     const AddressInfo & execution_address,
     int exception_code,
@@ -21,11 +23,10 @@ void reportFailurePlanSegmentStatus(
     SenderMetrics sender_metrics = {},
     PlanSegmentOutputs plan_segment_outputs = {});
 
-void reportSuccessPlanSegmentStatus(
+PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     ContextPtr query_context,
     const AddressInfo & execution_address,
     Progress & final_progress,
     SenderMetrics & sender_metrics,
     PlanSegmentOutputs & plan_segment_outputs);
-
 }

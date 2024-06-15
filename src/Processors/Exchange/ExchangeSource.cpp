@@ -37,8 +37,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int QUERY_WAS_CANCELLED;
+    extern const int QUERY_WAS_CANCELLED_INTERNAL;
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
+    extern const int TIMEOUT_EXCEEDED;
 }
 
 class ExchangeTotalsSource;
@@ -165,21 +166,10 @@ void ExchangeSource::checkBroadcastStatus(const BroadcastStatus & status) const
             }
         }
 
-        // FIXME
-        // if (fetch_exception_from_scheduler)
-        // {
-        //     auto context = CurrentThread::get().getQueryContext();
-        //     auto query_id = context->getClientInfo().initial_query_id;
-        //     auto exception_with_code = context->getSegmentScheduler()->getException(query_id, options.distributed_query_wait_exception_ms);
-        //     throw Exception(
-        //         getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code)
-        //             + " exception: " + exception_with_code.exception, exception_with_code.code);
-        // }
-
         // If receiver is finished and not cancelly by pipeline, we should cancel pipeline here
         if (status.code != BroadcastStatusCode::RECV_CANCELLED)
             throw Exception(
-                ErrorCodes::QUERY_WAS_CANCELLED,
+                ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL,
                 "Query {} cancel receive data due to unknown reason with code {}, try to find real error in log or query_log. Debug "
                 "info for source {}: {}",
                 CurrentThread::getQueryId(),

@@ -29,7 +29,7 @@ create session binding select * from test.bindings using select b+1 from test.bi
 show bindings; 
 
 -- re-generate uuid if AST serialization has been changed
-drop session binding uuid '32b6b495-200b-1786-3558-aea29e03e240';
+drop session binding uuid '142afa3b-d741-6912-0d42-e644f491156c';
 show bindings;
 
 -- test session regular expression binding

@@ -1231,7 +1231,10 @@ REGISTER_FUNCTION(Map)
     factory.registerFunction<FunctionExtractKeyLike>();
     factory.registerFunction<FunctionMapUpdate>();
     factory.registerFunction<FunctionMapFromArrays>();
+
     factory.registerAlias("MAP_FROM_ARRAYS", "mapFromArrays");
+    factory.registerAlias("map_keys", "mapKeys");
+    factory.registerAlias("map_values", "mapValues");
 }
 
 }

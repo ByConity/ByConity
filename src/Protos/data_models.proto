@@ -749,6 +749,21 @@ message DataModelAccessEntity
     optional UUID uuid = 4;
 }
 
+message DataModelSensitiveDatabase
+{
+    optional string database = 1;
+    repeated DataModelSensitiveTable tables = 2;
+    optional bool is_sensitive = 3; // is the database sensitive
+}
+
+message DataModelSensitiveTable
+{
+    optional string table = 1;
+    repeated string sensitive_columns = 2; // list of columns that are marked sensitive
+    optional bool is_sensitive = 3; // is the table sensitive
+}
+
+
 message DataModelSnapshot {
   optional string name = 1;
   optional uint64 commit_time = 2;

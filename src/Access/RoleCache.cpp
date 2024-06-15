@@ -44,6 +44,7 @@ namespace
 
         roles_info.names_of_roles[role_id] = role->getName();
         roles_info.access.makeUnion(role->access);
+        roles_info.sensitive_access.makeUnion(role->sensitive_access);
         roles_info.settings_from_enabled_roles.merge(role->settings);
 
         for (const auto & granted_role : role->granted_roles.getGranted())
@@ -55,8 +56,10 @@ namespace
 }
 
 
-RoleCache::RoleCache(const AccessControlManager & manager_)
-    : manager(manager_){}
+RoleCache::RoleCache(const AccessControlManager & manager_, int expiration_time_seconds)
+    : manager(manager_),cache(expiration_time_seconds * 1000 /* 10 minutes by default*/)
+{
+}
 
 
 RoleCache::~RoleCache() = default;
@@ -117,7 +120,7 @@ void RoleCache::collectEnabledRoles(EnabledRoles & enabled_roles, SubscriptionsO
     SubscriptionsOnRoles new_subscriptions_on_roles;
     new_subscriptions_on_roles.reserve(subscriptions_on_roles.size());
 
-    auto get_role_function = [this, &subscriptions_on_roles](const UUID & id) { return getRole(id, subscriptions_on_roles); };
+    auto get_role_function = [this, &subscriptions_on_roles](const UUID & id) TSA_NO_THREAD_SAFETY_ANALYSIS { return getRole(id, subscriptions_on_roles); };
 
     for (const auto & current_role : enabled_roles.params.current_roles)
         collectRoles(*new_info, skip_ids, get_role_function, current_role, true, false);
@@ -139,11 +142,30 @@ RolePtr RoleCache::getRole(const UUID & role_id, SubscriptionsOnRoles & subscrip
 {
     /// `mutex` is already locked.
 
-    auto on_role_changed_or_removed = [this](const UUID &, const AccessEntityPtr &) { roleChanged(); };
+    auto role_from_cache = cache.get(role_id);
+    if (role_from_cache)
+    {
+        subscriptions_on_roles.emplace_back(role_from_cache->second);
+        return role_from_cache->first;
+    }
+
+    auto on_role_changed_or_removed = [this, role_id](const UUID &, const AccessEntityPtr & entity)
+    {
+        auto changed_role = entity ? typeid_cast<RolePtr>(entity) : nullptr;
+        if (changed_role)
+            roleChanged(role_id, changed_role);
+        else
+            roleRemoved(role_id);
+    };
+
     auto subscription_on_role = std::make_shared<scope_guard>(manager.subscribeForChanges(role_id, on_role_changed_or_removed));
+
     auto role = manager.tryRead<Role>(role_id);
     if (role)
     {
+        auto cache_value = Poco::SharedPtr<std::pair<RolePtr, std::shared_ptr<scope_guard>>>(
+            new std::pair<RolePtr, std::shared_ptr<scope_guard>>{role, subscription_on_role});
+        cache.add(role_id, cache_value);
         subscriptions_on_roles.emplace_back(subscription_on_role);
         return role;
     }
@@ -152,14 +174,37 @@ RolePtr RoleCache::getRole(const UUID & role_id, SubscriptionsOnRoles & subscrip
 }
 
 
-void RoleCache::roleChanged()
+void RoleCache::roleChanged(const UUID & role_id, const RolePtr & changed_role)
 {
     /// Declared before `lock` to send notifications after the mutex will be unlocked.
     scope_guard notifications;
 
     std::lock_guard lock{mutex};
 
-    /// An enabled role for some users has been change/removed, we need to recalculate the access rights.
+    auto role_from_cache = cache.get(role_id);
+    if (role_from_cache)
+    {
+        /// We update the role stored in a cache entry only if that entry has not expired yet.
+        role_from_cache->first = changed_role;
+        cache.update(role_id, role_from_cache);
+    }
+
+    /// An enabled role for some users has been changed, we need to recalculate the access rights.
+    collectEnabledRoles(&notifications); /// collectEnabledRoles() must be called with the `mutex` locked.
+}
+
+
+void RoleCache::roleRemoved(const UUID & role_id)
+{
+    /// Declared before `lock` to send notifications after the mutex will be unlocked.
+    scope_guard notifications;
+
+    std::lock_guard lock{mutex};
+
+    /// If a cache entry with the role has expired already, that remove() will do nothing.
+    cache.remove(role_id);
+
+    /// An enabled role for some users has been removed, we need to recalculate the access rights.
     collectEnabledRoles(&notifications); /// collectEnabledRoles() must be called with the `mutex` locked.
 }
 

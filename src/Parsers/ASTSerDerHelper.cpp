@@ -76,6 +76,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTSetSensitiveQuery.h>
 #include <Parsers/ASTSetRoleQuery.h>
 #include <Parsers/ASTSettingsProfileElement.h>
 #include <Parsers/ASTShowAccessEntitiesQuery.h>
