@@ -45,6 +45,8 @@ public:
         return std::accumulate(start, name.cend(), 0) % SHARD_CNT;
     }
 
+    void loadEntities(EntityType type, const std::unordered_set<UUID> & ids) const;
+
 private:
     std::optional<UUID> findImpl(EntityType type, const String & name) const override;
     std::vector<UUID> findAllImpl(EntityType type) const override;
@@ -70,7 +72,7 @@ private:
         AccessEntityModel entity_model;
     };
 
-    UUID updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications & notifications, const AccessEntityPtr & entity = nullptr) const;
+    UUID updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications * notifications, const AccessEntityPtr & entity = nullptr) const;
     UUID updateCache(EntityType type, const AccessEntityModel & entity_model, const AccessEntityPtr & entity = nullptr) const;
 
     void prepareNotifications(const UUID & id, const Entry & entry, bool remove, Notifications & notifications) const;
