@@ -6784,6 +6784,29 @@ namespace Catalog
         return entity;
     }
 
+    std::vector<AccessEntityModel> Catalog::getEntities(EntityType type, const std::unordered_set<UUID> & ids)
+    {
+        std::vector<AccessEntityModel> entities;
+        runWithMetricSupport(
+            [&] {
+                auto responses = meta_proxy->getEntities(type, name_space, ids);
+                entities.reserve(responses.size());
+
+                for (const auto & [s, version] : responses)
+                {
+                    if (s.empty())
+                        continue;
+
+                    AccessEntityModel model;
+                    model.ParseFromString(std::move(s));
+                    entities.push_back(std::move(model));
+                }
+            },
+            ProfileEvents::GetAllAccessEntitySuccess,
+            ProfileEvents::GetAllAccessEntityFailed);
+        return entities;
+    }
+
     std::vector<AccessEntityModel> Catalog::getAllAccessEntities(EntityType type)
     {
         std::vector<AccessEntityModel> entities;

@@ -131,7 +131,8 @@ public:
         bool use_default_roles,
         const Settings & settings,
         const String & current_database,
-        const ClientInfo & client_info) const;
+        const ClientInfo & client_info,
+        bool load_roles) const;
 
     std::shared_ptr<const ContextAccess> getContextAccess(const ContextAccessParams & params) const;
 
@@ -173,7 +174,7 @@ private:
     std::unique_ptr<SettingsProfilesCache> settings_profiles_cache;
     std::unique_ptr<ExternalAuthenticators> external_authenticators;
     std::unique_ptr<CustomSettingsPrefixes> custom_settings_prefixes;
-   
+
     std::atomic_bool select_from_system_db_requires_grant = false;
     std::atomic_bool select_from_information_schema_requires_grant = false;
 };

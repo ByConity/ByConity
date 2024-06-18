@@ -848,6 +848,7 @@ public:
     std::optional<String> tryGetAccessEntityName(const UUID & uuid);
     void dropAccessEntity(EntityType type, const UUID & uuid, const String & name);
     void putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists = true);
+    std::vector<AccessEntityModel> getEntities(EntityType type, const std::unordered_set<UUID> & ids);
 
 
 private:

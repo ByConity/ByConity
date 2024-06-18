@@ -44,13 +44,18 @@ public:
         auto x = cache.get(params);
         if (x)
         {
-            if ((*x)->getUser())
+            auto user_ptr = (*x)->getUser();
+            if (user_ptr)
+            {
+                if (params.load_roles && params.use_default_roles)
+                    (*x)->loadRoles(user_ptr);
                 return *x;
+            }
             /// No user, probably the user has been dropped while it was in the cache.
             cache.remove(params);
         }
         auto res = std::shared_ptr<ContextAccess>(new ContextAccess(manager, params));
-        res->initialize();
+        res->initialize(params.load_roles);
         cache.add(params, res);
         return res;
     }
@@ -400,7 +405,8 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
     bool use_default_roles,
     const Settings & settings,
     const String & current_database,
-    const ClientInfo & client_info) const
+    const ClientInfo & client_info,
+    bool load_roles) const
 {
     ContextAccessParams params;
     params.user_id = user_id;
@@ -414,6 +420,7 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
     params.http_method = client_info.http_method;
     params.address = client_info.current_address.host();
     params.quota_key = client_info.quota_key;
+    params.load_roles = load_roles;
 
     /// Extract the last entry from comma separated list of X-Forwarded-For addresses.
     /// Only the last proxy can be trusted (if any).
