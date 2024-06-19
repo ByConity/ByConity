@@ -29,7 +29,7 @@ NamesAndTypesList StorageSystemCnchDetachedParts::getNamesAndTypes()
 void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
 
-   auto query_context = Context::createCopy(context);
+    auto query_context = Context::createCopy(context);
 
     auto cnch_catalog = context->getCnchCatalog();
 
