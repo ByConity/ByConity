@@ -1,0 +1,11 @@
+DROP DATABASE IF EXISTS test_db;
+CREATE DATABASE test_test_db;
+SELECT count(*) from system.cnch_detached_parts where database = 'test_db';
+CREATE TABLE test_db.lc (date String,b LowCardinality(String)) engine = CnchMergeTree partition by date ORDER BY b;
+INSERT INTO test_db.lc VALUES ('2024-06-18', 'test');
+ALTER TABLE test_db.lc DETACH PARTITION '2024-06-18';
+SELECT count(*) from system.cnch_detached_parts where database = 'test_db';
+ALTER TABLE test_db.lc ATTACH PARTITION '2024-06-18';
+SELECT count(*) from system.cnch_detached_parts where database = 'test_db';
+DROP TABLE test_db.lc;
+DROP DATABASE test_db;
