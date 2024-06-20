@@ -40,6 +40,7 @@ namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
     extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
+    extern const int LOGICAL_ERROR;
 }
 
 InterpreterRenameQuery::InterpreterRenameQuery(const ASTPtr & query_ptr_, ContextPtr context_)
@@ -51,11 +52,12 @@ InterpreterRenameQuery::InterpreterRenameQuery(const ASTPtr & query_ptr_, Contex
 BlockIO InterpreterRenameQuery::execute()
 {
     const auto & rename = query_ptr->as<const ASTRenameQuery &>();
+    auto access_type = rename.database ? RenameType::RenameDatabase : RenameType::RenameTable;
 
     if (!rename.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
+        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess(access_type));
 
-    getContext()->checkAccess(getRequiredAccess());
+    getContext()->checkAccess(getRequiredAccess(access_type));
 
     String path = getContext()->getPath();
     String current_database = getContext()->getCurrentDatabase();
@@ -161,18 +163,30 @@ BlockIO InterpreterRenameQuery::executeToDatabase(const ASTRenameQuery &, const 
     return {};
 }
 
-AccessRightsElements InterpreterRenameQuery::getRequiredAccess() const
+AccessRightsElements InterpreterRenameQuery::getRequiredAccess(InterpreterRenameQuery::RenameType type) const
 {
     AccessRightsElements required_access;
     const auto & rename = query_ptr->as<const ASTRenameQuery &>();
     for (const auto & elem : rename.elements)
     {
-        required_access.emplace_back(AccessType::SELECT | AccessType::DROP_TABLE, elem.from.database, elem.from.table);
-        required_access.emplace_back(AccessType::CREATE_TABLE | AccessType::INSERT, elem.to.database, elem.to.table);
-        if (rename.exchange)
+        if (type == RenameType::RenameTable)
         {
-            required_access.emplace_back(AccessType::CREATE_TABLE | AccessType::INSERT, elem.from.database, elem.from.table);
-            required_access.emplace_back(AccessType::SELECT | AccessType::DROP_TABLE, elem.to.database, elem.to.table);
+            required_access.emplace_back(AccessType::SELECT | AccessType::DROP_TABLE, elem.from.database, elem.from.table);
+            required_access.emplace_back(AccessType::CREATE_TABLE | AccessType::INSERT, elem.to.database, elem.to.table);
+            if (rename.exchange)
+            {
+                required_access.emplace_back(AccessType::CREATE_TABLE | AccessType::INSERT, elem.from.database, elem.from.table);
+                required_access.emplace_back(AccessType::SELECT | AccessType::DROP_TABLE, elem.to.database, elem.to.table);
+            }
+        }
+        else if (type == RenameType::RenameDatabase)
+        {
+            required_access.emplace_back(AccessType::SELECT | AccessType::DROP_DATABASE, elem.from.database);
+            required_access.emplace_back(AccessType::CREATE_DATABASE | AccessType::INSERT, elem.to.database);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown type of rename query");
         }
     }
     return required_access;

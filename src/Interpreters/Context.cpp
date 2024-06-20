@@ -1569,7 +1569,8 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     /// so Context::getLock() must be unlocked while we're doing this.
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
     auto new_access = getAccessControlManager().getContextAccess(
-        new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info);
+        new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
+        getServerType() != ServerType::cnch_server);
 
     auto lock = getLock();
     user_id = new_user_id;
@@ -1675,7 +1676,8 @@ void Context::calculateAccessRights()
     auto lock = getLock();
     if (user_id)
         access = getAccessControlManager().getContextAccess(
-            *user_id, current_roles, use_default_roles, settings, current_database, client_info);
+            *user_id, current_roles, use_default_roles, settings, current_database, client_info,
+            false);
 }
 
 

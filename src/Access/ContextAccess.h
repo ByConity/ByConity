@@ -38,6 +38,7 @@ struct ContextAccessParams
     UInt64 readonly = 0;
     bool allow_ddl = false;
     bool allow_introspection = false;
+    bool load_roles = false;
     String current_database;
     ClientInfo::Interface interface = ClientInfo::Interface::TCP;
     ClientInfo::HTTPMethod http_method = ClientInfo::HTTPMethod::UNKNOWN;
@@ -153,12 +154,14 @@ public:
     /// without any limitations. This is used for the global context.
     static std::shared_ptr<const ContextAccess> getFullAccess();
 
+    void loadRoles(const UserPtr & user_) const;
+
 private:
     friend class AccessControlManager;
     ContextAccess() {}
     ContextAccess(const AccessControlManager & manager_, const Params & params_);
 
-    void initialize();
+    void initialize(bool load_roles);
     void setUser(const UserPtr & user_) const;
     void setRolesInfo(const std::shared_ptr<const EnabledRolesInfo> & roles_info_) const;
     void setSettingsAndConstraints() const;

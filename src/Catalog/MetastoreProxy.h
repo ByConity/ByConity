@@ -1208,6 +1208,7 @@ public:
         bool include_start = true, bool include_end = false);
 
     // Access Entities
+    std::vector<std::pair<String, UInt64>> getEntities(EntityType type, const String & name_space, const std::unordered_set<UUID> & ids) const;
     String getAccessEntity(EntityType type, const String & name_space, const String & name) const;
     Strings getAllAccessEntities(EntityType type, const String & name_space) const;
     String getAccessEntityNameByUUID(const String & name_space, const UUID & id) const;

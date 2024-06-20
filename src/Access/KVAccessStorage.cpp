@@ -211,7 +211,10 @@ namespace
 
     class ConcurrentAccessGuard {
     public:
-        ConcurrentAccessGuard(const UUID &uuid)
+        ConcurrentAccessGuard & operator=(const ConcurrentAccessGuard &) = delete;
+        ConcurrentAccessGuard(const ConcurrentAccessGuard &) = delete;
+        ConcurrentAccessGuard() = delete;
+        explicit ConcurrentAccessGuard(const UUID &uuid)
         {
             {
                 std::scoped_lock lock(map_mtx);
@@ -328,10 +331,10 @@ UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & ent
     Notifications notifications;
     SCOPE_EXIT({ notify(notifications); });
 
-    return updateCache(type, entity_model, notifications, entity);
+    return updateCache(type, entity_model, &notifications, entity);
 }
 
-UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications & notifications, const AccessEntityPtr & entity_) const
+UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications * notifications, const AccessEntityPtr & entity_) const
 {
     UUID uuid = RPCHelpers::createUUID(entity_model.uuid());
     auto id_shard = getShard(uuid);
@@ -364,7 +367,8 @@ UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & ent
     auto entry_copy = entry;
     lock.unlock();
 
-    prepareNotifications(uuid, entry_copy, false, notifications);
+    if (notifications)
+        prepareNotifications(uuid, entry_copy, false, *notifications);
     return uuid;
 }
 
@@ -372,6 +376,8 @@ UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & ent
 // Always get entity from KV to ensure that we have the most updated Entity at all times
 std::optional<UUID> KVAccessStorage::findImpl(EntityType type, const String & name) const
 {
+    Notifications notifications;
+    SCOPE_EXIT({ notify(notifications); });
     auto entity_model = catalog->tryGetAccessEntity(type, name);
 
     if (!entity_model)
@@ -384,20 +390,18 @@ std::optional<UUID> KVAccessStorage::findImpl(EntityType type, const String & na
         return std::nullopt;
     }
 
-    return updateCache(type, *entity_model);
+    return updateCache(type, *entity_model, &notifications);
 }
 
 
 std::vector<UUID> KVAccessStorage::findAllImpl(EntityType type) const
 {
-    Notifications notifications;
-    SCOPE_EXIT({ notify(notifications); });
     auto entity_models = catalog->getAllAccessEntities(type);
     std::vector<UUID> res;
     res.reserve(entity_models.size());
 
     for (const auto & entity_model : entity_models)
-        res.emplace_back(updateCache(type, entity_model, notifications));
+        res.emplace_back(updateCache(type, entity_model, nullptr));
 
     return res;
 }
@@ -553,9 +557,9 @@ void KVAccessStorage::updateImpl(const UUID & uuid, const UpdateFunc & update_fu
         if (new_entity_model.commit_time() < entry->commit_time)
             throw Exception("Concurrent rbac update, model had been overwritten by another server",  ErrorCodes::CONCURRENT_RBAC_UPDATE);
 
-        entry->entity = new_entity;
+        entry->entity = std::move(new_entity);
         entry->commit_time = new_entity_model.commit_time();
-        entry->entity_model = new_entity_model;
+        entry->entity_model = std::move(new_entity_model);
 
         if (name_changed)
         {
@@ -661,6 +665,16 @@ bool KVAccessStorage::hasSubscriptionImpl(EntityType type) const
 
     std::lock_guard lock{hdl_mutex};
     return !handlers.empty();
+}
+
+void KVAccessStorage::loadEntities(EntityType type, const std::unordered_set<UUID> & ids) const
+{
+    Notifications notifications;
+    SCOPE_EXIT({ notify(notifications); });
+    auto entity_models = catalog->getEntities(type, ids);
+
+    for (const auto & entity_model : entity_models)
+        updateCache(type, entity_model, &notifications);
 }
 
 }
