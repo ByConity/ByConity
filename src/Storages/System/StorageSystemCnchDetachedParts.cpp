@@ -1,3 +1,4 @@
+#include <Access/ContextAccess.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -16,6 +17,7 @@ NamesAndTypesList StorageSystemCnchDetachedParts::getNamesAndTypes()
     return {
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
+        {"table_uuid", std::make_shared<DataTypeUUID>()},
         {"partition_id", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>())},
         {"name", std::make_shared<DataTypeString>()},
         {"part_id", std::make_shared<DataTypeUUID>()},
@@ -35,33 +37,73 @@ void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, Cont
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
     std::map<String, String> column_to_value;
+    std::vector<std::tuple<String, String, String>> tables;
 
-    collectWhereClausePredicate(where_expression, column_to_value);
+    const std::vector<std::map<String,Field>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
+    bool enable_filter_by_table = false;
+    bool enable_filter_by_partition = false;
+    String only_selected_db;
+    String only_selected_table;
+    String only_selected_partition_id;
 
-    /// Check if table is specified.
-    std::vector<StoragePtr> request_storages;
-    std::vector<std::pair<String, String>> tables;
-    auto database_it = column_to_value.find("database");
-    auto table_it = column_to_value.find("table");
-    auto uuid_it = column_to_value.find("uuid");
-
-    TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
-    TxnTimestamp start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{context->getTimestamp()};
-
-    /// Filter out the table we need in one way or another.
-    if (uuid_it != column_to_value.end())
+    if (value_by_column_names.size() == 1)
     {
-        request_storages.push_back(cnch_catalog->tryGetTableByUUID(*context, uuid_it->second, start_time));
+        const auto & value_by_column_name = value_by_column_names.at(0);
+        auto db_it = value_by_column_name.find("database");
+        auto table_it = value_by_column_name.find("table");
+        auto partition_it = value_by_column_name.find("partition_id");
+        if ((db_it != value_by_column_name.end()) && (table_it != value_by_column_name.end()))
+        {
+            only_selected_db = db_it->second.getType() == Field::Types::String ? db_it->second.get<String>() : "";
+            only_selected_table = table_it->second.getType() == Field::Types::String ? table_it->second.get<String>() : "";
+            enable_filter_by_table = true;
+
+            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchDetachedParts"),
+                    "filtering from catalog by table with db name {} and table name {}",
+                    only_selected_db, only_selected_table);
+        }
+
+        if (partition_it != value_by_column_name.end())
+        {
+            only_selected_partition_id = partition_it->second.getType() == Field::Types::String ? partition_it->second.get<String>() : "";
+            enable_filter_by_partition = true;
+
+            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchDetachedParts"),
+                    "filtering from catalog by partition with partition name {}",
+                    only_selected_partition_id);
+        }
     }
-    else if (database_it != column_to_value.end() && table_it != column_to_value.end())
+
+    if (!(enable_filter_by_partition || enable_filter_by_table))
+        LOG_TRACE(&Poco::Logger::get("StorageSystemCnchDetachedParts"), "No explicitly table and partition provided in where expression");
+    
+    // check for required structure of WHERE clause for cnch_parts
+    if (!enable_filter_by_table)
     {
-        request_storages.push_back(cnch_catalog->tryGetTable(*context, database_it->second, table_it->second, start_time));
+        if (!context->getSettingsRef().enable_multiple_tables_for_cnch_parts)
+            throw Exception(
+                "You should specify database and table in where cluster or set enable_multiple_tables_for_cnch_parts to enable visit "
+                "multiple "
+                "tables",
+                ErrorCodes::BAD_ARGUMENTS);
+        tables = filterTables(context, query_info);
     }
     else
     {
-        auto filtered_tables = filterTables(context, query_info);
-        for (const auto & [database_fullname, database_name, table_name] : filtered_tables)
-            request_storages.push_back(cnch_catalog->tryGetTable(*context, database_fullname, table_name, start_time));
+        const String & tenant_id = context->getTenantId();
+        String only_selected_db_full = only_selected_db;
+        if (!tenant_id.empty())
+        {
+            if (!DB::DatabaseCatalog::isDefaultVisibleSystemDatabase(only_selected_db))
+            {
+                only_selected_db_full = tenant_id + "." + only_selected_db;
+            }
+        }
+        tables.emplace_back(
+                only_selected_db_full,
+                only_selected_db,
+                only_selected_table
+            );
     }
 
     /// Add one item into final results.
@@ -73,6 +115,7 @@ void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, Cont
         size_t col_num = 0;
         res_columns[col_num++]->insert(storage->getDatabaseName());
         res_columns[col_num++]->insert(storage->getTableName());
+        res_columns[col_num++]->insert(storage->getStorageUUID());
         {
             WriteBufferFromOwnString out;
             part->get_partition().serializeText(*storage, out, format_settings);
@@ -86,13 +129,25 @@ void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, Cont
         res_columns[col_num++]->insert(part->get_info().level);
     };
 
-    /// Loop every table requested, retrieve all detached item in them.
-    for (const auto & storage : request_storages)
+    TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
+    TxnTimestamp start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{context->getTimestamp()};
+
+    const auto access = context->getAccess();
+    const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
+
+    for (const auto & [database_fullname, database_name, table_name] : tables)
     {
-        if (!storage)
+        const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, database_fullname);
+        if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, database_fullname, table_name))
             continue;
 
-        if (auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+        auto table = cnch_catalog->tryGetTable(*context, database_fullname, table_name, start_time);
+
+        /// Skip not exist table
+        if (!table)
+            continue;
+        
+        if (auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(table.get()))
         {
             PartitionCommand cmd;
             CnchAttachProcessor processor(*cnch_merge_tree, cmd, query_context);
