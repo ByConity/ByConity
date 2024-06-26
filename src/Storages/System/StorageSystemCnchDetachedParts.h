@@ -14,6 +14,12 @@ class StorageSystemCnchDetachedParts : public shared_ptr_helper<StorageSystemCnc
 public:
     std::string getName() const override { return "SystemCnchDetachedParts"; }
 
+    enum PartType
+    {
+        VisiblePart = 1,
+        InvisiblePart = 2
+    };
+
     static NamesAndTypesList getNamesAndTypes();
 
 protected:

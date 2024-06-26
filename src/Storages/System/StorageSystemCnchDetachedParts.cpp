@@ -3,6 +3,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/System/StorageSystemCnchDetachedParts.h>
 #include <Storages/MergeTree/CnchAttachProcessor.h>
@@ -14,6 +15,11 @@ namespace DB
 
 NamesAndTypesList StorageSystemCnchDetachedParts::getNamesAndTypes()
 {
+    auto type_enum = std::make_shared<DataTypeEnum8>(DataTypeEnum8::Values{
+        {"VisiblePart", static_cast<Int8>(PartType::VisiblePart)},
+        {"InvisiblePart", static_cast<Int8>(PartType::InvisiblePart)}
+    });
+
     return {
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
@@ -21,6 +27,8 @@ NamesAndTypesList StorageSystemCnchDetachedParts::getNamesAndTypes()
         {"partition_id", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>())},
         {"name", std::make_shared<DataTypeString>()},
         {"part_id", std::make_shared<DataTypeUUID>()},
+        {"part_type", std::move(type_enum)},
+        {"previous_version", std::make_shared<DataTypeUInt64>()},
         {"disk", std::make_shared<DataTypeString>()},
         {"min_block_number", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>())},
         {"max_block_number", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>())},
@@ -111,22 +119,33 @@ void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, Cont
     {
         const FormatSettings format_settings;
         DiskType::Type remote_disk_type = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
-
-        size_t col_num = 0;
-        res_columns[col_num++]->insert(storage->getDatabaseName());
-        res_columns[col_num++]->insert(storage->getTableName());
-        res_columns[col_num++]->insert(storage->getStorageUUID());
+        
+        auto type = PartType::VisiblePart;
+        for (IMergeTreeDataPartPtr curr_part = part; curr_part; curr_part = curr_part->tryGetPreviousPart())
         {
-            WriteBufferFromOwnString out;
-            part->get_partition().serializeText(*storage, out, format_settings);
-            res_columns[col_num++]->insert(out.str());
+            size_t col_num = 0;
+            res_columns[col_num++]->insert(storage->getDatabaseName());
+            res_columns[col_num++]->insert(storage->getTableName());
+            res_columns[col_num++]->insert(storage->getStorageUUID());
+            {
+                WriteBufferFromOwnString out;
+                curr_part->get_partition().serializeText(*storage, out, format_settings);
+                res_columns[col_num++]->insert(out.str());
+            }
+            res_columns[col_num++]->insert(curr_part->get_name());
+            res_columns[col_num++]->insert(curr_part->get_uuid());
+            res_columns[col_num++]->insert(static_cast<Int8>(type));
+            res_columns[col_num++]->insert(curr_part->get_info().hint_mutation);
+            res_columns[col_num++]->insert(DiskType::toString(remote_disk_type));
+            res_columns[col_num++]->insert(curr_part->get_info().min_block);
+            res_columns[col_num++]->insert(curr_part->get_info().max_block);
+            res_columns[col_num++]->insert(curr_part->get_info().level);
+            if (type == PartType::VisiblePart)
+                type = PartType::InvisiblePart;
         }
-        res_columns[col_num++]->insert(part->get_name());
-        res_columns[col_num++]->insert(part->get_uuid());
-        res_columns[col_num++]->insert(DiskType::toString(remote_disk_type));
-        res_columns[col_num++]->insert(part->get_info().min_block);
-        res_columns[col_num++]->insert(part->get_info().max_block);
-        res_columns[col_num++]->insert(part->get_info().level);
+
+
+
     };
 
     TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
