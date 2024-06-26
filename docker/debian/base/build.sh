@@ -15,7 +15,7 @@ sed -i \
     -e "s/set (VERSION_SCM [^) ]*/set (VERSION_SCM $VERSION_SCM/g;" \
     cmake/version.cmake
 
-cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${CMAKE_FLAGS} -DENABLE_BREAKPAD=ON -DCMAKE_INSTALL_PREFIX=build_install -S . -B build_docker
+cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${CMAKE_FLAGS} -DENABLE_BREAKPAD=OFF -DCMAKE_INSTALL_PREFIX=build_install -S . -B build_docker
 NUM_JOBS=$(( ($(nproc || grep -c ^processor /proc/cpuinfo) + 1) / 2 ))
 
 ninja -C build_docker -j $NUM_JOBS install
