@@ -1572,13 +1572,13 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             if (view->tryGetTargetTable() && !view->hasInnerTable())
             {
                 StoragePtr target_table = view->tryGetTargetTable();
-                if (!target_table->getInMemoryMetadataPtr()->getColumns().getMaterialized().empty())
-                    throw Exception(
-                        ErrorCodes::ILLEGAL_COLUMN,
-                        "Cannot create materialized view {} to target table {} with materialized columns {}",
-                        view->getStorageID().getNameForLogs(),
-                        target_table->getStorageID().getNameForLogs(),
-                        target_table->getInMemoryMetadataPtr()->getColumns().getMaterialized().toString());
+                // if (!target_table->getInMemoryMetadataPtr()->getColumns().getMaterialized().empty())
+                //     throw Exception(
+                //         ErrorCodes::ILLEGAL_COLUMN,
+                //         "Cannot create materialized view {} to target table {} with materialized columns {}",
+                //         view->getStorageID().getNameForLogs(),
+                //         target_table->getStorageID().getNameForLogs(),
+                //         target_table->getInMemoryMetadataPtr()->getColumns().getMaterialized().toString());
             }
         }
     }
