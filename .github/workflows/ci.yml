@@ -103,9 +103,28 @@ jobs:
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          mkdir -p queries_no_tenant
+          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries_no_tenant/
+          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries_no_tenant/
+          # We need skip-list to skip some tests.
           cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries/
+          cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries_no_tenant/
           mkdir -p test_output
-          ./clickhouse-test --s3 --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          export TENANT_ID="1234"
+          export TENANT_DB_PREFIX="${TENANT_ID}."
+          export TENANT_DEFAULT_DB_PREFIX="${TENANT_ID}\`"
+          export TENANT_DEFAULT_DB_PREFIX_INQUOTE="${TENANT_ID}\\\`"
+          export TENANT_HTTP_DEFAULT_DB_PREFIX="${TENANT_ID}%60"
+          find ./queries  -name *.sql |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          find ./queries  -name *.reference |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          ./clickhouse-test --s3 --use-skip-list --tenant_id $TENANT_ID -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} tenant_id=$TENANT_ID 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          echo "Running test without tenant information"
+          unset TENANT_ID
+          unset TENANT_DB_PREFIX
+          unset TENANT_DEFAULT_DB_PREFIX
+          unset TENANT_DEFAULT_DB_PREFIX_INQUOTE
+          unset TENANT_HTTP_DEFAULT_DB_PREFIX
+          ./clickhouse-test --s3 --use-skip-list --queries "queries_no_tenant" -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_s3_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/wo_optimizer_s3_test_result.txt
           cd ..
@@ -145,13 +164,20 @@ jobs:
           mkdir -p ci_external_table
           cd ci_external_table
           export EXTRA_OPTIONS='enable_optimizer_fallback=0'
+          export TENANT_ID="1234"
+          export TENANT_DB_PREFIX="${TENANT_ID}."
+          export TENANT_DEFAULT_DB_PREFIX="${TENANT_ID}\`"
+          export TENANT_DEFAULT_DB_PREFIX_INQUOTE="${TENANT_ID}\\\`"
+          export TENANT_HTTP_DEFAULT_DB_PREFIX="${TENANT_ID}%60"
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_external_table queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          find ./queries  -name *.sql |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          find ./queries  -name *.reference |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
           mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test --tenant_id $TENANT_ID -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} tenant_id=${TENANT_ID} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/external_table_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/external_table_test_result.txt
           cd ..
@@ -162,13 +188,20 @@ jobs:
           mkdir -p ci_stateless_without_optimizer
           cd ci_stateless_without_optimizer
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=0'
+          export TENANT_ID="1234"
+          export TENANT_DB_PREFIX="${TENANT_ID}."
+          export TENANT_DEFAULT_DB_PREFIX="${TENANT_ID}\`"
+          export TENANT_DEFAULT_DB_PREFIX_INQUOTE="${TENANT_ID}\\\`"
+          export TENANT_HTTP_DEFAULT_DB_PREFIX="${TENANT_ID}%60"
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          find ./queries  -name *.sql |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          find ./queries  -name *.reference |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
           mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test --use-skip-list --tenant_id ${TENANT_ID} -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} tenant_id=${TENANT_ID} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/wo_optimizer_test_result.txt
           cd ..
@@ -185,7 +218,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_no_tenant_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/wo_optimizer_no_tenant_test_result.txt
           cd ..
@@ -202,7 +235,14 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          export TENANT_ID="1234"
+          export TENANT_DB_PREFIX="${TENANT_ID}."
+          export TENANT_DEFAULT_DB_PREFIX="${TENANT_ID}\`"
+          export TENANT_DEFAULT_DB_PREFIX_INQUOTE="${TENANT_ID}\\\`"
+          export TENANT_HTTP_DEFAULT_DB_PREFIX="${TENANT_ID}%60"
+          find ./queries  -name *.sql |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          find ./queries  -name *.reference |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          ./clickhouse-test --use-skip-list --tenant_id ${TENANT_ID} -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} tenant_id=${TENANT_ID} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/w_optimizer_test_result.txt
           cd ..
@@ -219,7 +259,14 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          export TENANT_ID="1234"
+          export TENANT_DB_PREFIX="${TENANT_ID}."
+          export TENANT_DEFAULT_DB_PREFIX="${TENANT_ID}\`"
+          export TENANT_DEFAULT_DB_PREFIX_INQUOTE="${TENANT_ID}\\\`"
+          export TENANT_HTTP_DEFAULT_DB_PREFIX="${TENANT_ID}%60"
+          find ./queries  -name *.sql |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          find ./queries  -name *.reference |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          ./clickhouse-test --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --tenant_id ${TENANT_ID} --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} tenant_id=${TENANT_ID} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_bsp_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/w_optimizer_bsp_test_result.txt
           cd ..
@@ -237,7 +284,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/w_optimizer_test_result.txt
           cd ..
@@ -257,7 +304,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1'
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_bsp_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/no_tenant_w_optimizer_bsp_test_result.txt
           cd ..
@@ -268,14 +315,21 @@ jobs:
           mkdir -p ci_clickhouse_sql
           cd ci_clickhouse_sql
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=0'
+          export TENANT_ID="1234"
+          export TENANT_DB_PREFIX="${TENANT_ID}."
+          export TENANT_DEFAULT_DB_PREFIX="${TENANT_ID}\`"
+          export TENANT_DEFAULT_DB_PREFIX_INQUOTE="${TENANT_ID}\\\`"
+          export TENANT_HTTP_DEFAULT_DB_PREFIX="${TENANT_ID}%60"
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/7_clickhouse_sql queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          find ./queries  -name *.sql |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
+          find ./queries  -name *.reference |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
           echo "Running test without optimizer"
           mkdir -p test_output
-          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --tenant_id ${TENANT_ID} --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} tenant_id=${TENANT_ID} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/clickhouse_sql_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           mv test_output/test_result.txt /test_output/ChSQL_tenant_wo_optimizer_test_result.txt
           cd ..
