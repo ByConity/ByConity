@@ -67,8 +67,7 @@ jobs:
           cd /CI/
           cp -r $GITHUB_WORKSPACE/docker/ci-deploy/* ./          
           cp $GITHUB_WORKSPACE/docker/ci-deploy/.env ./
-          mkdir -p $GITHUB_WORKSPACE/../../tmp_ci_bin
-          ln -s $GITHUB_WORKSPACE/../../tmp_ci_bin bin
+          mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" hdfs_config/conf/core-site.xml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/fdb.cluster
