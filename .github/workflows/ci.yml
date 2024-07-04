@@ -103,12 +103,8 @@ jobs:
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          mkdir -p queries_no_tenant
-          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries_no_tenant/
-          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries_no_tenant/
           # We need skip-list to skip some tests.
           cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries/
-          cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries_no_tenant/
           mkdir -p test_output
           export TENANT_ID="1234"
           export TENANT_DB_PREFIX="${TENANT_ID}."
@@ -121,7 +117,7 @@ jobs:
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_s3_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           cd ..
           rm -rf ci_stateless_without_optimizer_s3
-      - name: Run ByConity FuntionalStateless for S3 not tenant (w.o optimizer)
+      - name: Run ByConity FuntionalStateless for S3 no tenant (w.o optimizer)
         continue-on-error: true
         run: |
           mkdir -p ci_stateless_without_optimizer_s3_no_tenant
