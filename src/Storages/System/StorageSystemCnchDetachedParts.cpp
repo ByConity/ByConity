@@ -84,7 +84,7 @@ void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, Cont
 
     if (!(enable_filter_by_partition || enable_filter_by_table))
         LOG_TRACE(&Poco::Logger::get("StorageSystemCnchDetachedParts"), "No explicitly table and partition provided in where expression");
-    
+
     // check for required structure of WHERE clause for cnch_parts
     if (!enable_filter_by_table)
     {
@@ -115,16 +115,16 @@ void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, Cont
     }
 
     /// Add one item into final results.
-    auto add_item = [&](const StorageCnchMergeTree *storage, const MutableMergeTreeDataPartCNCHPtr part) 
+    auto add_item = [&](const String& striped_database, const StorageCnchMergeTree *storage, const MutableMergeTreeDataPartCNCHPtr part)
     {
         const FormatSettings format_settings;
         DiskType::Type remote_disk_type = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
-        
+
         auto type = PartType::VisiblePart;
         for (IMergeTreeDataPartPtr curr_part = part; curr_part; curr_part = curr_part->tryGetPreviousPart())
         {
             size_t col_num = 0;
-            res_columns[col_num++]->insert(storage->getDatabaseName());
+            res_columns[col_num++]->insert(striped_database);
             res_columns[col_num++]->insert(storage->getTableName());
             res_columns[col_num++]->insert(storage->getStorageUUID());
             {
@@ -165,7 +165,7 @@ void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, Cont
         /// Skip not exist table
         if (!table)
             continue;
-        
+
         if (auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(table.get()))
         {
             PartitionCommand cmd;
@@ -175,7 +175,7 @@ void StorageSystemCnchDetachedParts::fillData(MutableColumns & res_columns, Cont
             {
                 for (const auto & part : parts)
                 {
-                    add_item(cnch_merge_tree, part);
+                    add_item(database_name, cnch_merge_tree, part);
                 }
             }
         }
