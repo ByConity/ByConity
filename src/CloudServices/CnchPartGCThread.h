@@ -122,6 +122,10 @@ private:
     std::weak_ptr<ICnchBGThread> merge_thread;
 
     String phase_two_start_key;
+    /// The total number of items got cleaned from the start key to end key.
+    /// Reset when a new round start.
+    /// Recovery rates can be more conservative if the value is too low.
+    size_t cleaned_items_in_a_round = 0;
 };
 
 
