@@ -51,12 +51,35 @@ private:
     void runImpl() override;
     void clearData() override;
 
-    void doPhaseOneGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions);
-    void doPhaseOnePartitionGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp);
+    /**
+     * @brief Try select valid invisible parts/delete bitmaps and move their metadata to trash.
+     *
+     * @param partitions Partitions to be selected.
+     * @return Return `true` if any items removed.
+     */
+    bool doPhaseOneGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions);
+    /**
+     * @param items_removed A reference to a boolean variable that will be set to true if any items were removed.
+     * @return total items count (that are still) in partition.
+     */
+    size_t doPhaseOnePartitionGC(
+        const StoragePtr & istorage,
+        StorageCnchMergeTree & storage,
+        const String & partition_id,
+        bool in_wakeup,
+        TxnTimestamp gc_timestamp,
+        bool & items_removed);
     void movePartsToTrash(const StoragePtr & storage, const ServerDataPartsVector & parts, bool is_staged, String log_type, size_t pool_size, size_t batch_size, bool is_zombie_with_staging_txn_id = false);
     void moveDeleteBitmapsToTrash(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps, size_t pool_size, size_t batch_size);
     void clearOldInsertionLabels(const StoragePtr & istorage, StorageCnchMergeTree & storage);
 
+    void clearEmptyPartitions(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions);
+
+    /**
+     * @brief Try to delete the actual data and trashed metadata for a table.
+     *
+     * @return total number of items deleted.
+     */
     size_t doPhaseTwoGC(const StoragePtr & istorage, StorageCnchMergeTree & storage);
 
     /**
@@ -81,6 +104,9 @@ private:
 
     /// Remove parts/delete bitmaps from remote storage and clear trash.
     size_t round_removing_no_data = 0;
+    size_t phase_one_continuous_hits = 0;
+    size_t phase_two_continuous_hits = 0;
+
 
     /// Delete data files in the trash state in background.
     BackgroundSchedulePool::TaskHolder data_remover;
