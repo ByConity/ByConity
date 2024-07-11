@@ -1715,8 +1715,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
-    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
-    M(UInt64, exchange_wait_accept_max_timeout_ms, 10000, "Exchange receiver wait accept max timeout ms",0) \
+    M(UInt64, exchange_timeout_ms, 1000000, "Exchange request timeout ms",0) \
+    M(UInt64, exchange_wait_accept_max_timeout_ms, 20000, "Exchange receiver wait accept max timeout ms",0) \
     M(UInt64, exchange_queue_bytes, 209715200, "Queue size(bytes) for exchange queue, 0 means disable", 0) \
     M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver",0) \
     M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
@@ -1738,7 +1738,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_use_query_memory_tracker, true, "Use query-level memory tracker", 0) \
     M(UInt64, wait_for_post_processing_timeout_ms, 1000, "Timeout for waiting post processing rpc from workers.", 0) \
-    M(UInt64, distributed_query_wait_exception_ms, 1000,"Wait final planSegment exception from segmentScheduler.", 0) \
+    M(UInt64, distributed_query_wait_exception_ms, 2000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
     \
     /** Runtime Filter settings */ \
