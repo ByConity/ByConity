@@ -92,6 +92,7 @@
 #include <Storages/System/StorageSystemUsers.h>
 #include <Storages/System/StorageSystemRoles.h>
 #include <Storages/System/StorageSystemGrants.h>
+#include <Storages/System/StorageSystemSensitiveGrants.h>
 #include <Storages/System/StorageSystemRoleGrants.h>
 #include <Storages/System/StorageSystemCurrentRoles.h>
 #include <Storages/System/StorageSystemEnabledRoles.h>
@@ -186,6 +187,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
     attach<StorageSystemUsers>(system_database, "users");
     attach<StorageSystemRoles>(system_database, "roles");
     attach<StorageSystemGrants>(system_database, "grants");
+    attach<StorageSystemSensitiveGrants>(system_database, "sensitive_grants");
     attach<StorageSystemRoleGrants>(system_database, "role_grants");
     attach<StorageSystemCurrentRoles>(system_database, "current_roles");
     attach<StorageSystemEnabledRoles>(system_database, "enabled_roles");

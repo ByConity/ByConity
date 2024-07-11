@@ -195,3 +195,4 @@ restrict_tenanted_users_to_whitelist_settings: false
 restrict_tenanted_users_to_privileged_operations: false
 additional_services:
   FullTextSearch: true
+sensitive_permission_tenants: 1234
