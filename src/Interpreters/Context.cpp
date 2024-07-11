@@ -2179,13 +2179,13 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
 
     // NOTE: tenanted users connect to server using tenant id given in connection info.
     // allow only whitelisted settings for tenanted users
-    if (this->getIsRestrictSettingsToWhitelist() && !this->getTenantId().empty())
+    if (this->getIsRestrictSettingsToWhitelist() && !getCurrentTenantId().empty())
     {
         for (const auto & change : changes)
         {
             if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
                 throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
-                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    " for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
         }
     }
