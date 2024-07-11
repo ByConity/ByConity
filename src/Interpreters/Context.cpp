@@ -457,6 +457,7 @@ struct ContextSharedPart
 
     bool shutdown_called = false;
     bool restrict_tenanted_users_to_whitelist_settings = false;
+    bool restrict_tenanted_users_to_privileged_operations = false;
 
     Stopwatch uptime_watch;
 
@@ -4395,6 +4396,16 @@ void Context::addRestrictSettingsToWhitelist(const std::vector<String>& setting_
 {
     for (auto & name : setting_names)
         SettingsChanges::WHITELIST_SETTINGS.emplace(name);
+}
+
+bool Context::getBlockPrivilegedOp() const
+{
+    return shared->restrict_tenanted_users_to_privileged_operations;
+}
+
+void Context::setBlockPrivilegedOp(bool is_restrict)
+{
+    shared->restrict_tenanted_users_to_privileged_operations = is_restrict;
 }
 
 void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
