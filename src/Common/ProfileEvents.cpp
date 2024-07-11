@@ -878,6 +878,10 @@
     M(GetTableTrashItemsMetricsDataFromMetastoreFailed, "") \
     M(GetPartsInfoMetricsSuccess, "") \
     M(GetPartsInfoMetricsFailed, "") \
+    M(PutSensitiveResourceSuccess, "") \
+    M(PutSensitiveResourceFailed, "") \
+    M(GetSensitiveResourceSuccess, "") \
+    M(GetSensitiveResourceFailed, "") \
     M(PutAccessEntitySuccess, "") \
     M(PutAccessEntityFailed, "") \
     M(TryGetAccessEntitySuccess, "") \
