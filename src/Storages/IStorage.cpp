@@ -30,6 +30,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -270,8 +271,12 @@ NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
     {
         if (view->getInMemoryMetadataPtr()->select.inner_query)
         {
+            Names required_columns;
             const auto & select_query = view->getInMemoryMetadataPtr()->select.inner_query;
-            auto required_columns = InterpreterSelectQuery(select_query, context, SelectQueryOptions{}.noModify()).getRequiredColumns();
+            if (auto * select = select_query->as<ASTSelectWithUnionQuery>(); select->list_of_selects->children.size() == 1)
+                required_columns = InterpreterSelectQuery(select->list_of_selects->children.at(0)->clone(), context, SelectQueryOptions{}.noModify()).getRequiredColumns();
+            else if (select_query->as<ASTSelectQuery>())
+                required_columns = InterpreterSelectQuery(select_query->clone(), context, SelectQueryOptions{}.noModify()).getRequiredColumns();
             for (const auto & col_name : required_columns)
                 name_deps[col_name].push_back(view->getTableName());
         }
