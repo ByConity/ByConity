@@ -939,7 +939,7 @@ public:
     void setSetting(const StringRef & name, const String & value);
     void setSetting(const StringRef & name, const Field & value);
     void applySettingChange(const SettingChange & change);
-    void applySettingsChanges(const SettingsChanges & changes);
+    void applySettingsChanges(const SettingsChanges & changes, bool internal = true);
     void applySettingsChanges(const JSON & changes);
 
     /// Checks the constraints.

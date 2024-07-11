@@ -2148,7 +2148,7 @@ void Context::applySettingChange(const SettingChange & change)
 }
 
 
-void Context::applySettingsChanges(const SettingsChanges & changes)
+void Context::applySettingsChanges(const SettingsChanges & changes, bool internal)
 {
     auto lock = getLock();
 
@@ -2179,7 +2179,7 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
 
     // NOTE: tenanted users connect to server using tenant id given in connection info.
     // allow only whitelisted settings for tenanted users
-    if (this->getIsRestrictSettingsToWhitelist() && !getCurrentTenantId().empty())
+    if (!internal && !isInternalQuery () && getIsRestrictSettingsToWhitelist() && getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY && !getCurrentTenantId().empty())
     {
         for (const auto & change : changes)
         {
