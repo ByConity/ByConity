@@ -143,6 +143,11 @@ void ServerDataPart::serializeDeleteBitmapMetas([[maybe_unused]] const MergeTree
 }
 
 UInt64 ServerDataPart::rowsCount() const { return part_model_wrapper->part_model->rows_count(); }
+UInt64 ServerDataPart::rowExistsCount() const
+{
+    return part_model_wrapper->part_model->has_row_exists_count() ? part_model_wrapper->part_model->row_exists_count() : rowsCount();
+}
+
 bool ServerDataPart::isEmpty() const { return !isPartial() && part_model_wrapper->part_model->rows_count() == 0; }
 UInt64 ServerDataPart::size() const { return part_model_wrapper->part_model->size();}
 bool ServerDataPart::isPartial() const { return part_model_wrapper->info->hint_mutation; }
@@ -189,6 +194,28 @@ MutableMergeTreeDataPartCNCHPtr ServerDataPart::toCNCHDataPart(
 void ServerDataPart::setVirtualPartSize(const UInt64 & vp_size) const { virtual_part_size = vp_size; }
 
 UInt64 ServerDataPart::getVirtualPartSize() const { return virtual_part_size; }
+
+UInt64 ServerDataPart::deletedRowsCount(const MergeTreeMetaBase & storage) const
+{
+    UInt64 res = 0;
+    /// For unique table, deletedRowsCount is calculated from delete_bitmap.
+    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+    {
+        if (delete_bitmap_metas.empty())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap meta for part {} is empty whose engine is unique table, it's a bug!", name());
+
+        for (const auto & delete_bitmap_meta: delete_bitmap_metas)
+            res += delete_bitmap_meta->cardinality();
+    }
+    /// For normal table, deletedRowsCount is calculated from _row_exists column which result is already materialized in part meta.
+    else
+    {
+        res = rowsCount() - rowExistsCount();
+    }
+
+    LOG_TRACE(storage.getLogger(), "Deleted rows of part {} is {}", name(), res);
+    return res;
+}
 
 const ImmutableDeleteBitmapPtr & ServerDataPart::getDeleteBitmap(const MergeTreeMetaBase & storage, bool is_unique_new_part) const
 {

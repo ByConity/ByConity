@@ -282,6 +282,8 @@ public:
 
     bool hasTrashedPartsInPartition(const ConstStoragePtr & storage, const String & partition);
 
+    ServerDataPartsWithDBM getAllServerDataPartsWithDBM(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
+
     ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DataPartsVector getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);

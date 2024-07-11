@@ -38,7 +38,7 @@ BlockIO InterpreterAlterDiskCacheQuery::execute()
     }
     else
     {
-        parts = storage->getAllParts(getContext());
+        parts = storage->getAllPartsWithDBM(getContext()).first;
     }
     parts = CnchPartsHelper::calcVisibleParts(parts, false);
 

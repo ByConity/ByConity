@@ -989,7 +989,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_threads_for_cnch_dump, 1, "The maximum number of threads for dumping data in cnch.", 0) \
     M(Bool, database_atomic_wait_for_drop_and_detach_synchronously, false, "When executing DROP or DETACH TABLE in Atomic database, wait for table data to be finally dropped or detached.", 0) \
     M(Bool, enable_scalar_subquery_optimization, true, "If it is set to true, prevent scalar subqueries from (de)serializing large scalar values and possibly avoid running the same subquery more than once.", 0) \
-    M(Bool, optimize_trivial_count_query, false, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
+    M(Bool, optimize_trivial_count_query, true, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
     M(Bool, optimize_respect_aliases, true, "If it is set to true, it will respect aliases in WHERE/GROUP BY/ORDER BY, that will help with partition pruning/secondary indexes/optimize_aggregation_in_order/optimize_read_in_order/optimize_trivial_count", 0) \
     M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
     M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \

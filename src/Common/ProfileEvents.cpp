@@ -560,6 +560,8 @@
     M(GetServerDataPartsInPartitionsFailed, "") \
     M(GetAllServerDataPartsSuccess, "") \
     M(GetAllServerDataPartsFailed, "") \
+    M(GetAllServerDataPartsWithDBMSuccess, "") \
+    M(GetAllServerDataPartsWithDBMFailed, "") \
     M(GetDataPartsByNamesSuccess, "") \
     M(GetDataPartsByNamesFailed, "") \
     M(GetStagedDataPartsByNamesSuccess, "") \

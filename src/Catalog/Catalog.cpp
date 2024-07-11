@@ -172,6 +172,8 @@ namespace ProfileEvents
     extern const Event GetServerDataPartsInPartitionsFailed;
     extern const Event GetAllServerDataPartsSuccess;
     extern const Event GetAllServerDataPartsFailed;
+    extern const Event GetAllServerDataPartsWithDBMSuccess;
+    extern const Event GetAllServerDataPartsWithDBMFailed;
     extern const Event GetDataPartsByNamesSuccess;
     extern const Event GetDataPartsByNamesFailed;
     extern const Event GetStagedDataPartsByNamesSuccess;
@@ -2150,6 +2152,22 @@ namespace Catalog
         return it->next();
     }
 
+    ServerDataPartsWithDBM Catalog::getAllServerDataPartsWithDBM(
+        const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, const VisibilityLevel visibility)
+    {
+        ServerDataPartsWithDBM res;
+        runWithMetricSupport(
+            [&] {
+                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
+                    return;
+
+                res = getServerDataPartsInPartitionsWithDBM(storage, getPartitionIDs(storage, session_context), ts, session_context, visibility);
+            },
+            ProfileEvents::GetAllServerDataPartsWithDBMSuccess,
+            ProfileEvents::GetAllServerDataPartsWithDBMFailed);
+        return res;
+    }
+
     ServerDataPartsVector Catalog::getAllServerDataParts(
         const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, const VisibilityLevel visibility)
     {
@@ -2157,9 +2175,8 @@ namespace Catalog
         runWithMetricSupport(
             [&] {
                 if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
-                {
                     return;
-                }
+
                 res = getServerDataPartsInPartitions(storage, getPartitionIDs(storage, session_context), ts, session_context, visibility);
             },
             ProfileEvents::GetAllServerDataPartsSuccess,
