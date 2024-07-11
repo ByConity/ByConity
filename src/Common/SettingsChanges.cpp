@@ -531,6 +531,7 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "sync_thread_heartbeat_interval_ms",
         "sync_thread_max_heartbeat_interval_second",
         "sync_thread_schedule_interval_ms",
+        "system_mutations_only_basic_info",
         "table_function_remote_max_addresses",
         "tables_load_pool_size",
         "tcp_keep_alive_timeout",

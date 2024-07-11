@@ -60,6 +60,7 @@ namespace
         "databases",
         "tables",
         "columns",
+        "mutations",
 
         /// Specific to the current session
         "settings",

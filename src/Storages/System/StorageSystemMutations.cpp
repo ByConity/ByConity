@@ -119,7 +119,7 @@ void StorageSystemMutations::fillCnchData(MutableColumns & res_columns, ContextP
         table_uuids.insert((*col_uuid)[i].safeGet<UUID>());
     }
 
-    if (context->getSettingsRef().system_mutations_only_basic_info)
+    if (context->getSettingsRef().system_mutations_only_basic_info || !tenant_id.empty())
     {
         std::unordered_map<UUID, std::pair<String, String>> uuid_to_db_table;
         col_database = filtered_block.getByName("database").column;
