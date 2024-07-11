@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS t_alter_d;
 DROP TABLE IF EXISTS t_alter_ids;
 
-CREATE TABLE t_alter_d(k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY k ORDER BY m UNIQUE KEY m;
+CREATE TABLE t_alter_d(k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY k ORDER BY m UNIQUE KEY m SETTINGS enable_delete_mutation_on_unique_table = 1;
 CREATE TABLE t_alter_ids(id Int32) ENGINE = CnchMergeTree ORDER BY id;
 -- t_alter_ids: 0,1,2,3,4,5,6,7,8,9
 INSERT INTO t_alter_ids select number from numbers(10);

@@ -475,6 +475,7 @@ enum StealingCacheMode : UInt64
     M(MaxThreads, unique_table_dedup_threads, 8, "", 0) \
     M(Seconds, dedup_worker_progress_log_interval, 120, "", 0) \
     M(UInt64, max_delete_bitmap_meta_depth, 100, "", 0) \
+    M(UInt64, enable_delete_mutation_on_unique_table, false, "Allow to run delete mutation on unique table. It's disabled by default and DELETE FROM is recommended for unique table.", 0) \
     M(UInt64, unique_merge_acquire_lock_retry_time, 10, "", 0) \
     M(Bool, enable_bucket_level_unique_keys, false, "", 0) \
     M(MaxThreads, cnch_write_part_threads, 1, "", 0) \
