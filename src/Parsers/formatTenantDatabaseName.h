@@ -24,9 +24,9 @@ String formatTenantConnectUserName(const String & user_name, bool is_force = fal
 
 String formatTenantEntityName(const String & name);
 
-String getOriginalEntityName(const String & tenant_entity_name);
+String getOriginalEntityName(const String & tenant_entity_name, const String & tenant_id = {});
 
-bool isTenantMatchedEntityName(const String & tenant_entity_name);
+bool isTenantMatchedEntityName(const String & tenant_entity_name, const String & tenant_id = {});
 
 String getOriginalDatabaseName(const String & tenant_database_name);
 
