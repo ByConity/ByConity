@@ -91,6 +91,7 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     , segment_cache_strategy(nullptr)
     , segment_cache(nullptr)
     , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
+    , reader_id(UUIDHelpers::UUIDToString(UUIDHelpers::generateV4()))
 
 {
     if (data_part->enableDiskCache())
@@ -100,6 +101,9 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     }
 
     initializeStreams(profile_callback_, internal_progress_cb_, clock_type_);
+
+    if (settings.read_settings.remote_read_log)
+        LOG_TRACE(log, "Created reader {} with {} columns: {}", reader_id, columns.size(), fmt::join(columns.getNames(), ","));
 }
 
 size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_mark,
@@ -156,6 +160,8 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_
         }
 
         prefetched_streams.clear();
+        if (settings.read_settings.remote_read_log)
+            LOG_TRACE(log, "reader {} reads {} rows into {} columns from mark {} offset {}", reader_id, read_rows, num_columns, from_mark, from_row);
 
         return read_rows;
     }
