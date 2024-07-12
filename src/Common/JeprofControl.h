@@ -19,16 +19,22 @@ class JeprofControl : public ext::singleton<JeprofControl>
 {
 private:
     bool jemalloc_prof_active {false};
+    bool use_mmap_directly {true};
 
 public:
-    bool jeprofEnabled()
+    bool jeprofEnabled() const
     {
         return jemalloc_prof_active;
     }
 
+    bool canUseMmapDirectly() const
+    {
+        return use_mmap_directly;
+    }
+
 #if USE_JEMALLOC
 public:
-    bool jeprofInitialize(bool enable_by_conf);
+    bool jeprofInitialize(bool enable_by_conf, bool use_mmap_directly);
     void setJeprofStatus(bool active);
     void setProfPath(const String & prof_path_);
     void dump();
@@ -46,4 +52,5 @@ private:
 };
 
 inline bool jeprofEnabled() { return DB::JeprofControl::instance().jeprofEnabled(); }
+inline bool canUseMmapDirectly() { return DB::JeprofControl::instance().canUseMmapDirectly(); }
 }

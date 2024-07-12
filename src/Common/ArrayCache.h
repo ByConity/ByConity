@@ -175,11 +175,11 @@ private:
     {
         void * ptr;
         size_t size;
-        bool prof_active{false};
+        bool use_mmap_directly {true};
 
         Chunk(size_t size_, void * address_hint) : size(size_)
         {
-            if (prof_active = DB::jeprofEnabled(); prof_active)
+            if (use_mmap_directly = DB::canUseMmapDirectly(); !use_mmap_directly)
             {
                 ptr = ::malloc(size);
             }
@@ -195,7 +195,7 @@ private:
         {
             if (ptr)
             {
-                if (prof_active)
+                if (!use_mmap_directly)
                     ::free(ptr)
                 else if (0 != munmap(ptr, size))
                     DB::throwFromErrno(fmt::format("Allocator: Cannot munmap {}.", ReadableSize(size)), DB::ErrorCodes::CANNOT_MUNMAP);
