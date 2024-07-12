@@ -2579,6 +2579,9 @@ String StepPrinter::printFillingStep(const FillingStep & step)
 String StepPrinter::printTotalsHavingStep(const TotalsHavingStep & step)
 {
     std::stringstream details;
+    if (step.getHavingFilter())
+        details << "Having | " << step.getHavingFilter()->formatForErrorMessage() << " |";
+
     details << "Output |";
     for (const auto & column : step.getOutputStream().header)
     {

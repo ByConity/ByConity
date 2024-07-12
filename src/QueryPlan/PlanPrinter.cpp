@@ -1105,6 +1105,12 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << intent.detailIntent() << table_write->getTarget()->toString();
     }
 
+    if (plan->getType() == IQueryPlanStep::Type::TotalsHaving)
+    {
+        const auto * totals_having = dynamic_cast<const TotalsHavingStep *>(plan.get());
+        if (totals_having->getHavingFilter())
+            out << intent.detailIntent() << "Having: " << totals_having->getHavingFilter()->formatForErrorMessage();
+    }
     return out.str();
 }
 
