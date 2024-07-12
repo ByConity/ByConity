@@ -1,3 +1,4 @@
+#include <utility>
 #include <Optimizer/Rewriter/OptimizeTrivialCount.h>
 
 #include <QueryPlan/IQueryPlanStep.h>
@@ -12,6 +13,7 @@
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <QueryPlan/SymbolMapper.h>
+#include "Optimizer/OptimizerMetrics.h"
 
 
 namespace DB
@@ -133,11 +135,13 @@ PlanNodePtr TrivialCountVisitor::visitAggregatingNode(AggregatingNode & node, Vo
     if (!num_rows)
         return visitPlanNode(node, v);
 
+    DatabaseAndTableName database_and_table = {storage->getDatabaseName(), storage->getTableName()};
     auto read_row_count= std::make_shared<ReadStorageRowCountStep>(node.getCurrentDataStream().header,
-                                                                    storage->getStorageID(),
                                                                     select_query.clone(),
                                                                     agg_step.getParams().aggregates[0],
-                                                                    num_rows.value());
+                                                                    num_rows.value(),
+                                                                    agg_step.isFinal(),
+                                                                    database_and_table);
     auto new_child_node= PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(read_row_count), {});
     return new_child_node->shared_from_this();
 }

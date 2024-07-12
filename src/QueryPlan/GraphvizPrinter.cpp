@@ -2028,13 +2028,12 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
 
 String StepPrinter::printReadStorageRowCountStep(const ReadStorageRowCountStep & step)
 {
-    String database = step.getStorageID().getDatabaseName();
-    String table = step.getStorageID().getTableName();
+    auto database_and_table = step.getDatabaseAndTableName();
     std::stringstream details;
-    details << database << "." << table << "|";
+    details << database_and_table.first << "." << database_and_table.second << "|";
 
     auto ast = step.getQuery();
-    auto query = ast->as<ASTSelectQuery>();
+    auto * query = ast->as<ASTSelectQuery>();
     if (query && query->getWhere())
     {
         details << "Filter : \\n";
