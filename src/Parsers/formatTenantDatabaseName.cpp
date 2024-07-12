@@ -17,9 +17,11 @@ static const String catalog_delim = "$$";
 
 String getCurrentTenantId()
 {
-    String empty_result;
     if (!CurrentThread::isInitialized())
-        return empty_result;
+        return {};
+    auto &status = CurrentThread::get();
+    if (!status.isEnableTenant())
+        return {};
     auto context = CurrentThread::get().getQueryContext();
     if (context)
     {
@@ -33,9 +35,8 @@ String getCurrentTenantId()
 
 String getCurrentCatalog()
 {
-    String empty_result;
     if (!CurrentThread::isInitialized())
-        return empty_result;
+        return {};
     auto context = CurrentThread::get().getQueryContext();
     if (context)
     {
@@ -44,7 +45,7 @@ String getCurrentCatalog()
         else if (!context->getSettings().default_catalog.toString().empty())
             return context->getSettings().default_catalog.toString();
     }
-    return empty_result;
+    return {};
 }
 
 static constexpr std::string_view internal_databases[]
@@ -267,4 +268,19 @@ std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDataba
         return {std::nullopt, {database_name}};
     return {{database_name.substr(0, pos)}, {database_name.substr(pos + catalog_delim.size())}};
 }
+
+DisableTenantGuard::DisableTenantGuard()
+{
+    if(!CurrentThread::isInitialized())
+        return;
+    CurrentThread::get().disableTenant();
+}
+
+DisableTenantGuard::~DisableTenantGuard()
+{
+    if(!CurrentThread::isInitialized())
+        return;
+    CurrentThread::get().enableTenant();
+}
+
 }

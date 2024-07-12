@@ -47,5 +47,13 @@ String formatCatalogDatabaseName(const String & database_name, const String cata
 // tenant_id.db -> teannt_id.db
 // tenant_id.catalog$$db -> teanant_id.catalog, db
 // catalog$$db -> catalog, db
-std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDatabaseName(const String & database_name);
+std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDatabaseName(const String &database_name);
+
+class DisableTenantGuard
+{
+public:
+    DisableTenantGuard();
+    ~DisableTenantGuard();
+};
+
 }
