@@ -36,7 +36,7 @@ using PatternRawPtr = const Pattern *;
 using PatternRawPtrs = std::vector<PatternRawPtr>;
 class PatternVisitor;
 using PatternProperty = std::function<std::any(const PlanNodePtr &)>;
-using PatternPredicate = std::function<bool(const PlanNodePtr &, const Captures &)>;
+using PatternPredicate = std::function<bool(const PlanNodePtr &, Captures &)>;
 enum class PatternQuantifier;
 
 class Pattern

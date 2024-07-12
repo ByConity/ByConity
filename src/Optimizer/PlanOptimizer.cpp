@@ -71,6 +71,8 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // rules for normalize Union/Except/Intersect
         std::make_shared<IterativeRewriter>(Rules::mergeSetRules(), "MergeSetNode"),
 
+        std::make_shared<IterativeRewriter>(Rules::extractBitmapImplicitFilterRules(), "ExtractBitmapImplicitFilter"),
+
         std::make_shared<BitmapIndexSplitter>(),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::pushDownBitmapProjection(), "PushDownBitmapProjection"),
@@ -175,6 +177,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<RemoveCorrelatedScalarSubquery>(),
         std::make_shared<RemoveUnCorrelatedQuantifiedComparisonSubquery>(),
         std::make_shared<RemoveCorrelatedQuantifiedComparisonSubquery>(),
+
+        std::make_shared<IterativeRewriter>(Rules::extractBitmapImplicitFilterRules(), "ExtractBitmapImplicitFilter"),
 
         std::make_shared<BitmapIndexSplitter>(),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),

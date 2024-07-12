@@ -49,6 +49,7 @@ public:
     static std::vector<RulePtr> pushIndexProjectionIntoTableScanRules();
     static std::vector<RulePtr> crossJoinToUnion();
     static std::vector<RulePtr> sumIfToCountIf();
+    static std::vector<RulePtr> extractBitmapImplicitFilterRules();
 };
 
 }

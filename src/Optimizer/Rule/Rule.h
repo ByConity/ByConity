@@ -167,6 +167,7 @@ enum class RuleType : UInt32
 
     SUM_IF_TO_COUNT_IF,
 
+    EXTRACT_BITMAP_IMPLICIT_FILTER,
     // Implementation
     SET_JOIN_DISTRIBUTION,
 

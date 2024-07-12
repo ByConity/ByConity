@@ -19,6 +19,7 @@
 #include <Optimizer/Rewriter/RemoveApply.h>
 #include <Optimizer/Rule/Rewrite/DistinctToAggregate.h>
 #include <Optimizer/Rule/Rewrite/ExplainAnalyzeRules.h>
+#include <Optimizer/Rule/Rewrite/ExtractBitmapImplicitFilter.h>
 #include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
 #include <Optimizer/Rule/Rewrite/ImplementSetOperationRules.h>
 #include <Optimizer/Rule/Rewrite/InlineProjections.h>
@@ -232,5 +233,8 @@ std::vector<RulePtr> Rules::crossJoinToUnion()
     return {std::make_shared<CrossJoinToUnion>()};
 }
 
-
+std::vector<RulePtr> Rules::extractBitmapImplicitFilterRules()
+{
+    return {std::make_shared<ExtractBitmapImplicitFilter>()};
+}
 }
