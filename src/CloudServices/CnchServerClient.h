@@ -169,7 +169,7 @@ public:
 
     void acquireLock(const LockInfoPtr & info);
     void releaseLock(const LockInfoPtr & info);
-    void assertLockAcquired(const TxnTimestamp & txn_id, LockID lock_ids);
+    void assertLockAcquired(const LockInfoPtr & info);
     void reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt64 expire_time = 0);
 
     std::optional<TxnTimestamp> getMinActiveTimestamp(const StorageID & storage_id);

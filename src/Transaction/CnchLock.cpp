@@ -90,7 +90,7 @@ public:
         auto client = getTargetServer();
         if (client)
         {
-            (*client)->assertLockAcquired(lock_info->txn_id, lock_info->lock_id);
+            (*client)->assertLockAcquired(lock_info);
         }
         else
         {
@@ -156,18 +156,19 @@ bool CnchLockHolder::tryLock()
     Stopwatch watch;
     SCOPE_EXIT({ LOG_DEBUG(&Poco::Logger::get("CnchLock"), "acquire {} locks in {} ms", cnch_locks.size(), watch.elapsedMilliseconds()); });
 
+    /// Init heartbeat task if needed
+    /// We need to start the heartbeat process in advance, otherwise txn may be aborted due to expiration time
+    if (!report_lock_heartbeat_task)
+    {
+        report_lock_heartbeat_task
+            = getContext()->getSchedulePool().createTask("reportLockHeartBeat", [this]() { reportLockHeartBeatTask(); });
+        report_lock_heartbeat_task->activateAndSchedule();
+    }
+
     for (const auto & lock : cnch_locks)
     {
         if (!lock->tryLock())
             return false;
-
-        /// Init heartbeat task if needed
-        if (!report_lock_heartbeat_task)
-        {
-            report_lock_heartbeat_task
-                = getContext()->getSchedulePool().createTask("reportLockHeartBeat", [this]() { reportLockHeartBeatTask(); });
-            report_lock_heartbeat_task->activateAndSchedule();
-        }
     }
     return true;
 }
@@ -199,9 +200,7 @@ void CnchLockHolder::reportLockHeartBeat()
 
     for (const auto & cnch_lock : cnch_locks)
     {
-        if (!cnch_lock->locked)
-            continue;
-
+        /// We need to start the heartbeat process in advance, otherwise txn may be aborted due to expiration time
         if (cnch_lock->server_client)
             clients.emplace(cnch_lock->server_client.get());
         else

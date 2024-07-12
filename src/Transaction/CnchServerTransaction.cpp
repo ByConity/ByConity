@@ -147,6 +147,8 @@ TxnTimestamp CnchServerTransaction::commitV2()
     {
         precommit();
         assertLockAcquired();
+        /// XXX: If a topo switch occurs during the commit phase, it may lead to parallel lock holding.
+        /// While this problem is difficult to solve because committed transactions are not supported to be rolled back. Temporarily use the time window of topo switching to avoid this problem
         return commit();
     }
     catch (const Exception & e)
@@ -162,7 +164,7 @@ TxnTimestamp CnchServerTransaction::commitV2()
                 return commit_ts;
         }
         catch (...)
-        {   
+        {
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
 

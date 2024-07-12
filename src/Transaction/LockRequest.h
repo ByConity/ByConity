@@ -92,6 +92,8 @@ public:
     LockID lock_id {0};
     LockStatus status{LockStatus::LOCK_INIT};
     LockRequestPtrs requests;
+    /// The topology version was set when acquiring lock
+    PairInt64 topology_version;
     static constexpr auto task_domain{"task_"};
     static constexpr auto default_domain {""};
     /// TODO: (litianan, zuochuang.zema) use this domain for unique table.
@@ -154,6 +156,12 @@ public:
     inline LockInfo & setLockID(LockID id)
     {
         lock_id = id;
+        return *this;
+    }
+
+    inline LockInfo & setTopologyVersion(PairInt64 topology_version_)
+    {
+        topology_version = std::move(topology_version_);
         return *this;
     }
 };

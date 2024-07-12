@@ -764,14 +764,14 @@ void CnchServerClient::releaseLock(const LockInfoPtr & lock)
     RPCHelpers::checkResponse(response);
 }
 
-void CnchServerClient::assertLockAcquired(const TxnTimestamp & txn_id, LockID lock_id)
+void CnchServerClient::assertLockAcquired(const LockInfoPtr & lock)
 {
     brpc::Controller cntl;
     Protos::AssertLockReq request;
     Protos::AssertLockResp response;
 
-    request.set_txn_id(txn_id);
-    request.set_lock_id(lock_id);
+    request.set_txn_id(lock->txn_id);
+    request.set_lock_id(lock->lock_id);
     stub->assertLockAcquired(&cntl, &request, &response, nullptr);
     assertController(cntl);
     RPCHelpers::checkResponse(response);
