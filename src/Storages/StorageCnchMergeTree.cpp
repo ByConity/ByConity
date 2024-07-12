@@ -1782,32 +1782,34 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
 
-    server_resource->sendResources(
-        local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
-            std::vector<brpc::CallId> ids;
-            for (const auto & resource : resources)
-            {
-                brpc::CallId id = client->preloadDataParts(
-                    local_context,
-                    txn_id,
-                    *this,
-                    create_table_query,
-                    resource.server_parts,
-                    handler,
-                    enable_parts_sync_preload,
-                    parts_preload_level,
-                    ts);
-                ids.emplace_back(id);
-                LOG_TRACE(
-                    log,
-                    "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}, submit_ts = {}",
-                    resource.server_parts.size(),
-                    enable_parts_sync_preload,
-                    parts_preload_level,
-                    ts);
-            }
-            return ids;
-        });
+    server_resource->sendResources(local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
+        std::vector<brpc::CallId> ids;
+        for (const auto & resource : resources)
+        {
+            if (resource.server_parts.empty())
+                continue;
+
+            brpc::CallId id = client->preloadDataParts(
+                local_context,
+                txn_id,
+                *this,
+                create_table_query,
+                resource.server_parts,
+                handler,
+                enable_parts_sync_preload,
+                parts_preload_level,
+                ts);
+            ids.emplace_back(id);
+            LOG_TRACE(
+                log,
+                "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}, submit_ts = {}",
+                resource.server_parts.size(),
+                enable_parts_sync_preload,
+                parts_preload_level,
+                ts);
+        }
+        return ids;
+    });
 }
 
 void StorageCnchMergeTree::sendDropDiskCacheTasks(ContextPtr local_context, const ServerDataPartsVector & parts, bool sync, bool drop_vw_disk_cache)
