@@ -333,7 +333,8 @@ GraceHashJoin::GraceHashJoin(
     TemporaryDataOnDiskScopePtr tmp_data_,
     int left_side_parallel_,
     bool enable_adaptive_spill,
-    bool any_take_last_row_)
+    bool any_take_last_row_,
+    int num_streams_)
     : log{&Poco::Logger::get("GraceHashJoin")}
     , context{context_}
     , adaptive_spill_mode(enable_adaptive_spill)
@@ -350,12 +351,17 @@ GraceHashJoin::GraceHashJoin(
     , hash_join(makeInMemoryJoin())
     , hash_join_sample_block(hash_join->savedBlockSample())
     , max_allowed_mem_size_in_spill(context->getSettingsRef().max_allowed_mem_size_in_join_spill)
+    , num_streams(num_streams_)
+    , setting_max_joined_block_rows(context->getSettingsRef().max_joined_block_size_rows? context->getSettingsRef().max_joined_block_size_rows: kMaxAllowedJoinedBlockRows)
 {
     if (left_side_parallel_ == 0)
-        left_side_parallel = context->getSettingsRef().max_threads;
+        left_side_parallel = num_streams;
     else
         left_side_parallel = left_side_parallel_;
 
+    initMaxJoinedBlockBytesInSpill();
+
+    LOG_DEBUG(log, "Grace hash join left side parallel:{}, max threads:{}", left_side_parallel, num_streams);
     if (!GraceHashJoin::isSupported(table_join))
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "GraceHashJoin is not supported for this join type");
 }
@@ -525,6 +531,18 @@ void GraceHashJoin::addBuckets(const size_t bucket_count)
         buckets.emplace_back(std::move(bucket));
 }
 
+inline size_t calculateMaxjoinedBlockBytes(size_t mem_quota, size_t used_memory, int max_threads, int K = 8) {
+    //formula: mem_quota * free_memory_ratio / max_threads / K (K=8)
+    if (unlikely(mem_quota <= used_memory)) {
+        return 1;
+    }
+    return (mem_quota-used_memory) / max_threads / K;
+}
+
+inline size_t calculateMaxJoinedBlockRowsBasedOnMaxBytesAndSampleBlock(size_t max_joined_block_bytes_in_spill, const Block &block) {
+    return max_joined_block_bytes_in_spill / (block.allocatedBytes()+1) * block.rows();
+}
+
 // void GraceHashJoin::checkTypesOfKeys(const Block & block) const
 // {
 //     chassert(hash_join);
@@ -543,7 +561,41 @@ void GraceHashJoin::initialize(const Block & sample_block)
 }
 
 void GraceHashJoin::inMemoryJoinBlock(Block & block, ExtraBlockPtr & not_processed) {
+    if (adaptive_spill_mode) {
+        if (!join_blk_rows_inited) {
+            table_join->maxJoinedBlockRows() = sample_block_rows_for_bytes_estimation;
+            join_blk_rows_inited = true;
+        }
+    }
+
     hash_join->joinBlock(block, not_processed);
+
+    if (adaptive_spill_mode && block.rows()) {
+
+        double spill_triger_threshold = context->getSettingsRef().spill_triger_threshold.value;
+        bool adaptive_spill_trigered = total_memory_tracker.getHardLimit() * spill_triger_threshold < total_memory_tracker.get();
+       
+        if (has_low_memory_encountered.load(std::memory_order_relaxed) || adaptive_spill_trigered) {
+            size_t updated_val = 
+                std::min(
+                    calculateMaxJoinedBlockRowsBasedOnMaxBytesAndSampleBlock(max_joined_block_bytes_in_spill, block), 
+                    setting_max_joined_block_rows);
+            if (updated_val) {
+                table_join->maxJoinedBlockRows() = updated_val;
+                // LOG_INFO(log, "update maxJoinedBlockRows: {}", updated_val);
+            }
+            has_low_memory_encountered.store(true, std::memory_order_relaxed);
+        } else {
+            table_join->maxJoinedBlockRows() = 
+                std::min(
+                    std::max(
+                        table_join->maxJoinedBlockRows(), 
+                        calculateMaxJoinedBlockRowsBasedOnMaxBytesAndSampleBlock(
+                            calculateMaxjoinedBlockBytes(total_memory_tracker.getHardLimit(),total_memory_tracker.get(), num_streams), block)), 
+                    setting_max_joined_block_rows);
+            // LOG_INFO(log, "scale up maxJoinedBlockRows: {} RAM:{}", table_join->maxJoinedBlockRows(),  (total_memory_tracker.get()/1024.0/1024/1024) );
+        }
+    }
 }
 
 void GraceHashJoin::joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_processed)
@@ -780,6 +832,13 @@ GraceHashJoin::InMemoryJoinPtr GraceHashJoin::makeInMemoryJoin()
 Block GraceHashJoin::prepareRightBlock(const Block & block)
 {
     return HashJoin::prepareRightBlock(block, hash_join_sample_block);
+}
+
+void GraceHashJoin::initMaxJoinedBlockBytesInSpill()
+{
+    double spill_triger_threshold = context->getSettingsRef().spill_triger_threshold.value; 
+    max_joined_block_bytes_in_spill = calculateMaxjoinedBlockBytes(total_memory_tracker.getHardLimit(), total_memory_tracker.getHardLimit()*spill_triger_threshold, num_streams);
+    LOG_INFO(log, "Init max_joined_block_bytes_in_spill:{}", max_joined_block_bytes_in_spill);
 }
 
 void GraceHashJoin::addJoinedBlockImpl(Block block, bool is_delay_read)
