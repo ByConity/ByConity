@@ -1232,6 +1232,10 @@ bool KeyCondition::tryPrepareSetIndex(
     /// The index can be prepared if the elements of the set were saved in advance.
     if (!prepared_set->hasExplicitSetElements())
         return false;
+    
+    if (prepared_set->getSetElements().size() == 1 &&
+        "BitMap64" == String(prepared_set->getSetElements()[0]->getFamilyName()))
+        return false;
 
     prepared_set->checkColumnsNumber(left_args_count);
     for (size_t i = 0; i < indexes_mapping.size(); ++i)
