@@ -52,11 +52,15 @@ public:
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 
+    bool isScalable() const { return scalable; }
+    void setScalable(bool scalable_) { scalable = scalable_; }
+
 private:
     ExchangeMode exchange_type = ExchangeMode::UNKNOWN;
     Partitioning schema;
     bool keep_order = false;
     std::unordered_map<String, std::vector<String>> output_to_inputs;
+    bool scalable = true;
 };
 
 

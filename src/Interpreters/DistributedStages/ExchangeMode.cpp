@@ -43,6 +43,9 @@ String exchangeModeToString(const ExchangeMode & exchange_mode)
         case ExchangeMode::GATHER:
             ostr << "GATHER";
             break;
+        case ExchangeMode::BUCKET_REPARTITION:
+            ostr << "BUCKET_REPARTITION";
+            break;
     }
 
     return ostr.str();

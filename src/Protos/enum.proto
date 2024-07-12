@@ -51,6 +51,7 @@ message ExchangeMode {
     REPARTITION = 3;
     BROADCAST = 4;
     GATHER = 5;
+    BUCKET_REPARTITION = 6;
   }
 }
 

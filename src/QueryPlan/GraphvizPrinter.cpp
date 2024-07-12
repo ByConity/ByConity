@@ -1782,6 +1782,8 @@ String StepPrinter::printExchangeStep(const ExchangeStep & step)
                 return "REPARTITION";
             case ExchangeMode::GATHER:
                 return "GATHER";
+            case ExchangeMode::BUCKET_REPARTITION:
+                return "BUCKET_REPARTITION";
         }
     };
     details << f(step.getExchangeMode());
@@ -3452,6 +3454,8 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
                 return "REPARTITION";
             case ExchangeMode::GATHER:
                 return "GATHER";
+            case ExchangeMode::BUCKET_REPARTITION:
+                return "BUCKET_REPARTITION";
         }
     };
     size_t segment_id = segment_ptr->getPlanSegmentId();
