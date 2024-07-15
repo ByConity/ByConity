@@ -31,7 +31,7 @@ ORDER BY label, s;
 -- totals after aggregate
 SELECT
     ss,
-    groupArray(s) AS arr
+    arraySort(groupArray(s)) AS arr
 FROM
 (
     SELECT
@@ -46,7 +46,7 @@ ORDER BY ss;
 
 SELECT
     ss,
-    groupArray(s) AS arr
+    arraySort(groupArray(s)) AS arr
 FROM
 (
     SELECT
