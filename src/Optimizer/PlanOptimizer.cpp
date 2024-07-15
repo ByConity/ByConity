@@ -124,7 +124,6 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // use property
         std::make_shared<SortingOrderedSource>(),
 
-        std::make_shared<UnaliasSymbolReferences>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
