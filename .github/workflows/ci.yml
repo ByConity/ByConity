@@ -312,6 +312,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries/
+          cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries/
           echo "Skip 48028_explain_format_json and 48036_verify_nullable_type_after_eliminate_join_by_fk_in_cte"
           rm -f ./queries/4_cnch_stateless_no_tenant/48028_explain_format_json.* ./queries/4_cnch_stateless_no_tenant/48036_verify_nullable_type_after_eliminate_join_by_fk_in_cte.*
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
