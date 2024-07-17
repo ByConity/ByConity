@@ -309,6 +309,10 @@ if (USE_NURAFT)
     add_object_library(clickhouse_coordination Coordination)
 endif()
 
+if (USE_PARQUET)
+    add_object_library(clickhouse_processors_formats_impl_parquet Processors/Formats/Impl/Parquet)
+endif()
+
 set (DBMS_COMMON_LIBRARIES)
 # libgcc_s does not provide an implementation of an atomics library. Instead,
 # GCC's libatomic library can be used to supply these when using libgcc_s.

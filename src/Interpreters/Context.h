@@ -1197,6 +1197,8 @@ public:
     std::shared_ptr<NvmCache> getNvmCache() const;
     void dropNvmCache() const;
 
+    void setFooterCache(size_t max_size_in_bytes);
+
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);
     std::shared_ptr<UncompressedCache> getUncompressedCache() const;

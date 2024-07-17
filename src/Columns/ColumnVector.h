@@ -482,7 +482,7 @@ public:
     {
         if constexpr (has_buf) {
             tryToFlushZeroCopyBufferImpl();
-        } 
+        }
         return data;
     }
 
@@ -490,7 +490,7 @@ public:
     {
         if constexpr (has_buf) {
             tryToFlushZeroCopyBufferImpl();
-        } 
+        }
         return data;
     }
 
@@ -511,7 +511,7 @@ public:
     }
 
     // mutable_ptr<Self> transInfoNonBufColVector() {
-        
+
     // }
 
     inline void tryToFlushZeroCopyBufferImpl() const
@@ -525,12 +525,12 @@ public:
     {
         size_t initial_size = data.size();
         int delta_sz = 0;
-        for(const auto &data_ref: zero_copy_buf.refs()) 
+        for(const auto &data_ref: zero_copy_buf.refs())
             delta_sz += data_ref.getSize();
-        
+
         data.resize(initial_size + delta_sz);
         char* data_addr = reinterpret_cast<char*>(&data[initial_size]);
-        for(const DataRef<T> &data_ref: zero_copy_buf.refs()) 
+        for(const DataRef<T> &data_ref: zero_copy_buf.refs())
         {
             ::memcpy(data_addr, reinterpret_cast<const char*>(data_ref.getData()), data_ref.getSize()*sizeof(T));
             data_addr += data_ref.getSize()*sizeof(T);
@@ -543,9 +543,9 @@ public:
         tryToFlushZeroCopyBufferImpl();
     }
 
-    void copyDataFromStart(char *dst, size_t length) const 
+    void copyDataFromStart(char *dst, size_t length) const
     {
-         // this func supports zero copy buffer 
+         // this func supports zero copy buffer
         size_t bytes_copied = 0;
         size_t cur_elem_cnt = 0;
         if (!data.empty())
@@ -555,7 +555,7 @@ public:
             bytes_copied += cur_elem_cnt * sizeof(T);
             length -= cur_elem_cnt;
         }
-        for(const auto &data_ref: zero_copy_buf.refs()) 
+        for(const auto &data_ref: zero_copy_buf.refs())
         {
             if (length <= 0)
                 break;
@@ -606,7 +606,8 @@ ColumnPtr ColumnVector<T, has_buf>::indexImpl(const PaddedPODArray<Type> & index
     return res;
 }
 
-
+template <class TCol>
+concept is_col_vector = std::is_same_v<TCol, ColumnVector<typename TCol::ValueType>>;
 
 /// Prevent implicit template instantiation of ColumnVector for common types
 

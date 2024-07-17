@@ -154,9 +154,7 @@ SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<
     auto parquet_format = std::make_unique<ParquetBlockInputFormat>(
         *params->read_buf,
         block,
-        params->format_settings,
-        params->read_settings.parquet_decode_threads,
-        params->read_settings.remote_read_min_bytes_for_seek);
+        params->format_settings);
 
     if (params->query_info)
         parquet_format->setQueryInfo(*params->query_info, params->context);

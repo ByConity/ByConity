@@ -129,4 +129,22 @@ MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info)
     return query_info.projection ? nullptr : query_info.index_context;
 }
 
+void SelectQueryInfo::appendPartitonFilters(ASTs conjuncts)
+{
+    ASTPtr new_partition_filter;
+
+    if (partition_filter)
+    {
+        conjuncts.push_back(partition_filter);
+        new_partition_filter = PredicateUtils::combineConjuncts(conjuncts);
+    }
+    else
+    {
+        new_partition_filter = PredicateUtils::combineConjuncts<false>(conjuncts);
+    }
+
+    if (!PredicateUtils::isTruePredicate(new_partition_filter))
+        partition_filter = std::move(new_partition_filter);
+}
+
 }

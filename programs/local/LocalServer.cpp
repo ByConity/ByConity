@@ -300,6 +300,10 @@ try
     if (mmap_cache_size)
         global_context->setMMappedFileCache(mmap_cache_size);
 
+    size_t footer_cache_size = config().getUInt64("footer_cache_size", 3221225472);
+    if (footer_cache_size)
+        global_context->setFooterCache(footer_cache_size);
+
     /// Load global settings from default_profile and system_profile.
     global_context->setDefaultProfiles(config());
 

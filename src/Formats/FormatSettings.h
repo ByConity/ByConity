@@ -148,9 +148,16 @@ struct FormatSettings
         bool output_string_as_string = false;
         bool output_fixed_string_as_fixed_byte_array = true;
         bool preserve_order = false;
+        bool coalesce_read = false;
         bool case_insensitive_column_matching = false;
         UInt64 max_block_size = 8192;
+        size_t max_download_threads = 1;
+        size_t min_bytes_for_seek = 8192;
+        size_t max_buffer_size = 8 * 1024 * 1024;
+        bool use_lazy_io_cache = true;
         bool filter_push_down = true;
+        bool use_footer_cache = false;
+        bool use_native_reader = false;
     } parquet;
 
     struct Orc

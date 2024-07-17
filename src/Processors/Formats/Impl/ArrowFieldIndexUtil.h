@@ -1,14 +1,14 @@
 #pragma once
 #include "config_formats.h"
 #if USE_PARQUET || USE_ORC
-#include <unordered_map>
-#include <Core/Block.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/NestedUtils.h>
-#include <arrow/type.h>
-#include <arrow/type_fwd.h>
-#include <boost/algorithm/string/case_conv.hpp>
-#include <Common/Exception.h>
+#    include <unordered_map>
+#    include <Core/Block.h>
+#    include <DataTypes/DataTypeTuple.h>
+#    include <DataTypes/NestedUtils.h>
+#    include <arrow/type.h>
+#    include <arrow/type_fwd.h>
+#    include <boost/algorithm/string/case_conv.hpp>
+#    include <Common/Exception.h>
 namespace arrow
 {
 class Schema;
@@ -25,10 +25,10 @@ namespace ErrorCodes
 class ArrowFieldIndexUtil
 {
 public:
-    explicit ArrowFieldIndexUtil(bool ignore_case_, bool allow_missing_columns_)
-        : ignore_case(ignore_case_)
-        , allow_missing_columns(allow_missing_columns_)
+        explicit ArrowFieldIndexUtil(bool ignore_case_, bool allow_missing_columns_, const arrow::Schema & schema)
+        : ignore_case(ignore_case_), allow_missing_columns(allow_missing_columns_)
     {
+        fields_indices = calculateFieldIndices(schema);
     }
 
     /// Recursively count every field indices. Return a map
@@ -40,8 +40,7 @@ public:
     /// - y: (1, 2)
     /// - y.i: (1, 1)
     /// - y.j: (2, 1)
-    std::unordered_map<std::string, std::pair<int, int>>
-        calculateFieldIndices(const arrow::Schema & schema)
+    std::unordered_map<std::string, std::pair<int, int>> calculateFieldIndices(const arrow::Schema & schema)
     {
         std::unordered_map<std::string, std::pair<int, int>> result;
         int index_start = 0;
@@ -53,38 +52,50 @@ public:
         return result;
     }
 
-    /// Only collect the required fields' indices. Eg. when just read a field of a struct,
-    /// don't need to collect the whole indices in this struct.
-    std::vector<int> findRequiredIndices(const Block & header, const arrow::Schema & schema)
+    std::vector<int> findRequiredIndices(std::string col_name) const
     {
         std::vector<int> required_indices;
-        std::unordered_set<int> added_indices;
-        /// Flat all named fields' index information into a map.
-        auto fields_indices = calculateFieldIndices(schema);
-        for (size_t i = 0; i < header.columns(); ++i)
-        {
-            const auto & named_col = header.getByPosition(i);
-            std::string col_name = named_col.name;
-            if (ignore_case)
-                boost::to_lower(col_name);
-            /// Since all named fields are flatten into a map, we should find the column by name
-            /// in this map.
-            auto it = fields_indices.find(col_name);
+        if (ignore_case)
+            boost::to_lower(col_name);
+        /// Since all named fields are flatten into a map, we should find the column by name
+        /// in this map.
+        auto it = fields_indices.find(col_name);
 
-            if (it == fields_indices.end())
-            {
-                if (!allow_missing_columns)
-                    throw Exception(
-                        ErrorCodes::THERE_IS_NO_COLUMN, "Not found field ({}) in the following Arrow schema:\n{}\n", named_col.name, schema.ToString());
-                else
-                    continue;
-            }
+        if (it == fields_indices.end())
+        {
+            if (!allow_missing_columns)
+                throw Exception(
+                    ErrorCodes::THERE_IS_NO_COLUMN,
+                    "Not found field ({}) in the following Arrow schema\n", col_name);
+        }
+        else
+        {
             for (int j = 0; j < it->second.second; ++j)
             {
                 auto index = it->second.first + j;
-                if (added_indices.insert(index).second)
-                    required_indices.emplace_back(index);
+                required_indices.emplace_back(index);
             }
+        }
+
+        return required_indices;
+    }
+
+    /// Only collect the required fields' indices. Eg. when just read a field of a struct,
+    /// don't need to collect the whole indices in this struct.
+    std::vector<int> findRequiredIndices(const Block & header) const
+    {
+        std::unordered_set<int> added_indices;
+        /// Flat all named fields' index information into a map.;
+        for (size_t i = 0; i < header.columns(); ++i)
+        {
+            const auto & named_col = header.getByPosition(i);
+            std::vector<int> required_indices = findRequiredIndices(named_col.name);
+            added_indices.insert(required_indices.begin(), required_indices.end());
+        }
+        std::vector<int> required_indices;
+        required_indices.reserve(added_indices.size());
+        for (auto it = added_indices.begin(); it != added_indices.end(); ) {
+            required_indices.push_back(std::move(added_indices.extract(it++).value()));
         }
         return required_indices;
     }
@@ -109,7 +120,7 @@ public:
         if (type->id() == arrow::Type::MAP)
         {
             auto * map_type = static_cast<arrow::MapType *>(type.get());
-            return countIndicesForType(map_type->key_type()) + countIndicesForType(map_type->item_type()) ;
+            return countIndicesForType(map_type->key_type()) + countIndicesForType(map_type->item_type());
         }
 
         return 1;
@@ -118,10 +129,14 @@ public:
 private:
     bool ignore_case;
     bool allow_missing_columns;
-    void calculateFieldIndices(const arrow::Field & field,
+    std::unordered_map<std::string, std::pair<int, int>> fields_indices;
+
+    void calculateFieldIndices(
+        const arrow::Field & field,
         std::string field_name,
         int & current_start_index,
-        std::unordered_map<std::string, std::pair<int, int>> & result, const std::string & name_prefix = "")
+        std::unordered_map<std::string, std::pair<int, int>> & result,
+        const std::string & name_prefix = "")
     {
         const auto & field_type = field.type();
         if (field_name.empty())
@@ -152,7 +167,7 @@ private:
         {
             // It is a nested table.
             const auto * list_type = static_cast<arrow::ListType *>(field_type.get());
-            const auto value_field = list_type->value_field();
+            const auto & value_field = list_type->value_field();
             auto index_snapshot = current_start_index;
             calculateFieldIndices(*value_field, field_name, current_start_index, result, name_prefix);
             // The nested struct field has the same name as this list field.

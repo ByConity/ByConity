@@ -300,6 +300,15 @@ enum class StatisticsCachePolicy
 };
 DECLARE_SETTING_ENUM(StatisticsCachePolicy)
 
+enum class HiveMoveToPrewhereMethod
+{
+    NEVER,
+    COLUMN_SIZE,
+    STATS,
+    ALL,
+};
+DECLARE_SETTING_ENUM(HiveMoveToPrewhereMethod)
+
 enum class MaterializedViewConsistencyCheckMethod
 {
     NONE,
@@ -334,7 +343,7 @@ enum class VWQueueMode : uint32_t
 {
     Skip = 0,
     Match,
-    Force 
+    Force
 };
 
 DECLARE_SETTING_ENUM(VWQueueMode);
