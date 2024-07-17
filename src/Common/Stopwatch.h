@@ -2,7 +2,9 @@
 
 #include <common/time.h>
 #include <common/types.h>
+#include <common/defines.h>
 
+#include <cassert>
 #include <atomic>
 
 
@@ -11,6 +13,20 @@ inline UInt64 clock_gettime_ns(clockid_t clock_type = CLOCK_MONOTONIC)
     struct timespec ts;
     clock_gettime(clock_type, &ts);
     return UInt64(ts.tv_sec * 1000000000LL + ts.tv_nsec);
+}
+
+/// Sometimes monotonic clock may not be monotonic (due to bug in kernel?).
+/// It may cause some operations to fail with "Timeout exceeded: elapsed 18446744073.709553 seconds".
+/// Takes previously returned value and returns it again if time stepped back for some reason.
+inline UInt64 clock_gettime_ns_adjusted(UInt64 prev_time, clockid_t clock_type = CLOCK_MONOTONIC)
+{
+    UInt64 current_time = clock_gettime_ns(clock_type);
+    if (likely(prev_time <= current_time))
+        return current_time;
+
+    /// Something probably went completely wrong if time stepped back for more than 1 second.
+    assert(prev_time - current_time <= 1000000000ULL);
+    return prev_time;
 }
 
 /** Differs from Poco::Stopwatch only by using 'clock_gettime' instead of 'gettimeofday',
@@ -44,7 +60,7 @@ private:
     clockid_t clock_type;
     bool is_running = false;
 
-    UInt64 nanoseconds() const { return clock_gettime_ns(clock_type); }
+    UInt64 nanoseconds() const { return clock_gettime_ns_adjusted(start_ns, clock_type); }
 };
 
 
@@ -53,8 +69,12 @@ class AtomicStopwatch
 public:
     AtomicStopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC) : clock_type(clock_type_) { restart(); }
 
-    void restart()                     { start_ns = nanoseconds(); }
-    UInt64 elapsed() const             { return nanoseconds() - start_ns; }
+    void restart()                     { start_ns = nanoseconds(0); }
+    UInt64 elapsed() const
+    {
+        UInt64 current_start_ns = start_ns;
+        return nanoseconds(current_start_ns) - current_start_ns;
+    }
     UInt64 elapsedMilliseconds() const { return elapsed() / 1000000UL; }
     double elapsedSeconds() const      { return static_cast<double>(elapsed()) / 1000000000ULL; }
 
@@ -65,8 +85,8 @@ public:
     bool compareAndRestart(double seconds)
     {
         UInt64 threshold = static_cast<UInt64>(seconds * 1000000000.0);
-        UInt64 current_ns = nanoseconds();
         UInt64 current_start_ns = start_ns;
+        UInt64 current_ns = nanoseconds(current_start_ns);
 
         while (true)
         {
@@ -109,8 +129,8 @@ public:
     Lock compareAndRestartDeferred(double seconds)
     {
         UInt64 threshold = UInt64(seconds * 1000000000.0);
-        UInt64 current_ns = nanoseconds();
         UInt64 current_start_ns = start_ns;
+        UInt64 current_ns = nanoseconds(current_start_ns);
 
         while (true)
         {
@@ -131,7 +151,7 @@ private:
     clockid_t clock_type;
 
     /// Most significant bit is a lock. When it is set, compareAndRestartDeferred method will return false.
-    UInt64 nanoseconds() const { return clock_gettime_ns(clock_type) & 0x7FFFFFFFFFFFFFFFULL; }
+   UInt64 nanoseconds(UInt64 prev_time) const { return clock_gettime_ns_adjusted(prev_time, clock_type) & 0x7FFFFFFFFFFFFFFFULL; }
 };
 
 
