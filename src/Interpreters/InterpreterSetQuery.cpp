@@ -11,6 +11,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
+#include "common/types.h"
 
 namespace DB
 {
@@ -135,5 +136,34 @@ SettingsChanges InterpreterSetQuery::extractSettingsFromQuery(const ASTPtr & ast
     }
 
     return {};
+}
+
+void InterpreterSetQuery::applyABTestProfile(ContextMutablePtr query_context)
+{
+    if (query_context->getSettingsRef().enable_ab_test)
+    {
+        String ab_test_profile = query_context->getSettingsRef().ab_test_profile;
+        Float64 ab_test_traffic_factor = query_context->getSettingsRef().ab_test_traffic_factor;
+        if (ab_test_profile != "default" && ab_test_traffic_factor > 0 && ab_test_traffic_factor <= 1)
+        {
+            try
+            {
+                std::random_device rd;
+                std::mt19937 gen(rd()); 
+                std::uniform_real_distribution<DB::Float64> distribution(0.0, 1.0);
+                Float64 res = distribution(gen);
+                if (res <= ab_test_traffic_factor)
+                    query_context->setCurrentProfile(ab_test_profile);
+            }
+            catch (...)
+            {
+                tryLogWarningCurrentException(&Poco::Logger::get("applyABTestProfile"), "Apply ab test profile failed.");
+            }
+        }
+        else
+        {
+            LOG_WARNING(&Poco::Logger::get("applyABTestProfile"), "Apply ab test profile failed, ab_test_traffic_factor must be between 0 and 1, ab_test_profile != default");        
+        }
+    }
 }
 }

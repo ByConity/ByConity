@@ -31,6 +31,9 @@ public:
 
     /// To extract SETTINGS clauses from query
     static SettingsChanges extractSettingsFromQuery(const ASTPtr & ast, ContextMutablePtr context);
+  
+    /// apply ab test profile from query
+    static void applyABTestProfile(ContextMutablePtr query_context);
 
 private:
     ASTPtr query_ptr;

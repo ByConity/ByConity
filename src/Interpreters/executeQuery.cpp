@@ -932,6 +932,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
         }
 
+        // apply ab test profile for query
+        if (!internal)
+            InterpreterSetQuery::applyABTestProfile(context);
+
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
         if (input_ast == nullptr)
