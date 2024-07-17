@@ -13,8 +13,6 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/sendPlanSegment.h>
 #include <Parsers/queryToString.h>
-#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
-#include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <butil/endpoint.h>

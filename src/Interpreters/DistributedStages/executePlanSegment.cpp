@@ -133,84 +133,10 @@ static void OnSendPlanSegmentCallback(
     }
 }
 
-void executePlanSegmentRemotely(
-    const PlanSegment & plan_segment, const PlanSegmentExecutionInfo & execution_info, ContextPtr context, AsyncContextPtr & async_context, const WorkerId & worker_id)
-{
-    auto execute_address = extractExchangeHostPort(execution_info.execution_address);
-    auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
-    Protos::PlanSegmentManagerService_Stub manager_stub(&rpc_channel->getChannel());
-    Protos::ExecutePlanSegmentRequest request;
-    request.set_brpc_protocol_major_revision(DBMS_BRPC_PROTOCOL_MAJOR_VERSION);
-    request.set_brpc_protocol_minor_revision(DBMS_BRPC_PROTOCOL_MINOR_VERSION);
-    request.set_query_id(plan_segment.getQueryId());
-    request.set_plan_segment_id(plan_segment.getPlanSegmentId());
-    request.set_parallel_id(execution_info.parallel_id);
-    if (execution_info.source_task_index)
-        request.set_source_task_index(execution_info.source_task_index.value());
-    if (execution_info.source_task_count)
-        request.set_source_task_count(execution_info.source_task_count.value());
-    request.set_initial_query_start_time(context->getClientInfo().initial_query_start_time_microseconds.value);
-    auto settings = context->getSettingsRef().dumpToMap();
-    request.mutable_settings()->insert(settings.begin(), settings.end());
-
-    const auto & coordinator_address = plan_segment.getCoordinatorAddress();
-    request.set_user(coordinator_address.getUser());
-    request.set_password(coordinator_address.getPassword());
-    request.set_initial_user(context->getClientInfo().initial_user);
-    request.set_current_host(coordinator_address.getHostName());
-    request.set_current_port(coordinator_address.getPort());
-    request.set_current_exchange_port(coordinator_address.getExchangePort());
-    request.set_current_exchange_status_port(coordinator_address.getExchangePort());
-
-    request.set_coordinator_host(coordinator_address.getHostName());
-    request.set_coordinator_port(coordinator_address.getPort());
-    request.set_coordinator_exchange_port(coordinator_address.getExchangePort());
-    request.set_coordinator_exchange_status_port(coordinator_address.getExchangePort());
-
-    request.set_database(context->getCurrentDatabase());
-    request.set_check_session(!context->getSettingsRef().bsp_mode);
-
-    const auto & client_info = context->getClientInfo();
-    const String & quota_key = client_info.quota_key;
-    if (!client_info.quota_key.empty())
-        request.set_quota(quota_key);
-
-    //OpenTelemetry trace
-    const auto & trace_context = client_info.client_trace_context;
-    if (trace_context.trace_id != UUID())
-    {
-        UInt128 trace_id = trace_context.trace_id.toUnderType();
-        request.set_open_telemetry_trace_id_low(trace_id.items[0]);
-        request.set_open_telemetry_trace_id_high(trace_id.items[1]);
-        request.set_open_telemetry_span_id(trace_context.span_id);
-        request.set_open_telemetry_tracestate(trace_context.tracestate);
-        request.set_open_telemetry_trace_flags(static_cast<uint32_t>(trace_context.trace_flags));
-    }
-
-    // Set cnch Transaction id as seesion id
-    request.set_txn_id(context->getCurrentTransactionID().toUInt64());
-    request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64());
-
-    WriteBufferFromBrpcBuf write_buf;
-    plan_segment.serialize(write_buf);
-    butil::IOBuf & iobuf = const_cast<butil::IOBuf &>(write_buf.getFinishedBuf());
-
-    /// async call
-    brpc::Controller * cntl = new brpc::Controller();
-    Protos::ExecutePlanSegmentResponse * response = new Protos::ExecutePlanSegmentResponse();
-    auto call_id = cntl->call_id();
-    cntl->set_timeout_ms(context->getSettingsRef().send_plan_segment_timeout_ms.totalMilliseconds());
-    cntl->request_attachment().append(iobuf.movable());
-    google::protobuf::Closure * done = brpc::NewCallback(
-        &OnSendPlanSegmentCallback, response, cntl, rpc_channel, context->getWorkerStatusManager(), async_context, worker_id);
-    async_context->addCallId(call_id);
-    manager_stub.executeQuery(cntl, &request, response, done);
-}
-
 void cleanupExchangeDataForQuery(const AddressInfo & address, UInt64 & query_unique_id)
 {
     auto execute_address = extractExchangeHostPort(address);
-    auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+    auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
     Protos::RegistryService_Stub manager_stub(&rpc_channel->getChannel());
     Protos::CleanupExchangeDataRequest request;
     request.set_query_unique_id(query_unique_id);
@@ -258,7 +184,7 @@ void executePlanSegmentRemotelyWithPreparedBuf(
     const WorkerId & worker_id)
 {
     auto execute_address = extractExchangeHostPort(execution_info.execution_address);
-    auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+    auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
     Protos::PlanSegmentManagerService_Stub manager_stub(&rpc_channel->getChannel());
     Protos::SubmitPlanSegmentRequest request;
     request.set_brpc_protocol_major_revision(DBMS_BRPC_PROTOCOL_MAJOR_VERSION);

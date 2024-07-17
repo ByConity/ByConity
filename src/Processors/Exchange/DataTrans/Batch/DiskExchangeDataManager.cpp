@@ -614,7 +614,7 @@ void DiskExchangeDataManager::gc()
     for (const auto & ep : endpoints)
     {
         BrpcAsyncResultHolder<Protos::ExchangeDataHeartbeatRequest, Protos::ExchangeDataHeartbeatResponse> holder;
-        holder.channel = RpcChannelPool::getInstance().getClient(ep.getRPCAddress(), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        holder.channel = RpcChannelPool::getInstance().getClient(ep.getRPCAddress(), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         holder.cntl = std::make_unique<brpc::Controller>();
         holder.request = req;
         holder.response = std::make_unique<Protos::ExchangeDataHeartbeatResponse>();
@@ -734,7 +734,7 @@ void DiskExchangeDataManager::reportError(const String & query_id, const String 
     try
     {
         std::shared_ptr<RpcClient> rpc_client
-            = RpcChannelPool::getInstance().getClient(coordinator_addr, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+            = RpcChannelPool::getInstance().getClient(coordinator_addr, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         brpc::Controller cntl;
         Protos::ReportPlanSegmentErrorRequest request;
         Protos::ReportPlanSegmentErrorResponse response;

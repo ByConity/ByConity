@@ -15,11 +15,14 @@
 
 #pragma once
 
+#include <thread>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
-#include <Common/Brpc/BrpcChannelPoolConfigHolder.h>
-#include <Common/Brpc/BrpcApplication.h>
-#include <Poco/DateTime.h>
+#include <bthread/shared_mutex.h>
+#include <parallel_hashmap/phmap.h>
 #include <Poco/DateTimeFormatter.h>
+#include <Common/Brpc/BrpcApplication.h>
+#include <Common/Brpc/BrpcChannelPoolConfigHolder.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -27,22 +30,30 @@ namespace DB
 ///  Singleton class, use std::cout for log
 class RpcChannelPool : public boost::noncopyable
 {
-public:
 private:
     struct Pool
     {
         std::vector<std::shared_ptr<RpcClient>> clients;
         std::atomic<UInt32> counter{0};
+        std::atomic<time_t> recent_used_ts{0};
+        std::atomic_bool ok_{true};
 
         Pool() = default;
         explicit Pool(std::vector<std::shared_ptr<RpcClient>>::size_type n)
         {
             this->clients = std::vector<std::shared_ptr<RpcClient>>(n, nullptr);
+            updateRecentUsedTime();
         }
+
+        time_t getRecentUsedTime() const { return recent_used_ts;}
+        inline void updateRecentUsedTime() { recent_used_ts = time(nullptr); }
+    
+        bool ok() const { return ok_.load(std::memory_order_relaxed); }
     };
     using PoolOptionsMap = BrpcChannelPoolConfigHolder::PoolOptionsMap;
     using ClientType = std::string;
     using HostPort = std::string;
+    using PoolPtr = std::shared_ptr<Pool>;
 
 public:
     static RpcChannelPool & getInstance()
@@ -51,43 +62,83 @@ public:
         return pool;
     }
 
-    std::shared_ptr<RpcClient> getClient(const String & host_port, const std::string & client_type, bool connection_reuse = true);
+    std::shared_ptr<RpcClient> getClient(const String & host_port, const std::string & client_type);
 
-    // carefully, calling this method will trigger the lock on @pool_options_map.
-    PoolOptionsMap getDefaultChannelPoolOptions()
+    brpc::ChannelOptions getChannelPoolOptions(const std::string & client_type)
     {
-        std::unique_lock<std::mutex> lock(pool_options_map_mutex);
-        return this->pool_options_map;
+        auto iter = channel_pool.find(client_type);
+        if (unlikely(iter == channel_pool.end()))
+            iter = channel_pool.find(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
+
+        auto pool_options = std::atomic_load(&iter->second.pool_options);
+        return pool_options.get()->channel_options;
     }
+
+    void initPoolExpireTimer(UInt64 rpc_channel_pool_check_interval_seconds_ = 0, UInt64 rpc_channel_pool_expired_seconds_ = 0)
+    {
+        static std::once_flag flag;
+        if (rpc_channel_pool_expired_seconds_ != 0 && rpc_channel_pool_check_interval_seconds_ != 0)
+        {
+            rpc_channel_pool_expired_seconds = rpc_channel_pool_expired_seconds_;
+            rpc_channel_pool_check_interval_seconds = rpc_channel_pool_check_interval_seconds_;
+            std::call_once(flag, [this]() { this->createExpireTimer(); });
+            LOG_DEBUG(
+                log,
+                "channel pool check interval config changed [{}, {}].",
+                rpc_channel_pool_expired_seconds,
+                rpc_channel_pool_check_interval_seconds);
+        }
+    }
+
+    void destroyExpireTimer();
 
 private:
     std::shared_ptr<BrpcChannelPoolConfigHolder> channel_pool_config_holder;
 
-    PoolOptionsMap pool_options_map;
-    std::mutex pool_options_map_mutex;
-    std::unordered_map<ClientType, std::unordered_map<HostPort, Pool>> channel_pool;
-    std::unordered_map<ClientType, std::unique_ptr<std::mutex>> mutexes;
+    using PoolOptionsPtr = std::shared_ptr<BrpcChannelPoolOptions::PoolOptions>;
+    using Container = phmap::parallel_flat_hash_map<
+        HostPort,
+        PoolPtr,
+        phmap::priv::hash_default_hash<HostPort>,
+        phmap::priv::hash_default_eq<HostPort>,
+        phmap::priv::Allocator<phmap::priv::Pair<HostPort, PoolPtr>>,
+        4,
+        bthread::Mutex>;
+    struct PoolContent
+    {
+        PoolOptionsPtr pool_options;
+        Container host_port_pool;
+    };
+    std::unordered_map<ClientType, PoolContent> channel_pool;
 
+    std::atomic<uint64_t> rpc_channel_pool_check_interval_seconds{0};
+    std::atomic<uint64_t> rpc_channel_pool_expired_seconds{0};
+    std::unique_ptr<std::thread> expireThread{nullptr};
+    bthread::Mutex mutex;
+    bthread::ConditionVariable cv;
+    std::atomic_bool exit{false};
+
+    Poco::Logger * log = &Poco::Logger::get("RpcChannelPool");
+
+    void createExpireTimer();
+    size_t checkAndClearExpiredPool(const std::string & client_type);
     inline PoolOptionsMap getChannelPoolOptions() { return channel_pool_config_holder->queryConfig(); }
 
     RpcChannelPool()
     {
         channel_pool_config_holder = BrpcApplication::getInstance().getConfigHolderByType<BrpcChannelPoolConfigHolder>();
 
-        pool_options_map = getChannelPoolOptions(); // init pool_options_map
+        auto pool_options_map = getChannelPoolOptions();
+        for (const auto & pair : pool_options_map)
+        {
+            const auto & key = pair.first;
+            channel_pool[key].pool_options = std::make_shared<BrpcChannelPoolOptions::PoolOptions>(pair.second);
+        }
 
         // can't init channel_pool here
 
-        for (const auto & pair : pool_options_map) // init mutexes
-        {
-            // rpc_default key is supposed to be included.
-            mutexes.emplace(pair.first, std::make_unique<std::mutex>());
-        }
-
         // lock in the granularity of client_type if the options change after reload
         auto channel_pool_reload_callback = [this](const PoolOptionsMap * old_conf_to_del, const PoolOptionsMap * readonly_new_conf) {
-            std::unique_lock pool_options_map_lock(pool_options_map_mutex);
-
             // normally, there should be NO insert or delete in pool options
             if (old_conf_to_del->size() > readonly_new_conf->size())
             {
@@ -116,15 +167,18 @@ private:
                 }
                 if (itr->second != pair.second) // update
                 {
-                    auto & mutex = mutexes.at(pair.first);
-                    std::unique_lock<std::mutex> lock(*mutex);
-                    pool_options_map[key] = readonly_new_conf->find(key)->second;
-                    channel_pool[key].clear();
-                    lock.unlock();
+                    auto pool_options = std::make_shared<BrpcChannelPoolOptions::PoolOptions>(itr->second);
+                    std::atomic_store(&channel_pool[key].pool_options, std::move(pool_options));
+                    channel_pool[key].host_port_pool.clear();
                 }
             }
         };
-        channel_pool_config_holder->initReloadCallback(channel_pool_reload_callback);
+        channel_pool_config_holder->initReloadCallback(channel_pool_reload_callback);        
+    }
+
+    ~RpcChannelPool()
+    {
+        destroyExpireTimer();
     }
 };
 

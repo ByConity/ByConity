@@ -15,6 +15,7 @@
 
 #include <iostream>
 #include <Common/Brpc/BrpcChannelPoolOptions.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 
 namespace DB
 {
@@ -41,6 +42,11 @@ std::ostream & operator<<(std::ostream & os, const BrpcChannelPoolOptions::PoolO
        << ", connection_group:" << pool_options.channel_options.connection_group << "}"
        << "}";
     return os;
+}
+
+void BrpcChannelPoolOptions::initPoolExpireTimer()
+{
+    RpcChannelPool::getInstance().initPoolExpireTimer(rpc_channel_pool_check_interval_seconds, rpc_channel_pool_expired_seconds);
 }
 
 const BrpcChannelPoolOptions::PoolOptions * BrpcChannelPoolOptions::getDefaultPoolOptions(std::string key)

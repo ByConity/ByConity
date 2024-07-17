@@ -47,8 +47,7 @@ static auto getDefaultChannelOptions()
     static std::once_flag init_flag;
     static brpc::ChannelOptions options;
     std::call_once(init_flag, []() {
-        options
-            = RpcChannelPool::getInstance().getDefaultChannelPoolOptions().at(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY).channel_options;
+        options = RpcChannelPool::getInstance().getChannelPoolOptions(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
     });
     return options;
 }

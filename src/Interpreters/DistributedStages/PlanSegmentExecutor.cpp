@@ -927,7 +927,7 @@ void PlanSegmentExecutor::sendProgress()
         {
             auto address = extractExchangeHostPort(plan_segment->getCoordinatorAddress());
             std::shared_ptr<RpcClient> rpc_client
-                = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+                = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
             Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
             brpc::Controller * cntl = new brpc::Controller;
             Protos::SendProgressRequest request;

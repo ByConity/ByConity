@@ -532,7 +532,7 @@ void reportToCoordinator(
     try
     {
         auto address = extractExchangeHostPort(coordinator_address);
-        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::ReportProcessorProfileMetricRequest request;
@@ -559,7 +559,7 @@ void reportToCoordinator(
     try
     {
         auto address = extractExchangeHostPort(coordinator_address);
-        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::BatchReportProcessorProfileMetricRequest requests;
