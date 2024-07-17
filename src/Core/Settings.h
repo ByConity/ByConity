@@ -260,41 +260,16 @@ enum PreloadLevelSettings : UInt64
       0) \
 \
     M(Bool, optimize_move_to_prewhere, true, "Allows disabling WHERE to PREWHERE optimization in SELECT queries from MergeTree.", 0) \
-    M(Bool, \
-      optimize_move_to_prewhere_if_final, \
-      false, \
-      "If query has `FINAL`, the optimization `move_to_prewhere` is not always correct and it is enabled only if both settings " \
-      "`optimize_move_to_prewhere` and `optimize_move_to_prewhere_if_final` are turned on", \
-      0) \
-\
-    M(UInt64, \
-      replication_alter_partitions_sync, \
-      1, \
-      "Wait for actions to manipulate the partitions. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", \
-      0) \
-    M(UInt64, \
-      replication_alter_columns_timeout, \
-      60, \
-      "Wait for actions to change the table structure within the specified number of seconds. 0 - wait unlimited time.", \
-      0) \
-\
-    M(LoadBalancing, \
-      load_balancing, \
-      LoadBalancing::RANDOM, \
-      "Which replicas (among healthy replicas) to preferably send a query to (on the first attempt) for distributed processing.", \
-      0) \
-    M(UInt64, \
-      load_balancing_first_offset, \
-      0, \
-      "Which replica to preferably send a query when FIRST_OR_RANDOM load balancing strategy is used.", \
-      0) \
-\
-    M(TotalsMode, \
-      totals_mode, \
-      TotalsMode::AFTER_HAVING_EXCLUSIVE, \
-      "How to calculate TOTALS when HAVING is present, as well as when max_rows_to_group_by and group_by_overflow_mode = ‘any’ are " \
-      "present.", \
-      IMPORTANT) \
+    M(Bool, optimize_move_to_prewhere_if_final, false, "If query has `FINAL`, the optimization `move_to_prewhere` is not always correct and it is enabled only if both settings `optimize_move_to_prewhere` and `optimize_move_to_prewhere_if_final` are turned on", 0) \
+    \
+    M(UInt64, replication_alter_partitions_sync, 1, "Wait for actions to manipulate the partitions. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(UInt64, replication_alter_columns_timeout, 60, "Wait for actions to change the table structure within the specified number of seconds. 0 - wait unlimited time.", 0) \
+    \
+    M(LoadBalancing, load_balancing, LoadBalancing::RANDOM, "Which replicas (among healthy replicas) to preferably send a query to (on the first attempt) for distributed processing.", 0) \
+    M(UInt64, load_balancing_first_offset, 0, "Which replica to preferably send a query when FIRST_OR_RANDOM load balancing strategy is used.", 0) \
+    M(UInt64, load_balancing_offset, 0, "Offset for load balancing priority calc.", 0) \
+    \
+    M(TotalsMode, totals_mode, TotalsMode::AFTER_HAVING_EXCLUSIVE, "How to calculate TOTALS when HAVING is present, as well as when max_rows_to_group_by and group_by_overflow_mode = ‘any’ are present.", IMPORTANT) \
     M(Float, totals_auto_threshold, 0.5, "The threshold for totals_mode = 'auto'.", 0) \
     M(Bool, allow_suspicious_low_cardinality_types, true, "In CREATE TABLE statement allows specifying LowCardinality modifier for types of small fixed size (8 or less). Enabling this may increase merge times and memory consumption.", 0) \
     M(Bool, allow_suspicious_fixed_string_types, false, "In CREATE TABLE statement allows creating columns of type FixedString(n) with n > 256. FixedString with length >= 256 is suspicious and most likely indicates misusage", 0) \
