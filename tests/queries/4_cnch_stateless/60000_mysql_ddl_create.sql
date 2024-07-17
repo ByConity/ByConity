@@ -116,7 +116,7 @@ STORAGE_POLICY = 'MIXED'
 hot_partition_count = 10
 BLOCK_SIZE = 4096
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDate(date_col_1) + 30;
+TTL toDate(date_col_1) + INTERVAL 30 DAY;
 
 CREATE TABLE test_create_table_unique2
 (
