@@ -217,7 +217,8 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
 
     size_t thread_num = storage.getSettings()->cnch_write_part_threads;
     bool use_thread_pool = thread_num > 1;
-    ThreadPool write_pool(thread_num);
+    /// Set queue size to unlimited to avoid dead lock
+    ThreadPool write_pool(thread_num, thread_num, /*queue_size=*/ 0);
     Stopwatch write_pool_watch;
     auto thread_group = CurrentThread::getGroup();
     auto processBlockWithPartition = [&](BlockWithPartition & block_with_partition) {
