@@ -763,23 +763,12 @@ String DiskExchangeDataManager::getFileName(const ExchangeDataKey & key) const
     return file_path;
 }
 
+// TODO(wangtao.vip): try to make return value a single file.
 std::vector<std::unique_ptr<ReadBufferFromFileBase>> DiskExchangeDataManager::readFiles(const ExchangeDataKey & key) const
 {
-    std::vector<String> file_names;
-    auto file_path = path / std::to_string(key.query_unique_id);
-    disk->listFiles(file_path, file_names);
-    std::vector<String> filtered_files;
-    String prefix = fmt::format("exchange_{}_{}_{}", key.exchange_id, key.partition_id, key.parallel_index);
-    String suffix = ".data";
-    std::copy_if(file_names.begin(), file_names.end(), std::back_inserter(filtered_files), [&prefix, &suffix](String s) {
-        return s.starts_with(prefix) && s.ends_with(suffix);
-    });
     std::vector<std::unique_ptr<ReadBufferFromFileBase>> ret;
-    for (const auto & file : filtered_files)
-    {
-        auto abs_file_path = file_path / file;
-        ret.push_back(disk->readFile(abs_file_path, {.local_fs_method = LocalFSReadMethod::read}));
-    }
+    auto abs_file_path = getFileName(key);
+    ret.push_back(disk->readFile(abs_file_path, {.local_fs_method = LocalFSReadMethod::read}));
     return ret;
 }
 

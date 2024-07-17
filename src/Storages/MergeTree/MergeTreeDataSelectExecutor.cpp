@@ -173,8 +173,16 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
 
     if (data.source_index && data.source_count)
     {
-        LOG_TRACE(log, "Filter the data parts with index {} count {}", data.source_index.value(), data.source_count.value());
+        auto size_before_filtering = parts.size();
         filterParts(parts, data.source_index.value(), data.source_count.value());
+        LOG_TRACE(
+            log,
+            "After filtering(index:{}, count:{}) the number of parts of table {} becomes {} from {}",
+            data.source_index.value(),
+            data.source_count.value(),
+            data.getTableName(),
+            parts.size(),
+            size_before_filtering);
     }
 
     if (settings.enable_ab_index_optimization)
