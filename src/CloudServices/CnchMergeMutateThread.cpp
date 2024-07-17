@@ -38,6 +38,7 @@
 
 #include <common/sleep.h>
 #include <chrono>
+#include <algorithm>
 
 namespace ProfileEvents
 {
@@ -708,7 +709,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
 
     /// TODO: support checkpoints
 
-    size_t max_bytes = storage_settings->cnch_merge_max_total_bytes_to_merge;
+    auto max_bytes = std::min(
+        storage_settings->cnch_merge_max_total_bytes_to_merge.value,
+        storage_settings->max_bytes_to_merge_at_max_space_in_pool.value);
     /// If selecting nonadjacent parts is allowed,
     /// we will filter out some parts before selecting:
     /// 1. all merging parts.
@@ -1017,11 +1020,15 @@ String CnchMergeMutateThread::triggerPartMerge(
     auto & storage = checkAndGetCnchTable(istorage);
     auto storage_settings = storage.getSettings();
 
+    /// For compatibility.
+    auto max_bytes = std::min(
+        storage_settings->cnch_merge_max_total_bytes_to_merge.value,
+        storage_settings->max_bytes_to_merge_at_max_space_in_pool.value);
+
     /// If selecting nonadjacent parts is allowed,
     /// we will filter out all merging parts firstly and then only check part's columns_commit_time.
     if (storage_settings->cnch_merge_select_nonadjacent_parts)
     {
-        auto max_bytes = storage_settings->cnch_merge_max_total_bytes_to_merge.value;
         auto max_rows = storage_settings->cnch_merge_max_total_rows_to_merge.value;
         visible_parts.erase(
             std::remove_if(
@@ -1044,7 +1051,7 @@ String CnchMergeMutateThread::triggerPartMerge(
         visible_parts,
         /// Step 4: create merge predicate
         getMergePred(merging_mutating_parts_snapshot, mutation_timestamps),
-        storage_settings->max_bytes_to_merge_at_max_space_in_pool,
+        max_bytes, /// max_total_size_to_merge
         true, /// aggressive
         false, /// enable_batch_select
         final, /// final

@@ -21,55 +21,55 @@ select count() from test46006 t1 left join test46006 t2 on t1.i=t2.i;
 set enable_optimizer = 1;
 -- optimized
 select 'optimized:';
-explain select count() from test46006;
+explain stats=0, verbose=0 select count() from test46006;
 
 -- optimized
 select 'optimized:';
-explain select count() from test46006 where toDate(p) > '2020-09-01';
+explain stats=0, verbose=0 select count() from test46006 where toDate(p) > '2020-09-01';
 
 -- optimized
 select 'optimized:';
-explain select count() from test46006 prewhere i = 1 where toDate(p) > '2020-09-01';
+explain stats=0, verbose=0 select count() from test46006 prewhere i = 1 where toDate(p) > '2020-09-01';
 
 -- optimized
 select 'optimized:';
-explain select count() from test46006 prewhere i > 1;
-
--- optimized
-select 'optimized:';
-
-explain select count() from test46006 where i < 1;
+explain stats=0, verbose=0 select count() from test46006 prewhere i > 1;
 
 -- optimized
 select 'optimized:';
 
-explain select * from (select count() as cnt from test46006 where i > 1) t where t.cnt < 10;
+explain stats=0, verbose=0 select count() from test46006 where i < 1;
 
 -- optimized
 select 'optimized:';
-explain select count() from (select i iiii from test46006) where iiii < 1 union all select count() from (select i iiii from test46006) where iiii < 1;
+
+explain stats=0, verbose=0 select * from (select count() as cnt from test46006 where i > 1) t where t.cnt < 10;
 
 -- optimized
 select 'optimized:';
-explain select count() from (select i iiii from test46006 prewhere iiii < 10 where i < 10) where iiii>1;
+explain stats=0, verbose=0 select count() from (select i iiii from test46006) where iiii < 1 union all select count() from (select i iiii from test46006) where iiii < 1;
+
+-- optimized
+select 'optimized:';
+explain stats=0, verbose=0 select count() from (select i iiii from test46006 prewhere iiii < 10 where i < 10) where iiii>1;
 
 -- non-optimized
 select 'non-optimized:';
-explain select count() from (select i iiii from test46006 prewhere iiii + i < 10 where j + iiii < 10) where iiii > 1;
+explain stats=0, verbose=0 select count() from (select i iiii from test46006 prewhere iiii + i < 10 where j + iiii < 10) where iiii > 1;
 
 -- non-optimized
 select 'non-optimized:';
-explain select count() from test46006 where i+i < 1;
+explain stats=0, verbose=0 select count() from test46006 where i+i < 1;
 
 -- non-optimized
 select 'non-optimized:';
-explain select i,count() from test46006 group by i;
+explain stats=0, verbose=0 select i,count() from test46006 group by i;
 
 -- non-optimized
 select 'non-optimized:';
-explain select count() from test46006 t1 left join test46006 t2 on t1.i=t2.i;
+explain stats=0, verbose=0 select count() from test46006 t1 left join test46006 t2 on t1.i=t2.i;
 
-EXPLAIN
+explain stats=0, verbose=0
 SELECT count(*)
 FROM
 (
@@ -80,7 +80,7 @@ FROM
     WHERE cityHash64(intDiv(rn, 8192)) < 0.02
 );
 
-EXPLAIN 
+explain stats=0, verbose=0 
 SELECT count(*)
 FROM
 (

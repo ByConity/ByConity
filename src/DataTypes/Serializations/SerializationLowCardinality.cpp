@@ -78,9 +78,11 @@ void SerializationLowCardinality::enumerateStreams(
     dict_inner_serialization->enumerateStreams(settings, callback, dict_data);
 
     settings.path.back() = Substream::DictionaryIndexes;
-    settings.path.back().data = data;
-
-    callback(settings.path);
+    /// note this part is different to ck as we need to handle full state
+    SubstreamData next_data(data.serialization);
+    next_data.withType(dictionary_type);
+    settings.path.back().data = next_data;
+    dictionary_type->getDefaultSerialization()->enumerateStreams(settings, callback, next_data);
     settings.path.pop_back();
 }
 
@@ -935,7 +937,8 @@ void SerializationFullLowCardinality::serializeBinaryBulkStatePrefix(
     /// Write version and create SerializeBinaryBulkState.
     UInt64 key_version;
     key_version = KeysSerializationVersion::DictionariesInFullState;
-    dict_inner_serialization->serializeBinaryBulkStatePrefix(column, settings, state);
+    const ColumnLowCardinality &low_cardinality_column = typeid_cast<const ColumnLowCardinality &>(column);
+    dict_inner_serialization->serializeBinaryBulkStatePrefix(low_cardinality_column.getNestedColumn(), settings, state);
 
     writeIntBinary(key_version, *stream);
 

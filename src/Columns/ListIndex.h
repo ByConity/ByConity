@@ -212,7 +212,7 @@ struct FileOffsetAndSize
 class BitmapIndexReader
 {
 private:
-    IMergeTreeDataPartPtr part;
+    IMergeTreeDataPartPtr source_part;
     String column_name;
     [[maybe_unused]] BitmapIndexMode bitmap_index_mode;
     std::unique_ptr<CompressedReadBufferFromFile> compressed_idx;

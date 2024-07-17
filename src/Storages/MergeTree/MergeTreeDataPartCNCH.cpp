@@ -197,6 +197,7 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     }
     minmax_idx = local_part.minmax_idx;
     rows_count = local_part.rows_count;
+    row_exists_count = local_part.row_exists_count;
     loadIndexGranularity(local_part.getMarksCount(), local_part.index_granularity.getIndexGranularities());
     setColumns(local_part.getColumns());
     index = local_part.index;

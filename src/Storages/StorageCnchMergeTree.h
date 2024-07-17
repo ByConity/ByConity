@@ -223,7 +223,11 @@ public:
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
     // get all Visible Parts
-    ServerDataPartsVector getAllParts(ContextPtr local_context) const;
+    ServerDataPartsWithDBM getAllPartsWithDBM(ContextPtr local_context) const;
+
+    /// drop the memody_dict_cache of cnch table
+    void dropMemoryDictCache(ContextMutablePtr & local_context);
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

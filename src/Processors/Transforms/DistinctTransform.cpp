@@ -90,6 +90,8 @@ void DistinctTransform::transform(Chunk & chunk)
     {
         case SetVariants::Type::EMPTY:
             break;
+        case SetVariants::Type::bitmap64:
+            break;
 #define M(NAME) \
             case SetVariants::Type::NAME: \
                 buildFilter(*data.NAME, column_ptrs, filter, num_rows, data); \

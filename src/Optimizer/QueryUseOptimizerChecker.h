@@ -38,7 +38,7 @@ struct QueryUseOptimizerContext
     ContextMutablePtr context;
     NameSet ctes;
     Tables external_tables;
-    std::optional<bool> is_add_totals;
+    bool disallow_with_totals = false;
 };
 
 class QueryUseOptimizerVisitor : public ASTVisitor<bool, QueryUseOptimizerContext>

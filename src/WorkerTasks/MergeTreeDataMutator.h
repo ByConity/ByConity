@@ -113,7 +113,7 @@ private:
         const NameSet & materialized_projections,
         const MergeTreeMetaBase::DataPartPtr & source_part);
 
-    void writeWithProjections(
+    std::optional<size_t> writeWithProjections(
         MergeTreeMetaBase::MutableDataPartPtr new_data_part,
         const StorageMetadataPtr & metadata_snapshot,
         const MergeTreeProjections & projections_to_build,
@@ -185,6 +185,8 @@ private:
     const size_t background_pool_size;
 
     Poco::Logger * log;
+
+    bool is_delete_command = false;
 };
 
 

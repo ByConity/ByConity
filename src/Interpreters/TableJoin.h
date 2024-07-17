@@ -85,7 +85,7 @@ private:
     const SizeLimits size_limits;
     const size_t default_max_bytes = 0;
     const bool join_use_nulls = false;
-    const size_t max_joined_block_rows = 0;
+    size_t max_joined_block_rows = 0;
     JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO;
     const bool partial_merge_join_optimizations = false;
     const size_t partial_merge_join_rows_in_right_blocks = 0;
@@ -176,8 +176,8 @@ public:
     bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
     bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
     bool forceNestedLoopJoin() const { return join_algorithm == JoinAlgorithm::NESTED_LOOP_JOIN; }
+    bool forceGraceHashJoin() const { return join_algorithm == JoinAlgorithm::GRACE_HASH; }
     bool allowParallelHashJoin() const;
-    bool forceGraceHashLoopJoin() const { return join_algorithm == JoinAlgorithm::GRACE_HASH; }
     bool forceHashJoin() const
     {
         /// HashJoin always used for DictJoin
@@ -187,7 +187,8 @@ public:
     bool forceNullableRight() const;
     bool forceNullableLeft() const;
     size_t defaultMaxBytes() const { return default_max_bytes; }
-    size_t maxJoinedBlockRows() const { return max_joined_block_rows; }
+    size_t & maxJoinedBlockRows() { return max_joined_block_rows; }
+    void setMaxJoinedBlockRows(size_t new_val) { max_joined_block_rows = new_val; }
     size_t maxRowsInRightBlock() const { return partial_merge_join_rows_in_right_blocks; }
     size_t maxBytesInLeftBuffer() const { return partial_merge_join_left_table_buffer_bytes; }
     size_t maxFilesToMerge() const { return max_files_to_merge; }

@@ -339,7 +339,7 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         params.task_id,
         watch.elapsedMilliseconds(),
         lock_watch.elapsedMilliseconds());
-    /// preload can be done outside the lock
+    /// preload can be done outside the lock todo(jiashuo): support unique merge tree?
     // preload(context, storage, dumped_data.parts, ManipulationType::Merge);
 }
 

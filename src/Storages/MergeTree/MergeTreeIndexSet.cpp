@@ -169,6 +169,8 @@ void MergeTreeIndexAggregatorSet::update(const Block & block, size_t * pos, size
     {
         case ClearableSetVariants::Type::EMPTY:
             break;
+        case ClearableSetVariants::Type::bitmap64:
+            break;
 #define M(NAME) \
         case ClearableSetVariants::Type::NAME: \
             has_new_data = buildFilter(*data.NAME, index_column_ptrs, filter, *pos, rows_read, data); \
@@ -223,6 +225,8 @@ MergeTreeIndexGranulePtr MergeTreeIndexAggregatorSet::getGranuleAndReset()
     switch (data.type)
     {
         case ClearableSetVariants::Type::EMPTY:
+            break;
+        case ClearableSetVariants::Type::bitmap64:
             break;
 #define M(NAME) \
         case ClearableSetVariants::Type::NAME: \

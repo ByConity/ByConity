@@ -127,6 +127,7 @@ namespace DB::Catalog
 #define TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX "TTS_"
 #define DICTIONARY_BUCKET_UPDATE_TIME_PREFIX "DBUT_"
 #define ENTITY_UUID_MAPPING "EUM_"
+#define SENSITIVE_RESOURCE_PREFIX "SR_"
 
 using EntityType = IAccessEntity::Type;
 struct EntityMetastorePrefix
@@ -847,21 +848,30 @@ public:
         return escapeString(name_space) + '_' + DETACHED_PART_PREFIX + uuid + '_' + part_name;
     }
 
-    static std::string accessEntityPrefix(EntityType type, const std::string & name_space)
+    static String sensitiveResourcePrefix(const String & name_space)
+    {
+        return fmt::format("{}_{}", escapeString(name_space), SENSITIVE_RESOURCE_PREFIX);
+    }
+    static String sensitiveResourceKey(const String & name_space, const String & db_name)
+    {
+        return fmt::format("{}{}", sensitiveResourcePrefix(name_space), db_name);
+    }
+
+    static String accessEntityPrefix(EntityType type, const String & name_space)
     {
         return fmt::format("{}_{}", escapeString(name_space), getEntityMetastorePrefix(type).prefix);
     }
-    static std::string accessEntityKey(EntityType type, const std::string & name_space, const std::string & name)
+    static String accessEntityKey(EntityType type, const String & name_space, const String & name)
     {
         return fmt::format("{}{}", accessEntityPrefix(type, name_space), name);
     }
 
-    static std::string accessEntityUUIDNameMappingPrefix(const std::string & name_space)
+    static String accessEntityUUIDNameMappingPrefix(const String & name_space)
     {
         return fmt::format("{}_{}", escapeString(name_space), ENTITY_UUID_MAPPING);
     }
 
-    static std::string accessEntityUUIDNameMappingKey(const std::string & name_space, const std::string & uuid)
+    static String accessEntityUUIDNameMappingKey(const String & name_space, const String & uuid)
     {
         return fmt::format("{}{}", accessEntityUUIDNameMappingPrefix(name_space), uuid);
     }
@@ -1248,6 +1258,10 @@ public:
     IMetaStore::IteratorPtr getDetachedPartsInRange(const String& name_space,
         const String& tbl_uuid, const String& range_start, const String& range_end,
         bool include_start = true, bool include_end = false);
+
+    // Sensitive Resources
+    void putSensitiveResource(const String & name_space, const String & database, const String & table, const String & column, const String & target, bool value) const;
+    std::shared_ptr<Protos::DataModelSensitiveDatabase> getSensitiveResource(const String & name_space, const String & database) const;
 
     // Access Entities
     String getAccessEntity(EntityType type, const String & name_space, const String & name) const;

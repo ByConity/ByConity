@@ -44,7 +44,7 @@ class PlanSegmentGroup
 {
 public:
     using Element = std::shared_ptr<ProcessListEntry>;
-    using Container = std::map<PlanSegmentInstanceId, Element>;
+    using Container = std::map<UInt32, Element>;
 
     PlanSegmentGroup(String coordinator_address_, Decimal64 initial_query_start_time_ms_, bool use_query_memory_tracker_, size_t queue_bytes_)
         : coordinator_address(std::move(coordinator_address_))
@@ -61,28 +61,28 @@ public:
         return segment_queries.empty();
     }
 
-    bool emplace(PlanSegmentInstanceId instance_id, Element && element)
+    bool emplace(UInt32 segment_id, Element && element)
     {
         std::unique_lock lock(mutex);
-        const auto ret = segment_queries.insert_or_assign(instance_id, std::move(element));
+        const auto ret = segment_queries.insert_or_assign(segment_id, std::move(element));
         return ret.second;
     }
 
-    void erase(PlanSegmentInstanceId instance_id)
+    void erase(UInt32 segment_id)
     {
         std::unique_lock lock(mutex);
-        segment_queries.erase(instance_id);
+        segment_queries.erase(segment_id);
     }
 
-    bool contains(PlanSegmentInstanceId instance_id)
+    bool contains(UInt32 segment_id)
     {
         std::unique_lock lock(mutex);
-        return segment_queries.find(instance_id) != segment_queries.end();
+        return segment_queries.find(segment_id) != segment_queries.end();
     }
 
-    bool tryCancel();
+    bool tryCancel(bool internal);
 
-    bool tryCancel(PlanSegmentInstanceId instance_id);
+    bool tryCancel(UInt32 segment_id, bool internal);
 
     mutable bthread::Mutex mutex;
     String coordinator_address;
@@ -103,13 +103,12 @@ private:
     PlanSegmentProcessList & parent;
     Element status;
     String initial_query_id;
-    PlanSegmentInstanceId instance_id;
+    UInt32 segment_id;
     AddressInfo coordinator_address;
     std::shared_ptr<MemoryController> memory_controller;
 
 public:
-    PlanSegmentProcessListEntry(
-        PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, PlanSegmentInstanceId instance_id_);
+    PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, UInt32 segment_id_);
     ~PlanSegmentProcessListEntry();
     Element operator->() { return status; }
     const Element operator->() const { return status; }
@@ -119,7 +118,10 @@ public:
     AddressInfo getCoordinatorAddress() const {return coordinator_address;}
     void setMemoryController(std::shared_ptr<MemoryController> & memory_controller_) {memory_controller = memory_controller_;}
     std::shared_ptr<MemoryController> getMemoryController() const {return memory_controller;}
-    size_t getSegmentId() const {return instance_id.segment_id;}
+    UInt32 getSegmentId() const
+    {
+        return segment_id;
+    }
 };
 
 /// List of currently executing query created from plan segment.
@@ -139,7 +141,7 @@ public:
 
     CancellationCode tryCancelPlanSegmentGroup(const String & initial_query_id, String coordinator_address = "");
 
-    bool remove(std::string initial_query_id, PlanSegmentInstanceId instance_id, bool before_execute = false);
+    bool remove(const String & initial_query_id, UInt32 segment_id, bool before_execute = false);
 
 private:
     bool tryEraseGroup();

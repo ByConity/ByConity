@@ -1,0 +1,33 @@
+test insert
+0
+test merge
+1
+test convert
+0
+1
+optimize convert
+1
+test convert 2
+1
+test query
+0
+0
+0
+0
+0
+0
+0
+0
+0
+test query mix part
+0
+0
+0
+0
+0
+0
+0
+0
+0
+compact part test
+10000000	{'__is_history':'true'}

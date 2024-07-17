@@ -165,6 +165,9 @@ enum class RuleType : UInt32
 
     CROSS_JOIN_TO_UNION,
 
+    SUM_IF_TO_COUNT_IF,
+
+    EXTRACT_BITMAP_IMPLICIT_FILTER,
     // Implementation
     SET_JOIN_DISTRIBUTION,
 

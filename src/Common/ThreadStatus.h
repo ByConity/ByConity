@@ -235,6 +235,9 @@ protected:
     /// Used to save all the involved queries tenant_id
     std::stack<String> tenant_ids;
 
+    /// when we handle external table parsing, we need to disable tenant logic temporarily
+    bool disable_tenant = false;
+
 public:
     ThreadStatus();
     ~ThreadStatus();
@@ -269,6 +272,21 @@ public:
     void setTransactionId(UInt64 xid_)
     {
         xid = xid_;
+    }
+
+    bool isEnableTenant() const
+    {
+        return !disable_tenant;
+    }
+
+    void disableTenant()
+    {
+        disable_tenant = true;
+    }
+
+    void enableTenant()
+    {
+        disable_tenant = false;
     }
 
     String getTenantId() const

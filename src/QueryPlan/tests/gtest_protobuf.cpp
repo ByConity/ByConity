@@ -1124,7 +1124,8 @@ TEST_F(ProtobufTest, ReadStorageRowCountStep)
         auto query = generateAST(eng);
         auto agg_desc = generateAggregateDescription(eng);
         auto num_rows = eng() % 1000;
-        auto s = std::make_shared<ReadStorageRowCountStep>(base_output_header, storage_id, query, agg_desc, num_rows);
+        auto is_final_agg = false;
+        auto s = std::make_shared<ReadStorageRowCountStep>(base_output_header, query, agg_desc, num_rows, is_final_agg);
 
         return s;
     }();

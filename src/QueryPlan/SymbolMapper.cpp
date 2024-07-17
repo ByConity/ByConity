@@ -779,7 +779,7 @@ std::shared_ptr<OutfileFinishStep> SymbolMapper::map(const OutfileFinishStep & s
 std::shared_ptr<ReadStorageRowCountStep> SymbolMapper::map(const ReadStorageRowCountStep & step)
 {
     return std::make_shared<ReadStorageRowCountStep>(
-        map(step.getOutputStream().header), step.getStorageID(), step.getQuery(), step.getAggregateDescription(), step.getNumRows());
+        map(step.getOutputStream().header), step.getQuery(), step.getAggregateDescription(), step.getNumRows(), step.isFinal(), step.getDatabaseAndTableName());
 }
 
 std::shared_ptr<BufferStep> SymbolMapper::map(const BufferStep & step)

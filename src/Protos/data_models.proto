@@ -164,6 +164,9 @@ message DataModelPart {
 
   /// Aggregated part ttl info. Used for selecting parts to do ttl merge.
   optional DataModelPartTTLInfo part_ttl_info = 40;
+
+  /// How many rows in the part are marked as existing after DELETE mutation.
+  optional uint64 row_exists_count = 41;
 };
 
 message CnchFilePartInfo { required string name = 1; }
@@ -748,6 +751,21 @@ message DataModelAccessEntity
     optional uint64 commit_time = 3;
     optional UUID uuid = 4;
 }
+
+message DataModelSensitiveDatabase
+{
+    optional string database = 1;
+    repeated DataModelSensitiveTable tables = 2;
+    optional bool is_sensitive = 3; // is the database sensitive
+}
+
+message DataModelSensitiveTable
+{
+    optional string table = 1;
+    repeated string sensitive_columns = 2; // list of columns that are marked sensitive
+    optional bool is_sensitive = 3; // is the table sensitive
+}
+
 
 message DataModelSnapshot {
   optional string name = 1;

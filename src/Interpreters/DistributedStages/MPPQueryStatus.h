@@ -8,7 +8,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int QUERY_WAS_CANCELLED;
+    extern const int QUERY_WAS_CANCELLED_INTERNAL;
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
@@ -40,7 +40,7 @@ struct QueryError
 
 constexpr bool isAmbiguosError(int error_code)
 {
-    return error_code == ErrorCodes::QUERY_WAS_CANCELLED || error_code == ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION;
+    return error_code == ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL || error_code == ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
 struct MPPQueryStatus

@@ -422,7 +422,7 @@ FilterEstimator::estimateEqualityFilter(PlanNodeStatistics & stats, const ConstA
     }
 
     // symbol == null, or symbol != null will be convert to NULL literal.
-    double selectivity = double(stats.getRowCount() - symbol_statistics.getNullsCount()) / stats.getRowCount();
+    double selectivity = double(stats.getRowCount() - symbol_statistics.getNullsCount()) / std::max(stats.getRowCount(), 1lu);
     if (symbol_statistics.isNumber())
     {
         try
@@ -494,7 +494,7 @@ FilterEstimator::estimateNotEqualityFilter(PlanNodeStatistics & stats, const Con
         return {std::nullopt, {}};
     }
 
-    double selectivity = double(stats.getRowCount() - symbol_statistics.getNullsCount()) / stats.getRowCount();
+    double selectivity = double(stats.getRowCount() - symbol_statistics.getNullsCount()) / std::max(stats.getRowCount(), 1lu);
     if (symbol_statistics.isNumber())
     {
         try

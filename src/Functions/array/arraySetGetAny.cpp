@@ -116,8 +116,8 @@ public:
         {
             case SetVariants::Type::EMPTY:
                 break;
-            // case SetVariants::Type::bitmap64:
-                // break;
+            case SetVariants::Type::bitmap64:
+                break;
 #define M(NAME)                                                         \
                 case SetVariants::Type::NAME:                           \
                     if (is_nullable)                                    \

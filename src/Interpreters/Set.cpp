@@ -25,6 +25,7 @@
 
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnTuple.h>
+#include <Columns/ColumnBitMap64.h>
 
 #include <Common/typeid_cast.h>
 
@@ -228,6 +229,25 @@ bool Set::insertFromBlock(const Block & block)
     {
         case SetVariants::Type::EMPTY:
             break;
+        case SetVariants::Type::bitmap64:
+        {
+            if (key_columns.size() == 1)
+            {
+                if (const auto * bitmap_column =  dynamic_cast<const ColumnBitMap64 *>(key_columns[0]);
+                    bitmap_column)
+                {
+                    for (size_t i = 0; i < bitmap_column->size(); ++i)
+                    {
+                        bitmap_set |= bitmap_column->getBitMapAt(i);
+                    }
+                }
+                else
+                    throw Exception("Not found ColumnBitMap64 when using IN bitmap", ErrorCodes::LOGICAL_ERROR);
+            }
+            else
+                throw Exception("Column size of Set(BitMap64) should be only one when using IN operator", ErrorCodes::LOGICAL_ERROR);
+            break;
+        }
 #define M(NAME) \
         case SetVariants::Type::NAME: \
             insertFromBlockImpl(*data.NAME, key_columns, rows, data, null_map, filter ? &filter->getData() : nullptr); \
@@ -290,25 +310,25 @@ ColumnUInt8::MutablePtr Set::markDistinctBlock(const Block & block)
     {
         case SetVariants::Type::EMPTY:
             break;
-        // TODO(dongyifeng): support bitmap64
-        #if 0 
         case SetVariants::Type::bitmap64:
         {
-            if (key_columns.size() == 1 && rows == 1)
+            if (key_columns.size() == 1)
             {
-                if (auto * bitmap_column =  dynamic_cast<const ColumnBitMap64 *>(key_columns[0]);
+                if (const auto * bitmap_column =  dynamic_cast<const ColumnBitMap64 *>(key_columns[0]);
                     bitmap_column)
                 {
-                    bitmap_set |= bitmap_column->getBitMapAt(0);
+                    for (size_t i = 0; i < bitmap_column->size(); ++i)
+                    {
+                        bitmap_set |= bitmap_column->getBitMapAt(i);
+                    }
                 }
                 else
-                    throw Exception("in bitmap get exception, not found ColumnBitMap64", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Not found ColumnBitMap64 when using IN bitmap", ErrorCodes::LOGICAL_ERROR);
             }
             else
-                throw Exception("size of Set(BitMap64) should be only one when using IN operator", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Column size of Set(BitMap64) should be only one when using IN operator", ErrorCodes::LOGICAL_ERROR);
             break;
         }
-        #endif
 #define M(NAME) \
         case SetVariants::Type::NAME: \
             insertFromBlockImpl(*data.NAME, key_columns, rows, data, null_map, filter ? &filter->getData() : nullptr); \
@@ -348,6 +368,13 @@ ColumnPtr Set::execute(const Block & block, bool negative) const
     }
 
     checkColumnsNumber(num_key_columns);
+
+    if (data_types.size() == 1 && isBitmap64(data_types[0])
+        && block.columns() == 1 && isInteger(block.safeGetByPosition(0).type))
+    {
+        executeBitmap64(block, vec_res, negative);
+        return res;
+    }
 
     /// Remember the columns we will work with. Also check that the data types are correct.
     ColumnRawPtrs key_columns;
@@ -467,12 +494,29 @@ void Set::executeOrdinary(
     {
         case SetVariants::Type::EMPTY:
             break;
+        case SetVariants::Type::bitmap64:
+            break;
 #define M(NAME) \
         case SetVariants::Type::NAME: \
             executeImpl(*data.NAME, key_columns, vec_res, negative, rows, null_map); \
             break;
     APPLY_FOR_SET_VARIANTS(M)
 #undef M
+    }
+}
+
+void Set::executeBitmap64(
+    const Block & block,
+    ColumnUInt8::Container & vec_res,
+    bool negative) const
+{
+    auto & column = block.safeGetByPosition(0).column;
+    for (size_t i = 0; i < column->size(); ++i)
+    {
+        auto val = column->get64(i);
+        vec_res[i] = bitmap_set.fastContains(val) ? 1 : 0;
+        if (negative)
+            vec_res[i] = 1 - vec_res[i];
     }
 }
 
@@ -512,6 +556,9 @@ void Set::serialize(WriteBuffer & buf) const
     {
         case SetVariants::Type::EMPTY:
             break;
+        case SetVariants::Type::bitmap64:
+            writeBitmap(buf);
+            break;
 #define M(NAME) \
         case SetVariants::Type::NAME: \
             data.NAME->data.write(buf); \
@@ -542,6 +589,9 @@ void Set::deserializeImpl(ReadBuffer & buf)
     {
         case SetVariants::Type::EMPTY:
             break;
+        case SetVariants::Type::bitmap64:
+            readBitmap(buf);
+            break;
 #define M(NAME) \
         case SetVariants::Type::NAME: \
             deserializeImplCase(*data.NAME, data, buf); \
@@ -565,6 +615,24 @@ SetPtr Set::deserialize(ReadBuffer & buf)
     auto set = std::make_shared<Set>(limits, fill_set_elements_tmp, transform_null_in_tmp);
     set->deserializeImpl(buf);
     return set;
+}
+
+void Set::writeBitmap(WriteBuffer & out) const
+{
+    auto size = bitmap_set.getSizeInBytes();
+    writeVarUInt(size, out);
+    PODArray<char> buffer(size);
+    bitmap_set.write(buffer.data());
+    out.write(buffer.data(), size);
+}
+
+void Set::readBitmap(ReadBuffer & in)
+{
+    size_t size;
+    readVarUInt(size, in);
+    PODArray<char> buffer(size);
+    in.readStrict(buffer.data(), size);
+    bitmap_set = roaring::Roaring64Map::read(buffer.data());
 }
 
 

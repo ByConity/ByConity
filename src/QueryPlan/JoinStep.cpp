@@ -31,6 +31,7 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
+#include <common/logger_useful.h>
 #include <Common/ErrorCodes.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -169,19 +170,35 @@ JoinPtr JoinStep::makeJoin(
         }
         else if (join_algorithm == JoinAlgorithm::GRACE_HASH && GraceHashJoin::isSupported(table_join) && allow_grace_hash_join)
         {
-            table_join->join_algorithm = JoinAlgorithm::GRACE_HASH;
-            // todo aron let optimizer decide this(parallel)
-            auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
-            return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false);
+            if (GraceHashJoin::isSupported(table_join) ) {
+                table_join->join_algorithm = JoinAlgorithm::GRACE_HASH;
+                // todo aron let optimizer decide this(parallel)
+                auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
+                return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false, num_streams);
+            } else if (allow_merge_join) { // fallback into merge join
+                LOG_WARNING(&Poco::Logger::get("JoinStep::makeJoin"), "Grace hash join is not support, fallback into merge join.");
+                return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
+            } else { // fallback into hash join when grace hash and merge join not supported
+                LOG_WARNING(&Poco::Logger::get("JoinStep::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
+                return std::make_shared<HashJoin>(table_join, r_sample_block);
+            }
         }
         return std::make_shared<HashJoin>(table_join, r_sample_block);
     }
     else if (table_join->forceMergeJoin() || (table_join->preferMergeJoin() && allow_merge_join))
         return {std::make_shared<MergeJoin>(table_join, r_sample_block)};
-    else if ((table_join->forceGraceHashLoopJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH) && GraceHashJoin::isSupported(table_join) && allow_grace_hash_join)
+    else if ((table_join->forceGraceHashJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH) && allow_grace_hash_join)
     {
-        auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
-        return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false);
+        if (GraceHashJoin::isSupported(table_join) ) {
+            auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
+            return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false, num_streams);
+        } else if (allow_merge_join) { // fallback into merge join
+            LOG_WARNING(&Poco::Logger::get("JoinStep::makeJoin"), "Grace hash join is not support, fallback into merge join.");
+            return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
+        } else { // fallback into hash join when grace hash and merge join not supported
+            LOG_WARNING(&Poco::Logger::get("JoinStep::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
+            return std::make_shared<HashJoin>(table_join, r_sample_block);
+        }
     }
     return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
 }

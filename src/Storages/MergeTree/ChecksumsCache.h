@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Common/ProfileEvents.h>
 #include <common/find_symbols.h>
+#include <cstddef>
 #include <sstream>
 
 namespace ProfileEvents
@@ -61,14 +62,18 @@ inline String getStorageUniqueId(const String & checksums_cache_key)
 
 struct ChecksumsWeightFunction
 {
+    /// We spent additional bytes on key in hashmap, linked lists, shared pointers, etc ...
+    static constexpr size_t CHECKSUM_CACHE_OVERHEAD = 128;
+
     size_t operator()(const ChecksumsCacheItem & cache_item) const
     {
         const auto & checksums = cache_item.second;
         if (!checksums)
             return 0;
         
-        constexpr size_t kApproximatelyBytesPerElement = 128;
-        return checksums->files.size() * kApproximatelyBytesPerElement;
+        // * 1.5 means MergeTreeDataPartChecksums class overhead
+        constexpr size_t kApproximatelyBytesPerElement = 128 * 1.5;
+        return (checksums->files.size() * kApproximatelyBytesPerElement) + CHECKSUM_CACHE_OVERHEAD;
     }
 };
 

@@ -292,6 +292,7 @@ struct SetVariantsTemplate: public Variant
     enum class Type
     {
         EMPTY,
+        bitmap64,
 
     #define M(NAME) NAME,
         APPLY_FOR_SET_VARIANTS(M)

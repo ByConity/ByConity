@@ -218,6 +218,7 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "delay_dequeue_ms",
         "dialect_type",
         "dict_table_full_mode",
+        "direct_forward_query_to_cnch",
         "disable_perfect_shard_auto_merge",
         "disable_remote_stream_log",
         "disk_cache_mode",
@@ -353,6 +354,7 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "log_queries_cut_to_length",
         "log_query_settings",
         "log_query_threads",
+        "log_segment_profiles",
         "low_cardinality_allow_in_native_format",
         "low_cardinality_max_dictionary_size",
         "low_cardinality_use_single_dictionary_for_part",
@@ -389,6 +391,7 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "max_ingest_rows_size",
         "max_insert_block_size",
         "max_insert_block_size_bytes",
+        "max_insert_threads",
         "max_memory_usage",
         "max_memory_usage_for_all_queries",
         "max_memory_usage_for_user",
@@ -528,6 +531,7 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "sync_thread_heartbeat_interval_ms",
         "sync_thread_max_heartbeat_interval_second",
         "sync_thread_schedule_interval_ms",
+        "system_mutations_only_basic_info",
         "table_function_remote_max_addresses",
         "tables_load_pool_size",
         "tcp_keep_alive_timeout",
@@ -543,6 +547,7 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "use_uncompressed_cache",
         "virtual_part_size",
         "virtual_warehouse",
+        "virtual_warehouse_write",
         "vw"
     };
 

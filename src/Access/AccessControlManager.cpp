@@ -108,6 +108,27 @@ private:
     mutable std::mutex mutex;
 };
 
+class AccessControlManager::SensitivePermissionTenants
+{
+public:
+    void registerTenants(const Strings & tenants_)
+    {
+        std::lock_guard lock{mutex};
+        tenants.clear();
+        tenants.reserve(tenants_.size());
+        tenants.insert(tenants_.begin(), tenants_.end());
+    }
+
+    bool isSensitivePermissionEnabled(const String & tenant) const
+    {
+        std::lock_guard lock{mutex};
+        return tenants.contains(tenant);
+    }
+
+private:
+    std::unordered_set<String> tenants;
+    mutable std::mutex mutex;
+};
 
 AccessControlManager::AccessControlManager()
     : MultipleAccessStorage("KV Storage"),
@@ -117,7 +138,8 @@ AccessControlManager::AccessControlManager()
       quota_cache(std::make_unique<QuotaCache>(*this)),
       settings_profiles_cache(std::make_unique<SettingsProfilesCache>(*this)),
       external_authenticators(std::make_unique<ExternalAuthenticators>()),
-      custom_settings_prefixes(std::make_unique<CustomSettingsPrefixes>())
+      custom_settings_prefixes(std::make_unique<CustomSettingsPrefixes>()),
+      sensitive_permission_tenants(std::make_unique<SensitivePermissionTenants>())
 {
 }
 
@@ -215,6 +237,7 @@ void AccessControlManager::addKVStorage(const ContextPtr & context)
     }
     auto new_storage = std::make_shared<KVAccessStorage>(context);
     addStorage(new_storage);
+    sensitive_resource_getter = [catalog = context->getCnchCatalog()] (String db) { return catalog->getSensitiveResource(db); };
     LOG_DEBUG(getLogger(), "Added {} access storage '{}'", String(new_storage->getStorageType()), new_storage->getStorageName());
 }
 
@@ -331,6 +354,9 @@ void AccessControlManager::setUpFromMainConfig(const Poco::Util::AbstractConfigu
     setSelectFromInformationSchemaRequiresGrant(config_.getBool("access_control_improvements.select_from_information_schema_requires_grant", false));
 
     addStoragesFromMainConfig(config_, config_path_, get_zookeeper_function_);
+
+    if (config_.has("sensitive_permission_tenants"))
+        setSensitivePermissionTenants(config_.getString("sensitive_permission_tenants"));
 }
 
 
@@ -383,6 +409,13 @@ void AccessControlManager::setCustomSettingsPrefixes(const String & comma_separa
     setCustomSettingsPrefixes(prefixes);
 }
 
+void AccessControlManager::setSensitivePermissionTenants(const String & comma_separated_tenants)
+{
+    Strings tenants;
+    splitInto<','>(tenants, comma_separated_tenants);
+    sensitive_permission_tenants->registerTenants(tenants);
+}
+
 bool AccessControlManager::isSettingNameAllowed(const std::string_view & setting_name) const
 {
     return custom_settings_prefixes->isSettingNameAllowed(setting_name);
@@ -401,7 +434,7 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
     const Settings & settings,
     const String & current_database,
     const ClientInfo & client_info,
-    bool has_tenant_id_in_username) const
+    const String & tenant) const
 {
     ContextAccessParams params;
     params.user_id = user_id;
@@ -415,7 +448,8 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
     params.http_method = client_info.http_method;
     params.address = client_info.current_address.host();
     params.quota_key = client_info.quota_key;
-    params.has_tenant_id_in_username = has_tenant_id_in_username;
+    params.has_tenant_id_in_username = !tenant.empty();
+    params.enable_sensitive_permission = sensitive_permission_tenants->isSensitivePermissionEnabled(tenant);
 
     /// Extract the last entry from comma separated list of X-Forwarded-For addresses.
     /// Only the last proxy can be trusted (if any).

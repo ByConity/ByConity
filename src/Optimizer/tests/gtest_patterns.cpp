@@ -41,7 +41,7 @@ TEST(OptimizerPatternsTest, PredicateNot)
 
 TEST(OptimizerPatternsTest, ToString)
 {
-    Capture cap1;
+    Capture cap1 = "cap1";
     PatternPtr pattern
         = Patterns::any().matching([](const auto &, const auto &) { return true; }).capturedAs(cap1).withSingle(Patterns::any()).result();
 
