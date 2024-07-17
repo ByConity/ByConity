@@ -14,60 +14,6 @@
 
 namespace DB
 {
-
-// ASTPtr ASTStorageAnalyticalMySQL::clone() const
-// {
-//     //return ASTStorage::clone();
-//     auto res = std::make_shared<ASTStorageAnalyticalMySQL>(*this);
-//     res->children.clear();
-//     // Clickhouse
-//     if (engine)
-//         res->set(res->engine, engine->clone());
-//     if (partition_by)
-//         res->set(res->partition_by, partition_by->clone());
-//     if (cluster_by)
-//         res->set(res->cluster_by, cluster_by->clone());
-//     if (primary_key)
-//         res->set(res->primary_key, primary_key->clone());
-//     if (order_by)
-//         res->set(res->order_by, order_by->clone());
-//     if (unique_key)
-//         res->set(res->unique_key, unique_key->clone());
-//     if (sample_by)
-//         res->set(res->sample_by, sample_by->clone());
-//     if (ttl_table)
-//         res->set(res->ttl_table, ttl_table->clone());
-//     if (settings)
-//         res->set(res->settings, settings->clone());
-//     if (comment)
-//         res->set(res->comment, comment->clone());
-
-//     // MySQL
-//     if (mysql_engine)
-//         res->set(res->mysql_engine, mysql_engine->clone());
-//     if (mysql_primary_key)
-//         res->set(res->mysql_primary_key, mysql_primary_key->clone());
-//     if (distributed_by)
-//         res->set(res->distributed_by, distributed_by->clone());
-//     if (storage_policy)
-//         res->set(res->storage_policy, storage_policy->clone());
-//     if (hot_partition_count)
-//         res->set(res->hot_partition_count, hot_partition_count->clone());
-//     if (block_size)
-//         res->set(res->block_size, block_size->clone());
-//     if (rt_engine)
-//         res->set(res->rt_engine, rt_engine->clone());
-//     if (table_properties)
-//         res->set(res->table_properties, table_properties->clone());
-//     if (mysql_partition_by)
-//         res->set(res->mysql_partition_by, mysql_partition_by->clone());
-//     if (life_cycle)
-//         res->set(res->life_cycle, life_cycle->clone());
-//     res->broadcast = broadcast;
-
-//     return res;
-// }
-
 void ASTStorageAnalyticalMySQL::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
 {
     if (mysql_engine)

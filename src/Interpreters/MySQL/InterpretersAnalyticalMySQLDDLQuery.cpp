@@ -38,11 +38,6 @@
 #include <Storages/IStorage.h>
 #include <Storages/AlterCommands.h>
 
-
-#if USE_MYSQL
-#include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
-#endif
-
 namespace DB
 {
 
@@ -95,29 +90,6 @@ static NamesAndTypesList getColumnsList(const ASTExpressionList * columns_defini
                         arguments->children.push_back(std::make_shared<ASTLiteral>("UTC"));
                     }
                     data_type_function->arguments = arguments;
-                }
-            }
-            /// Transforms MySQL ENUM's list of strings to ClickHouse string-integer pairs
-            /// For example ENUM('a', 'b', 'c') -> ENUM('a'=1, 'b'=2, 'c'=3)
-            /// Elements on a position further than 32767 are assigned negative values, starting with -32768.
-            /// Note: Enum would be transformed to Enum8 if number of elements is less then 128, otherwise it would be transformed to Enum16.
-            if (type_name_upper.find("ENUM") != String::npos)
-            {
-                UInt16 i = 0;
-                for (ASTPtr & child : data_type_function->arguments->children)
-                {
-                    auto new_child = std::make_shared<ASTFunction>();
-                    new_child->name = "equals";
-                    auto * literal = child->as<ASTLiteral>();
-
-                    if (!literal)
-                        throw Exception("ENUM is not supported yet", ErrorCodes::MYSQL_SYNTAX_ERROR);
-
-
-                    new_child->arguments = std::make_shared<ASTExpressionList>();
-                    new_child->arguments->children.push_back(std::make_shared<ASTLiteral>(literal->value.get<String>()));
-                    new_child->arguments->children.push_back(std::make_shared<ASTLiteral>(Int16(++i)));
-                    child = new_child;
                 }
             }
         }
@@ -191,10 +163,9 @@ static NamesAndTypesList modifyPrimaryKeysToNonNullable(const NamesAndTypesList 
     return non_nullable_primary_keys;
 }
 
-static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, NameSet, NamesAndTypesList> getKeys(
+static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, NamesAndTypesList> getKeys(
     ASTExpressionList * columns_definition, ASTExpressionList * indices_define, ContextPtr context, NamesAndTypesList & columns)
 {
-    NameSet increment_columns;
     auto keys = makeASTFunction("tuple");
     auto unique_keys = makeASTFunction("tuple");
     auto primary_keys = makeASTFunction("tuple");
@@ -281,9 +252,7 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, NameS
     const auto & primary_keys_names_and_types = getNames(*primary_keys, context, columns);
     const auto & non_nullable_primary_keys_names_and_types = modifyPrimaryKeysToNonNullable(primary_keys_names_and_types, columns);
 
-    const auto & unique_keys_names_and_types = getNames(*unique_keys, context, columns);
-    const auto & non_nullable_unique_keys_names_and_types = modifyPrimaryKeysToNonNullable(unique_keys_names_and_types, columns);
-    return std::make_tuple(non_nullable_primary_keys_names_and_types, non_nullable_unique_keys_names_and_types, getNames(*keys, context, columns), increment_columns, getNames(*cluster_keys, context, columns));
+    return std::make_tuple(non_nullable_primary_keys_names_and_types, getNames(*unique_keys, context, columns), getNames(*keys, context, columns), getNames(*cluster_keys, context, columns));
 }
 
 static ASTPtr getPartitionPolicy(const NamesAndTypesList & primary_keys)
@@ -342,14 +311,13 @@ static ASTPtr getPartitionPolicy(const NamesAndTypesList & primary_keys)
 }
 
 static ASTPtr getOrderByPolicy(
-    const NamesAndTypesList & primary_keys, const NamesAndTypesList & unique_keys, const NamesAndTypesList & keys, const NameSet & increment_columns, const NamesAndTypesList & cluster_keys = NamesAndTypesList())
+    const NamesAndTypesList & primary_keys,  const NamesAndTypesList & keys = NamesAndTypesList(), const NamesAndTypesList & cluster_keys = NamesAndTypesList())
 {
     NameSet order_by_columns_set;
     std::deque<NamesAndTypesList> order_by_columns_list;
 
     const auto & add_order_by_expression = [&](const NamesAndTypesList & names_and_types)
     {
-        NamesAndTypesList increment_keys;
         NamesAndTypesList non_increment_keys;
 
         for (const auto & [name, type] : names_and_types)
@@ -357,26 +325,15 @@ static ASTPtr getOrderByPolicy(
             if (order_by_columns_set.count(name))
                 continue;
 
-            if (increment_columns.count(name))
-            {
-                order_by_columns_set.emplace(name);
-                increment_keys.emplace_back(NameAndTypePair(name, type));
-            }
-            else
-            {
-                order_by_columns_set.emplace(name);
-                non_increment_keys.emplace_back(NameAndTypePair(name, type));
-            }
+            order_by_columns_set.emplace(name);
+            non_increment_keys.emplace_back(NameAndTypePair(name, type));
         }
 
-        order_by_columns_list.emplace_back(increment_keys);
         order_by_columns_list.emplace_front(non_increment_keys);
     };
 
-    /// primary_key[not increment], key[not increment], unique[not increment], unique[increment], key[increment], primary_key[increment]
-    /// cluster keys in the begining
+    /// primary_key[not increment], key[not increment], unique[not increment]
     add_order_by_expression(cluster_keys);
-    add_order_by_expression(unique_keys);
     add_order_by_expression(keys);
     add_order_by_expression(primary_keys);
 
@@ -490,48 +447,45 @@ void validateTTLExpression(const ASTPtr expression)
 
 void InterpreterAlterAnalyticalMySQLImpl::validate(const TQuery & query, ContextPtr context)
 {
-    if (query.alter_object != ASTAlterQuery::AlterObjectType::TABLE)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only support Alter Table under MySQL dialect. But you are altering other objects.");
-
-    for (const auto & ast : query.command_list->getChildren())
-    {
-        auto * command = ast->as<ASTAlterCommand>();
-        if (command && command->type != ASTAlterCommand::ADD_COLUMN
-                    && command->type != ASTAlterCommand::DROP_COLUMN
-                    && command->type != ASTAlterCommand::MODIFY_COLUMN
-                    && command->type != ASTAlterCommand::RENAME_COLUMN
-                    && command->type != ASTAlterCommand::RENAME_TABLE
-                    && command->type != ASTAlterCommand::DROP_PARTITION)
-            throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN, "MySQL dialect only supports alter query for ADD COLUMN, DROP Column, MODIFY COLUMN and RENAME COLUMN.");
-    }
-
-    auto table_id = context->resolveStorageID(query, Context::ResolveOrdinary);
-    DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name, context);
-    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, context);
-    StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
-
     for (const auto & ast : query.command_list->getChildren())
     {
         auto * command_ast = ast->as<ASTAlterCommand>();
-        if (auto command = AlterCommand::parse(command_ast, context))
+        if (command_ast && (command_ast->type == ASTAlterCommand::ADD_COLUMN
+                    || command_ast->type == ASTAlterCommand::DROP_COLUMN
+                    || command_ast->type == ASTAlterCommand::MODIFY_COLUMN
+                    || command_ast->type == ASTAlterCommand::RENAME_COLUMN
+                    || command_ast->type == ASTAlterCommand::RENAME_TABLE
+                    || command_ast->type == ASTAlterCommand::DROP_PARTITION))
         {
-            if (command->type == AlterCommand::MODIFY_COLUMN)
-                validateAlterColumnType(*command, metadata);
+            auto table_id = context->resolveStorageID(query, Context::ResolveOrdinary);
+            DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name, context);
+            StoragePtr table = DatabaseCatalog::instance().getTable(table_id, context);
+            StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
 
-            /// check changes to primary key
-            if (command->type == AlterCommand::DROP_COLUMN || command->type == AlterCommand::MODIFY_COLUMN)
+            if (auto command = AlterCommand::parse(command_ast, context))
             {
-                const auto primary_col_names = getPrimaryKeys(metadata);
-                if (primary_col_names.contains(command->column_name))
-                    throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN, "Cannot modify primary key columns.");
+                if (command->type == AlterCommand::MODIFY_COLUMN)
+                    validateAlterColumnType(*command, metadata);
+
+                /// check changes to primary key
+                if (command->type == AlterCommand::DROP_COLUMN || command->type == AlterCommand::MODIFY_COLUMN)
+                {
+                    const auto primary_col_names = getPrimaryKeys(metadata);
+                    if (primary_col_names.contains(command->column_name))
+                        throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN, "Cannot modify primary key columns.");
+                }
+                if (command->mysql_primary_key)
+                    throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN, "Cannot add primary key.");
             }
-            if (command->mysql_primary_key)
-                throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN, "Cannot add primary key.");
+        }
+        else if (command_ast && (command_ast->type == ASTAlterCommand::ADD_INDEX || command_ast->type == ASTAlterCommand::DROP_INDEX))
+        {
+            throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN, "MySQL dialect doesn't supports alter query for ADD INDEX and DROP INDEX.");
         }
     }
 }
 
-ASTs InterpreterAlterAnalyticalMySQLImpl::getRewrittenQueries(const TQuery & query, ContextPtr context)
+ASTPtr InterpreterAlterAnalyticalMySQLImpl::getRewrittenQuery(const TQuery & query, ContextPtr context)
 {
     auto new_query = std::make_shared<ASTAlterQuery>();
 
@@ -545,7 +499,7 @@ ASTs InterpreterAlterAnalyticalMySQLImpl::getRewrittenQueries(const TQuery & que
             auto to_database = need_database ? command->rename_table_to->as<ASTTableIdentifier>()->getDatabaseName() : "";
             auto to_table = command->rename_table_to->as<ASTTableIdentifier>()->getTableName();
             replace_query->elements.push_back({{query.database, query.table}, {to_database, to_table}});
-            return ASTs{replace_query};
+            return replace_query;
         }
         if (command && command->type == ASTAlterCommand::NO_TYPE)
         {
@@ -553,7 +507,7 @@ ASTs InterpreterAlterAnalyticalMySQLImpl::getRewrittenQueries(const TQuery & que
         }
     }
     *new_query = query;
-    return ASTs{new_query};
+    return new_query;
 }
 
 
@@ -561,8 +515,6 @@ void InterpreterCreateAnalyticMySQLImpl::validate(const InterpreterCreateAnalyti
 {
     if (const auto & mysql_storage = create_query.storage->as<ASTStorageAnalyticalMySQL>())
     {
-        if (mysql_storage->primary_key)
-            throw Exception("This is Clickhouse syntax for PRIMARY KEY, please follow mysql dialect", ErrorCodes::MYSQL_SYNTAX_ERROR);
         if (mysql_storage->cluster_by)
             throw Exception("This is Clickhouse syntax for CLUSTER BY, please follow mysql dialect: DISTRIBUTED BY", ErrorCodes::MYSQL_SYNTAX_ERROR);
         if (mysql_storage->life_cycle)
@@ -593,7 +545,7 @@ void InterpreterCreateAnalyticMySQLImpl::validate(const InterpreterCreateAnalyti
     }
 }
 
-ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & create_query, ContextPtr context)
+ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & create_query, ContextPtr context)
 {
     auto query = create_query.transform();
     auto rewritten_query = query->as<ASTCreateQuery>();
@@ -603,7 +555,6 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
     auto & storage = rewritten_query->storage;
     bool has_table_definition = create_defines && create_defines->columns && !create_defines->columns->children.empty();
     bool create_as = !create_query.as_table.empty() || create_query.as_table_function;
-    bool has_unique_key = false;
     const std::unordered_set<String> engine_names
         = {"XUANWU",
            "PERFORMANCE_SCHEMA",
@@ -617,7 +568,8 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
            "MERGE",
            "FEDERATED",
            "EXAMPLE",
-           "MEMORY"};
+           "MEMORY",
+           "HEAP"};
 
     // ck definitions, just return raw ast
     String engine_name = "";
@@ -628,7 +580,7 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
         {
             if (mysql_storage->mysql_partition_by)
                 storage->set(storage->partition_by, mysql_storage->mysql_partition_by->clone());
-            return ASTs{query};
+            return query;
         }
     }
     else if (mysql_storage->mysql_engine)
@@ -640,19 +592,18 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
         }
     }
 
-    if (create_as || rewritten_query->temporary)
+    if ((create_as || rewritten_query->temporary) && (!has_table_definition && !create_query.select))
     {
         rewritten_query->storage = nullptr;
-        return ASTs{query};
+        return query;
     }
 
     if (has_table_definition)
     {
         NamesAndTypesList columns_name_and_type = getColumnsList(create_defines->columns);
-        const auto & [primary_keys, unique_keys, keys, increment_columns, cluster_keys] = getKeys(create_defines->columns, create_defines->mysql_indices, context, columns_name_and_type);
+        const auto & [primary_keys, unique_keys, keys, cluster_keys] = getKeys(create_defines->columns, create_defines->mysql_indices, context, columns_name_and_type);
 
         setNotNullModifier(create_defines->columns, primary_keys);
-        setNotNullModifier(create_defines->columns, unique_keys);
 
         /// The `partition by` expression must use primary keys, otherwise the primary keys will not be merge.
         if (ASTPtr partition_expression = getPartitionPolicy(primary_keys))
@@ -661,7 +612,7 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
             storage->set(storage->partition_by, mysql_storage->mysql_partition_by->clone());
 
         /// The `order by` expression must use primary keys, otherwise the primary keys will not be merge.
-        if (ASTPtr order_by_expression = getOrderByPolicy(primary_keys, unique_keys, keys, increment_columns, cluster_keys))
+        if (ASTPtr order_by_expression = getOrderByPolicy(primary_keys, keys, cluster_keys))
         {
             auto & list = order_by_expression->as<ASTFunction>()->arguments;
             if (!list->children.empty())
@@ -670,10 +621,9 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
             }
         }
 
-        if (ASTPtr unique_key_expression = getOrderByPolicy(primary_keys, unique_keys, keys, increment_columns))
+        if (ASTPtr unique_key_expression = getOrderByPolicy(primary_keys))
         {
             storage->set(storage->unique_key, unique_key_expression);
-            has_unique_key = true;
         }
 
         rewritten_query->set(rewritten_query->columns_list, create_query.columns_list->clone());
@@ -684,31 +634,59 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
         storage->set(storage->engine, makeASTFunction("CnchMergeTree"));
     if (!storage->order_by)
         storage->set(storage->order_by, makeASTFunction("tuple"));
+    if (!storage->unique_key)
+    {
+        if (storage->primary_key)
+        {
+            storage->set(storage->unique_key, storage->primary_key->clone());
+            storage->primary_key = nullptr;
+        }
+        else
+        {
+            storage->set(storage->unique_key, makeASTFunction("tuple"));
+        }
+    }
+
+    if (mysql_storage->distributed_by)
+    {
+        // distributed by hash(col) -> cluster by col
+        const String vw_name = "vw_default";
+        auto vw = context->getVirtualWarehousePool().get(vw_name);
+        // context->setCurrentVW(std::move(vw_handle));
+        // auto vw = context->tryGetCurrentVW();
+        int total_bucket_number = vw ? vw->getNumWorkers() : 1;
+        auto cluster_by_ast = std::make_shared<ASTClusterByElement>(mysql_storage->distributed_by->clone(), std::make_shared<ASTLiteral>(total_bucket_number), 0, false, false);
+        storage->set(storage->cluster_by, cluster_by_ast);
+    }
+    else if (mysql_storage->cluster_by)
+    {
+        storage->set(storage->cluster_by, mysql_storage->cluster_by->clone());
+    }
 
     {
+        // settings
         ASTPtr settings = std::make_shared<ASTSetQuery>();
-        auto settings_ast = settings->as<ASTSetQuery>();
+        auto *settings_ast = settings->as<ASTSetQuery>();
         settings_ast->is_standalone = false;
+        bool has_index_granularity_setting = false;
+        bool has_partition_level_unique_keys_setting = false;
+        if (auto *const mysql_settings = mysql_storage->settings->as<ASTSetQuery>())
+        {
+            for (const auto & change: mysql_settings->changes)
+            {
+                if (change.name == "index_granularity")
+                    has_index_granularity_setting = true;
+                if (change.name == "partition_level_unique_keys")
+                    has_partition_level_unique_keys_setting = true;
+            }
+        }
         // It's not recommended to mix mysql and clickhosue dialects
         // but we have to provide this in case of fall back
-        if (mysql_storage->block_size)
-        {
+        if (mysql_storage->block_size && !has_index_granularity_setting)
             // block_size -> index_granularity
             settings_ast->changes.push_back({"index_granularity", mysql_storage->block_size->as<ASTLiteral>()->value.get<Int64>()});
-        }
 
-        if (mysql_storage->distributed_by)
-        {
-            // distributed by hash(col) -> cluster by col
-            const String vw_name = "vw_default";
-            auto vw = context->getVirtualWarehousePool().get(vw_name);
-            // context->setCurrentVW(std::move(vw_handle));
-            // auto vw = context->tryGetCurrentVW();
-            int total_bucket_number = vw ? vw->getNumWorkers() : 1;
-            auto cluster_by_ast = std::make_shared<ASTClusterByElement>(mysql_storage->distributed_by->clone(), std::make_shared<ASTLiteral>(total_bucket_number), 0, false, false);
-            storage->set(storage->cluster_by, cluster_by_ast);
-        }
-        if (has_unique_key)
+        if (!has_partition_level_unique_keys_setting)
             settings_ast->changes.push_back({"partition_level_unique_keys", 0});
         if (const auto mysql_settings = mysql_storage->settings->as<ASTSetQuery>())
             settings_ast->changes.insert(settings_ast->changes.end(), mysql_settings->changes.begin(), mysql_settings->changes.end());
@@ -716,239 +694,8 @@ ASTs InterpreterCreateAnalyticMySQLImpl::getRewrittenQueries( const TQuery & cre
         storage->set(storage->settings, settings);
     }
 
-    return ASTs{query};
+    return query;
 }
-
-// void InterpreterDropImpl::validate(const InterpreterDropImpl::TQuery & /*query*/, ContextPtr /*context*/)
-// {
-// }
-
-// ASTs InterpreterDropImpl::getRewrittenQueries(
-//     const InterpreterDropImpl::TQuery & drop_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database)
-// {
-//     const auto & database_name = resolveDatabase(drop_query.database, mysql_database, mapped_to_database, context);
-
-//     /// Skip drop database|view|dictionary
-//     if (database_name != mapped_to_database || drop_query.table.empty() || drop_query.is_view || drop_query.is_dictionary)
-//         return {};
-
-//     ASTPtr rewritten_query = drop_query.clone();
-//     rewritten_query->as<ASTDropQuery>()->database = mapped_to_database;
-//     rewritten_query->as<ASTDropQuery>()->if_exists = true;
-//     return ASTs{rewritten_query};
-// }
-
-// void InterpreterRenameImpl::validate(const InterpreterRenameImpl::TQuery & rename_query, ContextPtr /*context*/)
-// {
-//     if (rename_query.exchange)
-//         throw Exception("Cannot execute exchange for external ddl query.", ErrorCodes::NOT_IMPLEMENTED);
-// }
-
-// ASTs InterpreterRenameImpl::getRewrittenQueries(
-//     const InterpreterRenameImpl::TQuery & rename_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database)
-// {
-//     ASTRenameQuery::Elements elements;
-//     for (const auto & rename_element : rename_query.elements)
-//     {
-//         const auto & to_database = resolveDatabase(rename_element.to.database, mysql_database, mapped_to_database, context);
-//         const auto & from_database = resolveDatabase(rename_element.from.database, mysql_database, mapped_to_database, context);
-
-//         if ((from_database == mapped_to_database || to_database == mapped_to_database) && to_database != from_database)
-//             throw Exception("Cannot rename with other database for external ddl query.", ErrorCodes::NOT_IMPLEMENTED);
-
-//         if (from_database == mapped_to_database)
-//         {
-//             elements.push_back(ASTRenameQuery::Element());
-//             elements.back().from.database = mapped_to_database;
-//             elements.back().from.table = rename_element.from.table;
-//             elements.back().to.database = mapped_to_database;
-//             elements.back().to.table = rename_element.to.table;
-//         }
-//     }
-
-//     if (elements.empty())
-//         return ASTs{};
-
-//     auto rewritten_query = std::make_shared<ASTRenameQuery>();
-//     rewritten_query->elements = elements;
-//     return ASTs{rewritten_query};
-// }
-
-// void InterpreterAlterImpl::validate(const InterpreterAlterImpl::TQuery & /*query*/, ContextPtr /*context*/)
-// {
-// }
-
-// ASTs InterpreterAlterImpl::getRewrittenQueries(
-//     const InterpreterAlterImpl::TQuery & alter_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database)
-// {
-//     if (resolveDatabase(alter_query.database, mysql_database, mapped_to_database, context) != mapped_to_database)
-//         return {};
-
-//     auto rewritten_alter_query = std::make_shared<ASTAlterQuery>();
-//     auto rewritten_rename_query = std::make_shared<ASTRenameQuery>();
-//     rewritten_alter_query->database = mapped_to_database;
-//     rewritten_alter_query->table = alter_query.table;
-//     rewritten_alter_query->alter_object = ASTAlterQuery::AlterObjectType::TABLE;
-//     rewritten_alter_query->set(rewritten_alter_query->command_list, std::make_shared<ASTExpressionList>());
-
-//     auto dialect_type = ParserSettings::valueOf(context->getSettingsRef().dialect_type);
-
-//     String default_after_column;
-//     for (const auto & command_query : alter_query.command_list->children)
-//     {
-//         const auto & alter_command = command_query->as<MySQLParser::ASTAlterCommand>();
-
-//         if (alter_command->type == MySQLParser::ASTAlterCommand::ADD_COLUMN)
-//         {
-//             const auto & additional_columns_name_and_type = getColumnsList(alter_command->additional_columns);
-//             const auto & additional_columns_description = createColumnsDescription(additional_columns_name_and_type, alter_command->additional_columns);
-//             const auto & additional_columns = InterpreterCreateQuery::formatColumns(additional_columns_description, dialect_type);
-
-//             for (size_t index = 0; index < additional_columns_name_and_type.size(); ++index)
-//             {
-//                 auto rewritten_command = std::make_shared<ASTAlterCommand>();
-//                 rewritten_command->type = ASTAlterCommand::ADD_COLUMN;
-//                 rewritten_command->if_not_exists = true;
-//                 rewritten_command->first = alter_command->first;
-//                 rewritten_command->col_decl = additional_columns->children[index]->clone();
-
-//                 const auto & column_declare = alter_command->additional_columns->children[index]->as<MySQLParser::ASTDeclareColumn>();
-//                 if (column_declare && column_declare->column_options)
-//                 {
-//                     /// We need to add default expression for fill data
-//                     const auto & column_options = column_declare->column_options->as<MySQLParser::ASTDeclareOptions>();
-
-//                     const auto & default_expression_it = column_options->changes.find("default");
-//                     if (default_expression_it != column_options->changes.end())
-//                     {
-//                         ASTColumnDeclaration * col_decl = rewritten_command->col_decl->as<ASTColumnDeclaration>();
-//                         col_decl->default_specifier = "DEFAULT";
-//                         col_decl->default_expression = default_expression_it->second->clone();
-//                         col_decl->children.emplace_back(col_decl->default_expression);
-//                     }
-//                 }
-
-//                 if (default_after_column.empty())
-//                 {
-//                     StoragePtr storage = DatabaseCatalog::instance().getTable({mapped_to_database, alter_query.table}, context);
-//                     Block storage_header = storage->getInMemoryMetadataPtr()->getSampleBlock();
-
-//                     /// Put the sign and version columns last
-//                     default_after_column = storage_header.getByPosition(storage_header.columns() - 1).name;
-//                 }
-
-//                 if (!alter_command->column_name.empty())
-//                 {
-//                     rewritten_command->column = std::make_shared<ASTIdentifier>(alter_command->column_name);
-//                     rewritten_command->children.push_back(rewritten_command->column);
-
-//                     /// For example(when add_column_1 is last column):
-//                     /// ALTER TABLE test_database.test_table_2 ADD COLUMN add_column_3 INT AFTER add_column_1, ADD COLUMN add_column_4 INT
-//                     /// In this case, we still need to change the default after column
-
-//                     if (alter_command->column_name == default_after_column)
-//                         default_after_column = rewritten_command->col_decl->as<ASTColumnDeclaration>()->name;
-//                 }
-//                 else
-//                 {
-//                     rewritten_command->column = std::make_shared<ASTIdentifier>(default_after_column);
-//                     rewritten_command->children.push_back(rewritten_command->column);
-//                     default_after_column = rewritten_command->col_decl->as<ASTColumnDeclaration>()->name;
-//                 }
-
-//                 rewritten_command->children.push_back(rewritten_command->col_decl);
-//                 rewritten_alter_query->command_list->children.push_back(rewritten_command);
-//             }
-//         }
-//         else if (alter_command->type == MySQLParser::ASTAlterCommand::DROP_COLUMN)
-//         {
-//             auto rewritten_command = std::make_shared<ASTAlterCommand>();
-//             rewritten_command->type = ASTAlterCommand::DROP_COLUMN;
-//             rewritten_command->if_exists = true;
-//             rewritten_command->column = std::make_shared<ASTIdentifier>(alter_command->column_name);
-//             rewritten_alter_query->command_list->children.push_back(rewritten_command);
-//         }
-//         else if (alter_command->type == MySQLParser::ASTAlterCommand::RENAME_COLUMN)
-//         {
-//             if (alter_command->old_name != alter_command->column_name)
-//             {
-//                 /// 'RENAME column_name TO column_name' is not allowed in Clickhouse
-//                 auto rewritten_command = std::make_shared<ASTAlterCommand>();
-//                 rewritten_command->type = ASTAlterCommand::RENAME_COLUMN;
-//                 rewritten_command->column = std::make_shared<ASTIdentifier>(alter_command->old_name);
-//                 rewritten_command->rename_to = std::make_shared<ASTIdentifier>(alter_command->column_name);
-//                 rewritten_alter_query->command_list->children.push_back(rewritten_command);
-//             }
-//         }
-//         else if (alter_command->type == MySQLParser::ASTAlterCommand::MODIFY_COLUMN)
-//         {
-//             String new_column_name;
-
-//             {
-//                 auto rewritten_command = std::make_shared<ASTAlterCommand>();
-//                 rewritten_command->type = ASTAlterCommand::MODIFY_COLUMN;
-//                 rewritten_command->first = alter_command->first;
-//                 auto modify_columns = getColumnsList(alter_command->additional_columns);
-
-//                 if (modify_columns.size() != 1)
-//                     throw Exception("It is a bug", ErrorCodes::LOGICAL_ERROR);
-
-//                 new_column_name = modify_columns.front().name;
-
-//                 if (!alter_command->old_name.empty())
-//                     modify_columns.front().name = alter_command->old_name;
-
-//                 const auto & modify_columns_description = createColumnsDescription(modify_columns, alter_command->additional_columns);
-//                 rewritten_command->col_decl = InterpreterCreateQuery::formatColumns(modify_columns_description, dialect_type)->children[0];
-
-//                 if (!alter_command->column_name.empty())
-//                 {
-//                     rewritten_command->column = std::make_shared<ASTIdentifier>(alter_command->column_name);
-//                     rewritten_command->children.push_back(rewritten_command->column);
-//                 }
-
-//                 rewritten_alter_query->command_list->children.push_back(rewritten_command);
-//             }
-
-//             if (!alter_command->old_name.empty() && alter_command->old_name != new_column_name)
-//             {
-//                 auto rewritten_command = std::make_shared<ASTAlterCommand>();
-//                 rewritten_command->type = ASTAlterCommand::RENAME_COLUMN;
-//                 rewritten_command->column = std::make_shared<ASTIdentifier>(alter_command->old_name);
-//                 rewritten_command->rename_to = std::make_shared<ASTIdentifier>(new_column_name);
-//                 rewritten_alter_query->command_list->children.push_back(rewritten_command);
-//             }
-//         }
-//         else if (alter_command->type == MySQLParser::ASTAlterCommand::RENAME_TABLE)
-//         {
-//             const auto & to_database = resolveDatabase(alter_command->new_database_name, mysql_database, mapped_to_database, context);
-
-//             if (to_database != mapped_to_database)
-//                 throw Exception("Cannot rename with other database for external ddl query.", ErrorCodes::NOT_IMPLEMENTED);
-
-//             /// For ALTER TABLE table_name RENAME TO new_table_name_1, RENAME TO new_table_name_2;
-//             /// We just need to generate RENAME TABLE table_name TO new_table_name_2;
-//             if (rewritten_rename_query->elements.empty())
-//                 rewritten_rename_query->elements.push_back(ASTRenameQuery::Element());
-
-//             rewritten_rename_query->elements.back().from.database = mapped_to_database;
-//             rewritten_rename_query->elements.back().from.table = alter_query.table;
-//             rewritten_rename_query->elements.back().to.database = mapped_to_database;
-//             rewritten_rename_query->elements.back().to.table = alter_command->new_table_name;
-//         }
-//     }
-
-//     ASTs rewritten_queries;
-
-//     /// Order is very important. We always execute alter first and then execute rename
-//     if (!rewritten_alter_query->command_list->children.empty())
-//         rewritten_queries.push_back(rewritten_alter_query);
-
-//     if (!rewritten_rename_query->elements.empty())
-//         rewritten_queries.push_back(rewritten_rename_query);
-
-//     return rewritten_queries;
-// }
 
 }
 

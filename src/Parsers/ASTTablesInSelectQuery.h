@@ -82,7 +82,7 @@ struct ASTTableExpression : public IAST
 
     ASTType getType() const override { return ASTType::ASTTableExpression; }
 
-    void toLowerCase() override 
+    void toLowerCase() override
     {
         if (database_and_table_name)
             database_and_table_name->toLowerCase();
@@ -92,7 +92,7 @@ struct ASTTableExpression : public IAST
             subquery->toLowerCase();
     }
 
-    void toUpperCase() override 
+    void toUpperCase() override
     {
         if (database_and_table_name)
             database_and_table_name->toUpperCase();

@@ -3,6 +3,7 @@ use test;
 
 drop table if exists pp;
 drop table if exists c;
+drop table if exists c1;
 
 CREATE TABLE pp (
   id          UInt8 NOT NULL,
@@ -15,6 +16,16 @@ CREATE TABLE c (
   description String NOT NULL,
   CONSTRAINT unq1 UNIQUE (parent_id)
 ) engine = CnchMergeTree() order by id;
+
+CREATE TABLE c1 (
+  id          UInt8 NOT NULL,
+  parent_id   UInt8 NOT NULL,
+  parent_id1   UInt8 NOT NULL,
+  description String NOT NULL,
+  CONSTRAINT UNIQUE (parent_id)
+) engine = CnchMergeTree() order by id;
+show create table c1;
+drop table if exists c1;
 
 INSERT INTO pp VALUES (1, 'PARENT ONE');
 INSERT INTO pp VALUES (2, 'PARENT TWO');

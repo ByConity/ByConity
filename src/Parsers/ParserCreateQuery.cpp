@@ -179,6 +179,25 @@ bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     return true;
 }
 
+String getDefaultName(ASTPtr column_names, const String & suffix)
+{
+    String name;
+    if (auto *const col_name_list = column_names->as<ASTExpressionList>())
+    {
+        for (const auto &col_name: col_name_list->children)
+        {
+            name += col_name->as<ASTIdentifier &>().name() + "_";
+        }
+    }
+    else
+    {
+        auto unix_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        std::uniform_int_distribution dist;
+        name = std::to_string(unix_time) + "_" + std::to_string(dist(thread_local_rng)) + "_";
+    }
+    return name + suffix;
+}
+
 bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_check("CHECK");
@@ -189,17 +208,23 @@ bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
     ASTPtr name;
     ASTPtr expr;
 
-    if (!name_p.parse(pos, name, expected))
-        return false;
-
     if (!s_check.ignore(pos, expected))
-        return false;
+    {
+        if (!name_p.parse(pos, name, expected))
+            return false;
+
+        if (!s_check.ignore(pos, expected))
+            return false;
+    }
 
     if (!expression_p.parse(pos, expr, expected))
         return false;
 
     auto constraint = std::make_shared<ASTConstraintDeclaration>();
-    constraint->name = name->as<ASTIdentifier &>().name();
+    if (name)
+        constraint->name = name->as<ASTIdentifier &>().name();
+    else
+        constraint->name = getDefaultName(expr, "check");
     constraint->set(constraint->expr, expr);
     node = constraint;
 
@@ -238,6 +263,16 @@ bool ParserForeignKeyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
     ParserIdentifier name_p;
     ParserKeyword s_foreign_key("FOREIGN KEY");
     ParserKeyword s_references("REFERENCES");
+    ParserKeyword s_match_full("MATCH FULL");
+    ParserKeyword s_match_partial("MATCH PARTIAL");
+    ParserKeyword s_on_update("ON UPDATE");
+    ParserKeyword s_on_delete("ON DELETE");
+
+    ParserKeyword s_restrict("RESTRICT");
+    ParserKeyword s_cascade("CASCADE");
+    ParserKeyword s_set_null("SET NULL");
+    ParserKeyword s_no_action("NO ACTION");
+    ParserKeyword s_set_default("SET DEFAULT");
 
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
@@ -246,17 +281,21 @@ bool ParserForeignKeyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
     ParserIdentifier ref_table_name_p;
     ParserList references_columns_p(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma), false);
 
-
     ASTPtr fk_name;
     ASTPtr column_names;
     ASTPtr ref_table_name;
     ASTPtr ref_column_names;
 
-    if (!name_p.parse(pos, fk_name, expected))
-        return false;
-
     if (!s_foreign_key.ignore(pos, expected))
-        return false;
+    {
+        if (!name_p.parse(pos, fk_name, expected))
+            return false;
+        if (!s_foreign_key.ignore(pos, expected))
+            return false;
+    }
+
+    if (!fk_name)
+        name_p.parse(pos, fk_name, expected);
 
     if (!s_lparen.ignore(pos, expected))
         return false;
@@ -278,8 +317,30 @@ bool ParserForeignKeyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
     if (!s_rparen.ignore(pos, expected))
         return false;
 
+    s_match_full.ignore(pos, expected);
+    s_match_partial.ignore(pos, expected);
+
+    if (s_on_update.ignore(pos, expected) || s_on_delete.ignore(pos, expected))
+    {
+        if (!s_restrict.ignore(pos, expected) && !s_cascade.ignore(pos, expected)
+            && !s_set_null.ignore(pos, expected) && !s_no_action.ignore(pos, expected)
+            && !s_set_default.ignore(pos, expected))
+            return false;
+    }
+
+    if (s_on_update.ignore(pos, expected) || s_on_delete.ignore(pos, expected))
+    {
+        if (!s_restrict.ignore(pos, expected) && !s_cascade.ignore(pos, expected)
+            && !s_set_null.ignore(pos, expected) && !s_no_action.ignore(pos, expected)
+            && !s_set_default.ignore(pos, expected))
+            return false;
+    }
+
     auto foreign_key = std::make_shared<ASTForeignKeyDeclaration>();
-    foreign_key->fk_name = fk_name->as<ASTIdentifier &>().name();
+    if (fk_name)
+        foreign_key->fk_name = fk_name->as<ASTIdentifier &>().name();
+    else
+        foreign_key->fk_name = getDefaultName(column_names, "fk");
     foreign_key->column_names = column_names;
     foreign_key->ref_table_name = ref_table_name->as<ASTIdentifier &>().name();
     foreign_key->ref_column_names = ref_column_names;
@@ -299,15 +360,19 @@ bool ParserUniqueNotEnforcedDeclaration::parseImpl(Pos & pos, ASTPtr & node, Exp
 
     ParserList unique_columns_p(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma), false);
 
-
     ASTPtr name;
     ASTPtr column_names;
 
-    if (!name_p.parse(pos, name, expected))
-        return false;
-
     if (!s_unique_not_enforced.ignore(pos, expected))
-        return false;
+    {
+        if (!name_p.parse(pos, name, expected))
+            return false;
+        if (!s_unique_not_enforced.ignore(pos, expected))
+            return false;
+    }
+
+    if (!name)
+        name_p.parse(pos, name, expected);
 
     if (!s_lparen.ignore(pos, expected))
         return false;
@@ -318,7 +383,10 @@ bool ParserUniqueNotEnforcedDeclaration::parseImpl(Pos & pos, ASTPtr & node, Exp
 
 
     auto unique = std::make_shared<ASTUniqueNotEnforcedDeclaration>();
-    unique->name = name->as<ASTIdentifier &>().name();
+    if (name)
+        unique->name = name->as<ASTIdentifier &>().name();
+    else
+        unique->name = getDefaultName(column_names, "uk");
     unique->column_names = column_names;
 
     node = unique;
@@ -362,10 +430,12 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     ParserKeyword s_key("KEY");
     ParserKeyword s_cluster_key("CLUSTERED KEY");
     ParserKeyword s_constraint("CONSTRAINT");
+    ParserKeyword s_foreign_key("FOREIGN KEY");
+    ParserKeyword s_unique("UNIQUE");
+
     ParserKeyword s_bitengine_constraint("BITENGINE_CONSTRAINT");
     ParserKeyword s_projection("PROJECTION");
     ParserKeyword s_primary_key("PRIMARY KEY");
-    ParserKeyword s_unique_key("UNIQUE KEY");
 
     ParserIndexDeclaration index_p(dt);
     ParserConstraintDeclaration constraint_p(dt);
@@ -382,7 +452,7 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     {
         // mysql table_constraints
         if (s_index.checkWithoutMoving(pos, expected) || s_key.checkWithoutMoving(pos, expected) ||
-            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected) || s_unique_key.checkWithoutMoving(pos, expected))
+            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected) || s_unique.checkWithoutMoving(pos, expected))
         {
             MySQLParser::ParserDeclareIndex index_p_mysql;
             if (index_p_mysql.parse(pos, new_node, expected))
@@ -412,6 +482,11 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     {
         if (!foreign_key_p.parse(pos, new_node, expected) && !constraint_p.parse(pos, new_node, expected)
             && !unique_p.parse(pos, new_node, expected))
+            return false;
+    }
+    else if (s_foreign_key.checkWithoutMoving(pos, expected))
+    {
+        if (!foreign_key_p.parse(pos, new_node, expected))
             return false;
     }
     else if (s_bitengine_constraint.ignore(pos, expected))
@@ -700,6 +775,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_default_collate("DEFAULT COLLATE");
     ParserKeyword s_auto_increment("AUTO_INCREMENT");
     ParserKeyword s_row_format("ROW_FORMAT");
+    ParserKeyword s_checksum("CHECKSUM");
 
     ParserIdentifierWithOptionalParameters ident_with_optional_params_p(dt);
     ParserExpression expression_p(dt);
@@ -732,6 +808,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ASTPtr collate;
     ASTPtr auto_increment;
     ASTPtr row_format;
+    ASTPtr check_sum;
     bool broadcast = false;
 
     // optional engine
@@ -856,6 +933,15 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         {
             s_eq.ignore(pos, expected);
             if (expression_p.parse(pos, auto_increment, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!check_sum && s_checksum.ignore(pos, expected))
+        {
+            s_eq.ignore(pos, expected);
+            if (expression_p.parse(pos, check_sum, expected))
                 continue;
             else
                 return false;
@@ -1354,7 +1440,7 @@ bool ParserCreateTableAnalyticalMySQLQuery::parseImpl(Pos & pos, ASTPtr & node, 
             }
         }
         else if (s_like.ignore(pos, expected)) {
-            /// AS [db.]table
+            /// LIKE [db.]table
             if (!name_p.parse(pos, as_table, expected))
                 return false;
 
@@ -1365,6 +1451,10 @@ bool ParserCreateTableAnalyticalMySQLQuery::parseImpl(Pos & pos, ASTPtr & node, 
                 if (!name_p.parse(pos, as_table, expected))
                     return false;
             }
+        }
+        else if (!select && !select_p.parse(pos, select, expected))   // CREATE ... SELECT ...
+        {
+            return false;
         }
     }
 
