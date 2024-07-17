@@ -1822,11 +1822,7 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_endpoint, "", "the endpoint set by user when accessing lasfs", 0) \
     M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
-<<<<<<< HEAD
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
-    M(MaxThreads, max_download_threads, 4, "The maximum number of threads to download data (e.g. for URL engine).", 0) \
-=======
->>>>>>> d0cf3bcd6f (Merge branch 'parquet-native-cnch' into 'cnch-dev')
     /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(String, disk_shuffle_files_codec, "LZ4", "Set compression codec for disk shuffle files. I.e. LZ4, NONE.", 0) \
@@ -1942,19 +1938,10 @@ enum PreloadLevelSettings : UInt64
       "Maximum width of value to display in Pretty formats. If greater - it will be cut.", \
       0) \
     M(Bool, output_format_pretty_color, true, "Use ANSI escape sequences to paint colors in Pretty formats", 0) \
-<<<<<<< HEAD
-    M(String, \
-      output_format_pretty_grid_charset, \
-      "UTF-8", \
-      "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", \
-      0) \
-=======
     M(String, output_format_pretty_grid_charset, "UTF-8", "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", 0) \
-    \
     M(UInt64, max_download_threads, 4, "The maximum number of threads to download data (Actually I should put it in common settings instead of format settings).", 0) \
     M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
     M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
->>>>>>> d0cf3bcd6f (Merge branch 'parquet-native-cnch' into 'cnch-dev')
     M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
     M(Bool, output_format_parquet_string_as_string, false, "Use Parquet String type instead of Binary for String columns.", 0) \
     M(Bool, output_format_parquet_fixed_string_as_fixed_byte_array, true, "Use Parquet FIXED_LENGTH_BYTE_ARRAY type instead of Binary for FixedString columns.", 0) \
