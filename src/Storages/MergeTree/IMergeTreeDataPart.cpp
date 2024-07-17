@@ -41,7 +41,8 @@
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <common/JSON.h>
 #include <common/logger_useful.h>
-#include "Core/SettingsEnums.h"
+#include <Core/SettingsEnums.h>
+#include <metric_helper.h>
 #include <Storages/KeyDescription.h>
 #include <Compression/getCompressionCodecForFile.h>
 #include <Parsers/queryToString.h>
@@ -50,6 +51,7 @@
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <Interpreters/CnchSystemLog.h>
+#include <Poco/Logger.h>
 
 namespace CurrentMetrics
 {
@@ -343,7 +345,7 @@ static void incrementTypeMetric(MergeTreeDataPartType type)
             CurrentMetrics::add(CurrentMetrics::PartsInMemory);
             return;
         case MergeTreeDataPartType::CNCH:
-            CurrentMetrics::add(CurrentMetrics::PartsCNCH);
+            CurrentMetrics::add(CurrentMetrics::PartsCNCH, 1, Metrics::MetricType::Counter);
             return;
         case MergeTreeDataPartType::UNKNOWN:
             return;
@@ -364,7 +366,7 @@ static void decrementTypeMetric(MergeTreeDataPartType type)
             CurrentMetrics::sub(CurrentMetrics::PartsInMemory);
             return;
         case MergeTreeDataPartType::CNCH:
-            CurrentMetrics::sub(CurrentMetrics::PartsCNCH);
+            CurrentMetrics::sub(CurrentMetrics::PartsCNCH, 1, Metrics::MetricType::Counter);
             return;
         case MergeTreeDataPartType::UNKNOWN:
             return;

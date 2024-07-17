@@ -766,7 +766,7 @@ void HTTPHandler::processQuery(
 
     /// For external data we also want settings
     context->checkSettingsConstraints(settings_changes);
-    context->applySettingsChanges(settings_changes);
+    context->applySettingsChanges(settings_changes, false);
 
     const auto & query = getQuery(request, params, context);
     std::unique_ptr<ReadBuffer> in_param = std::make_unique<ReadBufferFromString>(query);

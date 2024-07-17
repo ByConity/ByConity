@@ -20,7 +20,7 @@ BlockIO InterpreterSetQuery::execute()
 {
     const auto & ast = query_ptr->as<ASTSetQuery &>();
     getContext()->checkSettingsConstraints(ast.changes);
-    getContext()->getSessionContext()->applySettingsChanges(ast.changes);
+    getContext()->getSessionContext()->applySettingsChanges(ast.changes, false);
     return {};
 }
 
@@ -29,7 +29,7 @@ void InterpreterSetQuery::executeForCurrentContext()
 {
     const auto & ast = query_ptr->as<ASTSetQuery &>();
     getContext()->checkSettingsConstraints(ast.changes);
-    getContext()->applySettingsChanges(ast.changes);
+    getContext()->applySettingsChanges(ast.changes, false);
 }
 
 void InterpreterSetQuery::applySettingsFromQuery(const ASTPtr & ast, ContextMutablePtr setting_scontext)

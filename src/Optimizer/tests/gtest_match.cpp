@@ -23,9 +23,9 @@ using namespace DB;
 TEST(OptimizerPatternMatchTest, DISABLED_captures)
 {
     Captures captures;
-    Capture uniqueCap;
-    Capture multiCap;
-    Capture emptyCap;
+    Capture uniqueCap{"uniqueCap"};
+    Capture multiCap{"multiCap"};
+    Capture emptyCap{"emptyCap"};
 
     std::string sFoo = "foo";
     std::shared_ptr<std::string> sPtrBar = std::make_shared<std::string>("bar");

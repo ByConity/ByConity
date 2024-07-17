@@ -58,7 +58,8 @@ public:
         TemporaryDataOnDiskScopePtr tmp_data_,
         int left_side_parallel_,
         bool enable_adaptive_spill,
-        bool any_take_last_row_);
+        bool any_take_last_row_,
+        int num_streams_);
 
     ~GraceHashJoin() override;
 
@@ -126,9 +127,12 @@ private:
     /// Structure block to store in the HashJoin according to sample_block.
     Block prepareRightBlock(const Block & block);
 
+    void initMaxJoinedBlockBytesInSpill();
+
     Poco::Logger * log;
     ContextPtr context;
     bool adaptive_spill_mode = false;
+    bool join_blk_rows_inited = false;
     std::shared_ptr<TableJoin> table_join;
     Block left_sample_block;
     Block right_sample_block;
@@ -155,6 +159,13 @@ private:
     mutable std::mutex hash_join_mutex;
     int left_side_parallel;
     size_t max_allowed_mem_size_in_spill = 512 * 1024 * 1024; //512MB default
+    size_t max_joined_block_bytes_in_spill = 50 * 1024 * 1024; //50MB default
+    const size_t sample_block_rows_for_bytes_estimation = 1024;
+
+    size_t num_streams = 1;
+    size_t setting_max_joined_block_rows = DEFAULT_BLOCK_SIZE;
+    mutable std::atomic<bool> has_low_memory_encountered {false};
+    
     mutable size_t last_mem_size_triger_spill = 0;
 
 };

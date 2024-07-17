@@ -1,7 +1,10 @@
 COLUMNS
+ENGINES
 EVENTS
+FILES
 KEY_COLUMN_USAGE
 PARTITIONS
+PROFILING
 REFERENTIAL_CONSTRAINTS
 ROUTINES
 SCHEMATA
@@ -10,9 +13,12 @@ TABLES
 TRIGGERS
 VIEWS
 columns
+engines
 events
+files
 key_column_usage
 partitions
+profiling
 referential_constraints
 routines
 schemata
@@ -21,9 +27,12 @@ tables
 triggers
 views
 COLUMNS
+ENGINES
 EVENTS
+FILES
 KEY_COLUMN_USAGE
 PARTITIONS
+PROFILING
 REFERENTIAL_CONSTRAINTS
 ROUTINES
 SCHEMATA
@@ -32,9 +41,12 @@ TABLES
 TRIGGERS
 VIEWS
 columns
+engines
 events
+files
 key_column_usage
 partitions
+profiling
 referential_constraints
 routines
 schemata
@@ -115,3 +127,79 @@ partitioned	2	i % 3	2
 partitioned	0	i % 3	2
 partitioned	1	i % 3	3
 partitioned	2	i % 3	2
+-- information_schema.engines
+AggregatingMergeTree	\N	\N	\N	\N	\N	AggregatingMergeTree	\N	\N	\N	\N	\N
+Buffer	\N	\N	\N	\N	\N	Buffer	\N	\N	\N	\N	\N
+COSN	\N	\N	\N	\N	\N	COSN	\N	\N	\N	\N	\N
+CloudAggregatingMergeTree	\N	\N	\N	\N	\N	CloudAggregatingMergeTree	\N	\N	\N	\N	\N
+CloudCollapsingMergeTree	\N	\N	\N	\N	\N	CloudCollapsingMergeTree	\N	\N	\N	\N	\N
+CloudGraphiteMergeTree	\N	\N	\N	\N	\N	CloudGraphiteMergeTree	\N	\N	\N	\N	\N
+CloudHDFS	\N	\N	\N	\N	\N	CloudHDFS	\N	\N	\N	\N	\N
+CloudHive	\N	\N	\N	\N	\N	CloudHive	\N	\N	\N	\N	\N
+CloudKafka	\N	\N	\N	\N	\N	CloudKafka	\N	\N	\N	\N	\N
+CloudMergeTree	\N	\N	\N	\N	\N	CloudMergeTree	\N	\N	\N	\N	\N
+CloudReplacingMergeTree	\N	\N	\N	\N	\N	CloudReplacingMergeTree	\N	\N	\N	\N	\N
+CloudS3	\N	\N	\N	\N	\N	CloudS3	\N	\N	\N	\N	\N
+CloudSummingMergeTree	\N	\N	\N	\N	\N	CloudSummingMergeTree	\N	\N	\N	\N	\N
+CloudVersionedCollapsingMergeTree	\N	\N	\N	\N	\N	CloudVersionedCollapsingMergeTree	\N	\N	\N	\N	\N
+CnchAggregatingMergeTree	\N	\N	\N	\N	\N	CnchAggregatingMergeTree	\N	\N	\N	\N	\N
+CnchCollapsingMergeTree	\N	\N	\N	\N	\N	CnchCollapsingMergeTree	\N	\N	\N	\N	\N
+CnchGraphiteMergeTree	\N	\N	\N	\N	\N	CnchGraphiteMergeTree	\N	\N	\N	\N	\N
+CnchHDFS	\N	\N	\N	\N	\N	CnchHDFS	\N	\N	\N	\N	\N
+CnchHive	\N	\N	\N	\N	\N	CnchHive	\N	\N	\N	\N	\N
+CnchKafka	\N	\N	\N	\N	\N	CnchKafka	\N	\N	\N	\N	\N
+CnchMergeTree	\N	\N	\N	\N	\N	CnchMergeTree	\N	\N	\N	\N	\N
+CnchReplacingMergeTree	\N	\N	\N	\N	\N	CnchReplacingMergeTree	\N	\N	\N	\N	\N
+CnchS3	\N	\N	\N	\N	\N	CnchS3	\N	\N	\N	\N	\N
+CnchSummingMergeTree	\N	\N	\N	\N	\N	CnchSummingMergeTree	\N	\N	\N	\N	\N
+CnchVersionedCollapsingMergeTree	\N	\N	\N	\N	\N	CnchVersionedCollapsingMergeTree	\N	\N	\N	\N	\N
+CollapsingMergeTree	\N	\N	\N	\N	\N	CollapsingMergeTree	\N	\N	\N	\N	\N
+DictCloudMergeTree	\N	\N	\N	\N	\N	DictCloudMergeTree	\N	\N	\N	\N	\N
+Dictionary	\N	\N	\N	\N	\N	Dictionary	\N	\N	\N	\N	\N
+Distributed	\N	\N	\N	\N	\N	Distributed	\N	\N	\N	\N	\N
+EmbeddedRocksDB	\N	\N	\N	\N	\N	EmbeddedRocksDB	\N	\N	\N	\N	\N
+ExternalDistributed	\N	\N	\N	\N	\N	ExternalDistributed	\N	\N	\N	\N	\N
+File	\N	\N	\N	\N	\N	File	\N	\N	\N	\N	\N
+GenerateRandom	\N	\N	\N	\N	\N	GenerateRandom	\N	\N	\N	\N	\N
+GraphiteMergeTree	\N	\N	\N	\N	\N	GraphiteMergeTree	\N	\N	\N	\N	\N
+HDFS	\N	\N	\N	\N	\N	HDFS	\N	\N	\N	\N	\N
+HaAggregatingMergeTree	\N	\N	\N	\N	\N	HaAggregatingMergeTree	\N	\N	\N	\N	\N
+HaCollapsingMergeTree	\N	\N	\N	\N	\N	HaCollapsingMergeTree	\N	\N	\N	\N	\N
+HaGraphiteMergeTree	\N	\N	\N	\N	\N	HaGraphiteMergeTree	\N	\N	\N	\N	\N
+HaMergeTree	\N	\N	\N	\N	\N	HaMergeTree	\N	\N	\N	\N	\N
+HaReplacingMergeTree	\N	\N	\N	\N	\N	HaReplacingMergeTree	\N	\N	\N	\N	\N
+HaSummingMergeTree	\N	\N	\N	\N	\N	HaSummingMergeTree	\N	\N	\N	\N	\N
+HaVersionedCollapsingMergeTree	\N	\N	\N	\N	\N	HaVersionedCollapsingMergeTree	\N	\N	\N	\N	\N
+JDBC	\N	\N	\N	\N	\N	JDBC	\N	\N	\N	\N	\N
+Join	\N	\N	\N	\N	\N	Join	\N	\N	\N	\N	\N
+LiveView	\N	\N	\N	\N	\N	LiveView	\N	\N	\N	\N	\N
+Log	\N	\N	\N	\N	\N	Log	\N	\N	\N	\N	\N
+MaterializedPostgreSQL	\N	\N	\N	\N	\N	MaterializedPostgreSQL	\N	\N	\N	\N	\N
+MaterializedView	\N	\N	\N	\N	\N	MaterializedView	\N	\N	\N	\N	\N
+Memory	\N	\N	\N	\N	\N	Memory	\N	\N	\N	\N	\N
+Merge	\N	\N	\N	\N	\N	Merge	\N	\N	\N	\N	\N
+MergeTree	\N	\N	\N	\N	\N	MergeTree	\N	\N	\N	\N	\N
+MongoDB	\N	\N	\N	\N	\N	MongoDB	\N	\N	\N	\N	\N
+MySQL	\N	\N	\N	\N	\N	MySQL	\N	\N	\N	\N	\N
+Null	\N	\N	\N	\N	\N	Null	\N	\N	\N	\N	\N
+ODBC	\N	\N	\N	\N	\N	ODBC	\N	\N	\N	\N	\N
+PostgreSQL	\N	\N	\N	\N	\N	PostgreSQL	\N	\N	\N	\N	\N
+RabbitMQ	\N	\N	\N	\N	\N	RabbitMQ	\N	\N	\N	\N	\N
+ReplacingMergeTree	\N	\N	\N	\N	\N	ReplacingMergeTree	\N	\N	\N	\N	\N
+ReplicatedAggregatingMergeTree	\N	\N	\N	\N	\N	ReplicatedAggregatingMergeTree	\N	\N	\N	\N	\N
+ReplicatedCollapsingMergeTree	\N	\N	\N	\N	\N	ReplicatedCollapsingMergeTree	\N	\N	\N	\N	\N
+ReplicatedGraphiteMergeTree	\N	\N	\N	\N	\N	ReplicatedGraphiteMergeTree	\N	\N	\N	\N	\N
+ReplicatedMergeTree	\N	\N	\N	\N	\N	ReplicatedMergeTree	\N	\N	\N	\N	\N
+ReplicatedReplacingMergeTree	\N	\N	\N	\N	\N	ReplicatedReplacingMergeTree	\N	\N	\N	\N	\N
+ReplicatedSummingMergeTree	\N	\N	\N	\N	\N	ReplicatedSummingMergeTree	\N	\N	\N	\N	\N
+ReplicatedVersionedCollapsingMergeTree	\N	\N	\N	\N	\N	ReplicatedVersionedCollapsingMergeTree	\N	\N	\N	\N	\N
+S3	\N	\N	\N	\N	\N	S3	\N	\N	\N	\N	\N
+Set	\N	\N	\N	\N	\N	Set	\N	\N	\N	\N	\N
+StripeLog	\N	\N	\N	\N	\N	StripeLog	\N	\N	\N	\N	\N
+SummingMergeTree	\N	\N	\N	\N	\N	SummingMergeTree	\N	\N	\N	\N	\N
+TinyLog	\N	\N	\N	\N	\N	TinyLog	\N	\N	\N	\N	\N
+URL	\N	\N	\N	\N	\N	URL	\N	\N	\N	\N	\N
+VersionedCollapsingMergeTree	\N	\N	\N	\N	\N	VersionedCollapsingMergeTree	\N	\N	\N	\N	\N
+View	\N	\N	\N	\N	\N	View	\N	\N	\N	\N	\N
+-- information_schema.profiling
+-- information_schema.files

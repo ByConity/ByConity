@@ -457,6 +457,7 @@ struct ContextSharedPart
 
     bool shutdown_called = false;
     bool restrict_tenanted_users_to_whitelist_settings = false;
+    bool restrict_tenanted_users_to_privileged_operations = false;
 
     Stopwatch uptime_watch;
 
@@ -1573,7 +1574,7 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
     auto new_access = getAccessControlManager().getContextAccess(
         new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
-        has_tenant_id_in_username);
+        has_tenant_id_in_username ? tenant_id : "");
 
     auto lock = getLock();
     user_id = new_user_id;
@@ -1685,7 +1686,7 @@ void Context::calculateAccessRights()
     if (user_id)
         access = getAccessControlManager().getContextAccess(
             *user_id, current_roles, use_default_roles, settings, current_database, client_info,
-            has_tenant_id_in_username);
+            has_tenant_id_in_username ? tenant_id : "");
 }
 
 
@@ -2148,7 +2149,7 @@ void Context::applySettingChange(const SettingChange & change)
 }
 
 
-void Context::applySettingsChanges(const SettingsChanges & changes)
+void Context::applySettingsChanges(const SettingsChanges & changes, bool internal)
 {
     auto lock = getLock();
 
@@ -2179,13 +2180,13 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
 
     // NOTE: tenanted users connect to server using tenant id given in connection info.
     // allow only whitelisted settings for tenanted users
-    if (this->getIsRestrictSettingsToWhitelist() && !this->getTenantId().empty())
+    if (!internal && !isInternalQuery () && getIsRestrictSettingsToWhitelist() && getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY && !getCurrentTenantId().empty())
     {
         for (const auto & change : changes)
         {
             if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
                 throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
-                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    " for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
         }
     }
@@ -2436,7 +2437,7 @@ void Context::killCurrentQuery()
 {
     if (process_list_elem)
     {
-        process_list_elem->cancelQuery(true);
+        process_list_elem->cancelQuery(true, false);
     }
 };
 
@@ -4395,6 +4396,16 @@ void Context::addRestrictSettingsToWhitelist(const std::vector<String>& setting_
 {
     for (auto & name : setting_names)
         SettingsChanges::WHITELIST_SETTINGS.emplace(name);
+}
+
+bool Context::getBlockPrivilegedOp() const
+{
+    return shared->restrict_tenanted_users_to_privileged_operations;
+}
+
+void Context::setBlockPrivilegedOp(bool is_restrict)
+{
+    shared->restrict_tenanted_users_to_privileged_operations = is_restrict;
 }
 
 void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)

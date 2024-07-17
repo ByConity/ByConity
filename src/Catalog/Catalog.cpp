@@ -172,6 +172,8 @@ namespace ProfileEvents
     extern const Event GetServerDataPartsInPartitionsFailed;
     extern const Event GetAllServerDataPartsSuccess;
     extern const Event GetAllServerDataPartsFailed;
+    extern const Event GetAllServerDataPartsWithDBMSuccess;
+    extern const Event GetAllServerDataPartsWithDBMFailed;
     extern const Event GetDataPartsByNamesSuccess;
     extern const Event GetDataPartsByNamesFailed;
     extern const Event GetStagedDataPartsByNamesSuccess;
@@ -465,6 +467,10 @@ namespace ProfileEvents
     extern const Event GetBGJobStatusesFailed;
     extern const Event DropBGJobStatusSuccess;
     extern const Event DropBGJobStatusFailed;
+    extern const Event PutSensitiveResourceSuccess;
+    extern const Event PutSensitiveResourceFailed;
+    extern const Event GetSensitiveResourceSuccess;
+    extern const Event GetSensitiveResourceFailed;
     extern const Event TryGetAccessEntitySuccess;
     extern const Event TryGetAccessEntityFailed;
     extern const Event GetAllAccessEntitySuccess;
@@ -2146,6 +2152,22 @@ namespace Catalog
         return it->next();
     }
 
+    ServerDataPartsWithDBM Catalog::getAllServerDataPartsWithDBM(
+        const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, const VisibilityLevel visibility)
+    {
+        ServerDataPartsWithDBM res;
+        runWithMetricSupport(
+            [&] {
+                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
+                    return;
+
+                res = getServerDataPartsInPartitionsWithDBM(storage, getPartitionIDs(storage, session_context), ts, session_context, visibility);
+            },
+            ProfileEvents::GetAllServerDataPartsWithDBMSuccess,
+            ProfileEvents::GetAllServerDataPartsWithDBMFailed);
+        return res;
+    }
+
     ServerDataPartsVector Catalog::getAllServerDataParts(
         const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, const VisibilityLevel visibility)
     {
@@ -2153,9 +2175,8 @@ namespace Catalog
         runWithMetricSupport(
             [&] {
                 if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
-                {
                     return;
-                }
+
                 res = getServerDataPartsInPartitions(storage, getPartitionIDs(storage, session_context), ts, session_context, visibility);
             },
             ProfileEvents::GetAllServerDataPartsSuccess,
@@ -6966,6 +6987,30 @@ namespace Catalog
         return parts_vec;
     }
 
+    // Sensitive Resources
+    void Catalog::putSensitiveResource(const String & database, const String & table, const String & column, const String & target, bool value)
+    {
+        runWithMetricSupport(
+            [&] {
+                meta_proxy->putSensitiveResource(name_space, database, table, column, target, value);
+            },
+            ProfileEvents::PutSensitiveResourceSuccess,
+            ProfileEvents::PutSensitiveResourceFailed);
+    }
+
+    std::shared_ptr<Protos::DataModelSensitiveDatabase> Catalog::getSensitiveResource(const String & database)
+    {
+        std::shared_ptr<Protos::DataModelSensitiveDatabase> res;
+        runWithMetricSupport(
+            [&] {
+                res = meta_proxy->getSensitiveResource(name_space, database);
+            },
+            ProfileEvents::GetSensitiveResourceSuccess,
+            ProfileEvents::GetSensitiveResourceFailed);
+        return res;
+
+    }
+
     // Access Entities
     std::optional<AccessEntityModel> Catalog::tryGetAccessEntity(EntityType type, const String & name)
     {
@@ -7017,6 +7062,8 @@ namespace Catalog
         return data;
     }
 
+    static void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, const UUID & uuid);
+
     void Catalog::dropAccessEntity(EntityType type, const UUID & uuid, const String & name)
     {
         bool isSuccessful = false;
@@ -7035,7 +7082,7 @@ namespace Catalog
         }
     }
 
-    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, AccessEntityModel & old_access_entity, bool replace_if_exists)
+    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists)
     {
         new_access_entity.set_commit_time(context.getTimestamp());
         bool isSuccessful = false;

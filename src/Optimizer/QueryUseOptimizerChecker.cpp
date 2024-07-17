@@ -245,17 +245,14 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
         return false;
     }
 
-    if (select->group_by_with_totals && context.is_add_totals.has_value())
+    if (select->group_by_with_totals && context.disallow_with_totals)
     {
         reason = "group by with totals only supports with totals at outmost select";
         return false;
     }
-    if (select->group_by_with_totals)
-        context.is_add_totals.emplace(true);
-    else
-        context.is_add_totals.emplace(false);
+    auto has_join = [](const auto & sel_query) { return sel_query.tables() && sel_query.tables()->children.size() > 1; };
 
-    QueryUseOptimizerContext child_context{.context = context.context, .ctes = context.ctes, .is_add_totals = context.is_add_totals};
+    QueryUseOptimizerContext child_context{.context = context.context, .ctes = context.ctes, .disallow_with_totals = has_join(*select)};
     collectWithTableNames(*select, child_context.ctes);
 
     for (const auto * table_expression : getTableExpressions(*select))

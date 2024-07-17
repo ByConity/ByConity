@@ -282,6 +282,8 @@ public:
 
     bool hasTrashedPartsInPartition(const ConstStoragePtr & storage, const String & partition);
 
+    ServerDataPartsWithDBM getAllServerDataPartsWithDBM(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
+
     ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DataPartsVector getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
@@ -859,13 +861,16 @@ public:
     void commitObjectPartialSchema(const TxnTimestamp & txn_id);
     void abortObjectPartialSchema(const TxnTimestamp & txn_id);
     void initStorageObjectSchema(StoragePtr & res);
+    // Sensitive Resources
+    void putSensitiveResource(const String & database, const String & table, const String & column, const String & target, bool value);
+    std::shared_ptr<Protos::DataModelSensitiveDatabase> getSensitiveResource(const String & database);
 
     // Access Entities
     std::optional<AccessEntityModel> tryGetAccessEntity(EntityType type, const String & name);
     std::vector<AccessEntityModel> getAllAccessEntities(EntityType type);
     std::optional<String> tryGetAccessEntityName(const UUID & uuid);
     void dropAccessEntity(EntityType type, const UUID & uuid, const String & name);
-    void putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, AccessEntityModel & old_access_entity, bool replace_if_exists = true);
+    void putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists = true);
 
 
 private:
@@ -1049,6 +1054,5 @@ void remove_not_exist_items(std::vector<T> & items_to_write, std::vector<size_t>
 }
 
 using CatalogPtr = std::shared_ptr<Catalog>;
-void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & tenanted_name, const UUID & uuid);
 void fillUUIDForDictionary(DB::Protos::DataModelDictionary &);
 }

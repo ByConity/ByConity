@@ -681,6 +681,12 @@ void ColumnLowCardinality::getPermutation(IColumn::PermutationSortDirection dire
 void ColumnLowCardinality::updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
                                         size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
 {
+    if (isFullState())
+    {
+        getNestedColumn().updatePermutation(direction, stability, limit, nan_direction_hint, res, equal_ranges);
+        return ;
+    }
+
     bool ascending = direction == IColumn::PermutationSortDirection::Ascending;
 
     auto comparator = [this, ascending, stability, nan_direction_hint](size_t lhs, size_t rhs)

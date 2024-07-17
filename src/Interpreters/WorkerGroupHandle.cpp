@@ -106,14 +106,10 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
 
         shards_info.emplace_back(std::move(info));
     }
+    
+    ring = buildRing(this->shards_info, current_context);
+    LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
 
-    /// if not jump consistent hash, build ring
-    if (current_context->getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
-    {
-        ring = buildRing(this->shards_info, current_context);
-        LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
-
-    }
 }
 
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const ContextPtr & context_)
@@ -135,10 +131,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from,
         shards_info.emplace_back(from.getShardsInfo().at(index));
     }
 
-    if (current_context->getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
-    {
-        ring = buildRing(this->shards_info, current_context);
-    }
+    ring = buildRing(this->shards_info, current_context);
 }
 
 static std::unordered_set<UInt64> getBusyWorkerIndexes(double ratio, const WorkerGroupMetrics & metrics)

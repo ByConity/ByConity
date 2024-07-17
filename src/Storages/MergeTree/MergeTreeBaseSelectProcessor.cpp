@@ -37,6 +37,11 @@
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <fmt/core.h>
 
+namespace ProfileEvents
+{
+extern const Event PrewhereSelectedRows;
+}
+
 
 namespace DB
 {
@@ -164,7 +169,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
 
     if (!task->task_columns.bitmap_index_columns.empty())
     {
-        index_executor = index_context ? 
+        index_executor = index_context ?
             index_context->getIndexExecutor(
                 task->data_part,
                 task->data_part->index_granularity,
@@ -184,10 +189,10 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
     else
     {
         /**
-         * if the current task has no bitmap-index (the current part has no bitmap-index), 
+         * if the current task has no bitmap-index (the current part has no bitmap-index),
          * but still has a bitmap-index reader,
          * it means the current thread read a part with bitmap-index before, thus we need reset bitmap-index.
-         * 
+         *
          */
         if (index_executor)
             index_executor.reset();
@@ -327,6 +332,7 @@ Chunk MergeTreeBaseSelectProcessor::readFromPartImpl()
     UInt64 num_filtered_rows = read_result.numReadRows() - read_result.num_rows;
 
     progress({ read_result.numReadRows(), read_result.numBytesRead() });
+    ProfileEvents::increment(ProfileEvents::PrewhereSelectedRows, read_result.num_rows);
 
     if (task->size_predictor)
     {
@@ -541,7 +547,7 @@ namespace
         {
             block.insert({column, std::make_shared<DataTypeInt64>(), name});
         }
-        
+
         void insertUInt8Column(const ColumnPtr & column, const String & name) final
         {
             block.insert({column, std::make_shared<DataTypeUInt8>(), name});

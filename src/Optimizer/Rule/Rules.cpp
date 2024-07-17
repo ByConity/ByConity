@@ -19,6 +19,7 @@
 #include <Optimizer/Rewriter/RemoveApply.h>
 #include <Optimizer/Rule/Rewrite/DistinctToAggregate.h>
 #include <Optimizer/Rule/Rewrite/ExplainAnalyzeRules.h>
+#include <Optimizer/Rule/Rewrite/ExtractBitmapImplicitFilter.h>
 #include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
 #include <Optimizer/Rule/Rewrite/ImplementSetOperationRules.h>
 #include <Optimizer/Rule/Rewrite/InlineProjections.h>
@@ -41,6 +42,7 @@
 #include <Optimizer/Rule/Rewrite/TopNRules.h>
 #include <Optimizer/Rule/Rewrite/EagerAggregation.h>
 #include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
+#include <Optimizer/Rule/Rewrite/SumIfToCountIf.h>
 
 namespace DB
 {
@@ -62,6 +64,11 @@ std::vector<RulePtr> Rules::normalizeExpressionRules()
 std::vector<RulePtr> Rules::swapPredicateRules()
 {
     return {std::make_shared<SwapPredicateRewriteRule>()};
+}
+
+std::vector<RulePtr> Rules::sumIfToCountIf()
+{
+    return {std::make_shared<SumIfToCountIf>()};
 }
 
 std::vector<RulePtr> Rules::simplifyExpressionRules()
@@ -226,5 +233,8 @@ std::vector<RulePtr> Rules::crossJoinToUnion()
     return {std::make_shared<CrossJoinToUnion>()};
 }
 
-
+std::vector<RulePtr> Rules::extractBitmapImplicitFilterRules()
+{
+    return {std::make_shared<ExtractBitmapImplicitFilter>()};
+}
 }

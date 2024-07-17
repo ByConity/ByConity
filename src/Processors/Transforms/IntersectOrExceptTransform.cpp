@@ -148,6 +148,8 @@ void IntersectOrExceptTransform::accumulate(Chunk chunk)
     {
         case SetVariants::Type::EMPTY:
             break;
+        case SetVariants::Type::bitmap64:
+            break;
 #define M(NAME) \
     case SetVariants::Type::NAME: \
         addToSet(*data_set.NAME, column_ptrs, num_rows, data_set); \
@@ -186,6 +188,8 @@ void IntersectOrExceptTransform::filter(Chunk & chunk)
     switch (data->type)
     {
         case SetVariants::Type::EMPTY:
+            break;
+        case SetVariants::Type::bitmap64:
             break;
 #define M(NAME) \
     case SetVariants::Type::NAME: \

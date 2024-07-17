@@ -29,6 +29,8 @@
 using namespace DB;
 using namespace DB::Patterns;
 
+extern const char * auto_config_build[];
+
 namespace DB
 {
 namespace
@@ -254,5 +256,17 @@ std::string executeTestDBQuery(const std::string & query, ContextMutablePtr cont
         std::cout << "Finish test DB query, got result: " << std::endl << "\033[1;32m" << res << "\033[0m" << std::flush;
 
     return res;
+}
+
+bool isDebugBuild()
+{
+    for (auto * it = auto_config_build; *it; it += 2)
+    {
+        if (strcmp(it[0], "BUILD_TYPE") == 0)
+        {
+            return strcmp(it[1], "Debug") == 0;
+        }
+    }
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "");
 }
 }

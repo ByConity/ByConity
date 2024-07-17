@@ -79,6 +79,8 @@ public:
 
     mutable std::forward_list<DataModelDeleteBitmapPtr> delete_bitmap_metas;
 
+    UInt64 deletedRowsCount(const MergeTreeMetaBase & storage) const;
+
     const ImmutableDeleteBitmapPtr & getDeleteBitmap(const MergeTreeMetaBase & storage, bool is_unique_new_part) const;
 
     UInt64 getCommitTime() const;
@@ -98,6 +100,7 @@ public:
 
     bool isEmpty() const;
     UInt64 rowsCount() const;
+    UInt64 rowExistsCount() const;
     UInt64 size() const;
     bool isPartial() const;
     bool isDropRangePart() const;

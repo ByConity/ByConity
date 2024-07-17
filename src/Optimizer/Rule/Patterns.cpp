@@ -27,23 +27,23 @@ PatternBuilder & PatternBuilder::capturedAs(const Capture & capture, const Patte
     return *this;
 }
 
-PatternBuilder & PatternBuilder::matching(const PatternPredicate & predicate)
+PatternBuilder & PatternBuilder::matching(PatternPredicate predicate)
 {
-    return matching(predicate, "unknown");
+    return matching(std::move(predicate), "unknown");
 }
 
-PatternBuilder & PatternBuilder::matching(const PatternPredicate & predicate, const std::string & name)
+PatternBuilder & PatternBuilder::matching(PatternPredicate predicate, const std::string & name)
 {
-    current = std::make_unique<FilterPattern>(name, predicate, std::move(current));
+    current = std::make_unique<FilterPattern>(name, std::move(predicate), std::move(current));
     return *this;
 }
 
-PatternBuilder & PatternBuilder::matchingCapture(const std::function<bool(const Captures &)> & capture_predicate)
+PatternBuilder & PatternBuilder::matchingCapture(std::function<bool(const Captures &)> capture_predicate)
 {
-    return matchingCapture(capture_predicate, "unknown");
+    return matchingCapture(std::move(capture_predicate), "unknown");
 }
 
-PatternBuilder & PatternBuilder::matchingCapture(const std::function<bool(const Captures &)> & capture_predicate, const std::string & name)
+PatternBuilder & PatternBuilder::matchingCapture(std::function<bool(const Captures &)> capture_predicate, const std::string & name)
 {
     return matching(std::bind(capture_predicate, std::placeholders::_2), name); // NOLINT(modernize-avoid-bind)
 }

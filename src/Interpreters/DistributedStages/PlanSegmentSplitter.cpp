@@ -13,9 +13,10 @@
  * limitations under the License.
  */
 
-#include <cstddef>
-#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
+
+#include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Optimizer/Property/Property.h>
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/PlanSegmentSourceStep.h>
 #include <QueryPlan/ReadNothingStep.h>
@@ -33,6 +34,8 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
 {
     PlanSegmentVisitor visitor{plan_segment_context, query_plan.getCTENodes()};
 
+    if (plan_segment_context.context->getSettingsRef().distributed_max_parallel_size != 0)
+        SetScalable::setScalable(query_plan.getRoot(), query_plan.getCTENodes(), *plan_segment_context.context);
     size_t exchange_id = 0;
     PlanSegmentVisitorContext split_context{{}, {}, exchange_id};
     visitor.createPlanSegment(query_plan.getRoot(), split_context);
@@ -74,7 +77,7 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
              */
             if (input->getPlanSegmentType() != PlanSegmentType::SOURCE && input->getPlanSegmentType() != PlanSegmentType::UNKNOWN)
             {
-                auto child_node = plan_mapping[input->getPlanSegmentId()];
+                auto * child_node = plan_mapping[input->getPlanSegmentId()];
                 node.children.push_back(child_node);
 
                 for (auto & output : child_node->plan_segment->getPlanSegmentOutputs())
@@ -96,7 +99,30 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
                 }
             }
         }
-        
+
+    }
+
+    ParallelSizeChecker checker;
+    checker.shard_number = plan_segment_context.shard_number;
+    for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
+    {
+        checker.segment = node.plan_segment.get();
+        checker.children_segments.clear();
+        for (auto & child : node.children)
+        {
+            checker.children_segments.emplace_back(child->plan_segment.get());
+        }
+        const Context & c = *plan_segment_context.context;
+        auto sizes = VisitorUtil::accept(node.plan_segment->getQueryPlan().getRoot(), checker, c);
+        if (!sizes.empty())
+        {
+            auto first = sizes[0];
+            for (auto size : sizes)
+            {
+                if (size != first)
+                    throw Exception("Segment parallel size not match", ErrorCodes::LOGICAL_ERROR);
+            }
+        }
     }
 }
 
@@ -153,6 +179,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
     remote_step->setStepDescription(step->getStepDescription());
     QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}, .id = node->id};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
+    split_context.scalable &= step->isScalable();
     return plan_segment_context.query_plan.getLastNode();
 }
 
@@ -169,7 +196,8 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
         if (cte_node->step->getType() == IQueryPlanStep::Type::Exchange)
         {
             exchange_step = dynamic_cast<ExchangeStep *>(cte_node->step.get());
-            plan_segment = createPlanSegment(cte_node->children[0], split_context);
+            PlanSegmentVisitorContext child_context{{}, {}, split_context.exchange_id, split_context.is_add_extremes, split_context.is_add_totals, exchange_step->isScalable()};
+            plan_segment = createPlanSegment(cte_node->children[0], child_context);
         }
         else
             plan_segment = createPlanSegment(cte_node, split_context);
@@ -283,7 +311,7 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
 PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, PlanSegmentVisitorContext & split_context)
 {
     size_t segment_id = plan_segment_context.getSegmentId();
-    auto result_node = VisitorUtil::accept(node, *this, split_context);
+    auto * result_node = VisitorUtil::accept(node, *this, split_context);
     if (!result_node)
         result_node = node;
 
@@ -367,8 +395,10 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
         }
     }
 
-    auto partitioning = SourceNodeFinder::find(node, *plan_segment_context.context);
-    switch (partitioning)
+    auto partitionings = SourceNodeFinder::find(node, cte_nodes, *plan_segment_context.context);
+
+
+    switch (partitionings[0])
     {
         case Partitioning::Handle::COORDINATOR:
             return {"", 1}; // dispatch to coordinator if server is empty
@@ -386,10 +416,11 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
                 }
             }
             break;
+        case Partitioning::Handle::BUCKET_TABLE:
         case Partitioning::Handle::FIXED_HASH: {
             /// if all input are not table type, parallel size should respect distributed_max_parallel_size setting
             size_t max_parallel_size = plan_segment_context.context->getSettingsRef().distributed_max_parallel_size;
-            if (!input_has_table && !split_context.inputs.empty())
+            if (!input_has_table && !split_context.inputs.empty() && split_context.scalable)
             {
                 size_t ret = plan_segment_context.shard_number;
                 if (max_parallel_size > 0 || plan_segment_context.health_parallel)
@@ -416,50 +447,56 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
     throw Exception("Unknown partition for PlanSegmentSplitter", ErrorCodes::LOGICAL_ERROR);
 }
 
-Partitioning::Handle SourceNodeFinder::find(QueryPlan::Node * node, const Context & context)
+std::vector<Partitioning::Handle> SourceNodeFinder::find(QueryPlan::Node * node, QueryPlan::CTENodes & cte_nodes, const Context & context)
 {
-    SourceNodeFinder visitor;
-    auto result = VisitorUtil::accept(node, visitor, context);
-    return result.value_or(Partitioning::Handle::FIXED_HASH);
+    SourceNodeFinder visitor{cte_nodes};
+    std::vector<Partitioning::Handle> result;
+    for (auto item : VisitorUtil::accept(node, visitor, context))
+    {
+        if (item)
+            result.emplace_back(item.value());
+    }
+    return result;
 }
 
-std::optional<Partitioning::Handle> SourceNodeFinder::visitNode(QueryPlan::Node * node, const Context & context)
+std::vector<std::optional<Partitioning::Handle>> SourceNodeFinder::visitNode(QueryPlan::Node * node, const Context & context)
 {
+    std::vector<std::optional<Partitioning::Handle>> result;
     for (const auto & child : node->children)
     {
-        if (auto result = VisitorUtil::accept(child, *this, context))
-            return result;
+        auto item = VisitorUtil::accept(child, *this, context);
+        result.insert(result.end(), item.begin(), item.end());
     }
-    return {};
+    return result;
 }
 
-std::optional<Partitioning::Handle> SourceNodeFinder::visitValuesNode(QueryPlan::Node *, const Context &)
+std::vector<std::optional<Partitioning::Handle>> SourceNodeFinder::visitValuesNode(QueryPlan::Node *, const Context &)
 {
-    return Partitioning::Handle::SINGLE;
+    return {{Partitioning::Handle::SINGLE}};
 }
 
-std::optional<Partitioning::Handle> SourceNodeFinder::visitReadNothingNode(QueryPlan::Node *, const Context &)
+std::vector<std::optional<Partitioning::Handle>> SourceNodeFinder::visitReadNothingNode(QueryPlan::Node *, const Context &)
 {
-    return Partitioning::Handle::SINGLE;
+    return {{Partitioning::Handle::SINGLE}};
 }
 
-std::optional<Partitioning::Handle> SourceNodeFinder::visitReadStorageRowCountNode(QueryPlan::Node *, const Context &)
+std::vector<std::optional<Partitioning::Handle>> SourceNodeFinder::visitReadStorageRowCountNode(QueryPlan::Node *, const Context &)
 {
-    return Partitioning::Handle::COORDINATOR;
+    return {{Partitioning::Handle::COORDINATOR}};
 }
 
-std::optional<Partitioning::Handle> SourceNodeFinder::visitTableScanNode(QueryPlan::Node * node, const Context &)
+std::vector<std::optional<Partitioning::Handle>> SourceNodeFinder::visitTableScanNode(QueryPlan::Node * node, const Context &)
 {
     auto * source_step = dynamic_cast<TableScanStep *>(node->step.get());
     // check is bucket table instead of cnch table?
     if (source_step->getStorage()->supportsDistributedRead())
-        return Partitioning::Handle::FIXED_HASH;
-   
-    // if source node is not cnch table, schedule to coordinator. eg, system tables.
-    return Partitioning::Handle::COORDINATOR;
+        return {{Partitioning::Handle::FIXED_HASH}};
+
+    return {{Partitioning::Handle::COORDINATOR}};
 }
 
-std::optional<Partitioning::Handle> SourceNodeFinder::visitRemoteExchangeSourceNode(QueryPlan::Node * node, const Context &)
+
+std::vector<std::optional<Partitioning::Handle>> SourceNodeFinder::visitRemoteExchangeSourceNode(QueryPlan::Node * node, const Context &)
 {
     const auto * source_step = dynamic_cast<RemoteExchangeSourceStep *>(node->step.get());
     for (const auto & input : source_step->getInput())
@@ -467,19 +504,163 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitRemoteExchangeSourceN
         switch (input->getExchangeMode())
         {
             case ExchangeMode::GATHER:
-                return Partitioning::Handle::SINGLE;
+                return {{Partitioning::Handle::SINGLE}};
+            case ExchangeMode::BROADCAST:
+            case ExchangeMode::REPARTITION:
+                return {{Partitioning::Handle::FIXED_HASH}};
+            case ExchangeMode::LOCAL_NO_NEED_REPARTITION:
+                return {{Partitioning::Handle::FIXED_PASSTHROUGH}};
+            case ExchangeMode::BUCKET_REPARTITION:
+                return {{Partitioning::Handle::FIXED_HASH}};
+            case ExchangeMode::LOCAL_MAY_NEED_REPARTITION:
+                return {{Partitioning::Handle::FIXED_PASSTHROUGH}};
+            case ExchangeMode::UNKNOWN:
+                throw Exception("Unknown exchange mode", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    return {{Partitioning::Handle::FIXED_HASH}};
+}
+
+std::vector<std::optional<Partitioning::Handle>> SourceNodeFinder::visitExchangeNode(QueryPlan::Node * node, const Context & context)
+{
+    const auto * source_step = dynamic_cast<ExchangeStep *>(node->step.get());
+    switch (source_step->getExchangeMode())
+    {
+        case ExchangeMode::GATHER:
+            return {{Partitioning::Handle::SINGLE}};
+        case ExchangeMode::BROADCAST:
+        case ExchangeMode::REPARTITION:
+            return {{Partitioning::Handle::FIXED_HASH}};
+        case ExchangeMode::LOCAL_NO_NEED_REPARTITION:
+        case ExchangeMode::LOCAL_MAY_NEED_REPARTITION:
+            return VisitorUtil::accept(node->children[0], *this, context);
+        default:
+            throw Exception("Unknown exchange mode", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+
+std::vector<std::optional<Partitioning::Handle>> SourceNodeFinder::visitCTERefNode(QueryPlan::Node * node, const Context & context)
+{
+    auto * step = dynamic_cast<CTERefStep *>(node->step.get());
+    auto * cte_node = cte_nodes.at(step->getId());
+    return VisitorUtil::accept(cte_node, *this, context);
+}
+
+void SetScalable::setScalable(QueryPlan::Node * node, QueryPlan::CTENodes & cte_nodes, const Context & context)
+{
+    auto partitionings = SourceNodeFinder::find(node, cte_nodes, context);
+
+    bool scalable = true;
+    for (auto partition : partitionings)
+    {
+        if (partition == Partitioning::Handle::BUCKET_TABLE || partition == Partitioning::Handle::SINGLE)
+        {
+            scalable = false;
+        }
+    }
+
+    SetScalable visitor(scalable, cte_nodes);
+    std::vector<Partitioning::Handle> result;
+    VisitorUtil::accept(node, visitor, context);
+}
+
+Void SetScalable::visitNode(QueryPlan::Node * node, const Context & context)
+{
+    for (const auto & child : node->children)
+    {
+        VisitorUtil::accept(child, *this, context);
+    }
+    return {};
+}
+
+
+Void SetScalable::visitExchangeNode(QueryPlan::Node * node, const Context & context)
+{
+    auto * source_step = dynamic_cast<ExchangeStep *>(node->step.get());
+    source_step->setScalable(scalable);
+    setScalable(node->children[0], cte_nodes, context);
+    return {};
+}
+
+Void SetScalable::visitCTERefNode(QueryPlan::Node * node, const Context & context)
+{
+    auto * step = dynamic_cast<CTERefStep *>(node->step.get());
+    auto * cte_node = cte_nodes.at(step->getId());
+    return VisitorUtil::accept(cte_node, *this, context);
+}
+
+std::vector<size_t> ParallelSizeChecker::visitNode(QueryPlan::Node * node, const Context & context)
+{
+    std::vector<size_t> result;
+    for (const auto & child : node->children)
+    {
+        auto item = VisitorUtil::accept(child, *this, context);
+        result.insert(result.end(), item.begin(), item.end());
+    }
+    return result;
+}
+
+std::vector<size_t> ParallelSizeChecker::visitValuesNode(QueryPlan::Node *, const Context &)
+{
+    return {1};
+}
+
+std::vector<size_t> ParallelSizeChecker::visitReadNothingNode(QueryPlan::Node *, const Context &)
+{
+    return {1};
+}
+
+std::vector<size_t> ParallelSizeChecker::visitTableScanNode(QueryPlan::Node * node, const Context & context)
+{
+    auto * source_step = dynamic_cast<TableScanStep *>(node->step.get());
+    // check is bucket table instead of cnch table?
+    if (source_step->getStorage()->supportsDistributedRead())
+        return {shard_number};
+
+    // hack for unittest
+    else if (context.getSettingsRef().enable_memory_catalog)
+        if (auto memory_tree = dynamic_pointer_cast<StorageMemory>(source_step->getStorage()))
+            return {shard_number};
+    // if source node is not cnch table, schedule to coordinator. eg, system tables.
+    return {1};
+}
+
+std::vector<size_t> ParallelSizeChecker::visitReadStorageRowCountNode(QueryPlan::Node *, const Context &)
+{
+    return {shard_number};
+}
+
+std::vector<size_t> ParallelSizeChecker::visitRemoteExchangeSourceNode(QueryPlan::Node * node, const Context &)
+{
+    const auto * source_step = dynamic_cast<RemoteExchangeSourceStep *>(node->step.get());
+    for (const auto & input : source_step->getInput())
+    {
+        switch (input->getExchangeMode())
+        {
+            case ExchangeMode::GATHER:
+                return {segment->getParallelSize()};
             case ExchangeMode::BROADCAST:
                 continue;
             case ExchangeMode::REPARTITION:
-                return Partitioning::Handle::FIXED_HASH;
+                return {segment->getParallelSize()};
             case ExchangeMode::LOCAL_NO_NEED_REPARTITION:
-                return Partitioning::Handle::FIXED_PASSTHROUGH;
-            case ExchangeMode::LOCAL_MAY_NEED_REPARTITION:
-            case ExchangeMode::UNKNOWN:
+            case ExchangeMode::LOCAL_MAY_NEED_REPARTITION: {
+                for (auto & child : children_segments)
+                {
+                    if (child->getPlanSegmentId() == source_step->getInput()[0]->getPlanSegmentId())
+                    {
+                        return {child->getParallelSize()};
+                    }
+                }
+                break;
+            }
+            default:
                 throw Exception("Unknown exchange mode", ErrorCodes::LOGICAL_ERROR);
         }
     }
     return {};
 }
+
 
 }

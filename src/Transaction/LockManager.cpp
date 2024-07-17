@@ -71,7 +71,7 @@ void LockContext::unlock(LockRequest * request)
     {
         waiting_list.erase(request->getRequestItor());
         decConflictedModeCount(request->getMode());
-        request->setLockResult(LockStatus::LOCK_INIT, waiting_list.end());
+        request->setLockResult(LockStatus::LOCK_CANCELLED, waiting_list.end());
         request->notify();
     }
 
@@ -236,6 +236,10 @@ void LockManager::unlock(LockRequest * request)
 
 void LockManager::lock(const LockInfoPtr & info, const Context & context)
 {
+    /// set and verify topology_version to avoid parallel lock holding
+    auto [current_topology_version, current_topology] = global_context->getCnchTopologyMaster()->getCurrentTopologyVersion();
+    info->setTopologyVersion(current_topology_version);
+
     LOG_TRACE(log, "try lock: " + info->toDebugString());
     assert(info->lock_id != 0);
     // register transaction in LockManager
@@ -253,10 +257,11 @@ void LockManager::lock(const LockInfoPtr & info, const Context & context)
             auto & txn_locks_info = it->second;
             txn_locks_info.expire_time = expire_tp;
             txn_locks_info.lock_ids.emplace(info->lock_id, info);
+            txn_locks_info.topology_version = info->topology_version;
         }
         else
         {
-            stripe.map.emplace(txn_id, TxnLockInfo{txn_id, expire_tp, LockIdMap{{info->lock_id, info}}});
+            stripe.map.emplace(txn_id, TxnLockInfo{txn_id, expire_tp, LockIdMap{{info->lock_id, info}}, info->topology_version});
         }
     }
 
@@ -315,6 +320,22 @@ void LockManager::unlock(const LockInfoPtr & info)
     {
         request->unlock();
     }
+
+    /// XXX: If a topo switch occurs during the commit phase, it may lead to parallel lock holding.
+    /// While this problem is difficult to solve because committed transactions are not supported to be rolled back. Temporarily use the time window of topo switching to avoid this problem
+    /// Potential logs need to be printed
+    auto current_topology_server = global_context->getCnchTopologyMaster()->getTargetServer(info->table_uuid_with_prefix, DEFAULT_SERVER_VW_NAME, false);
+    auto record = global_context->getCnchCatalog()->tryGetTransactionRecord(txn_id);
+    if (record && record->status() == CnchTransactionStatus::Finished)
+    {
+        if (current_topology_server.topology_version != PairInt64{0, 0} && info->topology_version != current_topology_server.topology_version)
+        {
+            bool is_local_server = isLocalServer(current_topology_server.getRPCAddress(), std::to_string(global_context->getRPCPort()));
+            if (!is_local_server || info->topology_version.high + 1 != current_topology_server.topology_version.high)
+                LOG_WARNING(log, "Txn {} of table {} has been committed, but topo check is failed, reason {}, it may cause parallel lock holding", txn_id, info->table_uuid_with_prefix,
+                    !is_local_server ? "host server switched" : "topology_version can not be used");
+        }
+    }
 }
 
 void LockManager::unlock(const TxnTimestamp & txn_id_)
@@ -345,6 +366,9 @@ void LockManager::unlock(const TxnTimestamp & txn_id_)
 
 void LockManager::assertLockAcquired(const TxnTimestamp & txn_id, LockID lock_id)
 {
+    /// set and verify topology_version to avoid parallel lock holding
+    auto [current_topology_version, current_topology] = global_context->getCnchTopologyMaster()->getCurrentTopologyVersion();
+
     TxnLockMapStripe & stripe = txn_locks_map.getStripe(txn_id);
     {
         std::lock_guard lock(stripe.mutex);
@@ -353,6 +377,17 @@ void LockManager::assertLockAcquired(const TxnTimestamp & txn_id, LockID lock_id
             auto & lock_id_map = it->second.lock_ids;
             if (lock_id_map.find(lock_id) == lock_id_map.end())
                 throw Exception(fmt::format("lock assertion failed, lock id {} not found ", lock_id), ErrorCodes::CNCH_TRANSACTION_INTERNAL_ERROR);
+
+            if (current_topology_version != PairInt64{0, 0} && it->second.topology_version != current_topology_version)
+            {
+                LOG_DEBUG(log, "txn id: {}, lock info's topology_version initialtime: {}, term: {}, current topology_version initialtime: {}, term: {}",
+                    txn_id, it->second.topology_version.low, it->second.topology_version.high, current_topology_version.low, current_topology_version.high);
+                /// do nothing if host server doesn't change in two consecutive topologies
+                if (it->second.topology_version.high + 1 == current_topology_version.high)
+                    return;
+                else
+                    throw Exception(fmt::format("lock assertion failed, topology_version can not be used, txn: {}", txn_id), ErrorCodes::CNCH_TRANSACTION_INTERNAL_ERROR);
+            }
         }
         else
         {

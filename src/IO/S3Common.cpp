@@ -362,11 +362,13 @@ namespace S3
 
         String name;
         String endpoint_authority_from_uri;
+        String endpoint_without_scheme;
 
         if (re2::RE2::FullMatch(uri.getAuthority(), virtual_hosted_style_pattern, &bucket, &name, &endpoint_authority_from_uri))
         {
             is_virtual_hosted_style = true;
-            endpoint = uri.getScheme() + "://" + name + endpoint_authority_from_uri;
+            endpoint_without_scheme = name + endpoint_authority_from_uri;
+            endpoint = uri.getScheme() + "://" + endpoint_without_scheme;
 
             /// S3 specification requires at least 3 and at most 63 characters in bucket name.
             /// https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html
@@ -404,7 +406,8 @@ namespace S3
         else if (re2::RE2::PartialMatch(uri.getPath(), path_style_pattern, &bucket, &key))
         {
             is_virtual_hosted_style = false;
-            endpoint = uri.getScheme() + "://" + uri.getAuthority();
+            endpoint_without_scheme = uri.getAuthority();
+            endpoint = uri.getScheme() + "://" + endpoint_without_scheme;
 
             validateBucket(bucket, uri);
         }
@@ -416,17 +419,17 @@ namespace S3
 
         // try parse region
         std::vector<String> endpoint_splices;
-        boost::split(endpoint_splices, endpoint, boost::is_any_of("."));
+        boost::split(endpoint_splices, endpoint_without_scheme, boost::is_any_of("."));
         if (endpoint_splices.empty())
             return;
 
-        if (storage_name == COSN || storage_name == S3)
+        if (endpoint_splices[0].starts_with("cos") || endpoint_splices[0].starts_with("s3"))
         {
             if (endpoint_splices.size() < 2)
                 return;
             region = endpoint_splices[1];
         }
-        else if (storage_name == TOS)
+        else if (endpoint_splices[0].starts_with("tos"))
         {
             if (endpoint_splices.size() < 1)
                 return;

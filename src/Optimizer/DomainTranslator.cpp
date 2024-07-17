@@ -16,6 +16,8 @@
 #include <Optimizer/DomainTranslator.h>
 #include <Optimizer/EqualityASTMap.h>
 #include <Common/Exception.h>
+#include <Parsers/ASTIdentifier.h>
+#include <DataTypes/DataTypeNothing.h>
 
 namespace DB::Predicate
 {
@@ -327,6 +329,25 @@ ExtractionResult<T> DomainVisitor<T>::visitASTLiteral(ASTPtr & node, const bool 
     else if (literal->value.isNull())
         return ExtractionResult<T>(TupleDomain<T>::none(), PredicateConst::TRUE_VALUE);
 
+    return visitNode(node, complement);
+}
+
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitASTIdentifier(ASTPtr & node, const bool & complement)
+{
+    if (!complement) // id / not(not(id)) -> toBool(id)
+    {
+        if (auto type = type_analyzer.getType(node))
+        {
+            if (auto inner_type = removeNullable(removeLowCardinality(type)))
+            {
+                if (!inner_type->equals(DataTypeUInt8()) && !inner_type->equals(DataTypeNothing()))
+                {
+                    return ExtractionResult<T>(TupleDomain<T>::all(), makeASTFunction("toBool", node));
+                }
+            }
+        }
+    }
     return visitNode(node, complement);
 }
 

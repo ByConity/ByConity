@@ -40,7 +40,7 @@ class SettingsProfileElements;
 class ClientInfo;
 class ExternalAuthenticators;
 struct Settings;
-
+using SensitiveResourcePtr = std::shared_ptr<Protos::DataModelSensitiveDatabase>;
 
 /// Manages access control entities.
 class AccessControlManager : public MultipleAccessStorage
@@ -115,6 +115,7 @@ public:
     void setCustomSettingsPrefixes(const String & comma_separated_prefixes);
     bool isSettingNameAllowed(const std::string_view & name) const;
     void checkSettingNameIsAllowed(const std::string_view & name) const;
+    void setSensitivePermissionTenants(const String & comma_separated_tenants);
 
     UUID login(const Credentials & credentials, const Poco::Net::IPAddress & address) const;
     void setExternalAuthenticatorsConfig(const Poco::Util::AbstractConfiguration & config);
@@ -132,7 +133,7 @@ public:
         const Settings & settings,
         const String & current_database,
         const ClientInfo & client_info,
-        bool has_tenant_id_in_username) const;
+        const String & tenant) const;
 
     std::shared_ptr<const ContextAccess> getContextAccess(const ContextAccessParams & params) const;
 
@@ -163,9 +164,12 @@ public:
 
     const ExternalAuthenticators & getExternalAuthenticators() const;
 
+    std::function<SensitiveResourcePtr(String)> sensitive_resource_getter;
+
 private:
     class ContextAccessCache;
     class CustomSettingsPrefixes;
+    class SensitivePermissionTenants;
 
     std::unique_ptr<ContextAccessCache> context_access_cache;
     std::unique_ptr<RoleCache> role_cache;
@@ -174,6 +178,7 @@ private:
     std::unique_ptr<SettingsProfilesCache> settings_profiles_cache;
     std::unique_ptr<ExternalAuthenticators> external_authenticators;
     std::unique_ptr<CustomSettingsPrefixes> custom_settings_prefixes;
+    std::unique_ptr<SensitivePermissionTenants> sensitive_permission_tenants;
 
     std::atomic_bool select_from_system_db_requires_grant = false;
     std::atomic_bool select_from_information_schema_requires_grant = false;

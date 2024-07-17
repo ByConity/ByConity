@@ -3268,6 +3268,74 @@ IMetaStore::IteratorPtr MetastoreProxy::getByPrefix(const String & prefix, size_
     return metastore_ptr->getByPrefix(prefix, limit);
 }
 
+// Sensitive Resources
+void MetastoreProxy::putSensitiveResource(const String & name_space, const String & database, const String & table, const String & column, const String & target, bool value) const
+{
+    String data;
+    auto res = std::make_shared<Protos::DataModelSensitiveDatabase>();
+
+    metastore_ptr->get(sensitiveResourceKey(name_space, database), data);
+
+    if (!data.empty())
+        res->ParseFromString(data);
+
+    if (!database.empty())
+    {
+        res->set_database(database);
+        if (target == "DATABASE")
+            res->set_is_sensitive(value);
+    }
+
+    Protos::DataModelSensitiveTable * current_table = nullptr;
+    if (!table.empty())
+    {
+        // get existing table from database if its already there
+        bool found = false;
+        for (auto & table_from_meta : *res->mutable_tables())
+        {
+            if (table_from_meta.table() == table)
+            {
+                current_table = &table_from_meta;
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            current_table = res->add_tables();
+        current_table->set_table(table);
+        if (target == "TABLE")
+            current_table->set_is_sensitive(value);
+    }
+
+    if (target == "COLUMN" && !column.empty())
+    {
+        Strings new_columns_for_meta(current_table->sensitive_columns().begin(), current_table->sensitive_columns().end());
+        current_table->clear_sensitive_columns();
+        for (auto & col : new_columns_for_meta)
+        {
+            if (col != column)
+                current_table->add_sensitive_columns(col);
+        }
+        if (value)
+            current_table->add_sensitive_columns(column);
+    }
+
+    metastore_ptr->put(sensitiveResourceKey(name_space, database), res->SerializeAsString());
+}
+
+std::shared_ptr<Protos::DataModelSensitiveDatabase> MetastoreProxy::getSensitiveResource(const String & name_space, const String & database) const
+{
+    String data;
+    auto res = std::make_shared<Protos::DataModelSensitiveDatabase>();
+
+    metastore_ptr->get(sensitiveResourceKey(name_space, database), data);
+
+    if (!data.empty())
+        res->ParseFromString(data);
+
+    return res;
+}
+
 // Access Entities
 String MetastoreProxy::getAccessEntity(EntityType type, const String & name_space, const String & name) const
 {

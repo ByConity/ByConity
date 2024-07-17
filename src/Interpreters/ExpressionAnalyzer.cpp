@@ -1311,10 +1311,18 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
         return std::make_shared<MergeJoin>(analyzed_join, r_sample_block);
     else if (analyzed_join->forceNestedLoopJoin())
         return std::make_shared<NestedLoopJoin>(analyzed_join, r_sample_block, context);
-    else if (analyzed_join->forceGraceHashLoopJoin() && GraceHashJoin::isSupported(analyzed_join))
+    else if (analyzed_join->forceGraceHashJoin())
     {
-        auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: context->getSettings().max_threads);
-        return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false);
+        if (GraceHashJoin::isSupported(analyzed_join)) {
+            auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: context->getSettings().max_threads);
+            return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false, context->getSettings().max_threads);
+        }  else if (allow_merge_join) {  // fallback into merge join
+            LOG_WARNING(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "Grace hash join is not support, fallback into merge join.");
+            return {std::make_shared<JoinSwitcher>(analyzed_join, r_sample_block)};
+        } else { // fallback into hash join when grace hash and merge join not supported
+            LOG_WARNING(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
+            return {std::make_shared<HashJoin>(analyzed_join, r_sample_block)};
+        }
     }
     return std::make_shared<JoinSwitcher>(analyzed_join, r_sample_block);
 }

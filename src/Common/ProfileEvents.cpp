@@ -195,7 +195,10 @@
     M(SelectedMarks, "Number of marks (index granules) selected to read from a MergeTree table.") \
     M(SelectedRows, "Number of rows SELECTed from all tables.") \
     M(SelectedBytes, "Number of bytes (uncompressed; for columns as they stored in memory) SELECTed from all tables.") \
-    \
+\
+    M(PrewhereSelectedMarks, "Number of marks (index granules) selected to read from a MergeTree table after apply prewhere conditions, must <= SelectedMarks.") \
+    M(PrewhereSelectedRows, "Number of rows selected after apply prewhere conditions, must be <= SelectedRows") \
+\
     M(Manipulation, "Number of manipulations.") \
     M(ManipulationSuccess, "Number of success manipulations.") \
 \
@@ -557,6 +560,8 @@
     M(GetServerDataPartsInPartitionsFailed, "") \
     M(GetAllServerDataPartsSuccess, "") \
     M(GetAllServerDataPartsFailed, "") \
+    M(GetAllServerDataPartsWithDBMSuccess, "") \
+    M(GetAllServerDataPartsWithDBMFailed, "") \
     M(GetDataPartsByNamesSuccess, "") \
     M(GetDataPartsByNamesFailed, "") \
     M(GetStagedDataPartsByNamesSuccess, "") \
@@ -875,6 +880,10 @@
     M(GetTableTrashItemsMetricsDataFromMetastoreFailed, "") \
     M(GetPartsInfoMetricsSuccess, "") \
     M(GetPartsInfoMetricsFailed, "") \
+    M(PutSensitiveResourceSuccess, "") \
+    M(PutSensitiveResourceFailed, "") \
+    M(GetSensitiveResourceSuccess, "") \
+    M(GetSensitiveResourceFailed, "") \
     M(PutAccessEntitySuccess, "") \
     M(PutAccessEntityFailed, "") \
     M(TryGetAccessEntitySuccess, "") \
@@ -1065,8 +1074,7 @@
     M(UpdateMvMetaIDSuccess, "") \
     M(UpdateMvMetaIDFailed, "") \
 \
-    M(AfterPrewhereNumRows, "Number of rows after filtered by prewhere") \
-\
+    M(NumberOfMarkRangesBeforeBeMergedInPKFilter, "Number of mark ranges in primary index filtering before adjacent ranges be merged into more bigger ranges") \
     M(PlanSegmentInstanceRetry, "How many times this plan segment has been retried, only valid under bsp mode")
 
 namespace ProfileEvents

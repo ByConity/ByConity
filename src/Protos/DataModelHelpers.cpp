@@ -12,6 +12,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <memory>
+#include <optional>
+#include <Protos/DataModelHelpers.h>
 
 #include <memory>
 #include <Catalog/DataModelPartWrapper.h>
@@ -144,6 +147,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
 
     part->bytes_on_disk = part_model.size();
     part->rows_count = part_model.rows_count();
+    part->row_exists_count = part_model.has_row_exists_count() ? part_model.row_exists_count() : part_model.rows_count();
     if (!part_model.has_marks_count())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cnch parts must have mark count");
     if (!part->isPartial() || !part->isEmpty())
@@ -190,7 +194,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     std::unordered_set<std::string> projection_parts_names(part_model.projections().begin(), part_model.projections().end());
     part->setProjectionPartsNames(projection_parts_names);
     part->setHostPort(part_model.disk_cache_host_port(), part_model.assign_compute_host_port());
-    
+
     part->ttl_infos.part_min_ttl = part_model.part_ttl_info().part_min_ttl();
     part->ttl_infos.part_max_ttl = part_model.part_ttl_info().part_max_ttl();
     part->ttl_infos.part_finished = part_model.part_ttl_info().part_finished();
@@ -251,6 +255,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
 
     part_model.set_size(part.bytes_on_disk);
     part_model.set_rows_count(part.rows_count);
+    part_model.set_row_exists_count(part.row_exists_count.has_value() ? part.row_exists_count.value() : part.rows_count);
     ///TODO: if we need marks_count in ce?
     if (part.index_granularity_info.is_adaptive)
     {

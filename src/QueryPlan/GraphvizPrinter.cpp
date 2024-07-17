@@ -1782,6 +1782,8 @@ String StepPrinter::printExchangeStep(const ExchangeStep & step)
                 return "REPARTITION";
             case ExchangeMode::GATHER:
                 return "GATHER";
+            case ExchangeMode::BUCKET_REPARTITION:
+                return "BUCKET_REPARTITION";
         }
     };
     details << f(step.getExchangeMode());
@@ -2026,13 +2028,12 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
 
 String StepPrinter::printReadStorageRowCountStep(const ReadStorageRowCountStep & step)
 {
-    String database = step.getStorageID().getDatabaseName();
-    String table = step.getStorageID().getTableName();
+    auto database_and_table = step.getDatabaseAndTableName();
     std::stringstream details;
-    details << database << "." << table << "|";
+    details << database_and_table.first << "." << database_and_table.second << "|";
 
     auto ast = step.getQuery();
-    auto query = ast->as<ASTSelectQuery>();
+    auto * query = ast->as<ASTSelectQuery>();
     if (query && query->getWhere())
     {
         details << "Filter : \\n";
@@ -2579,6 +2580,9 @@ String StepPrinter::printFillingStep(const FillingStep & step)
 String StepPrinter::printTotalsHavingStep(const TotalsHavingStep & step)
 {
     std::stringstream details;
+    if (step.getHavingFilter())
+        details << "Having | " << step.getHavingFilter()->formatForErrorMessage() << " |";
+
     details << "Output |";
     for (const auto & column : step.getOutputStream().header)
     {
@@ -3449,6 +3453,8 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
                 return "REPARTITION";
             case ExchangeMode::GATHER:
                 return "GATHER";
+            case ExchangeMode::BUCKET_REPARTITION:
+                return "BUCKET_REPARTITION";
         }
     };
     size_t segment_id = segment_ptr->getPlanSegmentId();

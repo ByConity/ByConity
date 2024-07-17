@@ -117,6 +117,8 @@ private:
         UInt64 txn_id;
         Clock::time_point expire_time;
         LockIdMap lock_ids;
+        /// The topology version passed when acquiring lock
+        PairInt64 topology_version;
     };
 
     using TxnLockMapStripe = MapStripe<UInt64, TxnLockInfo>;

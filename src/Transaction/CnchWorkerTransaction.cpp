@@ -189,6 +189,8 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
     try
     {
         assertLockAcquired();
+        /// XXX: If a topo switch occurs during the commit phase, it may lead to parallel lock holding.
+        /// While this problem is difficult to solve because committed transactions are not supported to be rolled back. Temporarily use the time window of topo switching to avoid this problem
         return commit();
     }
     catch (Exception & e)
@@ -240,7 +242,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
         {
             LOG_DEBUG(log, "Transaction {} commit failed\n", txn_record.txnID().toUInt64());
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            // depends on kv implementation, such as bytekv, some error codes are uncertain case like LOCK_TIMEOUT, 
+            // depends on kv implementation, such as bytekv, some error codes are uncertain case like LOCK_TIMEOUT,
             // instead of call the rollback explicitly, it is better to let server executes the clean logic to make sure the correct state transition.
             throw;
         }

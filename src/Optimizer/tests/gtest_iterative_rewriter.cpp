@@ -129,7 +129,7 @@ struct AddExchangeRule : public Rule
         return node;
     }
 };
-const Capture AddExchangeRule::subNodeCap;
+const Capture AddExchangeRule::subNodeCap{"subNodeCap"};
 
 struct FillDbNameRule : public Rule
 {
@@ -171,8 +171,8 @@ struct SortRule : public Rule
     bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override
     {
-        static Capture outerValCap;
-        static Capture innerValCap;
+        static Capture outerValCap{"outerValCap"};
+        static Capture innerValCap{"innerValCap"};
 
         return filter()
                   .capturedStepAs<MockedStepForRewriterTest>(outerValCap, &MockedStepForRewriterTest::i)
@@ -222,16 +222,20 @@ struct SleepRule : public Rule
     }
 };
 
-void check_continuous_nodes(PlanNodePtr node, int index, std::string testname)
+void check_continuous_nodes(PlanNodePtr node, int index, int max_index, std::string testname)
 {
     ASSERT_EQ(dynamic_cast<const MockedStepForRewriterTest *>(node->getStep().get())->i, index)
         << testname << " fails, index: " + std::to_string(index) << ", reason: "
         << "not expected number";
-    if (node->getChildren().size() > 0)
+    if (index < max_index)
     {
         ASSERT_EQ(node->getChildren().size(), 1) << testname << " fails, index: " + std::to_string(index) << ", reason: "
                                                    << "not single child";
-        check_continuous_nodes(node->getChildren()[0], index + 1, testname);
+        check_continuous_nodes(node->getChildren()[0], index + 1, max_index, testname);
+    }
+    else
+    {
+        ASSERT_EQ(node->getChildren().size(), 0);
     }
 }
 
@@ -480,7 +484,7 @@ TEST(OptimizerIterativeRewriterTest, ChildrenRewriteLeadToNodeRewriteLeadToChild
     auto context = Context::createCopy(getContext().context);
     rewriter.rewritePlan(query_plan, context);
 
-    check_continuous_nodes(query_plan.getPlanNode(), 1, "test 4 nodes sorting");
+    check_continuous_nodes(query_plan.getPlanNode(), 1, 4, "test 4 nodes sorting");
 }
 
 TEST(OptimizerIterativeRewriterTest, SortRule)
@@ -502,7 +506,7 @@ TEST(OptimizerIterativeRewriterTest, SortRule)
     auto context = Context::createCopy(getContext().context);
     rewriter.rewritePlan(query_plan1, context);
 
-    check_continuous_nodes(query_plan1.getPlanNode(), 1, "test 8 nodes sorting case 1");
+    check_continuous_nodes(query_plan1.getPlanNode(), 1, 8, "test 8 nodes sorting case 1");
 
     PlanNodePtr plan2 = createRewriteTestNode(
         4,
@@ -518,5 +522,5 @@ TEST(OptimizerIterativeRewriterTest, SortRule)
     QueryPlan query_plan2 = createQueryPlan(plan2);
     rewriter.rewritePlan(query_plan2, context);
 
-    check_continuous_nodes(query_plan2.getPlanNode(), 1, "test 8 nodes sorting case 2");
+    check_continuous_nodes(query_plan2.getPlanNode(), 1, 8, "test 8 nodes sorting case 2");
 }

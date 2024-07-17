@@ -220,6 +220,11 @@ struct NameSQLJSONContainsPath
     static constexpr auto name{"JSON_CONTAINS_PATH"};
 };
 
+struct NameSQLJSONExtractPath
+{
+    static constexpr auto name{"JSON_EXTRACT"};
+};
+
 template <typename JSONParser>
 class SQLJSONExistsImpl
 {
@@ -859,4 +864,39 @@ public:
         return to;
     }
 };
+
+template <typename JSONParser>
+class SQLJSONExtractPathImpl
+{
+public:
+    using Element = typename JSONParser::Element;
+
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) { return std::make_shared<DataTypeString>(); }
+
+    static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
+
+    static bool insertResultToColumn(IColumn & dest, const Element & root, ASTPtr & query_ptr)
+    {
+        GeneratorJSONPath<JSONParser> generator_json_path(query_ptr);
+        Element current_element = root;
+        VisitorStatus status;
+        while ((status = generator_json_path.getNextItem(current_element)) != VisitorStatus::Exhausted)
+        {
+            if (status == VisitorStatus::Ok)
+            {
+                break;
+            }
+            current_element = root;
+        }
+
+        if (status == VisitorStatus::Exhausted)
+        {
+            return false;
+        }
+
+        ElementIterator<JSONParser> iterator(current_element);
+        return JSONExtractRawImpl<ElementIterator<JSONParser>>::insertResultToColumn(dest, iterator);
+    }
+};
+
 }

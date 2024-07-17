@@ -49,6 +49,8 @@ Block DistinctSortedBlockInputStream::readImpl()
         {
             case ClearableSetVariants::Type::EMPTY:
                 break;
+            case ClearableSetVariants::Type::bitmap64:
+                break;
     #define M(NAME) \
             case ClearableSetVariants::Type::NAME: \
                 has_new_data = buildFilter(*data.NAME, column_ptrs, clearing_hint_columns, filter, rows, data); \

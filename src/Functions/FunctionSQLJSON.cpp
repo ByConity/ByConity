@@ -13,6 +13,7 @@ REGISTER_FUNCTION(SQLJSON)
     factory.registerFunction<FunctionSQLJSON<NameSQLJSONLength, SQLJSONLengthImpl>>();
     factory.registerFunction<FunctionSQLJSONContains<NameSQLJSONContains>>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionSQLJSONContainsPath<NameSQLJSONContainsPath>>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionSQLJSON<NameSQLJSONExtractPath, SQLJSONExtractPathImpl>>(FunctionFactory::CaseInsensitive);
 
 }
 

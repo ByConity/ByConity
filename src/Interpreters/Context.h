@@ -939,7 +939,7 @@ public:
     void setSetting(const StringRef & name, const String & value);
     void setSetting(const StringRef & name, const Field & value);
     void applySettingChange(const SettingChange & change);
-    void applySettingsChanges(const SettingsChanges & changes);
+    void applySettingsChanges(const SettingsChanges & changes, bool internal = true);
     void applySettingsChanges(const JSON & changes);
 
     /// Checks the constraints.
@@ -1379,6 +1379,9 @@ public:
     void setIsRestrictSettingsToWhitelist(bool is_restrict);
     void addRestrictSettingsToWhitelist(const std::vector<String>& name) const;
 
+    bool getBlockPrivilegedOp() const;
+    void setBlockPrivilegedOp(bool is_restrict);
+
     /// Sets default_profile and system_profile, must be called once during the initialization
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
@@ -1510,7 +1513,7 @@ public:
 
     bool shouldBlockPrivilegedOperations() const
     {
-        return getSettingsRef().block_privileged_operations && !getTenantId().empty();
+        return getBlockPrivilegedOp() && !getCurrentTenantId().empty();
     }
 
     const String & getCurrentCatalog() const

@@ -332,6 +332,9 @@ off_t ReadBufferFromByteHDFS::seek(off_t offset_, int whence_)
         throw Exception("Seek expects SEEK_SET or SEEK_CUR as whence", ErrorCodes::BAD_ARGUMENTS);
     assert(offset_ >= 0);
 
+    if (offset_ == getPosition())
+        return offset_;
+
     /// new position still inside working buffer
     /// impl->getPosition() is the file position of the working buffer end
     /// Therefore working buffer corresponds to the file range

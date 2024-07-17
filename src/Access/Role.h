@@ -12,6 +12,7 @@ namespace DB
 struct Role : public IAccessEntity
 {
     AccessRights access;
+    SensitiveAccessRights sensitive_access;
     GrantedRoles granted_roles;
     SettingsProfileElements settings;
 

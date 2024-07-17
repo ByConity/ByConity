@@ -867,7 +867,7 @@ void BaseDaemon::initialize(Application & self)
     buildLoggers(config(), logger(), self.commandName());
 
 #if USE_JEMALLOC
-    bool status = DB::JeprofControl::instance().jeprofInitialize(config().getBool("enable_jeprof", false));
+    bool status = DB::JeprofControl::instance().jeprofInitialize(config().getBool("enable_jeprof", false), config().getBool("use_mmap_directly", true));
     LOG_INFO(&logger(), "jeprof status: {}", status);
 
     if (status)

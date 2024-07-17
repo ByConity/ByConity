@@ -17,9 +17,11 @@ static const String catalog_delim = "$$";
 
 String getCurrentTenantId()
 {
-    String empty_result;
     if (!CurrentThread::isInitialized())
-        return empty_result;
+        return {};
+    auto &status = CurrentThread::get();
+    if (!status.isEnableTenant())
+        return {};
     auto context = CurrentThread::get().getQueryContext();
     if (context)
     {
@@ -33,9 +35,8 @@ String getCurrentTenantId()
 
 String getCurrentCatalog()
 {
-    String empty_result;
     if (!CurrentThread::isInitialized())
-        return empty_result;
+        return {};
     auto context = CurrentThread::get().getQueryContext();
     if (context)
     {
@@ -44,10 +45,10 @@ String getCurrentCatalog()
         else if (!context->getSettings().default_catalog.toString().empty())
             return context->getSettings().default_catalog.toString();
     }
-    return empty_result;
+    return {};
 }
 
-static String internal_databases[]
+static constexpr std::string_view internal_databases[]
     = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::INFORMATION_SCHEMA, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, DatabaseCatalog::TEMPORARY_DATABASE, CNCH_SYSTEM_LOG_DB_NAME, "default"};
 
 static bool isInternalDatabaseName(const String & database_name)
@@ -184,9 +185,9 @@ String formatTenantEntityName(const String & name)
     return formatTenantUserNameImpl(name, '.');
 }
 
-bool isTenantMatchedEntityName(const String & tenant_entity_name)
+bool isTenantMatchedEntityName(const String & tenant_entity_name, const String & tenant_id_arg)
 {
-    auto tenant_id = getCurrentTenantId();
+    const String & tenant_id = tenant_id_arg.empty() ? getCurrentTenantId() : tenant_id_arg;
     if (!tenant_id.empty())
     {
         auto size = tenant_id.size();
@@ -198,9 +199,9 @@ bool isTenantMatchedEntityName(const String & tenant_entity_name)
     return true;
 }
 
-String getOriginalEntityName(const String & tenant_entity_name)
+String getOriginalEntityName(const String & tenant_entity_name, const String & tenant_id_arg)
 {
-    auto tenant_id = getCurrentTenantId();
+    const String & tenant_id = tenant_id_arg.empty() ? getCurrentTenantId() : tenant_id_arg;
     if (!tenant_id.empty()) {
         auto size = tenant_id.size();
         if (tenant_entity_name.size() > size + 1 && tenant_entity_name[size] == '.'
@@ -267,4 +268,19 @@ std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDataba
         return {std::nullopt, {database_name}};
     return {{database_name.substr(0, pos)}, {database_name.substr(pos + catalog_delim.size())}};
 }
+
+DisableTenantGuard::DisableTenantGuard()
+{
+    if(!CurrentThread::isInitialized())
+        return;
+    CurrentThread::get().disableTenant();
+}
+
+DisableTenantGuard::~DisableTenantGuard()
+{
+    if(!CurrentThread::isInitialized())
+        return;
+    CurrentThread::get().enableTenant();
+}
+
 }

@@ -279,7 +279,7 @@ void PatternPrinter::visitTypeOfPattern(const TypeOfPattern & pattern)
 void PatternPrinter::visitCapturePattern(const CapturePattern & pattern)
 {
     visitPrevious(pattern);
-    appendLine("capture " + pattern.name + " as: " + pattern.capture.desc);
+    appendLine("capture " + pattern.name + " as: " + String{pattern.capture});
 }
 
 void PatternPrinter::visitFilterPattern(const FilterPattern & pattern)

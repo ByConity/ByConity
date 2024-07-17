@@ -1,0 +1,86 @@
+3
+1
+0
+2
+0
+2
+0
+0
+2
+2
+0
+1	1
+2	1
+3	1
+3
+optimized:
+Projection
+└─ ReadStorageRowCount
+optimized:
+Projection
+└─ ReadStorageRowCount
+optimized:
+Projection
+└─ ReadStorageRowCount
+optimized:
+Projection
+└─ ReadStorageRowCount
+optimized:
+Projection
+└─ ReadStorageRowCount
+optimized:
+Projection
+└─ Filter
+   └─ ReadStorageRowCount
+optimized:
+Projection
+└─ Union
+   ├─ ReadStorageRowCount
+   └─ ReadStorageRowCount
+optimized:
+Projection
+└─ ReadStorageRowCount
+non-optimized:
+Projection
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         └─ Filter
+            └─ TableScan test.test46006
+non-optimized:
+Projection
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         └─ Filter
+            └─ TableScan test.test46006
+non-optimized:
+Projection
+└─ Gather Exchange
+   └─ MergingAggregated
+      └─ Repartition Exchange
+         └─ Aggregating
+            └─ TableScan test.test46006
+non-optimized:
+Projection
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         └─ Left Join
+            ├─ TableScan test.test46006
+            └─ Broadcast Exchange
+               └─ TableScan test.test46006
+Projection
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         └─ Filter
+            └─ Projection
+               └─ TableScan test.test46006
+Projection
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         └─ Filter
+            └─ Projection
+               └─ TableScan test.test46006

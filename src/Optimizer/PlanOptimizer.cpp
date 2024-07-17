@@ -62,12 +62,16 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // rules for normalize plan (DO NOT change !!!)
         std::make_shared<HintsPropagator>(),
         std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::sumIfToCountIf(), "SumIfToCountIf"),
+
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
 
         // rules for normalize Union/Except/Intersect
         std::make_shared<IterativeRewriter>(Rules::mergeSetRules(), "MergeSetNode"),
+
+        std::make_shared<IterativeRewriter>(Rules::extractBitmapImplicitFilterRules(), "ExtractBitmapImplicitFilter"),
 
         std::make_shared<BitmapIndexSplitter>(),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
@@ -108,6 +112,8 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<IterativeRewriter>(Rules::createTopNFilteringRules(), "createTopNFiltering"),
         std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "pushDownTopNFiltering"),
 
+        std::make_shared<OptimizeTrivialCount>(),
+
         // add exchange
         std::make_shared<CascadesOptimizer>(false),
 
@@ -118,7 +124,6 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // use property
         std::make_shared<SortingOrderedSource>(),
 
-        std::make_shared<OptimizeTrivialCount>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
@@ -141,6 +146,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<HintsPropagator>(),
         std::make_shared<ColumnPruning>(),
         std::make_shared<UnifyNullableType>(),
+
+        std::make_shared<IterativeRewriter>(Rules::sumIfToCountIf(), "SumIfToCountIf"),
 
         // remove subquery rely on specific pattern
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
@@ -172,6 +179,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<RemoveUnCorrelatedQuantifiedComparisonSubquery>(),
         std::make_shared<RemoveCorrelatedQuantifiedComparisonSubquery>(),
 
+        std::make_shared<IterativeRewriter>(Rules::extractBitmapImplicitFilterRules(), "ExtractBitmapImplicitFilter"),
+
         std::make_shared<BitmapIndexSplitter>(),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::pushDownBitmapProjection(), "PushDownBitMapProjection"),
@@ -190,7 +199,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<PredicatePushdown>(true),
 
-        std::make_shared<IterativeRewriter>(Rules::crossJoinToUnion(), "CrossJoinToUnion"),        
+        std::make_shared<IterativeRewriter>(Rules::crossJoinToUnion(), "CrossJoinToUnion"),
 
         // predicate push down may convert outer-join to inner-join, make sure data type is correct.
         std::make_shared<WindowToSortPruning>(),
@@ -258,6 +267,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::createTopNFilteringRules(), "createTopNFiltering"),
         std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "pushDownTopNFiltering"),
 
+        std::make_shared<OptimizeTrivialCount>(),
+
         // Cost-based optimizer
         std::make_shared<CascadesOptimizer>(),
 
@@ -292,7 +303,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // TODO cost-based projection push down
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
-        // column pruned by add extra projection, DO NOT ADD RemoveRedundant rule after this rule !!!        
+        // column pruned by add extra projection, DO NOT ADD RemoveRedundant rule after this rule !!!
         std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */

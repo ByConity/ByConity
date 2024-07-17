@@ -40,7 +40,7 @@ using ArrayPairs = Vector<Pairs>;
 using EventIdType = UInt16;
 using TargetValueType = Float64;
 
-struct AnalysisResult
+struct ContribAnalysisResult
 {
     UInt64 total_click{};
     UInt64 valid_click{};
@@ -57,7 +57,7 @@ struct AnalysisResult
     Float64 correlation{};
     ArrayPairs features{};
 
-    AnalysisResult() 
+    ContribAnalysisResult() 
     {
         values.resize(5); 
         contributions.resize(5); 
@@ -79,11 +79,11 @@ struct TouchEventHash {
     }
 };
 template <typename AttrType>
-using ResultMap = std::unordered_map<TouchEvent<AttrType>, AnalysisResult, TouchEventHash<AttrType>>;
+using ContribResultMap = std::unordered_map<TouchEvent<AttrType>, ContribAnalysisResult, TouchEventHash<AttrType>>;
 
 
 template <typename AttrType>
-void mergeResultMap(ResultMap<AttrType> & results, const ResultMap<AttrType> & others) 
+void mergeContribResultMap(ContribResultMap<AttrType> & results, const ContribResultMap<AttrType> & others) 
 {
     bool has_valid = std::any_of(others.begin(), others.end(), [](const auto& item) {
         return item.second.valid_click > 0;
@@ -111,7 +111,7 @@ void mergeResultMap(ResultMap<AttrType> & results, const ResultMap<AttrType> & o
 template <typename AttrType>
 struct AggregateFunctionAttributionCorrelationData
 {
-    ResultMap<AttrType> results{};
+    ContribResultMap<AttrType> results{};
 
     template <typename Type>
     void serializeVector(const Vector<Type> & vector, WriteBuffer &buf) const
@@ -157,14 +157,14 @@ struct AggregateFunctionAttributionCorrelationData
         }
     }
 
-    void add(ResultMap<AttrType> & add_results, Arena *)
+    void add(ContribResultMap<AttrType> & add_results, Arena *)
     {
-        mergeResultMap(results, add_results);
+        mergeContribResultMap(results, add_results);
     }
 
     void merge(const AggregateFunctionAttributionCorrelationData &other, Arena *)
     {
-        mergeResultMap(results, other.results);
+        mergeContribResultMap(results, other.results);
     }
 
     void serialize(WriteBuffer &buf) const 
@@ -188,13 +188,13 @@ struct AggregateFunctionAttributionCorrelationData
     {
         size_t size;
         readBinary(size, buf);
-        ResultMap<AttrType>().swap(results);
+        ContribResultMap<AttrType>().swap(results);
 
-        ResultMap<AttrType> result_map;
+        ContribResultMap<AttrType> result_map;
         TouchEvent<AttrType> touch_event;
         for (size_t i = 0; i < size; i++) 
         {
-            AnalysisResult result;
+            ContribAnalysisResult result;
             readBinary(touch_event.first, buf);
             deserializeVector(touch_event.second, buf);
 
@@ -207,7 +207,7 @@ struct AggregateFunctionAttributionCorrelationData
 
             result_map[touch_event] = std::move(result);
         }
-        mergeResultMap(results, result_map);
+        mergeContribResultMap(results, result_map);
     }
 
     template <template <typename> class Comparator>
@@ -339,7 +339,7 @@ private:
 public:
 
     using TouchEvent = TouchEvent<AttrType>;
-    using ResultMap = ResultMap<AttrType>;
+    using ContribResultMap = ContribResultMap<AttrType>;
 
     AggregateFunctionAttributionCorrelation(
             UInt64 N_, bool need_others_,
@@ -398,7 +398,7 @@ public:
 
     void add(AggregateDataPtr place, const IColumn** columns, size_t row_num, Arena *arena) const override
     {
-        ResultMap results;
+        ContribResultMap results;
 
         const ColumnArray* tuple_array = typeid_cast<const ColumnArray *>(columns[0]);
         const auto& field_col = static_cast<const Field &>(tuple_array->operator[](row_num));
@@ -435,9 +435,9 @@ public:
         this->data(place).deserialize(buf, arena);
     }
 
-    void getTopByValue(ResultMap &results) const
+    void getTopByValue(ContribResultMap &results) const
     {
-        std::vector<std::pair<TouchEvent, AnalysisResult>> result(results.begin(), results.end());
+        std::vector<std::pair<TouchEvent, ContribAnalysisResult>> result(results.begin(), results.end());
         auto cmp = [](const auto& lhs, const auto& rhs) {
             for (size_t i = 0; i < 5; ++i)
             {
@@ -448,14 +448,14 @@ public:
         };
         std::partial_sort(result.begin(), result.begin() + std::min(N, result.size()), result.end(), cmp);
         result.resize(std::min(N, result.size()));
-        ResultMap new_results;
+        ContribResultMap new_results;
         std::move(result.begin(), result.end(), std::inserter(new_results, new_results.end()));
         results = new_results;
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * ) const override
     {
-        ResultMap & results = this->data(place).results;
+        ContribResultMap & results = this->data(place).results;
 
         std::vector<TargetValueType> total_values(5);
         for (size_t i = 0; i < total_values.size(); ++i)
@@ -468,7 +468,7 @@ public:
 
         for (auto & item : results)
         {
-            AnalysisResult & result = item.second;
+            ContribAnalysisResult & result = item.second;
             result.contributions.resize(result.values.size());
 
             for (size_t i = 0; i < total_values.size(); i++)
@@ -554,7 +554,7 @@ public:
         }
     }
 
-    void insertResultIntoColumn(IColumn &to, const ResultMap& results) const
+    void insertResultIntoColumn(IColumn &to, const ContribResultMap& results) const
     {
         ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
