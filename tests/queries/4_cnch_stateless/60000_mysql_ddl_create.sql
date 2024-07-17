@@ -22,7 +22,7 @@ hot_partition_count = 10
 BLOCK_SIZE=4096
 RT_ENGINE='COLUMNSTORE'
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDateTime(val1) + 1
+TTL toDateTime(val1) + INTERVAL 1 DAY
 COMMENT 'a';
 
 CREATE TABLE mysql_create_ddl2
@@ -88,34 +88,34 @@ DROP TABLE mysql_create_ddl3;
 DROP TABLE mysql_create_ddl4;
 DROP TABLE mysql_create_ddl5;
 
--- CREATE TABLE test_create_table_unique1
--- (
---     `int_col_1` UInt64 NOT NULL,
---     `int_col_2` Nullable(UInt64),
---     `int_col_3` LowCardinality(Int8),
---     `int_col_4` boolean,
---     `int_col_5` tinyint,
---     `int_col_6` bigint,
---     `str_col_1` String NOT NULL,
---     `str_col_2` varchar,
---     `float_col_1` Float64,
---     `float_col_2` decimal(3, 2),
---     `date_col_1` Date32,
---     `date_col_2` DateTime('Asia/Istanbul'),
---     `enum_col_1` Enum('a', 'b', 'c', 'd'),
---     `map_col_1` Map(String, String) NOT NULL,
---     `map_col_2` Map(String, UInt64) NOT NULL,
---     CLUSTERED KEY(int_col_1),
---     PRIMARY KEY(int_col_1, str_col_1)
--- )
--- ENGINE = 'XUANWU'
--- PARTITION BY VALUE((int_col_1, date_col_1))
--- DISTRIBUTED BY HASH(int_col_1)
--- STORAGE_POLICY = 'MIXED'
--- hot_partition_count = 10
--- BLOCK_SIZE = 4096
--- TABLE_PROPERTIES = '{"format":"columnstore"}'
--- TTL toDate(date_col_1) + 30; -- { serverError 538 }
+CREATE TABLE test_create_table_unique1
+(
+    `int_col_1` UInt64 NOT NULL,
+    `int_col_2` Nullable(UInt64),
+    `int_col_3` LowCardinality(Int8),
+    `int_col_4` boolean,
+    `int_col_5` tinyint,
+    `int_col_6` bigint,
+    `str_col_1` String NOT NULL,
+    `str_col_2` varchar,
+    `float_col_1` Float64,
+    `float_col_2` decimal(3, 2),
+    `date_col_1` Date32,
+    `date_col_2` DateTime('Asia/Istanbul'),
+    `enum_col_1` Enum('a', 'b', 'c', 'd'),
+    `map_col_1` Map(String, String) NOT NULL,
+    `map_col_2` Map(String, UInt64) NOT NULL,
+    CLUSTERED KEY(int_col_1),
+    PRIMARY KEY(int_col_1, str_col_1)
+)
+ENGINE = 'XUANWU'
+PARTITION BY VALUE((int_col_1, date_col_1))
+DISTRIBUTED BY HASH(int_col_1)
+STORAGE_POLICY = 'MIXED'
+hot_partition_count = 10
+BLOCK_SIZE = 4096
+TABLE_PROPERTIES = '{"format":"columnstore"}'
+TTL toDate(date_col_1) + INTERVAL 30 DAY;
 
 CREATE TABLE test_create_table_unique2
 (
@@ -142,7 +142,7 @@ STORAGE_POLICY = 'MIXED'
 hot_partition_count = 10
 BLOCK_SIZE = 4096
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDate(date_col_1) + 30;
+TTL toDate(date_col_1) + INTERVAL 30 DAY;
 
 CREATE TABLE mysql_create_ddl7
 (
@@ -158,7 +158,7 @@ hot_partition_count = 10
 BLOCK_SIZE=4096
 RT_ENGINE='COLUMNSTORE'
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDateTime(val1) + 1
+TTL toDateTime(val1) + INTERVAL 1 DAY
 COMMENT 'a';
 
 DROP TABLE IF EXISTS record_60000;

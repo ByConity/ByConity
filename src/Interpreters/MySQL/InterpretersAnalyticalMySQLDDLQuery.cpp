@@ -453,6 +453,39 @@ void validateAlterColumnType(const AlterCommand & command, const StorageInMemory
 
 }
 
+void validateTTLExpression(const ASTPtr expression)
+{
+    const auto * ttl = expression->as<ASTExpressionList>();
+    if (!ttl)
+        return;
+
+    for (const auto & child : ttl->children)
+    {
+        const auto * elem = child->as<ASTTTLElement>();
+        if (!elem)
+            continue;
+
+        const auto * func = elem->ttl()->as<ASTFunction>();
+        if (!func || !func->arguments || func->arguments->children.size() != 2)
+            continue;
+
+        if (func->name != "plus" && func->name != "minus")
+            continue;
+
+        const auto * to_date = func->arguments->children[0]->as<ASTFunction>();
+        const auto * number_literal = func->arguments->children[1]->as<ASTLiteral>();
+
+        if (!to_date || !number_literal)
+            continue;
+
+        if (to_date->name != "toDate" && to_date->name != "toDateTime")
+            continue;
+
+        throw Exception("TTL expression must not include toDate()/toDateTime() +/- numeric literal," \
+        " please use +/- INTERVAL xxx DAY or proper functions instead. eg: addDate", ErrorCodes::MYSQL_SYNTAX_ERROR);
+    }
+}
+
 }
 
 void InterpreterAlterAnalyticalMySQLImpl::validate(const TQuery & query, ContextPtr context)
@@ -534,6 +567,12 @@ void InterpreterCreateAnalyticMySQLImpl::validate(const InterpreterCreateAnalyti
             throw Exception("This is Clickhouse syntax for CLUSTER BY, please follow mysql dialect: DISTRIBUTED BY", ErrorCodes::MYSQL_SYNTAX_ERROR);
         if (mysql_storage->life_cycle)
             throw Exception("LIFE CYCLE is not supported yet, please use TTL as an alternative", ErrorCodes::MYSQL_SYNTAX_ERROR);
+        if (mysql_storage->ttl_table)
+        {
+            /// Throw exception for expression like toDate()/toDateTime +/- number
+            validateTTLExpression(mysql_storage->ttl_table->ptr());
+        }
+
 
         if (mysql_storage->engine)
         {

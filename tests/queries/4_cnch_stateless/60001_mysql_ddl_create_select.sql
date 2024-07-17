@@ -20,7 +20,7 @@ hot_partition_count = 10
 BLOCK_SIZE=4096
 RT_ENGINE='COLUMNSTORE'
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDateTime(val1) + 1
+TTL toDateTime(val1) + INTERVAL 1 DAY
 COMMENT 'a';
 
 CREATE TABLE mysql_create_select_ddl2 ENGINE=CnchMergeTree() ORDER BY id AS SELECT * FROM mysql_create_select_ddl1;
