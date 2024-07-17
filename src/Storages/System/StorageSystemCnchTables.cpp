@@ -26,12 +26,12 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <Interpreters/Context.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/System/StorageSystemCnchTables.h>
 #include <Storages/System/CollectWhereClausePredicate.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Common/Status.h>
 #include <common/logger_useful.h>
-// #include <Parsers/ASTClusterByElement.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 
@@ -66,6 +66,7 @@ StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
             {"partition_key", std::make_shared<DataTypeString>()},
             {"sorting_key", std::make_shared<DataTypeString>()},
             {"primary_key", std::make_shared<DataTypeString>()},
+            {"unique_key", std::make_shared<DataTypeString>()},
             {"sampling_key", std::make_shared<DataTypeString>()},
             {"cluster_key", std::make_shared<DataTypeString>()},
             {"split_number", std::make_shared<DataTypeInt64>()},
@@ -81,18 +82,19 @@ static std::unordered_set<String> key_columns =
     "partition_key",
     "sorting_key",
     "primary_key",
+    "unique_key",
     "sampling_key",
     "cluster_key",
     "split_number",
-    "with_range"
+    "with_range",
+    "engine" /// extract engine from AST
 };
 
 static std::unordered_set<std::string> columns_require_storage =
 {
     "dependencies_database",
     "dependencies_table",
-    "table_definition_hash",
-    "engine"
+    "table_definition_hash"
 };
 
 static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromWhere(const SelectQueryInfo & query_info, const ContextPtr & context)
@@ -244,7 +246,7 @@ Pipe StorageSystemCnchTables::read(
             else
             {
                 // Will skip database of other tenants and default user (without tenantid prefix)
-                if (non_stripped_db_name.find(".") != std::string::npos)
+                if (non_stripped_db_name.find('.') != std::string::npos)
                     continue;
 
                 if (!DatabaseCatalog::isDefaultVisibleSystemDatabase(non_stripped_db_name))
@@ -370,11 +372,12 @@ Pipe StorageSystemCnchTables::read(
         }
 
         if (columns_mask[src_index++])
-            res_columns[col_num++]->insert(table_model.vw_name().size() != 0); // is_preallocated should be 1 when vw_name exists
+            res_columns[col_num++]->insert(!table_model.vw_name().empty()); // is_preallocated should be 1 when vw_name exists
 
         if (columns_mask[src_index++])
             res_columns[col_num++]->insert(Status::isDetached(table_model.status())) ;
 
+        String engine;
         if (require_key_columns)
         {
             const char * begin = table_model.definition().data();
@@ -382,6 +385,7 @@ Pipe StorageSystemCnchTables::read(
             ParserQuery parser(end);
             IAST * ast_partition_by = nullptr;
             IAST * ast_primary_key = nullptr;
+            IAST * ast_unique_key = nullptr;
             IAST * ast_order_by = nullptr;
             IAST * ast_sample_by = nullptr;
             IAST * ast_cluster_by = nullptr;
@@ -402,9 +406,11 @@ Pipe StorageSystemCnchTables::read(
                 const auto & ast_create_query = ast->as<ASTCreateQuery &>();
                 const ASTStorage * ast_storage = ast_create_query.storage;
                 if (ast_storage) {
+                    engine = queryToString(*ast_storage->engine);
                     ast_partition_by = ast_storage->partition_by;
                     ast_order_by = ast_storage->order_by;
                     ast_primary_key = ast_storage->primary_key;
+                    ast_unique_key = ast_storage->unique_key;
                     ast_sample_by = ast_storage->sample_by;
                     ast_cluster_by = ast_storage->cluster_by;
                 }
@@ -420,11 +426,14 @@ Pipe StorageSystemCnchTables::read(
                 ast_primary_key ? (res_columns[col_num++]->insert(queryToString(*ast_primary_key))) : (res_columns[col_num++]->insertDefault());
 
             if (columns_mask[src_index++])
+                ast_unique_key ? (res_columns[col_num++]->insert(queryToString(*ast_unique_key))) : (res_columns[col_num++]->insertDefault());
+
+            if (columns_mask[src_index++])
                 ast_sample_by ? (res_columns[col_num++]->insert(queryToString(*ast_sample_by))) : (res_columns[col_num++]->insertDefault());
 
             if(ast_cluster_by)
             {
-                auto cluster_by = ast_cluster_by->as<ASTClusterByElement>();
+                auto * cluster_by = ast_cluster_by->as<ASTClusterByElement>();
                 if (columns_mask[src_index++])
                     res_columns[col_num++]->insert(queryToString(*ast_cluster_by));
                 if (columns_mask[src_index++])
@@ -455,10 +464,7 @@ Pipe StorageSystemCnchTables::read(
 
         if (columns_mask[src_index++])
         {
-            if (storage)
-                res_columns[col_num++]->insert(storage->getName());
-            else
-                res_columns[col_num++]->insertDefault();
+            res_columns[col_num++]->insert(engine);
         }
     }
 
