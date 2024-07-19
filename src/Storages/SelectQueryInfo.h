@@ -255,6 +255,8 @@ struct SelectQueryInfo
         return select_query;
     }
 
+    void appendPartitonFilters(ASTs conjuncts);
+
     ASTSelectQuery * getSelectQuery()
     {
         return const_cast<ASTSelectQuery *>((const_cast<const SelectQueryInfo *>(this))->getSelectQuery());

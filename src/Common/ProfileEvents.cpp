@@ -429,7 +429,12 @@
     M(DiskCacheDeviceReadIOErrors, "Total errors of disk cache device read io") \
     M(DiskCacheDeviceWriteIOLatency, "Latency of disk cache device write io") \
     M(DiskCacheDeviceReadIOLatency, "Latency of disk cache device read io") \
-    \
+\
+    M(ParquetFileOpened, "Number of parquet file read") \
+    M(ParquetReadRows, "Number of rows read by parquet native reader") \
+    M(ParquetPrewhereSkippedPageRows, "Number of rows skipped by page filter") \
+    M(ParquetPrewhereSkippedRows, "Number of rows skipped by parquet prewhere") \
+\
     M(CnchTxnAborted, "Total number of aborted transactions (excludes preempting transactions)") \
     M(CnchTxnCommitted, "Total number of committed transactions") \
     M(CnchTxnExpired, "Total number of expired transactions") \

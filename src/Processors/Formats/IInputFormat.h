@@ -23,7 +23,7 @@
 
 #include <Processors/ISource.h>
 #include "Interpreters/Context_fwd.h"
-
+#include <Storages/IStorage.h>
 #include <memory>
 
 
@@ -104,6 +104,9 @@ public:
     void setCurrentUnitNumber(size_t current_unit_number_) { current_unit_number = current_unit_number_; }
 
     void addBuffer(std::unique_ptr<ReadBuffer> buffer) { owned_buffers.emplace_back(std::move(buffer)); }
+
+    virtual IStorage::ColumnSizeByName getColumnSizes() { return {}; }
+    virtual bool supportsPrewhere() const { return false; }
 
 protected:
     ColumnMappingPtr column_mapping{};

@@ -260,41 +260,16 @@ enum PreloadLevelSettings : UInt64
       0) \
 \
     M(Bool, optimize_move_to_prewhere, true, "Allows disabling WHERE to PREWHERE optimization in SELECT queries from MergeTree.", 0) \
-    M(Bool, \
-      optimize_move_to_prewhere_if_final, \
-      false, \
-      "If query has `FINAL`, the optimization `move_to_prewhere` is not always correct and it is enabled only if both settings " \
-      "`optimize_move_to_prewhere` and `optimize_move_to_prewhere_if_final` are turned on", \
-      0) \
-\
-    M(UInt64, \
-      replication_alter_partitions_sync, \
-      1, \
-      "Wait for actions to manipulate the partitions. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", \
-      0) \
-    M(UInt64, \
-      replication_alter_columns_timeout, \
-      60, \
-      "Wait for actions to change the table structure within the specified number of seconds. 0 - wait unlimited time.", \
-      0) \
-\
-    M(LoadBalancing, \
-      load_balancing, \
-      LoadBalancing::RANDOM, \
-      "Which replicas (among healthy replicas) to preferably send a query to (on the first attempt) for distributed processing.", \
-      0) \
-    M(UInt64, \
-      load_balancing_first_offset, \
-      0, \
-      "Which replica to preferably send a query when FIRST_OR_RANDOM load balancing strategy is used.", \
-      0) \
-\
-    M(TotalsMode, \
-      totals_mode, \
-      TotalsMode::AFTER_HAVING_EXCLUSIVE, \
-      "How to calculate TOTALS when HAVING is present, as well as when max_rows_to_group_by and group_by_overflow_mode = ‘any’ are " \
-      "present.", \
-      IMPORTANT) \
+    M(Bool, optimize_move_to_prewhere_if_final, false, "If query has `FINAL`, the optimization `move_to_prewhere` is not always correct and it is enabled only if both settings `optimize_move_to_prewhere` and `optimize_move_to_prewhere_if_final` are turned on", 0) \
+    \
+    M(UInt64, replication_alter_partitions_sync, 1, "Wait for actions to manipulate the partitions. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(UInt64, replication_alter_columns_timeout, 60, "Wait for actions to change the table structure within the specified number of seconds. 0 - wait unlimited time.", 0) \
+    \
+    M(LoadBalancing, load_balancing, LoadBalancing::RANDOM, "Which replicas (among healthy replicas) to preferably send a query to (on the first attempt) for distributed processing.", 0) \
+    M(UInt64, load_balancing_first_offset, 0, "Which replica to preferably send a query when FIRST_OR_RANDOM load balancing strategy is used.", 0) \
+    M(UInt64, load_balancing_offset, 0, "Offset for load balancing priority calc.", 0) \
+    \
+    M(TotalsMode, totals_mode, TotalsMode::AFTER_HAVING_EXCLUSIVE, "How to calculate TOTALS when HAVING is present, as well as when max_rows_to_group_by and group_by_overflow_mode = ‘any’ are present.", IMPORTANT) \
     M(Float, totals_auto_threshold, 0.5, "The threshold for totals_mode = 'auto'.", 0) \
     M(Bool, allow_suspicious_low_cardinality_types, true, "In CREATE TABLE statement allows specifying LowCardinality modifier for types of small fixed size (8 or less). Enabling this may increase merge times and memory consumption.", 0) \
     M(Bool, allow_suspicious_fixed_string_types, false, "In CREATE TABLE statement allows creating columns of type FixedString(n) with n > 256. FixedString with length >= 256 is suspicious and most likely indicates misusage", 0) \
@@ -1177,8 +1152,10 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, query_plan_filter_push_down, true, "Allow to push down filter by predicate query plan step", 0) \
     M(Bool, enable_partition_filter_push_down, false, "Allow to push down partition filter to query info", 0) \
+    M(Bool, external_enable_partition_filter_push_down, true, "Allow to push down partition filter to query info for external table. Consider to merge into enable_partition_filter_push_down when mergetree bug is fixed", 0) \
     M(Bool, remove_partition_filter_on_worker, true, "Remove partition filter before worker execution, since partition pruning has been done on the server. This temp fix is used for not selecting partition key as prewhere", 0) \
     M(Bool, enable_optimizer_early_prewhere_push_down, false, "Allow to push down prewhere in the optimizer phase", 0) \
+    M(HiveMoveToPrewhereMethod, hive_move_to_prewhere_method, HiveMoveToPrewhereMethod::COLUMN_SIZE, "Move WHERE to PREWHERE based on which method. Used in hive external table", 0) \
     M(UInt64, regexp_max_matches_per_row, 1000, "Max matches of any single regexp per row, used to safeguard 'extractAllGroupsHorizontal' against consuming too much memory with greedy RE.", 0) \
     \
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
@@ -1601,6 +1578,9 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
     M(Bool, extract_bitmap_implicit_filter, false, "Whether to extract implicit filter for bitmap functions, e.g. for bitmapCount('1 | 2 & 3')(a, b), extract 'a in (1, 2, 3)'", 0) \
     M(Bool, enable_add_local_exchange, false, "Whether to add local exchange", 0) \
+    M(Bool, enable_ab_test, false, "Whether to open ab test for settings, If true, the settings for some queries are set in the ab_test_profile profile.", 0) \
+    M(Float, ab_test_traffic_factor, 0, "Proportion of queries that perform ab test, meaningful between 0 and 1", 0) \
+    M(String, ab_test_profile, "default", "Profile name for ab test", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
     M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \
@@ -1843,7 +1823,6 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
-    M(MaxThreads, max_download_threads, 4, "The maximum number of threads to download data (e.g. for URL engine).", 0) \
     /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(String, disk_shuffle_files_codec, "LZ4", "Set compression codec for disk shuffle files. I.e. LZ4, NONE.", 0) \
@@ -1959,22 +1938,25 @@ enum PreloadLevelSettings : UInt64
       "Maximum width of value to display in Pretty formats. If greater - it will be cut.", \
       0) \
     M(Bool, output_format_pretty_color, true, "Use ANSI escape sequences to paint colors in Pretty formats", 0) \
-    M(String, \
-      output_format_pretty_grid_charset, \
-      "UTF-8", \
-      "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", \
-      0) \
+    M(String, output_format_pretty_grid_charset, "UTF-8", "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", 0) \
+    M(UInt64, max_download_threads, 4, "The maximum number of threads to download data (Actually I should put it in common settings instead of format settings).", 0) \
+    M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
+    M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
     M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
     M(Bool, output_format_parquet_string_as_string, false, "Use Parquet String type instead of Binary for String columns.", 0) \
     M(Bool, output_format_parquet_fixed_string_as_fixed_byte_array, true, "Use Parquet FIXED_LENGTH_BYTE_ARRAY type instead of Binary for FixedString columns.", 0) \
+    M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
+    M(UInt64, input_format_parquet_min_bytes_for_seek, 8192, "Min bytes for seek when reading parquet file", 0) \
+    M(Bool, input_format_parquet_filter_push_down, true, "When reading Parquet files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
+    M(Bool, input_format_parquet_use_footer_cache, false, "Whether to use footer cache, cache footer data in memory", 0) \
+    M(Bool, input_format_parquet_use_native_reader, false, "When reading Parquet files, to use native reader instead of arrow reader.", 0) \
+    M(UInt64, input_format_parquet_max_block_size, 8192, "Max block size for parquet reader.", 0) \
+    M(Bool, input_format_parquet_import_nested, false, "Allow to insert array of structs into Nested table in Parquet input format.", 0) \
     M(Bool, input_format_parquet_case_insensitive_column_matching, false, "Ignore case when matching Parquet columns with CH columns.", 0) \
     M(Bool, input_format_parquet_preserve_order, false, "Avoid reordering rows when reading from Parquet files. Usually makes it much slower.", 0) \
-    M(Bool, input_format_parquet_filter_push_down, true, "When reading Parquet files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
-    M(UInt64, input_format_parquet_max_block_size, 8192, "Max block size for parquet reader.", 0) \
-    M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
-    M(Bool, input_format_parquet_import_nested, false, "Allow to insert array of structs into Nested table in Parquet input format.", 0) \
-    M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
-    M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
+    M(Bool, input_format_parquet_coalesce_read, true, "Merge small IO ranges, See arrow::ReadRangeCache", 0) \
+    M(Bool, input_format_parquet_use_lazy_io_cache, true, "Lazy caching will trigger io requests when they are requested for the first time. See arrow::ReadRangeCache", 0) \
+    \
     M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
     M(Bool, input_format_arrow_import_nested, false, "Allow to insert array of structs into Nested table in Arrow input format.", 0) \
     M(Bool, input_format_orc_import_nested, false, "Allow to insert array of structs into Nested table in ORC input format.", 0) \

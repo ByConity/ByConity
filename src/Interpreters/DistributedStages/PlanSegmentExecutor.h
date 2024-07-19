@@ -21,6 +21,7 @@
 #include <vector>
 #include <IO/Progress.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
@@ -53,7 +54,13 @@ public:
 
     ~PlanSegmentExecutor() noexcept;
 
-    void execute();
+    struct ExecutionResult
+    {
+        AddressInfo coordinator_address;
+        RuntimeSegmentsStatus runtime_segment_status;
+        Protos::SenderMetrics sender_metrics;
+    };
+    std::optional<ExecutionResult> execute();
     BlockIO lazyExecute(bool add_output_processors = false);
 
     static void registerAllExchangeReceivers(const QueryPipeline & pipeline, UInt32 register_timeout_ms);

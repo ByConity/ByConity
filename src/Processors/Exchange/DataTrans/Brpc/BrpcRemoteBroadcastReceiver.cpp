@@ -128,7 +128,7 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
 void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 {
     Stopwatch s;
-    std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(registry_address, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY, true);
+    std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(registry_address, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY);
     Protos::RegistryService_Stub stub = Protos::RegistryService_Stub(&rpc_client->getChannel());
     brpc::Controller cntl;
     brpc::StreamOptions stream_options;
@@ -311,7 +311,7 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     Stopwatch s;
     AsyncRegisterResult res;
 
-    res.channel = RpcChannelPool::getInstance().getClient(registry_address, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY, true);
+    res.channel = RpcChannelPool::getInstance().getClient(registry_address, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY);
     res.cntl = std::make_unique<brpc::Controller>();
     res.request = std::make_unique<Protos::RegistryRequest>();
     res.response = std::make_unique<Protos::RegistryResponse>();

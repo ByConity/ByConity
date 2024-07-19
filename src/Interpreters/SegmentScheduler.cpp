@@ -23,6 +23,8 @@
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/profile/ProfileLogHub.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
+#include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <butil/endpoint.h>
 #include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
@@ -186,7 +188,7 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
     for (const auto & addr : dag_ptr->plan_send_addresses)
     {
         auto address = extractExchangeHostPort(addr);
-        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller * cntl = new brpc::Controller;
         call_ids.emplace_back(cntl->call_id());

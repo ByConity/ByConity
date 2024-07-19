@@ -7,6 +7,8 @@ namespace DB
 {
 void PartitionPredicateMatcher::visit(const ASTPtr & ast, Data & data)
 {
+    if (data.match.has_value())
+        return;
     if (data.match_names.end() != std::find(data.match_names.begin(), data.match_names.end(), ast->getColumnName()))
     {
         if (!data.match.has_value())

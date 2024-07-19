@@ -22,7 +22,7 @@ hot_partition_count = 10
 BLOCK_SIZE=4096
 RT_ENGINE='COLUMNSTORE'
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDateTime(val1) + 1
+TTL toDateTime(val1) + INTERVAL 1 DAY
 COMMENT 'a';
 
 CREATE TABLE mysql_create_ddl2
@@ -60,12 +60,13 @@ CREATE TABLE mysql_create_ddl4
 (
     `id` Int32 NULL,
     `val1` timestamp NOT NULL COMMENT '中文',
-    `val2` varchar NOT NULL DEFAULT 'a'
+    `val2` varchar NOT NULL DEFAULT 'a',
+    UNIQUE KEY(id) USING BTREE
 );
 
 CREATE TABLE mysql_create_ddl5
 (
-    `id` Int32 NOT NULL,
+    `id` Int32 NOT NULL PRIMARY KEY,
     `val1` timestamp NOT NULL COMMENT '中文',
     `val2` varchar NOT NULL DEFAULT 'a',
     constraint un1 unique(id)
@@ -88,34 +89,34 @@ DROP TABLE mysql_create_ddl3;
 DROP TABLE mysql_create_ddl4;
 DROP TABLE mysql_create_ddl5;
 
--- CREATE TABLE test_create_table_unique1
--- (
---     `int_col_1` UInt64 NOT NULL,
---     `int_col_2` Nullable(UInt64),
---     `int_col_3` LowCardinality(Int8),
---     `int_col_4` boolean,
---     `int_col_5` tinyint,
---     `int_col_6` bigint,
---     `str_col_1` String NOT NULL,
---     `str_col_2` varchar,
---     `float_col_1` Float64,
---     `float_col_2` decimal(3, 2),
---     `date_col_1` Date32,
---     `date_col_2` DateTime('Asia/Istanbul'),
---     `enum_col_1` Enum('a', 'b', 'c', 'd'),
---     `map_col_1` Map(String, String) NOT NULL,
---     `map_col_2` Map(String, UInt64) NOT NULL,
---     CLUSTERED KEY(int_col_1),
---     PRIMARY KEY(int_col_1, str_col_1)
--- )
--- ENGINE = 'XUANWU'
--- PARTITION BY VALUE((int_col_1, date_col_1))
--- DISTRIBUTED BY HASH(int_col_1)
--- STORAGE_POLICY = 'MIXED'
--- hot_partition_count = 10
--- BLOCK_SIZE = 4096
--- TABLE_PROPERTIES = '{"format":"columnstore"}'
--- TTL toDate(date_col_1) + 30; -- { serverError 538 }
+CREATE TABLE test_create_table_unique1
+(
+    `int_col_1` UInt64 NOT NULL,
+    `int_col_2` Nullable(UInt64),
+    `int_col_3` LowCardinality(Int8),
+    `int_col_4` boolean,
+    `int_col_5` tinyint,
+    `int_col_6` bigint,
+    `str_col_1` String NOT NULL,
+    `str_col_2` varchar,
+    `float_col_1` Float64,
+    `float_col_2` decimal(3, 2),
+    `date_col_1` Date32,
+    `date_col_2` DateTime('Asia/Istanbul'),
+    `enum_col_1` Enum('a', 'b', 'c', 'd'),
+    `map_col_1` Map(String, String) NOT NULL,
+    `map_col_2` Map(String, UInt64) NOT NULL,
+    CLUSTERED KEY(int_col_1),
+    PRIMARY KEY(int_col_1, str_col_1)
+)
+ENGINE = 'XUANWU'
+PARTITION BY VALUE((int_col_1, date_col_1))
+DISTRIBUTED BY HASH(int_col_1)
+STORAGE_POLICY = 'MIXED'
+hot_partition_count = 10
+BLOCK_SIZE = 4096
+TABLE_PROPERTIES = '{"format":"columnstore"}'
+TTL toDate(date_col_1) + INTERVAL 30 DAY;
 
 CREATE TABLE test_create_table_unique2
 (
@@ -142,7 +143,7 @@ STORAGE_POLICY = 'MIXED'
 hot_partition_count = 10
 BLOCK_SIZE = 4096
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDate(date_col_1) + 30;
+TTL toDate(date_col_1) + INTERVAL 30 DAY;
 
 CREATE TABLE mysql_create_ddl7
 (
@@ -158,7 +159,7 @@ hot_partition_count = 10
 BLOCK_SIZE=4096
 RT_ENGINE='COLUMNSTORE'
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDateTime(val1) + 1
+TTL toDateTime(val1) + INTERVAL 1 DAY
 COMMENT 'a';
 
 DROP TABLE IF EXISTS record_60000;
@@ -186,11 +187,47 @@ DROP TABLE IF EXISTS t2_60000;
 DROP TABLE IF EXISTS t3_60000;
 DROP TABLE IF EXISTS t4_60000;
 DROP TABLE IF EXISTS t5_60000;
+DROP TABLE IF EXISTS t6_60000;
+DROP TABLE IF EXISTS t7_60000;
+DROP TABLE IF EXISTS t8_60000;
+DROP TABLE IF EXISTS t9_60000;
 CREATE TABLE t1_60000(a VARCHAR(10)) CHARACTER SET filename;
 CREATE TABLE t2_60000(a VARCHAR(10)) COLLATE filename;
 CREATE TABLE t3_60000(a VARCHAR(10) CHARACTER SET filename);
 CREATE TABLE t4_60000(a VARCHAR(10) CHARACTER SET utf8) CHARACTER SET latin1;
 CREATE TABLE t5_60000 (a char(16)) character set cp1250 collate cp1250_czech_cs;
+
+CREATE TABLE t6_60000 (
+    id INT NOT NULL,
+    c INT NOT NULL,
+    d INT NOT NULL,
+    PRIMARY KEY (id)
+);
+CREATE TABLE t7_60000 (
+    c INT NOT NULL,
+    d INT NOT NULL,
+    PRIMARY KEY (c, d)
+);
+
+create table t8_60000 (
+	a int not null,
+	b int not null,
+	primary key (a,b),
+	constraint fk1 foreign key (a) references t6_60000(c),
+	constraint fk2 foreign key (a,b) references t6_60000 (c,d) on delete no action
+	  on update no action,
+	constraint fk3 foreign key (a,b) references t7_60000 (c,d) on update cascade,
+	constraint fk4 foreign key (a,b) references t7_60000 (c,d) on delete set default,
+	constraint fk5 foreign key (a,b) references t7_60000 (c,d) on update set null);
+
+create table t9_60000 (
+	a int not null,
+	b int not null,
+	primary key (a,b),
+	foreign key (a,b) references t7_60000 (c,d) on delete no action
+	  on update no action);
+
+
 INSERT INTO t1_60000 VALUES ('');
 SELECT a, length(a), a='', a=' ', a='  ' FROM t1_60000;
 DROP TABLE IF EXISTS t1_60000;
@@ -198,11 +235,15 @@ DROP TABLE IF EXISTS t2_60000;
 DROP TABLE IF EXISTS t3_60000;
 DROP TABLE IF EXISTS t4_60000;
 DROP TABLE IF EXISTS t5_60000;
+DROP TABLE IF EXISTS t6_60000;
+DROP TABLE IF EXISTS t7_60000;
+DROP TABLE IF EXISTS t8_60000;
+DROP TABLE IF EXISTS t9_60000;
 
 DROP TABLE IF EXISTS users_60000;
 DROP TABLE IF EXISTS users1_60000;
-CREATE TABLE `users_60000` ( `uid` bigint(20) signed NOT NULL,`update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE `users1_60000` ( `uid` bigint(20) unsigned NOT NULL,`update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT = '';
+CREATE TABLE `users_60000` ( `uid` bigint(20) signed zerofill NOT NULL,`update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 CHECKSUM = 1;
+CREATE TABLE `users1_60000` ( `uid` bigint(20) unsigned zerofill NOT NULL,`update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 CHECKSUM = 1 COMMENT = '';
 DROP TABLE IF EXISTS users_60000;
 DROP TABLE IF EXISTS users1_60000;
 

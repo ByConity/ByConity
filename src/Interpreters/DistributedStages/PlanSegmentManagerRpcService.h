@@ -78,13 +78,7 @@ public:
         }
 
     }
-    /// execute query described by plan segment
-    void executeQuery(
-        ::google::protobuf::RpcController * controller,
-        const ::DB::Protos::ExecutePlanSegmentRequest * request,
-        ::DB::Protos::ExecutePlanSegmentResponse * response,
-        ::google::protobuf::Closure * done) override;
-    
+
     /// submit query described by plan segment
     void submitPlanSegment(
         ::google::protobuf::RpcController * controller,

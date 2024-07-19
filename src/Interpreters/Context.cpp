@@ -110,6 +110,7 @@
 #include <QueryPlan/PlanCache.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <Processors/Transforms/AddingDefaultsTransform.h>
+#include <Processors/Formats/Impl/ArrowColumnCache.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <ResourceGroup/InternalResourceGroupManager.h>
 #include <ResourceGroup/VWResourceGroupManager.h>
@@ -2749,6 +2750,12 @@ void Context::dropNvmCache() const
         shared->nvm_cache->reset();
 }
 
+void Context::setFooterCache(size_t max_size_in_bytes)
+{
+    auto lock = getLock();
+    if (max_size_in_bytes)
+        ArrowFooterCache::initialize(max_size_in_bytes);
+}
 
 void Context::setUncompressedCache(size_t max_size_in_bytes)
 {

@@ -14,34 +14,14 @@ namespace DB
 
 namespace MySQLInterpreter
 {
-    // struct InterpreterDropImpl
-    // {
-    //     using TQuery = ASTDropQuery;
-
-    //     static void validate(const TQuery & query, ContextPtr context);
-
-    //     static ASTs getRewrittenQueries(
-    //         const TQuery & drop_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database);
-    // };
-
     struct InterpreterAlterAnalyticalMySQLImpl
     {
         using TQuery = ASTAlterAnalyticalMySQLQuery;
 
         static void validate(const TQuery & query, ContextPtr context);
 
-        static ASTs getRewrittenQueries(const TQuery & alter_query, ContextPtr context);
+        static ASTPtr getRewrittenQuery(const TQuery & alter_query, ContextPtr context);
     };
-
-    // struct InterpreterRenameImpl
-    // {
-    //     using TQuery = ASTRenameQuery;
-
-    //     static void validate(const TQuery & query, ContextPtr context);
-
-    //     static ASTs getRewrittenQueries(
-    //         const TQuery & rename_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database);
-    // };
 
     struct InterpreterCreateAnalyticMySQLImpl
     {
@@ -49,8 +29,7 @@ namespace MySQLInterpreter
 
         static void validate(const TQuery & query, ContextPtr context);
 
-        static ASTs getRewrittenQueries(
-            const TQuery & create_query, ContextPtr context);
+        static ASTPtr getRewrittenQuery(const TQuery & create_query, ContextPtr context);
     };
 
 template <typename InterpreterImpl>
@@ -69,13 +48,14 @@ public:
 
         LOG_DEBUG(log, "Begin to rewritte mysql query {}", queryToString(query));
         InterpreterImpl::validate(query, getContext());
-        ASTs rewritten_queries = InterpreterImpl::getRewrittenQueries(query, getContext());
+        ASTPtr rewritten_query = InterpreterImpl::getRewrittenQuery(query, getContext());
 
-        for (const auto & rewritten_query : rewritten_queries)
+        // only one rewriten query every time
+        if (rewritten_query)
         {
             LOG_DEBUG(log, "Execute rewritten mysql query {}", queryToString(rewritten_query));
             /// Set `internal` to true as we use CnchStorageCommonHelper to forward query to target server when needed
-            executeQuery("/* Rewritten MySQL DDL Query */ " + queryToString(rewritten_query), rewritten_query, getContext(), true);
+            return executeQuery("/* Rewritten MySQL DDL Query */ " + queryToString(rewritten_query), rewritten_query, getContext(), true);
         }
 
         return BlockIO{};
@@ -86,9 +66,7 @@ private:
     Poco::Logger * log;
 };
 
-// using InterpreterAnalyticalMySQLDropQuery = InterpreterAnalyticalMySQLDDLQuery<InterpreterDropImpl>;
 using InterpreterAnalyticalMySQLAlterQuery = InterpreterAnalyticalMySQLDDLQuery<InterpreterAlterAnalyticalMySQLImpl>;
-// using InterpreterAnalyticalMySQLRenameQuery = InterpreterAnalyticalMySQLDDLQuery<InterpreterRenameImpl>;
 using InterpreterAnalyticalMySQLCreateQuery = InterpreterAnalyticalMySQLDDLQuery<InterpreterCreateAnalyticMySQLImpl>;
 
 }

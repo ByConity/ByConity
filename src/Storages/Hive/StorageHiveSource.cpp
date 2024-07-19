@@ -1,9 +1,8 @@
 #include "Storages/Hive/StorageHiveSource.h"
-#include <algorithm>
-#include "Core/Names.h"
 #if USE_HIVE
 
 #include "Core/Defines.h"
+#include "Core/Names.h"
 #include "DataTypes/DataTypeString.h"
 #include "Formats/FormatFactory.h"
 #include "Interpreters/Context.h"
@@ -15,6 +14,8 @@
 #include "Processors/QueryPipeline.h"
 #include "Storages/Hive/HivePartition.h"
 #include "Processors/Sources/NullSource.h"
+#include "Processors/Transforms/FilterTransform.h"
+#include "Processors/Transforms/ExpressionTransform.h"
 
 namespace DB
 {
@@ -169,6 +170,38 @@ void StorageHiveSource::prepareReader()
     data_source = hive_file->getReader(block_info->to_read, read_params);
     pipeline->init(Pipe(data_source));
     reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
+
+    auto input_format = std::dynamic_pointer_cast<IInputFormat>(data_source);
+    if (read_params->query_info && read_params->query_info->prewhere_info
+        && input_format && !input_format->supportsPrewhere())
+    {
+        const auto & query_info = *read_params->query_info;
+        auto actions_settings = ExpressionActionsSettings::fromContext(getContext());
+        if (query_info.prewhere_info->alias_actions)
+        {
+            pipeline->addSimpleTransform([&](const Block & header) {
+                return std::make_shared<ExpressionTransform>(
+                    header, std::make_shared<ExpressionActions>(query_info.prewhere_info->alias_actions, actions_settings));
+            });
+        }
+        if (query_info.prewhere_info->row_level_filter)
+        {
+            pipeline->addSimpleTransform([&](const Block & header) {
+                return std::make_shared<FilterTransform>(
+                    header,
+                    std::make_shared<ExpressionActions>(query_info.prewhere_info->row_level_filter, actions_settings),
+                    query_info.prewhere_info->row_level_column_name,
+                    false);
+            });
+        }
+        pipeline->addSimpleTransform([&](const Block & header) {
+            return std::make_shared<FilterTransform>(
+                header,
+                std::make_shared<ExpressionActions>(query_info.prewhere_info->prewhere_actions, actions_settings),
+                query_info.prewhere_info->prewhere_column_name,
+                query_info.prewhere_info->remove_prewhere_column);
+        });
+    }
 }
 
 Chunk StorageHiveSource::generate()

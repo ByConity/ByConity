@@ -1,25 +1,27 @@
 #include "Storages/Hive/StorageCnchHive.h"
 #if USE_HIVE
 
-#include <thrift/TToString.h>
+#include <Protos/hive_models.pb.h>
 #include "CloudServices/CnchServerResource.h"
 #include "DataStreams/narrowBlockInputStreams.h"
 #include "Functions/FunctionFactory.h"
 #include "Interpreters/ClusterProxy/SelectStreamFactory.h"
 #include "Interpreters/ClusterProxy/executeQuery.h"
 #include "Interpreters/InterpreterSelectQuery.h"
+#include "Interpreters/PushFilterToStorage.h"
 #include "Interpreters/SelectQueryOptions.h"
 #include "Interpreters/evaluateConstantExpression.h"
 #include "Interpreters/trySetVirtualWarehouse.h"
 #include "MergeTreeCommon/CnchStorageCommon.h"
+#include "Optimizer/PredicateUtils.h"
+#include "Optimizer/SelectQueryInfoHelper.h"
 #include "Parsers/ASTClusterByElement.h"
 #include "Parsers/ASTCreateQuery.h"
 #include "Parsers/ASTLiteral.h"
-#include "Parsers/ASTSetQuery.h"
 #include "Parsers/ASTSelectQuery.h"
+#include "Parsers/ASTSetQuery.h"
 #include "Parsers/queryToString.h"
 #include "Processors/Sources/NullSource.h"
-#include <Protos/hive_models.pb.h>
 #include "QueryPlan/BuildQueryPipelineSettings.h"
 #include "QueryPlan/Optimizations/QueryPlanOptimizationSettings.h"
 #include "QueryPlan/ReadFromPreparedSource.h"
@@ -34,12 +36,14 @@
 #include "Storages/Hive/HiveWhereOptimizer.h"
 #include "Storages/Hive/Metastore/HiveMetastore.h"
 #include "Storages/Hive/StorageHiveSource.h"
+#include "Storages/MergeTree/MergeTreeWhereOptimizer.h"
 #include "Storages/MergeTree/PartitionPruner.h"
 #include "Storages/StorageFactory.h"
 #include "Storages/StorageInMemoryMetadata.h"
 #include "Storages/DataLakes/HudiDirectoryLister.h"
 
 #include <boost/lexical_cast.hpp>
+#include <thrift/TToString.h>
 #include "common/scope_guard_safe.h"
 
 namespace DB
@@ -332,6 +336,71 @@ void StorageCnchHive::read(
 
     if (!query_plan.isInitialized())
         throw Exception("Pipeline is not initialized", ErrorCodes::LOGICAL_ERROR);
+}
+
+ASTPtr StorageCnchHive::applyFilter(
+    ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr local_context, PlanNodeStatisticsPtr /*storage_statistics*/) const
+{
+    const auto & settings = local_context->getSettingsRef();
+    auto * select_query = query_info.getSelectQuery();
+    PushFilterToStorage push_filter_to_storage(shared_from_this(), local_context);
+    ASTs conjuncts;
+    /// Set partition_filter
+    /// this should be done before setting query.where() to avoid partition filters being chosen as prewhere
+    if (settings.external_enable_partition_filter_push_down)
+    {
+        auto [push_predicates, remain_predicates] = push_filter_to_storage.extractPartitionFilter(query_filter);
+
+        query_info.appendPartitonFilters(push_predicates);
+        conjuncts.swap(remain_predicates);
+    }
+
+    /// Set query.where()
+    // IStorage::applyFilter(PredicateUtils::combineConjuncts(conjuncts), query_info, local_context, storage_statistics);
+    select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(conjuncts));
+
+    /// Set prewhere()
+    if (supportsPrewhere() && settings.optimize_move_to_prewhere
+        && select_query->where() && !select_query->prewhere()
+        && (!select_query->final() || settings.optimize_move_to_prewhere_if_final))
+    {
+        if (HiveMoveToPrewhereMethod::ALL == settings.hive_move_to_prewhere_method)
+        {
+            select_query->setExpression(ASTSelectQuery::Expression::PREWHERE, PredicateUtils::combineConjuncts(conjuncts));
+        }
+        else if (HiveMoveToPrewhereMethod::COLUMN_SIZE == settings.hive_move_to_prewhere_method)
+        {
+            /// PREWHERE optimization: transfer some condition from WHERE to PREWHERE if enabled and viable
+            if (const auto & column_sizes_copy = getColumnSizes(); !column_sizes_copy.empty())
+            {
+                /// Extract column compressed sizes.
+                std::unordered_map<std::string, UInt64> column_compressed_sizes;
+                for (const auto & [name, sizes] : column_sizes_copy)
+                    column_compressed_sizes[name] = sizes.data_compressed;
+
+                auto current_info = buildSelectQueryInfoForQuery(query_info.query, local_context);
+                MergeTreeWhereOptimizer{
+                    current_info,
+                    local_context,
+                    std::move(column_compressed_sizes),
+                    getInMemoryMetadataPtr(),
+                    current_info.syntax_analyzer_result->requiredSourceColumns(),
+                    &Poco::Logger::get("OptimizerEarlyPrewherePushdown")};
+            }
+        }
+        else if (HiveMoveToPrewhereMethod::NEVER == settings.hive_move_to_prewhere_method)
+        {
+            // do nothing
+        }
+        else
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unimplemented move to prewhere method");
+    }
+
+    /// remove prewhere from query plan
+    if (auto prewhere = select_query->prewhere())
+        PredicateUtils::subtract(conjuncts, PredicateUtils::extractConjuncts(prewhere));
+
+    return PredicateUtils::combineConjuncts(conjuncts);
 }
 
 NamesAndTypesList StorageCnchHive::getVirtuals() const

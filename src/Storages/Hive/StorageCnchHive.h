@@ -80,6 +80,8 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+    ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const override;
+
     void setHiveMetaClient(const IMetaClientPtr & client);
     void initialize(StorageInMemoryMetadata metadata_);
 

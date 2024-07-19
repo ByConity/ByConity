@@ -29,6 +29,10 @@ namespace DB
 /// Config Example:
 ///  <brpc>
 ///      <channel_pool>
+///          <channel_pool_common_options>
+///              <rpc_channel_pool_expired_seconds>1800</rpc_channel_pool_expired_seconds>
+///              <rpc_channel_pool_check_interval_seconds>300</rpc_channel_pool_check_interval_seconds>
+///          </channel_pool_common_options>
 ///          <rpc_default>
 ///              <max_connections>8</max_connections>
 ///              <load_balancer>rr</load_balancer>

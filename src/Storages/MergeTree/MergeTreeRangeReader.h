@@ -22,6 +22,7 @@
 #pragma once
 #include <Core/Block.h>
 #include <common/logger_useful.h>
+#include "Storages/MergeTree/IMergeTreeDataPart_fwd.h"
 #include <Storages/MergeTree/MarkRange.h>
 #include <optional>
 

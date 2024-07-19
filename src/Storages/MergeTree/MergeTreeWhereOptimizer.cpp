@@ -712,7 +712,7 @@ bool MergeTreeWhereOptimizer::cannotBeMoved(const ASTPtr & ptr, bool is_final) c
         /// indexHint is a special function that it does not make sense to transfer to PREWHERE
         if ("indexHint" == function_ptr->name)
             return true;
-        
+
         // These functions can cause performance degradation
         if ("match" == function_ptr->name || "get_json_object" == function_ptr->name)
             return true;
@@ -908,7 +908,7 @@ void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryI
 
         push_filter = PredicateUtils::combineConjuncts(mapped_pushable_conjuncts);
     }
-    if (!PredicateUtils::isTruePredicate(push_filter))
+    if (push_filter && !PredicateUtils::isTruePredicate(push_filter))
     {
         if (auto * merge_tree_data = dynamic_cast<MergeTreeCloudData *>(storage.get()))
         {

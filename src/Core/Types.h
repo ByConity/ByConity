@@ -256,6 +256,9 @@ concept is_over_big_int =
     || std::is_same_v<T, Decimal128>
     || std::is_same_v<T, Decimal256>;
 
+template <class T>
+concept is_over_big_decimal = is_decimal<T> && is_over_big_int<typename T::NativeType>;
+
 template <> inline constexpr const char * TypeName<Decimal32> = "Decimal32";
 template <> inline constexpr const char * TypeName<Decimal64> = "Decimal64";
 template <> inline constexpr const char * TypeName<Decimal128> = "Decimal128";

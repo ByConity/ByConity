@@ -98,16 +98,22 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.seekable_read = settings.input_format_allow_seeks;
     format_settings.avoid_buffering = settings.input_format_arrow_avoid_buffering;
     format_settings.null_as_default = settings.input_format_null_as_default;
-    format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;
-    format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;
-    format_settings.parquet.case_insensitive_column_matching = settings.input_format_parquet_case_insensitive_column_matching;
     format_settings.parquet.row_group_size = settings.output_format_parquet_row_group_size;
-    format_settings.parquet.preserve_order = settings.input_format_parquet_preserve_order;
-    format_settings.parquet.filter_push_down = settings.input_format_parquet_filter_push_down;
-    format_settings.parquet.max_block_size = settings.input_format_parquet_max_block_size;
     format_settings.parquet.output_string_as_string = settings.output_format_parquet_string_as_string;
     format_settings.parquet.output_fixed_string_as_fixed_byte_array = settings.output_format_parquet_fixed_string_as_fixed_byte_array;
+    format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;
+    format_settings.parquet.preserve_order = settings.input_format_parquet_preserve_order;
+    format_settings.parquet.coalesce_read = settings.input_format_parquet_coalesce_read;
+    format_settings.parquet.use_lazy_io_cache = settings.input_format_parquet_use_lazy_io_cache;
     format_settings.parquet.import_nested = settings.input_format_parquet_import_nested;
+    format_settings.parquet.case_insensitive_column_matching = settings.input_format_parquet_case_insensitive_column_matching;
+    format_settings.parquet.max_block_size = settings.input_format_parquet_max_block_size;
+    // NOTE:: this is used for parallel parquet read. It's a temporary solution
+    format_settings.parquet.max_download_threads = settings.max_download_threads;
+    format_settings.parquet.min_bytes_for_seek = settings.input_format_parquet_min_bytes_for_seek;
+    format_settings.parquet.filter_push_down = settings.input_format_parquet_filter_push_down;
+    format_settings.parquet.use_footer_cache = settings.input_format_parquet_use_footer_cache;
+    format_settings.parquet.use_native_reader = settings.input_format_parquet_use_native_reader;
     format_settings.pretty.charset = settings.output_format_pretty_grid_charset.toString() == "ASCII" ? FormatSettings::Pretty::Charset::ASCII : FormatSettings::Pretty::Charset::UTF8;
     format_settings.pretty.color = settings.output_format_pretty_color;
     format_settings.pretty.max_column_pad_width = settings.output_format_pretty_max_column_pad_width;

@@ -34,7 +34,7 @@ select 'alter index';
 alter table tbx add index idx(y); -- { serverError 524 }
 alter table tbx add key idx(y); -- { serverError 524 }
 alter table tbx drop index idx; -- { serverError 524 }
--- alter table tbx add clustered key cidx(y); -- {serverError 524 }
+alter table tbx add clustered key cidx(y); -- {serverError 524 }
 -- alter table tbx drop clustered index cidx; -- {serverError 524 }
 
 -- if alter previous columns, there could be exception due to the previous alter ops not finished yet.

@@ -159,7 +159,7 @@ PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
         RuntimeFilterManager::getInstance().removeDynamicValue(plan_segment->getQueryId(), id);
 }
 
-void PlanSegmentExecutor::execute()
+std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute()
 {
     LOG_DEBUG(logger, "execute PlanSegment:\n" + plan_segment->toString());
     try
@@ -172,8 +172,8 @@ void PlanSegmentExecutor::execute()
         query_log_element->event_time = time_in_seconds(finish_time);
         query_log_element->event_time_microseconds = time_in_microseconds(finish_time);
 
-        if (options.need_send_plan_segment_status)
-            reportSuccessPlanSegmentStatus(context, plan_segment_instance->info.execution_address, final_progress, sender_metrics, plan_segment_outputs);
+        return convertSuccessPlanSegmentStatusToResult(
+            context, plan_segment_instance->info.execution_address, final_progress, sender_metrics, plan_segment_outputs);
     }
     catch (...)
     {
@@ -210,10 +210,18 @@ void PlanSegmentExecutor::execute()
                     plan_segment->getPlanSegmentId(),
                     exception_code));
         }
+        /// exception_handler will report failure plan segment status before release
         auto exception_handler = context->getPlanSegmentExHandler();
-        if (options.need_send_plan_segment_status && exception_handler && exception_handler->setException(std::current_exception()))
-            reportFailurePlanSegmentStatus(
-                context, plan_segment_instance->info.execution_address, exception_code, exception_message, std::move(final_progress), sender_metrics, plan_segment_outputs);
+        if (exception_handler && exception_handler->setException(std::current_exception()))
+            return convertFailurePlanSegmentStatusToResult(
+                context,
+                plan_segment_instance->info.execution_address,
+                exception_code,
+                exception_message,
+                std::move(final_progress),
+                sender_metrics,
+                plan_segment_outputs);
+        return {};
     }
 
     //TODO notify segment scheduler with finished or exception status.
@@ -233,8 +241,8 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
     }
     catch (Exception &)
     {
-        auto instance_id = context->getPlanSegmentInstanceId();
-        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), instance_id, true);
+        auto segment_id = plan_segment_instance->plan_segment->getPlanSegmentId();
+        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), segment_id, true);
         throw;
     }
 
@@ -305,8 +313,8 @@ void PlanSegmentExecutor::doExecute()
     catch (Exception &)
     {
         query_scope.reset();
-        auto instance_id = context->getPlanSegmentInstanceId();
-        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), instance_id, true);
+        auto segment_id = plan_segment_instance->plan_segment->getPlanSegmentId();
+        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), segment_id, true);
         throw;
     }
     context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
@@ -919,7 +927,7 @@ void PlanSegmentExecutor::sendProgress()
         {
             auto address = extractExchangeHostPort(plan_segment->getCoordinatorAddress());
             std::shared_ptr<RpcClient> rpc_client
-                = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+                = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
             Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
             brpc::Controller * cntl = new brpc::Controller;
             Protos::SendProgressRequest request;

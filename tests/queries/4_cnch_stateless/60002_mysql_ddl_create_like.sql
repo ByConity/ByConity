@@ -18,7 +18,7 @@ hot_partition_count = 10
 BLOCK_SIZE=4096
 RT_ENGINE='COLUMNSTORE'
 TABLE_PROPERTIES = '{"format":"columnstore"}'
-TTL toDateTime(val1) + 1
+TTL toDateTime(val1) + INTERVAL 1 DAY
 COMMENT 'a';
 
 CREATE TABLE mysql_create_like_ddl2 like mysql_create_like_ddl1;

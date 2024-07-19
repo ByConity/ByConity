@@ -133,6 +133,20 @@ bool memoryIsZero(const void * data, size_t size)
     return memoryIsByte(data, size, 0x0);
 }
 
+bool memoryIsByte(const void * data, size_t start, size_t end, uint8_t byte)
+{
+    size_t size = end - start;
+    if (size == 0)
+        return true;
+    const auto * ptr = reinterpret_cast<const uint8_t *>(data) + start;
+    return *ptr == byte && memcmp(ptr, ptr + 1, size - 1) == 0;
+}
+
+bool memoryIsZero(const void * data, size_t start, size_t end)
+{
+    return memoryIsByte(data, start, end, 0x0);
+}
+
 namespace ErrorCodes
 {
     extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;

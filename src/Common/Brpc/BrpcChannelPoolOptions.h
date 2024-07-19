@@ -64,9 +64,20 @@ public:
     };
     using PoolOptionsMap = std::unordered_map<std::string, BrpcChannelPoolOptions::PoolOptions>;
 
+    void setPoolCheckConfig(UInt64 rpc_channel_pool_check_interval_seconds_, UInt64 rpc_channel_pool_expired_seconds_)
+    {
+        rpc_channel_pool_check_interval_seconds = rpc_channel_pool_check_interval_seconds_;
+        rpc_channel_pool_expired_seconds = rpc_channel_pool_expired_seconds_;
+    }
+
+    void initPoolExpireTimer();
+
 private:
 
     PoolOptionsMap options_map;
+
+    UInt64 rpc_channel_pool_expired_seconds{0};
+    UInt64 rpc_channel_pool_check_interval_seconds{0};
 
 public:
 #define STR(M) #M
@@ -133,7 +144,6 @@ public:
     }
 
     const PoolOptions * getDefaultPoolOptions(std::string key);
-
 
 private:
     BrpcChannelPoolOptions() = default;

@@ -139,61 +139,6 @@ message SubmitPlanSegmentRequest {
   optional uint32 retry_id = 10;
 }
 
-message ExecutePlanSegmentRequest {
-  // version number for plan segment serialize and deserialize
-  required uint32 brpc_protocol_minor_revision = 1;
-
-  // the starting time of a distributed query
-  required int64 initial_query_start_time = 2;
-  // per query settings
-  map<string, string> settings = 3;
-  // inter-server cluster secret
-  optional string cluster_secret = 4;
-  // related to query quota mechanism
-  optional string quota = 5;
-  // OpenTelemetry
-  optional uint64 open_telemetry_trace_id_low = 6;
-  optional uint64 open_telemetry_trace_id_high = 7;
-  optional uint64 open_telemetry_span_id = 8;
-  optional string open_telemetry_tracestate = 9;
-  optional uint32 open_telemetry_trace_flags = 10;
-  // id of distributed query
-  required string query_id = 11;
-  // plan segment id
-  required uint32 plan_segment_id = 12;
-  // user
-  required string user = 13;
-  required string password = 14;
-  // coordinator
-  required string coordinator_host = 15;
-  required uint32 coordinator_port = 16;
-  required uint32 coordinator_exchange_port = 17;
-  required uint32 coordinator_exchange_status_port = 18;
-  // current
-  required string current_host = 19;
-  required uint32 current_port = 20;
-  required uint32 current_exchange_port = 21;
-  required uint32 current_exchange_status_port = 22;
-
-  // Default database.
-  optional string database = 23;
-
-  // Cnch Transaction ID
-  required uint64 txn_id = 24;
-
-  optional uint32 brpc_protocol_major_revision = 25;
-  optional uint64 primary_txn_id = 26;
-  // Opentelemetry protocol v2
-  optional TraceMeta trace_meta = 27;
-
-  optional string initial_user = 28;
-  optional bool check_session = 29;
-  optional uint32 parallel_id = 30;
-  optional uint32 source_task_index = 31;
-  optional uint32 source_task_count = 32;
-  optional uint32 retry_id = 33;
-}
-
 message ExecutePlanSegmentResponse {
   optional string message = 1;
   optional WorkerNodeResourceData worker_resource_data = 2;
@@ -252,8 +197,6 @@ message SendProgressResponse {
 }
 
 service PlanSegmentManagerService {
-
-  rpc executeQuery(ExecutePlanSegmentRequest) returns (ExecutePlanSegmentResponse);
 
   rpc submitPlanSegment(SubmitPlanSegmentRequest) returns (ExecutePlanSegmentResponse);
 

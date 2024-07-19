@@ -1179,6 +1179,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     global_context->setUncompressedCache(uncompressed_cache_size);
 
+    size_t footer_cache_size = config().getUInt64("footer_cache_size", 3221225472);
+    global_context->setFooterCache(footer_cache_size);
+
     /// Load global settings from default_profile and system_profile.
     if (global_context->getServerType() == ServerType::cnch_server)
     {

@@ -52,7 +52,7 @@ PlanSegmentProcessList::insertGroup(const PlanSegment & plan_segment, ContextMut
 
     auto & settings = query_context->getSettingsRef();
     bool bsp_mode = settings.bsp_mode;
-    auto instance_id = query_context->getPlanSegmentInstanceId();
+    UInt32 segment_id = plan_segment.getPlanSegmentId();
     auto initial_query_start_time_ms = query_context->getClientInfo().initial_query_start_time_microseconds;
     {
         Element segment_group;
@@ -84,32 +84,9 @@ PlanSegmentProcessList::insertGroup(const PlanSegment & plan_segment, ContextMut
                 }
             }
         }
-
-        if (found && bsp_mode && segment_group->coordinator_address == coordinator_address && segment_group->tryCancelInstance(instance_id, false))
-        {
-            std::unique_lock lock(mutex);
-            auto query_expiration_ts = query_context->getQueryExpirationTimeStamp();
-            if (!remove_group.wait_until(lock, timespec_to_timepoint(query_expiration_ts), [&] {
-                    tryEraseGroup();
-                    bool deleted = true;
-                    initail_query_to_groups.if_contains(initial_query_id, [&](auto & it) {
-                        if (it.second->coordinator_address == coordinator_address && it.second->contains(instance_id))
-                            deleted = false;
-                    });
-                    return deleted;
-                }))
-            {
-                throw Exception(
-                    fmt::format(
-                        "Distributed query with id = {} is already running and can't be stopped, query_expiration_ts is {}",
-                        initial_query_id,
-                        query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000),
-                    ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
-            }
-        }
     }
 
-    if (!bsp_mode && !query_context->getProcessListEntry().lock())
+    if (!query_context->getProcessListEntry().lock())
         query_context->getProcessList().checkRunningQuery(query_context, false, force);
 
     if (need_wait_cancel)
@@ -140,14 +117,14 @@ PlanSegmentProcessList::insertGroup(const PlanSegment & plan_segment, ContextMut
             if (v.second->coordinator_address == coordinator_address)
             {
                 segment_group = v.second;
-                segment_group->emplace(instance_id, nullptr);
+                segment_group->emplace(segment_id, nullptr);
             }
         };
         auto emplace = [&](const Container::constructor & ctor) {
-            bool use_query_memory_tracker = settings.exchange_use_query_memory_tracker && !bsp_mode && instance_id.segment_id != 0;
+            bool use_query_memory_tracker = settings.exchange_use_query_memory_tracker && !bsp_mode && segment_id != 0;
             size_t queue_bytes = settings.exchange_queue_bytes;
             segment_group = std::make_shared<PlanSegmentGroup>(coordinator_address, initial_query_start_time_ms, use_query_memory_tracker, queue_bytes);
-            segment_group->emplace(instance_id, nullptr);
+            segment_group->emplace(segment_id, nullptr);
             ctor(initial_query_id, segment_group);
         };
 
@@ -176,12 +153,12 @@ PlanSegmentProcessList::EntryPtr PlanSegmentProcessList::insertProcessList(const
     else
         entry = query_context->getProcessList().insert("\n" + pipeline_string, nullptr, query_context, force);
 
-    auto instance_id = query_context->getPlanSegmentInstanceId();
-    auto res = std::make_shared<PlanSegmentProcessListEntry>(*this, entry->getPtr(), initial_query_id, instance_id);
+    auto segment_id = plan_segment.getPlanSegmentId();
+    auto res = std::make_shared<PlanSegmentProcessListEntry>(*this, entry->getPtr(), initial_query_id, segment_id);
     res->setCoordinatorAddress(plan_segment.getCoordinatorAddress());
     res->setMemoryController(segment_group->memory_controller);
 
-    segment_group->emplace(instance_id, std::move(entry));
+    segment_group->emplace(segment_id, std::move(entry));
     return res;
 }
 
@@ -204,10 +181,10 @@ bool PlanSegmentGroup::tryCancel(bool internal)
     return !to_cancel.empty();
 }
 
-bool PlanSegmentGroup::tryCancelInstance(PlanSegmentInstanceId instance_id, bool internal)
+bool PlanSegmentGroup::tryCancel(UInt32 segment_id, bool internal)
 {
     std::unique_lock lock(mutex);
-    auto iter = segment_queries.find(instance_id);
+    auto iter = segment_queries.find(segment_id);
     auto to_cancel = iter == segment_queries.end() ? nullptr : iter->second;
     lock.unlock();
 
@@ -247,7 +224,7 @@ bool PlanSegmentProcessList::tryEraseGroup()
     return true;
 }
 
-bool PlanSegmentProcessList::remove(std::string initial_query_id, PlanSegmentInstanceId instance_id, bool before_execute)
+bool PlanSegmentProcessList::remove(const String & initial_query_id, UInt32 segment_id, bool before_execute)
 {
     Element segment_group;
     initail_query_to_groups.if_contains(initial_query_id, [&](auto & it){
@@ -257,12 +234,12 @@ bool PlanSegmentProcessList::remove(std::string initial_query_id, PlanSegmentIns
     {
         if (!segment_group->empty())
         {
-            segment_group->erase(instance_id);
+            segment_group->erase(segment_id);
 
             LOG_TRACE(
                 logger,
                 "Remove {} for distributed query {}@{} from PlanSegmentProcessList",
-                instance_id.toString(),
+                segment_id,
                 initial_query_id,
                 segment_group->coordinator_address);
         }
@@ -331,13 +308,13 @@ CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String 
 }
 
 PlanSegmentProcessListEntry::PlanSegmentProcessListEntry(
-    PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, PlanSegmentInstanceId instance_id_)
-    : parent(parent_), status(status_), initial_query_id(std::move(initial_query_id_)), instance_id(instance_id_)
+    PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, UInt32 segment_id_)
+    : parent(parent_), status(status_), initial_query_id(std::move(initial_query_id_)), segment_id(segment_id_)
 {
 }
 
 PlanSegmentProcessListEntry::~PlanSegmentProcessListEntry()
 {
-    parent.remove(initial_query_id, instance_id);
+    parent.remove(initial_query_id, segment_id);
 }
 }
