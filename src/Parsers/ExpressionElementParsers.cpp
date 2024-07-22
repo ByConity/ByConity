@@ -992,11 +992,9 @@ bool ParserCodec::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
-ASTPtr createFunctionCast(const ASTPtr & expr_ast, const ASTPtr & type_ast)
+ASTPtr createFunctionCast(const ASTPtr & expr_ast, std::string type)
 {
-    /// Convert to canonical representation in functional form: CAST(expr, 'type')
-    auto type_literal = std::make_shared<ASTLiteral>(queryToString(type_ast));
-
+    auto type_literal = std::make_shared<ASTLiteral>(type);
     auto expr_list_args = std::make_shared<ASTExpressionList>();
     expr_list_args->children.push_back(expr_ast);
     expr_list_args->children.push_back(std::move(type_literal));
@@ -1007,6 +1005,12 @@ ASTPtr createFunctionCast(const ASTPtr & expr_ast, const ASTPtr & type_ast)
     func_node->children.push_back(func_node->arguments);
 
     return func_node;
+}
+
+ASTPtr createFunctionCast(const ASTPtr & expr_ast, const ASTPtr & type_ast)
+{
+    /// Convert to canonical representation in functional form: CAST(expr, 'type')
+    return createFunctionCast(expr_ast, queryToString(type_ast));
 }
 
 template <TokenType ...tokens>
@@ -1320,6 +1324,23 @@ bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
     }
 
     node = std::move(function_node);
+    return true;
+}
+
+bool ParserBinaryExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserKeyword s_binary("BINARY");
+
+    if (!s_binary.ignore(pos, expected))
+        return false;
+
+    ParserExpressionElement expr_parser;
+    ASTPtr char_node;
+
+    if (!expr_parser.parse(pos, char_node, expected))
+        return false;
+
+    node = createFunctionCast(char_node, "String");
     return true;
 }
 
@@ -2609,6 +2630,7 @@ bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         || ParserDateDiffExpression(dt).parse(pos, node, expected)
         || ParserSubstringExpression(dt).parse(pos, node, expected)
         || ParserGroupConcatExpression(dt).parse(pos, node, expected)
+        || ParserBinaryExpression(dt).parse(pos, node, expected)
         || ParserTrimExpression(dt).parse(pos, node, expected)
         || ParserLeftExpression(dt).parse(pos, node, expected)
         || ParserRightExpression(dt).parse(pos, node, expected)

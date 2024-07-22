@@ -288,6 +288,15 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserBinaryExpression : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "BINARY expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 class ParserTrimExpression : public IParserDialectBase
 {
 protected:
