@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "formatNumber.h"
-#include "formatString.h"
+#include <Functions/formatNumber.h>
+#include <Functions/formatString.h>
 
 namespace DB
 {
@@ -46,7 +46,7 @@ public:
         return std::make_shared<FormatFunction>(context);
     }
 
-    ArgType getArgumentsType() const override { return ArgType::NUMBERS; }
+    ArgType getArgumentsType() const override { return ArgType::NUM_NUM_STR; }
 
     String getName() const override { return name; }
 
@@ -64,9 +64,10 @@ public:
 
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
     {
-        // Clickhouse format function -> arg 0 is constant
-        // MySQL format function -> arg 1 is constant
-        return {static_cast<size_t>(mysql_mode)};
+        if (mysql_mode)
+            return {1, 2};
+        else
+            return {0};
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -85,19 +86,24 @@ public:
 
         if (mysql_mode)
         {
-            // MySQL compatibility: select format(X, D) -> format number X to D decimal places with comma
-            if (arguments.size() != 2)
+            // MySQL compatibility: select format(X, D, locale) -> format number X to D decimal places with comma
+            if (arguments.size() != 2 && arguments.size() != 3)
                 throw Exception(
-                    "Currently " + getName() + " only support 2 arguments, the number of passed arguments: " + toString(arguments.size()),
+                    getName() + " only support 2-3 arguments, the number of passed arguments: " + toString(arguments.size()),
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
             if (!isNumber(arguments[0]))
                 throw Exception(
-                    "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                    "Illegal type " + arguments[0]->getName() + " of argument 0 of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             if (!isNumber(arguments[1]))
                 throw Exception(
-                    "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
+                    "Illegal type " + arguments[1]->getName() + " of argument 1 of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+            if (arguments.size() == 3 && !isString(arguments[2]))
+                throw Exception(
+                    "Illegal type " + arguments[2]->getName() + " of argument 2 of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             return std::make_shared<DataTypeString>();
