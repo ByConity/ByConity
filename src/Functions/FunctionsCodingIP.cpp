@@ -1178,6 +1178,7 @@ REGISTER_FUNCTION(Coding)
     factory.registerAlias("INET6_NTOA", FunctionIPv6NumToString::name, FunctionFactory::CaseInsensitive);
     factory.registerAlias("INET6_ATON", FunctionIPv6StringToNum<IPStringToNumExceptionMode::Throw>::name, FunctionFactory::CaseInsensitive);
     factory.registerAlias("INET_NTOA", NameFunctionIPv4NumToString::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("IS_IPV4", FunctionIsIPv4String::name, FunctionFactory::CaseInsensitive);
 }
 
 }
