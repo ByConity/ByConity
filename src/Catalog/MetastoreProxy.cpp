@@ -1274,9 +1274,11 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::getTransactionRecords(con
     return metastore_ptr->multiGet(txn_keys);
 }
 
-IMetaStore::IteratorPtr MetastoreProxy::getAllTransactionRecord(const String & name_space, const size_t & max_result_number)
+IMetaStore::IteratorPtr
+MetastoreProxy::getAllTransactionRecord(const String & name_space, const String & start_key, const size_t & max_result_number)
 {
-    return metastore_ptr->getByPrefix(escapeString(name_space) + "_" + TRANSACTION_RECORD_PREFIX, max_result_number);
+    return metastore_ptr->getByPrefix(
+        escapeString(name_space) + "_" + TRANSACTION_RECORD_PREFIX, max_result_number, DEFAULT_SCAN_BATCH_COUNT, start_key);
 }
 
 std::pair<bool, String> MetastoreProxy::updateTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data_old, const String & txn_data_new)
