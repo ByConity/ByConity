@@ -190,7 +190,6 @@ udf_processor:
   uds_path: /dev/shm/udf_processor_worker
   timeout_ms: 10000
   max_retry: 1
-restrict_tenanted_users_to_system_tables: false
 restrict_tenanted_users_to_whitelist_settings: false
 restrict_tenanted_users_to_privileged_operations: false
 additional_services:

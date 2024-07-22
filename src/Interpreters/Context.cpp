@@ -458,7 +458,6 @@ struct ContextSharedPart
 
     bool shutdown_called = false;
     bool restrict_tenanted_users_to_whitelist_settings = false;
-    bool restrict_tenanted_users_to_privileged_operations = false;
 
     Stopwatch uptime_watch;
 
@@ -1575,7 +1574,7 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
     auto new_access = getAccessControlManager().getContextAccess(
         new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
-        has_tenant_id_in_username ? tenant_id : "");
+        has_tenant_id_in_username);
 
     auto lock = getLock();
     user_id = new_user_id;
@@ -1687,7 +1686,7 @@ void Context::calculateAccessRights()
     if (user_id)
         access = getAccessControlManager().getContextAccess(
             *user_id, current_roles, use_default_roles, settings, current_database, client_info,
-            has_tenant_id_in_username ? tenant_id : "");
+            has_tenant_id_in_username);
 }
 
 
@@ -2187,7 +2186,7 @@ void Context::applySettingsChanges(const SettingsChanges & changes, bool interna
         {
             if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
                 throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
-                    " for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
         }
     }
