@@ -144,7 +144,10 @@ CnchWorkerServiceImpl::~CnchWorkerServiceImpl()
             RPCHelpers::handleException(response->mutable_exception()); \
         } \
     }; \
-    THREADPOOL_SCHEDULE(_func);
+    Stopwatch watch; \
+    THREADPOOL_SCHEDULE(_func); \
+    UInt64 milliseconds = watch.elapsedMilliseconds(); \
+    if (milliseconds > 100) LOG_DEBUG(log, "CnchWorkerService rpc request threadpool schedule cost : {} ", milliseconds);
 
 
 void CnchWorkerServiceImpl::executeSimpleQuery(
