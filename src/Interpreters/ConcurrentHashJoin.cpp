@@ -58,6 +58,9 @@ ConcurrentHashJoin::ConcurrentHashJoin(
     , hash_joins_task_in_queue(slots, false)
 {
     LOG_DEBUG(&Poco::Logger::get("ConcurrentHashJoin"), fmt::format("parallel_join_rows_batch_threshold:{}", parallel_join_rows_batch_threshold));
+    /// Non zero `max_joined_block_rows` allows to process block partially and return not processed part.
+    /// TODO: It's not handled properly in ConcurrentHashJoin case, so we set it to 0 to disable this feature.
+    table_join->setMaxJoinedBlockRows(0);
     for (size_t i = 0; i < slots; ++i)
     {
         auto inner_hash_join = std::make_shared<InternalHashJoin>();

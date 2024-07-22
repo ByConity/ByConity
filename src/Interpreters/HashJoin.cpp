@@ -1768,6 +1768,9 @@ Block HashJoin::joinBlockImplIneuqalCondition(
 void HashJoin::joinBlockImplCross(Block & block, ExtraBlockPtr & not_processed) const
 {
     size_t max_joined_block_rows = table_join->maxJoinedBlockRows();
+    if (!max_joined_block_rows)
+        max_joined_block_rows = kMaxAllowedJoinedBlockRows;
+
     size_t start_left_row = 0;
     size_t start_right_block = 0;
     if (not_processed)
