@@ -1007,7 +1007,8 @@ public:
     void removeTransactionRecord(const String & name_space, const UInt64 & txn_id);
     void removeTransactionRecords(const String & name_space, const std::vector<TxnTimestamp> & txn_ids);
     String getTransactionRecord(const String & name_space, const UInt64 & txn_id);
-    IMetaStore::IteratorPtr getAllTransactionRecord(const String & name_space, const size_t & max_result_number = 0);
+    IMetaStore::IteratorPtr
+    getAllTransactionRecord(const String & name_space, const String & start_key = "", const size_t & max_result_number = 0);
     std::pair<bool, String> updateTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data_old, const String & txn_data_new);
     std::vector<std::pair<String, UInt64>> getTransactionRecords(const String & name_space, const std::vector<TxnTimestamp> & txn_ids);
 
