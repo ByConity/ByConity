@@ -32,12 +32,16 @@ void ASTUpdateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "") << "UPDATE " << (settings.hilite ? hilite_none : "");
 
-    if (!database.empty())
-        settings.ostr << backQuoteIfNeed(database) << ".";
-    settings.ostr << backQuoteIfNeed(table);
-
-    if (tables)
+    if (single_table)
+    {
+        if (!database.empty())
+            settings.ostr << backQuoteIfNeed(database) << ".";
+        settings.ostr << backQuoteIfNeed(table);
+    }
+    else
+    {
         tables->formatImpl(settings, state, frame);
+    }
 
     settings.ostr << (settings.hilite ? hilite_keyword : "") << " SET " << (settings.hilite ? hilite_none : "");
 

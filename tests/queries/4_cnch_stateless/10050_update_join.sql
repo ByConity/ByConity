@@ -35,3 +35,20 @@ SELECT age FROM update_join_test ORDER BY id;
 
 DROP TABLE update_join_test;
 DROP TABLE update_join_test_new;
+
+DROP TABLE IF EXISTS test.update_join_tuj;
+DROP TABLE IF EXISTS test.update_join_tt;
+
+CREATE TABLE test.update_join_tuj(k Int32, m Int32) ENGINE = CnchMergeTree ORDER BY k UNIQUE KEY k;
+CREATE TABLE test.update_join_tt(k Int32, m Int32) ENGINE = CnchMergeTree ORDER BY k;
+
+INSERT INTO test.update_join_tuj SELECT number, number FROM numbers(5);
+INSERT INTO test.update_join_tt VALUES (1, 10), (2, 20), (4, 40), (6, 60);
+
+SELECT 'Try all combinations';
+
+UPDATE test.update_join_tuj SET m = m * 2;
+UPDATE test.update_join_tuj SET m = 2;
+UPDATE test.update_join_tuj SET m = 2 WHERE k >= 3;
+UPDATE test.update_join_tuj AS a SET m = 3;
+UPDATE test.update_join_tuj AS a LEFT JOIN test.update_join_tt AS b ON a.k = b.k SET m = b.m WHERE k >= 1;
