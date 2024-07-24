@@ -96,7 +96,7 @@
 	url = https://github.com/ClickHouse-Extras/fastops
 [submodule "contrib/orc"]
 	path = contrib/orc
-	url = git@code.byted.org:dp/clickhouse-orc.git
+	url = https://github.com/ByConity/clickhouse-orc.git
 [submodule "contrib/sparsehash-c11"]
 	path = contrib/sparsehash-c11
 	url = https://github.com/sparsehash/sparsehash-c11.git
