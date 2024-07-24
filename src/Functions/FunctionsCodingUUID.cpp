@@ -2,16 +2,19 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
-#include <Common/BitHelpers.h>
-#include <Common/hex.h>
-#include <DataTypes/DataTypeString.h>
+#include <Columns/ColumnsNumber.h>
+#include <Core/UUID.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/castColumn.h>
+#include <Common/BitHelpers.h>
+#include <Common/hex.h>
 #include <common/EnumReflection.h>
 
 #include <span>
@@ -320,10 +323,80 @@ public:
     }
 };
 
+struct NameUUIDToUInt64Low { static constexpr auto name = "UUIDToUInt64Low"; };
+struct NameUUIDToUInt64High { static constexpr auto name = "UUIDToUInt64High"; };
+
+template <typename Name>
+class FunctionUUIDToUInt64 : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionUUIDToUInt64>(); }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+    bool isVariadic() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        checkArgumentCount(arguments, name);
+
+        /// UUID
+        if (!isUUID(arguments[0]))
+        {
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of first argument of function {}, expected UUID",
+                arguments[0]->getName(),
+                getName());
+        }
+
+        return std::make_shared<DataTypeUInt64>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
+    {
+        const ColumnWithTypeAndName & col_type_name = arguments[0];
+        const ColumnPtr & column = col_type_name.column;
+
+        if (const auto * col_in = checkAndGetColumn<ColumnUUID>(column.get()))
+        {
+            const auto & vec_in = col_in->getData();
+            const UUID * uuids = vec_in.data();
+            const size_t size = vec_in.size();
+
+            auto col_res = ColumnUInt64::create(size);
+            auto & vec_res = col_res->getData();
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                if constexpr (std::is_same_v<Name, NameUUIDToUInt64Low>)
+                    vec_res[i] = DB::UUIDHelpers::getLowBytes(uuids[i]);
+                else if constexpr (std::is_same_v<Name, NameUUIDToUInt64High>)
+                    vec_res[i] = DB::UUIDHelpers::getHighBytes(uuids[i]);
+            }
+
+            return col_res;
+        }
+        else
+            throw Exception(
+                ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}", arguments[0].column->getName(), getName());
+    }
+};
+
+using FunctionUUIDToUInt64Low = FunctionUUIDToUInt64<NameUUIDToUInt64Low>;
+using FunctionUUIDToUInt64High = FunctionUUIDToUInt64<NameUUIDToUInt64High>;
+
 REGISTER_FUNCTION(CodingUUID)
 {
     factory.registerFunction<FunctionUUIDNumToString>();
     factory.registerFunction<FunctionUUIDStringToNum>();
+    factory.registerFunction<FunctionUUIDToUInt64Low>();
+    factory.registerFunction<FunctionUUIDToUInt64High>();
 }
 
 }
