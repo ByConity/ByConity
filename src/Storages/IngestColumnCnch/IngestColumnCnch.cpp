@@ -40,6 +40,7 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
+#include <common/sleep.h>
 
 namespace DB
 {
@@ -207,6 +208,9 @@ BlockInputStreamPtr forwardIngestPartitionToWorker(
     ContextPtr context
     )
 {
+    if (auto sleep_ms = context->getSettingsRef().sleep_in_send_ingest_to_worker_ms.totalMilliseconds())
+        sleepForMilliseconds(sleep_ms);
+
     Poco::Logger * log = target_table.getLogger();
     TxnTimestamp txn_id = context->getCurrentTransactionID();
     std::hash<String> hasher;

@@ -1404,6 +1404,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_async_ingest, false, "Allow ingest in aync mode", 0) \
     M(Bool, optimize_ingest_with_bucket, true, "Using bucket table to optimize ingest", 0) \
     M(UInt64, max_ingest_task_on_workers, 50, "Max ingest task on wokers, now It is not make a distinction with query num", 0) \
+    M(Milliseconds, sleep_in_send_ingest_to_worker_ms, 0, "Only for testing: time to sleep in sending ingest column to worker", 0) \
     /** Early Stop **/ \
     M(Milliseconds, query_shard_timeout_time, 0, "Timeout for query shard", 0) \
     M(Milliseconds, late_shard_relax_time, 1000, "Relaxition time for late shard", 0) \
