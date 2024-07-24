@@ -96,7 +96,7 @@ String PlanPrinter::textLogicalPlan(
     const StepAggregatedOperatorProfiles & profiles,
     const QueryPlanSettings & settings)
 {
-    TextPrinter printer{costs, context, false, {}, settings};
+    TextPrinter printer{costs, context, false, {}, settings, context->getSettingsRef().max_predicate_text_length};
     bool has_children = !plan.getPlanNode()->getChildren().empty();
     auto output = printer.printLogicalPlan(*plan.getPlanNode(), TextPrinterIntent{0, has_children}, profiles);
 
@@ -308,7 +308,7 @@ String PlanPrinter::textDistributedPlan(
         if (analyze_node)
         {
             os << TextPrinter::printOutputColumns(*analyze_node.value()->getChildren()[0], TextPrinterIntent{3, false});
-            TextPrinter printer{costs, context, true, segment_ptr->exchange_to_segment, settings};
+            TextPrinter printer{costs, context, true, segment_ptr->exchange_to_segment, settings, context->getSettingsRef().max_predicate_text_length};
             bool has_children = !analyze_node.value()->getChildren().empty();
             if ((analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::CTERef
                  || analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::Exchange))
@@ -888,7 +888,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         if (!ASTEquality::compareTree(join_step->getFilter(), PredicateConst::TRUE_VALUE))
         {
             out << intent.detailIntent() << "Filter: ";
-            out << serializeAST(*join_step->getFilter());
+            out << getSerializedASTWithLimit(*join_step->getFilter(), max_predicate_text_length);
         }
         if (!join_step->getRuntimeFilterBuilders().empty())
         {
@@ -996,7 +996,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
     {
         const auto * filter = dynamic_cast<const FilterStep *>(plan.get());
         auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter->getFilter());
-        out << intent.detailIntent() << "Condition: " << printFilter(filter->getFilter());
+        out << intent.detailIntent() << "Condition: " << printFilter(filter->getFilter(), max_predicate_text_length);
     }
 
     if (plan->getType() == IQueryPlanStep::Type::Projection)
@@ -1010,7 +1010,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             if (Utils::isIdentity(assignment))
                 identities.emplace_back(assignment.first);
             else
-                assignments.emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
+                assignments.emplace_back(assignment.first + ":=" + getSerializedASTWithLimit(*assignment.second, max_predicate_text_length));
 
         std::sort(assignments.begin(), assignments.end());
         if (!identities.empty())
@@ -1042,13 +1042,13 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         {
             out << intent.detailIntent();
             out << "Partition filter: ";
-            out << serializeAST(*query_info.partition_filter);
+            out << getSerializedASTWithLimit(*query_info.partition_filter, max_predicate_text_length);
         }
 
         if (auto where = query->getWhere())
-            out << intent.detailIntent() << "Where: " << printFilter(where);
+            out << intent.detailIntent() << "Where: " << printFilter(where, max_predicate_text_length);
         if (auto prewhere = query->getPrewhere())
-            out << intent.detailIntent() << "Prewhere: " << printFilter(prewhere);
+            out << intent.detailIntent() << "Prewhere: " << printFilter(prewhere, max_predicate_text_length);
         if (query->getLimitLength())
         {
             out << intent.detailIntent() << "Limit: ";
@@ -1069,7 +1069,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
 
         std::vector<String> inline_expressions;
         for (const auto & assignment : table_scan->getInlineExpressions())
-            inline_expressions.emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
+            inline_expressions.emplace_back(assignment.first + ":=" + getSerializedASTWithLimit(*assignment.second, max_predicate_text_length));
         if (!inline_expressions.empty())
             out << intent.detailIntent() << "Inline expressions: " << join(inline_expressions, ", ", "[", "]");
 
@@ -1119,13 +1119,13 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
     return out.str();
 }
 
-String PlanPrinter::TextPrinter::printFilter(ConstASTPtr filter)
+String PlanPrinter::TextPrinter::printFilter(ConstASTPtr filter, size_t max_text_length)
 {
     std::stringstream out;
     auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
 
     if (!filters.second.empty())
-        out << serializeAST(*PredicateUtils::combineConjuncts(filters.second));
+        out << getSerializedASTWithLimit(*PredicateUtils::combineConjuncts(filters.second), max_text_length);
 
     if (!filters.first.empty())
     {
@@ -1133,7 +1133,7 @@ String PlanPrinter::TextPrinter::printFilter(ConstASTPtr filter)
         for (auto & item : filters.first)
         {
             auto desc = RuntimeFilterUtils::extractDescription(item).value();
-            runtime_filters.emplace(serializeAST(*desc.expr->clone()));
+            runtime_filters.emplace(getSerializedASTWithLimit(*desc.expr->clone(), max_text_length));
         }
         if (!filters.second.empty())
             out << " ";

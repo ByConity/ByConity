@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +20,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <cstddef>
 #include <Parsers/formatAST.h>
 
 
@@ -51,4 +53,14 @@ String serializeASTWithOutAlias(const IAST & ast)
     ast.format(settings);
     return buf.str();
 }
+
+String getSerializedASTWithLimit(const IAST & ast, size_t max_text_length)
+{
+    String res = serializeAST(ast);
+    if (res.size() <= max_text_length)
+        return res;
+    else
+        return res.substr(0, max_text_length);
+}
+
 }

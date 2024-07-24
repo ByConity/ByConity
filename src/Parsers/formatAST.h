@@ -43,6 +43,8 @@ String serializeAST(const IAST & ast, bool one_line = true);
 
 String serializeASTWithOutAlias(const IAST & ast);
 
+String getSerializedASTWithLimit(const IAST & ast, size_t max_text_length);
+
 inline WriteBuffer & operator<<(WriteBuffer & buf, const IAST & ast)
 {
     formatAST(ast, buf, false, true);

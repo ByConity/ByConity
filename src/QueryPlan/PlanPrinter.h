@@ -112,12 +112,14 @@ public:
         ContextMutablePtr context_ = nullptr,
         bool is_distributed_ = false,
         const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment_ = {},
-        QueryPlanSettings settings_ = {})
+        QueryPlanSettings settings_ = {},
+        size_t max_predicate_text_length_ = 10000)
         : costs(costs_)
         , is_distributed(is_distributed_)
         , exchange_to_segment(exchange_to_segment_)
         , context(context_)
         , settings(settings_)
+        , max_predicate_text_length(max_predicate_text_length_)
     {}
     static String printOutputColumns(PlanNodeBase & plan_node, const TextPrinterIntent & intent = {});
     String printLogicalPlan(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {});
@@ -129,7 +131,7 @@ public:
     static String printPrefix(PlanNodeBase & plan);
     String printSuffix(PlanNodeBase & plan);
     static String printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles);
-    static String printFilter(ConstASTPtr filter);
+    static String printFilter(ConstASTPtr filter, size_t max_text_length = 10000);
 private:
     String printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
     static String printProcessorDetail(GroupedProcessorProfilePtr profile, const TextPrinterIntent & intent);
@@ -141,6 +143,7 @@ private:
     const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment;
     ContextMutablePtr context;
     QueryPlanSettings settings;
+    const size_t max_predicate_text_length;
 };
 
 class NodeDescription;

@@ -778,7 +778,14 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
 
     auto tuple_func = makeASTFunction("tuple", set_values);
     auto simplified_in_func = makeASTFunction(function.name, rewritten_left_arg, tuple_func);
-    return {getType(simplified_in_func), simplified_in_func};
+
+    auto column_set = ColumnSet::create(1, set);
+    ColumnPtr const_column_set = ColumnConst::create(std::move(column_set), 1);
+    ColumnsWithTypeAndName columns_with_types;
+    columns_with_types.emplace_back(left_arg_result.type, "");
+    columns_with_types.emplace_back(const_column_set, std::make_shared<DataTypeSet>(), "");
+    auto overload_resolver = FunctionFactory::instance().tryGet(function.name, context);
+    return {overload_resolver->getReturnType(columns_with_types), simplified_in_func};
 }
 
 }

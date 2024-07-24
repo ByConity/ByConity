@@ -1625,6 +1625,7 @@ enum PreloadLevelSettings : UInt64
     M(Float, pk_selectivity, 1.0, "PK selectivity for join estimation", 0) \
     /** Optimizer relative settings, CBO, CTE, MagicSet, MV */ \
     M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
+    M(UInt64, max_predicate_text_length, 5000, "Max length of predicate text", 0) \
     M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
     M(UInt64 , max_graph_reorder_size, 6, "Max tables join order enum on graph", 0) \
     M(UInt64 , heuristic_join_reorder_enumeration_times, 3, "Heuristic times in CardinalityBased Join Reorder algorithm", 0) \
