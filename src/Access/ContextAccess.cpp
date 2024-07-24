@@ -212,6 +212,10 @@ namespace
             res.grant(AccessType::SELECT, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
         }
 
+        // information_schema is always visible
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA);
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
+
         return res;
     }
 

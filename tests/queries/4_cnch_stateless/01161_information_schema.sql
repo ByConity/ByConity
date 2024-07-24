@@ -63,9 +63,9 @@ INSERT INTO partitioned VALUES
     (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three'), (4, 'four'), (5, 'five'), (1000, 'one thousand');
 
 SELECT '-- information_schema.partitions (After INSERT)';
-SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) > 0 ORDER BY table_name, partition_name SETTINGS enable_multiple_tables_for_cnch_parts=1;
-SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) > 0 ORDER BY table_name, partition_name SETTINGS dialect_type='ANSI',enable_multiple_tables_for_cnch_parts=1;
-SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) > 0 ORDER BY table_name, partition_name SETTINGS dialect_type='MYSQL',enable_multiple_tables_for_cnch_parts=1;
+SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) ORDER BY table_name, partition_name SETTINGS enable_multiple_tables_for_cnch_parts=1;
+SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) ORDER BY table_name, partition_name SETTINGS dialect_type='ANSI',enable_multiple_tables_for_cnch_parts=1;
+SELECT table_name, partition_name, partition_expression, table_rows FROM information_schema.partitions WHERE table_schema = currentDatabase(1) ORDER BY table_name, partition_name SETTINGS dialect_type='MYSQL',enable_multiple_tables_for_cnch_parts=1;
 
 SELECT '-- information_schema.engines';
 SELECT * FROM information_schema.engines ORDER BY engine;
