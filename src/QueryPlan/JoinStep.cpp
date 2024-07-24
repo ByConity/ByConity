@@ -16,6 +16,7 @@
 #include <memory>
 #include <Core/SettingsEnums.h>
 #include <Interpreters/ConcurrentHashJoin.h>
+#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/GraceHashJoin.h>
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/IJoin.h>
@@ -25,16 +26,16 @@
 #include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterConsumer.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
-#include <common/logger_useful.h>
 #include <Common/ErrorCodes.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -113,6 +114,20 @@ JoinPtr JoinStep::makeJoin(
         {
             NameAndTypePair joined_column{item.name, item.type};
             table_join->addJoinedColumn(joined_column);
+        }
+    }
+
+    // add the symbol needed in the join filter but not existed in join output stream to the output,
+    // because FilterTransform built after the join need these symbols.
+    if (filter && !PredicateUtils::isTruePredicate(filter))
+    {
+        for (const auto & symbol : SymbolsExtractor::extract(filter))
+        {
+            if (!output_stream->header.has(symbol) && input_streams[1].header.has(symbol))
+            {
+                NameAndTypePair joined_column{symbol, input_streams[1].header.getByName(symbol).type};
+                table_join->addJoinedColumn(joined_column);
+            }
         }
     }
 
