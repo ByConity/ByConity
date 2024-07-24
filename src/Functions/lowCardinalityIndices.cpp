@@ -12,6 +12,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    extern const int NOT_IMPLEMENTED;
 }
 
 namespace
@@ -36,7 +37,7 @@ public:
     {
         const auto * type = typeid_cast<const DataTypeLowCardinality *>(arguments[0].get());
         if (!type)
-            throw Exception("First first argument of function lowCardinalityIndexes must be ColumnLowCardinality, but got "
+            throw Exception("First argument of function lowCardinalityIndexes must be ColumnLowCardinality, but got "
                             + arguments[0]->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt64>();
@@ -45,7 +46,10 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
     {
         const auto & arg = arguments[0];
-        auto indexes_col = typeid_cast<const ColumnLowCardinality *>(arg.column.get())->getIndexesPtr();
+        const auto * low_cardinality_column = typeid_cast<const ColumnLowCardinality *>(arg.column.get());
+        if (low_cardinality_column->isFullState())
+            throw Exception("Function lowCardinalityIndices is not supported for full state", ErrorCodes::NOT_IMPLEMENTED);
+        auto indexes_col = low_cardinality_column->getIndexesPtr();
         auto new_indexes_col = ColumnUInt64::create(indexes_col->size());
         auto & data = new_indexes_col->getData();
         for (size_t i = 0; i < data.size(); ++i)
