@@ -69,12 +69,15 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/TreeRewriter.h>
+#include <MergeTreeCommon/CnchStorageCommon.h>
+#include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTPartition.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/formatAST.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -127,7 +130,7 @@ namespace ErrorCodes
 static NameSet collectColumnsFromCommands(const AlterCommands & commands)
 {
     NameSet res;
-    for (auto & command : commands)
+    for (const auto & command : commands)
         res.insert(command.column_name);
     return res;
 }
@@ -620,7 +623,7 @@ void StorageCnchMergeTree::filterPartitionByTTL(std::vector<std::shared_ptr<Merg
         const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
         MutableColumns columns = partition_key_sample.cloneEmptyColumns();
 
-        for (auto partition : partition_list)
+        for (const auto & partition : partition_list)
         {
             /// This can happen when ALTER query is implemented improperly; finish ALTER query should bypass this check.
             if (columns.size() != partition->value.size())
@@ -2617,12 +2620,34 @@ void StorageCnchMergeTree::checkAlterVW(const String & vw_name) const
 }
 
 void StorageCnchMergeTree::truncate(
-    const ASTPtr & /*query*/, const StorageMetadataPtr & /* metadata_snapshot */, ContextPtr local_context, TableExclusiveLockHolder &)
+    const ASTPtr & query, const StorageMetadataPtr & /* metadata_snapshot */, ContextPtr local_context, TableExclusiveLockHolder &)
 {
     PartitionCommand command;
-    command.type = PartitionCommand::DROP_PARTITION_WHERE;
-    command.partition = std::make_shared<ASTLiteral>(Field(UInt8(1)));
     command.part = false;
+    const auto & ast_truncate = query->as<ASTDropQuery &>();
+
+    /// TRUNCATE TABLE t
+    if (!ast_truncate.partition && !ast_truncate.partition_predicate)
+    {
+        LOG_TRACE(log, "TRUNCATE WHOLE TABLE");
+        command.type = PartitionCommand::DROP_PARTITION_WHERE;
+        command.partition = std::make_shared<ASTLiteral>(Field(static_cast<UInt8>(1)));
+    }
+    /// TRUNCATE TABLE t PARTITION [ID] p
+    else if (ast_truncate.partition)
+    {
+        LOG_TRACE(log, "TRUNCATE PARTITION {}", serializeAST(*ast_truncate.partition));
+        command.type = PartitionCommand::DROP_PARTITION;
+        command.partition = ast_truncate.partition->clone();
+    }
+    /// TRUNCATE TABLE t PARTITION WHERE predicate
+    else if (ast_truncate.partition_predicate)
+    {
+        LOG_TRACE(log, "TRUNCATE PARTITION WHERE {}", serializeAST(*ast_truncate.partition_predicate));
+        command.type = PartitionCommand::DROP_PARTITION_WHERE;
+        command.partition = ast_truncate.partition_predicate->clone();
+    }
+
     dropPartitionOrPart(command, local_context);
 }
 
@@ -3325,7 +3350,6 @@ ServerDataPartsWithDBM StorageCnchMergeTree::selectPartsByPartitionCommand(Conte
     }
     else if (!partitionCommandHasWhere(command))
     {
-        fmt::print("Command: {}\n", command.typeToString());
         const auto & partition = command.partition->as<const ASTPartition &>();
         if (!partition.id.empty())
         {
@@ -3350,6 +3374,9 @@ ServerDataPartsWithDBM StorageCnchMergeTree::selectPartsByPartitionCommand(Conte
     {
         /// Predicate: WHERE xxx with xxx is command.partition
         where = command.partition->clone();
+        /// NOTE: Where condition may contains _partition_id or _partition_value, so we must run a filter of partition.
+        /// Adding _partition_id to `column_names_to_return` trigger the partition prune in ::selectPartitionsByPredicate.
+        column_names_to_return.push_back("_partition_id");
     }
 
     select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));

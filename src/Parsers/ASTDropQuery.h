@@ -55,6 +55,11 @@ public:
     // We detach the object permanently, so it will not be reattached back during server restart.
     bool permanently{false};
 
+    /// TRUNCATE TABLE t [PARTITION WHERE predicate]
+    ASTPtr partition_predicate;
+    /// TRUNCATE TABLE t [PARTITION [ID] p]
+    ASTPtr partition;
+
     /** Get the text that identifies this element. */
     String getID(char) const override;
     ASTPtr clone() const override;

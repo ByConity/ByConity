@@ -171,7 +171,7 @@ public:
     void mutate(const MutationCommands & commands, ContextPtr query_context) override;
 
     void truncate(
-        const ASTPtr & /*query*/,
+        const ASTPtr & query,
         const StorageMetadataPtr & /* metadata_snapshot */,
         ContextPtr /* local_context */,
         TableExclusiveLockHolder &) override;
