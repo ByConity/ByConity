@@ -30,6 +30,9 @@ struct PlanSegmentDescription;
 using PlanSegmentDescriptionPtr = std::shared_ptr<PlanSegmentDescription>;
 using PlanSegmentDescriptions = std::vector<PlanSegmentDescriptionPtr>;
 
+struct Analysis;
+using AnalysisPtr = std::shared_ptr<Analysis>;
+
 class PlanPrinter
 {
 public:
@@ -66,6 +69,9 @@ public:
     static std::unordered_map<PlanNodeId, PlanNodePtr>  getPlanNodeMap(const QueryPlan & query_plan);
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
     static String getPlanSegmentHeaderText(PlanSegmentDescriptionPtr & segment_desc);
+
+    static String jsonMetaData(
+        ASTPtr & query, AnalysisPtr analysis, ContextMutablePtr context, QueryPlanPtr & plan, const QueryMetadataSettings & settings = {});
 
     class TextPrinter;
 };

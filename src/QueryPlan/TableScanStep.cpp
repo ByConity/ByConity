@@ -794,8 +794,15 @@ TableScanStep::TableScanStep(
     , log(&Poco::Logger::get("TableScanStep"))
     , alias(alias_)
 {
-    storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    storage_id.uuid = storage->getStorageUUID();
+    const auto & table_expression = getTableExpression(*query_info.getSelectQuery(), 0);
+    if (table_expression && table_expression->table_function)
+        storage = context->getQueryContext()->executeTableFunction(table_expression->table_function);
+    else
+    {
+        storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        storage_id.uuid = storage->getStorageUUID();
+    }
+        
     formatOutputStream(context);
 }
 

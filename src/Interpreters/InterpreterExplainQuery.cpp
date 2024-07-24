@@ -36,6 +36,7 @@
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/predicateExpressionsUtils.h>
@@ -798,8 +799,39 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData()
     const auto & explain = query->as<ASTExplainQuery &>();
     auto context = Context::createCopy(getContext());
     auto query_ptr = explain.getExplainedQuery();
-    query_ptr = QueryRewriter().rewrite(query_ptr, context);
-    AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
+    auto contxt = getContext();
+    auto metadata_settings = checkAndGetSettings<QueryMetadataSettings>(explain.getSettings());
+    AnalysisPtr analysis;
+    QueryPlanPtr query_plan;
+
+    if (metadata_settings.lineage || metadata_settings.lineage_use_optimizer)
+    {
+        try
+        {
+            InterpreterSelectQueryUseOptimizer interpreter(query_ptr, contxt, SelectQueryOptions());
+            interpreter.buildQueryPlan(query_plan, analysis, !metadata_settings.lineage_use_optimizer);
+        }
+        catch (...)
+        {
+            tryLogWarningCurrentException(&Poco::Logger::get("InterpreterExplainQuery::explainMetaData"), "build plan failed.");
+        }
+    }
+
+    if (!analysis)
+    {
+        query_ptr = QueryRewriter().rewrite(query_ptr, contxt);
+        analysis = QueryAnalyzer::analyze(query_ptr, contxt);
+    }
+
+    if (metadata_settings.format_json)
+    {
+        String res = PlanPrinter::jsonMetaData(query_ptr, analysis, contxt, query_plan, metadata_settings);
+        Block sample_block = getSampleBlock();
+        MutableColumns res_columns = sample_block.cloneEmptyColumns();
+        fillColumn(*res_columns[0], res);
+        return std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns)));
+    }
+
 
     // get used tables, databases, columns_list
     auto column_tables = ColumnArray::create(ColumnString::create());
@@ -836,25 +868,15 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData()
         functions_array.push_back(func_name);
 
     // get settings
-    ASTPtr settings;
-    if (const auto * select_with_union_query = query_ptr->as<ASTSelectWithUnionQuery>())
-    {
-        const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
-        settings = last_select->settings();
-    }
-    else if (const auto * select_query = query_ptr->as<ASTSelectQuery>())
-        settings = select_query->settings();
-    else if (const auto * insert_query = query_ptr->as<ASTInsertQuery>())
-        settings = insert_query->settings_ast;
+    SettingsChanges settings_changes = InterpreterSetQuery::extractSettingsFromQuery(query, contxt);
 
     auto key_column = ColumnString::create();
     auto value_column = ColumnString::create();
     auto settings_offset_column = ColumnVector<UInt64>::create();
     size_t offest_size = 0;
-    if (settings)
+    if (!settings_changes.empty())
     {
-        const auto & changes = settings->as<ASTSetQuery &>().changes;
-        for (const auto & setting : changes)
+        for (const auto & setting : settings_changes)
         {
             offest_size++;
             key_column->insert(setting.name);

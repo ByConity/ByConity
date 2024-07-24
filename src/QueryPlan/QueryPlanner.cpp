@@ -147,7 +147,7 @@ private:
     std::pair<Names, Names> prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
     static DataStream getJoinOutputStream(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
 
-    RelationPlan planReadFromStorage(const IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints);
+    RelationPlan planReadFromStorage(IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints, bool is_table_function = false);
     // static MergeTreeReadPlannerPtr getReadPlanner(ASTSelectQuery & select_query);
     // static MergeTreeBitMapSchedulerPtr getBitMapScheduler(ASTSelectQuery & select_query, const StoragePtr & storage, size_t max_streams);
 
@@ -568,7 +568,7 @@ PlanBuilder QueryPlannerVisitor::planTable(ASTTableIdentifier & db_and_table, AS
 PlanBuilder QueryPlannerVisitor::planTableFunction(ASTFunction & table_function, ASTSelectQuery & select_query)
 {
     const auto * scope = analysis.getScope(table_function);
-    auto relation_plan = planReadFromStorage(table_function, scope, select_query, table_function.hints);
+    auto relation_plan = planReadFromStorage(table_function, scope, select_query, table_function.hints, true);
     auto builder = toPlanBuilder(relation_plan, scope);
     PRINT_PLAN(builder.plan, plan_table_function);
     return builder;
@@ -902,7 +902,7 @@ DataStream QueryPlannerVisitor::getJoinOutputStream(ASTTableJoin &, PlanBuilder 
 }
 
 RelationPlan
-QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints)
+QueryPlannerVisitor::planReadFromStorage(IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints, bool is_table_function)
 {
     const auto & storage_analysis = analysis.getStorageAnalysis(table_ast);
     const auto & storage = storage_analysis.storage;
@@ -1011,7 +1011,13 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
 
     NamesAndTypesList columns;
     columns = storage->getInMemoryMetadataPtr()->getColumns().getOrdinary();
-    generated_query->replaceDatabaseAndTable(storage->getStorageID());
+    if (is_table_function)
+    {
+        auto table_func = table_ast.shared_from_this();
+        generated_query->addTableFunction(table_func);
+    }
+    else
+        generated_query->replaceDatabaseAndTable(storage->getStorageID());
 
     // set sampling size
     if (origin_query.sampleSize())

@@ -99,6 +99,11 @@ public:
 
     NameToType getNamesToTypes() const { return header.getNamesToTypes(); }
 
+    Names getNames() const
+    {
+        return header.getNames();
+    }
+
     void toProto(Protos::DataStream & proto) const;
     void fillFromProto(const Protos::DataStream & proto);
 };

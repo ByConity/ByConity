@@ -23,7 +23,9 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
-#include "QueryPlan/QueryPlan.h"
+#include <QueryPlan/QueryPlan.h>
+#include <Interpreters/getTableExpressions.h>
+#include <Parsers/IAST_fwd.h>
 
 
 namespace DB
