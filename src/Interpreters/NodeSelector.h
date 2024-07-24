@@ -196,6 +196,7 @@ public:
     }
 
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, bool is_source);
+    void setParallelIndexAndSourceAddrs(PlanSegment * plan_segment_ptr, NodeSelectorResult * result);
     static PlanSegmentInputPtr tryGetLocalInput(PlanSegment * plan_segment_ptr);
 
 private:

@@ -11,6 +11,7 @@ enum class ArgType
     DATES,                  /// (General Date/Datetime Date a, Date b, ...) Date include date, datetime, datetime64, time
     DATE_OR_DATETIME,       /// (Date or DateTime only Date a, Date b, ...)
     NUM_STR,                /// (Number a, String b, String c ...)
+    NUM_NUM_STR,            /// (Number a, Number b, String c)
     INT_STR,                /// (Int a, String b, ...)
     INTS,                   /// (Int a, Int b, ...)
     STR_NUM,                /// (String a, Number b)

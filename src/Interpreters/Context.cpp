@@ -1569,13 +1569,15 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
         client_info.current_password = basic_credentials->getPassword();
     //#endif
 
+    String tenant = getTenantId();
     /// Find a user with such name and check the credentials.
     /// NOTE: getAccessControlManager().login and other AccessControl's functions may require some IO work,
     /// so Context::getLock() must be unlocked while we're doing this.
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
     auto new_access = getAccessControlManager().getContextAccess(
         new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
-        has_tenant_id_in_username ? tenant_id : "");
+        tenant,
+        has_tenant_id_in_username);
 
     auto lock = getLock();
     user_id = new_user_id;
@@ -1687,7 +1689,8 @@ void Context::calculateAccessRights()
     if (user_id)
         access = getAccessControlManager().getContextAccess(
             *user_id, current_roles, use_default_roles, settings, current_database, client_info,
-            has_tenant_id_in_username ? tenant_id : "");
+            tenant_id,
+            has_tenant_id_in_username);
 }
 
 
@@ -2187,7 +2190,7 @@ void Context::applySettingsChanges(const SettingsChanges & changes, bool interna
         {
             if (!SettingsChanges::WHITELIST_SETTINGS.contains(change.name))
                 throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown or disabled setting " + change.name +
-                    " for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
+                    "for tenant user. Contact the admin about whether it is needed to add it to tenant_whitelist_settings"
                     " in configuration");
         }
     }

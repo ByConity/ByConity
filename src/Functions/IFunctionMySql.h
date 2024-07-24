@@ -132,6 +132,14 @@ DataTypes getColumnsType(ArgType argType, const Type & arguments)
                 else expectedTypes.push_back(std::make_shared<DataTypeString>());
             }
             break;
+        case ArgType::NUM_NUM_STR:
+            for (size_t i = 0; i < column_size; ++i)
+            {
+                if (i == 0) expectedTypes.push_back(std::make_shared<DataTypeFloat64>());
+                else if (i == 1) expectedTypes.push_back(std::make_shared<DataTypeFloat64>());
+                else expectedTypes.push_back(std::make_shared<DataTypeString>());
+            }
+            break;
         case ArgType::INT_STR:
             for (size_t i = 0; i < column_size; ++i)
             {

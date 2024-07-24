@@ -204,13 +204,35 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 for (size_t i = 0; i < exchange_parallel_size; ++i)
                 {
                     UInt32 partition_id = partition_id_start + i;
-                    ExchangeDataKeyPtr data_key = context->getSettingsRef().bsp_mode
-                        ? ((exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                    ExchangeDataKeyPtr data_key;
+                    if (context->getSettingsRef().bsp_mode)
+                    {
+                        if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
                             || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
-                               ? std::make_shared<ExchangeDataKey>(
-                                   current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id)
-                               : std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index))
-                        : std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                        {
+                            if (source_address.getHostName() == "localhost" && source_address.getPort() == 0)
+                            {
+                                data_key = std::make_shared<ExchangeDataKey>(
+                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                            }
+                            else
+                            {
+                                if (input_index == context->getPlanSegmentInstanceId().parallel_id)
+                                    data_key = std::make_shared<ExchangeDataKey>(
+                                        current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                                else
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index);
+                        }
+                    }
+                    else
+                    {
+                        data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                    }
                     bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
                     BroadcastReceiverPtr receiver = createReceiver(
                         disk_exchange_mgr,
@@ -279,13 +301,35 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 for (size_t i = 0; i < exchange_parallel_size; ++i)
                 {
                     size_t partition_id = partition_id_start + i;
-                    ExchangeDataKeyPtr data_key = context->getSettingsRef().bsp_mode
-                        ? ((exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                    ExchangeDataKeyPtr data_key;
+                    if (context->getSettingsRef().bsp_mode)
+                    {
+                        if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
                             || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
-                               ? std::make_shared<ExchangeDataKey>(
-                                   current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id)
-                               : std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index))
-                        : std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                        {
+                            if (source_address.getHostName() == "localhost" && source_address.getPort() == 0)
+                            {
+                                data_key = std::make_shared<ExchangeDataKey>(
+                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                            }
+                            else
+                            {
+                                if (input_index == context->getPlanSegmentInstanceId().parallel_id)
+                                    data_key = std::make_shared<ExchangeDataKey>(
+                                        current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                                else
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index);
+                        }
+                    }
+                    else
+                    {
+                        data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                    }
                     bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
                     BroadcastReceiverPtr receiver = createReceiver(
                         disk_exchange_mgr,

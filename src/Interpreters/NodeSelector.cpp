@@ -23,8 +23,7 @@ bool isLocal(PlanSegment * plan_segment_ptr)
     return plan_segment_ptr->getParallelSize() == 0 || plan_segment_ptr->getClusterName().empty();
 }
 
-void setParallelIndexAndSourceAddrs(
-    PlanSegment * plan_segment_ptr, DAGGraph * dag_graph_ptr, NodeSelectorResult * result, Poco::Logger * log)
+void NodeSelector::setParallelIndexAndSourceAddrs(PlanSegment * plan_segment_ptr, NodeSelectorResult * result)
 {
     LOG_TRACE(log, "Set parallel index for segment id {}", plan_segment_ptr->getPlanSegmentId());
     //set parallel index
@@ -32,6 +31,7 @@ void setParallelIndexAndSourceAddrs(
         result->indexes.emplace_back(parallel_index_id_index);
 
     //set input source addresses
+    bool first_local_input = true;
     for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
     {
         auto plan_segment_input_id = plan_segment_input->getPlanSegmentId();
@@ -50,13 +50,16 @@ void setParallelIndexAndSourceAddrs(
                 if (plan_segment_output->getExchangeId() != plan_segment_input->getExchangeId())
                     continue;
                 // if data is write to local, so no need to shuffle data
-                if (plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
-                    || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                if ((plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                     || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                    && first_local_input)
                 {
                     LOG_TRACE(log, "Local plan segment plan_segment_input_id:{}", plan_segment_input_id);
                     source_iter
                         = result->source_addresses.emplace(plan_segment_input_id, AddressInfos{AddressInfo("localhost", 0, "", "")}).first;
                     source_iter->second.parallel_index = 0;
+                    if (query_context->getSettingsRef().bsp_mode)
+                        first_local_input = false;
                 }
                 else
                 {
@@ -288,7 +291,7 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
         }
     }
 
-    setParallelIndexAndSourceAddrs(plan_segment_ptr, dag_graph_ptr, &result, log);
+    setParallelIndexAndSourceAddrs(plan_segment_ptr, &result);
     auto it = dag_graph_ptr->id_to_segment.find(segment_id);
     if (it == dag_graph_ptr->id_to_segment.end())
         throw Exception("Logical error: plan segment segment can not be found", ErrorCodes::LOGICAL_ERROR);

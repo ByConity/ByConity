@@ -17,3 +17,6 @@ select hex(UUIDStringToNum('00112233-4455-6677-8899-aabbccddeeff', 1));
 select hex(UUIDStringToNum('00112233-4455-6677-8899-aabbccddeeff', 2));
 select UUIDNumToString(UUIDStringToNum('00112233-4455-6677-8899-aabbccddeeff', 1), 1);
 select UUIDNumToString(UUIDStringToNum('00112233-4455-6677-8899-aabbccddeeff', 2), 2);
+
+-- Mysql compatibility
+select toTypeName(uuid());

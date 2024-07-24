@@ -49,6 +49,8 @@ public:
     AccessControlManager();
     ~AccessControlManager() override;
 
+    bool isSensitiveTenant(const String & tenant) const;
+
     /// Initializes access storage (user directories).
     void setUpFromMainConfig(const Poco::Util::AbstractConfiguration & config_, const String & config_path_,
                              const zkutil::GetZooKeeper & get_zookeeper_function_);
@@ -133,7 +135,8 @@ public:
         const Settings & settings,
         const String & current_database,
         const ClientInfo & client_info,
-        const String & tenant) const;
+        const String & tenant,
+        bool has_tenant_id_in_username) const;
 
     std::shared_ptr<const ContextAccess> getContextAccess(const ContextAccessParams & params) const;
 
