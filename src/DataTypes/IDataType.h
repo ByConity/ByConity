@@ -487,6 +487,7 @@ struct WhichDataType
     constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString(); }
     constexpr bool isBitmap64() const { return idx == TypeIndex::BitMap64; }
 
+    constexpr bool isLowCarnality() const { return idx == TypeIndex::LowCardinality; }
 };
 
 /// IDataType helpers (alternative for IDataType virtual methods with single point of truth)
