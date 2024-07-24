@@ -57,7 +57,8 @@ inline UInt64 ALWAYS_INLINE normalizedQueryHash(const char * begin, const char *
         }
 
         /// Slightly normalize something that look like aliases - if they are complex, replace them to `?` placeholders.
-        if (token.type == TokenType::QuotedIdentifier
+        if (token.type == TokenType::BackQuotedIdentifier
+            || token.type == TokenType::DoubleQuotedIdentifier
             /// Differentiate identifier from function (example: SHA224(x)).
             /// By the way, there is padding in columns and pointer dereference is Ok.
             || (token.type == TokenType::BareWord && *token.end != '('))
@@ -193,7 +194,8 @@ inline void ALWAYS_INLINE normalizeQueryToPODArray(const char * begin, const cha
         }
 
         /// Slightly normalize something that look like aliases - if they are complex, replace them to `?` placeholders.
-        if (token.type == TokenType::QuotedIdentifier
+        if (token.type == TokenType::BackQuotedIdentifier
+            || token.type == TokenType::DoubleQuotedIdentifier
             /// Differentiate identifier from function (example: SHA224(x)).
             /// By the way, there is padding in columns and pointer dereference is Ok.
             || (token.type == TokenType::BareWord && *token.end != '('))

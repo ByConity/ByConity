@@ -199,9 +199,9 @@ Token Lexer::nextTokenImpl()
         case '\'':
             return quotedString<'\'', TokenType::StringLiteral, TokenType::ErrorSingleQuoteIsNotClosed>(pos, token_begin, end);
         case '"':
-            return quotedString<'"', TokenType::QuotedIdentifier, TokenType::ErrorDoubleQuoteIsNotClosed>(pos, token_begin, end);
+            return quotedString<'"', TokenType::DoubleQuotedIdentifier, TokenType::ErrorDoubleQuoteIsNotClosed>(pos, token_begin, end);
         case '`':
-            return quotedString<'`', TokenType::QuotedIdentifier, TokenType::ErrorBackQuoteIsNotClosed>(pos, token_begin, end);
+            return quotedString<'`', TokenType::BackQuotedIdentifier, TokenType::ErrorBackQuoteIsNotClosed>(pos, token_begin, end);
 
         case '(':
             return Token(TokenType::OpeningRoundBracket, token_begin, ++pos);
@@ -228,7 +228,8 @@ Token Lexer::nextTokenImpl()
                     || prev_significant_token_type == TokenType::ClosingRoundBracket
                     || prev_significant_token_type == TokenType::ClosingSquareBracket
                     || prev_significant_token_type == TokenType::BareWord
-                    || prev_significant_token_type == TokenType::QuotedIdentifier
+                    || prev_significant_token_type == TokenType::BackQuotedIdentifier
+                    || prev_significant_token_type == TokenType::DoubleQuotedIdentifier
                     || prev_significant_token_type == TokenType::Number))
                 return Token(TokenType::Dot, token_begin, ++pos);
 

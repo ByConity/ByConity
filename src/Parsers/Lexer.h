@@ -15,7 +15,8 @@ namespace DB
     M(Number)                 /** Always non-negative. No leading plus. 123 or something like 123.456e12, 0x123p12 */ \
     M(StringLiteral)          /** 'hello word', 'hello''word', 'hello\'word\\' */ \
     \
-    M(QuotedIdentifier)       /** "x", `x` */ \
+    M(DoubleQuotedIdentifier)     /** "x" */ \
+    M(BackQuotedIdentifier)       /** `x` */ \
     \
     M(OpeningRoundBracket) \
     M(ClosingRoundBracket) \

@@ -182,7 +182,7 @@ bool ParserSubquery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     /// Identifier in backquotes or in double quotes
-    if (pos->type == TokenType::QuotedIdentifier)
+    if (pos->type == TokenType::BackQuotedIdentifier || pos->type == TokenType::DoubleQuotedIdentifier)
     {
         ReadBufferFromMemory buf(pos->begin, pos->size());
         String s;
@@ -586,7 +586,7 @@ bool ParserTableFunctionView::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
     ParserIdentifier id_parser;
 
     ParserSelectWithUnionQuery select(dt);
-    
+
     ASTPtr identifier;
     ASTPtr query;
 
@@ -1025,7 +1025,8 @@ bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
     const char * data_begin = pos->begin;
     const char * data_end = pos->end;
-    bool is_string_literal = pos->type == TokenType::StringLiteral;
+    bool is_double_quoted_string = pos->type == TokenType::DoubleQuotedIdentifier;
+    bool is_string_literal = pos->type == TokenType::StringLiteral || is_double_quoted_string;
 
     if (pos->type == TokenType::Minus)
     {
@@ -1078,7 +1079,7 @@ bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 if (!isOneOf<TokenType::OpeningSquareBracket, TokenType::OpeningRoundBracket, TokenType::Comma, TokenType::Minus>(last_token))
                     return false;
             }
-            else if (isOneOf<TokenType::StringLiteral, TokenType::Minus>(pos->type))
+            else if (isOneOf<TokenType::StringLiteral, TokenType::Minus, TokenType::BackQuotedIdentifier>(pos->type))
             {
                 if (!isOneOf<TokenType::OpeningSquareBracket, TokenType::OpeningRoundBracket, TokenType::Comma>(last_token))
                     return false;
@@ -1110,7 +1111,10 @@ bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         if (is_string_literal)
         {
             ReadBufferFromMemory buf(data_begin, data_size);
-            readQuotedStringWithSQLStyle(s, buf);
+            if (!is_double_quoted_string)
+                readQuotedStringWithSQLStyle(s, buf);
+            else
+                readDoubleQuotedStringWithSQLStyle(s, buf);
             assert(buf.count() == data_size);
         }
         else
@@ -1289,7 +1293,7 @@ bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
         function_node->name += "OrderBy";
     if (has_distinct)
         function_node->name += "Distinct";
-    
+
     if (order_by_list)
     {
         for (const ASTPtr & order_by_elem : order_by_list->children)
@@ -1306,7 +1310,7 @@ bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
     {
         if (!expr_list_params)
             expr_list_params = std::make_shared<ASTExpressionList>();
-        
+
         for (ASTPtr order_by_elem_ : order_by_list->children)
         {
             auto order_by_elem = order_by_elem_->as<ASTOrderByElement>();
@@ -2063,12 +2067,34 @@ static bool makeHexOrBinStringLiteral(IParser::Pos & pos, ASTPtr & node, bool he
 bool ParserStringLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     if (pos->type != TokenType::StringLiteral && pos->type != TokenType::HereDoc)
-        return false;
+    {
+        if (dt.ansi_quotes)
+            return false;
+        if (pos->type != TokenType::DoubleQuotedIdentifier)
+            return false;
+    }
 
     String s;
 
-    if (pos->type == TokenType::StringLiteral)
+    if (pos->type == TokenType::StringLiteral || pos->type == TokenType::DoubleQuotedIdentifier)
     {
+        if (pos->type == TokenType::DoubleQuotedIdentifier)
+        {
+            Expected tmp_expected;
+            Pos tmp = pos;
+            ASTPtr id_list;
+
+            if (ParserList(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Dot), false)
+                .parse(tmp, id_list, tmp_expected))
+            {
+                const auto & list = id_list->as<ASTExpressionList &>();
+                auto sz = list.children.size();
+                /* It's not string literal */
+                if (sz == 2 || sz == 3)
+                    return false;
+            }
+        }
+
         if (*pos->begin == 'x' || *pos->begin == 'X')
         {
             constexpr size_t word_size = 2;
@@ -2085,7 +2111,10 @@ bool ParserStringLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
 
         try
         {
-            readQuotedStringWithSQLStyle(s, in);
+            if (pos->type == TokenType::StringLiteral)
+                readQuotedStringWithSQLStyle(s, in);
+            else
+                readDoubleQuotedStringWithSQLStyle(s, in);
         }
         catch (const Exception &)
         {
@@ -2175,7 +2204,7 @@ bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserNull null_p;
     ParserNumber num_p(dt);
     ParserBool bool_p;
-    ParserStringLiteral str_p;
+    ParserStringLiteral str_p(dt);
 
     if (null_p.parse(pos, node, expected))
         return true;
@@ -2274,7 +2303,7 @@ bool ParserColumnsMatcher::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
 {
     ParserKeyword columns("COLUMNS");
     ParserList columns_p(std::make_unique<ParserCompoundIdentifier>(false, true), std::make_unique<ParserToken>(TokenType::Comma), false);
-    ParserStringLiteral regex;
+    ParserStringLiteral regex(dt);
 
     if (!columns.ignore(pos, expected))
         return false;
@@ -2354,7 +2383,7 @@ bool ParserColumnsTransformers::parseImpl(Pos & pos, ASTPtr & node, Expected & e
         {
             ++pos;
 
-            ParserStringLiteral parser_string_literal;
+            ParserStringLiteral parser_string_literal(dt);
             ASTPtr ast_prefix_name;
             if (!parser_string_literal.parse(pos, ast_prefix_name, expected))
                 return false;
@@ -2383,7 +2412,7 @@ bool ParserColumnsTransformers::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
         ASTs identifiers;
         ASTPtr regex_node;
-        ParserStringLiteral regex;
+        ParserStringLiteral regex(dt);
         auto parse_id = [&identifiers, &pos, &expected]
         {
             ASTPtr identifier;
@@ -2814,7 +2843,7 @@ bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     ParserKeyword from("FROM");
     ParserKeyword to("TO");
     ParserKeyword step("STEP");
-    ParserStringLiteral collate_locale_parser;
+    ParserStringLiteral collate_locale_parser(dt);
     ParserExpressionWithOptionalAlias exp_parser(false, dt);
 
     ASTPtr expr_elem;
@@ -2944,7 +2973,7 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserToken s_eq(TokenType::Equals);
 
     ParserIdentifier parser_identifier;
-    ParserStringLiteral parser_string_literal;
+    ParserStringLiteral parser_string_literal(dt);
     ParserExpression parser_exp(dt);
     ParserExpressionList parser_keys_list(false, dt);
     ParserCodec parser_codec;
@@ -2999,7 +3028,7 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         ASTPtr ast_space_name;
         if (!parser_string_literal.parse(pos, ast_space_name, expected))
             return false;
-        
+
         if(s_where.ignore(pos) && !parser_exp.parse(pos, where_expr, expected))
             return false;
 
@@ -3103,7 +3132,7 @@ bool ParserAssignment::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserEscapeExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserStringLiteral escape_exp;
+    ParserStringLiteral escape_exp(dt);
     if(!escape_exp.parse(pos, node, expected))
         return false;
 

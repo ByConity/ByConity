@@ -89,6 +89,8 @@ struct ParserSettingsImpl
     bool explicit_null_modifiers;
     bool parse_mysql_ddl;
     bool parse_bitwise_operators;
+    /// treat " as identifier quote character (like the ` quote character) and not as a string quote character
+    bool ansi_quotes;
 };
 
 struct ParserSettings
@@ -99,6 +101,7 @@ struct ParserSettings
         .explicit_null_modifiers = false,
         .parse_mysql_ddl = false,
         .parse_bitwise_operators = false,
+        .ansi_quotes = true,
     };
 
     const static inline ParserSettingsImpl MYSQL{
@@ -107,6 +110,7 @@ struct ParserSettings
         .explicit_null_modifiers = true,
         .parse_mysql_ddl = true,
         .parse_bitwise_operators = true,
+        .ansi_quotes = false,
     };
 
     const static inline ParserSettingsImpl ANSI{
@@ -115,6 +119,7 @@ struct ParserSettings
         .explicit_null_modifiers = true,
         .parse_mysql_ddl = false,
         .parse_bitwise_operators = false,
+        .ansi_quotes = true,
     };
 
     // deprecated. use `valueOf(const Settings & s)` instead

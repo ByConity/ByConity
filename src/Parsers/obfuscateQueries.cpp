@@ -902,7 +902,7 @@ void obfuscateQueries(
                 obfuscateIdentifier(whole_token, result, obfuscate_map, used_nouns, hash_func);
             }
         }
-        else if (token.type == TokenType::QuotedIdentifier)
+        else if (token.type == TokenType::DoubleQuotedIdentifier || token.type == TokenType::BackQuotedIdentifier)
         {
             assert(token.size() >= 2);
 
