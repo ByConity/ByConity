@@ -88,6 +88,7 @@ struct ParserSettingsImpl
     /// demonstrate nullable info with explicit null modifiers (including nested types)
     bool explicit_null_modifiers;
     bool parse_mysql_ddl;
+    bool parse_bitwise_operators;
 };
 
 struct ParserSettings
@@ -96,21 +97,24 @@ struct ParserSettings
         .parse_literal_as_decimal = false,
         .apply_adaptive_type_cast = false,
         .explicit_null_modifiers = false,
-        .parse_mysql_ddl = false
+        .parse_mysql_ddl = false,
+        .parse_bitwise_operators = false,
     };
 
     const static inline ParserSettingsImpl MYSQL{
         .parse_literal_as_decimal = true,
         .apply_adaptive_type_cast = false,
         .explicit_null_modifiers = true,
-        .parse_mysql_ddl = true
+        .parse_mysql_ddl = true,
+        .parse_bitwise_operators = true,
     };
 
     const static inline ParserSettingsImpl ANSI{
         .parse_literal_as_decimal = true,
         .apply_adaptive_type_cast = false,
         .explicit_null_modifiers = true,
-        .parse_mysql_ddl = false
+        .parse_mysql_ddl = false,
+        .parse_bitwise_operators = false,
     };
 
     // deprecated. use `valueOf(const Settings & s)` instead

@@ -22,6 +22,7 @@
 #pragma once
 
 #include <list>
+#include <functional>
 
 #include <Parsers/IParserBase.h>
 #include <Parsers/CommonParsers.h>
@@ -291,12 +292,32 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserBitwiseXorExpression : public IParserDialectBase
+{
+    static const char * operators[];
+    ParserUnaryExpression & nested_parser = *new ParserUnaryExpression(dt);
+    ParserLeftAssociativeBinaryOperatorList operator_parser {operators, std::unique_ptr<ParserUnaryExpression>(&nested_parser)};
+
+protected:
+    const char * getName() const override { return "bitwise xor expression"; }
+
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    {
+        if (dt.parse_bitwise_operators)
+            return operator_parser.parse(pos, node, expected);
+        else
+            return nested_parser.parse(pos, node, expected);
+    }
+
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
 
 class ParserMultiplicativeExpression : public IParserDialectBase
 {
 private:
     static const char * operators[];
-    ParserLeftAssociativeBinaryOperatorList operator_parser {operators, std::make_unique<ParserUnaryExpression>(dt)};
+    ParserLeftAssociativeBinaryOperatorList operator_parser {operators, std::make_unique<ParserBitwiseXorExpression>(dt)};
 
 protected:
     const char * getName() const  override { return "multiplicative expression"; }
@@ -406,10 +427,67 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserShiftExpression : public IParserDialectBase
+{
+    static const char * operators[];
+    ParserAdditiveExpression & nested_parser = *new ParserAdditiveExpression(dt);
+    ParserLeftAssociativeBinaryOperatorList operator_parser{operators, std::unique_ptr<ParserAdditiveExpression>(&nested_parser)};
+protected:
+    const char * getName() const override { return "shift expression"; }
+
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    {
+        if (dt.parse_bitwise_operators)
+            return operator_parser.parse(pos, node, expected);
+        else
+            return nested_parser.parse(pos, node, expected);
+    }
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+class ParserBitwiseAndExpression : public IParserDialectBase
+{
+    static const char * operators[];
+    ParserShiftExpression & nested_parser = *new ParserShiftExpression(dt);
+    ParserLeftAssociativeBinaryOperatorList operator_parser{operators, std::unique_ptr<ParserShiftExpression>(&nested_parser)};
+protected:
+    const char * getName() const override { return "bitAnd expression"; }
+
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    {
+        if (dt.parse_bitwise_operators)
+            return operator_parser.parse(pos, node, expected);
+        else
+            return nested_parser.parse(pos, node, expected);
+    }
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+class ParserBitwiseOrExpression : public IParserDialectBase
+{
+    static const char * operators[];
+    ParserBitwiseAndExpression & nested_parser = *new ParserBitwiseAndExpression(dt);
+    ParserLeftAssociativeBinaryOperatorList operator_parser{operators, std::unique_ptr<ParserBitwiseAndExpression>(&nested_parser)};
+protected:
+    const char * getName() const  override { return "bitOr expression"; }
+
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    {
+        if (dt.parse_bitwise_operators)
+            return operator_parser.parse(pos, node, expected);
+        else
+            return nested_parser.parse(pos, node, expected);
+    }
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 
 class ParserConcatExpression : public IParserDialectBase
 {
-    ParserVariableArityOperatorList operator_parser {"||", "concat", std::make_unique<ParserAdditiveExpression>(dt), dt};
+    ParserVariableArityOperatorList operator_parser {"||", "concat", std::make_unique<ParserBitwiseOrExpression>(dt), dt};
 
 protected:
     const char * getName() const override { return "string concatenation expression"; }

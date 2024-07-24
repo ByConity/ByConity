@@ -40,6 +40,8 @@ namespace DB
     M(Minus) \
     M(Slash) \
     M(Percent) \
+    M(BitLeftShift) \
+    M(BitRightShift) \
     M(Arrow)                  /** ->. Should be distinguished from minus operator. */ \
     M(QuestionMark) \
     M(Colon) \
@@ -47,6 +49,9 @@ namespace DB
     M(Equals) \
     M(NotEquals) \
     M(BitEquals) \
+    M(BitOr) \
+    M(BitAnd) \
+    M(BitXor) \
     M(Less) \
     M(Greater) \
     M(LessOrEquals) \
@@ -68,7 +73,6 @@ namespace DB
     M(ErrorDoubleQuoteIsNotClosed) \
     M(ErrorBackQuoteIsNotClosed) \
     M(ErrorSingleExclamationMark) \
-    M(ErrorSinglePipeMark) \
     M(ErrorWrongNumber) \
     M(ErrorMaxQuerySizeExceeded) \
 
