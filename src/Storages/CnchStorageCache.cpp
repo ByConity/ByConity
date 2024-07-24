@@ -96,4 +96,16 @@ void CnchStorageCache::clear()
     Base::reset();
 }
 
+size_t CnchStorageCache::uuidNameMappingSize()
+{
+    std::unique_lock<std::shared_mutex> lock(cache_mutex);
+    return uuid_to_table_names.size();
+}
+
+void CnchStorageCache::onEvict(const Key & key)
+{
+    // Note, We already get cache lock when onEvict calls. No need to get lock here
+    uuid_to_table_names.right.erase(key);
+}
+
 }

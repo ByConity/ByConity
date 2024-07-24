@@ -618,12 +618,16 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             auto part_cache_metrics = cache_manager->dumpPartCache();
             auto storage_cache_metrics = cache_manager->dumpStorageCache();
             auto delete_bitmap_cache_metrics = cache_manager->dumpDeleteBitmapCache();
-            new_values["CnchPartCachePartitions"] = part_cache_metrics.first;
-            new_values["CnchPartCacheParts"] = part_cache_metrics.second;
-            new_values["CnchStorageCacheTables"] = storage_cache_metrics.first;
-            new_values["CnchStorageCacheBytes"] = storage_cache_metrics.second;
-            new_values["CnchDeleteBitmapCacheParitions"] = delete_bitmap_cache_metrics.first;
-            new_values["CnchDeleteBitmapCacheBitmaps"] = delete_bitmap_cache_metrics.second;
+            new_values["CnchPartCachePartitions"] = std::get<0>(part_cache_metrics);
+            new_values["CnchPartCacheParts"] = std::get<1>(part_cache_metrics);
+            new_values["CnchPartCacheInnerContainerSize"] = std::get<2>(part_cache_metrics);
+            new_values["CnchStorageCacheTables"] = std::get<0>(storage_cache_metrics);
+            new_values["CnchStorageCacheBytes"] = std::get<1>(storage_cache_metrics);
+            new_values["CnchStorageCacheInnerContainerSize"] = std::get<2>(storage_cache_metrics);
+            new_values["CnchStorageCacheMappingSize"] = std::get<3>(storage_cache_metrics);
+            new_values["CnchDeleteBitmapCacheParitions"] = std::get<0>(delete_bitmap_cache_metrics);
+            new_values["CnchDeleteBitmapCacheBitmaps"] = std::get<1>(delete_bitmap_cache_metrics);
+            new_values["CnchDeleteBitmapCacheInnerContainerSize"] = std::get<2>(delete_bitmap_cache_metrics);
         }
     }
 
