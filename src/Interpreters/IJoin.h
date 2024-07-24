@@ -111,19 +111,19 @@ public:
     /// Returns empty block on EOF
     Block next()
     {
-        if (finished)
-            return {};
+        // if (finished)
+        //     return {};
 
         if (Block res = nextImpl())
             return res;
 
-        finished = true;
+        // finished = true;
         return {};
     }
 
     virtual ~IBlocksStream() = default;
 
-    bool isFinished() const { return finished; }
+    // bool isFinished() const { return finished; }
 
 protected:
     virtual Block nextImpl() = 0;

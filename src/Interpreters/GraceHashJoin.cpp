@@ -622,8 +622,6 @@ void GraceHashJoin::joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_p
 
 
     inMemoryJoinBlock(block, not_processed);
-    if (not_processed)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unhandled not processed block in GraceHashJoin");
 }
 
 void GraceHashJoin::setTotals(const Block & block)
@@ -688,7 +686,7 @@ public:
     {
     }
 
-    Block nextImpl() override
+    Block nextImpl0()
     {
         ExtraBlockPtr not_processed = nullptr;
 
@@ -720,9 +718,12 @@ public:
 
         do
         {
+            if (eof) 
+                return {};
             block = left_reader.read();
             if (!block)
             {
+                eof = true;
                 return {};
             }
 
@@ -763,6 +764,21 @@ public:
         return block;
     }
 
+    Block nextImpl() override
+    {
+        Block ret;
+        do {
+            if (eof) {
+                std::lock_guard lock(extra_block_mutex);
+                if (not_processed_blocks.empty()) {
+                    return {};
+                }
+            }
+            ret = nextImpl0();
+        } while(!ret);
+        return ret;
+    }
+
     size_t current_bucket;
     Buckets buckets;
     InMemoryJoinPtr hash_join;
@@ -774,6 +790,7 @@ public:
 
     std::mutex extra_block_mutex;
     std::list<ExtraBlockPtr> not_processed_blocks TSA_GUARDED_BY(extra_block_mutex);
+    std::atomic<bool> eof{false};
 
     bool rehash;
 
