@@ -240,6 +240,11 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         parts_to_dump.push_back(std::move(drop_part));
         bitmaps_to_dump.push_back(LocalDeleteBitmap::createTombstone(drop_part_info, txn_id.toUInt64(), part->bucket_number));
     }
+
+    /// 0 rows part may come from unique table or DELETE mutation, and we can safely mark it as deleted.
+    if (merged_part->rows_count == 0)
+        merged_part->deleted = true;
+
     parts_to_dump.push_back(merged_part);
 
     if (isCancelled())
@@ -320,9 +325,13 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
     updateDeleteBitmap(*catalog, merger, merged_part_bitmap);
 
     /// dump merged part's bitmap
-    auto final_bitmap_to_dump = LocalDeleteBitmap::createBase(merged_part->info, merged_part_bitmap, txn_id.toUInt64(), merged_part->bucket_number);
-    auto new_dumped_data = cnch_writer.dumpCnchParts(/*parts*/ {}, {final_bitmap_to_dump}, /*staged parts*/ {});
-    dumped_data.bitmaps.push_back(new_dumped_data.bitmaps.front());
+    /// if merged_part is already marked as deleted, we can skip dumping the final bitmap (it must be empty and will never be touched by queries).
+    if (!merged_part->deleted)
+    {
+        auto final_bitmap_to_dump = LocalDeleteBitmap::createBase(merged_part->info, merged_part_bitmap, txn_id.toUInt64(), merged_part->bucket_number);
+        auto new_dumped_data = cnch_writer.dumpCnchParts(/*parts*/ {}, {final_bitmap_to_dump}, /*staged parts*/ {});
+        dumped_data.bitmaps.push_back(new_dumped_data.bitmaps.front());
+    }
 
     cnch_writer.commitDumpedParts(dumped_data);
     auto commit_time = getContext()->getCurrentTransaction()->commitV2();
