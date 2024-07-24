@@ -53,6 +53,7 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_FORMAT;
     extern const int SUPPORT_IS_DISABLED;
+    extern const int TOO_MANY_PARTITIONS;
 }
 
 static std::optional<UInt64> get_file_hash_index(const String & hive_file_path)
@@ -221,6 +222,19 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     HiveWhereOptimizer optimizer(metadata_snapshot, query_info);
 
     HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info, optimizer);
+
+    const auto & settings = local_context->getSettingsRef();
+    if (settings.max_partitions_to_read > 0)
+    {
+        if (partitions.size() > static_cast<size_t>(settings.max_partitions_to_read ))
+        {
+            throw Exception(
+                ErrorCodes::TOO_MANY_PARTITIONS,
+                "Too many partitions to read. Current {}, max {}",
+                partitions.size(),
+                settings.max_partitions_to_read);
+        }
+    }
     HiveFiles hive_files;
     std::mutex mu;
 
@@ -258,7 +272,6 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     }
 
     size_t total_hive_files = hive_files.size();
-    const auto & settings = local_context->getSettingsRef();
     if (isBucketTable() && settings.use_hive_cluster_key_filter)
     {
         auto required_bucket = getSelectedBucketNumber(local_context, query_info, metadata_snapshot, optimizer);
@@ -732,7 +745,7 @@ void registerStorageCnchHive(StorageFactory & factory)
                 chassert(cluster_by_ast->children.size() == 2);
                 auto bucket_num = cluster_by_ast->children[1];
                 auto func_hash = makeASTFunction("javaHash", cluster_by_ast->children[0]);
-                auto func_mod = makeASTFunction("modulo", ASTs{func_hash, bucket_num});
+                auto func_mod = makeASTFunction("hiveModulo", ASTs{func_hash, bucket_num});
                 auto cluster_by_key = std::make_shared<ASTClusterByElement>(func_mod, bucket_num, -1, false, false);
                 metadata.cluster_by_key = KeyDescription::getClusterByKeyFromAST(cluster_by_key, metadata.columns, args.getContext());
             }

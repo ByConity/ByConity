@@ -207,4 +207,19 @@ struct PositiveModuloImpl : ModuloImpl<A, B>
         return static_cast<ResultType>(res);
     }
 };
+
+template <typename A, typename B>
+struct HiveModuloImpl : ModuloImpl<A, B>
+{
+    using ResultType = typename ModuloImpl<Int32, B>::ResultType;
+
+    template <typename Result = ResultType>
+    static inline Result apply(A a, B b)
+    {
+        Int32 x = static_cast<Int32>(0x7FFFFFFF & static_cast<UInt32>(a));
+        auto res = ModuloImpl<Int32, B>::template apply<ResultType>(x, b);
+        return static_cast<ResultType>(res);
+    }
+};
+
 }
