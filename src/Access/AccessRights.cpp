@@ -1,18 +1,15 @@
 #include <Access/AccessRights.h>
-#include <Access/ContextAccess.h>
 #include <common/logger_useful.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/algorithm/sort.hpp>
 #include <unordered_map>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
-    extern const int UNKNOWN_DATABASE;
 }
 
 namespace
@@ -1045,52 +1042,6 @@ String AccessRightsBase<IsSensitive>::toString() const
     return getElements().toString();
 }
 
-template <typename... Args>
-static bool checkTenantsAccess(const Args &... args)
-{
-    if constexpr (sizeof...(args) >= 1)
-    {
-
-        const auto & tuple = std::make_tuple(args...);
-        const auto & database = std::get<0>(tuple);
-
-        /* always disable access to default database for tenants */
-        if (database == "default")
-        {
-            if (!current_thread)
-                return true;
-
-            const auto ctx = current_thread->getQueryContext();
-
-            if (!ctx)
-                return true;
-
-            if (ctx->getAccess()->getParams().has_tenant_id_in_username)
-                throw Exception("Database not found.", ErrorCodes::UNKNOWN_DATABASE);
-        }
-
-        if constexpr (sizeof...(args) >= 2)
-        {
-            /* always disable access to system tables for tenants */
-            if (database != "system")
-                return true;
-
-            if (!current_thread)
-                return true;
-
-            const auto ctx = current_thread->getQueryContext();
-
-            if (!ctx)
-                return true;
-
-            const auto & table = std::get<1>(tuple);
-            return ctx->getAccess()->isAlwaysAccessibleTableInSystem(table);
-        }
-    }
-
-    return true;
-}
-
 template <bool grant_option, typename... Args>
 bool AccessRights::isGrantedImpl(const AccessFlags & flags, const Args &... args) const
 {
@@ -1098,9 +1049,6 @@ bool AccessRights::isGrantedImpl(const AccessFlags & flags, const Args &... args
     {
         if (!root_node)
             return flags.isEmpty();
-
-        if (!checkTenantsAccess(args...))
-            return false;
 
         return root_node->isGranted(flags, args...);
     };
@@ -1277,9 +1225,6 @@ bool SensitiveAccessRights::isGrantedImpl(const std::unordered_set<std::string_v
     {
         if (!root_node)
             return flags.isEmpty();
-
-        if (!checkTenantsAccess(args...))
-            return false;
 
         return root_node->isGranted(sensitive_columns, flags, args...);
     };
