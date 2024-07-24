@@ -48,8 +48,7 @@
 	url = https://github.com/ClickHouse-Extras/Turbo-Base64.git
 [submodule "contrib/arrow"]
 	path = contrib/arrow
-	url = https://github.com/ClickHouse-Extras/arrow
-	branch = clickhouse-arrow-2.0.0
+	url = git@github.com:ByConity/clickhouse-arrow.git
 [submodule "contrib/thrift"]
 	path = contrib/thrift
 	url = https://github.com/apache/thrift.git
@@ -97,7 +96,7 @@
 	url = https://github.com/ClickHouse-Extras/fastops
 [submodule "contrib/orc"]
 	path = contrib/orc
-	url = https://github.com/ClickHouse-Extras/orc
+	url = git@code.byted.org:dp/clickhouse-orc.git
 [submodule "contrib/sparsehash-c11"]
 	path = contrib/sparsehash-c11
 	url = https://github.com/sparsehash/sparsehash-c11.git

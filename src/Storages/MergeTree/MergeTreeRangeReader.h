@@ -20,12 +20,15 @@
  */
 
 #pragma once
+#include <optional>
 #include <Core/Block.h>
+#include <Storages/MergeTree/MarkRange.h>
 #include <common/logger_useful.h>
 #include "Storages/MergeTree/IMergeTreeDataPart_fwd.h"
-#include <Storages/MergeTree/MarkRange.h>
-#include <optional>
 
+#include "IMergeTreeDataPart.h"
+#include "Parsers/IAST_fwd.h"
+#include "Storages/MergeTree/IMergeTreeDataPart.h"
 namespace DB
 {
 

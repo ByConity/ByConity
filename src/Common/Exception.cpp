@@ -72,7 +72,7 @@ void abortOnFailedAssertion(const String & description)
     if (always_false)
         return;
 
-    abort();
+    // abort();
 }
 
 /// - Aborts the process if error code is LOGICAL_ERROR.

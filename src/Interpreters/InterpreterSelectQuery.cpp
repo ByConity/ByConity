@@ -1255,6 +1255,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
                 expressions.prewhere_info->remove_prewhere_column);
 
             prewhere_step->setStepDescription("PREWHERE");
+
             query_plan.addStep(std::move(prewhere_step));
         }
     }

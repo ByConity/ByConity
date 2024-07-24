@@ -41,6 +41,8 @@ private:
     mutable std::unique_ptr<ReadBuffer> buf;
     mutable std::shared_ptr<arrow::Schema> schema;
     mutable std::mutex mutex;
+
+    Poco::Logger * log = &Poco::Logger::get("HiveORCFile");
 };
 
 class ArrowColumnToCHColumn;

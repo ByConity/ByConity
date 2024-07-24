@@ -122,7 +122,7 @@ protected:
     size_t max_decoding_threads;
     bool preserve_order = false;
 
-    const size_t max_pending_chunks_per_row_group = 2;
+    const size_t max_pending_chunks_per_row_group = 8;
 
 
     // Window of active row groups:

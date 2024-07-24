@@ -1958,10 +1958,12 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_parquet_preserve_order, false, "Avoid reordering rows when reading from Parquet files. Usually makes it much slower.", 0) \
     M(Bool, input_format_parquet_coalesce_read, true, "Merge small IO ranges, See arrow::ReadRangeCache", 0) \
     M(Bool, input_format_parquet_use_lazy_io_cache, true, "Lazy caching will trigger io requests when they are requested for the first time. See arrow::ReadRangeCache", 0) \
+    M(Bool, input_format_orc_filter_push_down, true, "When reading Orc files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
     \
     M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
     M(Bool, input_format_arrow_import_nested, false, "Allow to insert array of structs into Nested table in Arrow input format.", 0) \
     M(Bool, input_format_orc_import_nested, false, "Allow to insert array of structs into Nested table in ORC input format.", 0) \
+    M(Bool, input_format_orc_case_insensitive_column_matching, false, "Ignore case when matching ORC columns with CH columns.", 0) \
     M(Bool, input_format_arrow_allow_missing_columns, false, "Allow missing columns while reading Arrow input formats", 0) \
     M(String, output_format_avro_codec, "", "Compression codec used for output. Possible values: 'null', 'deflate', 'snappy'.", 0) \
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
@@ -2008,7 +2010,13 @@ enum PreloadLevelSettings : UInt64
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
     M(Bool, output_format_arrow_string_as_string, false, "Use Arrow String type instead of Binary for String columns", 0) \
     M(Bool, output_format_arrow_fixed_string_as_fixed_byte_array, true, "Use Arrow FIXED_SIZE_BINARY type instead of Binary for FixedString columns.", 0) \
+    M(Bool, input_orc_date_type_out_of_range, false, "Allow orc Date type out of range", 0) \
     M(Bool, output_format_orc_string_as_string, false, "Use ORC String type instead of Binary for String columns", 0) \
+    \
+    M(UInt64, input_format_orc_use_fast_decoder, 0, "Whether to use native ORC decoder", 0) \
+    M(Bool, input_format_orc_use_column_cache, false, "Whether to use column cache", 0) \
+    M(Bool, input_format_orc_use_footer_cache, false, "Whether to use footer cache", 0) \
+    M(Int64, input_format_orc_row_batch_size, 100'000, "Batch size when reading ORC stripes.", 0) \
     M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
     M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
     M(Bool, enable_zero_copy_read, false, "Whether enable zero copy read from cache, it requires uncompressed-cache to be enabled.", 0) \

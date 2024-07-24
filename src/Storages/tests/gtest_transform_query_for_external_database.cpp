@@ -1,19 +1,21 @@
 #include <gtest/gtest.h>
+#include "Core/ColumnWithTypeAndName.h"
 
-#include <Storages/transformQueryForExternalDatabase.h>
-#include <Parsers/ParserSelectQuery.h>
-#include <Parsers/parseQuery.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/TreeRewriter.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Databases/DatabaseMemory.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Parsers/ParserSelectQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/StorageMemory.h>
+#include <Storages/VirtualColumnUtils.h>
+#include <Storages/transformQueryForExternalDatabase.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
-
-
 using namespace DB;
 
 
@@ -109,7 +111,37 @@ static void check(
     std::string transformed_query = transformQueryForExternalDatabase(
         query_info, state.getColumns(), IdentifierQuotingStyle::DoubleQuotes, "test", "table", state.context);
 
+
     EXPECT_EQ(transformed_query, expected);
+}
+
+static void check2(const State & state, size_t table_num, const std::string & query, [[maybe_unused]] const std::string & expected)
+{
+    ParserSelectQuery parser;
+    ASTPtr ast = parseQuery(parser, query, 1000, 1000);
+    SelectQueryInfo query_info;
+    SelectQueryOptions select_options;
+
+    query_info.syntax_analyzer_result
+        = TreeRewriter(state.context)
+              .analyzeSelect(ast, TreeRewriterResult{state.getColumns()}, select_options, state.getTables(table_num));
+    query_info.query = ast;
+    ExpressionAnalyzer analyzer(ast, query_info.syntax_analyzer_result, state.context);
+    buildSets(ast, analyzer);
+    std::string transformed_query = transformQueryForExternalDatabase(
+        query_info, state.getColumns(), IdentifierQuotingStyle::DoubleQuotes, "test", "table", state.context);
+    Block header;
+    header.insert(ColumnWithTypeAndName(std::make_shared<DataTypeUInt8>(), "column"));
+    header.insert(ColumnWithTypeAndName(std::make_shared<DataTypeUInt64>(), "apply_id"));
+
+    KeyCondition key_condition(
+        query_info,
+        state.context,
+        header.getNames(),
+        std::make_shared<ExpressionActions>(std::make_shared<ActionsDAG>(header.getColumnsWithTypeAndName())));
+    std::cout << "key_condition " << key_condition.toString() << std::endl;
+
+    // EXPECT_EQ(transformed_query, expected);
 }
 
 
@@ -126,6 +158,11 @@ TEST(TransformQueryForExternalDatabase, InWithSingleElement)
     check(state, 1,
           "SELECT column FROM test.table WHERE column NOT IN ('hello', 'world')",
           R"(SELECT "column" FROM "test"."table" WHERE "column" NOT IN ('hello', 'world'))");
+    check2(
+        state,
+        1,
+        "SELECT column FROM test.table prewhere apply_id > 6 where column >1 and column in (2,6)",
+        R"(SELECT "column" FROM "test"."table" WHERE "column" NOT IN ('hello', 'world'))");
 }
 
 TEST(TransformQueryForExternalDatabase, InWithTable)

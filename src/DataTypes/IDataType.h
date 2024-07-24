@@ -389,16 +389,16 @@ protected:
     void setCustomization(DataTypeCustomDescPtr custom_desc_) const;
 
     mutable UInt16 flags = 0;
-    
+
     mutable DataTypeCustomNamePtr custom_name;
     mutable SerializationPtr custom_serialization;
 
 public:
     const IDataTypeCustomName * getCustomName() const { return custom_name.get(); }
     const ISerialization * getCustomSerialization() const { return custom_serialization.get(); }
-    
+
     mutable bool enable_zero_cpy_read = false;
-    
+
 private:
     template <typename Ptr>
     Ptr getForSubcolumn(
@@ -486,7 +486,7 @@ struct WhichDataType
     constexpr bool isAggregateFunction() const { return idx == TypeIndex::AggregateFunction; }
     constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString(); }
     constexpr bool isBitmap64() const { return idx == TypeIndex::BitMap64; }
-
+    constexpr bool isLowCardinality() const { return idx == TypeIndex::LowCardinality; }
 };
 
 /// IDataType helpers (alternative for IDataType virtual methods with single point of truth)
@@ -708,7 +708,7 @@ template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeTime> = true;
     M(Int64) \
     M(Float32) \
     M(Float64)
-    
+
 #define FOR_NUMERIC_TYPES(M) \
     M(UInt8) \
     M(UInt16) \

@@ -95,6 +95,13 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.json.defaults_for_missing_elements_in_named_tuple = settings.input_format_json_defaults_for_missing_elements_in_named_tuple;
     format_settings.json.quote_64bit_integers = settings.output_format_json_quote_64bit_integers;
     format_settings.json.quote_denormals = settings.output_format_json_quote_denormals;
+    format_settings.orc.output_string_as_string = settings.output_format_orc_string_as_string;
+    format_settings.orc.allow_out_of_range = settings.input_orc_date_type_out_of_range;
+    format_settings.orc.use_fast_decoder = settings.input_format_orc_use_fast_decoder;
+    format_settings.orc.filter_push_down = settings.input_format_orc_filter_push_down;
+    format_settings.orc.import_nested = settings.input_format_orc_import_nested;
+    format_settings.orc.case_insensitive_column_matching = settings.input_format_orc_case_insensitive_column_matching;
+    format_settings.orc.use_footer_cache = settings.input_format_orc_use_footer_cache;
     format_settings.seekable_read = settings.input_format_allow_seeks;
     format_settings.avoid_buffering = settings.input_format_arrow_avoid_buffering;
     format_settings.null_as_default = settings.input_format_null_as_default;
