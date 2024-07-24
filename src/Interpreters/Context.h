@@ -1686,6 +1686,8 @@ public:
     void setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager);
     PreparedStatementManager * getPreparedStatementManager();
 
+    bool is_tenant_user() const { return has_tenant_id_in_username; }
+
 private:
     bool has_tenant_id_in_username = false;
     String tenant_id;
