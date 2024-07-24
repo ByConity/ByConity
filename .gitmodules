@@ -48,7 +48,7 @@
 	url = https://github.com/ClickHouse-Extras/Turbo-Base64.git
 [submodule "contrib/arrow"]
 	path = contrib/arrow
-	url = git@github.com:ByConity/clickhouse-arrow.git
+	url = https://github.com/ByConity/clickhouse-arrow.git
 [submodule "contrib/thrift"]
 	path = contrib/thrift
 	url = https://github.com/apache/thrift.git
@@ -338,3 +338,6 @@
 [submodule "contrib/nlp-data"]
 	path = contrib/nlp-data
     url = https://github.com/ClickHouse/nlp-data
+[submodule "contrib/libdeflate"]
+	path = contrib/libdeflate
+	url = https://github.com/ByConity/libdeflate.git
