@@ -41,7 +41,9 @@ jobs:
       - name: Setup git proxy
         if: ${{ runner.name != 'ec2-aws-id4-10.10.129.157' }}
         run: | 
+          echo 'proxy:' http://${{ secrets.HTTP_PROXY }}
           git config --global http.proxy http://${{ secrets.HTTP_PROXY }}
+          git config --global https.proxy https://${{ secrets.HTTP_PROXY }}
       - name: Check out repository code
         uses: actions/checkout@v4
         with:
