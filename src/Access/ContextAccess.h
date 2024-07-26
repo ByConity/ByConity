@@ -39,6 +39,7 @@ struct ContextAccessParams
     bool allow_introspection = false;
     bool has_tenant_id_in_username = false;
     bool enable_sensitive_permission = false;
+    bool load_roles = false;
     String current_database;
     ClientInfo::Interface interface = ClientInfo::Interface::TCP;
     ClientInfo::HTTPMethod http_method = ClientInfo::HTTPMethod::UNKNOWN;
@@ -165,12 +166,14 @@ public:
 
     bool isAlwaysAccessibleTableInSystem(const std::string_view & table) const;
 
+    void loadRoles(const UserPtr & user_) const;
+
 private:
     friend class AccessControlManager;
     ContextAccess() {}
     ContextAccess(const AccessControlManager & manager_, const Params & params_);
 
-    void initialize();
+    void initialize(bool load_roles);
     void setUser(const UserPtr & user_) const;
     void setRolesInfo(const std::shared_ptr<const EnabledRolesInfo> & roles_info_) const;
     void setSettingsAndConstraints() const;

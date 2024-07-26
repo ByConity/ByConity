@@ -1577,7 +1577,8 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     auto new_access = getAccessControlManager().getContextAccess(
         new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
         tenant,
-        has_tenant_id_in_username);
+        has_tenant_id_in_username,
+        getServerType() != ServerType::cnch_server);
 
     auto lock = getLock();
     user_id = new_user_id;
@@ -1690,7 +1691,8 @@ void Context::calculateAccessRights()
         access = getAccessControlManager().getContextAccess(
             *user_id, current_roles, use_default_roles, settings, current_database, client_info,
             tenant_id,
-            has_tenant_id_in_username);
+            has_tenant_id_in_username,
+            false);
 }
 
 

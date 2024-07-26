@@ -45,6 +45,8 @@ public:
         return std::accumulate(start, name.cend(), 0) % SHARD_CNT;
     }
 
+    void loadEntities(EntityType type, const std::unordered_set<UUID> & ids) const;
+
 private:
     std::optional<UUID> findImpl(EntityType type, const String & name) const override;
     std::vector<UUID> findAllImpl(EntityType type) const override;

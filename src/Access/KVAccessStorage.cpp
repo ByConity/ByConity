@@ -663,4 +663,14 @@ bool KVAccessStorage::hasSubscriptionImpl(EntityType type) const
     return !handlers.empty();
 }
 
+void KVAccessStorage::loadEntities(EntityType type, const std::unordered_set<UUID> & ids) const
+{
+    Notifications notifications;
+    SCOPE_EXIT({ notify(notifications); });
+    auto entity_models = catalog->getEntities(type, ids);
+
+    for (const auto & entity_model : entity_models)
+        updateCache(type, entity_model, notifications);
+}
+
 }

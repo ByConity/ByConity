@@ -44,13 +44,18 @@ public:
         auto x = cache.get(params);
         if (x)
         {
-            if ((*x)->getUser())
+            auto user_ptr = (*x)->getUser();
+            if (user_ptr)
+            {
+                if (params.load_roles && params.use_default_roles)
+                    (*x)->loadRoles(user_ptr);
                 return *x;
+            }
             /// No user, probably the user has been dropped while it was in the cache.
             cache.remove(params);
         }
         auto res = std::shared_ptr<ContextAccess>(new ContextAccess(manager, params));
-        res->initialize();
+        res->initialize(params.load_roles);
         cache.add(params, res);
         return res;
     }
@@ -440,7 +445,8 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
     const String & current_database,
     const ClientInfo & client_info,
     const String & tenant,
-    bool has_tenant_id_in_username) const
+    bool has_tenant_id_in_username,
+    bool load_roles) const
 {
     ContextAccessParams params;
     params.user_id = user_id;
@@ -454,8 +460,9 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
     params.http_method = client_info.http_method;
     params.address = client_info.current_address.host();
     params.quota_key = client_info.quota_key;
-    params.has_tenant_id_in_username = has_tenant_id_in_username;
-    params.enable_sensitive_permission = has_tenant_id_in_username ? isSensitiveTenant(tenant) : false;
+    params.has_tenant_id_in_username = !tenant.empty();
+    params.enable_sensitive_permission = sensitive_permission_tenants->isSensitivePermissionEnabled(tenant);
+    params.load_roles = load_roles;
 
     /// Extract the last entry from comma separated list of X-Forwarded-For addresses.
     /// Only the last proxy can be trusted (if any).
