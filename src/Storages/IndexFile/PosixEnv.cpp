@@ -63,8 +63,11 @@ namespace
 
         virtual ~PosixRandomAccessFile() override { close(fd_); }
 
-        virtual Status Read(uint64_t offset, size_t n, Slice * result, char * scratch) const override
+        virtual Status Read(uint64_t offset, size_t n, Slice * result, char * scratch, bool * from_local) const override
         {
+            // Read from local unique index file
+            if (from_local)
+                *from_local = true;
             int fd = fd_;
             Status s;
             ssize_t r = pread(fd, scratch, n, static_cast<off_t>(offset));
@@ -83,7 +86,7 @@ namespace
     public:
         RemoteFileWithCache(RemoteFileInfo file_, RemoteFileCachePtr cache_) : file(std::move(file_)), cache(std::move(cache_)) {}
 
-        virtual Status Read(uint64_t offset, size_t n, Slice * result, char * scratch) const override
+        virtual Status Read(uint64_t offset, size_t n, Slice * result, char * scratch, bool * from_local) const override
         {
             Status s;
             int fd = -1;
@@ -92,6 +95,8 @@ namespace
             if (fd < 0)
             {
                 /// fallback to remote read
+                if (from_local)
+                    *from_local = false;
                 try
                 {
                     std::unique_ptr<ReadBufferFromFileBase> buffer = file.disk->readFile(
@@ -119,6 +124,8 @@ namespace
             else
             {
                 /// read from local cached file
+                if (from_local)
+                    *from_local = true;
                 ssize_t r = pread(fd, scratch, n, static_cast<off_t>(offset));
                 *result = Slice(scratch, (r < 0) ? 0 : r);
                 if (r < 0)

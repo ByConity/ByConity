@@ -1195,11 +1195,9 @@ void ColumnLowCardinality::Index::transformIndex(std::unordered_map<UInt64, UInt
         /// TODO: Optimize with SSE?
         for (size_t i = 0; i < size; ++i)
         {
-            const auto it = trans.find(data[i]);
-            if (it != trans.end())
+            if (trans.count(data[i]))
             {
-                auto ind = trans[data[i]];
-                data[i] = ind;
+                data[i] = trans[data[i]];
             }
 
             if (data[i] > max_size)

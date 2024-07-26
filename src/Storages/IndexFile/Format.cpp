@@ -11,6 +11,8 @@
 #include <Storages/IndexFile/Format.h>
 
 #include <Storages/IndexFile/Env.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 #include <Common/Coding.h>
 #include <Common/Crc32c.h>
 
@@ -87,7 +89,8 @@ Status ReadBlock(RandomAccessFile * file, const ReadOptions & options, const Blo
     size_t n = static_cast<size_t>(handle.size());
     char * buf = new char[n + kBlockTrailerSize];
     Slice contents;
-    Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf);
+    bool from_local = false;
+    Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf, &from_local);
     if (!s.ok())
     {
         delete[] buf;
@@ -140,14 +143,18 @@ Status ReadBlock(RandomAccessFile * file, const ReadOptions & options, const Blo
             if (!snappy::GetUncompressedLength(data, n, &ulength))
             {
                 delete[] buf;
-                return Status::Corruption("corrupted compressed block contents");
+                WriteBufferFromOwnString error_msg;
+                error_msg << "corrupted compressed block contents, could not GetUncompressedLength. Try to get " <<  n + kBlockTrailerSize << " bytes from offset " << handle.offset() << ", from local: " << from_local << ", result slice:" << contents.ToString();
+                return Status::Corruption(error_msg.str());
             }
             char * ubuf = new char[ulength];
             if (!snappy::RawUncompress(data, n, ubuf))
             {
                 delete[] buf;
                 delete[] ubuf;
-                return Status::Corruption("corrupted compressed block contents");
+                WriteBufferFromOwnString error_msg;
+                error_msg << "corrupted compressed block contents, could not RawUncompress data. Try to get " <<  n + kBlockTrailerSize << " bytes from offset " << handle.offset() << ", from local: " << from_local << ", result slice:" << contents.ToString();
+                return Status::Corruption(error_msg.str());
             }
             delete[] buf;
             result->data = Slice(ubuf, ulength);

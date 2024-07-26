@@ -63,7 +63,9 @@ Status Table::Open(const Options & options, std::unique_ptr<RandomAccessFile> &&
 
     char footer_space[Footer::kEncodedLength];
     Slice footer_input;
-    Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength, &footer_input, footer_space);
+    /// XXX: Currently from_local is not used
+    bool from_local = false;
+    Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength, &footer_input, footer_space, &from_local);
     if (!s.ok())
         return s;
 
