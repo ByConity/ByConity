@@ -108,6 +108,18 @@ public:
         }
         return true;
     }
+    
+    template<typename F>
+    void computeExpireKeys(F && f)
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        if (map_data.empty())
+            return;
+        for (const auto & [k, v] : map_data)
+        {
+            f(k, v);
+        }
+    }
 
 private:
     bthread::Mutex mutex;
@@ -241,6 +253,14 @@ public:
     Value compute(const Key & key, std::function<Value(const Key &, Value)> func) { return getShard(key).compute(key, func); }
 
     bool remove(const Key & key) { return getShard(key).remove(key); }
+
+    template<typename F>
+    void computeExpireKeys(F && f)
+    {
+        std::for_each(shards.begin(), shards.end(), [&](std::unique_ptr<ConcurrentMapShard<Key, Value>> & element) {
+            element->computeExpireKeys(std::forward<F>(f));
+        });
+    }
 
     size_t size()
     {

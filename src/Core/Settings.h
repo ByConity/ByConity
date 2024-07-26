@@ -1742,6 +1742,8 @@ enum PreloadLevelSettings : UInt64
     M(Float, adjust_range_set_filter_rate, 0.1, "If the prewhere is not range or set, adjust use this value as priority to bloom filter ", 0) \
     M(UInt64, shuffle_aware_ndv_threshold, 0, "Threshold to to use shuffle-aware grf or to use pre enlarge ndv, 0 disable shuffle-aware grf", 0) \
     M(String, runtime_filter_black_list, "", "Runtime filter ids need be blocked", 0) \
+    M(Bool, runtime_filter_parallel_build_for_local, false, "Runtime filter parallel build for local.", 0) \
+    M(UInt64, clean_rf_time_limit, 300000, "Threshold to clean runtime filters in manager to prevent memory leak", 0) \
     \
     /** ip2geo settings */ \
     M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0)\
