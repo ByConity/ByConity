@@ -1123,6 +1123,11 @@ MergeTreeMetaBase::DataPartPtr MergeTreeMetaBase::getPartIfExistsWithoutLock(con
 
 String MergeTreeMetaBase::getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr local_context) const
 {
+    if (const auto & ast_literal = ast->as<ASTLiteral>())
+    {
+        return ast_literal->value.get<String>();
+    }
+
     const auto & partition_ast = ast->as<ASTPartition &>();
 
     if (!partition_ast.value)

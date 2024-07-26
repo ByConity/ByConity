@@ -2633,12 +2633,24 @@ void StorageCnchMergeTree::truncate(
         command.type = PartitionCommand::DROP_PARTITION_WHERE;
         command.partition = std::make_shared<ASTLiteral>(Field(static_cast<UInt8>(1)));
     }
-    /// TRUNCATE TABLE t PARTITION [ID] p
+    /// TRUNCATE TABLE t PARTITION p1, p2, p3
     else if (ast_truncate.partition)
     {
         LOG_TRACE(log, "TRUNCATE PARTITION {}", serializeAST(*ast_truncate.partition));
-        command.type = PartitionCommand::DROP_PARTITION;
-        command.partition = ast_truncate.partition->clone();
+        if (auto * partition_list = typeid_cast<ASTExpressionList *>(ast_truncate.partition.get()))
+        {
+            for (const auto & p : partition_list->children)
+            {
+                PartitionCommand single_command;
+                single_command.type = PartitionCommand::DROP_PARTITION;
+                single_command.partition = p;
+                dropPartitionOrPart(single_command, local_context, nullptr, false);
+            }
+
+            auto txn = local_context->getCurrentTransaction();
+            txn->commitV2();
+            return;
+        }
     }
     /// TRUNCATE TABLE t PARTITION WHERE predicate
     else if (ast_truncate.partition_predicate)
@@ -3325,7 +3337,7 @@ ServerDataPartsWithDBM StorageCnchMergeTree::selectPartsByPartitionCommand(Conte
     /// 2. <COMMAND> PARTITION <ID>:
     ///    - command.part = false
     ///    - command.partition is partition expression
-    /// 3. <COMMAND> PARTHTION WHERE:
+    /// 3. <COMMAND> PARTITION WHERE:
     ///    - command.part = false;
     ///    - command.partition is the WHERE predicate (should only includes partition column)
 
@@ -3350,24 +3362,36 @@ ServerDataPartsWithDBM StorageCnchMergeTree::selectPartsByPartitionCommand(Conte
     }
     else if (!partitionCommandHasWhere(command))
     {
-        const auto & partition = command.partition->as<const ASTPartition &>();
-        if (!partition.id.empty())
+        if (const auto & ast_literal = command.partition->as<ASTLiteral>())
         {
-            /// Predicate: WHERE _partition_id = value, with value is partition.id
+            String partition_id = ast_literal->value.get<String>();
+            /// Predicate: WHERE _partition_id = value, with value is literal partition id.
             auto lhs = std::make_shared<ASTIdentifier>("_partition_id");
-            auto rhs = std::make_shared<ASTLiteral>(Field(partition.id));
+            auto rhs = std::make_shared<ASTLiteral>(Field(partition_id));
             where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
             column_names_to_return.push_back("_partition_id");
         }
         else
         {
-            /// Predicate: WHERE _partition_value = value, with value is partition.value
-            auto lhs = std::make_shared<ASTIdentifier>("_partition_value");
-            auto rhs = partition.value->clone();
-            if (partition.fields_count == 1)
-                rhs = makeASTFunction("tuple", std::move(rhs));
-            where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
-            column_names_to_return.push_back("_partition_value");
+            const auto & partition = command.partition->as<const ASTPartition &>();
+            if (!partition.id.empty())
+            {
+                /// Predicate: WHERE _partition_id = value, with value is partition.id
+                auto lhs = std::make_shared<ASTIdentifier>("_partition_id");
+                auto rhs = std::make_shared<ASTLiteral>(Field(partition.id));
+                where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
+                column_names_to_return.push_back("_partition_id");
+            }
+            else
+            {
+                /// Predicate: WHERE _partition_value = value, with value is partition.value
+                auto lhs = std::make_shared<ASTIdentifier>("_partition_value");
+                auto rhs = partition.value->clone();
+                if (partition.fields_count == 1)
+                    rhs = makeASTFunction("tuple", std::move(rhs));
+                where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
+                column_names_to_return.push_back("_partition_value");
+            }
         }
     }
     else

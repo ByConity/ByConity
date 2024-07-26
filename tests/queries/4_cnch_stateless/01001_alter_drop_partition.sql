@@ -33,10 +33,10 @@ SELECT '------ TRUNCATE PARTITION ------';
 CREATE TABLE t_truncate(k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY (k) ORDER BY m;
 INSERT INTO t_truncate SELECT number, number FROM numbers(10);
 
-TRUNCATE TABLE t_truncate PARTITION (0);
+TRUNCATE TABLE t_truncate PARTITION '0';
 SELECT count() FROM t_truncate; -- 9
 
-TRUNCATE TABLE t_truncate PARTITION ID '1';
+TRUNCATE TABLE t_truncate PARTITION '1';
 SELECT count() FROM t_truncate; -- 8
 
 TRUNCATE TABLE t_truncate PARTITION WHERE k = 2;
@@ -46,7 +46,10 @@ TRUNCATE TABLE t_truncate PARTITION WHERE _partition_id IN ('3', '4');
 SELECT count() FROM t_truncate; -- 5
 
 TRUNCATE TABLE t_truncate PARTITION WHERE _partition_value IN (tuple('5'), tuple('6'));
-SELECT m FROM t_truncate ORDER BY m; -- 7 8 9
+SELECT count() FROM t_truncate; -- 3
+
+TRUNCATE TABLE t_truncate PARTITION '7', '8';
+SELECT m FROM t_truncate ORDER BY m; -- 9
 
 TRUNCATE TABLE t_truncate;
 SELECT count() FROM t_truncate; -- 0
