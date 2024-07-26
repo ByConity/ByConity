@@ -218,6 +218,8 @@ DataTypes getColumnsType(ArgType argType, const Type & arguments)
                 {
                     expectedTypes = {std::make_shared<DataTypeFloat64>(), std::make_shared<DataTypeFloat64>()};
                 }
+                else if (isEnum(left) || isEnum(right))
+                    break;
                 else
                 {
                     auto common_type = getLeastSupertype(DataTypes{left, right});
