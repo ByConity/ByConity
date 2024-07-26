@@ -5,6 +5,7 @@ DROP TABLE IF EXISTS mysql_create_ddl2;
 DROP TABLE IF EXISTS mysql_create_ddl3;
 DROP TABLE IF EXISTS mysql_create_ddl4;
 DROP TABLE IF EXISTS mysql_create_ddl5;
+DROP TABLE IF EXISTS mysql_create_ddl6;
 DROP TABLE IF EXISTS mysql_create_ddl7;
 DROP TABLE IF EXISTS test_create_table_unique1;
 DROP TABLE IF EXISTS test_create_table_unique2;
@@ -72,6 +73,15 @@ CREATE TABLE mysql_create_ddl5
     constraint un1 unique(id)
 );
 
+CREATE TABLE mysql_create_ddl6
+(
+    `id` Int32 NOT NULL,
+    `id2` Decimal(20, 0),
+    `val1` timestamp NOT NULL COMMENT '中文',
+    `val2` varchar NOT NULL DEFAULT 'a',
+    PRIMARY KEY(id, id2)
+) INDEX_ALL='Y' ENGINE='OSS' BLOCK_SIZE=8192 TABLE_PROPERTIES='{"accessid":"******","skip_header_line_count":"1","endpoint":"","accesskey":"******","delimiter":";","url":""}';
+
 describe table mysql_create_ddl1;
 show create table mysql_create_ddl1;
 describe table mysql_create_ddl2;
@@ -82,12 +92,15 @@ describe table mysql_create_ddl4;
 show create table mysql_create_ddl4;
 describe table mysql_create_ddl5;
 show create table mysql_create_ddl5;
+describe table mysql_create_ddl6;
+show create table mysql_create_ddl6;
 
 DROP TABLE mysql_create_ddl1;
 DROP TABLE mysql_create_ddl2;
 DROP TABLE mysql_create_ddl3;
 DROP TABLE mysql_create_ddl4;
 DROP TABLE mysql_create_ddl5;
+DROP TABLE mysql_create_ddl6;
 
 CREATE TABLE test_create_table_unique1
 (

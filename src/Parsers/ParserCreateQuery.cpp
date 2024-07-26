@@ -758,6 +758,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_rt_engine("RT_ENGINE");
     ParserKeyword s_table_properties("TABLE_PROPERTIES");
     ParserKeyword s_hot_partition_count("HOT_PARTITION_COUNT");
+    ParserKeyword s_index_all("INDEX_ALL");
 
     ParserKeyword s_cluster_by("CLUSTER BY");
     ParserKeyword s_primary_key("PRIMARY KEY");
@@ -794,7 +795,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ASTPtr ttl_table;
     ASTPtr settings;
 
-    // MySQL specfic
+    // MySQL specific
     ASTPtr distributed_by;
     ASTPtr storage_policy;
     ASTPtr hot_partition_count;
@@ -809,6 +810,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ASTPtr auto_increment;
     ASTPtr row_format;
     ASTPtr check_sum;
+    ASTPtr index_all;
     bool broadcast = false;
 
     // optional engine
@@ -951,6 +953,15 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         {
             s_eq.ignore(pos, expected);
             if (expression_p.parse(pos, row_format, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!index_all && s_index_all.ignore(pos, expected))
+        {
+            s_eq.ignore(pos, expected);
+            if (expression_p.parse(pos, index_all, expected))
                 continue;
             else
                 return false;
