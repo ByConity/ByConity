@@ -1385,7 +1385,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setFormatSchemaPath(remote_format_schema_path, true);
     try
     {
-        reloadFormatSchema(remote_format_schema_path, format_schema_path.string(), log);
+        reloadFormatSchema(global_context, remote_format_schema_path, format_schema_path.string(), log);
     }
     catch(const Exception &)
     {

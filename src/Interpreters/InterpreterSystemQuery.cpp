@@ -413,7 +413,7 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::RELOAD_FORMAT_SCHEMA:
             // REUSE SYSTEM_RELOAD_CONF
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
-            reloadFormatSchema(system_context->getFormatSchemaPath(true), system_context->getFormatSchemaPath(false));
+            reloadFormatSchema(system_context, system_context->getFormatSchemaPath(true), system_context->getFormatSchemaPath(false));
             break;
         case Type::RELOAD_SYMBOLS:
         {
