@@ -924,6 +924,13 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
     /// parts
     params.assignSourceParts(future_task.parts);
     params.columns_commit_time = future_task.calcColumnsCommitTime();
+
+    const auto & settings = local_context->getSettingsRef();
+    if (settings.parts_preload_level && storage.getSettings()->enable_local_disk_cache)
+    {
+        params.parts_preload_level
+            = storage.getSettings()->enable_preload_parts ? PreloadLevelSettings::AllPreload : storage.getSettings()->parts_preload_level;
+    }
     /// mutation
     if (future_task.mutation_entry)
     {

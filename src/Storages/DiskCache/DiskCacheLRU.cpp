@@ -317,6 +317,14 @@ size_t DiskCacheLRU::writeSegment(const String& seg_key, ReadBuffer& buffer, Res
         // to modify these files now
         disk->replaceFile(temp_cache_rel_path, cache_rel_path);
 
+        if (disk->getFileSize(cache_rel_path) != written_size)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "cached {} file size {} doesn't match written size {}",
+                cache_rel_path,
+                disk->getFileSize(cache_rel_path),
+                written_size);
+
         return written_size;
     }
     catch (...)

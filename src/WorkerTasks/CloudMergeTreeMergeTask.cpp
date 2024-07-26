@@ -107,7 +107,8 @@ void CloudMergeTreeMergeTask::executeImpl()
         MergeMutateAction::updatePartData(part, commit_time);
         part->relative_path = part->info.getPartNameWithHintMutation();
     }
-    cnch_writer.preload(data.parts);
+    if (params.parts_preload_level)
+        cnch_writer.preload(data.parts);
 }
 
 }

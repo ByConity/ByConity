@@ -67,6 +67,7 @@ void CnchWorkerClient::submitManipulationTask(
     request.set_rpc_port(params.rpc_port);
     request.set_columns_commit_time(params.columns_commit_time);
     request.set_is_bucket_table(params.is_bucket_table);
+    request.set_parts_preload_level(params.parts_preload_level);
     if (!params.create_table_query.empty())
         request.set_create_table_query(params.create_table_query);
     fillPartsModelForSend(storage, params.source_parts, *request.mutable_source_parts());
