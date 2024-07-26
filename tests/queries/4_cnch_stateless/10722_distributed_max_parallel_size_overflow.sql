@@ -18,4 +18,8 @@ select * from distributed_max_parallel_size_overflow order by number settings di
 select * from distributed_max_parallel_size_overflow order by number settings distributed_max_parallel_size = 4;
 select * from distributed_max_parallel_size_overflow order by number settings distributed_max_parallel_size = 12;
 
+-- In mpp mode, distributed_max_parallel_size will be aligned to the number of workers.
+set bsp_mode=0;
+select * from distributed_max_parallel_size_overflow order by number settings distributed_max_parallel_size = 12;
+
 drop table distributed_max_parallel_size_overflow;
