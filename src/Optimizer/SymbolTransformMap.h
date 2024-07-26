@@ -36,17 +36,15 @@ public:
 
     ASTPtr inlineReferences(const String & symbol) const { return inlineReferences(std::make_shared<ASTIdentifier>(symbol)); }
 
-    /**
-     * violation may happen when matching the root node, which may contain duplicate,
-     * symbol names with other plan nodes. e.g. select sum(amount) as amount
-     */
-    bool addSymbolMapping(const String & symbol, ConstASTPtr expr) { return symbol_to_expressions.emplace(symbol, std::move(expr)).second; }
-
-    SymbolTransformMap() = default;
-
     String toString() const;
 
 private:
+    /**
+     * violation may happen when illegal plan has symbol transform loop, or contain duplicate
+     * symbol names with other plan nodes. eg, expr1 := cast(expr1, 'UInt8').
+     */
+    bool addSymbolMapping(const String & symbol, ConstASTPtr expr);
+
     std::unordered_map<String, ConstASTPtr> symbol_to_expressions;
 
     // cache
