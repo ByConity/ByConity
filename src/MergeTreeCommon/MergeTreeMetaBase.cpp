@@ -1743,7 +1743,15 @@ TableDefinitionHash MergeTreeMetaBase::getTableHashForClusterBy() const
     UInt64 v1_hash = compatibility::v1::hash(cluster_definition);
     UInt64 v2_hash = compatibility::v2::hash(cluster_definition);
 
-    return {determin_hash, v1_hash, v2_hash};
+    /// Get v1 quoted hash for backward compatibility
+    String quoted_partition_by = partition_by_ast ? queryToString(partition_by_ast, true) : "";
+    String quoted_order_by = order_by_ast ? queryToString(order_by_ast, true) : "";
+    String quoted_cluster_by = cluster_by_ast ? queryToString(cluster_by_ast, true) : "";
+    String quoted_cluster_definition = quoted_partition_by + quoted_order_by + quoted_cluster_by;
+    quoted_cluster_definition.erase(remove(quoted_cluster_definition.begin(), quoted_cluster_definition.end(), '\''), quoted_cluster_definition.end());
+    UInt64 v1_quoted_hash = compatibility::v1::hash(quoted_cluster_definition);
+
+    return {determin_hash, v1_hash, v2_hash, v1_quoted_hash};
 
 }
 

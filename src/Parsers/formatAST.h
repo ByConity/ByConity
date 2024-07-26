@@ -39,7 +39,7 @@ void formatAST(const IAST &ast,
 	       bool always_quote_identifiers = false,
                DialectType dialect = DialectType::CLICKHOUSE);
 
-String serializeAST(const IAST & ast, bool one_line = true);
+String serializeAST(const IAST & ast, bool one_line = true, bool always_quote_identifiers = false);
 
 String serializeASTWithOutAlias(const IAST & ast);
 
