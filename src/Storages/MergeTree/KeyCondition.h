@@ -318,7 +318,6 @@ public:
 
     bool matchesExactContinuousRange(const DataTypes & data_types) const;
 
-private:
     using ColumnIndices = std::map<String, size_t>;
     const ColumnIndices & getKeyColumns() const { return key_columns; }
 
