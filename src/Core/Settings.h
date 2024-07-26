@@ -707,12 +707,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_execution_speed, 0, "Maximum number of execution rows per second.", 0) \
     M(UInt64, min_execution_speed_bytes, 0, "Minimum number of execution bytes per second.", 0) \
     M(UInt64, max_execution_speed_bytes, 0, "Maximum number of execution bytes per second.", 0) \
-    M(Seconds, \
-      timeout_before_checking_execution_speed, \
-      10, \
-      "Check that the speed is not too low after the specified time has elapsed.", \
-      0) \
-\
+    M(Seconds, timeout_before_checking_execution_speed, 0, "Check that the speed is not too low after the specified time has elapsed.", 0) \
+    \
     M(UInt64, max_columns_to_read, 0, "", 0) \
     M(UInt64, max_temporary_columns, 0, "", 0) \
     M(UInt64, max_temporary_non_const_columns, 0, "", 0) \
