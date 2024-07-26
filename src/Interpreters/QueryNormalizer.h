@@ -81,9 +81,6 @@ public:
         ConstStoragePtr storage;
         const StorageMetadataPtr metadata_snapshot;
         bool rewrite_map_col;
-        bool aliases_rewrite_scope; /// 0 - default; 1 - forbid JOIN USING rewrite, prefer_column_name_to_alias
-            /// ignore ORDER BY, used for ANSI
-        bool is_order_by_clause = false; /// tmp data, marked when traversing ORDER BY
 
         Data(
             const Aliases & aliases_,
@@ -94,8 +91,7 @@ public:
             ContextPtr context_ = {},
             ConstStoragePtr storage_ = nullptr,
             const StorageMetadataPtr & metadata_snapshot_ = {},
-            bool rewrite_map_col_ = true,
-            bool aliases_rewrite_scope_ = false)
+            bool rewrite_map_col_ = true)
             : aliases(aliases_)
             , source_columns_set(source_columns_set_)
             , settings(settings_)
@@ -106,7 +102,6 @@ public:
             , storage(storage_)
             , metadata_snapshot(metadata_snapshot_)
             , rewrite_map_col(rewrite_map_col_)
-            , aliases_rewrite_scope(aliases_rewrite_scope_)
         {
         }
     };

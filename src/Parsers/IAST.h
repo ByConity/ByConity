@@ -449,6 +449,7 @@ public:
     std::string formatForErrorMessage() const;
     template <typename AstArray>
     static std::string formatForErrorMessage(const AstArray & array);
+    std::string formatForErrorMessageWithoutAlias() const;
 
     void cloneChildren();
 
