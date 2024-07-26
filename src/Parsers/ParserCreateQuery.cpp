@@ -884,10 +884,10 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         {
             s_eq.ignore(pos, expected);
 
-            if (!ident_with_optional_params_p.parse(pos, engine, expected) && !string_literal_parser.parse(pos, mysql_engine, expected))
-            {
+            if (ident_with_optional_params_p.parse(pos, engine, expected) || string_literal_parser.parse(pos, mysql_engine, expected))
+                continue;
+            else
                 return false;
-            }
         }
 
         if (!rt_engine && s_rt_engine.ignore(pos, expected))

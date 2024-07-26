@@ -15,10 +15,10 @@ CREATE TABLE mysql_create_ddl1
     `val2` varchar NOT NULL DEFAULT 'a',
     CLUSTERED KEY(id, val1, val2)
 )
-ENGINE = 'XUANWU'
 PARTITION BY VALUE((toString(val1), id))
 STORAGE_POLICY = 'MIXED'
 hot_partition_count = 10
+ENGINE = 'XUANWU'
 BLOCK_SIZE=4096
 RT_ENGINE='COLUMNSTORE'
 TABLE_PROPERTIES = '{"format":"columnstore"}'
