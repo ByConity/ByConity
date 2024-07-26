@@ -110,7 +110,11 @@ struct SortColumnDescription
     std::string format() const
     {
         return fmt::format(
-            "{} {} {}", column_name, direction == 1 ? "ASC" : "DESC", nulls_direction == direction ? "NULLS LAST" : "NULLS FIRST");
+            "{} {} {}", 
+            column_name, 
+            direction == 1 ? "ASC" : "DESC", 
+            nulls_direction == 0 ? "ANY" : 
+                (nulls_direction == direction ? "NULLS LAST" : "NULLS FIRST"));
     }
 
     void explain(JSONBuilder::JSONMap & map, const Block & header) const;

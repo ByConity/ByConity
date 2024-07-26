@@ -1042,6 +1042,21 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         {
             out << intent.detailIntent() << "Partition filter: " << printFilter(query_info.partition_filter, max_predicate_text_length);
         }
+        
+        if (query_info.input_order_info)
+        {
+            out << intent.detailIntent();
+            out << "Input Order Info: ";
+
+            const auto & prefix_descs = query_info.input_order_info->order_key_prefix_descr;
+            if (!prefix_descs.empty())
+            {
+                std::vector<String> columns;
+                for (const auto & desc : prefix_descs)
+                    columns.emplace_back(desc.format());
+                out << join(columns, ", ", "{", "}");
+            }
+        }
 
         if (auto where = query->getWhere())
             out << intent.detailIntent() << "Where: " << printFilter(where, max_predicate_text_length);

@@ -161,8 +161,10 @@ ENUM_WITH_PROTO_CONVERTER(
     Protos::SortOrder, // proto enum message
     (ASC_NULLS_FIRST),
     (ASC_NULLS_LAST),
+    (ASC_ANY), // for not null type, nulls first/last is useless.
     (DESC_NULLS_FIRST),
     (DESC_NULLS_LAST),
+    (DESC_ANY),
     (ANY),
     (UNKNOWN));
 
@@ -177,6 +179,7 @@ public:
                 return SortOrder::ASC_NULLS_LAST;
             else if (nulls_direction == -1)
                 return SortOrder::ASC_NULLS_FIRST;
+            // else if (nulls_direction == 0) // no need, this case should return ASC_NULLS_LAST.
         }
         else if (direction == -1)
         {
@@ -213,6 +216,11 @@ public:
                 nulls_direction = 1;
                 break;
             }
+            case SortOrder::ASC_ANY: {
+                direction = 1;
+                nulls_direction = 0;
+                break;
+            }
             case SortOrder::DESC_NULLS_FIRST: {
                 direction = -1;
                 nulls_direction = -1;
@@ -221,6 +229,11 @@ public:
             case SortOrder::DESC_NULLS_LAST: {
                 direction = -1;
                 nulls_direction = 1;
+                break;
+            }
+            case SortOrder::DESC_ANY: {
+                direction = -1;
+                nulls_direction = 0;
                 break;
             }
             case SortOrder::ANY: {
