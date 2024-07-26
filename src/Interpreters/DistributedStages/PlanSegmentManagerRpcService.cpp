@@ -94,7 +94,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
 {
     brpc::ClosureGuard done_guard(done);
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "Received status of query {}, segment {}, parallel index {}, succeed: {}, cancelled: {}, code is {}",
         request->query_id(),

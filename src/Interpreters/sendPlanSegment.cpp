@@ -32,7 +32,7 @@ void sendPlanSegmentToAddress(
     const WorkerId & worker_id)
 {
     static auto * log = &Poco::Logger::get("SegmentScheduler::sendPlanSegment");
-    LOG_INFO(
+    LOG_TRACE(
         log,
         "query id {} segment id {}, parallel index {}, address {}, plansegment {}",
         plan_segment_ptr->getQueryId(),
@@ -41,7 +41,7 @@ void sendPlanSegmentToAddress(
         addressinfo.toString(),
         plan_segment_ptr->toString());
     if (execution_info.source_task_index && execution_info.source_task_count)
-        LOG_INFO(
+        LOG_TRACE(
             log,
             "send additional filter index {} count {}",
             execution_info.source_task_index.value(),
