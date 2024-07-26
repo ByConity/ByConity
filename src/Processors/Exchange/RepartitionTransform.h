@@ -50,7 +50,7 @@ public:
 
     String getName() const override { return "RepartitionTransform"; }
 
-    inline static const String REPARTITION_FUNC{"cityHash64V2"};
+    inline static const String REPARTITION_FUNC{"cityHash64"};
 
     static const DataTypePtr REPARTITION_FUNC_RESULT_TYPE;
     static const DataTypePtr REPARTITION_FUNC_NULLABLE_RESULT_TYPE;
