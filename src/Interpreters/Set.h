@@ -150,7 +150,7 @@ private:
         ColumnUInt8::Container & vec_res,
         bool negative,
         const PaddedPODArray<UInt8> * null_map) const;
-      
+
     void executeBitmap64(
         const Block & block,
         ColumnUInt8::Container & vec_res,
@@ -256,6 +256,8 @@ public:
     MergeTreeSetIndex(const Columns & set_elements, std::vector<KeyTuplePositionMapping> && index_mapping_);
 
     size_t size() const { return ordered_set.at(0)->size(); }
+
+    const Columns & getOrderedSet() const { return ordered_set; }
 
     bool hasMonotonicFunctionsChain() const;
 

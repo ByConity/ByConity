@@ -21,7 +21,7 @@ bool ParserJSONPathMemberAccess::parseImpl(Pos & pos, ASTPtr & node, Expected & 
 
     ++pos;
 
-    if (pos->type != TokenType::BareWord && pos->type !=TokenType::QuotedIdentifier)
+    if (pos->type != TokenType::BareWord && pos->type !=TokenType::BackQuotedIdentifier && pos->type !=TokenType::DoubleQuotedIdentifier)
         return false;
 
     ParserIdentifier name_p;

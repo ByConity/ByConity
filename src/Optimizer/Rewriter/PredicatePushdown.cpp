@@ -45,6 +45,7 @@
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/UnionStep.h>
 #include <Common/FieldVisitorConvertToNumber.h>
+#include <Parsers/ASTLiteral.h>
 
 namespace DB
 {
@@ -155,7 +156,8 @@ PlanNodePtr PredicateVisitor::visitProjectionNode(ProjectionNode & node, Predica
     LOG_DEBUG(
         &Poco::Logger::get("Debugger"), "node {}, pushdown_predicate : {}", node.getId(), pushdown_predicate->formatForErrorMessage());
 
-    pushdown_predicate = ExpressionInterpreter::optimizePredicate(pushdown_predicate, step.getInputStreams()[0].getNamesToTypes(), context);
+    if (!pushdown_predicate->as<ASTLiteral>())
+        pushdown_predicate = ExpressionInterpreter::optimizePredicate(pushdown_predicate, step.getInputStreams()[0].getNamesToTypes(), context);
     PredicateContext expression_context{
         .predicate = pushdown_predicate,
         .extra_predicate_for_simplify_outer_join

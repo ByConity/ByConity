@@ -17,6 +17,9 @@
 
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Analyzers/ASTEquals.h>
+#include <Analyzers/Analysis.h>
+#include <Core/Names.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Optimizer/OptimizerMetrics.h>
 #include <Optimizer/PlanNodeSearcher.h>
@@ -26,9 +29,11 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/LineageInfo.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Poco/JSON/Object.h>
 #include <magic_enum.hpp>
+#include <Poco/JSON/Object.h>
 
 #include <utility>
 
@@ -91,7 +96,7 @@ String PlanPrinter::textLogicalPlan(
     const StepAggregatedOperatorProfiles & profiles,
     const QueryPlanSettings & settings)
 {
-    TextPrinter printer{costs, context, false, {}, settings};
+    TextPrinter printer{costs, context, false, {}, settings, context->getSettingsRef().max_predicate_text_length};
     bool has_children = !plan.getPlanNode()->getChildren().empty();
     auto output = printer.printLogicalPlan(*plan.getPlanNode(), TextPrinterIntent{0, has_children}, profiles);
 
@@ -303,7 +308,7 @@ String PlanPrinter::textDistributedPlan(
         if (analyze_node)
         {
             os << TextPrinter::printOutputColumns(*analyze_node.value()->getChildren()[0], TextPrinterIntent{3, false});
-            TextPrinter printer{costs, context, true, segment_ptr->exchange_to_segment, settings};
+            TextPrinter printer{costs, context, true, segment_ptr->exchange_to_segment, settings, context->getSettingsRef().max_predicate_text_length};
             bool has_children = !analyze_node.value()->getChildren().empty();
             if ((analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::CTERef
                  || analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::Exchange))
@@ -883,7 +888,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         if (!ASTEquality::compareTree(join_step->getFilter(), PredicateConst::TRUE_VALUE))
         {
             out << intent.detailIntent() << "Filter: ";
-            out << serializeAST(*join_step->getFilter());
+            out << getSerializedASTWithLimit(*join_step->getFilter(), max_predicate_text_length);
         }
         if (!join_step->getRuntimeFilterBuilders().empty())
         {
@@ -991,7 +996,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
     {
         const auto * filter = dynamic_cast<const FilterStep *>(plan.get());
         auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter->getFilter());
-        out << intent.detailIntent() << "Condition: " << printFilter(filter->getFilter());
+        out << intent.detailIntent() << "Condition: " << printFilter(filter->getFilter(), max_predicate_text_length);
     }
 
     if (plan->getType() == IQueryPlanStep::Type::Projection)
@@ -1005,7 +1010,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             if (Utils::isIdentity(assignment))
                 identities.emplace_back(assignment.first);
             else
-                assignments.emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
+                assignments.emplace_back(assignment.first + ":=" + getSerializedASTWithLimit(*assignment.second, max_predicate_text_length));
 
         std::sort(assignments.begin(), assignments.end());
         if (!identities.empty())
@@ -1037,13 +1042,13 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         {
             out << intent.detailIntent();
             out << "Partition filter: ";
-            out << serializeAST(*query_info.partition_filter);
+            out << getSerializedASTWithLimit(*query_info.partition_filter, max_predicate_text_length);
         }
 
         if (auto where = query->getWhere())
-            out << intent.detailIntent() << "Where: " << printFilter(where);
+            out << intent.detailIntent() << "Where: " << printFilter(where, max_predicate_text_length);
         if (auto prewhere = query->getPrewhere())
-            out << intent.detailIntent() << "Prewhere: " << printFilter(prewhere);
+            out << intent.detailIntent() << "Prewhere: " << printFilter(prewhere, max_predicate_text_length);
         if (query->getLimitLength())
         {
             out << intent.detailIntent() << "Limit: ";
@@ -1064,7 +1069,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
 
         std::vector<String> inline_expressions;
         for (const auto & assignment : table_scan->getInlineExpressions())
-            inline_expressions.emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
+            inline_expressions.emplace_back(assignment.first + ":=" + getSerializedASTWithLimit(*assignment.second, max_predicate_text_length));
         if (!inline_expressions.empty())
             out << intent.detailIntent() << "Inline expressions: " << join(inline_expressions, ", ", "[", "]");
 
@@ -1114,13 +1119,13 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
     return out.str();
 }
 
-String PlanPrinter::TextPrinter::printFilter(ConstASTPtr filter)
+String PlanPrinter::TextPrinter::printFilter(ConstASTPtr filter, size_t max_text_length)
 {
     std::stringstream out;
     auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
 
     if (!filters.second.empty())
-        out << serializeAST(*PredicateUtils::combineConjuncts(filters.second));
+        out << getSerializedASTWithLimit(*PredicateUtils::combineConjuncts(filters.second), max_text_length);
 
     if (!filters.first.empty())
     {
@@ -1128,7 +1133,7 @@ String PlanPrinter::TextPrinter::printFilter(ConstASTPtr filter)
         for (auto & item : filters.first)
         {
             auto desc = RuntimeFilterUtils::extractDescription(item).value();
-            runtime_filters.emplace(serializeAST(*desc.expr->clone()));
+            runtime_filters.emplace(getSerializedASTWithLimit(*desc.expr->clone(), max_text_length));
         }
         if (!filters.second.empty())
             out << " ";
@@ -1662,7 +1667,7 @@ Poco::JSON::Object::Ptr PlanSegmentDescription::jsonPlanSegmentDescription(const
         Poco::JSON::Array keys;
         for (auto & key : shuffle_keys)
             keys.add(key);
-        json->set("ShuffleKeys", exchange);
+        json->set("ShuffleKeys", keys);
     }
     json->set("ParallelSize", parallel);
     json->set("ClusterName", (cluster_name.empty() ? "server" : cluster_name));
@@ -1794,4 +1799,169 @@ String PlanPrinter::jsonDistributedPlan(PlanSegmentDescriptions & segment_descs,
     return os.str();
 }
 
+String PlanPrinter::jsonMetaData(
+    ASTPtr & query, AnalysisPtr analysis, ContextMutablePtr context, QueryPlanPtr & plan, const QueryMetadataSettings & settings)
+{
+    Poco::JSON::Object::Ptr metadata_json = new Poco::JSON::Object(true);
+
+    Poco::JSON::Array table_and_columns_info;
+    const auto & used_columns_map = analysis->getUsedColumns();
+    for (const auto & [table_ast, storage_analysis] : analysis->getStorages())
+    {
+        Poco::JSON::Object::Ptr used_table_info = new Poco::JSON::Object(true);
+
+        used_table_info->set("Database", storage_analysis.database);
+        used_table_info->set("Table", storage_analysis.table);
+
+        Poco::JSON::Array used_columns;
+        if (auto it = used_columns_map.find(storage_analysis.storage->getStorageID()); it != used_columns_map.end())
+        {
+            for (const auto & column : it->second)
+                used_columns.add(column);
+        }
+
+        used_table_info->set("Columns", used_columns);
+
+        table_and_columns_info.add(used_table_info);
+    }
+    metadata_json->set("UsedTablesInfo", table_and_columns_info);
+
+
+    Poco::JSON::Array used_functions;
+    //get used functions
+    for (const auto & func_name : analysis->getUsedFunctions())
+        used_functions.add(func_name);
+
+    metadata_json->set("UsedFunctions", used_functions);
+
+    // get settings
+    Poco::JSON::Object::Ptr query_used_settings = new Poco::JSON::Object(true);
+    SettingsChanges settings_changes = InterpreterSetQuery::extractSettingsFromQuery(query, context);
+    for (const auto & setting : settings_changes)
+        query_used_settings->set(setting.name, setting.value.toString());
+    metadata_json->set("UsedSettings", query_used_settings);
+
+    // get InsertInfo
+    Poco::JSON::Object::Ptr insert_table_info = new Poco::JSON::Object(true);
+    if (analysis->getInsert())
+    {
+        auto & insert_info = analysis->getInsert().value();
+        insert_table_info->set("Database", insert_info.storage_id.getDatabaseName());
+        insert_table_info->set("Table", insert_info.storage_id.getTableName());
+
+        Poco::JSON::Array insert_columns;
+        for (auto & column_info : insert_info.columns)
+            insert_columns.add(column_info.name);
+        insert_table_info->set("columns", insert_columns);
+    }
+    metadata_json->set("InsertInfo", insert_table_info);
+
+    // get FunctionsInfo
+    auto function_arguments = analysis->function_arguments;
+    Poco::JSON::Array functions_info;
+    for (const auto & func_args : function_arguments)
+    {
+        Poco::JSON::Object::Ptr function_info = new Poco::JSON::Object(true);
+        function_info->set("FunctionName", func_args.first);
+
+        Poco::JSON::Array function_const_aggs;
+        for (const auto & arg : func_args.second)
+            function_const_aggs.add(arg);
+        function_info->set("ConstantArguments", function_const_aggs);
+    }
+    metadata_json->set("FunctionsInfo", functions_info);
+
+    if (plan && plan->getPlanNode() && (settings.lineage || settings.lineage_use_optimizer))
+    {
+        LineageInfoVisitor visitor{context, plan->getCTEInfo()};
+        LineageInfoContext lineage_info_context;
+        VisitorUtil::accept(plan->getPlanNode(), visitor, lineage_info_context);
+
+        Poco::JSON::Object::Ptr lineage_info = new Poco::JSON::Object(true);
+
+        Poco::JSON::Array table_sources_info;
+        for (auto & [full_name, table_source] : visitor.table_sources)
+        {
+            Poco::JSON::Object::Ptr table_info = new Poco::JSON::Object(true);
+            table_info->set("Database", table_source.source_tables[0].first);
+            table_info->set("Table", table_source.source_tables[0].second);
+
+            Poco::JSON::Array columns_info;
+            for (auto & [id, column] : table_source.id_to_source_name)
+            {
+                Poco::JSON::Object::Ptr column_info = new Poco::JSON::Object(true);
+                column_info->set("Id", id);
+                column_info->set("Name", column);
+                columns_info.add(column_info);
+            }
+            table_info->set("Columns", columns_info);
+            table_sources_info.add(table_info);
+        }
+        lineage_info->set("TableSources", table_sources_info);
+
+        Poco::JSON::Array expression_sources_info;
+        for (auto & expression_source : visitor.expression_or_value_sources)
+        {
+            Poco::JSON::Object::Ptr expression_info = new Poco::JSON::Object(true);
+
+            Poco::JSON::Array tables_info;
+            for (auto & [database, table] : expression_source.source_tables)
+            {
+                Poco::JSON::Object::Ptr table_info = new Poco::JSON::Object(true);
+                table_info->set("Database", database);
+                table_info->set("Table", table);
+                tables_info.add(table_info);
+            }
+            expression_info->set("Sources", tables_info);
+
+            Poco::JSON::Array expression_list;
+            for (auto & [id, name] : expression_source.id_to_source_name)
+            {
+                Poco::JSON::Object::Ptr expression_element = new Poco::JSON::Object(true);
+                expression_element->set("Id", id);
+                expression_element->set("Name", name);
+                expression_list.add(expression_element);
+            }
+            expression_info->set("Expression", expression_list);
+            expression_sources_info.add(expression_info);
+        }
+        lineage_info->set("ExpressionSources", expression_sources_info);
+
+        Poco::JSON::Array lineage_dag_info;
+        for (auto & [output_name, outputstream_info] : lineage_info_context.output_stream_lineages)
+        {
+            Poco::JSON::Object::Ptr output_info = new Poco::JSON::Object(true);
+
+            output_info->set("Name", output_name);
+            Poco::JSON::Array source_id_list;
+            for (const auto & id : outputstream_info->column_ids)
+                source_id_list.add(id);
+            output_info->set("SourceIds", source_id_list);
+            lineage_dag_info.add(output_info);
+        }
+        lineage_info->set("OutputLineageInfo", lineage_dag_info);
+
+        Poco::JSON::Object::Ptr insert_info = new Poco::JSON::Object(true);
+        if (visitor.insert_info)
+        {
+            insert_info->set("Database", visitor.insert_info->database);
+            insert_info->set("Table", visitor.insert_info->table);
+            Poco::JSON::Array insert_columns_info;
+            for (const auto & insert_column : visitor.insert_info->insert_columns_info)
+            {
+                Poco::JSON::Object::Ptr insert_column_info = new Poco::JSON::Object(true);
+                insert_column_info->set("InsertColumnName", insert_column.insert_column_name);
+                insert_column_info->set("InputName", insert_column.input_column);
+                insert_columns_info.add(insert_column_info);
+            }
+            insert_info->set("InsertColumnInfo", insert_columns_info);
+        }
+        lineage_info->set("InsertLinageInfo", insert_info);
+
+        metadata_json->set("LineageInfo", lineage_info);
+    }
+    std::ostringstream os;
+    metadata_json->stringify(os, 1);
+    return os.str();
+}
 }

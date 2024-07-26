@@ -162,11 +162,18 @@ struct FormatSettings
 
     struct Orc
     {
-        bool import_nested = false;
         bool allow_missing_columns = false;
+        int64_t row_batch_size = 100000;
         bool case_insensitive_column_matching = false;
-        std::vector<bool> skip_stripes;
+        bool import_nested = false;
+        std::unordered_set<int> skip_stripes = {};
         bool output_string_as_string = false;
+        size_t use_fast_decoder = 0;
+        bool allow_out_of_range = false;
+        size_t current_file_offset = 0;
+        size_t range_bytes = 0;
+        bool filter_push_down = true;
+        bool use_footer_cache = false;
     } orc;
 
     struct Pretty

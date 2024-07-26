@@ -16,7 +16,7 @@ namespace DB
   * Or:
   * DROP DICTIONARY|SNAPSHOT [IF EXISTS] [db.]name
   */
-class ParserDropQuery : public IParserBase
+class ParserDropQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const  override{ return "DROP query"; }

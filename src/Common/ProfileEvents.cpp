@@ -1080,7 +1080,22 @@
     M(UpdateMvMetaIDFailed, "") \
 \
     M(NumberOfMarkRangesBeforeBeMergedInPKFilter, "Number of mark ranges in primary index filtering before adjacent ranges be merged into more bigger ranges") \
-    M(PlanSegmentInstanceRetry, "How many times this plan segment has been retried, only valid under bsp mode")
+    M(PlanSegmentInstanceRetry, "How many times this plan segment has been retried, only valid under bsp mode") \
+\
+    M(OrcTotalStripes, "Total Stripes") \
+    M(OrcReadStripes, "Total Read Stripes") \
+    M(HdfsReadBigAtCount, "ReadBigAt count for Hdfs") \
+    M(HdfsReadBigAtBytes, "ReadBitAt bytes for Hdfs") \
+    M(OrcSkippedRows, "rows skipped") \
+    M(OrcTotalRows, "rows total") \
+    M(OrcReadDirectCount, "direct read counts") \
+    M(OrcReadCacheCount, "cache read counts") \
+    M(OrcIOMergedCount, "") \
+    M(OrcIOMergedBytes, "") \
+    M(OrcIOSharedCount, "") \
+    M(OrcIOSharedBytes, "") \
+    M(OrcIODirectCount, "") \
+    M(OrcIODirectBytes, "")
 
 namespace ProfileEvents
 {

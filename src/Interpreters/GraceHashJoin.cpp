@@ -389,7 +389,8 @@ void GraceHashJoin::initBuckets()
 bool GraceHashJoin::isSupported(const std::shared_ptr<TableJoin> & table_join)
 {
     bool is_asof = (table_join->strictness() == ASTTableJoin::Strictness::Asof);
-    return !is_asof && isInnerOrLeft(table_join->kind()) && table_join->oneDisjunct();
+    auto kind = table_join->kind();
+    return !is_asof && (isInner(kind) || isLeft(kind) || isRight(kind) || isFull(kind)) && table_join->oneDisjunct();
 }
 
 GraceHashJoin::~GraceHashJoin() = default;
@@ -403,6 +404,10 @@ bool GraceHashJoin::addJoinedBlock(const Block & block, bool /*check_limits*/)
     // Block materialized = materializeBlock(block);
     addJoinedBlockImpl(std::move(block));
     return true;
+}
+
+BlockInputStreamPtr GraceHashJoin::createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size_, size_t total_size, size_t index) const {
+    return hash_join->createStreamWithNonJoinedRows(result_sample_block, max_block_size_, total_size, index);
 }
 
 bool GraceHashJoin::hasMemoryOverflow(size_t total_rows, size_t total_bytes) const
@@ -622,8 +627,6 @@ void GraceHashJoin::joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_p
 
 
     inMemoryJoinBlock(block, not_processed);
-    if (not_processed)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unhandled not processed block in GraceHashJoin");
 }
 
 void GraceHashJoin::setTotals(const Block & block)
@@ -688,7 +691,7 @@ public:
     {
     }
 
-    Block nextImpl() override
+    Block nextImpl0()
     {
         ExtraBlockPtr not_processed = nullptr;
 
@@ -720,9 +723,12 @@ public:
 
         do
         {
+            if (eof) 
+                return {};
             block = left_reader.read();
             if (!block)
             {
+                eof = true;
                 return {};
             }
 
@@ -763,6 +769,21 @@ public:
         return block;
     }
 
+    Block nextImpl() override
+    {
+        Block ret;
+        do {
+            if (eof) {
+                std::lock_guard lock(extra_block_mutex);
+                if (not_processed_blocks.empty()) {
+                    return {};
+                }
+            }
+            ret = nextImpl0();
+        } while(!ret);
+        return ret;
+    }
+
     size_t current_bucket;
     Buckets buckets;
     InMemoryJoinPtr hash_join;
@@ -774,6 +795,7 @@ public:
 
     std::mutex extra_block_mutex;
     std::list<ExtraBlockPtr> not_processed_blocks TSA_GUARDED_BY(extra_block_mutex);
+    std::atomic<bool> eof{false};
 
     bool rehash;
 

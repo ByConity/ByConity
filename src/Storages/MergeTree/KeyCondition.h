@@ -71,11 +71,10 @@ struct FieldRef : public Field
   */
 struct Range
 {
-private:
+public:
     static bool equals(const Field & lhs, const Field & rhs);
     static bool less(const Field & lhs, const Field & rhs);
 
-public:
     FieldRef left;        /// the left border
     FieldRef right;       /// the right border
     bool left_included;   /// includes the left border
@@ -319,7 +318,9 @@ public:
 
     bool matchesExactContinuousRange(const DataTypes & data_types) const;
 
-private:
+    using ColumnIndices = std::map<String, size_t>;
+    const ColumnIndices & getKeyColumns() const { return key_columns; }
+
     /// The expression is stored as Reverse Polish Notation.
     struct RPNElement
     {
@@ -364,10 +365,10 @@ private:
     };
 
     using RPN = std::vector<RPNElement>;
-    using ColumnIndices = std::map<String, size_t>;
 
     using AtomMap = std::unordered_map<std::string, bool(*)(RPNElement & out, const Field & value)>;
     using FunctionWithEscape = bool(*)(RPNElement & out, const Field & value, const Field & escape_value);
+    const RPN & getRPN() const { return rpn; }
 
 public:
     static const AtomMap atom_map;

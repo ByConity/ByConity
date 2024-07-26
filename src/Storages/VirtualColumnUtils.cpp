@@ -57,6 +57,25 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+void buildSets(const ASTPtr & expression, ExpressionAnalyzer & analyzer)
+{
+    const auto * func = expression->as<ASTFunction>();
+    if (func && functionIsInOrGlobalInOperator(func->name))
+    {
+        const IAST & args = *func->arguments;
+        const ASTPtr & arg = args.children.at(1);
+        if (arg->as<ASTSubquery>() || arg->as<ASTTableIdentifier>())
+        {
+            analyzer.tryMakeSetForIndexFromSubquery(arg);
+        }
+    }
+    else
+    {
+        for (const auto & child : expression->children)
+            buildSets(child, analyzer);
+    }
+}
+
 namespace
 {
 
@@ -101,25 +120,6 @@ ASTPtr buildWhereExpression(const ASTs & functions)
     if (functions.size() == 1)
         return functions[0];
     return makeASTFunction("and", functions);
-}
-
-void buildSets(const ASTPtr & expression, ExpressionAnalyzer & analyzer)
-{
-    const auto * func = expression->as<ASTFunction>();
-    if (func && functionIsInOrGlobalInOperator(func->name))
-    {
-        const IAST & args = *func->arguments;
-        const ASTPtr & arg = args.children.at(1);
-        if (arg->as<ASTSubquery>() || arg->as<ASTTableIdentifier>())
-        {
-            analyzer.tryMakeSetForIndexFromSubquery(arg);
-        }
-    }
-    else
-    {
-        for (const auto & child : expression->children)
-            buildSets(child, analyzer);
-    }
 }
 
 }

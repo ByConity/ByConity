@@ -393,11 +393,13 @@ protected:
 /** String in single quotes.
   * String in heredoc $here$txt$here$ equivalent to 'txt'.
   */
-class ParserStringLiteral : public IParserBase
+class ParserStringLiteral : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "string literal"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 

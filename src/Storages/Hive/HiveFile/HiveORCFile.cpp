@@ -2,6 +2,7 @@
 #if USE_HIVE
 
 #include "Processors/Formats/Impl/ArrowBufferedStreams.h"
+#include "Processors/Formats/Impl/LMNativeORCBlockInputFormat.h"
 #include "Processors/Formats/Impl/ORCBlockInputFormat.h"
 #include "IO/ReadSettings.h"
 
@@ -187,31 +188,40 @@ void HiveORCFile::openFile() const
 SourcePtr HiveORCFile::getReader(const Block & block, const std::shared_ptr<IHiveFile::ReadParams> & params)
 {
     openFile();
-
-    auto arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
-        block,
-        "ORC",
-        params->format_settings.orc.import_nested,
-        params->format_settings.orc.allow_missing_columns,
-        params->format_settings.null_as_default,
-        params->format_settings.orc.case_insensitive_column_matching);
-
-    std::vector<int> column_indices = ORCBlockInputFormat::getColumnIndices(
-        schema,
-        block,
-        params->format_settings.orc.case_insensitive_column_matching,
-        params->format_settings.orc.import_nested);
     if (!params->read_buf)
         params->read_buf = readFile(params->read_settings);
 
-    std::unique_ptr<arrow::adapters::orc::ORCFileReader> reader;
-    std::atomic_int stopped = false;
-    THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
-        asArrowFile(*params->read_buf, params->format_settings, stopped, "ORC", ORC_MAGIC_BYTES, /* avoid_buffering */ true),
-        arrow::default_memory_pool())
-    .Value(&reader));
+    if (params->format_settings.orc.use_fast_decoder == 2)
+    {
+        LOG_TRACE(log, "Orc use native reader");
+        auto orc_format = std::make_shared<LMNativeORCBlockInputFormat>(*params->read_buf, block, params->format_settings);
+        if (params->query_info)
+            orc_format->setQueryInfo(*params->query_info, params->context);
+        return orc_format;
+    }
+    else
+    {
+        auto arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
+            block,
+            "ORC",
+            params->format_settings.orc.import_nested,
+            params->format_settings.orc.allow_missing_columns,
+            params->format_settings.null_as_default,
+            params->format_settings.orc.case_insensitive_column_matching);
 
-    return std::make_shared<ORCSliceSource>(std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
+        std::vector<int> column_indices = ORCBlockInputFormat::getColumnIndices(
+            schema, block, params->format_settings.orc.case_insensitive_column_matching, params->format_settings.orc.import_nested);
+
+        std::unique_ptr<arrow::adapters::orc::ORCFileReader> reader;
+        std::atomic_int stopped = false;
+        THROW_ARROW_NOT_OK(
+            arrow::adapters::orc::ORCFileReader::Open(
+                asArrowFile(*params->read_buf, params->format_settings, stopped, "ORC", ORC_MAGIC_BYTES, /* avoid_buffering */ true),
+                arrow::default_memory_pool())
+                .Value(&reader));
+
+        return std::make_shared<ORCSliceSource>(std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
+    }
 }
 
 ORCSliceSource::ORCSliceSource(

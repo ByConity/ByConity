@@ -229,4 +229,24 @@ In other words, the function returning the modulus (modulo) in the terms of Modu
     factory.registerAlias("pmod", "positiveModulo", FunctionFactory::CaseInsensitive);
 }
 
+struct NameHiveModulo
+{
+    static constexpr auto name = "hiveModulo";
+};
+using FunctionHiveModulo = BinaryArithmeticOverloadResolver<HiveModuloImpl, NameHiveModulo, false>;
+
+REGISTER_FUNCTION(HiveModulo)
+{
+    factory.registerFunction<FunctionHiveModulo>(
+        {
+            R"(
+Calculates the remainder when dividing `a` by `b`. Effectively execute the expression (a & INT32_MAX) % b
+        )",
+            Documentation::Examples{{"hiveModulo", "SELECT hiveModulo(-2, 10);"}},
+            Documentation::Categories{"Arithmetic"}},
+        FunctionFactory::CaseInsensitive);
+
+    factory.registerAlias("hmod", "hiveModulo", FunctionFactory::CaseInsensitive);
+}
+
 }

@@ -155,7 +155,6 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
         for (const auto & [h, current_size] : size_per_worker)
         {
             sum += current_size;
-            size_per_worker[h] = current_size;
         }
         size_t avg = sum / plan_segment_ptr->getParallelSize();
         for (const auto & [h, s] : size_per_worker)

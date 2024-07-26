@@ -794,8 +794,15 @@ TableScanStep::TableScanStep(
     , log(&Poco::Logger::get("TableScanStep"))
     , alias(alias_)
 {
-    storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    storage_id.uuid = storage->getStorageUUID();
+    const auto & table_expression = getTableExpression(*query_info.getSelectQuery(), 0);
+    if (table_expression && table_expression->table_function)
+        storage = context->getQueryContext()->executeTableFunction(table_expression->table_function);
+    else
+    {
+        storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        storage_id.uuid = storage->getStorageUUID();
+    }
+        
     formatOutputStream(context);
 }
 
@@ -990,7 +997,7 @@ void TableScanStep::rewriteDynamicFilter(ASTSelectQuery * query, const BuildQuer
                 continue;
             is_range_or_sets[i] = is_range_or_set;
 
-            if (enable_2stags_prewhere) 
+            if (enable_2stags_prewhere)
             {
                 if (has_bf)
                     rf_only_predicates[i] = runtime_filters.back();
@@ -1042,7 +1049,7 @@ void TableScanStep::rewriteDynamicFilter(ASTSelectQuery * query, const BuildQuer
             if (i == the_prewhere && storage->supportsPrewhere() && (enable_bf_in_prewhere || enable_2stags_prewhere)) // TODO use rf_preds or rf_only_pred?
             {
                 if (rf_only_predicates[i])
-                    tmp_prewhere_predicates.emplace_back(rf_only_predicates[i]); // TODO range pred derived from RF need not push into prewhere 
+                    tmp_prewhere_predicates.emplace_back(rf_only_predicates[i]); // TODO range pred derived from RF need not push into prewhere
                 else {
                     tmp_prewhere_predicates.emplace_back(rf_predicates[i]);
                 }
@@ -1107,7 +1114,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             auto prewhere_ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getPrewhere());
             ids.insert(ids.end(), prewhere_ids.begin(), prewhere_ids.end());
         }
-        
+
         if (!ids.empty())
         {
             Pipe pipe(std::make_shared<MergeTreeSelectPrepareProcessor>(
@@ -1249,6 +1256,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 cloud_merge_tree->source_count = build_context.distributed_settings.source_task_count;
             }
         }
+        // flag = Output
         auto pipe = storage->read(
             interpreter->getRequiredColumns(), storage_snapshot, query_info, build_context.context, QueryProcessingStage::Enum::FetchColumns, max_block_size, max_streams);
 

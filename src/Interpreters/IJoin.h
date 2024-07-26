@@ -94,7 +94,7 @@ public:
     // That can run FillingRightJoinSideTransform parallelly
     virtual bool supportParallelJoin() const { return false; }
 
-    virtual BlockInputStreamPtr createStreamWithNonJoinedRows(const Block &, UInt64 /*max_block_size*/, size_t /*total_size*/, size_t /*index*/) const { return {}; }
+    virtual BlockInputStreamPtr createStreamWithNonJoinedRows(const Block &, UInt64 /*max_block_size*/, size_t /*total_parallel_size*/, size_t /*parallel_index*/) const { return {}; }
     
     virtual void serialize(WriteBuffer &) const { throw Exception("Not implement join serialize", ErrorCodes::NOT_IMPLEMENTED); }
     static JoinPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not implement join deserialize", ErrorCodes::NOT_IMPLEMENTED); }
@@ -111,19 +111,19 @@ public:
     /// Returns empty block on EOF
     Block next()
     {
-        if (finished)
-            return {};
+        // if (finished)
+        //     return {};
 
         if (Block res = nextImpl())
             return res;
 
-        finished = true;
+        // finished = true;
         return {};
     }
 
     virtual ~IBlocksStream() = default;
 
-    bool isFinished() const { return finished; }
+    // bool isFinished() const { return finished; }
 
 protected:
     virtual Block nextImpl() = 0;

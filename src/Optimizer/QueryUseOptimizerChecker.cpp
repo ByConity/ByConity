@@ -138,7 +138,9 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizer
             || explain->getKind() ==  ASTExplainQuery::MetaData;
-         return explain_plan && check(explain->getExplainedQuery(), context, throw_exception);
+        if (!explain_plan)
+            reason = "unsupported explain type";
+        return explain_plan && check(explain->getExplainedQuery(), context, throw_exception);
     }
     if (auto * prepare = node->as<ASTCreatePreparedStatementQuery>())
     {

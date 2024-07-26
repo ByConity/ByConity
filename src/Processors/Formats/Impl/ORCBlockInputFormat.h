@@ -26,6 +26,10 @@ public:
 
     void resetParser() override;
 
+    void setQueryInfo(const SelectQueryInfo &, ContextPtr) override;
+
+    IStorage::ColumnSizeByName getColumnSizes() override;
+
     const BlockMissingValues & getMissingValues() const override;
 
     static std::vector<int> getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header, const bool & ignore_case, const bool & import_nested);

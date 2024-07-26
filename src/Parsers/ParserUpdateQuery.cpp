@@ -34,6 +34,7 @@ bool ParserUpdateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (!s_update.ignore(pos, expected))
         return false;
 
+    auto pos_before = pos;
     /// extract the target table
     if (!parseDatabaseAndTableName(pos, expected, query->database, query->table))
         return false;
@@ -48,7 +49,7 @@ bool ParserUpdateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         /// For UPDATE JOIN, we already extract the target table and store the info to query->database and query->table.
         /// To parse the whole `tables` correctly, we need to retrace tokens from the beginning of target table. 
         query->single_table = false;
-        --pos; 
+        pos = pos_before;
 
         /// extract all tables
         if (!ParserTablesInSelectQuery(dt).parse(pos, query->tables, expected))

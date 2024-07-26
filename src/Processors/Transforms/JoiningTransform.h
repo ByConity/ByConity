@@ -168,9 +168,14 @@ class DelayedBlocksTask : public ChunkInfo
 public:
 
     explicit DelayedBlocksTask() : finished(true) {}
-    explicit DelayedBlocksTask(IBlocksStreamPtr delayed_blocks_) : delayed_blocks(std::move(delayed_blocks_)) {}
+    explicit DelayedBlocksTask(IBlocksStreamPtr delayed_blocks_, JoiningTransform::FinishCounterPtr left_delayed_stream_finish_counter_)
+        : delayed_blocks(std::move(delayed_blocks_))
+        , left_delayed_stream_finish_counter(left_delayed_stream_finish_counter_)
+    {
+    }
 
     IBlocksStreamPtr delayed_blocks = nullptr;
+    JoiningTransform::FinishCounterPtr left_delayed_stream_finish_counter = nullptr;
 
     bool finished = false;
 };
@@ -199,7 +204,11 @@ private:
 class DelayedJoinedBlocksWorkerTransform : public IProcessor
 {
 public:
-    explicit DelayedJoinedBlocksWorkerTransform(Block output_header);
+    explicit DelayedJoinedBlocksWorkerTransform(
+        Block left_header_,
+        Block output_header_,
+        size_t max_block_size_,
+        JoinPtr join_);
 
     String getName() const override { return "DelayedJoinedBlocksWorkerTransform"; }
 
@@ -207,8 +216,20 @@ public:
     void work() override;
 
 private:
+    Block left_header;
+    Block output_header;
+    size_t max_block_size;
+    JoinPtr join;
     DelayedBlocksTaskPtr task;
     Chunk output_chunk;
+
+    /// All joined and non-joined rows from left stream are emitted, only right non-joined rows are left
+    bool left_delayed_stream_finished = false;
+    bool setup_non_joined_stream = false;
+    BlockInputStreamPtr non_joined_delayed_stream = nullptr;
+
+    void resetTask();
+    Block nextNonJoinedBlock();
 };
 
 }

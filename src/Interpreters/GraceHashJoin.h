@@ -70,6 +70,8 @@ public:
 
     bool addJoinedBlock(const Block & block, bool check_limits) override;
 
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size, size_t total_size, size_t index) const override;
+
     // void checkTypesOfKeys(const Block & block) const override;
 
     void joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_processed) override;

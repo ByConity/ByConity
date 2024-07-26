@@ -471,8 +471,16 @@ void FillingRightJoinSideTransform::work()
     }
 }
 
-DelayedJoinedBlocksWorkerTransform::DelayedJoinedBlocksWorkerTransform(Block output_header)
-    : IProcessor(InputPorts{Block()}, OutputPorts{output_header})
+DelayedJoinedBlocksWorkerTransform::DelayedJoinedBlocksWorkerTransform(
+    Block left_header_,
+    Block output_header_,
+    size_t max_block_size_,
+    JoinPtr join_)
+    : IProcessor(InputPorts{Block()}, OutputPorts{output_header_})
+    , left_header(left_header_)
+    , output_header(output_header_)
+    , max_block_size(max_block_size_)
+    , join(join_)
 {
 }
 
@@ -533,7 +541,8 @@ IProcessor::Status DelayedJoinedBlocksWorkerTransform::prepare()
         input.setNotNeeded();
     }
 
-    if (task->finished)
+    // When delayed_blocks is nullptr, it means that all buckets have been joined.
+    if (!task->delayed_blocks)
     {
         input.close();
         output.finish();
@@ -548,17 +557,61 @@ void DelayedJoinedBlocksWorkerTransform::work()
     if (!task)
         return;
 
-    Block block = task->delayed_blocks->next();
-
+    Block block;
+    if (!left_delayed_stream_finished)
+    {
+        block = task->delayed_blocks->next();
+        if (!block)
+        {
+            left_delayed_stream_finished = true;
+            block = nextNonJoinedBlock();
+        }
+    }
+    else
+    {
+        block = nextNonJoinedBlock();
+    }
     if (!block)
     {
-        task.reset();
+        resetTask();
         return;
-    }
+    }    
 
     // Add block to the output
     auto rows = block.rows();
     output_chunk.setColumns(block.getColumns(), rows);
+}
+
+void DelayedJoinedBlocksWorkerTransform::resetTask()
+{
+    task.reset();
+    left_delayed_stream_finished = false;
+    setup_non_joined_stream = false;
+    non_joined_delayed_stream = nullptr;
+}
+
+Block DelayedJoinedBlocksWorkerTransform::nextNonJoinedBlock()
+{
+    if (!setup_non_joined_stream)
+    {
+        setup_non_joined_stream = true;
+        // Before read from non-joined stream, all blocks in left file reader must have been joined.
+        // For example, in HashJoin, it may return invalid mismatch rows from non-joined stream before
+        // the all blocks in left file reader have been finished, since the used flags are incomplete.
+        // To make only one processor could read from non-joined stream seems be a easy way.
+        if (task && task->left_delayed_stream_finish_counter->isLast())
+        {
+            if (!non_joined_delayed_stream)
+            {
+                non_joined_delayed_stream = join->createStreamWithNonJoinedRows(output_header, max_block_size, 1, 0);
+            }
+        }
+    }
+    if (non_joined_delayed_stream)
+    {
+        return non_joined_delayed_stream->read();
+    }
+    return {};
 }
 
 DelayedJoinedBlocksTransform::DelayedJoinedBlocksTransform(size_t num_streams, JoinPtr join_)
@@ -609,10 +662,14 @@ IProcessor::Status DelayedJoinedBlocksTransform::prepare()
 
     if (delayed_blocks)
     {
+        // This counter is used to ensure that only the last DelayedJoinedBlocksWorkerTransform
+        // could read right non-joined blocks from the join.
+        auto left_delayed_stream_finished_counter = std::make_shared<JoiningTransform::FinishCounter>(outputs.size());
         for (auto & output : outputs)
         {
             Chunk chunk;
-            chunk.setChunkInfo(std::make_shared<DelayedBlocksTask>(delayed_blocks));
+            auto task = std::make_shared<DelayedBlocksTask>(delayed_blocks, left_delayed_stream_finished_counter);
+            chunk.setChunkInfo(task);
             output.push(std::move(chunk));
         }
         delayed_blocks = nullptr;

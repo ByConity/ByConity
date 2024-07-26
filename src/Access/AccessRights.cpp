@@ -1,18 +1,15 @@
 #include <Access/AccessRights.h>
-#include <Access/ContextAccess.h>
 #include <common/logger_useful.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/algorithm/sort.hpp>
 #include <unordered_map>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
-    extern const int UNKNOWN_DATABASE;
 }
 
 namespace
@@ -26,37 +23,27 @@ namespace
 
         friend bool operator<(const ProtoElement & left, const ProtoElement & right)
         {
-            static constexpr auto compare_name = [](const boost::container::small_vector<std::string_view, 3> & left_name,
-                                                    const boost::container::small_vector<std::string_view, 3> & right_name,
-                                                    size_t i)
+            /// Compare components alphabetically.
+            size_t min_size = std::min(left.full_name.size(), right.full_name.size());
+            for (size_t i = 0; i != min_size; ++i)
             {
-                if (i < left_name.size())
-                {
-                    if (i < right_name.size())
-                        return left_name[i].compare(right_name[i]);
-                    else
-                        return 1; /// left_name is longer => left_name > right_name
-                }
-                else if (i < right_name.size())
-                    return 1; /// right_name is longer => left < right
-                else
-                    return 0; /// left_name == right_name
-            };
+                int cmp = left.full_name[i].compare(right.full_name[i]);
+                if (cmp != 0)
+                    return cmp < 0;
+            }
 
-            if (int cmp = compare_name(left.full_name, right.full_name, 0))
-                return cmp < 0;
+            /// Names with less number of components first.
+            if (left.full_name.size() != right.full_name.size())
+                return left.full_name.size() < right.full_name.size();
 
-            if (int cmp = compare_name(left.full_name, right.full_name, 1))
-                return cmp < 0;
-
+            /// Grants before partial revokes.
             if (left.is_partial_revoke != right.is_partial_revoke)
-                return right.is_partial_revoke;
+                return right.is_partial_revoke; /// if left is grant, right is partial revoke, we assume left < right
 
+            /// Grants with grant option after other grants.
+            /// Revoke grant option after normal revokes.
             if (left.grant_option != right.grant_option)
-                return right.grant_option;
-
-            if (int cmp = compare_name(left.full_name, right.full_name, 2))
-                return cmp < 0;
+                return right.grant_option; /// if left is without grant option, and right is with grant option, we assume left < right
 
             return (left.access_flags < right.access_flags);
         }
@@ -1055,52 +1042,6 @@ String AccessRightsBase<IsSensitive>::toString() const
     return getElements().toString();
 }
 
-template <typename... Args>
-static bool checkTenantsAccess(const Args &... args)
-{
-    if constexpr (sizeof...(args) >= 1)
-    {
-
-        const auto & tuple = std::make_tuple(args...);
-        const auto & database = std::get<0>(tuple);
-
-        /* always disable access to default database for tenants */
-        if (database == "default")
-        {
-            if (!current_thread)
-                return true;
-
-            const auto ctx = current_thread->getQueryContext();
-
-            if (!ctx)
-                return true;
-
-            if (ctx->getAccess()->getParams().has_tenant_id_in_username)
-                throw Exception("Database not found.", ErrorCodes::UNKNOWN_DATABASE);
-        }
-
-        if constexpr (sizeof...(args) >= 2)
-        {
-            /* always disable access to system tables for tenants */
-            if (database != "system")
-                return true;
-
-            if (!current_thread)
-                return true;
-
-            const auto ctx = current_thread->getQueryContext();
-
-            if (!ctx)
-                return true;
-
-            const auto & table = std::get<1>(tuple);
-            return ctx->getAccess()->isAlwaysAccessibleTableInSystem(table);
-        }
-    }
-
-    return true;
-}
-
 template <bool grant_option, typename... Args>
 bool AccessRights::isGrantedImpl(const AccessFlags & flags, const Args &... args) const
 {
@@ -1108,9 +1049,6 @@ bool AccessRights::isGrantedImpl(const AccessFlags & flags, const Args &... args
     {
         if (!root_node)
             return flags.isEmpty();
-
-        if (!checkTenantsAccess(args...))
-            return false;
 
         return root_node->isGranted(flags, args...);
     };
@@ -1287,9 +1225,6 @@ bool SensitiveAccessRights::isGrantedImpl(const std::unordered_set<std::string_v
     {
         if (!root_node)
             return flags.isEmpty();
-
-        if (!checkTenantsAccess(args...))
-            return false;
 
         return root_node->isGranted(sensitive_columns, flags, args...);
     };

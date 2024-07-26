@@ -607,7 +607,7 @@ void TCPHandler::runImpl()
             state.io.onException();
             exception.emplace(Exception::CreateFromSTDTag{}, e);
             sendException(*exception, send_exception_with_stack_trace);
-            std::abort();
+            // std::abort();
         }
 #endif
         catch (const std::exception & e)

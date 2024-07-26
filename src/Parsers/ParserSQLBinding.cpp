@@ -39,11 +39,14 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
 
     ParserSelectWithUnionQuery select_p(dt);
     const auto * begin = pos->begin;
-    if (pos->type == TokenType::StringLiteral)
+    if (pos->type == TokenType::StringLiteral || pos->type == TokenType::DoubleQuotedIdentifier)
     {
         /// Identifier single quot
         ReadBufferFromMemory buf(pos->begin, pos->size());
-        readQuotedStringWithSQLStyle(re_expression, buf);
+        if (pos->type == TokenType::StringLiteral)
+            readQuotedStringWithSQLStyle(re_expression, buf);
+        else
+            readDoubleQuotedStringWithSQLStyle(re_expression, buf);
 
         if (re_expression.empty())
             return false;
@@ -130,11 +133,14 @@ bool ParserDropBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     const auto * begin = pos->begin;
     String query_pattern;
     ParserSelectWithUnionQuery select_p(dt);
-    if (pos->type == TokenType::StringLiteral)
+    if (pos->type == TokenType::StringLiteral || pos->type == TokenType::DoubleQuotedIdentifier)
     {
         /// Identifier single quot
         ReadBufferFromMemory buf(pos->begin, pos->size());
-        readQuotedStringWithSQLStyle(str_value, buf);
+        if (pos->type == TokenType::StringLiteral)
+            readQuotedStringWithSQLStyle(str_value, buf);
+        else
+            readDoubleQuotedStringWithSQLStyle(str_value, buf);
 
         if (str_value.empty())
             return false;

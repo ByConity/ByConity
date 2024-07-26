@@ -8,6 +8,7 @@
 #include <Access/EnabledRolesInfo.h>
 #include <Access/EnabledSettings.h>
 #include <Access/SettingsProfilesInfo.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Common/Exception.h>
 #include <Common/quoteString.h>
@@ -30,6 +31,7 @@ namespace ErrorCodes
     extern const int READONLY;
     extern const int QUERY_IS_PROHIBITED;
     extern const int FUNCTION_NOT_ALLOWED;
+    extern const int UNKNOWN_DATABASE;
     extern const int UNKNOWN_USER;
 }
 
@@ -211,6 +213,10 @@ namespace
             res.grant(AccessType::SELECT, DatabaseCatalog::INFORMATION_SCHEMA);
             res.grant(AccessType::SELECT, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
         }
+
+        // information_schema is always visible
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA);
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
 
         return res;
     }
@@ -528,6 +534,52 @@ bool ContextAccess::checkSensitivePermissions(std::unordered_set<std::string_vie
     return isSensitive(cols, args...);
 }
 
+template <bool throw_if_denied, typename... Args>
+static bool checkTenantsAccess(const Args &... args)
+{
+    if constexpr (sizeof...(args) >= 1)
+    {
+        const auto & tuple = std::make_tuple(args...);
+        const auto & database = std::get<0>(tuple);
+
+        if (!current_thread)
+            return true;
+
+        /* always disable access to default database for tenants */
+        if (database == "default" || database == "cnch_system")
+        {
+            const auto ctx = current_thread->getQueryContext();
+
+            if (!ctx)
+                return true;
+
+            if (ctx->getAccess()->getParams().has_tenant_id_in_username)
+            {
+                if constexpr (throw_if_denied)
+                    throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database {} not found.", database);
+                return false;
+            }
+        }
+
+        if constexpr (sizeof...(args) >= 2)
+        {
+            /* always disable access to system tables for tenants */
+            if (database != "system")
+                return true;
+
+            const auto ctx = current_thread->getQueryContext();
+
+            if (!ctx)
+                return true;
+
+            const auto & table = std::get<1>(tuple);
+            return ctx->getAccess()->isAlwaysAccessibleTableInSystem(table);
+        }
+    }
+
+    return true;
+}
+
 template <bool throw_if_denied, bool grant_option, typename... Args>
 bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args &... args) const
 {
@@ -577,6 +629,9 @@ bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args 
     }
     else
         granted = acs->isGranted(flags, args...);
+
+    if (granted)
+        granted = checkTenantsAccess<throw_if_denied>(args...);
 
     if (!granted)
     {

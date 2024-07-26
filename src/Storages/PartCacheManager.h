@@ -168,9 +168,12 @@ public:
         const Protos::DataModelPartVector * helper_staged_parts = nullptr);
 
     /// Get count and weight in Part cache
-    std::pair<UInt64, UInt64> dumpPartCache();
-    std::pair<UInt64, UInt64> dumpDeleteBitmapCache();
-    std::pair<UInt64, UInt64> dumpStorageCache();
+    /// return LRUCache count, weight and inner container size
+    std::tuple<UInt64, UInt64, UInt64> dumpPartCache();
+    std::tuple<UInt64, UInt64, UInt64> dumpDeleteBitmapCache();
+
+    /// return LRUCache count, weight and inner container size, as well as bimap size in storage cache
+    std::tuple<UInt64, UInt64, UInt64, UInt64> dumpStorageCache();
 
     std::unordered_map<String, std::pair<size_t, size_t>> getTablePartCacheInfo();
     std::unordered_map<String, std::pair<size_t, size_t>> getTableDeleteBitmapCacheInfo();

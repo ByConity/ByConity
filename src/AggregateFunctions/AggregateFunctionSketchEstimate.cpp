@@ -49,10 +49,10 @@ AggregateFunctionPtr createAggregateFunctionHllSketchEstimate
     UInt8 precision = 12;
     if (!params.empty())
     {
-        if (params.size() != 1)
+        if (params.size() > 2 || params.size() == 0)
         {
             throw Exception(
-                "Aggregate function " + name + " requires one parameter or less.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                "Aggregate function " + name + " requires two parameter or one.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
 
         UInt64 precision_param = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), params[0]);

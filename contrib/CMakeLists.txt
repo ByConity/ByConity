@@ -80,6 +80,10 @@ add_subdirectory (jsonc-cmake)
 add_subdirectory (ipdb-cmake)
 add_subdirectory (maxminddb-cmake)
 
+if (USE_LIBDEFLATE)
+  add_subdirectory (libdeflate-cmake)
+endif()
+
 if (USE_YAML_CPP)
     add_subdirectory (yaml-cpp-cmake)
 endif()
@@ -224,9 +228,11 @@ if (USE_INTERNAL_PARQUET_LIBRARY)
     add_subdirectory(arrow-cmake)
 
     # The library is large - avoid bloat.
-    target_compile_options (${ARROW_LIBRARY} PRIVATE -g0)
-    target_compile_options (${THRIFT_LIBRARY} PRIVATE -g0)
-    target_compile_options (${PARQUET_LIBRARY} PRIVATE -g0)
+    if( NOT (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+        target_compile_options (${ARROW_LIBRARY} PRIVATE -g0)
+        target_compile_options (${THRIFT_LIBRARY} PRIVATE -g0)
+        target_compile_options (${PARQUET_LIBRARY} PRIVATE -g0)
+    endif()
 endif()
 
 if (USE_INTERNAL_AVRO_LIBRARY)

@@ -40,6 +40,7 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
+#include <common/sleep.h>
 
 namespace DB
 {
@@ -176,7 +177,7 @@ BlockInputStreamPtr forwardIngestPartitionToWorkerWithBucketTableImpl(
         {
             continue;
         }
-        
+
         LOG_TRACE(log, fmt::format("{} with {} buckets", query_for_send_to_worker, buckets_lists[index].size()));
 
         auto worker_index = workers_index_with_task[index].first;
@@ -207,6 +208,9 @@ BlockInputStreamPtr forwardIngestPartitionToWorker(
     ContextPtr context
     )
 {
+    if (auto sleep_ms = context->getSettingsRef().sleep_in_send_ingest_to_worker_ms.totalMilliseconds())
+        sleepForMilliseconds(sleep_ms);
+
     Poco::Logger * log = target_table.getLogger();
     TxnTimestamp txn_id = context->getCurrentTransactionID();
     std::hash<String> hasher;
@@ -359,7 +363,7 @@ Pipe ingestPartitionInServer(
 
     BlockInputStreamPtr in = forwardIngestPartitionToWorker(storage, *source_merge_tree, command, local_context);
     cur_txn->setMainTableUUID(storage.getStorageUUID());
-    in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(cur_txn));
+    in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(cur_txn), std::move(cnch_lock));
     return Pipe{std::make_shared<SourceFromInputStream>(std::move(in))};
 }
 

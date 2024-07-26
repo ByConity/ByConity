@@ -354,10 +354,10 @@ message FinalSampleStep {
 
 message ReadStorageRowCountStep {
   required ISourceStep query_plan_base = 1;
-  required AST query = 2;
-  required AggregateDescription agg_desc = 3;
-  required uint64 num_rows = 4;
-  required bool is_final_agg = 5;
+  required AST query = 3;
+  required AggregateDescription agg_desc = 4;
+  required uint64 num_rows = 5;
+  required bool is_final_agg = 6;
 }
 
 message WindowStep {

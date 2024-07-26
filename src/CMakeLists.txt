@@ -581,6 +581,10 @@ if (USE_HDFS)
     dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${HDFS3_INCLUDE_DIR})
 endif()
 
+if (USE_LIBDEFLATE)
+    dbms_target_link_libraries(PRIVATE ${LIBDEFLATE_LIBRARY})
+endif()
+
 if (TARGET ch_contrib::aws_s3)
     target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::aws_s3)
     message("link clickhouse_common_io ch_contrib::aws_s3")
@@ -615,7 +619,7 @@ target_link_libraries (clickhouse_common_io PUBLIC ${FAST_FLOAT_LIBRARY})
 target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${FAST_FLOAT_INCLUDE_DIR} ${PARALLEL_HASHMAP_INCLUDE_DIR})
 
 if (USE_ORC)
-    dbms_target_link_libraries(PUBLIC ${ORC_LIBRARIES})
+    dbms_target_link_libraries(PUBLIC ${ORC_LIBRARIES} ${LIBDEFLATE_LIBRARY})
     dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${ORC_INCLUDE_DIR} "${CMAKE_BINARY_DIR}/contrib/orc/c++/include")
 endif ()
 
@@ -718,7 +722,8 @@ if (ENABLE_TESTS AND USE_GTEST)
         clickhouse_common_zookeeper
         string_utils
         brpc-static
-        )
+        $<TARGET_OBJECTS:protobuf::libprotobuf>
+     )
 
     # For __udivmodti4 referenced in Core/tests/gtest_DecimalFunctions.cpp
     if (OS_DARWIN AND COMPILER_GCC)

@@ -21,7 +21,8 @@ std::map<TokenType, const char *> hilite =
     {TokenType::BareWord, "\033[1m"},
     {TokenType::Number, "\033[1;36m"},
     {TokenType::StringLiteral, "\033[1;32m"},
-    {TokenType::QuotedIdentifier, "\033[1;35m"},
+    {TokenType::DoubleQuotedIdentifier, "\033[1;35m"},
+    {TokenType::BackQuotedIdentifier, "\033[1;35m"},
 
     {TokenType::OpeningRoundBracket, "\033[1;33m"},
     {TokenType::ClosingRoundBracket, "\033[1;33m"},

@@ -162,6 +162,13 @@ public:
 
         indexes.template get<key_tag>().clear();
     }
+
+    size_t size()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        return indexes.size();
+    }
 };
 
 
@@ -321,6 +328,15 @@ public:
         current_size = 0;
         hits = 0;
         misses = 0;
+    }
+
+    size_t innerContainerSize() const
+    {
+        std::lock_guard lock(mutex);
+        if (inner_container)
+            return inner_container->size();
+        else
+            return 0;
     }
 
     virtual ~LRUCache() {}
@@ -522,6 +538,12 @@ private:
 
             if (!cell.load_from_external)
                 removeExternal(key, cell.value, cell.size);
+
+            onEvict(key);
+
+            //sync inner_container
+            if (inner_container)
+                inner_container->remove(key);
             
             cells.erase(it);
             queue.pop_front();
@@ -537,6 +559,8 @@ private:
         }
     }
 
+    // called when element is evict from cache
+    virtual void onEvict(const Key &) {}
     /// Override this method if you want to track how much weight was lost in removeOverflow method.
     virtual void onRemoveOverflowWeightLoss(size_t /*weight_loss*/) {}
     virtual void removeExternal(const Key & /*key*/, const MappedPtr &/*value*/, size_t /*weight*/) {}

@@ -489,9 +489,11 @@ void CnchServerResource::computeResourceSize(
             std::unordered_map<UUID, size_t> table_size;
             for (const auto & r : assinged_resource)
             {
-                size_t s = std::accumulate(r.server_parts.cbegin(), r.server_parts.cend(), 0, [](size_t sum, ServerDataPartPtr p) {
-                    return sum + p->rowsCount();
-                });
+                size_t s = 0;
+                for (const auto & p : r.server_parts)
+                {
+                    s += p->rowsCount();
+                }
                 auto & t_size = table_size[r.storage->getStorageID().uuid];
                 if (t_size)
                     t_size += s;

@@ -33,7 +33,10 @@ namespace DB
 {
 
 class NamesAndTypesList;
+class ExpressionAnalyzer;
 
+/// for function IN, changes its args into a set
+void buildSets(const ASTPtr & expression, ExpressionAnalyzer &);
 
 namespace VirtualColumnUtils
 {

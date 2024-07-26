@@ -199,7 +199,7 @@ void HiveSchemaConverter::convert(StorageInMemoryMetadata & metadata) const
         }
         auto func_hash = makeASTFunction("javaHash", args);
         auto bucket_num = std::make_shared<ASTLiteral>(hive_table->sd.numBuckets);
-        auto func_mod = makeASTFunction("modulo", ASTs{func_hash, bucket_num});
+        auto func_mod = makeASTFunction("hiveModulo", ASTs{func_hash, bucket_num});
         auto cluster_key = std::make_shared<ASTClusterByElement>(func_mod, bucket_num, -1, false, false);
         metadata.cluster_by_key = KeyDescription::getClusterByKeyFromAST(cluster_key, columns, getContext());
     }

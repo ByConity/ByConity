@@ -1655,19 +1655,19 @@ void PartCacheManager::checkTimeLimit(Stopwatch & watch)
     }
 }
 
-std::pair<UInt64, UInt64> PartCacheManager::dumpPartCache()
+std::tuple<UInt64, UInt64, UInt64> PartCacheManager::dumpPartCache()
 {
-    return {part_cache_ptr->count(), part_cache_ptr->weight()};
+    return {part_cache_ptr->count(), part_cache_ptr->weight(), part_cache_ptr->innerContainerSize()};
 }
 
-std::pair<UInt64, UInt64> PartCacheManager::dumpDeleteBitmapCache()
+std::tuple<UInt64, UInt64, UInt64> PartCacheManager::dumpDeleteBitmapCache()
 {
-    return {delete_bitmap_cache_ptr->count(), delete_bitmap_cache_ptr->weight()};
+    return {delete_bitmap_cache_ptr->count(), delete_bitmap_cache_ptr->weight(), delete_bitmap_cache_ptr->innerContainerSize()};
 }
 
-std::pair<UInt64, UInt64> PartCacheManager::dumpStorageCache()
+std::tuple<UInt64, UInt64, UInt64, UInt64> PartCacheManager::dumpStorageCache()
 {
-    return {storageCachePtr->count(), storageCachePtr->weight()};
+    return {storageCachePtr->count(), storageCachePtr->weight(), storageCachePtr->innerContainerSize(), storageCachePtr->uuidNameMappingSize()};
 }
 
 std::unordered_map<String, std::pair<size_t, size_t>> PartCacheManager::getTablePartCacheInfo()
