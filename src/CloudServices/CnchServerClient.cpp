@@ -21,7 +21,6 @@
 #include <brpc/controller.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Protos/auto_statistics.pb.h>
 #include <common/types.h>
 #include <Storages/MergeTree/MarkRange.h>
@@ -962,19 +961,6 @@ CnchServerClient::getBackGroundStatus(const CnchBGThreadType & type)
     RPCHelpers::checkResponse(response);
 
     return response.status();
-}
-
-void CnchServerClient::submitQueryWorkerMetrics(const QueryWorkerMetricElementPtr & query_worker_metric_element)
-{
-    brpc::Controller cntl;
-    Protos::SubmitQueryWorkerMetricsReq request;
-    Protos::SubmitQueryWorkerMetricsResp response;
-
-    fillQueryWorkerMetricElement(query_worker_metric_element, *request.mutable_element());
-
-    stub->submitQueryWorkerMetrics(&cntl, &request, &response, nullptr);
-    assertController(cntl);
-    RPCHelpers::checkResponse(response);
 }
 
 void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 timeout_ms)

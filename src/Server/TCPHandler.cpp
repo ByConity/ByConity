@@ -46,7 +46,6 @@
 #include <IO/WriteBufferFromPocoSocket.h>
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryStatus.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
@@ -548,7 +547,6 @@ void TCPHandler::runImpl()
                 break;
 
             sendLogs();
-            sendQueryWorkerMetrics();
             sendEndOfStream();
 
             /// QueryState should be cleared before QueryScope, since otherwise
@@ -630,7 +628,6 @@ void TCPHandler::runImpl()
                     /// Try to send logs to client, but it could be risky too
                     /// Assume that we can't break output here
                     sendLogs();
-                    sendQueryWorkerMetrics();
                 }
                 catch (...)
                 {
@@ -1030,26 +1027,6 @@ void TCPHandler::sendProfileInfo(const BlockStreamProfileInfo & info)
     writeVarUInt(Protocol::Server::ProfileInfo, *out);
     info.write(*out);
     out->next();
-}
-
-void TCPHandler::sendQueryWorkerMetrics()
-{
-    /// The 'QueryMetrics' packets are only allowed to be sent to cnch worker or cnch server.
-    /// plan segment cannot receive worker metrics currently
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_QUERY_METRICS && query_context->getSettingsRef().enable_query_level_profiling
-        && query_context->getClientInfo().client_type != ClientInfo::ClientType::UNKNOWN
-        /*&& !state->plan_segment*/)
-    {
-        writeVarUInt(Protocol::Server::QueryMetrics, *out);
-
-        writeVarUInt(query_context->getQueryWorkerMetricElements().size(), *out);
-        for (const auto & query_worker_metric_element : query_context->getQueryWorkerMetricElements())
-        {
-            query_worker_metric_element->write(*out);
-        }
-
-        out->next();
-    }
 }
 
 void TCPHandler::sendTotals(const Block & totals)

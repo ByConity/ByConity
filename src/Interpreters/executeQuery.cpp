@@ -78,7 +78,6 @@
 
 #include <Access/EnabledQuota.h>
 #include <Interpreters/ApplyWithGlobalVisitor.h>
-#include <Interpreters/CnchQueryMetrics/QueryMetricLogHelper.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IdentifierNameNormalizer.h>
 #include <Interpreters/InterpreterFactory.h>
@@ -591,25 +590,6 @@ static void onExceptionBeforeStart(
         && !settings.log_queries_min_query_duration_ms.totalMilliseconds())
         logQuery(context, elem);
 
-    if (settings.enable_query_level_profiling)
-    {
-        insertCnchQueryMetric(
-            context,
-            query_for_logging,
-            QueryLogElementType::EXCEPTION_BEFORE_START,
-            current_time_us / 1000000,
-            nullptr /*ast*/,
-            nullptr /*query status info*/,
-            nullptr /*stream info*/,
-            nullptr /*query pipeline*/,
-            false,
-            0,
-            0,
-            0,
-            elem.exception,
-            elem.stack_trace);
-    }
-
     if (auto opentelemetry_span_log = context->getOpenTelemetrySpanLog();
         context->query_trace_context.trace_id != UUID() && opentelemetry_span_log)
     {
@@ -1039,7 +1019,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             context->initCnchServerResource(txn->getTransactionID());
             if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
                 tryQueueQuery(context, ast);
-            
+
             if (!internal && !ast->as<ASTShowProcesslistQuery>())
                 enqueueVirtualWarehouseQueue(context, ast);
         }
@@ -1203,7 +1183,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     static std::unordered_set<int> no_fallback_error_codes = {
                         ErrorCodes::TIMEOUT_EXCEEDED,
                         ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES,
-                        ErrorCodes::SOCKET_TIMEOUT, 
+                        ErrorCodes::SOCKET_TIMEOUT,
                         ErrorCodes::TOO_MANY_PARTS,
                         ErrorCodes::QUERY_WAS_CANCELLED,
                         ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL,
@@ -1301,10 +1281,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             if (!table_id.empty())
                 context->setInsertionTable(std::move(table_id));
         }
-
-        /// FIXME: Fix after complex query is supported
-        bool complex_query = false;
-        UInt32 init_time = watch.elapsedMilliseconds();
 
         if (process_list_entry)
         {
@@ -1476,26 +1452,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     logQuery(context, elem);
             }
 
-            if (settings.enable_query_level_profiling && context->getServerType() == ServerType::cnch_server)
-            {
-                /// Only query_metrics will include the `query_start` records, query_worker_metrics will not.
-                insertCnchQueryMetric(
-                    context,
-                    query,
-                    QueryMetricLogState::QUERY_START,
-                    time_in_seconds(current_time),
-                    ast,
-                    nullptr,
-                    nullptr,
-                    nullptr,
-                    false,
-                    complex_query,
-                    init_time,
-                    0,
-                    "",
-                    "");
-            }
-
             /// Common code for finish and exception callbacks
             auto status_info_to_query_log = [is_unlimited_query, context](QueryLogElement & element, const QueryStatusInfo & info, const ASTPtr query_ast) mutable {
                 DB::UInt64 query_time = info.elapsed_seconds * 1000000;
@@ -1574,13 +1530,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                      log_processors_profiles = settings.log_processors_profiles,
                      status_info_to_query_log,
                      query_id,
-                     finish_current_transaction,
-                     complex_query,
-                     init_time](
+                     finish_current_transaction](
                         IBlockInputStream * stream_in,
                         IBlockOutputStream * stream_out,
-                        QueryPipeline * query_pipeline,
-                        UInt64 runtime_latency) mutable {
+                        QueryPipeline * query_pipeline) mutable {
                         /// If active (write) use of the query cache is enabled and the query is eligible for result caching, then store the query
                         /// result buffered in the special-purpose cache processor (added on top of the pipeline) into the cache.
                         if (query_cache_usage == QueryCache::Usage::Write)
@@ -1667,82 +1620,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                 elapsed_seconds,
                                 static_cast<size_t>(elem.read_rows / elapsed_seconds),
                                 ReadableSize(elem.read_bytes / elapsed_seconds));
-                        }
-
-                        if (context->getSettingsRef().enable_query_level_profiling)
-                        {
-                            if (stream_in)
-                            {
-                                insertCnchQueryMetric(
-                                    context,
-                                    query,
-                                    QueryMetricLogState::QUERY_FINISH,
-                                    time(nullptr),
-                                    ast,
-                                    &info,
-                                    &stream_in->getProfileInfo(),
-                                    nullptr,
-                                    false,
-                                    complex_query,
-                                    init_time,
-                                    runtime_latency,
-                                    "",
-                                    "");
-                            }
-                            else if (stream_out)
-                            {
-                                insertCnchQueryMetric(
-                                    context,
-                                    query,
-                                    QueryMetricLogState::QUERY_FINISH,
-                                    time(nullptr),
-                                    ast,
-                                    &info,
-                                    nullptr,
-                                    nullptr,
-                                    false,
-                                    complex_query,
-                                    init_time,
-                                    runtime_latency,
-                                    "",
-                                    "");
-                            }
-                            else if (query_pipeline)
-                            {
-                                insertCnchQueryMetric(
-                                    context,
-                                    query,
-                                    QueryMetricLogState::QUERY_FINISH,
-                                    time(nullptr),
-                                    ast,
-                                    &info,
-                                    nullptr,
-                                    query_pipeline,
-                                    false,
-                                    complex_query,
-                                    init_time,
-                                    runtime_latency,
-                                    "",
-                                    "");
-                            }
-                            else
-                            {
-                                insertCnchQueryMetric(
-                                    context,
-                                    query,
-                                    QueryMetricLogState::QUERY_FINISH,
-                                    time(nullptr),
-                                    ast,
-                                    &info,
-                                    nullptr,
-                                    nullptr,
-                                    true,
-                                    complex_query,
-                                    init_time,
-                                    runtime_latency,
-                                    "",
-                                    "");
-                            }
                         }
 
                         elem.thread_ids = std::move(info.thread_ids);
@@ -1858,10 +1735,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                        status_info_to_query_log,
                                        query_id,
                                        finish_current_transaction,
-                                       complex_query,
-                                       init_time,
                                        query_type,
-                                       is_unlimited_query](UInt64 runtime_latency) mutable {
+                                       is_unlimited_query]() mutable {
                 finish_current_transaction(context);
                 if (quota)
                     quota->used(Quota::ERRORS, 1, /* check_exceeded = */ false);
@@ -1909,26 +1784,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 /// In case of exception we log internal queries also
                 if (log_queries && elem.type >= log_queries_min_type && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
                     logQuery(context, elem);
-
-                if (context->getSettingsRef().enable_query_level_profiling)
-                {
-                    QueryStatusInfo info = process_list_elem->getInfo(true, context->getSettingsRef().log_profile_events);
-                    insertCnchQueryMetric(
-                        context,
-                        query,
-                        QueryMetricLogState::EXCEPTION_WHILE_PROCESSING,
-                        time(nullptr),
-                        ast,
-                        &info,
-                        nullptr,
-                        nullptr,
-                        false,
-                        complex_query,
-                        init_time,
-                        runtime_latency,
-                        elem.exception,
-                        elem.stack_trace);
-                }
 
                 ProfileEvents::increment(ProfileEvents::FailedQuery);
 

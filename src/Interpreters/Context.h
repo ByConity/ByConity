@@ -149,16 +149,10 @@ class CloudUniqueTableLog;
 class ProcessorsProfileLog;
 class RemoteReadLog;
 class ZooKeeperLog;
-class QueryMetricLog;
-class QueryWorkerMetricLog;
 class CnchQueryLog;
 class ViewRefreshTaskLog;
 class AutoStatsTaskLog;
-struct QueryMetricElement;
-struct QueryWorkerMetricElement;
 struct ViewRefreshTaskLogElement;
-using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
-using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 struct ProcessorProfileLogElement;
 template <typename>
 class ProfileElementConsumer;
@@ -613,8 +607,6 @@ private:
     /// Transaction for each query, query level
     TransactionCnchPtr current_cnch_txn;
 
-    QueryWorkerMetricElements query_worker_metrics;
-
     /// The extended profile info is from workers and mainly for INSERT operations
     mutable ExtendedProfileInfo extended_profile_info;
 
@@ -649,9 +641,6 @@ public:
 
     void setExtendedProfileInfo(const ExtendedProfileInfo & source) const;
     ExtendedProfileInfo getExtendedProfileInfo() const;
-
-    void addQueryWorkerMetricElements(QueryWorkerMetricElementPtr query_worker_metric_element);
-    QueryWorkerMetricElements getQueryWorkerMetricElements();
 
     String getPath() const;
     String getFlagsPath() const;
@@ -1313,12 +1302,7 @@ public:
     std::shared_ptr<ServerPartLog> getServerPartLog() const;
 
     void initializeCnchSystemLogs();
-    std::shared_ptr<QueryMetricLog> getQueryMetricsLog() const;
-    void insertQueryMetricsElement(const QueryMetricElement & element); /// Add the metrics element to the background thread for flushing
     void insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element) const;
-    std::shared_ptr<QueryWorkerMetricLog> getQueryWorkerMetricsLog() const;
-    void insertQueryWorkerMetricsElement(
-        const QueryWorkerMetricElement & element); /// Add the metrics element to the background thread for flushing
     std::shared_ptr<CnchQueryLog> getCnchQueryLog() const;
     std::shared_ptr<ViewRefreshTaskLog> getViewRefreshTaskLog() const;
 

@@ -60,9 +60,6 @@ namespace DB
 class ClientInfo;
 class Pipe;
 struct Settings;
-struct QueryWorkerMetricElement;
-using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
-using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 
 /// Struct which represents data we are going to send for external table.
 struct ExternalTableData
@@ -98,7 +95,6 @@ struct Packet
     Progress progress;
     BlockStreamProfileInfo profile_info;
     std::vector<UUID> part_uuids;
-    QueryWorkerMetricElements query_worker_metric_elements;
 
     Packet() : type(Protocol::Server::Hello) {}
 };
@@ -397,7 +393,6 @@ private:
     std::unique_ptr<Exception> receiveException() const;
     Progress receiveProgress() const;
     BlockStreamProfileInfo receiveProfileInfo() const;
-    QueryWorkerMetricElements receiveQueryWorkerMetrics();
 
     void initInputBuffers();
     void initBlockInput();

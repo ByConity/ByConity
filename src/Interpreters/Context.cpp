@@ -67,8 +67,6 @@
 #include <Interpreters/ActionLocksManager.h>
 #include <Interpreters/Cache/QueryCache.h>
 #include <Interpreters/Cluster.h>
-#include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/CnchSystemLog.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DDLTask.h>
@@ -1080,17 +1078,6 @@ ExtendedProfileInfo Context::getExtendedProfileInfo() const
 {
     auto lock = getLock();
     return extended_profile_info;
-}
-
-/// Should not be called in concurrent cases
-void Context::addQueryWorkerMetricElements(QueryWorkerMetricElementPtr query_worker_metric_element)
-{
-    query_worker_metrics.emplace_back(query_worker_metric_element);
-}
-
-QueryWorkerMetricElements Context::getQueryWorkerMetricElements()
-{
-    return query_worker_metrics;
 }
 
 String Context::resolveDatabase(const String & database_name) const
@@ -3797,29 +3784,6 @@ void Context::initializeCnchSystemLogs()
     shared->cnch_system_logs = std::make_unique<CnchSystemLogs>(getGlobalContext());
 }
 
-std::shared_ptr<QueryMetricLog> Context::getQueryMetricsLog() const
-{
-    auto lock = getLock();
-
-    if (!shared->cnch_system_logs)
-        return {};
-
-    return shared->cnch_system_logs->getQueryMetricLog();
-}
-
-void Context::insertQueryMetricsElement(const QueryMetricElement & element)
-{
-    auto query_metrics_log = getQueryMetricsLog();
-    if (query_metrics_log)
-    {
-        query_metrics_log->add(element);
-    }
-    else
-    {
-        LOG_WARNING(&Poco::Logger::get("Context"), "Query Metrics Log has not been initialized.");
-    }
-}
-
 void Context::insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element) const
 {
     auto view_refresh_task_log = getViewRefreshTaskLog();
@@ -3827,29 +3791,6 @@ void Context::insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element
         view_refresh_task_log->add(element);
     else
         LOG_WARNING(&Poco::Logger::get("Context"), "View Refresh Task Log has not been initialized.");
-}
-
-std::shared_ptr<QueryWorkerMetricLog> Context::getQueryWorkerMetricsLog() const
-{
-    auto lock = getLock();
-
-    if (!shared->cnch_system_logs)
-        return {};
-
-    return shared->cnch_system_logs->getQueryWorkerMetricLog();
-}
-
-void Context::insertQueryWorkerMetricsElement(const QueryWorkerMetricElement & element)
-{
-    auto query_worker_metrics_log = getQueryWorkerMetricsLog();
-    if (query_worker_metrics_log)
-    {
-        query_worker_metrics_log->add(element);
-    }
-    else
-    {
-        LOG_WARNING(&Poco::Logger::get("Context"), "Query Worker Metrics Log has not been initialized.");
-    }
 }
 
 std::shared_ptr<CnchQueryLog> Context::getCnchQueryLog() const

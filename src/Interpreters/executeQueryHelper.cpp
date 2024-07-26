@@ -160,7 +160,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         *plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
     res.pipeline.addInterpreterContext(context);
 
-    res.finish_callback = [proxy_txn, context, remote_query_executor](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
+    res.finish_callback = [proxy_txn, context, remote_query_executor](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *) {
         /// Get the extended profile info which is mainly for INSERT SELECT/INSERT INFILE
         context->setExtendedProfileInfo(remote_query_executor->getExtendedProfileInfo());
         if (proxy_txn)
@@ -169,7 +169,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
 
     };
-    res.exception_callback = [proxy_txn, context](int) {
+    res.exception_callback = [proxy_txn, context]() {
         if (proxy_txn)
             proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
 

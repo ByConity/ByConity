@@ -89,8 +89,6 @@
 #include <unistd.h>
 #include <Interpreters/QueryExchangeLog.h>
 #include <Interpreters/CnchSystemLog.h>
-#include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/AutoStatsTaskLog.h>
 #include <Interpreters/RemoteReadLog.h>
 #include <common/sleep.h>
@@ -1639,22 +1637,16 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
         executeActionOnCNCHLogImpl(getContext()->getCloudKafkaLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getCloudMaterializedMySQLLog(), type, table_name, log);
-    else if (table_name == CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME)
-        executeActionOnCNCHLogImpl(getContext()->getQueryMetricsLog(), type, table_name, log);
-    else if (table_name == CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME)
-        executeActionOnCNCHLogImpl(getContext()->getQueryWorkerMetricsLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getCnchQueryLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getViewRefreshTaskLog(), type, table_name, log);
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "there is no log corresponding to table name {}, available names are {}, {}, {}, {}, {}",
+            "there is no log corresponding to table name {}, available names are {}, {}, {}, {}",
             table_name,
             CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME,
-            CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
-            CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME);
 }

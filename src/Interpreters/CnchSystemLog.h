@@ -26,25 +26,14 @@
 namespace DB
 {
 
-class QueryMetricLog;
-class QueryWorkerMetricLog;
 class CnchQueryLog;
 
 // Query metrics definitions
-constexpr auto CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME = "query_metrics";
-constexpr auto CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME = "query_worker_metrics";
 constexpr auto CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME = "cnch_kafka_log";
 constexpr auto CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME = "cnch_query_log";
 constexpr auto CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME = "cnch_materialized_mysql_log";
 constexpr auto CNCH_SYSTEM_LOG_UNIQUE_TABLE_LOG_TABLE_NAME = "cnch_unique_table_log";
 constexpr auto CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME = "cnch_view_refresh_task_log";
-
-static inline bool isQueryMetricsTable(const String & database, const String & table)
-{
-    return (database == CNCH_SYSTEM_LOG_DB_NAME || database == DatabaseCatalog::SYSTEM_DATABASE) &&
-            (table == CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME ||
-            table == CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME);
-}
 
 /** Modified version of SystemLog that flushes data to a CnchMergeTree table.
   * Altering of schema is also possible for columns that are not part of primary/partition keys.
@@ -74,18 +63,6 @@ public:
         return cloud_unique_table_log;
     }
 
-    std::shared_ptr<QueryMetricLog> getQueryMetricLog() const
-    {
-        std::lock_guard<std::mutex> g(mutex);
-        return query_metrics;
-    }
-
-    std::shared_ptr<QueryWorkerMetricLog> getQueryWorkerMetricLog() const
-    {
-        std::lock_guard<std::mutex> g(mutex);
-        return query_worker_metrics;
-    }
-
     std::shared_ptr<CnchQueryLog> getCnchQueryLog() const
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -104,8 +81,6 @@ private:
     std::shared_ptr<CloudKafkaLog> cloud_kafka_log;
     std::shared_ptr<CloudMaterializedMySQLLog> cloud_materialized_mysql_log;
     std::shared_ptr<CloudUniqueTableLog> cloud_unique_table_log;
-    std::shared_ptr<QueryMetricLog> query_metrics;                /// Used to log query metrics.
-    std::shared_ptr<QueryWorkerMetricLog> query_worker_metrics;   /// Used to log query worker metrics.
     std::shared_ptr<CnchQueryLog> cnch_query_log;
     std::shared_ptr<ViewRefreshTaskLog> cnch_view_refresh_task_log;
 
@@ -136,8 +111,6 @@ private:
     std::vector<ISystemLog *> logs;
 };
 
-constexpr auto QUERY_METRICS_CONFIG_PREFIX = "query_metrics";
-constexpr auto QUERY_WORKER_METRICS_CONFIG_PREFIX = "query_worker_metrics";
 constexpr auto CNCH_KAFKA_LOG_CONFIG_PREFIX = "cnch_kafka_log";
 constexpr auto CNCH_QUERY_LOG_CONFIG_PREFIX = "cnch_query_log";
 constexpr auto CNCH_MATERIALIZED_MYSQL_LOG_CONFIG_PREFIX = "cnch_materialized_mysql_log";
