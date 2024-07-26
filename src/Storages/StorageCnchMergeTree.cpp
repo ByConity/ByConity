@@ -2805,7 +2805,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(
     }
 
     auto parts = createPartVectorFromServerParts(*this, svr_parts.first);
-    dropPartsImpl(svr_parts, parts, command.detach, local_context, do_commit, max_threads, command.staging_area);
+    dropPartsImpl(command, svr_parts, parts, local_context, do_commit, max_threads);
 
     if (dropped_parts != nullptr)
     {
@@ -2814,14 +2814,15 @@ void StorageCnchMergeTree::dropPartitionOrPart(
 }
 
 void StorageCnchMergeTree::dropPartsImpl(
+    const PartitionCommand & command,
     ServerDataPartsWithDBM & svr_parts_to_drop_with_dbm,
     IMergeTreeDataPartsVector & parts_to_drop,
-    bool detach,
     ContextPtr local_context,
     bool do_commit,
-    size_t max_threads,
-    bool staging_area)
+    size_t max_threads)
 {
+    bool detach = command.detach;
+    bool staging_area = command.staging_area;
     auto & svr_parts_to_drop = svr_parts_to_drop_with_dbm.first;
     auto txn = local_context->getCurrentTransaction();
     if (svr_parts_to_drop.empty())
@@ -3024,10 +3025,10 @@ void StorageCnchMergeTree::dropPartsImpl(
     }
     else
     {
-        if (svr_parts_to_drop.size() == 1)
+        if (svr_parts_to_drop.size() == 1 || command.specify_bucket)
         {
-            auto & part = parts_to_drop.front();
-            drop_ranges.emplace_back(generateDropPart(part));
+            for (const auto & part: parts_to_drop)
+                drop_ranges.emplace_back(generateDropPart(part));
         }
         else
         {
