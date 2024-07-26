@@ -730,7 +730,6 @@ UniqueNotEnforcedDescription InterpreterCreateQuery::getUniqueNotEnforcedDescrip
     return res;
 }
 
-
 InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(ASTCreateQuery & create) const
 {
     TableProperties properties;
@@ -1138,109 +1137,6 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
 
 BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
-    // Make sure names in foreign key exist.
-    if (create.columns_list && create.columns_list->foreign_keys)
-    {
-        // When the reference column does not exist, foreign keys are still created
-        bool force_create_foreign_key = getContext()->getSettingsRef().force_create_foreign_key;
-
-        if (create.database.empty())
-            create.database = getContext()->getCurrentDatabase();
-
-        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
-            NameSet name_set;
-            for (const auto & name : names)
-                name_set.insert(name);
-
-            for (const auto & ptr : name_list.children)
-                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
-                    return ptr->as<ASTIdentifier &>().name();
-            return String();
-        };
-
-        Names columns;
-        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
-            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
-
-        // FOREIGN KEY (foreign_key.column_names) REFERENCES(foreign_key.ref_column_names)
-        if (!columns.empty())
-        {
-            const ASTExpressionList * foreign_keys = create.columns_list->foreign_keys;
-            NameSet used_fk_names;
-
-            for (const auto & foreign_key_child : foreign_keys->children)
-            {
-                auto & foreign_key = foreign_key_child->as<ASTForeignKeyDeclaration &>();
-
-                if (!used_fk_names.contains(foreign_key.fk_name))
-                    used_fk_names.insert(foreign_key.fk_name);
-                else
-                    throw Exception("FOREIGN KEY constraint name duplicated with " + foreign_key.fk_name, ErrorCodes::ILLEGAL_COLUMN);
- 
-                
-                auto check_res = contains_columns(foreign_key.column_names->as<ASTExpressionList &>(), columns);
-                if (!check_res.empty())
-                    throw Exception("FOREIGN KEY references unknown self column " + check_res, ErrorCodes::ILLEGAL_COLUMN);
-
-                if (!force_create_foreign_key)
-                {
-                    auto ref_storage_ptr = DatabaseCatalog::instance().tryGetTable({create.database, foreign_key.ref_table_name}, getContext());
-                    if (!ref_storage_ptr)
-                        throw Exception("FOREIGN KEY references unknown table " + foreign_key.ref_table_name, ErrorCodes::UNKNOWN_TABLE);
-
-                    auto ref_check_res = contains_columns(
-                        foreign_key.ref_column_names->as<ASTExpressionList &>(),
-                        ref_storage_ptr->getInMemoryMetadataPtr()->getColumns().getAll().getNames());
-
-                    if (!ref_check_res.empty())
-                        throw Exception("FOREIGN KEY references unknown column " + ref_check_res, ErrorCodes::ILLEGAL_COLUMN);
-                }
-            }
-        }
-    }
-
-    // Make sure names in unique not enforced exist.
-    if (create.columns_list && create.columns_list->unique)
-    {
-        if (create.database.empty())
-            create.database = getContext()->getCurrentDatabase();
-
-        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
-            NameSet name_set;
-            for (const auto & name : names)
-                name_set.insert(name);
-
-            for (const auto & ptr : name_list.children)
-                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
-                    return ptr->as<ASTIdentifier &>().name();
-            return String();
-        };
-
-        Names columns;
-        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
-            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
-
-        if (!columns.empty())
-        {
-            const ASTExpressionList * unique = create.columns_list->unique;
-            NameSet used_uk_names;
-
-            for (const auto & unique_child : unique->children)
-            {
-                auto & unique_key = unique_child->as<ASTUniqueNotEnforcedDeclaration &>();
-
-                if (!used_uk_names.contains(unique_key.name))
-                    used_uk_names.insert(unique_key.name);
-                else
-                    throw Exception("UNIQUE NOT ENFORCED constraint name duplicated with " + unique_key.name, ErrorCodes::ILLEGAL_COLUMN);
-
-                auto check_res = contains_columns(unique_key.column_names->as<ASTExpressionList &>(), columns);
-                if (!check_res.empty())
-                    throw Exception("UNIQUE NOT ENFORCED not exists -- " + check_res, ErrorCodes::ILLEGAL_COLUMN);
-            }
-        }
-    }
-
     /// Temporary tables are created out of databases.
     if (create.temporary && !create.database.empty())
         throw Exception("Temporary tables cannot be inside a database. You should not specify a database for a temporary table.",
@@ -1347,6 +1243,110 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     /// Set and retrieve list of columns, indices and constraints. Set table engine if needed. Rewrite query in canonical way.
     TableProperties properties = setProperties(create);
+
+    // Make sure names in foreign key exist.
+    if (create.columns_list && create.columns_list->foreign_keys && !create.columns_list->foreign_keys->children.empty())
+    {
+        // When the reference column does not exist, foreign keys are still created
+        bool force_create_foreign_key = getContext()->getSettingsRef().force_create_foreign_key;
+
+        if (create.database.empty())
+            create.database = getContext()->getCurrentDatabase();
+
+        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
+            NameSet name_set;
+            for (const auto & name : names)
+                name_set.insert(name);
+
+            for (const auto & ptr : name_list.children)
+                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
+                    return ptr->as<ASTIdentifier &>().name();
+            return String();
+        };
+
+        Names columns;
+        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
+            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
+
+        // FOREIGN KEY (foreign_key.column_names) REFERENCES(foreign_key.ref_column_names)
+        if (!columns.empty())
+        {
+            const ASTExpressionList * foreign_keys = create.columns_list->foreign_keys;
+            NameSet used_fk_names;
+
+            for (const auto & foreign_key_child : foreign_keys->children)
+            {
+                auto & foreign_key = foreign_key_child->as<ASTForeignKeyDeclaration &>();
+
+                if (!used_fk_names.contains(foreign_key.fk_name))
+                    used_fk_names.insert(foreign_key.fk_name);
+                else
+                    throw Exception("FOREIGN KEY constraint name duplicated with " + foreign_key.fk_name, ErrorCodes::ILLEGAL_COLUMN);
+
+
+                auto check_res = contains_columns(foreign_key.column_names->as<ASTExpressionList &>(), columns);
+                if (!check_res.empty())
+                    throw Exception("FOREIGN KEY references unknown self column " + check_res, ErrorCodes::ILLEGAL_COLUMN);
+
+                if (!force_create_foreign_key)
+                {
+                    auto ref_storage_ptr = DatabaseCatalog::instance().tryGetTable({create.database, foreign_key.ref_table_name}, getContext());
+                    if (!ref_storage_ptr)
+                        throw Exception("FOREIGN KEY references unknown table " + foreign_key.ref_table_name, ErrorCodes::UNKNOWN_TABLE);
+
+                    auto ref_check_res = contains_columns(
+                        foreign_key.ref_column_names->as<ASTExpressionList &>(),
+                        ref_storage_ptr->getInMemoryMetadataPtr()->getColumns().getAll().getNames());
+
+                    if (!ref_check_res.empty())
+                        throw Exception("FOREIGN KEY references unknown column " + ref_check_res, ErrorCodes::ILLEGAL_COLUMN);
+                }
+            }
+        }
+    }
+
+    // Make sure names in unique not enforced exist.
+    if (create.columns_list && create.columns_list->unique && !create.columns_list->unique->children.empty())
+    {
+        if (create.database.empty())
+            create.database = getContext()->getCurrentDatabase();
+
+        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
+            NameSet name_set;
+            for (const auto & name : names)
+                name_set.insert(name);
+
+            for (const auto & ptr : name_list.children)
+                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
+                    return ptr->as<ASTIdentifier &>().name();
+            return String();
+        };
+
+        Names columns;
+        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
+            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
+
+        if (!columns.empty())
+        {
+            const ASTExpressionList * unique = create.columns_list->unique;
+            NameSet used_uk_names;
+
+            for (const auto & unique_child : unique->children)
+            {
+                auto & unique_key = unique_child->as<ASTUniqueNotEnforcedDeclaration &>();
+
+                if (!used_uk_names.contains(unique_key.name))
+                    used_uk_names.insert(unique_key.name);
+                else
+                    throw Exception("UNIQUE NOT ENFORCED constraint name duplicated with " + unique_key.name, ErrorCodes::ILLEGAL_COLUMN);
+
+                auto check_res = contains_columns(unique_key.column_names->as<ASTExpressionList &>(), columns);
+                if (!check_res.empty())
+                    throw Exception("UNIQUE NOT ENFORCED not exists -- " + check_res, ErrorCodes::ILLEGAL_COLUMN);
+            }
+        }
+    }
+
 
     DatabasePtr database;
     bool need_add_to_database = !create.temporary;

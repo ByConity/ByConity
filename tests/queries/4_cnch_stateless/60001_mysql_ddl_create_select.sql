@@ -114,3 +114,33 @@ DROP TABLE IF EXISTS mysql_create_select_ddl3;
 DROP TABLE IF EXISTS mysql_create_select_ddl4;
 DROP TABLE IF EXISTS mysql_create_select_ddl5;
 DROP TABLE IF EXISTS mysql_create_select_ddl6;
+
+DROP TABLE IF EXISTS 60001_customer;
+DROP TABLE IF EXISTS 60001_customer_add_fk;
+CREATE TABLE 60001_customer (
+customer_id bigint NOT NULL COMMENT '顾客ID',
+customer_name varchar NOT NULL COMMENT '顾客姓名',
+phone_num bigint NOT NULL COMMENT '电话',
+city_name varchar NOT NULL COMMENT '所属城市',
+sex int NOT NULL COMMENT '性别',
+id_number varchar NOT NULL COMMENT '身份证号码',
+home_address varchar NOT NULL COMMENT '家庭住址',
+office_address varchar NOT NULL COMMENT '办公地址',
+age int NOT NULL COMMENT '年龄',
+login_time timestamp NOT NULL COMMENT '登录时间',
+PRIMARY KEY (login_time,customer_id,phone_num)
+)
+DISTRIBUTED BY HASH(customer_id)
+PARTITION BY VALUE(DATE_FORMAT(login_time, '%Y%m%d'))
+TTL to_date(login_time) + toIntervalDay(30)
+COMMENT '客户信息表';
+
+CREATE TABLE 60001_customer_add_fk
+(
+    FOREIGN KEY (age) REFERENCES 60001_customer (customer_id)
+)
+AS
+SELECT * FROM test_adb_qinlei.customer; -- { serverError 90 }
+
+DROP TABLE IF EXISTS 60001_customer;
+DROP TABLE IF EXISTS 60001_customer_add_fk;
