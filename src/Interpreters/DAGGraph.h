@@ -1,7 +1,9 @@
 #pragma once
 
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
@@ -17,6 +19,8 @@
 namespace DB
 {
 
+class CnchServerResource;
+
 struct PlanSegmentsStatus
 {
     //TODO dongyifeng add when PlanSegmentInfo is merged
@@ -28,10 +32,20 @@ struct PlanSegmentsStatus
 
 using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
 using Source = std::unordered_set<size_t>;
+using WorkerInfoSet = std::unordered_set<HostWithPorts, std::hash<HostWithPorts>, HostWithPorts::IsSameEndpoint>;
+using PlanSegmentId = size_t;
+struct SourcePruneInfo
+{
+    std::unordered_set<PlanSegmentId> unprunable_plan_segments;
+    std::unordered_map<PlanSegmentId, std::vector<UUID>> plan_segment_storages_map;
+    std::unordered_map<PlanSegmentId, WorkerInfoSet> plan_segment_workers_map;
+};
+
+using SourcePruneInfoPtr = std::shared_ptr<SourcePruneInfo>;
 
 struct DAGGraph
 {
-    DAGGraph()
+    DAGGraph() : log(&Poco::Logger::get("DAGGraph"))
     {
         async_context = std::make_shared<AsyncContext>();
     }
@@ -64,6 +78,10 @@ struct DAGGraph
     std::unordered_map<size_t, UInt64> segment_parallel_size_map;
     butil::IOBuf query_common_buf;
     butil::IOBuf query_settings_buf;
+    SourcePruneInfoPtr source_prune_info;
+
+    void generateSourcePruneInfo(PlanSegmentTree * plan_segments_ptr, CnchServerResource * server_resource);
+    Poco::Logger * log;
 };
 
 using DAGGraphPtr = std::shared_ptr<DAGGraph>;

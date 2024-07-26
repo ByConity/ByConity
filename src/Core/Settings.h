@@ -1425,6 +1425,8 @@ enum PreloadLevelSettings : UInt64
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, true, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
+    M(Bool, enable_prune_source_plan_segment, true, "Whether prune source plan segment", 0) \
+    M(Bool, enable_prune_compute_plan_segment, true, "Whether prune compute plan segment", 0) \
     M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
@@ -1864,7 +1866,6 @@ enum PreloadLevelSettings : UInt64
     MAKE_OBSOLETE(M, Bool, make_partition_by_todate_monotonic, false) \
     MAKE_OBSOLETE(M, Bool, enable_query_cache, false) \
     MAKE_OBSOLETE(M, Bool, enable_parallel_input_generator, false) \
-    MAKE_OBSOLETE(M, Bool, enable_prune_source_plan_segment, true) \
     MAKE_OBSOLETE(M, Bool, exchange_enable_metric, true) \
     MAKE_OBSOLETE(M, UInt64, cnch_offloading_mode, 0) \
     MAKE_OBSOLETE(M, UInt64, distributed_query_max_threads, 0) \

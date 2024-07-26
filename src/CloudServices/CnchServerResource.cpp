@@ -134,7 +134,7 @@ void CnchServerResource::cleanResource()
         auto lock = getLock();
         assigned_table_resource.clear();
         assigned_worker_resource.clear();
-        // assigned_storage_workers.clear();
+        assigned_storage_workers.clear();
     }
 
     cleanResourceInWorker();
@@ -429,6 +429,7 @@ void CnchServerResource::allocateResource(
                 }
             }
 
+            auto & assigned_storage_worker_indexs = assigned_storage_workers[storage->getStorageUUID()];
             for (const auto & host_ports : host_ports_vec)
             {
                 ServerDataPartsVector assigned_parts;
@@ -437,23 +438,42 @@ void CnchServerResource::allocateResource(
                 if (auto it = assigned_map.find(host_ports.id); it != assigned_map.end())
                 {
                     assigned_parts = std::move(it->second);
+                    assigned_storage_worker_indexs.insert(host_ports);
+                    LOG_TRACE(
+                        log,
+                        "SourcePrune Send {}.{} {}'s data part to worker {}",
+                        storage->getDatabaseName(),
+                        storage->getTableName(),
+                        toString(storage->getStorageUUID()),
+                        host_ports.toDebugString());
+
                     CnchPartsHelper::flattenPartsVector(assigned_parts);
                 }
 
                 if (auto it = assigned_hive_map.find(host_ports.id); it != assigned_hive_map.end())
                 {
                     assigned_hive_parts = std::move(it->second);
+                    assigned_storage_worker_indexs.insert(host_ports);
+                    LOG_TRACE(
+                        log,
+                        "SourcePrune Send Hive {}.{} {}'s data part to worker {}",
+                        storage->getDatabaseName(),
+                        storage->getTableName(),
+                        toString(storage->getStorageUUID()),
+                        host_ports.toDebugString());
                 }
 
 
                 if (auto it = assigned_file_map.find(host_ports.id); it != assigned_file_map.end())
                 {
                     assigned_file_parts = std::move(it->second);
+                    assigned_storage_worker_indexs.insert(host_ports);
                     LOG_TRACE(
                         log,
-                        "assign {}.{} file data parts to works {}, size = {}",
+                        "SourcePrune Send File {}.{} {} data parts to works {}, size = {}",
                         storage->getDatabaseName(),
                         storage->getTableName(),
+                        toString(storage->getStorageUUID()),
                         host_ports.toDebugString(),
                         assigned_file_parts.size());
                 }

@@ -46,6 +46,8 @@ namespace ErrorCodes
     extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
 }
 
+
+
 PlanSegmentsStatusPtr
 SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * plan_segments_ptr, ContextPtr query_context)
 {
@@ -75,7 +77,6 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
         segment_status_map[query_id];
         query_status_map.emplace(query_id, std::make_shared<RuntimeSegmentsStatus>());
     }
-
     /// send resource to worker before scheduler
     auto server_resource = query_context->tryGetCnchServerResource();
     if (server_resource && !query_context->getSettingsRef().bsp_mode)
@@ -83,6 +84,8 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
         server_resource->setSendMutations(true);
         /// TODO: we can skip some worker
         server_resource->sendResources(query_context);
+        if (query_context->getSettingsRef().enable_prune_source_plan_segment)
+            dag_ptr->generateSourcePruneInfo(plan_segments_ptr, server_resource.get());
     }
 
     auto * final_segment = plan_segments_ptr->getRoot()->getPlanSegment();

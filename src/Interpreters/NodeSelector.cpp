@@ -116,7 +116,7 @@ NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_con
     return result;
 }
 
-NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context)
+NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr)
 {
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
@@ -181,32 +181,51 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
     }
     else
     {
-        size_t parallel_index = 0;
         auto local_address = getLocalAddress(*query_context);
-        for (const auto & worker : cluster_nodes.rank_workers)
+        if (dag_graph_ptr->source_prune_info
+            && dag_graph_ptr->source_prune_info->plan_segment_workers_map.contains(plan_segment_ptr->getPlanSegmentId()))
         {
-            parallel_index++;
-            if (parallel_index > plan_segment_ptr->getParallelSize())
-                break;
-            if (worker.address != local_address)
-                result.worker_nodes.emplace_back(worker);
+            selectPrunedWorkers(dag_graph_ptr, plan_segment_ptr, result, local_address);
+        }
+        else
+        {
+            size_t parallel_index = 0;
+            for (const auto & worker : cluster_nodes.rank_workers)
+            {
+                parallel_index++;
+                if (parallel_index > plan_segment_ptr->getParallelSize())
+                    break;
+                if (worker.address != local_address)
+                    result.worker_nodes.emplace_back(worker);
+            }
         }
     }
     return result;
 }
 
-NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr)
+NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr)
 {
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
-    size_t parallel_index = 0;
-    for (const auto & worker : cluster_nodes.rank_workers)
+
+    if (dag_graph_ptr->source_prune_info && query_context->getSettingsRef().enable_prune_compute_plan_segment
+        && dag_graph_ptr->source_prune_info->plan_segment_workers_map.contains(plan_segment_ptr->getPlanSegmentId()))
     {
-        parallel_index++;
-        if (parallel_index > plan_segment_ptr->getParallelSize())
-            break;
-        result.worker_nodes.emplace_back(worker);
+        auto local_address = getLocalAddress(*query_context);
+        selectPrunedWorkers(dag_graph_ptr, plan_segment_ptr, result, local_address);
     }
+    else
+    {
+        size_t parallel_index = 0;
+        for (const auto & worker : cluster_nodes.rank_workers)
+        {
+            parallel_index++;
+            if (parallel_index > plan_segment_ptr->getParallelSize())
+                break;
+            result.worker_nodes.emplace_back(worker);
+        }
+    }
+
     return result;
 }
 
@@ -266,7 +285,7 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
     }
     else if (is_source)
     {
-        result = source_node_selector.select(plan_segment_ptr, query_context);
+        result = source_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
     }
     else
     {
@@ -281,12 +300,12 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
                     result.worker_nodes.size(),
                     segment_id,
                     plan_segment_ptr->getParallelSize());
-                result = compute_node_selector.select(plan_segment_ptr);
+                result = compute_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
             }
         }
         else
         {
-            result = compute_node_selector.select(plan_segment_ptr);
+            result = compute_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
         }
     }
 

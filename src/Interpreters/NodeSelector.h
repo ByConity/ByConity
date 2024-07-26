@@ -18,6 +18,7 @@
 #include <butil/endpoint.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <Common/HostWithPorts.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
 
@@ -69,21 +70,20 @@ struct ClusterNodes
                 const auto & worker_endpoint = worker_group->getHostWithPortsVec()[i];
                 auto worker_address = getRemoteAddress(worker_endpoint, query_context);
                 rank_workers.emplace_back(worker_address, NodeType::Remote, worker_endpoint.id);
+                rank_hosts.emplace_back(worker_endpoint);
             }
         }
     }
     std::vector<size_t> rank_worker_ids;
     std::vector<WorkerNode> rank_workers;
+    HostWithPortsVec rank_hosts;
 };
 
 struct NodeSelectorResult
 {
     struct SourceAddressInfo
     {
-        SourceAddressInfo(const AddressInfos & addresses_)
-            : addresses(addresses_)
-        {
-        }
+        SourceAddressInfo(const AddressInfos & addresses_) : addresses(addresses_) { }
 
         // = 0 when the exchange mode to the source is LOCAL_XX_NEED_REPARTITION. Otherwise keep it empty.
         std::optional<size_t> parallel_index;
@@ -142,6 +142,32 @@ public:
                 ErrorCodes::LOGICAL_ERROR);
         }
     }
+    void
+    selectPrunedWorkers(DAGGraph * dag_graph_ptr, PlanSegment * plan_segment_ptr, NodeSelectorResult & result, AddressInfo & local_address)
+    {
+        const auto & target_hosts = dag_graph_ptr->source_prune_info->plan_segment_workers_map[plan_segment_ptr->getPlanSegmentId()];
+        if (target_hosts.empty())
+        {
+            LOG_DEBUG(log, "SourcePrune plan segment {} select first worker.", plan_segment_ptr->getPlanSegmentId());
+            for (const auto & worker : cluster_nodes.rank_workers)
+            {
+                if (worker.address != local_address)
+                {
+                    result.worker_nodes.emplace_back(worker);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            LOG_DEBUG(log, "SourcePrune plan segment {} select workers after source prune.", plan_segment_ptr->getPlanSegmentId());
+            for (size_t idx = 0; idx < cluster_nodes.rank_worker_ids.size(); idx++)
+            {
+                if (target_hosts.contains(cluster_nodes.rank_hosts[idx]))
+                    result.worker_nodes.emplace_back(cluster_nodes.rank_workers[idx]);
+            }
+        }
+    }
     ~CommonNodeSelector() = default;
 
 protected:
@@ -159,9 +185,7 @@ public:
 class LocalityNodeSelector : public CommonNodeSelector<LocalityNodeSelector>
 {
 public:
-    LocalityNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_)
-    {
-    }
+    LocalityNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };
 
@@ -169,14 +193,14 @@ class SourceNodeSelector : public CommonNodeSelector<SourceNodeSelector>
 {
 public:
     SourceNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
-    NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context);
+    NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };
 
 class ComputeNodeSelector : public CommonNodeSelector<ComputeNodeSelector>
 {
 public:
     ComputeNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
-    NodeSelectorResult select(PlanSegment * plan_segment_ptr);
+    NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };
 
 class NodeSelector

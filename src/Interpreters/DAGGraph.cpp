@@ -1,12 +1,14 @@
 #include "DAGGraph.h"
 #include <iterator>
+#include <memory>
 
+#include <CloudServices/CnchServerResource.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/StorageID.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int BRPC_EXCEPTION;
@@ -65,6 +67,87 @@ AddressInfos DAGGraph::getAddressInfos(size_t segment_id)
                 ErrorCodes::LOGICAL_ERROR);
         }
         return id_to_address[segment_id];
+    }
+}
+
+void DAGGraph::generateSourcePruneInfo(PlanSegmentTree * plan_segments_ptr, CnchServerResource * server_resource)
+{
+    source_prune_info = std::make_shared<SourcePruneInfo>();
+    for (auto & node : plan_segments_ptr->getNodes())
+    {
+        for (auto & segment_output : node.getPlanSegment()->getPlanSegmentOutputs())
+        {
+            if (segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION
+                || segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION)
+            {
+                source_prune_info->unprunable_plan_segments.insert(node.getPlanSegment()->getPlanSegmentId());
+                source_prune_info->unprunable_plan_segments.insert(segment_output->getPlanSegmentId());
+            }
+        }
+    }
+
+    for (auto & node : plan_segments_ptr->getNodes())
+    {
+        auto plan_segment_id = node.getPlanSegment()->getPlanSegmentId();
+        if (source_prune_info->unprunable_plan_segments.contains(plan_segment_id))
+            continue;
+
+        bool has_storage = false;
+        for (auto & segment_input : node.getPlanSegment()->getPlanSegmentInputs())
+        {
+            if (segment_input->getStorageID())
+            {
+                auto uuid = segment_input->getStorageID()->uuid;
+                LOG_TRACE(
+                    log,
+                    "SourcePrune plan segment : {} storage id : {}",
+                    node.getPlanSegment()->getPlanSegmentId(),
+                    segment_input->getStorageID()->getNameForLogs());
+                has_storage = true;
+                source_prune_info->plan_segment_storages_map[plan_segment_id].emplace_back(uuid);
+            }
+        }
+        if (has_storage)
+        {
+            for (auto & uuid : source_prune_info->plan_segment_storages_map[plan_segment_id])
+            {
+                const auto & target_workers = server_resource->getAssignedWorkers(uuid);
+                source_prune_info->plan_segment_workers_map[plan_segment_id].insert(target_workers.begin(), target_workers.end());
+            }
+            source_prune_info->plan_segment_workers_map[plan_segment_id];
+            LOG_TRACE(
+                log,
+                "SourcePrune plan segment : {} worker size {}",
+                plan_segment_id,
+                source_prune_info->plan_segment_workers_map[plan_segment_id].size());
+        }
+    }
+    for (auto & node : plan_segments_ptr->getNodes())
+    {
+        auto plan_segment_id = node.getPlanSegment()->getPlanSegmentId();
+        auto iter = source_prune_info->plan_segment_workers_map.find(plan_segment_id);
+        if (iter != source_prune_info->plan_segment_workers_map.end())
+        {
+            auto parallel_size = iter->second.empty() ? 1 : iter->second.size();
+            // Adjust the parallel size of pruned plan segment.
+            node.getPlanSegment()->setParallelSize(parallel_size);
+            auto inputs = node.plan_segment->getPlanSegmentInputs();
+            for (auto & input : inputs)
+            {
+                auto child_iter = id_to_segment.find(input->getPlanSegmentId());
+                if (child_iter != id_to_segment.end())
+                {
+                    for (auto & output : child_iter->second->getPlanSegmentOutputs())
+                    {
+                        if (output->getExchangeId() == input->getExchangeId())
+                        {
+                            // Adjust the parallel size of the input plan segment of the pruned segment.
+                            output->setParallelSize(parallel_size);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -134,5 +217,6 @@ std::vector<size_t> AdaptiveScheduler::getHealthyWorkerRank()
     std::shuffle(rank_worker_ids.begin(), rank_worker_ids.begin() + worker_group_status->getHealthWorkerSize(), rd);
     return rank_worker_ids;
 }
+
 
 } // namespace DB
