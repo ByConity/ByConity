@@ -185,7 +185,7 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
         return;
 
     StorageCnchMergeTree::PartitionDropInfos partition_infos;
-    
+
     /// Option 1. Get ttl by evaluating TTL expression on partition keys.
     /// And update max_block (for generating DROP_RANGE) if ttl is expired.
     if (use_partition_ttl)
@@ -251,7 +251,7 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
                 it->second.max_block = part->info().max_block;
                 it->second.value.assign(part->partition());
             }
-        } 
+        }
 
         for (const auto & p : skip_partitions)
         {
@@ -287,19 +287,17 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
     txn->commitV2();
 }
 
+/// the returned ts is guaranteed to be non-zero.
 TxnTimestamp CnchPartGCThread::calculateGCTimestamp(UInt64 delay_second, bool in_wakeup)
 {
-    auto local_context = getContext();
-
-    TxnTimestamp gc_timestamp = local_context->getTimestamp();
     if (in_wakeup) /// XXX: will invalid all running queries
-        return gc_timestamp;
+        return getContext()->getTimestamp();
 
     /// Will invalid the running queries of which the timestamp <= gc_timestamp
     auto server_min_active_ts = calculateMinActiveTimestamp();
     TxnTimestamp max_gc_timestamp = ((time(nullptr) - delay_second) * 1000) << 18;
 
-    return std::min({gc_timestamp, server_min_active_ts, max_gc_timestamp});
+    return std::min({server_min_active_ts, max_gc_timestamp});
 }
 
 Strings CnchPartGCThread::selectPartitions(const StoragePtr & storage)
@@ -721,9 +719,11 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(
     TxnTimestamp gc_timestamp,
     bool & items_removed)
 {
+    if (!gc_timestamp)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "gc_timestamp should not be zero");
+
     size_t items_count_in_partition = 0;
     auto storage_settings = storage.getSettings();
-    auto now = time(nullptr);
 
     Stopwatch watch;
     // for gc thread, intermediate parts are required in case that TransactionCleaner fails to clean them.
@@ -777,8 +777,14 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(
         }
     }
 
-    /// Clear special old parts
+    UInt64 now = time(nullptr);
     UInt64 old_parts_lifetime = in_wakeup ? 0ull : static_cast<UInt64>(storage_settings->old_parts_lifetime.totalSeconds());
+    auto should_move_to_trash = [now, old_parts_lifetime, gc_timestamp](TxnTimestamp end_time)
+    {
+        return (end_time)                   // end_time is set
+            && (old_parts_lifetime == 0 || (end_time.toSecond() + old_parts_lifetime < now)) // exceed lifetime
+            && (end_time < gc_timestamp);   // invisible to gc_timestamp and beyond
+    };
 
     /// clear parts
     {
@@ -795,7 +801,7 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(
             watch.elapsedMicroseconds());
 
         std::erase_if(parts_to_gc, [&](auto & part) {
-            return !part->getEndTime() || static_cast<UInt64>(now) < TxnTimestamp(part->getEndTime()).toSecond() + old_parts_lifetime;
+            return !should_move_to_trash(part->getEndTime());
         });
 
         if (size_t limit = storage_settings->gc_trash_part_limit; limit && parts_to_gc.size() > limit)
@@ -845,7 +851,7 @@ size_t CnchPartGCThread::doPhaseOnePartitionGC(
             watch.elapsedMicroseconds());
 
         std::erase_if(bitmaps_to_gc, [&](auto & bitmap) {
-            return !bitmap->getEndTime() || static_cast<UInt64>(now) < TxnTimestamp(bitmap->getEndTime()).toSecond() + old_parts_lifetime;
+            return !should_move_to_trash(bitmap->getEndTime());
         });
         if (!bitmaps_to_gc.empty())
         {

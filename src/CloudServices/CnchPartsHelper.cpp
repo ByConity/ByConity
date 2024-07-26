@@ -147,6 +147,11 @@ namespace
 
         static void setEndTime(const DeleteBitmapMetaPtr & bitmap, UInt64 end_time)
         {
+            /// a bitmap's end time is equal to the commit time of the first non-partial bitmap that covers it.
+            /// e.g., for the following mvvc chain ("->" means next version)
+            ///   base(commit=t1) -> delta(commit=t2) -> delta(commit=t3) -> base(commit=t4) -> base(commit=t5) -> delta(commit=t6)
+            /// the end time for each bitmaps are updated to
+            ///   base(end=t4)    -> delta(end=t4)    -> delta(end=t4)    -> base(end=t5)    -> base(end=0)     -> delta(end=0)
             for (auto it = bitmap; it; it = it->tryGetPrevious())
             {
                 if (end_time)
@@ -261,15 +266,20 @@ namespace
             /// latest version of non-tombstone item
             else
             {
+                UInt64 end_time = 0;
                 /// find the first covering range tombstone for prev
                 for (auto it = range_tombstone_beg_it; it != range_tombstone_end_it; ++it)
                 {
                     if (max_block_number <= Operation::getMaxBlockNumber(*it))
                     {
-                        Operation::setEndTime(prev, Operation::getCommitTime(*it));
+                        end_time = Operation::getCommitTime(*it);
                         break;
                     }
                 }
+                /// NOTE: mvcc-chain of bitmaps can have multiple base(full) versions,
+                /// and `setEndTime(prev, 0)` is required in order to gc old versions
+                /// covered by new base bitmap. for parts, it's a no-op when end_time is 0.
+                Operation::setEndTime(prev, end_time);
                 output(prev);
             }
 
