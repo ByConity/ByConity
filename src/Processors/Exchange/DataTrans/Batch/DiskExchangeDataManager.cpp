@@ -890,7 +890,6 @@ void DiskExchangeDataManager::removeWriteTaskDirectory(const std::variant<String
     if (disk->exists(delete_file))
     {
         disk->removeRecursive(delete_file);
-        LOG_INFO(logger, "removed disk exchange data files under directory {}", delete_file);
         if (std::holds_alternative<UInt64>(delete_item))
         {
             auto query_unique_id = std::get<UInt64>(delete_item);
@@ -901,11 +900,13 @@ void DiskExchangeDataManager::removeWriteTaskDirectory(const std::variant<String
                 if (it != alive_queries.end())
                     disk_written_bytes = alive_queries[query_unique_id].disk_written_bytes;
             }
+            LOG_INFO(logger, "Removed disk exchange data files under directory {} disk_written_bytes:{}", delete_file, disk_written_bytes);
             global_disk_written_bytes.fetch_sub(disk_written_bytes, std::memory_order_relaxed);
         }
         else
         {
             auto file_size = getFileSizeRecursively(delete_file);
+            LOG_INFO(logger, "Removed disk exchange data files under directory {} file_size:{}", delete_file, file_size);
             global_disk_written_bytes.fetch_sub(file_size, std::memory_order_relaxed);
         }
     }
