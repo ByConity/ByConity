@@ -7,25 +7,39 @@
 #include <cassert>
 #include <atomic>
 
+/// From clock_getres(2):
+///
+///    Similar to CLOCK_MONOTONIC, but provides access to a raw hardware-based
+///    time that is not subject to NTP adjustments or the incremental
+///    adjustments performed by adjtime(3).
+#ifdef CLOCK_MONOTONIC_RAW
+static constexpr clockid_t STOPWATCH_DEFAULT_CLOCK = CLOCK_MONOTONIC_RAW;
+#else
+static constexpr clockid_t STOPWATCH_DEFAULT_CLOCK = CLOCK_MONOTONIC;
+#endif
 
-inline UInt64 clock_gettime_ns(clockid_t clock_type = CLOCK_MONOTONIC)
+inline UInt64 clock_gettime_ns(clockid_t clock_type = STOPWATCH_DEFAULT_CLOCK)
 {
     struct timespec ts;
     clock_gettime(clock_type, &ts);
     return UInt64(ts.tv_sec * 1000000000LL + ts.tv_nsec);
 }
 
-/// Sometimes monotonic clock may not be monotonic (due to bug in kernel?).
-/// It may cause some operations to fail with "Timeout exceeded: elapsed 18446744073.709553 seconds".
 /// Takes previously returned value and returns it again if time stepped back for some reason.
-inline UInt64 clock_gettime_ns_adjusted(UInt64 prev_time, clockid_t clock_type = CLOCK_MONOTONIC)
+///
+/// You should use this if OS does not support CLOCK_MONOTONIC_RAW
+inline UInt64 clock_gettime_ns_adjusted(UInt64 prev_time, clockid_t clock_type = STOPWATCH_DEFAULT_CLOCK)
 {
+#ifdef CLOCK_MONOTONIC_RAW
+    if (likely(clock_type == CLOCK_MONOTONIC_RAW))
+        return clock_gettime_ns(clock_type);
+#endif
+
     UInt64 current_time = clock_gettime_ns(clock_type);
     if (likely(prev_time <= current_time))
         return current_time;
-
     /// Something probably went completely wrong if time stepped back for more than 1 second.
-    assert(prev_time - current_time <= 1000000000ULL);
+    //assert(prev_time - current_time <= 1000000000ULL);
     return prev_time;
 }
 
@@ -35,10 +49,10 @@ inline UInt64 clock_gettime_ns_adjusted(UInt64 prev_time, clockid_t clock_type =
 class Stopwatch
 {
 public:
-    /** CLOCK_MONOTONIC works relatively efficient (~15 million calls/sec) and doesn't lead to syscall.
+    /** CLOCK_MONOTONIC/CLOCK_MONOTONIC_RAW works relatively efficient (~40-50 million calls/sec) and doesn't lead to syscall.
       * Pass CLOCK_MONOTONIC_COARSE, if you need better performance with acceptable cost of several milliseconds of inaccuracy.
       */
-    Stopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC) : clock_type(clock_type_) { start(); }
+    Stopwatch(clockid_t clock_type_ = STOPWATCH_DEFAULT_CLOCK) : clock_type(clock_type_) { start(); }
 
     void start()                       { start_ns = nanoseconds(); is_running = true; }
     void stop()                        { stop_ns = nanoseconds(); is_running = false; }
@@ -67,7 +81,7 @@ private:
 class AtomicStopwatch
 {
 public:
-    AtomicStopwatch(clockid_t clock_type_ = CLOCK_MONOTONIC) : clock_type(clock_type_) { restart(); }
+    AtomicStopwatch(clockid_t clock_type_ = STOPWATCH_DEFAULT_CLOCK) : clock_type(clock_type_) { restart(); }
 
     void restart()                     { start_ns = nanoseconds(0); }
     UInt64 elapsed() const
