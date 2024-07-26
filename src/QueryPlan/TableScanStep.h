@@ -217,7 +217,7 @@ private:
 
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;
-    void rewriteDynamicFilter(ASTSelectQuery * query, const BuildQueryPipelineSettings & build_settings, bool use_expand_pipe);
+    void rewriteDynamicFilter(SelectQueryInfo & select_query, const BuildQueryPipelineSettings & build_settings, bool use_expand_pipe);
 
     void aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings &, const String & pipeline_name);
     void setQuotaAndLimits(QueryPipeline & pipeline, const SelectQueryOptions & options, const BuildQueryPipelineSettings &);

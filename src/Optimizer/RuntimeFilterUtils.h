@@ -63,6 +63,8 @@ public:
     static std::vector<ASTPtr> generateFunctionArgs(const RuntimeFilterDescription & description, const String & query_id);
     static bool containsRuntimeFilters(const ConstASTPtr & filter);
     static std::vector<RuntimeFilterId> extractRuntimeFilterId(const ConstASTPtr & conjuncts);
+
+    static ASTPtr removeAllInternalRuntimeFilters(ASTPtr expr);
 };
 
 }

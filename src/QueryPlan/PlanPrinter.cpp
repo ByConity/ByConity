@@ -1040,9 +1040,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
 
         if (query_info.partition_filter)
         {
-            out << intent.detailIntent();
-            out << "Partition filter: ";
-            out << getSerializedASTWithLimit(*query_info.partition_filter, max_predicate_text_length);
+            out << intent.detailIntent() << "Partition filter: " << printFilter(query_info.partition_filter, max_predicate_text_length);
         }
 
         if (auto where = query->getWhere())

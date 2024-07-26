@@ -74,8 +74,10 @@ namespace
                     auto * query = table_step.getQueryInfo().query->as<ASTSelectQuery>();
                     if (auto query_filter = query->getWhere())
                         collect_runtime_filters(query_filter);
-                    if (auto query_filter = query->prewhere())
+                    if (auto query_filter = query->getPrewhere())
                         collect_runtime_filters(query_filter);
+                    if (auto partition_filter = table_step.getQueryInfo().partition_filter)
+                        collect_runtime_filters(partition_filter);
                 }
             }
 
