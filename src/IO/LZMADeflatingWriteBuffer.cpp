@@ -53,8 +53,15 @@ LZMADeflatingWriteBuffer::~LZMADeflatingWriteBuffer()
     /// FIXME move final flush into the caller
     MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
 
-    finish();
-    lzma_end(&lstr);
+    try
+    {
+        finish();
+        lzma_end(&lstr);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 void LZMADeflatingWriteBuffer::nextImpl()

@@ -55,10 +55,9 @@ ZstdDeflatingWriteBuffer::~ZstdDeflatingWriteBuffer()
     /// FIXME move final flush into the caller
     MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
 
-    finish();
-
     try
     {
+        finish();
         int err = ZSTD_freeCCtx(cctx);
         /// This is just in case, since it is impossible to get an error by using this wrapper.
         if (unlikely(err))

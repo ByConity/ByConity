@@ -53,10 +53,9 @@ ZlibDeflatingWriteBuffer::~ZlibDeflatingWriteBuffer()
     /// FIXME move final flush into the caller
     MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
 
-    finish();
-
     try
     {
+        finish();
         int rc = deflateEnd(&zstr);
         if (rc != Z_OK)
             throw Exception(std::string("deflateEnd failed: ") + zError(rc), ErrorCodes::ZLIB_DEFLATE_FAILED);

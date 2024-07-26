@@ -52,7 +52,14 @@ BrotliWriteBuffer::~BrotliWriteBuffer()
 {
     /// FIXME move final flush into the caller
     MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
-    finish();
+    try
+    {
+        finish();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 void BrotliWriteBuffer::nextImpl()
