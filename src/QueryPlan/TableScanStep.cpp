@@ -1388,7 +1388,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             String pipeline_name = "execute plan read";
             if (plan_element.read_bitmap_index)
                 pipeline_name += "(with index)";
-            aliasColumns(*sub_pipeline, build_context, "execute plan read");
+            aliasColumns(*sub_pipeline, build_context, pipeline_name);
 
             if (pushdown_filter)
                 getPushdownFilterCast()->transformPipeline(*sub_pipeline, build_context);

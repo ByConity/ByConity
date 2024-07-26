@@ -10,6 +10,7 @@
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 #include <Storages/MergeTree/Index/MergeTreeBitmapIndex.h>
 
 
@@ -192,9 +193,7 @@ ConstASTPtr CollectFuncs::visitASTFunction(const ConstASTPtr & node, Assignments
 
     if (const auto * func = node->as<ASTFunction>())
     {
-        String func_name = Poco::toLower(func->name);
-        static NameSet funcs{"arraysetcheck"};
-        if (funcs.contains(func_name) && func->arguments->children.size() > 0)
+        if (functionCanUseBitmapIndex(*func) && func->arguments->children.size() > 0)
         {
             String argu_name = func->arguments->children[0]->getColumnName();
             if (name_to_type.contains(argu_name) && MergeTreeBitmapIndex::isBitmapIndexColumn(*name_to_type.at(argu_name)))
