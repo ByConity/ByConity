@@ -1411,10 +1411,10 @@ void TCPHandler::receiveQuery()
      *  NOTE: query_context will be restored to connection_context before received
      *  a new query. The only thing modified is the current_user of this (current) query.
      */
-    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
-    {
-        client_info.current_user = client_info.initial_user;
-    }
+    // if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+    // {
+    //     client_info.current_user = client_info.initial_user;
+    // }
 
     /// Per query settings are also passed via TCP.
     /// We need to check them before applying due to they can violate the settings constraints.
