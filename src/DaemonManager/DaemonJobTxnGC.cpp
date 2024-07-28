@@ -39,23 +39,35 @@ bool DaemonJobTxnGC::executeImpl()
 {
 
     const Context & context = *getContext();
-    auto txn_records
-        = context.getCnchCatalog()->getTransactionRecordsForGC(context.getConfigRef().getInt("cnch_txn_clean_batch_size", 200000));
-    if (!txn_records.empty())
-    {
-        cleanTxnRecords(txn_records);
-    }
+    
+    size_t max_loop_count = 20;
+    size_t current_loop_number = 0;
+    size_t cleanBatchSize = context.getConfigRef().getInt("cnch_txn_clean_batch_size", 100000);
 
-    if (triggerCleanUndoBuffers())
-    {
-        cleanUndoBuffers(txn_records);
-        lastCleanUBtime = std::chrono::system_clock::now();
+    auto txn_records = context.getCnchCatalog()->getTransactionRecordsForGC(cleanBatchSize);
+    while (!txn_records.empty() && current_loop_number < max_loop_count) {
+        LOG_INFO(log, "Executing TxnGC iteration {} for {} records", current_loop_number, txn_records.size());
+        size_t cleaned = cleanTxnRecords(txn_records);
+
+        if (triggerCleanUndoBuffers())
+        {
+            cleanUndoBuffers(txn_records);
+            lastCleanUBtime = std::chrono::system_clock::now();
+        }
+        
+        if (cleaned < cleanBatchSize / 2) {
+            LOG_INFO(log, "Stopping TxnGC loop");
+            break;
+        }
+
+        txn_records = context.getCnchCatalog()->getTransactionRecordsForGC(cleanBatchSize);
+        current_loop_number++;
     }
 
     return true;
 }
 
-void DaemonJobTxnGC::cleanTxnRecords(const TransactionRecords & txn_records)
+size_t DaemonJobTxnGC::cleanTxnRecords(const TransactionRecords & txn_records)
 {
     const Context & context = *getContext();
     LOG_DEBUG(log, "txn_id from {} to {}",
@@ -103,6 +115,7 @@ void DaemonJobTxnGC::cleanTxnRecords(const TransactionRecords & txn_records)
 
     thread_pool.wait();
     exception_handler.throwIfException();
+    return summary.cleaned;
 }
 
 void DaemonJobTxnGC::cleanTxnRecord(
