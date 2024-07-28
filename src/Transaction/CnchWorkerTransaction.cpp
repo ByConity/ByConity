@@ -121,7 +121,7 @@ void CnchWorkerTransaction::precommit()
     auto lock = getLock();
     server_client->precommitTransaction(getTransactionID(), getMainTableUUID());
     txn_record.prepared = true;
-    LOG_DEBUG(log, "Transaction {} successfully finished pre commit.");
+    LOG_DEBUG(log, "Transaction {} successfully finished pre commit.", txn_record.txnID().toUInt64());
 }
 
 TxnTimestamp CnchWorkerTransaction::commit()
@@ -148,7 +148,7 @@ TxnTimestamp CnchWorkerTransaction::commit()
 
 TxnTimestamp CnchWorkerTransaction::rollback()
 {
-    LOG_DEBUG(log, "Transaction {} failed, start rollback.");
+    LOG_DEBUG(log, "Transaction {} failed, start rollback.", txn_record.txnID().toUInt64());
     checkServerClient();
     auto lock = getLock();
 
