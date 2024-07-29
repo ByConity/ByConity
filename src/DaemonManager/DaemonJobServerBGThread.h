@@ -39,10 +39,10 @@ struct StorageTrait
 public:
     struct Param
     {
-        bool is_cnch_merge_tree;
-        bool is_cnch_kafka;
-        bool is_cnch_unique;
-        bool is_cnch_refresh_materialized_view;
+        bool is_cnch_merge_tree = false;
+        bool is_cnch_kafka = false;
+        bool is_cnch_unique = false;
+        bool is_cnch_refresh_materialized_view = false;
         bool is_cnch_table_with_manifest = false;
     };
 

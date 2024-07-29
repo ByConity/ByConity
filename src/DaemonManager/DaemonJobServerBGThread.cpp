@@ -1241,72 +1241,29 @@ StorageTrait::StorageTrait(StorageTrait::Param param)
 
 StorageTrait constructStorageTrait(StoragePtr storage)
 {
-    if (dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr)
-        return StorageTrait{StorageTrait::Param {
-                .is_cnch_merge_tree = false,
-                .is_cnch_kafka = true,
-                .is_cnch_unique = false,
-                .is_cnch_refresh_materialized_view = false,
-                .is_cnch_table_with_manifest = false
-            }};
+    StorageTrait::Param param;
 
-    StorageCnchMergeTree * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-    if (cnch_storage)
+    if (dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr)
+    {
+        param.is_cnch_kafka = true;
+    }
+    else if (StorageCnchMergeTree * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
     {
         if (cnch_storage->getInMemoryMetadataPtr()->hasUniqueKey())
-        {
-            return StorageTrait{StorageTrait::Param {
-                    .is_cnch_merge_tree = true,
-                    .is_cnch_kafka = false,
-                    .is_cnch_unique = true,
-                    .is_cnch_refresh_materialized_view = false,
-                    .is_cnch_table_with_manifest = false
-                }};
-        }
-        else
-        {
-            if (cnch_storage->getSettings()->enable_publish_version_on_commit)
-            {
-                return StorageTrait{StorageTrait::Param {
-                    .is_cnch_merge_tree = true,
-                    .is_cnch_kafka = false,
-                    .is_cnch_unique = false,
-                    .is_cnch_refresh_materialized_view = false,
-                    .is_cnch_table_with_manifest = true
-                }};
-            }
-            return StorageTrait{StorageTrait::Param {
-                    .is_cnch_merge_tree = true,
-                    .is_cnch_kafka = false,
-                    .is_cnch_unique = false,
-                    .is_cnch_refresh_materialized_view = false,
-                    .is_cnch_table_with_manifest = false
-                }};
-        }
-    }
+            param.is_cnch_unique = true;
 
-    StorageMaterializedView * materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get());
-    if (materialized_view)
+        if (cnch_storage->getSettings()->enable_publish_version_on_commit)
+            param.is_cnch_table_with_manifest = true;
+
+        param.is_cnch_merge_tree = true;
+    }
+    else if (StorageMaterializedView * materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get()))
     {
         if (materialized_view->async())
-        {
-            return StorageTrait{StorageTrait::Param {
-                    .is_cnch_merge_tree = false,
-                    .is_cnch_kafka = false,
-                    .is_cnch_unique = false,
-                    .is_cnch_refresh_materialized_view = true,
-                    .is_cnch_table_with_manifest = false
-                }};
-        }
+            param.is_cnch_refresh_materialized_view = true;
     }
 
-    return StorageTrait{StorageTrait::Param {
-            .is_cnch_merge_tree = false,
-            .is_cnch_kafka = false,
-            .is_cnch_unique = false,
-            .is_cnch_refresh_materialized_view = false,
-            .is_cnch_table_with_manifest = false
-        }};
+    return StorageTrait{param};
 }
 
 StorageTrait constructStorageTrait(ContextMutablePtr context, const String & db, const String & table, const String & create_query)
