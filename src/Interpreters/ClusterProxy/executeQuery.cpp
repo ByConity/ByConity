@@ -122,6 +122,10 @@ ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr c
         new_settings.limit.changed = false;
     }
 
+    // do not set access_table_names in worker
+    if (!settings.access_table_names.toString().empty())
+        new_settings.setString("access_table_names", "");
+
     auto new_context = Context::createCopy(context);
     new_context->setSettings(new_settings);
     return new_context;

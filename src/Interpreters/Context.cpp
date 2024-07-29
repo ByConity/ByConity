@@ -259,6 +259,7 @@ namespace ErrorCodes
     extern const int CATALOG_SERVICE_INTERNAL_ERROR;
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
+    extern const int DATABASE_ACCESS_DENIED;
 }
 
 /** Set of known objects (environment), that could be used in query.
@@ -1755,6 +1756,24 @@ std::shared_ptr<const ContextAccess> Context::getAccess() const
     if (getServerType() == ServerType::cnch_worker && !getSettingsRef().prefer_cnch_catalog)
         return ContextAccess::getFullAccess();
     return access ? access : ContextAccess::getFullAccess();
+}
+
+void Context::checkAeolusTableAccess(const String & database_name, const String & table_name) const
+{
+    String table_names = this->getSettingsRef().access_table_names;
+    if (table_names.empty())
+        return;
+    std::vector<String> tables;
+    boost::split(tables, table_names, boost::is_any_of(" ,"));
+    /// avoid check temporary table.
+    if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
+        return;
+
+    String full_table_name = database_name.empty() ? table_name : database_name+"."+table_name;
+    if (std::find(tables.begin(), tables.end(), full_table_name) == tables.end())
+    {
+        throw Exception("Access denied to " + full_table_name , ErrorCodes::DATABASE_ACCESS_DENIED);
+    }
 }
 
 ASTPtr Context::getRowPolicyCondition(const String & database, const String & table_name, RowPolicy::ConditionType type) const

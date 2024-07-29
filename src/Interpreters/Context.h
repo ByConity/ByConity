@@ -780,6 +780,8 @@ public:
     void grantAllAccess();
     std::shared_ptr<const ContextAccess> getAccess() const;
 
+    void checkAeolusTableAccess(const String & database_name, const String & table_name) const;
+
     WorkerGroupStatusPtr & getWorkerGroupStatusPtr() { return worker_group_status; }
     const WorkerGroupStatusPtr & getWorkerGroupStatusPtr() const { return worker_group_status; }
 

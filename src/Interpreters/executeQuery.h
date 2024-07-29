@@ -121,4 +121,6 @@ void updateAsyncQueryStatus(
     const String & error_msg = "");
 
 void interpretSettings(ASTPtr ast, ContextMutablePtr context);
+
+void adjustAccessTablesIfNeeded(ContextMutablePtr & context);
 }
