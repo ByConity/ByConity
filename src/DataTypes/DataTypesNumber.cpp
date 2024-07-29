@@ -21,7 +21,8 @@ static DataTypePtr createNumericDataType(const ASTPtr & arguments)
         if (std::is_integral_v<T>)
         {
             if (arguments->children.size() > 1)
-                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "{} data type family must not have more than one argument - display width", TypeName<T>);
+                /// MySQL compatibility
+                arguments->children = {arguments->children[0]};
         }
         else
         {
