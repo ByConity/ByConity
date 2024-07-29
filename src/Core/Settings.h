@@ -1307,6 +1307,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_materialized_mysql_log_profiling, false, "Enable query profiling for cnch_materialized_mysql_log table", 0) \
+    M(Bool, enable_unique_log_profiling, false, "Enable query profiling for cnch_unique_table_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
     M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
     M(Bool, enable_local_disk_cache, 1, "enable global local disk cache", 0) \
