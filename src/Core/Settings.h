@@ -1829,7 +1829,7 @@ enum PreloadLevelSettings : UInt64
     /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(String, disk_shuffle_files_codec, "LZ4", "Set compression codec for disk shuffle files. I.e. LZ4, NONE.", 0) \
-    M(Bool, bsp_shuffle_reduce_locality_enabled, true, "Whether to compute locality preferences for reduce tasks", 0) \
+    M(Bool, bsp_shuffle_reduce_locality_enabled, false, "Whether to compute locality preferences for reduce tasks", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
     M(UInt64, bsp_max_retry_num, 3, "max retry number for a task(plan segment instance) in bsp mode, does not include first execution(i.e. normal execution without retry)",0) \
     /*end of bulk synchronous parallel section*/ \
