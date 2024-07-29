@@ -104,14 +104,12 @@ protected:
     HivePartitions selectPartitions(
         ContextPtr local_context,
         const StorageMetadataPtr & metadata_snapshot,
-        const SelectQueryInfo & query_info,
-        const HiveWhereOptimizer & optimizer);
+        const SelectQueryInfo & query_info);
 
     std::optional<UInt64> getSelectedBucketNumber(
         ContextPtr local_context,
         SelectQueryInfo & query_info,
-        const StorageMetadataPtr & metadata_snapshot,
-        HiveWhereOptimizer & optimizer) const;
+        const StorageMetadataPtr & metadata_snapshot) const;
 
     /// DirectoryList is not multi-threaded
     virtual std::shared_ptr<IDirectoryLister> getDirectoryLister();

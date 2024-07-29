@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include "Common/ObjectPool.h"
 #include "Common/config.h"
 #if USE_HDFS
 
@@ -67,6 +68,8 @@ private:
     ReadSettings settings;
     std::unique_ptr<ReadBufferFromHDFSImpl> impl;
     ThrottlerPtr total_network_throttler;
+     // Pool for reusing ReadBufferFromHDFSImpl under concurrent readBigAt
+    SimpleObjectPool<ReadBufferFromHDFSImpl> impl_pool;
 };
 
 }

@@ -135,27 +135,6 @@ std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings &
     return disk->readFile(file_path, settings);
 }
 
-String IHiveFile::describeMinMaxIndex(const NamesAndTypesList & index_names_and_types) const
-{
-    WriteBufferFromOwnString buf;
-    size_t i = 0;
-    for (const auto & name_type : index_names_and_types)
-    {
-        writeString(name_type.name, buf);
-        writeChar(':', buf);
-        writeString(name_type.type->getName(), buf);
-        writeChar('\n', buf);
-        for (const auto & split_minmax : split_minmax_idxes)
-        {
-            writeString(split_minmax->hyperrectangle[i].toString(), buf);
-            writeChar('\n', buf);
-        }
-
-        ++i;
-    }
-    return buf.str();
-}
-
 SourcePtr IHiveFile::getReader(const Block & block, const std::shared_ptr<ReadParams> & params)
 {
     auto buffer = readFile(params->read_settings);

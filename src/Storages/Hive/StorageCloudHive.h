@@ -41,13 +41,6 @@ public:
     std::shared_ptr<CnchHiveSettings> getSettings() const { return storage_settings; }
 
 private:
-    struct MinMaxDescription
-    {
-        NamesAndTypesList columns;
-        ExpressionActionsPtr expression;
-    };
-    static MinMaxDescription getMinMaxIndex(const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context);
-
     void selectFiles(
         ContextPtr local_context,
         const StorageMetadataPtr & metadata_snapshot,

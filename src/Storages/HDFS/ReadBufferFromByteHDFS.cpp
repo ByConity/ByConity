@@ -392,10 +392,13 @@ size_t ReadBufferFromByteHDFS::readBigAt(char * to, size_t n, size_t range_begin
     if (n == 0)
         return 0;
 
-    /// make a impl copy
-    auto hdfs_impl = std::make_shared<ReadBufferFromHDFSImpl>(impl->hdfs_file_path, impl->hdfs_params, 0, settings);
-    hdfs_impl->seek(range_begin);
-    size_t bytes_read = hdfs_impl->readImpl(to, n);
+    auto pooled_impl = impl_pool.get([this] (){
+        return new ReadBufferFromHDFSImpl(impl->hdfs_file_path, impl->hdfs_params, 0, settings);
+    });
+
+    pooled_impl->seek(range_begin);
+    size_t bytes_read = pooled_impl->readImpl(to, n);
+
     if (bytes_read && progress_callback)
         progress_callback(bytes_read);
     return bytes_read;

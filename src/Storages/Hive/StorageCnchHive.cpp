@@ -1,4 +1,5 @@
 #include "Storages/Hive/StorageCnchHive.h"
+#include "common/defines.h"
 #if USE_HIVE
 
 #include <Protos/hive_models.pb.h>
@@ -54,6 +55,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_FORMAT;
     extern const int SUPPORT_IS_DISABLED;
     extern const int TOO_MANY_PARTITIONS;
+    extern const int INDEX_NOT_USED;
 }
 
 static std::optional<UInt64> get_file_hash_index(const String & hive_file_path)
@@ -219,9 +221,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     unsigned num_streams)
 {
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
-    HiveWhereOptimizer optimizer(metadata_snapshot, query_info);
-
-    HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info, optimizer);
+    HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info);
 
     const auto & settings = local_context->getSettingsRef();
     if (settings.max_partitions_to_read > 0)
@@ -274,7 +274,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     size_t total_hive_files = hive_files.size();
     if (isBucketTable() && settings.use_hive_cluster_key_filter)
     {
-        auto required_bucket = getSelectedBucketNumber(local_context, query_info, metadata_snapshot, optimizer);
+        auto required_bucket = getSelectedBucketNumber(local_context, query_info, metadata_snapshot);
         /// prune files with required bucket number
         auto end = std::remove_if(hive_files.begin(), hive_files.end(), [&] (auto & file) {
             if (!required_bucket)
@@ -421,11 +421,68 @@ NamesAndTypesList StorageCnchHive::getVirtuals() const
     return NamesAndTypesList{{"_path", std::make_shared<DataTypeString>()}, {"_file", std::make_shared<DataTypeString>()}};
 }
 
+static void filterPartitions(const ASTPtr & partition_filter, const StorageMetadataPtr & storage_metadata, ContextPtr local_context, HivePartitions & hive_partitions)
+{
+    chassert(partition_filter);
+    chassert(storage_metadata->hasPartitionKey());
+
+    const auto & partition_key = storage_metadata->getPartitionKey();
+
+    MutableColumns columns = partition_key.sample_block.cloneEmptyColumns();
+    for (auto & col : columns)
+        col->reserve(hive_partitions.size());
+
+    auto index_column = ColumnUInt32::create();
+    index_column->reserve(hive_partitions.size());
+    int idx = 0;
+    for (const auto & partition : hive_partitions)
+    {
+        chassert(columns.size() == partition->value.size());
+        for (size_t i = 0; i < columns.size(); i++)
+            columns[i]->insert(partition->value[i]);
+        index_column->insert(idx++);
+    }
+
+    Block block_with_filter = partition_key.sample_block.cloneWithColumns(std::move(columns));
+    {
+        BuildQueryPipelineSettings settings;
+        settings.fromContext(local_context);
+        auto action_dag = IQueryPlanStep::createFilterExpressionActions(local_context, partition_filter, partition_key.sample_block);
+        auto expression = std::make_shared<ExpressionActions>(action_dag, settings.getActionsSettings());
+        expression->execute(block_with_filter);
+    }
+
+    String filter_column_name = partition_filter->getColumnName();
+    ColumnPtr filter_column = block_with_filter.getByName(filter_column_name).column;
+
+    ConstantFilterDescription constant_filter(*filter_column);
+    if (constant_filter.always_true)
+    {
+        return;
+    }
+    else if (constant_filter.always_false)
+    {
+        hive_partitions.clear();
+        return;
+    }
+
+    FilterDescription filter(*filter_column);
+    auto result_column = filter.filter(*index_column, -1);
+    std::unordered_set<int> result_set;
+    for (size_t i = 0; i < result_column->size(); i++) {
+        result_set.emplace(result_column->getUInt(i));
+    }
+
+    idx = 0;
+    std::erase_if(hive_partitions, [&result_set, &idx] (const auto &) {
+        return result_set.find(idx++) == result_set.end();
+    });
+}
+
 HivePartitions StorageCnchHive::selectPartitions(
     ContextPtr local_context,
     const StorageMetadataPtr & metadata_snapshot,
-    const SelectQueryInfo & query_info,
-    const HiveWhereOptimizer & optimizer)
+    const SelectQueryInfo & query_info)
 {
     /// non-partition table
     if (!metadata_snapshot->hasPartitionKey())
@@ -435,42 +492,76 @@ HivePartitions StorageCnchHive::selectPartitions(
         return {partition};
     }
 
-    const auto & query_settings = local_context->getSettingsRef();
-    String filter = {};
-    if (query_settings.use_hive_metastore_filter && optimizer.partition_key_conds)
-        filter = queryToString(optimizer.partition_key_conds);
-
-    auto apache_hive_partitions = hive_client->getPartitionsByFilter(hive_db_name, hive_table_name, filter);
-
-    std::optional<PartitionPruner> pruner;
-    if (metadata_snapshot->hasPartitionKey() && query_settings.use_hive_partition_filter)
-        pruner.emplace(metadata_snapshot, query_info, local_context, false);
-
-    /// TODO: handle non partition key case
-    HivePartitions partitions;
-    partitions.reserve(apache_hive_partitions.size());
-    for (const auto & apache_partition : apache_hive_partitions)
+    String filter_str;
+    ASTPtr partition_filter;
+    if (query_info.partition_filter)
     {
-        auto partition = std::make_shared<HivePartition>();
-        partition->load(apache_partition, metadata_snapshot->getPartitionKey());
-        bool can_be_pruned = pruner && pruner->canBePruned(partition->partition_id, partition->value);
-        if (!can_be_pruned)
-        {
-            partitions.push_back(std::move(partition));
-        }
+        HiveWhereOptimizer where_optimizer(metadata_snapshot, query_info.partition_filter);
+        filter_str = where_optimizer.partition_key_conds == nullptr ? "" : queryToString(where_optimizer.partition_key_conds);
+        partition_filter = query_info.partition_filter;
+    }
+    else if (auto filters = getFilterFromQueryInfo(query_info, false); filters)
+    {
+        HiveWhereOptimizer where_optimizer(metadata_snapshot, filters);
+        filter_str = where_optimizer.partition_key_conds == nullptr ? "" : queryToString(where_optimizer.partition_key_conds);
+        partition_filter = where_optimizer.partition_key_conds;
     }
 
-    LOG_DEBUG(log, "Read from {}/{} partitions", partitions.size(), apache_hive_partitions.size());
-    return partitions;
+    // runtime filters here has not been rewriten rewritten to be executable
+    if (partition_filter)
+        partition_filter = RuntimeFilterUtils::removeAllInternalRuntimeFilters(partition_filter);
+
+    Stopwatch watch;
+    // push filter to hive metastore
+    auto apache_partitions = hive_client->getPartitionsByFilter(hive_db_name, hive_table_name, filter_str);
+    auto fetch_partitions_elapsed = watch.elapsedMilliseconds();
+
+    watch.restart();
+    // eval filters that cannot be pushed, i.e., expression with functions.
+
+    HivePartitions hive_partitions;
+    hive_partitions.reserve(apache_partitions.size());
+    for (const auto & apache_partition : apache_partitions)
+    {
+        auto & partition = *hive_partitions.emplace_back(std::make_shared<HivePartition>());
+        partition.load(apache_partition, metadata_snapshot->getPartitionKey());
+    }
+
+    if (partition_filter)
+    {
+        filterPartitions(partition_filter, metadata_snapshot, local_context, hive_partitions);
+    }
+
+    auto filter_partitions_elapsed = watch.elapsedMilliseconds();
+
+    LOG_DEBUG(
+        log,
+        "filtered partition {}/{}, filter_str={}, partition_filter={}, elapsed {} ms to fetch partitions, elpased {} ms to filter partitions",
+        hive_partitions.size(),
+        apache_partitions.size(),
+        filter_str,
+        query_info.partition_filter ? queryToString(query_info.partition_filter) : "",
+        fetch_partitions_elapsed,
+        filter_partitions_elapsed);
+
+    if (local_context->getSettingsRef().force_index_by_date && filter_str.empty() && hive_partitions.size() == apache_partitions.size())
+    {
+        throw Exception(ErrorCodes::INDEX_NOT_USED, "No partitions get filtered (total {}) and setting 'force_index_by_date' is set", hive_partitions.size());
+    }
+
+    return hive_partitions;
 }
 
 std::optional<UInt64> StorageCnchHive::getSelectedBucketNumber(
     [[maybe_unused]] ContextPtr local_context,
     [[maybe_unused]] SelectQueryInfo & query_info,
-    const StorageMetadataPtr & metadata_snapshot,
-    HiveWhereOptimizer & optimizer) const
+    const StorageMetadataPtr & metadata_snapshot) const
 {
-    if (!isBucketTable() || !optimizer.cluster_key_conds)
+    if (!isBucketTable())
+        return {};
+
+    HiveWhereOptimizer optimizer(metadata_snapshot, getFilterFromQueryInfo(query_info, false));
+    if (!optimizer.cluster_key_conds)
         return {};
 
     ExpressionActionsPtr cluster_by_expression = metadata_snapshot->cluster_by_key.expression;
@@ -683,11 +774,20 @@ std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister()
 
 StorageID StorageCnchHive::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
 {
-    size_t max_streams = local_context->getSettingsRef().max_threads;
+    // size_t max_streams = local_context->getSettingsRef().max_threads;
     // if (max_block_size < local_context->getSettingsRef().max_block_size)
     //     max_streams = 1; // single block single stream.
     // if (max_streams > 1 && !isRemote())
     //     max_streams *= local_context->getSettingsRef().max_streams_to_max_threads_ratio;
+
+    /** With distributed query processing, almost no computations are done in the threads,
+     *  but wait and receive data from remote servers.
+     *  If we have 20 remote servers, and max_threads = 8, then it would not be very good
+     *  connect and ask only 8 servers at a time.
+     *  To simultaneously query more remote servers,
+     *  instead of max_threads, max_distributed_connections is used.
+     */
+    size_t max_streams = local_context->getSettingsRef().max_distributed_connections;
 
     auto prepare_result = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context, max_streams);
 
