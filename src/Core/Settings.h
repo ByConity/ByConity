@@ -2078,7 +2078,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, load_dict_from_cache, true, "Read dict from cache", 0) \
     M(Bool, throw_exception_if_bucket_unmatched, false, "Whether to throw exception if bucket is unmatched when send bitengine resource", 0) \
     M(Bool, enable_cnch_engine_conversion, false, "Whether to converse MergeTree engine to CnchMergeTree engine", 0) \
-    M(UInt64, ingest_partition_timeout, 3600, "The ingestion timeout in seconds.", 0) \
     /** End of BitEngine related settings */ \
     \
 
