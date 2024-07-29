@@ -85,8 +85,21 @@ void MergeMutateAction::postCommit(TxnTimestamp commit_time)
     global_context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
     for (auto & part : parts)
         part->commit_time = commit_time;
+    
+    UInt64 current_time_ns = clock_gettime_ns(CLOCK_MONOTONIC_COARSE);
 
-    ServerPartLog::addNewParts(getContext(), table->getStorageID(), getPartLogType(), type == ManipulationType::Merge ? getMergedPart() : parts, {}, txn_id, /*error=*/ false, source_part_names);
+    ServerPartLog::addNewParts(
+        getContext(),
+        table->getStorageID(),
+        getPartLogType(),
+        /*parts*/ type == ManipulationType::Merge ? getMergedPart() : parts,
+        /*staged_parts*/ {},
+        txn_id,
+        /*error=*/ false,
+        source_part_names,
+        current_time_ns - manipulation_submit_time_ns,
+        peak_memory_usage);
+
     ProfileEvents::increment(ProfileEvents::ManipulationSuccess, 1);
 }
 

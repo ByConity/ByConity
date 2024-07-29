@@ -178,6 +178,12 @@ void CnchServerServiceImpl::commitParts(
                     binlog.meta_version = binlog_req.meta_version();
                 }
 
+                UInt64 peak_memory_usage = 0;
+                if (req->has_peak_memory_usage())
+                {
+                    peak_memory_usage = req->peak_memory_usage();
+                }
+
                 CnchDataWriter cnch_writer(
                     *cnch,
                     rpc_context,
@@ -185,7 +191,8 @@ void CnchServerServiceImpl::commitParts(
                     req->task_id(),
                     std::move(consumer_group),
                     tpl,
-                    binlog);
+                    binlog,
+                    peak_memory_usage);
 
                 cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
             }

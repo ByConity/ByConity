@@ -60,6 +60,9 @@ struct ServerPartLogElement
     // the input part for each new part, but all the source parts for the txn
     Strings source_part_names;
 
+    UInt64 duration_ms = 0;
+    UInt64 peak_memory_usage = 0;
+
     UInt8 error = 0;
     String exception;
 
@@ -82,7 +85,9 @@ public:
         const MutableMergeTreeDataPartsCNCHVector & staged_parts,
         UInt64 txn_id,
         UInt8 error,
-        const Strings & source_part_names = {});
+        const Strings & source_part_names = {},
+        UInt64 duration_ns = 0,
+        UInt64 peak_memory_usage = 0);
 
     static bool addRemoveParts(
         const ContextPtr & local_context,

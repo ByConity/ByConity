@@ -505,7 +505,8 @@ void CnchServerClient::commitParts(
     const bool from_server,
     const String & consumer_group,
     const cppkafka::TopicPartitionList & tpl,
-    const MySQLBinLogInfo & binlog)
+    const MySQLBinLogInfo & binlog,
+    const UInt64 peak_memory_usage)
 {
     /// TODO: check txn_id & start_ts
 
@@ -579,6 +580,8 @@ void CnchServerClient::commitParts(
         binlog_req->set_meta_version(binlog.meta_version);
     }
 
+    request.set_peak_memory_usage(peak_memory_usage);
+
     /// add delete bitmaps for table with unique key
     for (const auto & delete_bitmap : delete_bitmaps)
     {
@@ -605,7 +608,8 @@ void CnchServerClient::precommitParts(
     const bool from_server,
     const String & consumer_group,
     const cppkafka::TopicPartitionList & tpl,
-    const MySQLBinLogInfo & binlog)
+    const MySQLBinLogInfo & binlog,
+    const UInt64 peak_memory_usage)
 {
     const UInt64 batch_size = context->getSettingsRef().catalog_max_commit_size;
 
@@ -648,7 +652,8 @@ void CnchServerClient::precommitParts(
             from_server,
             consumer_group,
             tpl,
-            binlog);
+            binlog,
+            peak_memory_usage);
     }
 }
 

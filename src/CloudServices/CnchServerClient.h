@@ -141,7 +141,8 @@ public:
         const bool from_server = false,
         const String & consumer_group = {},
         const cppkafka::TopicPartitionList & tpl = {},
-        const MySQLBinLogInfo & binlog = {});
+        const MySQLBinLogInfo & binlog = {},
+        const UInt64 peak_memory_usage = 0);
 
     void precommitParts(
         ContextPtr context,
@@ -155,7 +156,8 @@ public:
         const bool from_server = false,
         const String & consumer_group = {},
         const cppkafka::TopicPartitionList & tpl = {},
-        const MySQLBinLogInfo & binlog = {});
+        const MySQLBinLogInfo & binlog = {},
+        const UInt64 peak_memory_usage = 0);
 
     MergeTreeDataPartsCNCHVector fetchCloudTableMeta(
         const StorageCloudMergeTree & storage, const TxnTimestamp & ts, const std::unordered_set<Int64> & bucket_numbers = {});

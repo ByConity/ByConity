@@ -333,6 +333,12 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         dumped_data.bitmaps.push_back(new_dumped_data.bitmaps.front());
     }
 
+    ManipulationListElement * manipulation_list_element = getManipulationListElement();
+    if (manipulation_list_element)
+    {
+        cnch_writer.setPeakMemoryUsage(manipulation_list_element->getMemoryTracker().getPeak());
+    }
+
     cnch_writer.commitDumpedParts(dumped_data);
     auto commit_time = getContext()->getCurrentTransaction()->commitV2();
     for (const auto & part : dumped_data.parts)

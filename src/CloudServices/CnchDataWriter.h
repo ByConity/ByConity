@@ -51,7 +51,8 @@ public:
         String task_id_ = {},
         String consumer_group_ = {},
         const cppkafka::TopicPartitionList & tpl_ = {},
-        const MySQLBinLogInfo & binlog = {});
+        const MySQLBinLogInfo & binlog_ = {},
+        UInt64 peak_memory_usage_ = 0);
 
     ~CnchDataWriter();
 
@@ -84,6 +85,8 @@ public:
 
     void preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts);
 
+    void setPeakMemoryUsage(UInt64 peak_memory_usage_) { peak_memory_usage = peak_memory_usage_; }
+
     DumpedData res;
 
 private:
@@ -103,6 +106,8 @@ private:
     mutable std::mutex write_mutex;
 
     PlanSegmentInstanceId instance_id{};
+
+    UInt64 peak_memory_usage;
 
     UUID newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp);
 };

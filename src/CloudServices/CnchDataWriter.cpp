@@ -115,7 +115,8 @@ CnchDataWriter::CnchDataWriter(
     String task_id_,
     String consumer_group_,
     const cppkafka::TopicPartitionList & tpl_,
-    const MySQLBinLogInfo & binlog_)
+    const MySQLBinLogInfo & binlog_,
+    UInt64 peak_memory_usage_)
     : storage(storage_)
     , context(context_)
     , type(type_)
@@ -124,6 +125,7 @@ CnchDataWriter::CnchDataWriter(
     , tpl(tpl_)
     , binlog(binlog_)
     , instance_id(context->getPlanSegmentInstanceId())
+    , peak_memory_usage(peak_memory_usage_)
 {
 }
 
@@ -333,7 +335,8 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
                 auto server_client = context->getCnchServerClient("0.0.0.0", context->getRPCPort());
-                server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, binlog);
+                server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false,
+                    consumer_group, tpl, binlog, peak_memory_usage);
             }
             else
             {
@@ -360,7 +363,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             }
 
             server_client->precommitParts(
-                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, binlog);
+                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, binlog, peak_memory_usage);
         }
     }
     catch (const Exception &)
@@ -598,8 +601,9 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             }
             else
             {
-                merge_mutate_thread->finishTask(task_id, [&](const Strings & source_part_names) {
-                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, source_part_names);
+                merge_mutate_thread->finishTask(task_id, [&](const Strings & source_part_names, UInt64 manipulation_submit_time_ns) {
+                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, source_part_names,
+                        manipulation_submit_time_ns, peak_memory_usage);
 
                     for (const auto & part : dumped_data.parts)
                         action->as<MergeMutateAction &>().appendPart(part);
