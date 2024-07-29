@@ -49,6 +49,8 @@
 #include <Storages/DiskCache/IDiskCacheSegment.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/DiskCache/BitmapIndexDiskCacheSegment.h>
+#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GinIndexDataPartHelper.h>
 
 
 namespace ProfileEvents
@@ -1468,6 +1470,28 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
         {
             last_exception = e.message();
             /// no exception thrown
+        }
+    }
+
+    /// Preload inverted index into memory
+    ContextPtr ctx = storage.getContext();
+    if (auto factory = ctx->getGinIndexStoreFactory();
+        factory != nullptr && ctx->getSettings().enable_skip_index
+        && (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
+    {
+        for (const auto& idx : storage.getInMemoryMetadataPtr()->getSecondaryIndices())
+        {
+            auto index_helper = MergeTreeIndexFactory::instance().get(idx);
+            if (!index_helper->isInvertedIndex())
+            {
+                continue;
+            }
+
+            std::unique_ptr<IGinDataPartHelper> part_helper = std::make_unique<GinDataCNCHPartHelper>(
+                getMvccDataPart(index_helper->getFileName() + INDEX_FILE_EXTENSION),
+                DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache(),
+                DiskCacheMode::USE_DISK_CACHE);
+            factory->get(index_helper->getFileName(), std::move(part_helper));
         }
     }
 
