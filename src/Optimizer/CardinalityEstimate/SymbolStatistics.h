@@ -94,6 +94,7 @@ public:
     size_t getOutputSizeInBytes();
 
     void setNdv(UInt64 ndv_) { ndv = ndv_; }
+    void setMax(Float64 max_) { max = max_; }
     void setType(const DataTypePtr & type_)
     {
         type = type_;

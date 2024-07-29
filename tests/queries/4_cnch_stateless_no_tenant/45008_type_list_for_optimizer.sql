@@ -24,7 +24,6 @@ insert into optimizer_supported values ('Decimal')('Decimal32')('Decimal64')('De
 insert into optimizer_supported values ('Enum')('Enum8')('Enum16');
 insert into optimizer_supported values ('IPv4')('IPv6');
 insert into optimizer_supported values ('Float32')('Float64');
-insert into optimizer_supported values ('GlobalLowCardinality');
 
 -- interval type is designed for calculation, thus not supported
 insert into optimizer_unsupported select name from system.data_type_families where alias_to='' and name like 'Interval%';

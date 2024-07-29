@@ -38,7 +38,6 @@ public:
 
     virtual void dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) = 0;
     virtual void dropStatsData(const StatsTableIdentifier & table) = 0;
-    virtual void dropStatsDataAll(const String & database) = 0;
 
     virtual void invalidateClusterStatsCache(const StatsTableIdentifier & table) = 0;
     // const because it should use ConstContext

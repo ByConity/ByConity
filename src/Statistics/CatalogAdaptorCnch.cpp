@@ -44,7 +44,6 @@ public:
     void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) override;
     void dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) override;
     void dropStatsData(const StatsTableIdentifier & table) override;
-    void dropStatsDataAll(const String & database) override;
 
     void invalidateClusterStatsCache(const StatsTableIdentifier & table) override;
     void invalidateServerStatsCache(const StatsTableIdentifier & table) override;
@@ -194,14 +193,6 @@ void CatalogAdaptorCnch::dropStatsData(const StatsTableIdentifier & table)
 
     // step 2: write column stats
     catalog->removeAllColumnStatistics(uuid_str);
-}
-void CatalogAdaptorCnch::dropStatsDataAll(const String & database_name)
-{
-    auto tables = this->getAllTablesID(database_name);
-    for (auto & identifier : tables)
-    {
-        dropStatsData(identifier);
-    }
 }
 
 void CatalogAdaptorCnch::dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc)

@@ -28,6 +28,7 @@
 #include <Statistics/TypeUtils.h>
 #include <Poco/Exception.h>
 #include <Common/Stopwatch.h>
+#include <Statistics/ASTHelpers.h>
 
 
 namespace DB
@@ -44,36 +45,8 @@ namespace ErrorCodes
 using namespace Statistics;
 using namespace Statistics::AutoStats;
 
-template <typename QueryType>
-static auto getTableIdentifier(ContextPtr context, const QueryType * query)
-{
-    std::vector<StatsTableIdentifier> tables;
-    auto catalog = createCatalogAdaptor(context);
-    auto db = context->resolveDatabase(query->database);
-    if (query->target_all)
-    {
-        tables = catalog->getAllTablesID(db);
-        if (tables.empty())
-        {
-            auto err_msg = fmt::format(FMT_STRING("current database `{}` has no tables"), db);
-            LOG_WARNING(&Poco::Logger::get("CreateStats"), err_msg);
-        }
-    }
-    else
-    {
-        auto table_info_opt = catalog->getTableIdByName(db, query->table);
-        if (!table_info_opt)
-        {
-            auto msg = "Unknown Table (" + query->table + ") in database (" + db + ")";
-            throw Exception(msg, ErrorCodes::UNKNOWN_TABLE);
-        }
-        tables.emplace_back(table_info_opt.value());
-    }
-    return tables;
-}
-
-
-static Block constructInfoBlock(ContextPtr context, const String & table_name, UInt64 column_count, String row_count_or_error, double time, bool only_header = false)
+static Block constructInfoBlock(
+    ContextPtr context, const String & table_name, UInt64 column_count, String row_count_or_error, double time, bool only_header = false)
 {
     Block block;
     auto append_str_column = [&](String header, String value) {
@@ -271,8 +244,7 @@ BlockIO InterpreterCreateStatsQuery::execute()
     settings.accurate_sample_ndv = context->getSettingsRef().statistics_accurate_sample_ndv;
     settings.normalize();
 
-    auto tables = getTableIdentifier(context, query);
-
+    auto tables = getTablesFromAST(context, query);
     std::vector<CollectTarget> valid_targets;
     for (const auto & table : tables)
     {

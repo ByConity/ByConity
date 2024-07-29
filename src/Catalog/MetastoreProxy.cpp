@@ -2085,8 +2085,11 @@ void MetastoreProxy::updateTableStatistics(
         batch_write.AddPut(SinglePutRequest(tag_key, std::to_string(static_cast<UInt64>(tag))));
     }
 
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 void MetastoreProxy::removeTableStatistics(const String & name_space, const String & uuid)
@@ -2152,9 +2155,11 @@ void MetastoreProxy::updateColumnStatistics(const String & name_space, const Str
         // TODO: currently keep it just for front&back-compatibility
         batch_write.AddPut(SinglePutRequest(columnStatisticTagKey(name_space, uuid, column, tag), std::to_string(static_cast<UInt64>(tag))));
     }
-
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 

@@ -12,8 +12,6 @@ extern const int UNKNOWN_DATABASE;
 
 namespace DB::Statistics
 {
-void dropStatsDatabase(ContextPtr context, const String & db, StatisticsCachePolicy cache_policy, bool throw_exception);
-
 void dropStatsTable(ContextPtr context, const StatsTableIdentifier & table, StatisticsCachePolicy cache_policy, bool throw_exception);
 
 void dropStatsColumns(
