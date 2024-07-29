@@ -457,7 +457,11 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     /// Sets an extra row policy based on `client_info.initial_user`
                     query_context->setInitialRowPolicy();
                     /// apply settings changed
-                    const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::BINARY);
+                    const size_t MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS = 4;
+                    if (query_common->brpc_protocol_minor_revision() >= MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS)
+                        const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::STRINGS_WITH_FLAGS);
+                    else
+                        const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::BINARY);
                 }
 
                 /// Disable function name normalization when it's a secondary query, because queries are either
