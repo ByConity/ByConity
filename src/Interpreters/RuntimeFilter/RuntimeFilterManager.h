@@ -93,12 +93,15 @@ public:
     void set(DynamicData&& value, UInt32 ref);
     bool isReady();
     UInt32 unref() { return --ref_count; }
+    UInt64 lastTime() const { return last_time; }
+    UInt32 ref() { return ref_count; }
     String dump();
 
 private:
     DynamicData value;
     std::atomic<bool> ready{false};
     std::atomic<UInt32> ref_count;
+    UInt64 last_time;  /// ms
 };
 
 class RuntimeFilterManager final : private boost::noncopyable
@@ -132,8 +135,12 @@ public:
 
     static String makeKey(const String & query_id, RuntimeFilterId filter_id);
 
+    void initRoutineCheck();
+    ~RuntimeFilterManager();
+
 private:
-    RuntimeFilterManager() : log(&Poco::Logger::get("RuntimeFilterManager")) { }
+    void routineCheck();
+    RuntimeFilterManager() : log(&Poco::Logger::get("RuntimeFilterManager")) { initRoutineCheck(); }
 
     /**
      * Coordinator: Query Id -> RuntimeFilters
@@ -146,5 +153,8 @@ private:
     ConcurrentHashMap<String, DynamicValuePtr> complete_runtime_filters;
 
     Poco::Logger * log;
+    std::unique_ptr<std::thread> check_thread{nullptr};
+    std::atomic_bool need_stop = false;
+    UInt64 clean_rf_time_limit = 300000; /// default 300s to timeout runtime filters
 };
 }

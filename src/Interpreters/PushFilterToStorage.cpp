@@ -5,7 +5,8 @@
 #include <Interpreters/PartitionPredicateVisitor.h>
 #include <Optimizer/CardinalityEstimate/FilterEstimator.h>
 #include <Optimizer/PredicateUtils.h>
-#include "Parsers/IAST_fwd.h"
+#include <Optimizer/RuntimeFilterUtils.h>
+#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -14,7 +15,7 @@ PushFilterToStorage::PushFilterToStorage(ConstStoragePtr storage_, ContextPtr lo
 {
 }
 
-std::tuple<ASTs, ASTs> PushFilterToStorage::extractPartitionFilter(ASTPtr query_filter)
+std::tuple<ASTs, ASTs> PushFilterToStorage::extractPartitionFilter(ASTPtr query_filter, bool supports_parition_runtime_filter)
 {
     ASTs push_predicates;
     ASTs remain_predicates;
@@ -23,6 +24,9 @@ std::tuple<ASTs, ASTs> PushFilterToStorage::extractPartitionFilter(ASTPtr query_
     Names virtual_key_names = storage->getVirtuals().getNames();
     partition_key_names.insert(partition_key_names.end(), virtual_key_names.begin(), virtual_key_names.end());
     auto iter = std::stable_partition(conjuncts.begin(), conjuncts.end(), [&](const auto & predicate) {
+        if (!supports_parition_runtime_filter && RuntimeFilterUtils::isInternalRuntimeFilter(predicate))
+            return false;
+
         PartitionPredicateVisitor::Data visitor_data{getContext(), partition_key_names};
         PartitionPredicateVisitor(visitor_data).visit(predicate);
         return visitor_data.getMatch();

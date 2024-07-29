@@ -29,8 +29,8 @@
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/SortingStep.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
-#include "QueryPlan/SortingStep.h"
 
 namespace DB
 {
@@ -41,17 +41,7 @@ NameSet PushPartialAggThroughExchange::BLOCK_AGGS{
     "attributionCorrelationFuse",
     "attribution",
     "attributionCorrelation",
-
-    // fixme: remove bitmap* if correctness problem fixed
-    "bitmapJoinAndCard",
-    "bitmapJoinAndCard2",
-    "bitmapJoin",
-    "bitmapCount",
-    "bitmapExtract",
-    "bitmapMultiCount",
-    "bitmapMultiCountWithDate",
-    "bitmapMaxLevel",
-    "bitmapColumnDiff"};
+};
 
 static std::pair<bool, bool> canPushPartialWithHint(const AggregatingStep * step)
 {
@@ -209,6 +199,12 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
     for (const auto & agg : step->getAggregates())
     {
         if (BLOCK_AGGS.count(agg.function->getName()))
+        {
+            return {};
+        }
+
+        // fixme: remove bitmap* if correctness problem fixed
+        if (Poco::toLower(agg.function->getName()).starts_with("bitmap"))
         {
             return {};
         }

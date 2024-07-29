@@ -436,7 +436,8 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
                 }
             }
             /// Respect distributed_max_parallel_size in bsp mode.
-            if (max_parallel_size > 0 && max_parallel_size > plan_segment_context.shard_number)
+            if (plan_segment_context.context->getSettingsRef().bsp_mode && max_parallel_size > 0
+                && max_parallel_size > plan_segment_context.shard_number)
                 return {plan_segment_context.cluster_name, max_parallel_size};
             else
                 return {plan_segment_context.cluster_name, plan_segment_context.shard_number};

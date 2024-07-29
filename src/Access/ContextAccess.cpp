@@ -8,6 +8,7 @@
 #include <Access/EnabledRolesInfo.h>
 #include <Access/EnabledSettings.h>
 #include <Access/SettingsProfilesInfo.h>
+#include <Access/KVAccessStorage.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Common/Exception.h>
@@ -19,6 +20,7 @@
 #include <common/logger_useful.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/range/algorithm/set_algorithm.hpp>
+#include <boost/range/algorithm/copy.hpp>
 #include <assert.h>
 #include <unordered_set>
 
@@ -250,7 +252,7 @@ ContextAccess::ContextAccess(const AccessControlManager & manager_, const Params
 {
 }
 
-void ContextAccess::initialize()
+void ContextAccess::initialize(bool load_roles)
 {
     if (!params.user_id)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "No user in current context, it's a bug");
@@ -269,7 +271,33 @@ void ContextAccess::initialize()
             ptr->setUser(changed_user);
         });
 
-    setUser(manager->read<User>(*params.user_id));
+
+    auto user_ = manager->read<User>(*params.user_id);
+    if (load_roles && params.use_default_roles)
+        loadRoles(user_);
+    setUser(user_);
+}
+
+void ContextAccess::loadRoles(const UserPtr & user_) const
+{
+    std::unordered_set<UUID> ids;
+    ids.reserve(user_->default_roles.ids.size() + user_->default_roles.except_ids.size() + params.current_roles.size());
+    boost::range::copy(user_->default_roles.ids, std::inserter(ids, ids.end()));
+    boost::range::copy(user_->default_roles.except_ids, std::inserter(ids, ids.end()));
+    boost::range::copy(params.current_roles, std::inserter(ids, ids.end()));
+
+    if (ids.empty())
+        return;
+
+    for (const auto & storage : *const_cast<AccessControlManager *>(manager)->getStoragesPtr())
+    {
+        auto kv = typeid_cast<std::shared_ptr<KVAccessStorage>>(storage);
+        if (!kv)
+            continue;
+
+        kv->loadEntities(IAccessEntity::Type::ROLE, ids);
+        break;
+    }
 }
 
 void ContextAccess::setUser(const UserPtr & user_) const
@@ -295,6 +323,7 @@ void ContextAccess::setUser(const UserPtr & user_) const
     trace_log = &Poco::Logger::get("ContextAccess (" + user_name + ")");
 
     std::vector<UUID> current_roles, current_roles_with_admin_option;
+
     if (params.use_default_roles)
     {
         current_roles = user->granted_roles.findGranted(user->default_roles);

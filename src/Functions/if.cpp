@@ -640,7 +640,7 @@ private:
         const ColumnWithTypeAndName & arg1 = arguments[1];
         const ColumnWithTypeAndName & arg2 = arguments[2];
 
-        DataTypePtr common_type = getLeastSupertype(DataTypes{arg1.type, arg2.type});
+        DataTypePtr common_type = getLeastSupertypeOrString(DataTypes{arg1.type, arg2.type});
 
         ColumnPtr col_then = castColumn(arg1, common_type);
         ColumnPtr col_else = castColumn(arg2, common_type);
@@ -1036,7 +1036,7 @@ public:
             return getLeastSupertype(DataTypes{arguments[1], arguments[2]});
         /// mysql supports if (cond, Nullable<Array>, Array)
         bool has_nullable = arguments[1]->isNullable() || arguments[2]->isNullable();
-        auto ret_type =  getLeastSupertype(DataTypes{removeNullable(arguments[1]), removeNullable(arguments[2])});
+        auto ret_type =  getLeastSupertypeOrString(DataTypes{removeNullable(arguments[1]), removeNullable(arguments[2])});
         return has_nullable ? makeNullable(ret_type) : ret_type;
     }
 

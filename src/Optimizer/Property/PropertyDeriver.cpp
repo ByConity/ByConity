@@ -98,9 +98,14 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, cons
         return Property{node, Partitioning(Partitioning::Handle::ARBITRARY)};
     }
     Sorting sorting;
-    for (const auto & col : storage->getInMemoryMetadataPtr()->getSortingKeyColumns())
+    const auto & descs = storage->getInMemoryMetadataPtr()->sorting_key;
+
+    for (size_t i = 0; i < descs.column_names.size(); i++)
     {
-        sorting.emplace_back(SortColumn(col, SortOrder::ASC_NULLS_FIRST));
+        if (Utils::canIgnoreNullsDirection(descs.data_types[i]))
+            sorting.emplace_back(SortColumn(descs.column_names[i], SortOrder::ASC_ANY));
+        else
+            sorting.emplace_back(SortColumn(descs.column_names[i], SortOrder::ASC_NULLS_FIRST));
     }
 
     auto metadata = storage->getInMemoryMetadataPtr();

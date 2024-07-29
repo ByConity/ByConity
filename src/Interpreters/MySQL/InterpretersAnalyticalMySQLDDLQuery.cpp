@@ -1,42 +1,43 @@
 #include <memory>
 #include <Interpreters/MySQL/InterpretersAnalyticalMySQLDDLQuery.h>
 
-#include <Parsers/IAST.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTColumnDeclaration.h>
-#include <Parsers/ASTIndexDeclaration.h>
-#include <Parsers/MySQL/ASTCreateQuery.h>
-#include <Parsers/MySQL/ASTAlterCommand.h>
-#include <Parsers/ASTColumnDeclaration.h>
-#include <Parsers/MySQL/ASTDeclareOption.h>
-#include <Parsers/MySQL/ASTCreateDefines.h>
-#include <Parsers/ASTClusterByElement.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <Parsers/MySQL/ASTDeclareIndex.h>
-#include <Common/quoteString.h>
-#include <Common/assert_cast.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTRenameQuery.h>
-#include <Interpreters/DatabaseCatalog.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/VirtualWarehousePool.h>
+#include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTClusterByElement.h>
+#include <Parsers/ASTColumnDeclaration.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTIndexDeclaration.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTRenameQuery.h>
+#include <Parsers/IAST.h>
+#include <Parsers/IAST_fwd.h>
+#include <Parsers/MySQL/ASTAlterCommand.h>
+#include <Parsers/MySQL/ASTCreateDefines.h>
+#include <Parsers/MySQL/ASTCreateQuery.h>
+#include <Parsers/MySQL/ASTDeclareIndex.h>
+#include <Parsers/MySQL/ASTDeclareOption.h>
 #include <ResourceManagement/CommonData.h>
-#include <Storages/IStorage.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/IStorage.h>
+#include <Common/assert_cast.h>
+#include <Common/quoteString.h>
 
 namespace DB
 {
@@ -117,6 +118,33 @@ static void setNotNullModifier(ASTExpressionList * columns_definition, const Nam
                     declare_column->default_specifier = "";
                 }
                }
+            }
+        }
+
+    }
+}
+
+static void convertDecimal(ASTExpressionList * columns_definition, const NamesAndTypesList & primary_keys)
+{
+     for (const auto & primary_key : primary_keys)
+    {
+        for (auto & declare_column_ast : columns_definition->children)
+        {
+            auto declare_column = declare_column_ast->as<ASTColumnDeclaration>();
+            if (declare_column->name != primary_key.name) continue;
+            ASTPtr data_type = declare_column->type;
+            auto * data_type_function = data_type->as<ASTFunction>();
+
+            if (!data_type_function) continue;
+
+            String type_name_upper = Poco::toUpper(data_type_function->name);
+
+            if (type_name_upper.find("DECIMAL") != String::npos && data_type_function->arguments->children.size() == 2)
+            {
+                data_type_function->name = "DECIMAL64";
+                auto arguments = std::make_shared<ASTExpressionList>();
+                arguments->children.push_back(data_type_function->arguments->children.back());
+                data_type_function->arguments = arguments;
             }
         }
 
@@ -515,8 +543,6 @@ void InterpreterCreateAnalyticMySQLImpl::validate(const InterpreterCreateAnalyti
 {
     if (const auto & mysql_storage = create_query.storage->as<ASTStorageAnalyticalMySQL>())
     {
-        if (mysql_storage->cluster_by)
-            throw Exception("This is Clickhouse syntax for CLUSTER BY, please follow mysql dialect: DISTRIBUTED BY", ErrorCodes::MYSQL_SYNTAX_ERROR);
         if (mysql_storage->life_cycle)
             throw Exception("LIFE CYCLE is not supported yet, please use TTL as an alternative", ErrorCodes::MYSQL_SYNTAX_ERROR);
         if (mysql_storage->ttl_table)
@@ -569,7 +595,8 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
            "FEDERATED",
            "EXAMPLE",
            "MEMORY",
-           "HEAP"};
+           "HEAP",
+           "OSS"};
 
     // ck definitions, just return raw ast
     String engine_name = "";
@@ -604,12 +631,15 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
         const auto & [primary_keys, unique_keys, keys, cluster_keys] = getKeys(create_defines->columns, create_defines->mysql_indices, context, columns_name_and_type);
 
         setNotNullModifier(create_defines->columns, primary_keys);
+        convertDecimal(create_defines->columns, primary_keys);
 
         /// The `partition by` expression must use primary keys, otherwise the primary keys will not be merge.
-        if (ASTPtr partition_expression = getPartitionPolicy(primary_keys))
-            storage->set(storage->partition_by, partition_expression);
         if (mysql_storage->mysql_partition_by)
+        {
             storage->set(storage->partition_by, mysql_storage->mysql_partition_by->clone());
+        }
+        else if (ASTPtr partition_expression = getPartitionPolicy(primary_keys))
+            storage->set(storage->partition_by, partition_expression);
 
         /// The `order by` expression must use primary keys, otherwise the primary keys will not be merge.
         if (ASTPtr order_by_expression = getOrderByPolicy(primary_keys, keys, cluster_keys))

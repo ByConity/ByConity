@@ -11,8 +11,9 @@ Segment[ 2 ] :
 AggregatingTransform
   (TopNFiltering)
   TopNFilteringByLimitingTransform
-    (TableScan) # 
-    NullSource 0 → 1
+    PartialSortingTransform
+      (TableScan) # 
+      NullSource 0 → 1
 
 ------------------------------------------
 
@@ -103,8 +104,9 @@ Segment[ 2 ] :
 AggregatingTransform
   (TopNFiltering)
   TopNFilteringByLimitingTransform
-    (TableScan) # 
-    NullSource 0 → 1
+    PartialSortingTransform
+      (TableScan) # 
+      NullSource 0 → 1
 
 ------------------------------------------
 
@@ -148,8 +150,9 @@ Segment[ 2 ] :
 AggregatingTransform
   (TopNFiltering)
   TopNFilteringByLimitingTransform
-    (TableScan) # 
-    NullSource 0 → 1
+    PartialSortingTransform
+      (TableScan) # 
+      NullSource 0 → 1
 
 ------------------------------------------
 

@@ -155,7 +155,7 @@ void StorageCloudKafka::tryLoadFormatSchemaFileFromHDFS()
             }
 
             LOG_DEBUG(log, "Loading format schema files from remote path: {} to local path: {}", path, local_format_path);
-            reloadFormatSchema(path, local_format_path, log);
+            reloadFormatSchema(getContext(), path, local_format_path, log);
 
             /// Check the existence of the file to ensure loading successfully
             if (!Poco::File(local_format_path + "/" + target_path.getFileName()).exists())

@@ -136,7 +136,7 @@ public:
         const String & current_database,
         const ClientInfo & client_info,
         const String & tenant,
-        bool has_tenant_id_in_username) const;
+        bool load_roles) const;
 
     std::shared_ptr<const ContextAccess> getContextAccess(const ContextAccessParams & params) const;
 

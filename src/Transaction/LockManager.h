@@ -85,6 +85,9 @@ public:
     LockManager();
     LockManager(const LockManager &) = delete;
     LockManager & operator=(const LockManager &) = delete;
+    ~LockManager();
+
+    void shutdown();
 
     LockStatus lock(LockRequest *, const Context & context);
     void unlock(LockRequest *);
@@ -130,6 +133,10 @@ private:
     BackgroundSchedulePool::TaskHolder txn_checker;
 
     Poco::Logger * log{&Poco::Logger::get("CnchLockManager")};
+
+    std::atomic<bool> is_stopped{false};
+
+    bool isActive() { return !is_stopped; }
 
     void checkTxnStatus();
 

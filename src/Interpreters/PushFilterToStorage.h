@@ -13,7 +13,7 @@ public:
     PushFilterToStorage(ConstStoragePtr storage, ContextPtr local_context);
 
 
-    std::tuple<ASTs, ASTs> extractPartitionFilter(ASTPtr query_filter);
+    std::tuple<ASTs, ASTs> extractPartitionFilter(ASTPtr query_filter, bool supports_parition_runtime_filter);
 
     std::tuple<ASTs, ASTs> extractPrewhereWithStats(ASTPtr query_filter, PlanNodeStatisticsPtr storage_statistics);
 

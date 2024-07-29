@@ -13,19 +13,19 @@
  * limitations under the License.
  */
 
-#include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
-
+#include <Optimizer/CardinalityEstimate/FilterEstimator.h>
+#include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Patterns.h>
+#include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <QueryPlan/LimitStep.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 #include "Parsers/ASTSelectQuery.h"
-#include <Optimizer/CardinalityEstimate/FilterEstimator.h>
-#include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 
 namespace DB
 {
@@ -292,7 +292,7 @@ TransformResult PushIndexProjectionIntoTableScan::transformImpl(PlanNodePtr node
     {
         if (const auto * func = assignment.second->as<ASTFunction>())
         {
-            if (Poco::toLower(func->name) == "arraysetcheck")
+            if (functionCanUseBitmapIndex(*func))
             {
                 b_assignments.emplace_back(assignment);
                 // b_name_to_type.emplace(assignment.first, all_name_to_type.at(assignment.first));

@@ -6,6 +6,7 @@
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <Optimizer/Utils.h>
 
 namespace DB
 {

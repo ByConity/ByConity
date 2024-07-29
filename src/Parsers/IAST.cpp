@@ -96,6 +96,13 @@ std::string IAST::formatForErrorMessage() const
     return buf.str();
 }
 
+std::string IAST::formatForErrorMessageWithoutAlias() const
+{
+    WriteBufferFromOwnString buf;
+    format(FormatSettings(buf, true /* one line */, true /* without_alias */));
+    return buf.str();
+}
+
 void IAST::cloneChildren()
 {
     for (auto & child : children)

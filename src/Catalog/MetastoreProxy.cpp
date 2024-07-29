@@ -31,6 +31,8 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include "Interpreters/DistributedStages/PlanSegmentInstance.h"
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/adaptors.hpp>
 
 namespace DB::ErrorCodes
 {
@@ -2109,7 +2111,7 @@ void MetastoreProxy::removeTableStatistics(const String & name_space, const Stri
         }
     }
 
-    if (!batch_write.isEmpty()) 
+    if (!batch_write.isEmpty())
     {
         BatchCommitResponse resp;
         metastore_ptr->batchWrite(batch_write, resp);
@@ -2264,7 +2266,7 @@ void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const 
             batch_write.AddDelete(iter->key());
         }
     }
-    if (!batch_write.isEmpty()) 
+    if (!batch_write.isEmpty())
     {
         BatchCommitResponse resp;
         metastore_ptr->batchWrite(batch_write, resp);
@@ -3342,6 +3344,28 @@ String MetastoreProxy::getAccessEntity(EntityType type, const String & name_spac
     String data;
     metastore_ptr->get(accessEntityKey(type, name_space, name), data);
     return data;
+}
+
+std::vector<std::pair<String, UInt64>> MetastoreProxy::getEntities(EntityType type, const String & name_space, const std::unordered_set<UUID> & ids) const
+{
+    Strings requests;
+
+    requests.reserve(ids.size());
+
+    for (const auto & id : ids)
+        requests.push_back(accessEntityUUIDNameMappingKey(name_space, UUIDHelpers::UUIDToString(id)));
+
+    auto response = metastore_ptr->multiGet(requests);
+
+    requests.clear();
+    for (const auto & [s, version] : response)
+    {
+        if (s.empty())
+            continue;
+        requests.push_back(accessEntityKey(type, name_space, s));
+    }
+
+    return metastore_ptr->multiGet(requests);
 }
 
 Strings MetastoreProxy::getAllAccessEntities(EntityType type, const String & name_space) const

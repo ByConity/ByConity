@@ -47,6 +47,8 @@
 #include <Parsers/queryToString.h>
 #include <Storages/StorageSnapshot.h>
 
+#include <common/logger_useful.h>
+
 namespace DB
 {
 
@@ -546,6 +548,8 @@ namespace
 
 ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enable_materialized_view)
 {
+    const auto * logger = &Poco::Logger::get("QueryRewriter");
+
     (void) enable_materialized_view;
     graphviz_index = GraphvizPrinter::PRINT_AST_INDEX;
     GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-init");
@@ -609,6 +613,8 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
 
     GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-done");
 
+    LOG_DEBUG(logger, "rewritten query: {}", query->formatForErrorMessageWithoutAlias());
+    LOG_TRACE(logger, "rewritten ast tree: {}", query->dumpTree());
     return query;
 }
 

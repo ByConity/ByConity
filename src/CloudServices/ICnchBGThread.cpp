@@ -167,7 +167,7 @@ TxnTimestamp ICnchBGThread::calculateMinActiveTimestamp() const
     {
         try
         {
-            if (auto ts = c->getMinActiveTimestamp(storage_id))
+            if (auto ts = c->getMinActiveTimestamp(storage_id); ts && ts.value())
                 min_active_ts = std::min(*ts, min_active_ts);
         }
         catch (...)

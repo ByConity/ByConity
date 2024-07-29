@@ -275,13 +275,12 @@ private:
         const Names & column_names_to_return) const;
 
     void dropPartsImpl(
+        const PartitionCommand & command,
         ServerDataPartsWithDBM & svr_parts_to_drop,
         IMergeTreeDataPartsVector & parts_to_drop,
-        bool detach,
         ContextPtr local_context,
         bool do_commit,
-        size_t max_threads,
-        bool staging_area = false);
+        size_t max_threads);
 
     void collectResource(
         ContextPtr local_context,

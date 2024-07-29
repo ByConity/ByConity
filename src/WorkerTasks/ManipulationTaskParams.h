@@ -59,6 +59,8 @@ struct ManipulationTaskParams
 
     AsyncRefreshParamPtr mv_refresh_param;
 
+    UInt64 parts_preload_level{0};
+
     explicit ManipulationTaskParams(StoragePtr s) : storage(std::move(s)) {}
     ManipulationTaskParams(const ManipulationTaskParams &) = default;
     ManipulationTaskParams & operator=(const ManipulationTaskParams &) = default;

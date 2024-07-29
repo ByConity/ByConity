@@ -25,6 +25,8 @@ message SortOrder {
     DESC_NULLS_LAST = 3;
     ANY = 4;
     UNKNOWN = 5;
+    ASC_ANY = 6;
+    DESC_ANY = 7;
   }
 }
 

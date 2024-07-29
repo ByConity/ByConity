@@ -67,7 +67,6 @@ void write(ContextMutablePtr & context, Block header, DiskExchangeDataManagerPtr
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataWriteAndRead)
 {
-    GTEST_SKIP() << "Skip for now";
     auto context = getContext().context;
     auto header = getHeader(1);
 
@@ -104,7 +103,6 @@ Processors createMockExecutor(const ExchangeDataKeyPtr & key, Block header, uint
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
 {
-    GTEST_SKIP() << "Skip for now";
     auto context = Context::createCopy(getContext().context);
     context->setPlanSegmentInstanceId({1, static_cast<UInt32>(parallel_idx)});
     auto manager = context->getDiskExchangeDataManager();
@@ -113,7 +111,8 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
     auto key = std::make_shared<ExchangeDataKey>(query_unique_id_2, exchange_id, parallel_idx);
     write(context, header, manager, key);
 
-    manager->submitReadTask(query_id, key, createMockExecutor(key, header, interval_ms, rows));
+    auto mock_executor = createMockExecutor(key, header, interval_ms, rows);
+    manager->submitReadTask(query_id, key, mock_executor);
     // wait until executor starts execution
     ASSERT_TRUE(manager->getExecutor(key));
     while (!manager->getExecutor(key)->isExecutionInitialized())
@@ -124,6 +123,20 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
     auto receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
         key, rpc_host, context, header, true, name, BrpcExchangeReceiverRegistryService::BRPC);
     receiver->registerToSenders(1000);
+
+    // wait until sender becomes real sender, so when we cancel executor, it wont be empty
+    for (const auto & processor : mock_executor)
+    {
+        if (auto sink = std::dynamic_pointer_cast<BroadcastExchangeSink>(processor))
+        {
+            for (const auto & sender : sink->getSenders())
+            {
+                auto proxy = std::dynamic_pointer_cast<BroadcastSenderProxy>(sender);
+                proxy->waitBecomeRealSender(5000);
+            }
+        }
+    }
+
     // cancel executor
     manager->cancelReadTask(key->query_unique_id, key->exchange_id);
     auto packet = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver)->recv(1000);
@@ -136,13 +149,12 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataCleanup)
 {
-    GTEST_SKIP() << "Skip for now";
     auto context = getContext().context;
     auto header = getHeader(1);
 
     auto key = std::make_shared<ExchangeDataKey>(query_unique_id_3, exchange_id, parallel_idx);
     write(context, header, manager, key);
-
+    ASSERT_EQ(manager->getDiskWrittenBytes(), 39);
     manager->cleanup(key->query_unique_id);
     ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
     auto file_name = manager->getFileName(*key);
@@ -151,7 +163,6 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCleanup)
 
 TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByHeartBeat)
 {
-    GTEST_SKIP() << "Skip for now";
     auto context = getContext().context;
     auto header = getHeader(1);
     /// test unregister
@@ -187,7 +198,6 @@ TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByHeartBeat)
 
 TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByExpire)
 {
-    GTEST_SKIP() << "Skip for now";
     auto context = getContext().context;
     auto header = getHeader(1);
     auto key = std::make_shared<ExchangeDataKey>(query_unique_id_4, exchange_id, parallel_idx);
@@ -213,20 +223,12 @@ TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByExpire)
 
 TEST_F(ExchangeRemoteTest, DiskExchangeSizeLimit)
 {
-    GTEST_SKIP() << "Skip for now";
     auto context = getContext().context;
     auto header = getHeader(1);
     auto query_unique_id_5 = 555;
     auto key1 = std::make_shared<ExchangeDataKey>(query_unique_id_5, exchange_id, parallel_idx);
     ASSERT_EQ(manager->getDiskWrittenBytes(), 0);
     write(context, header, manager, key1);
-    std::mutex mu;
-    std::condition_variable cv;
-    for (size_t i = 0; i < 500; i++)
-    {
-        std::unique_lock<std::mutex> lock(mu);
-        cv.wait_for(lock, std::chrono::milliseconds((10)), [&]() { return manager->getDiskWrittenBytes() == 13; });
-    }
     ASSERT_EQ(manager->getDiskWrittenBytes(), 39);
     manager->setMaxDiskBytes(1);
     auto query_unique_id_6 = 666;

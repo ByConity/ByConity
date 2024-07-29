@@ -198,6 +198,12 @@ bool containsAggregateFunction(const ASTPtr & ast)
     return false;
 }
 
+
+bool canIgnoreNullsDirection(const DataTypePtr & type)
+{
+    return !type->isNullable() && type->getTypeId() != TypeIndex::Float32 && type->getTypeId() != TypeIndex::Float64;
+}
+
 bool checkFunctionName(const ASTFunction & function, const String & expect_name)
 {
     if (function.name == expect_name)

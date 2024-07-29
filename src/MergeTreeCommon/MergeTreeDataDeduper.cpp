@@ -60,7 +60,7 @@ namespace
     {
         index_holders.clear();
         index_holders.reserve(parts.size());
-        for (auto & part : parts)
+        for (const auto & part : parts)
             index_holders.push_back(part->getUniqueKeyIndex());
 
         IndexFileIterators iters;
@@ -177,7 +177,11 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
             throw Exception("Deduper new parts iterator has error " + keys->status().ToString(), ErrorCodes::INCORRECT_DATA);
 
         if (!base_iter.status().ok())
-            throw Exception("Deduper visible parts iterator has error " + base_iter.status().ToString(), ErrorCodes::INCORRECT_DATA);
+        {
+            auto abnormal_part_index = base_iter.getAbnormalIndex();
+            auto part_name = abnormal_part_index == -1 ? "Null" : parts[abnormal_part_index]->get_name();
+            throw Exception("Deduper visible parts iterator has error, part name: " + part_name + ", error: " + base_iter.status().ToString(), ErrorCodes::INCORRECT_DATA);
+        }
 
         if (!base_iter.Valid())
         {

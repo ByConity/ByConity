@@ -17,7 +17,11 @@
 #include <CloudServices/CnchServerServiceImpl.h>
 
 #include <Catalog/Catalog.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Catalog/CatalogUtils.h>
+#include <CloudServices/CnchDataWriter.h>
+#include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/DedupWorkerManager.h>
+#include <CloudServices/DedupWorkerStatus.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -1482,31 +1486,11 @@ void CnchServerServiceImpl::removeMergeMutateTasksOnPartitions(
 
 void CnchServerServiceImpl::submitQueryWorkerMetrics(
     google::protobuf::RpcController * /*cntl*/,
-    const Protos::SubmitQueryWorkerMetricsReq * request,
-    Protos::SubmitQueryWorkerMetricsResp * response,
+    const Protos::SubmitQueryWorkerMetricsReq * /*request*/,
+    Protos::SubmitQueryWorkerMetricsResp * /*response*/,
     google::protobuf::Closure * done)
 {
-    RPCHelpers::serviceHandler(
-        done,
-        response,
-        [request = request, response = response, done = done, gc = getContext(), log = log] {
-            brpc::ClosureGuard done_guard(done);
-
-            try
-            {
-                auto query_worker_metric_element = createQueryWorkerMetricElement(request->element());
-                gc->insertQueryWorkerMetricsElement(query_worker_metric_element);
-
-                LOG_TRACE(log, "Submit query worker metrics [{}] from {}: {}", query_worker_metric_element.current_query_id,
-                    query_worker_metric_element.worker_id, query_worker_metric_element.query);
-            }
-            catch (...)
-            {
-                tryLogCurrentException(log, __PRETTY_FUNCTION__);
-                RPCHelpers::handleException(response->mutable_exception());
-            }
-        }
-    );
+    brpc::ClosureGuard done_guard(done);
 }
 
 void CnchServerServiceImpl::submitPreloadTask(

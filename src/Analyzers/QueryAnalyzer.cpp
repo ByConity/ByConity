@@ -22,6 +22,7 @@
 #include <Analyzers/ScopeAwareEquals.h>
 #include <Analyzers/analyze_common.h>
 #include <Analyzers/function_utils.h>
+#include <Analyzers/resolveNamesAsMySQL.h>
 #include <Analyzers/tryEvaluateConstantExpression.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeLowCardinality.h>
@@ -74,6 +75,8 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
 #include "Parsers/formatAST.h"
+
+#include <common/logger_useful.h>
 
 using namespace std::string_literals;
 
@@ -143,7 +146,7 @@ private:
     const bool allow_extended_conversion;
     const bool enable_subcolumn_optimization_through_union;
 
-    Poco::Logger * logger = &Poco::Logger::get("QueryAnalyzer");
+    Poco::Logger * logger = &Poco::Logger::get("QueryAnalyzerVisitor");
 
     void analyzeSetOperation(ASTPtr & node, ASTs & selects);
 
@@ -198,7 +201,7 @@ private:
     void verifyNoFreeReferencesToLambdaArgument(ASTSelectQuery & select_query);
     UInt64 analyzeUIntConstExpression(const ASTPtr & expression);
     void countLeadingHint(const IAST & ast);
-    void rewriteAliasesForANSI(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set);
+    void rewriteSelectInANSIMode(ASTSelectQuery & select_query, const Aliases & aliases, const NameSet & source_columns_set);
     void normalizeAliases(ASTPtr & expr, ASTPtr & aliases_expr);
     void normalizeAliases(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set);
 };
@@ -340,14 +343,14 @@ Void QueryAnalyzerVisitor::visitASTSelectQuery(ASTPtr & node, const Void &)
     // since aliases rewritting for CLICKHOUSE is done by QueryRewriter
     Aliases query_aliases;
     if (use_ansi_semantic)
-        QueryAliasesVisitor(query_aliases).visit(node);
+        QueryAliasesAllowAmbiguousNoSubqueriesVisitor(query_aliases).visit(node);
 
     if (select_query.tables())
         source_scope = analyzeFrom(select_query.refTables()->as<ASTTablesInSelectQuery &>(), select_query, query_aliases);
     else
         source_scope = analyzeWithoutFrom(select_query);
 
-    rewriteAliasesForANSI(node, query_aliases, source_scope->getNamesSet());
+    rewriteSelectInANSIMode(select_query, query_aliases, source_scope->getNamesSet());
     analyzeWindow(select_query);
     analyzeWhere(select_query, source_scope);
     // analyze SELECT first since SELECT item may be referred in GROUP BY/ORDER BY
@@ -1346,8 +1349,9 @@ void QueryAnalyzerVisitor::analyzePrewhere(
         throw Exception("Prewhere is not supported in query with join", ErrorCodes::ILLEGAL_PREWHERE);
 
     auto prewhere = select_query.prewhere()->clone();
-    // normalize query aliases
-    rewriteAliasesForANSI(prewhere, query_aliases, source_scope->getNamesSet());
+    // normalize query aliases in ANSI mode
+    if (use_ansi_semantic)
+        normalizeAliases(prewhere, query_aliases, source_scope->getNamesSet());
     // normalize ALIAS columns
     normalizeAliases(prewhere, alias_columns);
 
@@ -2068,10 +2072,62 @@ void QueryAnalyzerVisitor::countLeadingHint(const IAST & ast)
     }
 }
 
-void QueryAnalyzerVisitor::rewriteAliasesForANSI(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set)
+void QueryAnalyzerVisitor::rewriteSelectInANSIMode(
+    ASTSelectQuery & select_query, const Aliases & aliases, const NameSet & source_columns_set)
 {
     if (use_ansi_semantic)
-        normalizeAliases(expr, aliases, source_columns_set);
+    {
+        QueryNormalizer::Data normalizer_prefer_source_data(
+            aliases,
+            source_columns_set,
+            false, /* ignore_alias */
+            context->getSettingsRef(),
+            true, /* allow_self_aliases */
+            context,
+            nullptr, /* storage */
+            nullptr, /* metadata_snapshot */
+            false /* rewrite_map_col */);
+        QueryNormalizer normalizer_prefer_source(normalizer_prefer_source_data);
+
+        QueryNormalizer::Data normalizer_prefer_alias_data(
+            aliases,
+            source_columns_set,
+            false, /* ignore_alias */
+            context->getSettingsRef(),
+            true, /* allow_self_aliases */
+            context,
+            nullptr, /* storage */
+            nullptr, /* metadata_snapshot */
+            false /* rewrite_map_col */);
+        normalizer_prefer_alias_data.settings.prefer_column_name_to_alias = false;
+        QueryNormalizer normalizer_prefer_alias(normalizer_prefer_alias_data);
+
+        auto select_id = select_query.getTreeHash().first;
+        LOG_DEBUG(
+            logger, "ANSI alias process, select id {}, before query: {}", select_id, select_query.formatForErrorMessageWithoutAlias());
+        LOG_TRACE(logger, "ANSI alias process, select id {}, before ast: {}", select_id, select_query.dumpTree());
+
+        if (select_query.select())
+            normalizer_prefer_source.visit(select_query.refSelect());
+        if (select_query.where())
+            normalizer_prefer_source.visit(select_query.refWhere());
+        if (select_query.groupBy())
+            normalizer_prefer_source.visit(select_query.refGroupBy());
+        if (select_query.having())
+        {
+            if (context->getSettingsRef().allow_mysql_having_name_resolution)
+                resolveNamesInHavingAsMySQL(select_query);
+            else
+                normalizer_prefer_source.visit(select_query.refHaving());
+        }
+        if (select_query.window())
+            normalizer_prefer_source.visit(select_query.refWindow());
+        if (select_query.orderBy())
+            normalizer_prefer_alias.visit(select_query.refOrderBy());
+
+        LOG_DEBUG(logger, "ANSI alias process, select id {}, after query: {}", select_id, select_query.formatForErrorMessageWithoutAlias());
+        LOG_TRACE(logger, "ANSI alias process, select id {}, after ast: {}", select_id, select_query.dumpTree());
+    }
 }
 
 void QueryAnalyzerVisitor::normalizeAliases(ASTPtr & expr, ASTPtr & aliases_expr)
@@ -2092,8 +2148,7 @@ void QueryAnalyzerVisitor::normalizeAliases(ASTPtr & expr, const Aliases & alias
         context,
         nullptr, /* storage */
         nullptr, /* metadata_snapshot */
-        false, /* rewrite_map_col */
-        use_ansi_semantic /* aliases_rewrite_scope */);
+        false /* rewrite_map_col */);
     QueryNormalizer(normalizer_data).visit(expr);
 }
 

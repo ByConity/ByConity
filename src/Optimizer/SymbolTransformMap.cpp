@@ -15,11 +15,12 @@
 
 #include <Optimizer/SymbolTransformMap.h>
 
+#include <Interpreters/InDepthNodeVisitor.h>
+#include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/PlanVisitor.h>
-#include <Interpreters/InDepthNodeVisitor.h>
 
 namespace DB
 {
@@ -175,6 +176,14 @@ String SymbolTransformMap::toString() const
     for (const auto & x: symbol_to_expressions)
         str += x.first + " = " + serializeAST(*x.second) + ", ";
     return str;
+}
+
+bool SymbolTransformMap::addSymbolMapping(const String & symbol, ConstASTPtr expr)
+{
+    for (const auto & symbol_in_expr : SymbolsExtractor::extract(expr))
+        if (symbol_to_expressions.contains(symbol_in_expr))
+            return false;
+    return symbol_to_expressions.emplace(symbol, std::move(expr)).second;
 }
 
 void SymbolTranslationMap::addStorageTranslation(ASTPtr ast, String name, const IStorage * storage, UInt32 unique_id)

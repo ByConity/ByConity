@@ -3,6 +3,7 @@
 
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserPartition.h>
@@ -34,8 +35,6 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ParserKeyword s_partition_where("PARTITION WHERE");
     ParserExpression parser_partition_predicate(dt);
     ParserKeyword s_partition("PARTITION");
-    ParserPartition parser_partition(dt);
-
 
     ASTPtr catalog;
     ASTPtr database;
@@ -123,7 +122,8 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     }
     else if (s_partition.ignore(pos, expected))
     {
-        if (!parser_partition.parse(pos, query->partition, expected))
+        if (!ParserList{std::make_unique<ParserLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false}.parse(
+                pos, query->partition, expected))
             return false;
     }
 

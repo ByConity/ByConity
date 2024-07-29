@@ -16,6 +16,7 @@
 #pragma once
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <Core/Types.h>
@@ -118,6 +119,8 @@ public:
 
     ~CnchServerResource();
 
+    using WorkerInfoSet = std::unordered_set<HostWithPorts, std::hash<HostWithPorts>, HostWithPorts::IsSameEndpoint>;
+
     void addCreateQuery(
         const ContextPtr & context,
         const StoragePtr & storage,
@@ -143,6 +146,11 @@ public:
         assigned_resource.addDataParts(data_parts);
         if (assigned_resource.bucket_numbers.empty() && !required_bucket_numbers.empty())
             assigned_resource.bucket_numbers = required_bucket_numbers;
+    }
+
+    const WorkerInfoSet & getAssignedWorkers(const UUID & storage_uuid)
+    {
+        return assigned_storage_workers[storage_uuid];
     }
 
     void setResourceReplicated(const UUID & storage_id, bool replicated)
@@ -207,6 +215,8 @@ private:
     /// storage_uuid, assigned_resource
     std::unordered_map<UUID, AssignedResource> assigned_table_resource;
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
+    std::unordered_map<UUID, WorkerInfoSet> assigned_storage_workers;
+
 
     ResourceStageInfo resource_stage_info;
     /// table id -> [worker address -> resources size]

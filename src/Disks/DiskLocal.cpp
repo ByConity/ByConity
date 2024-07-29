@@ -431,9 +431,13 @@ void registerDiskLocal(DiskFactory & factory)
                 "Only one of 'keep_free_space_bytes' and 'keep_free_space_ratio' can be specified",
                 ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
 
-        UInt64 keep_free_space_bytes = config.getUInt64(config_prefix + ".keep_free_space_bytes", 0);
-        UInt64 keep_free_inode_count = config.getUInt64(config_prefix + ".keep_free_space_inodes", 0);
-        double ratio = config.getDouble(config_prefix + ".keep_free_space_ratio", 0.05);
+        UInt64 keep_free_space_bytes
+            = std::max(config.getUInt64(config_prefix + ".keep_free_space_bytes", 0), config.getUInt64("global_keep_free_space_bytes", 0));
+        UInt64 keep_free_inode_count = std::max(
+            config.getUInt64(config_prefix + ".keep_free_space_inodes", 0), config.getUInt64("global_keep_free_space_inodes", 0));
+        double ratio = std::max(
+            config.getDouble(config_prefix + ".keep_free_space_ratio", 0),
+            config.getDouble(config_prefix + "global_keep_free_space_ratio", 0.05));
 
         if (ratio < 0 || ratio > 1)
             throw Exception("'keep_free_space_ratio' have to be between 0 and 1", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);

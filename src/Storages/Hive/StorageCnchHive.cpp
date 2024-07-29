@@ -362,7 +362,7 @@ ASTPtr StorageCnchHive::applyFilter(
     /// this should be done before setting query.where() to avoid partition filters being chosen as prewhere
     if (settings.external_enable_partition_filter_push_down)
     {
-        auto [push_predicates, remain_predicates] = push_filter_to_storage.extractPartitionFilter(query_filter);
+        auto [push_predicates, remain_predicates] = push_filter_to_storage.extractPartitionFilter(query_filter, true);
 
         query_info.appendPartitonFilters(push_predicates);
         conjuncts.swap(remain_predicates);

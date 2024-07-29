@@ -1264,6 +1264,7 @@ public:
     std::shared_ptr<Protos::DataModelSensitiveDatabase> getSensitiveResource(const String & name_space, const String & database) const;
 
     // Access Entities
+    std::vector<std::pair<String, UInt64>> getEntities(EntityType type, const String & name_space, const std::unordered_set<UUID> & ids) const;
     String getAccessEntity(EntityType type, const String & name_space, const String & name) const;
     Strings getAllAccessEntities(EntityType type, const String & name_space) const;
     String getAccessEntityNameByUUID(const String & name_space, const UUID & id) const;

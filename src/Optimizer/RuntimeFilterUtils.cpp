@@ -8,6 +8,7 @@
 #include <Optimizer/CardinalityEstimate/SymbolStatistics.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/IAST_fwd.h>
@@ -19,31 +20,35 @@ namespace DB
 ConstASTPtr RuntimeFilterUtils::createRuntimeFilterExpression(
     RuntimeFilterId id, const std::string & symbol, const std::vector<String> & partition_columns, double filter_factor)
 {
-    auto partition_columns_exprs = std::make_shared<ASTExpressionList>('|');
+    auto partition_columns_tuple = std::make_shared<ASTFunction>();
+    partition_columns_tuple->name = partition_columns.empty() ? "array" : "tuple";
+    partition_columns_tuple->arguments = std::make_shared<ASTExpressionList>();
     for (const auto & column : partition_columns)
-    {
-        partition_columns_exprs->children.emplace_back(std::make_shared<ASTIdentifier>(column));
-    }
+        partition_columns_tuple->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(column));
+    partition_columns_tuple->children.push_back(partition_columns_tuple->arguments);
 
     return makeASTFunction(
         InternalFunctionRuntimeFilter::name,
         std::make_shared<ASTLiteral>(id),
         std::make_shared<ASTIdentifier>(symbol),
         std::make_shared<ASTLiteral>(filter_factor),
-        partition_columns_exprs);
+        partition_columns_tuple);
 }
 
 ConstASTPtr RuntimeFilterUtils::createRuntimeFilterExpression(const RuntimeFilterDescription & description)
 {
-    auto partition_columns_exprs = std::make_shared<ASTExpressionList>('|');
-    partition_columns_exprs->children = description.partition_columns_exprs;
+    auto partition_columns_tuple = std::make_shared<ASTFunction>();
+    partition_columns_tuple->name = description.partition_columns_exprs.empty() ? "array" : "tuple";
+    partition_columns_tuple->arguments = std::make_shared<ASTExpressionList>();
+    partition_columns_tuple->arguments->children = description.partition_columns_exprs;
+    partition_columns_tuple->children.push_back(partition_columns_tuple->arguments);
 
     return makeASTFunction(
         InternalFunctionRuntimeFilter::name,
         std::make_shared<ASTLiteral>(description.id),
         description.expr,
         std::make_shared<ASTLiteral>(description.filter_factor),
-        partition_columns_exprs);
+        partition_columns_tuple);
 }
 
 bool RuntimeFilterUtils::containsRuntimeFilters(const ConstASTPtr & filter)
@@ -186,7 +191,10 @@ std::optional<RuntimeFilterDescription> RuntimeFilterUtils::extractDescription(c
     auto id = function.arguments->children[0]->as<ASTLiteral &>().value.get<RuntimeFilterId>();
     auto expr = function.arguments->children[1];
     auto filter_factor = function.arguments->children[2]->as<ASTLiteral &>().value.get<double>();
-    const auto & partition_columns_exprs = function.arguments->children[3]->as<ASTExpressionList &>().children;
+    ASTs partition_columns_exprs;
+    // empty partition_columns_exprs may be fold as empty literal
+    if (auto * fucntion = function.arguments->children[3]->as<ASTFunction>())
+        partition_columns_exprs = fucntion->arguments->children;
 
     return RuntimeFilterDescription{static_cast<RuntimeFilterId>(id), expr, filter_factor, partition_columns_exprs};
 }
@@ -357,6 +365,20 @@ std::vector<ASTPtr> RuntimeFilterUtils::createRuntimeFilterForTableScan(
     }
 
     return res;
+}
+
+ASTPtr RuntimeFilterUtils::removeAllInternalRuntimeFilters(ASTPtr expr)
+{
+    std::vector<ConstASTPtr> ret;
+    auto filters = PredicateUtils::extractConjuncts(expr);
+    for (auto & filter : filters)
+        if (!RuntimeFilterUtils::isInternalRuntimeFilter(filter))
+            ret.emplace_back(filter);
+
+    if (ret.size() == filters.size())
+        return expr;
+
+    return PredicateUtils::combineConjuncts(ret);
 }
 
 }

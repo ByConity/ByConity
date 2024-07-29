@@ -130,7 +130,10 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
         if (it.type->isByteMap())
             continue;
         else if (isMapImplicitKey(it.name))
-            addByteMapStreams({it}, parseMapNameFromImplicitColName(it.name), default_codec->getFullCodecDesc());
+        {
+            auto map_name = parseMapNameFromImplicitColName(it.name);
+            addByteMapStreams({it}, map_name, columns.getCodecDescOrDefault(map_name, default_codec));
+        }
         else
             addStreams(it, columns.getCodecDescOrDefault(it.name, default_codec));
     }

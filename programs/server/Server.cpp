@@ -33,6 +33,7 @@
 #include <Catalog/Catalog.h>
 #include "BrpcServerHolder.h"
 #include "MetricsTransmitter.h"
+#include <Transaction/LockManager.h>
 // #include <Catalog/MetastoreConfig.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerClientPools.h>
@@ -1385,7 +1386,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setFormatSchemaPath(remote_format_schema_path, true);
     try
     {
-        reloadFormatSchema(remote_format_schema_path, format_schema_path.string(), log);
+        reloadFormatSchema(global_context, remote_format_schema_path, format_schema_path.string(), log);
     }
     catch(const Exception &)
     {
@@ -2003,6 +2004,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_INFO(log, "Will shutdown forcefully.");
                 forceShutdown();
             }
+
+            /// Need to shutdown LockManager before shared->schedule_pool in context shutdown, otherwise it may core.
+            LockManager::instance().shutdown();
         });
 
         std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;

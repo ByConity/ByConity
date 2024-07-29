@@ -127,6 +127,7 @@ private:
         {
             column = block.getByName(name).column.get();
             size = block.rows();
+            index_map.clear();
             pos = 0;
         }
     };

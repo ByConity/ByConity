@@ -15,8 +15,6 @@
 
 #include <Interpreters/CnchSystemLog.h>
 #include <Interpreters/CnchSystemLogHelper.h>
-#include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/KafkaLog.h>
 #include <Interpreters/IInterpreter.h>
 #include <Interpreters/MaterializedMySQLLog.h>
@@ -84,11 +82,7 @@ template <typename LogElement>
 String prepareEngineClause(const Poco::Util::AbstractConfiguration & config, const String & config_prefix)
 {
     String engine = "ENGINE = CnchMergeTree() ";
-    if (std::is_same_v<LogElement, QueryMetricElement>)
-        engine += " ORDER BY (`query_id`, `server_id`) ";
-    else if (std::is_same_v<LogElement, QueryWorkerMetricElement>)
-        engine += " ORDER BY (`initial_query_id`, `current_query_id`, `worker_id`) ";
-    else if (std::is_same_v<LogElement, QueryLogElement>)
+    if (std::is_same_v<LogElement, QueryLogElement>)
         engine += " ORDER BY (`query_id`, `event_time`) ";
 
     String partition_by = config.getString(config_prefix + ".partition_by", "toStartOfDay(event_time)");
@@ -104,8 +98,6 @@ String prepareEngineClause(const Poco::Util::AbstractConfiguration & config, con
     return engine;
 }
 
-template String prepareEngineClause<QueryMetricElement>(const Poco::Util::AbstractConfiguration &, const String &);
-template String prepareEngineClause<QueryWorkerMetricElement>(const Poco::Util::AbstractConfiguration &, const String &);
 template String prepareEngineClause<QueryLogElement>(const Poco::Util::AbstractConfiguration &, const String &);
 
 template <>
@@ -394,22 +386,6 @@ bool CnchSystemLogs::initInServer(ContextPtr global_context)
             CNCH_UNIQUE_TABLE_LOG_CONFIG_PREFIX,
             config,
             cloud_unique_table_log);
-
-    if (config.has(QUERY_METRICS_CONFIG_PREFIX))
-        query_metrics_ret = initInServerForSingleLog<QueryMetricLog>(global_context,
-            CNCH_SYSTEM_LOG_DB_NAME,
-            CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
-            QUERY_METRICS_CONFIG_PREFIX,
-            config,
-            query_metrics);
-
-    if (config.has(QUERY_WORKER_METRICS_CONFIG_PREFIX))
-        query_worker_metrics_ret = initInServerForSingleLog<QueryWorkerMetricLog>(global_context,
-            CNCH_SYSTEM_LOG_DB_NAME,
-            CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME,
-            QUERY_WORKER_METRICS_CONFIG_PREFIX,
-            config,
-            query_worker_metrics);
 
     if (config.has(CNCH_QUERY_LOG_CONFIG_PREFIX))
         cnch_query_log_ret = initInServerForSingleLog<CnchQueryLog>(global_context,

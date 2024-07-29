@@ -271,6 +271,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         params.txn_id = txn_id;
         params.columns_commit_time = request->columns_commit_time();
         params.is_bucket_table = request->is_bucket_table();
+        params.parts_preload_level = request->parts_preload_level();
 
         if (params.type == ManipulationType::Mutate || params.type == ManipulationType::Clustering)
         {

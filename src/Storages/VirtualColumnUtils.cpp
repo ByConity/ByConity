@@ -47,6 +47,7 @@
 #include <IO/WriteHelpers.h>
 #include <Common/typeid_cast.h>
 #include <Interpreters/ActionsVisitor.h>
+#include <Functions/InternalFunctionRuntimeFilter.h>
 
 
 namespace DB
@@ -88,6 +89,8 @@ bool isValidFunction(const ASTPtr & expression, const std::function<bool(const A
         // Second argument of IN can be a scalar subquery
         return isValidFunction(function->arguments->children[0], is_constant);
     }
+    else if (function && function->name == InternalFunctionRuntimeFilter::name)
+        return true;
     else
         return is_constant(expression);
 }

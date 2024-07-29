@@ -74,8 +74,10 @@ namespace
                     auto * query = table_step.getQueryInfo().query->as<ASTSelectQuery>();
                     if (auto query_filter = query->getWhere())
                         collect_runtime_filters(query_filter);
-                    if (auto query_filter = query->prewhere())
+                    if (auto query_filter = query->getPrewhere())
                         collect_runtime_filters(query_filter);
+                    if (auto partition_filter = table_step.getQueryInfo().partition_filter)
+                        collect_runtime_filters(partition_filter);
                 }
             }
 
@@ -116,6 +118,58 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterCollection
 {
     std::lock_guard guard(mutex);
     return builder->extractDistributedValues(builder->merge(std::move(rf_data)));
+}
+RuntimeFilterManager::~RuntimeFilterManager()
+{
+    need_stop = true;
+    if (check_thread)
+    {
+        check_thread.reset();
+    }
+}
+
+void RuntimeFilterManager::initRoutineCheck()
+{
+    static std::once_flag flag;
+    std::call_once(flag, [&](){
+        check_thread = std::make_unique<std::thread>([this](){
+            while (!need_stop)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(30)); /// 30s interval
+                if (need_stop) break;
+                this->routineCheck();
+            }
+        });
+        check_thread->detach();
+    });
+}
+
+void RuntimeFilterManager::routineCheck()
+{
+    if (need_stop || complete_runtime_filters.size() == 0)
+        return ;
+
+    LOG_TRACE(log, "start routine check, total rf:{}", complete_runtime_filters.size());
+    std::vector<String> expire_keys;
+    UInt64 current_time = clock_gettime_ns() / 1000000; /// ms
+    auto get_expire_keys = [&](const String & key, const DynamicValuePtr & val_ptr)
+    {
+        if ((current_time - val_ptr->lastTime()) >= clean_rf_time_limit) /// timeout
+        {
+            LOG_DEBUG(log, "get expired key:{}, ref:{}, time:{}", key, val_ptr->ref(), val_ptr->lastTime());
+            expire_keys.emplace_back(key);
+        }
+    };
+
+    complete_runtime_filters.computeExpireKeys(std::move(get_expire_keys));
+    if (!expire_keys.empty())
+    {
+        for (const auto & key : expire_keys)
+        {
+            LOG_DEBUG(log, "do rm expired key:{}", key);
+            complete_runtime_filters.remove(key);
+        }
+    }
 }
 
 RuntimeFilterManager & RuntimeFilterManager::getInstance()
@@ -181,6 +235,7 @@ void RuntimeFilterManager::registerQuery(const String & query_id, PlanSegmentTre
 
     auto runtime_filter_collection_context = std::make_shared<RuntimeFilterCollectionContext>(std::move(builders), std::move(targets));
     runtime_filter_collection_contexts.put(query_id, runtime_filter_collection_context);
+    clean_rf_time_limit = context->getSettingsRef().clean_rf_time_limit;
 }
 
 void RuntimeFilterManager::removeQuery(const String & query_id)
@@ -255,6 +310,7 @@ void DynamicValue::set(DynamicData&& value_, UInt32 ref)
 {
     value = std::move(value_);
     ref_count = ref;
+    last_time = clock_gettime_ns() / 1000000; /// ms
     ready = true;
 }
 

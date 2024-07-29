@@ -36,10 +36,10 @@ void formatAST(const IAST & ast, WriteBuffer & buf, bool hilite, bool one_line, 
     ast.format(settings);
 }
 
-String serializeAST(const IAST & ast, bool one_line)
+String serializeAST(const IAST & ast, bool one_line, bool always_quote_identifiers)
 {
     WriteBufferFromOwnString buf;
-    formatAST(ast, buf, false, one_line);
+    formatAST(ast, buf, false, one_line, always_quote_identifiers);
     return buf.str();
 }
 

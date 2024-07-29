@@ -44,7 +44,6 @@
 #include <Common/randomSeed.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Compression/CompressionFactory.h>
 #include <Processors/Pipe.h>
 #include <Processors/QueryPipeline.h>
@@ -1024,10 +1023,6 @@ Packet Connection::receivePacket()
                 res.profile_info = receiveProfileInfo();
                 return res;
 
-            case Protocol::Server::QueryMetrics:
-                res.query_worker_metric_elements = receiveQueryWorkerMetrics();
-                return res;
-
             case Protocol::Server::Log:
                 res.block = receiveLogData();
                 return res;
@@ -1175,20 +1170,6 @@ BlockStreamProfileInfo Connection::receiveProfileInfo() const
     BlockStreamProfileInfo profile_info;
     profile_info.read(*in);
     return profile_info;
-}
-
-QueryWorkerMetricElements Connection::receiveQueryWorkerMetrics()
-{
-    QueryWorkerMetricElements elements;
-    size_t num;
-    readVarUInt(num, *in);
-    for (size_t i = 0; i < num; ++i)
-    {
-        QueryWorkerMetricElement element;
-        element.read(*in);
-        elements.emplace_back(std::make_shared<QueryWorkerMetricElement>(element));
-    }
-    return elements;
 }
 
 void Connection::throwUnexpectedPacket(UInt64 packet_type, const char * expected) const

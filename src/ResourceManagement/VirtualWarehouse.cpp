@@ -178,9 +178,9 @@ void VirtualWarehouse::applySettings(const VirtualWarehouseAlterSettings & setti
             QueueData queue_data;
             queue_data.queue_name = *setting_changes.queue_name;
             if (setting_changes.max_concurrency)
-                queue_iter->max_concurrency = *setting_changes.max_concurrency;
+                queue_data.max_concurrency = *setting_changes.max_concurrency;
             if (setting_changes.query_queue_size)
-                queue_iter->query_queue_size = *setting_changes.query_queue_size;
+                queue_data.query_queue_size = *setting_changes.query_queue_size;
             new_settings.queue_datas.push_back(queue_data);
         }
     }

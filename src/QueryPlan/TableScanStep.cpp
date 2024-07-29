@@ -946,8 +946,42 @@ void TableScanStep::rewriteInForBucketTable(ContextPtr context) const
     LOG_TRACE(log, "After rewriteInForBucketTable:\n: {}", query->dumpTree());
 }
 
-void TableScanStep::rewriteDynamicFilter(ASTSelectQuery * query, const BuildQueryPipelineSettings & build_settings, bool use_expand_pipe)
+void TableScanStep::rewriteDynamicFilter(SelectQueryInfo & select_query, const BuildQueryPipelineSettings & build_settings, bool use_expand_pipe)
 {
+    if (select_query.partition_filter)
+    {
+        Stopwatch watch;
+
+        auto [rf_filters, where_predicates] = RuntimeFilterUtils::extractRuntimeFilters(select_query.partition_filter);
+        std::vector<RuntimeFilterDescription> descriptions;
+        descriptions.reserve(rf_filters.size());
+        for (const auto & predicate : rf_filters)
+            descriptions.emplace_back(RuntimeFilterUtils::extractDescription(predicate).value());
+
+        const auto & query_id = build_settings.distributed_settings.query_id;
+        const auto & setting = build_settings.context->getSettingsRef();
+        size_t wait_ms = use_expand_pipe ? 0 : setting.wait_runtime_filter_timeout;
+        bool enable_bf_in_prewhere = setting.enable_rewrite_bf_into_prewhere;
+        bool enable_range_cover = setting.enable_range_cover;
+        for (auto & description : descriptions)
+        {
+            bool is_range_or_set = false;
+            bool has_bf = false;
+            auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForTableScan(
+                description, query_id, wait_ms, enable_bf_in_prewhere, enable_range_cover, is_range_or_set, has_bf);
+            where_predicates.insert(where_predicates.end(), runtime_filters.begin(), runtime_filters.end());
+        }
+        auto where_dicates = PredicateUtils::combineConjuncts(where_predicates);
+        select_query.partition_filter = !PredicateUtils::isTruePredicate(where_dicates) ? std::move(where_dicates) : nullptr;
+
+        LOG_DEBUG(
+            log,
+            "rewrite partition runtime filter done, cost:{} ms, query:{}",
+            watch.elapsedMilliseconds(),
+            select_query.partition_filter ? queryToString(*select_query.partition_filter) : "null");
+    }
+
+    auto * query = select_query.query->as<ASTSelectQuery>();
     auto where = query->getWhere();
     auto prehwere = query->getPrewhere();
     if (where || prehwere)
@@ -1100,7 +1134,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 {
     auto * query = query_info.query->as<ASTSelectQuery>();
     bool use_expand_pipe = build_context.is_expand;
-    if (!build_context.is_expand && (query->getWhere() || query->getPrewhere())
+    if (!build_context.is_expand && (query->getWhere() || query->getPrewhere() || query_info.partition_filter)
         && build_context.context->getSettingsRef().enable_runtime_filter_pipeline_poll)
     {
         std::vector<RuntimeFilterId> ids;
@@ -1112,6 +1146,12 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         if (query->getPrewhere())
         {
             auto prewhere_ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getPrewhere());
+            ids.insert(ids.end(), prewhere_ids.begin(), prewhere_ids.end());
+        }
+
+        if (query_info.partition_filter)
+        {
+            auto prewhere_ids = RuntimeFilterUtils::extractRuntimeFilterId(query_info.partition_filter);
             ids.insert(ids.end(), prewhere_ids.begin(), prewhere_ids.end());
         }
 
@@ -1144,10 +1184,12 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     bool use_optimizer_projection_selection
         = build_context.context->getSettingsRef().optimizer_projection_support && is_merge_tree && !use_projection_index;
 
+    LOG_WARNING(&Poco::Logger::get("test"), "initTableScan, limit={}, !empty={}", query->limitLength() ? serializeAST(*query->limitLength()) : "nothing", use_projection_index || use_optimizer_projection_selection);
+
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();
     /// Rewrite runtime filter
-    rewriteDynamicFilter(query, build_context, use_expand_pipe);
+    rewriteDynamicFilter(query_info, build_context, use_expand_pipe);
 
     // todo support _shard_num rewrite
     // if ()
@@ -1388,7 +1430,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             String pipeline_name = "execute plan read";
             if (plan_element.read_bitmap_index)
                 pipeline_name += "(with index)";
-            aliasColumns(*sub_pipeline, build_context, "execute plan read");
+            aliasColumns(*sub_pipeline, build_context, pipeline_name);
 
             if (pushdown_filter)
                 getPushdownFilterCast()->transformPipeline(*sub_pipeline, build_context);

@@ -707,12 +707,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_execution_speed, 0, "Maximum number of execution rows per second.", 0) \
     M(UInt64, min_execution_speed_bytes, 0, "Minimum number of execution bytes per second.", 0) \
     M(UInt64, max_execution_speed_bytes, 0, "Maximum number of execution bytes per second.", 0) \
-    M(Seconds, \
-      timeout_before_checking_execution_speed, \
-      10, \
-      "Check that the speed is not too low after the specified time has elapsed.", \
-      0) \
-\
+    M(Seconds, timeout_before_checking_execution_speed, 0, "Check that the speed is not too low after the specified time has elapsed.", 0) \
+    \
     M(UInt64, max_columns_to_read, 0, "", 0) \
     M(UInt64, max_temporary_columns, 0, "", 0) \
     M(UInt64, max_temporary_non_const_columns, 0, "", 0) \
@@ -1263,6 +1259,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, query_cache_share_between_users, false, "Allow other users to read entry in the query cache", 0) \
     M(Bool, create_view_check_column_names, true, "When executing CREATE VIEW queries, whether check column names are consistent with select query", 0) \
     M(Bool, rewrite_unknown_left_join_identifier, true, "Whether to rewrite unknown left join identifier, this is a deprecated feature but Aeolus SQL depends on it", 0) \
+    M(Bool, allow_mysql_having_name_resolution, false, "Whether to use MySQL special name resolution rules for HAVING clauses ", 0) \
     \
     /** settings in cnch **/ \
     M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
@@ -1425,6 +1422,8 @@ enum PreloadLevelSettings : UInt64
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, true, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
+    M(Bool, enable_prune_source_plan_segment, true, "Whether prune source plan segment", 0) \
+    M(Bool, enable_prune_compute_plan_segment, true, "Whether prune compute plan segment", 0) \
     M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
@@ -1740,6 +1739,8 @@ enum PreloadLevelSettings : UInt64
     M(Float, adjust_range_set_filter_rate, 0.1, "If the prewhere is not range or set, adjust use this value as priority to bloom filter ", 0) \
     M(UInt64, shuffle_aware_ndv_threshold, 0, "Threshold to to use shuffle-aware grf or to use pre enlarge ndv, 0 disable shuffle-aware grf", 0) \
     M(String, runtime_filter_black_list, "", "Runtime filter ids need be blocked", 0) \
+    M(Bool, runtime_filter_parallel_build_for_local, false, "Runtime filter parallel build for local.", 0) \
+    M(UInt64, clean_rf_time_limit, 300000, "Threshold to clean runtime filters in manager to prevent memory leak", 0) \
     \
     /** ip2geo settings */ \
     M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0)\
@@ -1864,7 +1865,6 @@ enum PreloadLevelSettings : UInt64
     MAKE_OBSOLETE(M, Bool, make_partition_by_todate_monotonic, false) \
     MAKE_OBSOLETE(M, Bool, enable_query_cache, false) \
     MAKE_OBSOLETE(M, Bool, enable_parallel_input_generator, false) \
-    MAKE_OBSOLETE(M, Bool, enable_prune_source_plan_segment, true) \
     MAKE_OBSOLETE(M, Bool, exchange_enable_metric, true) \
     MAKE_OBSOLETE(M, UInt64, cnch_offloading_mode, 0) \
     MAKE_OBSOLETE(M, UInt64, distributed_query_max_threads, 0) \

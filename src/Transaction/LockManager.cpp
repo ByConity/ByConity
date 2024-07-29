@@ -181,6 +181,29 @@ LockManager::LockManager(): global_context(Context::getGlobalContextInstance())
     txn_checker->activateAndSchedule();
 }
 
+LockManager::~LockManager()
+{
+    try
+    {
+        shutdown();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
+}
+
+void LockManager::shutdown()
+{
+    if (!isActive())
+        return;
+
+    if (txn_checker)
+        txn_checker->deactivate();
+
+    is_stopped = true;
+}
+
 LockStatus LockManager::lock(LockRequest * request, const Context & context)
 {
     LOG_TRACE(log, "lock request: " + request->toDebugString());

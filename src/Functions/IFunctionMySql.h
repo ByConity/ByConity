@@ -218,6 +218,8 @@ DataTypes getColumnsType(ArgType argType, const Type & arguments)
                 {
                     expectedTypes = {std::make_shared<DataTypeFloat64>(), std::make_shared<DataTypeFloat64>()};
                 }
+                else if (isEnum(left) || isEnum(right))
+                    break;
                 else
                 {
                     auto common_type = getLeastSupertype(DataTypes{left, right});
@@ -273,6 +275,8 @@ DataTypes getColumnsType(ArgType argType, const Type & arguments)
                     arr_type = arguments[0].type;
                 else
                     arr_type = arguments[0];
+                if (!isArray(removeNullable(arr_type)))
+                    break;
                 expectedTypes.push_back(arr_type);
                 auto array_nested_type = convertToBigIntegerOrFloat(removeNullable(extractNestedArrayType(*arr_type)));
 

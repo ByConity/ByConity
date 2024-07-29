@@ -59,6 +59,8 @@ namespace Utils
     ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);
     bool containsAggregateFunction(const ASTPtr & ast);
 
+    bool canIgnoreNullsDirection(const DataTypePtr & type);
+
     // this method is used to deal with function names which are case-insensitive or have an alias to.
     // should be called after `registerFunctions`
     bool checkFunctionName(const ASTFunction & function, const String & expect_name);

@@ -246,10 +246,14 @@ String SortColumn::toString() const
             return name + "↑↑";
         case SortOrder::ASC_NULLS_LAST:
             return name + "↑↓";
+        case SortOrder::ASC_ANY:
+            return name + "↑any";
         case SortOrder::DESC_NULLS_FIRST:
             return name + "↓↑";
         case SortOrder::DESC_NULLS_LAST:
             return name + "↓↓";
+        case SortOrder::DESC_ANY:
+            return name + "↓any";
         case SortOrder::ANY:
             return name + "any";
         case SortOrder::UNKNOWN:
@@ -297,7 +301,7 @@ Sorting Sorting::normalize(const SymbolEquivalences & symbol_equivalences) const
 
 String Sorting::toString() const
 {
-    return std::accumulate(
+    return empty() ? "" : std::accumulate(
         std::next(begin()), end(), front().toString(), [](std::string a, const auto & b) { return std::move(a) + '-' + b.toString(); });
 }
 

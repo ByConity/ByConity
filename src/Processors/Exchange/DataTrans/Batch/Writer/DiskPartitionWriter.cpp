@@ -255,12 +255,13 @@ void DiskPartitionWriter::runWriteTask()
     }
 
     SCOPE_EXIT({
+        /// update written bytes before notify
+        manager->updateWrittenBytes(key->query_unique_id, key, buf->count());
         {
             std::unique_lock<bthread::Mutex> lock(done_mutex);
             done = true;
         }
         done_cv.notify_all();
-        manager->updateWrittenBytes(key->query_unique_id, key, buf->count());
     });
 }
 

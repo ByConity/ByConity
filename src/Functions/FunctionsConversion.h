@@ -50,6 +50,7 @@
 #include <DataTypes/DataTypeObject.h>
 #include <DataTypes/DataTypeNested.h>
 #include <DataTypes/ObjectUtils.h>
+#include <DataTypes/DataTypeSketchBinary.h>
 #include <DataTypes/Serializations/SerializationDecimal.h>
 #include <Formats/FormatSettings.h>
 #include <Columns/ColumnString.h>
@@ -1521,7 +1522,7 @@ struct ConvertThroughParsing
             {
                 if (in.buffer().size() == strlen("YYYYMMDDhhmmss"))
                     return true;
-                
+
                 if (in.buffer().size() >= strlen("YYYYMMDDhhmmss.x")
                     && in.buffer().begin()[14] == '.')
                 {
@@ -2107,7 +2108,7 @@ public:
 
     static constexpr bool to_string_or_fixed_string = std::is_same_v<ToDataType, DataTypeFixedString> ||
                                                       std::is_same_v<ToDataType, DataTypeString>;
-    
+
     static constexpr bool to_date_or_datetime = std::is_same_v<ToDataType, DataTypeDate> ||
                                                 std::is_same_v<ToDataType, DataTypeDate32> ||
                                                 std::is_same_v<ToDataType, DataTypeDateTime>;
@@ -2202,11 +2203,11 @@ public:
         {
             optional_args.push_back({"Value", nullptr, nullptr, nullptr});
         }
-        else 
+        else
         {
             mandatory_args.push_back({"Value", nullptr, nullptr, nullptr});
         }
-        
+
         if constexpr (to_decimal)
         {
             mandatory_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
@@ -3548,6 +3549,17 @@ private:
         }
     }
 
+    WrapperType createSketchWrapper(const DataTypePtr & from_type_untyped, const DataTypeSketchBinary &) const
+    {
+        /// Conversion from String through parsing.
+        if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
+        {
+            return &ConvertImplGenericFromString<ColumnString>::execute;
+        }
+
+        throw Exception{"Illegal column for function CAST AS SketchBinary", ErrorCodes::LOGICAL_ERROR};
+    }
+
     WrapperType createArrayWrapper(const DataTypePtr & from_type_untyped, const DataTypeArray & to_type) const
     {
         /// Conversion from String through parsing.
@@ -4406,6 +4418,8 @@ private:
                 return createAggregateFunctionWrapper(from_type, checkAndGetDataType<DataTypeAggregateFunction>(to_type.get()));
             case TypeIndex::Object:
                 return createObjectWrapper(from_type, checkAndGetDataType<DataTypeObject>(to_type.get()));
+            case TypeIndex::SketchBinary:
+                return createSketchWrapper(from_type, static_cast<const DataTypeSketchBinary &>(*to_type));
             default:
                 break;
         }
@@ -4498,29 +4512,29 @@ public:
     {
         const auto & settings = context->getSettingsRef();
         return createImpl(
-            context, settings.cast_keep_nullable, 
-            {}, settings.adaptive_type_cast, 
-            settings.cast_ipv4_ipv6_default_on_conversion_error, 
+            context, settings.cast_keep_nullable,
+            {}, settings.adaptive_type_cast,
+            settings.cast_ipv4_ipv6_default_on_conversion_error,
             settings.disable_str_to_array_cast
         );
     }
 
-    static FunctionOverloadResolverPtr createImpl(ContextPtr context, bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, 
+    static FunctionOverloadResolverPtr createImpl(ContextPtr context, bool keep_nullable, std::optional<Diagnostic> diagnostic = {},
         bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false, bool disable_str_to_array_cast = false)
     {
-        return std::make_unique<CastOverloadResolver>(context, keep_nullable, adaptive_cast, 
+        return std::make_unique<CastOverloadResolver>(context, keep_nullable, adaptive_cast,
             cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_array_cast, std::move(diagnostic));
     }
 
-    static FunctionOverloadResolverPtr createImpl(bool keep_nullable, std::optional<Diagnostic> diagnostic = {}, 
+    static FunctionOverloadResolverPtr createImpl(bool keep_nullable, std::optional<Diagnostic> diagnostic = {},
         bool adaptive_cast = false, bool cast_ipv4_ipv6_default_on_conversion_error = false, bool disable_str_to_array_cast = false)
     {
-        return std::make_unique<CastOverloadResolver>(ContextPtr(), keep_nullable, adaptive_cast, 
+        return std::make_unique<CastOverloadResolver>(ContextPtr(), keep_nullable, adaptive_cast,
             cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_array_cast, std::move(diagnostic));
     }
 
-    explicit CastOverloadResolver(ContextPtr context_, bool keep_nullable_, bool adaptive_cast_ = false, 
-        bool cast_ipv4_ipv6_default_on_conversion_error_ = false, bool disable_str_to_array_cast_ = false, 
+    explicit CastOverloadResolver(ContextPtr context_, bool keep_nullable_, bool adaptive_cast_ = false,
+        bool cast_ipv4_ipv6_default_on_conversion_error_ = false, bool disable_str_to_array_cast_ = false,
         std::optional<Diagnostic> diagnostic_ = {})
         : keep_nullable(keep_nullable_), diagnostic(std::move(diagnostic_)), adaptive_cast(adaptive_cast_)
         , cast_ipv4_ipv6_default_on_conversion_error(cast_ipv4_ipv6_default_on_conversion_error_)
@@ -4544,7 +4558,7 @@ protected:
             data_types[i] = arguments[i].type;
 
         auto monotonicity = MonotonicityHelper::getMonotonicityInformation(arguments.front().type, return_type.get());
-        return std::make_unique<FunctionCast>(context, name, std::move(monotonicity), data_types, return_type, 
+        return std::make_unique<FunctionCast>(context, name, std::move(monotonicity), data_types, return_type,
             diagnostic, cast_type, adaptive_cast, cast_ipv4_ipv6_default_on_conversion_error, disable_str_to_array_cast);
     }
 

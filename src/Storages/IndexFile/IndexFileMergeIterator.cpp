@@ -137,6 +137,16 @@ Status IndexFileMergeIterator::status() const
     return status;
 }
 
+int IndexFileMergeIterator::getAbnormalIndex() const
+{
+    for (int i = 0; i < n_; ++i)
+    {
+        if (!children_[i].status().ok())
+            return i;
+    }
+    return -1;
+}
+
 int IndexFileMergeIterator::checkDuplicateForKey(const Slice & target) const
 {
     if (!min_heap_.empty())

@@ -291,3 +291,6 @@ select '"shuffle"';
 select shuffle(b), shuffle(c), shuffle(d), shuffle(e), shuffle(f) from ary format Null; 
 select shuffle([1,2,3]), shuffle([NULL, NULL]), shuffle([1.2, 2.3, 3.4]), shuffle([[1], [2,3]]), shuffle(['ab', 'bc', 'de']) format Null;
 
+select '"has"';
+select has('[1, 2, 3]', 2);  -- { serverError 43 }
+select has([1,2,3], '2');
