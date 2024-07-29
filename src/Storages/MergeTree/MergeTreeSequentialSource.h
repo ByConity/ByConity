@@ -70,7 +70,6 @@ public:
         bool take_column_types_from_storage,
         bool quiet = false,
         CnchMergePrefetcher::PartFutureFiles* future_files = nullptr,
-        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE,
         size_t block_preferred_size_bytes_ = 0, /// 0 means unlimited, will read single granule each time
         RuntimeContextPtr rt_ctx_ = nullptr);
 
