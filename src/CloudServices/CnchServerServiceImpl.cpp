@@ -30,6 +30,8 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Transaction/GlobalTxnCommitter.h>
+#include <WorkerTasks/ManipulationType.h>
 #include <Common/RWLock.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Statistics/AutoStatisticsHelper.h>
@@ -333,14 +335,14 @@ void CnchServerServiceImpl::commitTransaction(
                 auto txn_id = request->txn_id();
                 auto txn = txn_coordinator.getTransaction(txn_id);
 
-                if (request->has_insertion_label())
-                {
-                    if (UUIDHelpers::Nil == txn->getMainTableUUID())
-                        throw Exception("Main table is not set when using insertion label", ErrorCodes::LOGICAL_ERROR);
+                // if (request->has_insertion_label())
+                // {
+                //     if (UUIDHelpers::Nil == txn->getMainTableUUID())
+                //         throw Exception("Main table is not set when using insertion label", ErrorCodes::LOGICAL_ERROR);
 
-                    txn->setInsertionLabel(std::make_shared<InsertionLabel>(
-                        txn->getMainTableUUID(), request->insertion_label(), txn->getTransactionID().toUInt64()));
-                }
+                //     txn->setInsertionLabel(std::make_shared<InsertionLabel>(
+                //         txn->getMainTableUUID(), request->insertion_label(), txn->getTransactionID().toUInt64()));
+                // }
 
                 auto commit_ts = txn->commit();
                 response->set_commit_ts(commit_ts.toUInt64());
@@ -375,6 +377,40 @@ void CnchServerServiceImpl::precommitTransaction(
             if (txn->getMainTableUUID() == UUIDHelpers::Nil)
                 txn->setMainTableUUID(main_table_uuid);
             txn->precommit();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::redirectCommitTransaction(
+    google::protobuf::RpcController * /*cntl*/,
+    const Protos::RedirectCommitTransactionReq * request,
+    Protos::RedirectCommitTransactionResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done, response, [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+        try
+        {
+            const Protos::TransactionMetadata & transaction_model = request->txn_meta();
+            TransactionRecord record{transaction_model.txn_record()};
+
+            CnchServerTransactionPtr txn = std::make_shared<CnchServerTransaction>(global_context, record);
+            txn->setCommitTs(TxnTimestamp{transaction_model.commit_time()});
+            txn->setMainTableUUID(RPCHelpers::createUUID(transaction_model.main_table()));
+            if (transaction_model.has_consumer_group())
+            {
+                cppkafka::TopicPartitionList tpl;
+                RPCHelpers::createKafkaTPL(tpl, transaction_model.tpl());
+                txn->setKafkaTpl(transaction_model.consumer_group(), tpl);
+            }
+
+            global_context->getGlobalTxnCommitter()->commit(txn);
         }
         catch (...)
         {
@@ -1204,8 +1240,9 @@ void CnchServerServiceImpl::handleRedirectCommitRequest(
             if (!final_commit)
             {
                 TxnTimestamp txnID{request->txn_id()};
+                bool write_manifest = cnch->getSettings()->enable_publish_version_on_commit;
                 global_context->getCnchCatalog()->writeParts(storage, txnID,
-                    Catalog::CommitItems{parts, delete_bitmaps, staged_parts}, request->from_merge_task(), request->preallocate_mode());
+                    Catalog::CommitItems{parts, delete_bitmaps, staged_parts}, request->from_merge_task(), request->preallocate_mode(), write_manifest);
             }
             else
             {

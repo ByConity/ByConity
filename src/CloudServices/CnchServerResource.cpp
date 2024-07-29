@@ -59,6 +59,7 @@ AssignedResource::AssignedResource(AssignedResource && resource)
     bucket_numbers = resource.bucket_numbers;
     replicated = resource.replicated;
 
+    table_version = resource.table_version;
     server_parts = std::move(resource.server_parts);
     hive_parts = std::move(resource.hive_parts);
     file_parts = std::move(resource.file_parts);
@@ -203,6 +204,13 @@ void CnchServerResource::addCreateQuery(
 
     it->second.create_table_query = create_query;
     it->second.worker_table_name = worker_table_name;
+}
+
+void CnchServerResource::setTableVersion(const UUID & storage_uuid, const UInt64 table_version)
+{
+    std::lock_guard lock(mutex);
+    auto & assigned_resource = assigned_table_resource.at(storage_uuid);
+    assigned_resource.table_version = table_version;
 }
 
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
@@ -491,6 +499,7 @@ void CnchServerResource::allocateResource(
                 worker_resource.addDataParts(assigned_hive_parts);
                 worker_resource.addDataParts(assigned_file_parts);
                 worker_resource.sent_create_query = resource.sent_create_query;
+                worker_resource.table_version = resource.table_version;
                 worker_resource.create_table_query = resource.create_table_query;
                 worker_resource.worker_table_name = resource.worker_table_name;
                 worker_resource.object_columns = resource.object_columns;

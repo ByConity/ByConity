@@ -501,6 +501,7 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
     auto txn_id = txn->getTransactionID();
     /// set main table uuid in server side
     txn->setMainTableUUID(storage.getCnchStorageUUID());
+    txn->setCommitMode(storage.getSettings()->enable_publish_version_on_commit ? TransactionCommitMode::SEQUENTIAL : TransactionCommitMode::INDEPENDENT);
 
     auto storage_ptr = storage.shared_from_this();
     if (!storage_ptr)

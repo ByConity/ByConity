@@ -61,7 +61,8 @@ void MergeMutateAction::executeV1(TxnTimestamp commit_time)
     for (auto & bitmap : delete_bitmaps)
         bitmap->updateCommitTime(commit_time);
 
-    global_context.getCnchCatalog()->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, true, /*preallocate_mode=*/ false);
+    bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
+    global_context.getCnchCatalog()->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, true, /*preallocate_mode=*/ false, write_manifest);
 }
 
 void MergeMutateAction::executeV2()
@@ -74,8 +75,9 @@ void MergeMutateAction::executeV2()
     auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(table.get());
     if (!cnch_table)
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
-
-    global_context.getCnchCatalog()->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true,  /*preallocate_mode=*/ false);
+    
+    bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
+    global_context.getCnchCatalog()->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true,  /*preallocate_mode=*/ false, write_manifest);
 }
 
 /// Post processing

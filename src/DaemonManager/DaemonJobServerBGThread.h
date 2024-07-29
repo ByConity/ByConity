@@ -43,6 +43,7 @@ public:
         bool is_cnch_kafka;
         bool is_cnch_unique;
         bool is_cnch_refresh_materialized_view;
+        bool is_cnch_table_with_manifest = false;
     };
 
     explicit StorageTrait(Param param);
@@ -67,16 +68,22 @@ public:
         return data[IS_CNCH_REFRESH_MATERIALIZED_VIEW];
     }
 
-    const std::bitset<4> & getData() const /// for testing
+    bool isCnchTableWithManifest() const
+    {
+        return data[IS_CNCH_TABLE_WITH_MANIFEST_FLAG];
+    }
+
+    const std::bitset<8> & getData() const /// for testing
     {
         return data;
     }
 private:
-    std::bitset<4> data;
+    std::bitset<8> data;
     static constexpr int IS_CNCH_MERGE_TREE_FLAG = 0;
     static constexpr int IS_CNCH_KAFKA_FLAG = 1;
     static constexpr int IS_CNCH_MERGE_TREE_UNIQUE_FLAG = 2;
     static constexpr int IS_CNCH_REFRESH_MATERIALIZED_VIEW = 3;
+    static constexpr int IS_CNCH_TABLE_WITH_MANIFEST_FLAG = 4;
 };
 
 bool operator == (const StorageTrait & lhs, const StorageTrait & rhs);
@@ -197,6 +204,8 @@ struct DaemonJobForCnch : public DaemonJobServerBGThread
 };
 
 bool isCnchMergeTree(const StorageTrait & , const StorageID & storage_id, const ContextPtr & context);
+
+bool isCnchTableWithManifest(const StorageTrait &, const StorageID &, const ContextPtr &);
 
 struct DaemonJobForMergeMutate : public DaemonJobForCnch<CnchBGThreadType::MergeMutate, isCnchMergeTree>
 {

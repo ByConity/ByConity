@@ -62,7 +62,8 @@ void InsertAction::executeV1(TxnTimestamp commit_time)
         bitmap->updateCommitTime(commit_time);
 
     auto catalog = global_context.getCnchCatalog();
-    catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false);
+    bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
+    catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false, write_manifest);
     ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, {}, txn_id, /*error=*/ false);
 }
 
@@ -77,7 +78,8 @@ void InsertAction::executeV2()
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
 
     auto catalog = global_context.getCnchCatalog();
-    catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, false, /*preallocate_mode=*/ false);
+    bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
+    catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, false, /*preallocate_mode=*/ false, write_manifest);
 
     if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().columns))
         catalog->appendObjectPartialSchema(table, txn_id, parts);

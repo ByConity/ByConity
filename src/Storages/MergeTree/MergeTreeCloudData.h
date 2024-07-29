@@ -43,6 +43,8 @@ public:
     /// [Preallocate Mode] if worker_topology_hash is not empty, need to check whether the given topology is matched with worker's topology
     void loadDataParts(MutableDataPartsVector & parts, UInt64 worker_topology_hash = 0);
 
+    void loadServerDataPartsWithDBM(ServerDataPartsWithDBM && parts_with_dbm);
+
     /// Remove Outdated parts of which timestamp is less than expired ts from container.
     /// DO NOT check reference count of parts.
     void unloadOldPartsByTimestamp(Int64 expired_ts);
@@ -59,6 +61,8 @@ protected:
         DataPartsLock & /* data_parts_lock */);
 
     void deactivateOutdatedParts();
+
+    size_t loadFromServerPartsInPartition(const Strings & required_partitions);
 
     void loadDataPartsInParallel(MutableDataPartsVector & parts);
 

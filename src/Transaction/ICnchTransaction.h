@@ -37,6 +37,7 @@
 #include "Transaction/LockRequest.h"
 #include <bthread/recursive_mutex.h>
 #include <Catalog/MetastoreCommon.h>
+#include <Protos/data_models.pb.h>
 
 #if USE_MYSQL
 #include <Databases/MySQL/MaterializedMySQLCommon.h>
@@ -57,9 +58,10 @@ namespace ErrorCodes
 
 bool isReadOnlyTransaction(const DB::IAST * ast);
 
-class ICnchTransaction : public TypePromotion<ICnchTransaction>, public WithContext
+class ICnchTransaction : public std::enable_shared_from_this<ICnchTransaction>, public TypePromotion<ICnchTransaction>, public WithContext
 {
 public:
+    friend class Catalog::Catalog;
     friend class CnchLockHolder;
     // insert action.
     struct TransFunction
@@ -91,6 +93,12 @@ public:
     String getInitiator() const { return txn_record.initiator(); }
 
     CnchTransactionStatus getStatus() const;
+
+    void setCommitMode(const TransactionCommitMode & mode) { commit_mode = mode; }
+    TransactionCommitMode getCommitMode() const { return commit_mode;}
+
+    void setCommitTs(const TxnTimestamp & commit_time_) { commit_time = commit_time_; }
+    TxnTimestamp getCommitTs() const { return commit_time; }
 
     bool isReadOnly() const { return txn_record.isReadOnly(); }
     void setReadOnly(bool read_only) { txn_record.read_only = read_only; }
@@ -157,8 +165,8 @@ public:
         throw Exception("getKafkaConsumerIndex is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
-    const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
+    // void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
+    // const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
 
 #if USE_MYSQL
     void setBinlogName(String binlog_name_) { binlog_name = std::move(binlog_name_); }
@@ -214,6 +222,9 @@ public:
         extern_commit_functions.push_back({commit_f, abort_f});
     }
 
+    // serialize the transaction for remote commit (in sequential mode).
+    void serialize(Protos::TransactionMetadata & txn_meta) const;
+
     bool async_post_commit = false;
 protected:
     void setStatus(CnchTransactionStatus status);
@@ -229,6 +240,11 @@ protected:
     ContextPtr global_context;
     TransactionRecord txn_record;
     UUID main_table_uuid{UUIDHelpers::Nil};
+
+    // independent mode by default.
+    TransactionCommitMode commit_mode = TransactionCommitMode::INDEPENDENT;
+    // runtime variable set when committing the transaction.
+    TxnTimestamp commit_time {0};
 
     /// for committing offsets
     String consumer_group;

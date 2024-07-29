@@ -105,7 +105,7 @@ void ServerDataPart::serializePartitionAndMinMaxIndex(const MergeTreeMetaBase & 
     if (unlikely(storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING))
         throw Exception("MergeTree data format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
 
-    part_model_wrapper->partition.store(storage, buf);
+    part_model_wrapper->partition->store(storage, buf);
     if (!isEmpty())
     {
         if (!minmax_idx() || !minmax_idx()->initialized)
@@ -117,7 +117,7 @@ void ServerDataPart::serializePartitionAndMinMaxIndex(const MergeTreeMetaBase & 
     /// Skip partition_id check if this is a deleted part
     if (!deleted())
     {
-        String calculated_partition_id = part_model_wrapper->partition.getID(storage);
+        String calculated_partition_id = part_model_wrapper->partition->getID(storage);
         if (calculated_partition_id != info().partition_id)
             throw Exception(
                 "While loading part " + name() + ": calculated partition ID: " + calculated_partition_id
@@ -156,7 +156,7 @@ bool ServerDataPart::deleted() const { return part_model_wrapper->part_model->de
 const Protos::DataModelPart & ServerDataPart::part_model() const { return *part_model_wrapper->part_model; }
 const MergeTreePartInfo & ServerDataPart::info() const { return *part_model_wrapper->info; }
 const String & ServerDataPart::name() const { return part_model_wrapper->name; }
-const MergeTreePartition & ServerDataPart::partition() const { return part_model_wrapper->partition; }
+const MergeTreePartition & ServerDataPart::partition() const { return *(part_model_wrapper->partition); }
 const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & ServerDataPart::minmax_idx() const { return part_model_wrapper->minmax_idx; }
 
 UUID ServerDataPart::get_uuid() const

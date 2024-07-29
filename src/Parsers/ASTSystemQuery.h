@@ -95,6 +95,7 @@ public:
         RESUME_ALL_MERGES,
         SUSPEND_ALL_MERGES,
         GC, // gc db.table [partition partition_expr]
+        MANIFEST_CHECKPOINT, // system checkpoint db.table
         STOP_GC,
         START_GC,
         FORCE_GC,

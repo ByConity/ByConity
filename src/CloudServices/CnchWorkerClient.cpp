@@ -412,7 +412,8 @@ brpc::CallId CnchWorkerClient::sendResources(
     auto recycle_timeout = max_execution_time ? max_execution_time + 60 : 3600;
     request.set_timeout(recycle_timeout);
 
-    for (const auto & resource : resources_to_send)
+    bool require_worker_info = false;
+    for (const auto & resource: resources_to_send)
     {
         if (!resource.sent_create_query)
         {
@@ -439,6 +440,11 @@ brpc::CallId CnchWorkerClient::sendResources(
 
         table_data_parts.set_database(resource.storage->getDatabaseName());
         table_data_parts.set_table(resource.worker_table_name);
+        if (resource.table_version)
+        {
+            require_worker_info = true;
+            table_data_parts.set_table_version(resource.table_version);
+        }
 
         if (!resource.server_parts.empty())
         {
@@ -465,6 +471,20 @@ brpc::CallId CnchWorkerClient::sendResources(
         /// bucket numbers
         for (const auto & bucket_num : resource.bucket_numbers)
             *table_data_parts.mutable_bucket_numbers()->Add() = bucket_num;
+    }
+
+    // need add worker info if query by table version
+    if (require_worker_info)
+    {
+        auto current_wg = context->getCurrentWorkerGroup();
+        auto * worker_info = request.mutable_worker_info();
+        // TODO: resource manager should gurantee the worker number and worker index are consistent
+        RPCHelpers::fillWorkerInfo(*worker_info, worker_id.id, current_wg->workerNum());
+
+        // worker info validation
+        if (worker_info->num_workers() <= worker_info->index())
+            throw Exception("Invailid worker index " + toString(worker_info->index()) + " for worker group " +
+                current_wg->getVWName() + ", which contains " + toString(current_wg->workerNum()) + " workers.", ErrorCodes::LOGICAL_ERROR);
     }
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());

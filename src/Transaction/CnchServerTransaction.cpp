@@ -14,7 +14,7 @@
  */
 
 #include <Transaction/CnchServerTransaction.h>
-
+#include <Transaction/GlobalTxnCommitter.h>
 #include <atomic>
 #include <mutex>
 #include <Catalog/Catalog.h>
@@ -209,6 +209,23 @@ TxnTimestamp CnchServerTransaction::commit()
     {
         try
         {
+            if (TransactionCommitMode::SEQUENTIAL == getCommitMode())
+            {
+                commit_time = commit_ts;
+                bool success = getContext()->getGlobalTxnCommitter()->commit(shared_from_this());
+                if (success)
+                {
+                    ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
+                    ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
+
+                    return commit_ts;
+                }
+                else
+                {
+                    throw Exception("Fail to commit txn " + txn_record.txnID().toString() + " by using GlobalTxnCommitter.", ErrorCodes::CNCH_TRANSACTION_COMMIT_ERROR);
+                }
+            }
+
             if (isPrimary() && !consumer_group.empty()) /// Kafka transaction is always primary
             {
                 if (tpl.empty())
@@ -291,23 +308,23 @@ TxnTimestamp CnchServerTransaction::commit()
 
                 String label_key;
                 String label_value;
-                if (insertion_label)
-                {
-                    /// Pack the operation creating a new label into CAS operations
-                    insertion_label->commit();
-                    label_key = global_context->getCnchCatalog()->getInsertionLabelKey(insertion_label);
-                    label_value = insertion_label->serializeValue();
-                    Catalog::SinglePutRequest put_req(label_key, label_value, true);
-                    put_req.callback = [label = insertion_label](int code, const std::string & msg) {
-                        if (code == Catalog::CAS_FAILED)
-                            throw Exception(
-                                "Insertion label " + label->name + " already exists: " + msg, ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS);
-                        else if (code != Catalog::OK)
-                            throw Exception(
-                                "Failed to put insertion label " + label->name + ": " + msg, ErrorCodes::FAILED_TO_PUT_INSERTION_LABEL);
-                    };
-                    requests.AddPut(put_req);
-                }
+                // if (insertion_label)
+                // {
+                //     /// Pack the operation creating a new label into CAS operations
+                //     insertion_label->commit();
+                //     label_key = global_context->getCnchCatalog()->getInsertionLabelKey(insertion_label);
+                //     label_value = insertion_label->serializeValue();
+                //     Catalog::SinglePutRequest put_req(label_key, label_value, true);
+                //     put_req.callback = [label = insertion_label](int code, const std::string & msg) {
+                //         if (code == Catalog::CAS_FAILED)
+                //             throw Exception(
+                //                 "Insertion label " + label->name + " already exists: " + msg, ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS);
+                //         else if (code != Catalog::OK)
+                //             throw Exception(
+                //                 "Failed to put insertion label " + label->name + ": " + msg, ErrorCodes::FAILED_TO_PUT_INSERTION_LABEL);
+                //     };
+                //     requests.AddPut(put_req);
+                // }
 
                 // CAS operation
                 TransactionRecord target_record = getTransactionRecord();

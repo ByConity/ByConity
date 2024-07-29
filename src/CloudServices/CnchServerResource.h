@@ -76,6 +76,7 @@ struct AssignedResource
     AssignedResource(AssignedResource && resource);
 
     StoragePtr storage;
+    UInt64 table_version{0};  //send table version instead of parts if set
     String worker_table_name;
     String create_table_query;
     bool sent_create_query{false};
@@ -127,6 +128,9 @@ public:
         const String & create_query,
         const String & worker_table_name,
         bool create_local_table = true);
+
+    void setTableVersion(const UUID & storage_uuid, const UInt64 table_version);
+
     void setAggregateWorker(HostWithPorts aggregate_worker_) { aggregate_worker = std::move(aggregate_worker_); }
 
     void setWorkerGroup(WorkerGroupHandle worker_group_)

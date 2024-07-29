@@ -18,6 +18,7 @@
 #include <CloudServices/CnchRefreshMaterializedViewThread.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchPartGCThread.h>
+#include <CloudServices/CnchManifestCheckpointThread.h>
 #include <Interpreters/Context.h>
 #include <ResourceManagement/ResourceReporter.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
@@ -90,6 +91,10 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     else if (type == CnchBGThreadType::PartMover)
     {
         return std::make_shared<CnchPartMoverThread>(getContext(), storage_id);
+    }
+    else if (type == CnchBGThreadType::ManifestCheckpoint)
+    {
+        return std::make_shared<CnchManifestCheckpointThread>(getContext(), storage_id);
     }
     else
     {

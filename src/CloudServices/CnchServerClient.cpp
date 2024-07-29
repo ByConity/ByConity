@@ -75,8 +75,8 @@ CnchServerClient::commitTransaction(const ICnchTransaction & txn, const StorageI
     Protos::CommitTransactionResp response;
 
     request.set_txn_id(txn.getTransactionID());
-    if (const auto & label = txn.getInsertionLabel())
-        request.set_insertion_label(label->name);
+    // if (const auto & label = txn.getInsertionLabel())
+    //     request.set_insertion_label(label->name);
 
     if (!kafka_storage_id.empty())
     {
@@ -133,6 +133,22 @@ void CnchServerClient::finishTransaction(const TxnTimestamp & txn_id)
     request.set_txn_id(txn_id);
 
     stub->finishTransaction(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::commitTransactionViaGlobalCommitter(const TransactionCnchPtr & txn)
+{
+    brpc::Controller cntl;
+    cntl.set_timeout_ms(10 * 1000);  /// make it configurable later
+
+    Protos::RedirectCommitTransactionReq request;
+    Protos::RedirectCommitTransactionResp response;
+
+    txn->serialize(*(request.mutable_txn_meta()));
+
+    stub->redirectCommitTransaction(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);

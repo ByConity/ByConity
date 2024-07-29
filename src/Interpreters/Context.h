@@ -319,6 +319,12 @@ using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
 class GinIndexStoreFactory;
 struct GinIndexStoreCacheSettings;
 
+class GlobalTxnCommitter;
+using GlobalTxnCommitterPtr = std::shared_ptr<GlobalTxnCommitter>;
+class GlobalDataManager;
+using GlobalDataManagerPtr = std::shared_ptr<GlobalDataManager>;
+
+
 enum class ServerType
 {
     standalone,
@@ -1554,6 +1560,11 @@ public:
     void updateServerVirtualWarehouses(const ConfigurationPtr & config);
     void setCnchTopologyMaster();
     std::shared_ptr<CnchTopologyMaster> getCnchTopologyMaster() const;
+
+    GlobalTxnCommitterPtr getGlobalTxnCommitter() const;
+
+    void initGlobalDataManager() const;
+    GlobalDataManagerPtr getGlobalDataManager() const;
 
     void updateQueueManagerConfig() const;
     void setServerType(const String & type_str);

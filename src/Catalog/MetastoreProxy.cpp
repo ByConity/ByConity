@@ -929,7 +929,9 @@ void MetastoreProxy::prepareAddDataParts(
     const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
     BatchCommitRequest & batch_write,
     const std::vector<String> & expected_parts,
-    bool update_sync_list)
+    const UInt64 txn_id,
+    bool update_sync_list,
+    bool write_manifest)
 {
     if (parts.empty())
         return;
@@ -953,6 +955,8 @@ void MetastoreProxy::prepareAddDataParts(
         String part_meta = it->SerializeAsString();
 
         batch_write.AddPut(SinglePutRequest(dataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_parts[it - parts.begin()]));
+        if (write_manifest)
+            batch_write.AddPut(SinglePutRequest(manifestKeyForPart(name_space, table_uuid, txn_id, info_ptr->getPartName()), part_meta));
 
         if (deleting_partitions.count(info_ptr->partition_id) && !partitions_found_in_deleting_set.count(info_ptr->partition_id))
         {
@@ -1831,6 +1835,11 @@ void MetastoreProxy::setBGJobStatus(const String & name_space, const String & uu
             partMoverBGJobStatusKey(name_space, uuid),
             String{BGJobStatusInCatalog::serializeToChar(status)}
         );
+    else if (type == CnchBGThreadType::ManifestCheckpoint)
+        metastore_ptr->put(
+            checkpointBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 }
@@ -1856,6 +1865,8 @@ std::optional<CnchBGThreadStatus> MetastoreProxy::getBGJobStatus(const String & 
         metastore_ptr->get(refreshViewBGJobStatusKey(name_space, uuid), status_store_data);
     else if (type == CnchBGThreadType::PartMover)
         metastore_ptr->get(partMoverBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::ManifestCheckpoint)
+        metastore_ptr->get(checkpointBGJobStatusKey(name_space, uuid), status_store_data);
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 
@@ -1896,6 +1907,8 @@ std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(co
                 return metastore_ptr->getByPrefix(allRefreshViewJobStatusKeyPrefix(name_space));
             else if (type == CnchBGThreadType::PartMover)
                 return metastore_ptr->getByPrefix(allPartMoverBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::ManifestCheckpoint)
+                return metastore_ptr->getByPrefix(allCheckpointBGJobStatusKeyPrefix(name_space));
             else
                 throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
         };
@@ -1946,6 +1959,9 @@ void MetastoreProxy::dropBGJobStatus(const String & name_space, const String & u
         case CnchBGThreadType::PartMover:
             metastore_ptr->drop(partMoverBGJobStatusKey(name_space, uuid));
             break;
+        case CnchBGThreadType::ManifestCheckpoint:
+            metastore_ptr->drop(checkpointBGJobStatusKey(name_space, uuid));
+            break;
         default:
             throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
     }
@@ -1966,10 +1982,14 @@ IMetaStore::IteratorPtr MetastoreProxy::getMetaInRange(const String & prefix, co
     return metastore_ptr->getByRange(prefix + range_start, prefix + range_end, include_start, include_end);
 }
 
-void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const String & table_uuid,
-                                             const DeleteBitmapMetaPtrVector & bitmaps,
-                                             BatchCommitRequest & batch_write,
-                                             const std::vector<String> & expected_bitmaps)
+void MetastoreProxy::prepareAddDeleteBitmaps(
+    const String & name_space,
+    const String & table_uuid,
+    const DeleteBitmapMetaPtrVector & bitmaps,
+    BatchCommitRequest & batch_write,
+    const UInt64 txn_id, 
+    const std::vector<String> & expected_bitmaps,
+    bool write_manifest)
 {
     size_t expected_bitmaps_size = expected_bitmaps.size();
     if (expected_bitmaps_size > 0 && expected_bitmaps_size != static_cast<size_t>(bitmaps.size()))
@@ -1979,11 +1999,14 @@ void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const St
     for (const auto & dlb_ptr : bitmaps)
     {
         const Protos::DataModelDeleteBitmap & model = *(dlb_ptr->getModel());
+        String serialized_data = model.SerializeAsString();
         if (expected_bitmaps_size == 0)
-            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), model.SerializeAsString()));
+            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), serialized_data));
         else
-            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), model.SerializeAsString(), expected_bitmaps[idx]));
-
+            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), serialized_data, expected_bitmaps[idx]));
+        
+        if (write_manifest)
+            batch_write.AddPut(SinglePutRequest(manifestKeyForDeleteBitmap(name_space, table_uuid, txn_id, dataModelName(model)), serialized_data));
         ++idx;
     }
 }

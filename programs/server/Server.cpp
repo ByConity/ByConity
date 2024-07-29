@@ -677,6 +677,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // global_context->initTestLog();
     }
 
+    if (global_context->getServerType() == ServerType::cnch_worker)
+        global_context->initGlobalDataManager();
+
     global_context->initTSOElectionReader();
 
     bool has_zookeeper = config().has("zookeeper");

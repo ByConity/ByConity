@@ -411,6 +411,10 @@ enum StealingCacheMode : UInt64
     M(UInt64, max_parallel_threads_for_bitmap, 16, "", 0) \
     M(Bool, enable_run_optimization, true, "", 0) \
     M(UInt64, delta_merge_interval, 60, "", 0) \
+    M(Bool, enable_publish_version_on_commit, false, "Experimental. New table version is published sequentially when commit happens. ", 0) \
+    M(Seconds, checkpoint_delay_period, 120, "Interval between two rounds of checkpoint tasks in Checkpoint BG thread", 0) \
+    M(Seconds, manifest_list_lifetime, 1800, "Lifetime of the manifest list. Oudated manifests can be cleaned by Checkpoint GC thread", 0) \
+    M(UInt64, max_active_manifest_list, 10, "Max number of new manifest list before trigger one checkpoint task.", 0) \
     /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */                                 \
     \
     /** If true, replicated tables would prefer to merge locally rather than                                  |\

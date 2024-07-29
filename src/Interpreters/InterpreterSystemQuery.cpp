@@ -36,6 +36,7 @@
 #include <MergeTreeCommon/GlobalGCManager.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <CloudServices/CnchPartGCThread.h>
+#include <CloudServices/CnchManifestCheckpointThread.h>
 #include <CloudServices/CnchServerClientPool.h>
 #include <DaemonManager/DaemonManagerClient.h>
 #include <Interpreters/Context.h>
@@ -521,6 +522,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::GC:
             executeGc(query);
+            break;
+        case Type::MANIFEST_CHECKPOINT:
+            executeCheckpoint(query);
             break;
         case Type::DEDUP_WITH_HIGH_PRIORITY:
             dedupWithHighPriority(query);
@@ -1231,6 +1235,17 @@ void InterpreterSystemQuery::executeGc(const ASTSystemQuery & query)
 
     CnchPartGCThread gc_thread(local_context, table->getStorageID());
     gc_thread.executeManually(query.partition, local_context);
+}
+
+void InterpreterSystemQuery::executeCheckpoint(const ASTSystemQuery & )
+{
+    auto local_context = getContext();
+    if (auto server_type = local_context->getServerType(); server_type != ServerType::cnch_server)
+        throw Exception("SYSTEM CHECKPOINT is only available on CNCH server", ErrorCodes::NOT_IMPLEMENTED);
+    
+    auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
+    CnchManifestCheckpointThread checkpoint_thread(local_context, storage->getStorageID());
+    checkpoint_thread.executeManually();
 }
 
 void InterpreterSystemQuery::dedupWithHighPriority(const ASTSystemQuery & query)

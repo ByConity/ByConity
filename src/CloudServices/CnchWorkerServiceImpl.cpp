@@ -53,6 +53,7 @@
 #include <Common/Configurations.h>
 #include <Storages/ColumnsDescription.h>
 #include <Common/Exception.h>
+#include <MergeTreeCommon/GlobalDataManager.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -721,7 +722,7 @@ void CnchWorkerServiceImpl::sendResources(
 {
     SUBMIT_THREADPOOL({
         LOG_TRACE(log, "Receiving resources for Session: {}", request->txn_id());
-
+        Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
         auto timeout = std::chrono::seconds(request->timeout());
@@ -752,7 +753,25 @@ void CnchWorkerServiceImpl::sendResources(
 
             if (auto * cloud_merge_tree = dynamic_cast<StorageCloudMergeTree *>(storage.get()))
             {
-                if (!data.server_parts().empty())
+                if (data.has_table_version())
+                {
+                    WGWorkerInfoPtr worker_info = RPCHelpers::createWorkerInfo(request->worker_info());
+                    UInt64 version = data.table_version();
+                    ServerDataPartsWithDBM server_parts_with_dbms;
+                    query_context->getGlobalDataManager()->loadDataPartsWithDBM(*cloud_merge_tree, cloud_merge_tree->getStorageUUID(), version, worker_info, server_parts_with_dbms);
+                    size_t server_part_size = server_parts_with_dbms.first.size();
+                    size_t delete_bitmap_size = server_parts_with_dbms.second.size();
+                    cloud_merge_tree->loadServerDataPartsWithDBM(std::move(server_parts_with_dbms));
+
+                    LOG_DEBUG(
+                        log,
+                        "Loaded {} server parts and {} delete bitmap for table {} with version {}",
+                        server_part_size,
+                        delete_bitmap_size,
+                        cloud_merge_tree->getStorageID().getNameForLogs(),
+                        version);
+                }
+                else if (!data.server_parts().empty())
                 {
                     MergeTreeMutableDataPartsVector server_parts;
                     if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
@@ -815,7 +834,7 @@ void CnchWorkerServiceImpl::sendResources(
                 throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);
         }
 
-        LOG_TRACE(log, "Received all resource for session: {}", request->txn_id());
+        LOG_TRACE(log, "Received all resource for session: {}, elapsed: {}ms.", request->txn_id(), watch.elapsedMilliseconds());
     })
 }
 

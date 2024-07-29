@@ -57,7 +57,8 @@ void DropRangeAction::executeV1(TxnTimestamp commit_time)
         throw Exception("CNCH table ptr is null in DropRange Action", ErrorCodes::LOGICAL_ERROR);
 
     auto catalog = global_context.getCnchCatalog();
-    catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false);
+    bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
+    catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false, write_manifest);
 
     ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::DROP_RANGE, parts, {}, txn_id, /*error=*/ false);
 }
@@ -74,7 +75,8 @@ void DropRangeAction::executeV2()
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
 
     auto catalog = global_context.getCnchCatalog();
-    catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, false, /*preallocate_mode=*/ false);
+    bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
+    catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, false, /*preallocate_mode=*/ false, write_manifest);
 }
 
 /// Post progressing

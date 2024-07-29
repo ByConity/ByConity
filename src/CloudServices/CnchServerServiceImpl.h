@@ -70,6 +70,12 @@ public:
         Protos::PrecommitTransactionResp * response,
         google::protobuf::Closure * done) override;
 
+    void redirectCommitTransaction(
+        google::protobuf::RpcController * cntl,
+        const Protos::RedirectCommitTransactionReq * request,
+        Protos::RedirectCommitTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
     void rollbackTransaction(
         google::protobuf::RpcController * cntl,
         const Protos::RollbackTransactionReq * request,

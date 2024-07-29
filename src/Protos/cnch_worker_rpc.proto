@@ -7,6 +7,13 @@ import "hive_models.proto";
 
 option cc_generic_services = true;
 
+message WorkerInfo
+{
+  required uint32 index = 1;
+  required uint32 num_workers = 2;
+  required string worker_id = 3;
+}
+
 message ExecuteSimpleQueryReq
 {
   required string query = 1;
@@ -465,6 +472,7 @@ message TableDataParts
   repeated CnchFilePartModel file_parts = 7;
   /// mutations: CloudMergeTree need this to find the actual column name in storage.
   repeated string cnch_mutation_entries = 8;
+  optional uint64 table_version = 9;
 }
 
 message SendResourcesReq
@@ -479,6 +487,7 @@ message SendResourcesReq
   optional string disk_cache_mode = 6;
   repeated UDFInfo udf_infos = 7;
   repeated string dynamic_object_column_schema = 8;
+  optional WorkerInfo worker_info = 9;
 }
 
 message SendResourcesResp

@@ -38,6 +38,8 @@ namespace Protos
 }
 
 class ICnchTransaction;
+class CnchServerTransaction;
+using CnchServerTransactionPtr = std::shared_ptr<CnchServerTransaction>;
 struct PrunedPartitions;
 class StorageCloudMergeTree;
 
@@ -59,6 +61,8 @@ public:
     void precommitTransaction(const TxnTimestamp & txn_id, const UUID & uuid = UUIDHelpers::Nil);
     TxnTimestamp rollbackTransaction(const TxnTimestamp & txn_id);
     void finishTransaction(const TxnTimestamp & txn_id);
+
+    void commitTransactionViaGlobalCommitter(const TransactionCnchPtr & txn);
 
     CnchTransactionStatus getTransactionStatus(const TxnTimestamp & txn_id, bool need_search_catalog = false);
 

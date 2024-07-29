@@ -27,6 +27,10 @@ namespace DB::DaemonManager::BRPCMetrics
     bvar::Window<bvar::Adder<int>> g_executeImpl_MergeMutate_error_minute("DaemonManager_Internal", "executeImpl_MergeMutate_error", & g_executeImpl_MergeMutate_error, 60);
     bvar::Window<bvar::Adder<int>> g_executeImpl_MergeMutate_minute("DaemonManager_Internal", "executeImpl_MergeMutate", & g_executeImpl_MergeMutate, 60);
 
+    bvar::Adder< int > g_executeImpl_ManifestCheckpoint_error;
+    bvar::Adder< int > g_executeImpl_ManifestCheckpoint;
+    bvar::Window<bvar::Adder<int>> g_executeImpl_ManifestCheckpoint_error_minute("DaemonManager_Internal", "executeImpl_ManifestCheckpoint_error", & g_executeImpl_ManifestCheckpoint_error, 60);
+    bvar::Window<bvar::Adder<int>> g_executeImpl_ManifestCheckpoint_minute("DaemonManager_Internal", "executeImpl_ManifestCheckpoint", & g_executeImpl_ManifestCheckpoint, 60);
 
     bvar::Adder< int > g_executeImpl_Consumer_error;
     bvar::Adder< int > g_executeImpl_Consumer;

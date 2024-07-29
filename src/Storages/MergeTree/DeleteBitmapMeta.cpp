@@ -281,6 +281,18 @@ String DeleteBitmapMeta::getBlockName() const
     return wb.str();
 }
 
+String DeleteBitmapMeta::getNameForAllocation() const
+{
+    WriteBufferFromOwnString wb;
+    writeString(model->partition_id(), wb);
+    writeChar('_', wb);
+    writeIntText(model->part_min_block(), wb);
+    writeChar('_', wb);
+    writeIntText(model->part_max_block(), wb);
+    writeChar('_', wb);
+    return wb.str();
+}
+
 bool DeleteBitmapMeta::operator<(const DeleteBitmapMeta & rhs) const
 {
     return std::forward_as_tuple(model->partition_id(), model->part_min_block(), model->part_max_block(), model->commit_time())

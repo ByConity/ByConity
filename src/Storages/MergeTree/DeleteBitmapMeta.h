@@ -152,6 +152,9 @@ public:
     /// PartitionID_MinBlock_MaxBlock
     String getBlockName() const;
 
+    /// Used for data allocation only
+    String getNameForAllocation() const;
+
     const String & getPartitionID() const { return model->partition_id(); }
 
     bool sameBlock(const DeleteBitmapMeta & rhs) const
@@ -202,6 +205,17 @@ public:
     DeleteBitmapMeta & setEndTime(UInt64 end_time);
 
     String getNameForLogs() const;
+
+    Int64 bucketNumber() const { return model->bucket_number(); }
+
+    // No actual use. Just required in assignParts
+    void setHostPort(const String & disk_cache_host_port_, const String & assign_compute_host_port_) const
+    {
+        disk_cache_host_port = disk_cache_host_port_;
+        assign_compute_host_port = assign_compute_host_port_;
+    }
+    mutable String disk_cache_host_port;
+    mutable String assign_compute_host_port;
 
 private:
     const MergeTreeMetaBase & storage;

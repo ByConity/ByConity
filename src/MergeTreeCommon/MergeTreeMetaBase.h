@@ -54,6 +54,9 @@ public:
 
     using MetaStorePtr = std::shared_ptr<MergeTreeMeta>;
 
+    using MergeTreePartitions = std::vector<std::shared_ptr<MergeTreePartition>>;
+    using ServerDataParts = std::unordered_map<String, ServerDataPartsWithDBM>;
+
     /// Alter conversions which should be applied on-fly for part. Build from of
     /// the most recent mutation commands for part. Now we have only rename_map
     /// here (from ALTER_RENAME) command, because for all other type of alters
@@ -218,9 +221,13 @@ public:
     /// Returns all parts in specified partition
     DataPartsVector getDataPartsVectorInPartition(DataPartState /*state*/, const String & /*partition_id*/) const;
 
+    MergeTreePartitions getAllPartitions() const;
+
     /// Returns Committed parts
     DataParts getDataParts() const;
     DataPartsVector getDataPartsVector() const;
+
+    ServerDataPartsVector getServerDataPartsInPartitions(const Strings & required_partitions);
 
     /// Returns the part with the given name and state or nullptr if no such part.
     DataPartPtr getPartIfExists(const String & part_name, const DataPartStates & valid_states);
@@ -442,6 +449,24 @@ public:
 
     ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const override;
 
+    /// partition filters
+    /// TODO: make partition_list constant
+    void filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context) const;
+
+    Strings selectPartitionsByPredicate(
+        const SelectQueryInfo & query_info,
+        std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
+        const Names & column_names_to_return,
+        ContextPtr local_context) const;
+
+    /**
+     * @param parts input parts, must be sorted in PartComparator order
+     */
+    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas) const;
+    void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
+    void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
+    void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
+
 protected:
     friend class IMergeTreeDataPart;
     friend class MergeTreeDataPartCNCH;
@@ -595,6 +620,14 @@ protected:
 
     /// Returns default settings for storage with possible changes from global config.
     virtual std::unique_ptr<MergeTreeSettings> getDefaultSettings() const = 0;
+
+    /// track runtime server parts by partition id. Used when query by table version
+    MergeTreePartitions data_partitions;
+    // Server dataparts with delete bitmap. should be protected by data part lock
+    ServerDataParts server_data_parts;
+
+    mutable std::mutex server_data_mutex;
+    mutable std::atomic<bool> has_server_part_to_load{false};
 
 private:
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.

@@ -615,6 +615,7 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, enable_partition_prune, true, "prune partition based on where expression analysis.", 0) \
     M(Bool, restore_table_expression_in_distributed, 1, "restore table expressions in distributed query to pass current database to remote query.", 0) \
+    M(Bool, query_with_linear_table_version, 1, "Distribute table version instead of data parts to workers if set to true. Only has effect for table which set `enable_publish_version_on_commit`", 0) \
     \
     /**  settings about bitmap index */\
     M(Bool, enable_ab_index_optimization, true, "Optimize ab version by reading Bitmap", 0)\

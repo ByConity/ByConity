@@ -61,7 +61,7 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
     if (unlikely(storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING))
         throw Exception("MergeTree data format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
 
-    part_model_wrapper->partition.load(storage, partition_minmax_buf);
+    part_model_wrapper->partition->load(storage, partition_minmax_buf);
     if (part_model_wrapper->part_model->rows_count() > 0)
     {
         part_model_wrapper->minmax_idx = std::make_shared<IMergeTreeDataPart::MinMaxIndex>();

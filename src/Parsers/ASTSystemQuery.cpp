@@ -134,6 +134,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "SUSPEND_ALL MERGES";
         case Type::GC:
             return "GC";
+        case Type::MANIFEST_CHECKPOINT:
+            return "MANIFEST CHECKPOINT";
         case Type::START_GC:
             return "START GC";
         case Type::STOP_GC:
@@ -346,7 +348,8 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::DROP_CNCH_PART_CACHE
             || type == Type::DROP_CNCH_DELETE_BITMAP_CACHE
             || type == Type::START_CLUSTER
-            || type == Type::STOP_CLUSTER)
+            || type == Type::STOP_CLUSTER
+            || type == Type::MANIFEST_CHECKPOINT)
     {
         print_database_table();
     }

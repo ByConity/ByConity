@@ -243,6 +243,7 @@ public:
     const auto & get_deleted() const { return deleted; }
     const auto & get_commit_time() const { return commit_time; }
     const auto & get_uuid() const { return uuid; }
+    String getNameForAllocation() const { return info.getBasicPartName(); }
 
     const MergeTreeMetaBase & storage;
 

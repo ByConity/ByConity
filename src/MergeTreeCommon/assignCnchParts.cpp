@@ -16,6 +16,7 @@
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Storages/Hive/HiveFile/IHiveFile.h>
@@ -67,6 +68,8 @@ inline void reportStats(const M & map, const String & name, size_t num_workers)
 /// explicit instantiation for server part and cnch data part.
 template ServerAssignmentMap assignCnchParts<ServerDataPartsVector>(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts);
 template AssignmentMap assignCnchParts<MergeTreeDataPartsCNCHVector>(const WorkerGroupHandle & worker_group, const MergeTreeDataPartsCNCHVector & parts);
+template std::unordered_map<String, DataModelPartWrapperVector> assignCnchParts<DataModelPartWrapperVector>(const WorkerGroupHandle & worker_group, const DataModelPartWrapperVector &);
+template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<DeleteBitmapMetaPtrVector>(const WorkerGroupHandle & worker_group, const DeleteBitmapMetaPtrVector &);
 
 template <typename DataPartsCnchVector>
 std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts)
@@ -121,7 +124,7 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithSimpleHash(Wo
     for (size_t i = 0; i < parts.size(); ++i)
     {
         /// use crc64 as original implementation, may change to other hash later
-        auto part_name = parts[i]->get_info().getBasicPartName();
+        auto part_name = parts[i]->getNameForAllocation();
         auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
         auto index_consistent = JumpConsistentHash(hash_val, num_workers);
 
@@ -148,7 +151,7 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithJump(WorkerLi
     for (const auto & part : parts)
     {
         /// use crc64 as original implementation, may change to other hash later
-        auto part_name = part->get_info().getBasicPartName();
+        auto part_name = part->getNameForAllocation();
         auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
         auto index = JumpConsistentHash(hash_val, num_workers);
 
@@ -178,12 +181,12 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
     String disk_cache_host_port = "";
     for (auto & part : parts)
     {
-        auto part_name = part->get_info().getBasicPartName();
+        auto part_name = part->getNameForAllocation();
         auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
         disk_cache_worker_index = JumpConsistentHash(hash_val, num_workers);
         disk_cache_host_port = worker_hosts.at(worker_ids[disk_cache_worker_index]).getRPCAddress();
 
-        if (auto host_id = ring.tryFind(part->get_info().getBasicPartName(), cap_limit, stats); !host_id.empty())
+        if (auto host_id = ring.tryFind(part->getNameForAllocation(), cap_limit, stats); !host_id.empty())
         {
             ret[host_id].emplace_back(part);
 
@@ -199,7 +202,7 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
     // second round to assign the overloaded parts, reuse the one round apporach `findAndRebalance`.
     for (auto & part: exceed_parts)
     {
-        auto host_id = ring.findAndRebalance(part->get_info().getBasicPartName(), cap_limit, stats);
+        auto host_id = ring.findAndRebalance(part->getNameForAllocation(), cap_limit, stats);
         ret[host_id].emplace_back(part);
 
         auto assign_compute_host_port = worker_hosts.at(host_id).getRPCAddress();
@@ -230,12 +233,12 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBounded
     {
         auto & part = parts[i];
 
-        auto part_name = part->get_info().getBasicPartName();
+        auto part_name = part->getNameForAllocation();
         auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
         auto index = JumpConsistentHash(hash_val, num_workers);
 
         cap_limit = ring.getCapLimit(i + 1, strict);
-        auto host_id = ring.findAndRebalance(part->get_info().getBasicPartName(), cap_limit, stats);
+        auto host_id = ring.findAndRebalance(part->getNameForAllocation(), cap_limit, stats);
         ret[host_id].emplace_back(part);
 
         auto disk_cache_host_port = worker_hosts.at(worker_ids[index]).getRPCAddress();

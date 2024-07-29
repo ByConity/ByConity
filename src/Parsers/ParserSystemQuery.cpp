@@ -299,6 +299,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::FLUSH_CNCH_LOG:
         case Type::STOP_CNCH_LOG:
         case Type::RESUME_CNCH_LOG:
+        case Type::MANIFEST_CHECKPOINT:
             parseDatabaseAndTableName(pos, expected, res->database, res->table);
             break;
 

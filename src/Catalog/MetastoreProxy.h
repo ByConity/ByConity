@@ -100,6 +100,7 @@ namespace DB::Catalog
 #define PARTMOVER_BG_JOB_STATUS "PARTMOVER_BGJS_"
 #define CONSUMER_BG_JOB_STATUS "CONSUMER_BGJS_"
 #define DEDUPWORKER_BG_JOB_STATUS "DEDUPWORKER_BGJS_"
+#define CHECKPOINT_BG_JOB_STATUS "CHECKPOINT_BGJS_"
 #define OBJECT_SCHEMA_ASSEMBLE_BG_JOB_STATUS "OBJECT_SCHEMA_ASSEMBLE_BGJS_"
 #define REFRESH_VIEW_JOB_STATUS "REFRESH_VIEW_BGJS_"
 #define PREALLOCATE_VW "PVW_"
@@ -128,6 +129,8 @@ namespace DB::Catalog
 #define DICTIONARY_BUCKET_UPDATE_TIME_PREFIX "DBUT_"
 #define ENTITY_UUID_MAPPING "EUM_"
 #define SENSITIVE_RESOURCE_PREFIX "SR_"
+#define MANIFEST_DATA_PREFIX "MFST_"
+#define MANIFEST_LIST_PREFIX "MFSTS_"
 
 using EntityType = IAccessEntity::Type;
 struct EntityMetastorePrefix
@@ -677,6 +680,16 @@ public:
         return escapeString(name_space) + '_' + DEDUPWORKER_BG_JOB_STATUS;
     }
 
+    static std::string allCheckpointBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + CHECKPOINT_BG_JOB_STATUS;
+    }
+
+    static std::string checkpointBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allCheckpointBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
     static std::string dedupWorkerBGJobStatusKey(const std::string & name_space, const std::string & uuid)
     {
         return allDedupWorkerBGJobStatusKeyPrefix(name_space) + uuid;
@@ -915,6 +928,32 @@ public:
     {
         return escapeString(name_space) + '_' + DICTIONARY_BUCKET_UPDATE_TIME_PREFIX + uuid + '_' + std::to_string(bucket_number);
     }
+
+    static String manifestDataPrefix(const String & name_space, const String & uuid, const UInt64 txn_id)
+    {
+        return escapeString(name_space) + '_' + MANIFEST_DATA_PREFIX + uuid + "_" + toString(txn_id) + "_";
+    }
+
+    static String manifestKeyForPart(const String & name_space, const String & uuid, const UInt64 txn_id, const String & part_name)
+    {
+        return manifestDataPrefix(name_space, uuid, txn_id) + PART_STORE_PREFIX + part_name;
+    }
+
+    static String manifestKeyForDeleteBitmap(const String & name_space, const String & uuid, const UInt64 txn_id, const String & bitmap_key)
+    {
+        return manifestDataPrefix(name_space, uuid, txn_id) + DELETE_BITMAP_PREFIX + bitmap_key;
+    }
+
+    static String manifestListPrefix(const String & name_space, const String & uuid)
+    {
+        return escapeString(name_space) + '_' + MANIFEST_LIST_PREFIX + uuid + '_';
+    }
+
+    static String manifestListKey(const String & name_space, const String & uuid, const UInt64 table_version)
+    {
+        return manifestListPrefix(name_space, uuid) + toString(table_version);
+    }
+
     // parse the first key in format of '{prefix}{escapedString(first_key)}_postfix'
     // note that prefix should contains _, like TCS_
     // return [first_key, postfix]
@@ -1035,7 +1074,9 @@ public:
         const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
         BatchCommitRequest & batch_write,
         const std::vector<String> & expected_parts,
-        bool update_sync_list = false);
+        const UInt64 txn_id,
+        bool update_sync_list = false,
+        bool write_manifest = false);
     void prepareAddStagedParts(
         const String & name_space,
         const String & table_uuid,
@@ -1140,8 +1181,15 @@ public:
     void getTablePreallocateVW(const String & name_space, const String & uuid, String & vw);
 
     /// delete bitmap/keys related api
-    void prepareAddDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps,
-                                 BatchCommitRequest & batch_write, const std::vector<String> & expected_bitmaps = {});
+    void prepareAddDeleteBitmaps(
+        const String & name_space,
+        const String & table_uuid,
+        const DeleteBitmapMetaPtrVector & bitmaps,
+        BatchCommitRequest & batch_write,
+        const UInt64 txn_id, 
+        const std::vector<String> & expected_bitmaps = {},
+        bool write_manifest = false);
+
     Strings getDeleteBitmapByKeys(const Strings & key);
 
     IMetaStore::IteratorPtr getMetaInRange(const String & prefix, const String & range_start, const String & range_end, bool include_start, bool include_end);

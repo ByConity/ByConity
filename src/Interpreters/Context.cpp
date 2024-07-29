@@ -99,6 +99,7 @@
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <MergeTreeCommon/GlobalDataManager.h>
 #include <Optimizer/OptimizerMetrics.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -180,6 +181,8 @@
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Common/HostWithPorts.h>
+#include <Transaction/GlobalTxnCommitter.h>
+#include <Statistics/StatisticsMemoryStore.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
@@ -404,6 +407,8 @@ struct ContextSharedPart
     mutable CnchTopologyMasterPtr topology_master;
     mutable ResourceManagerClientPtr rm_client;
     mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
+    mutable GlobalTxnCommitterPtr global_txn_committer;
+    mutable GlobalDataManagerPtr global_data_manager;
 
     bool enable_ssl = false;
 
@@ -5155,6 +5160,27 @@ std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const
         throw Exception("Topology master is not initialized.", ErrorCodes::LOGICAL_ERROR);
 
     return shared->topology_master;
+}
+
+GlobalTxnCommitterPtr Context::getGlobalTxnCommitter() const
+{
+    auto lock = getLock();
+    if (!shared->global_txn_committer)
+        shared->global_txn_committer = std::make_shared<GlobalTxnCommitter>(shared_from_this());
+    return shared->global_txn_committer;
+}
+
+void Context::initGlobalDataManager() const
+{
+    shared->global_data_manager = std::make_shared<GlobalDataManager>(shared_from_this());
+}
+
+GlobalDataManagerPtr Context::getGlobalDataManager() const
+{
+    if (!shared->global_data_manager)
+        throw Exception("GlobalDataManager is not initialized", ErrorCodes::LOGICAL_ERROR);
+
+    return shared->global_data_manager;
 }
 
 UInt16 Context::getRPCPort() const

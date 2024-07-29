@@ -1125,6 +1125,11 @@ bool isCnchMergeTree(const StorageTrait & storage_trait, const StorageID &, cons
     return storage_trait.isCnchMergeTree();
 }
 
+bool isCnchTableWithManifest(const StorageTrait & storage_trait, const StorageID &, const ContextPtr &)
+{
+    return storage_trait.isCnchTableWithManifest();
+}
+
 bool isCnchKafka(const StorageTrait & storage_trait, const StorageID &, const ContextPtr &)
 {
     return storage_trait.isCnchKafka();
@@ -1159,6 +1164,7 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::MaterializedMySQL, isMaterializedMySQL>>("MATERIALIZED_MYSQL");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::CnchRefreshMaterializedView, isCnchRefreshMaterializedView>>("CNCH_REFRESH_MATERIALIZED_VIEW");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::PartMover, isCnchMergeTree>>("PART_MOVER");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::ManifestCheckpoint, isCnchTableWithManifest>>("MANIFEST_CHECKPOINT");
 }
 
 void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
@@ -1219,7 +1225,7 @@ void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
 
 StorageTrait::StorageTrait(StorageTrait::Param param)
 {
-    std::bitset<4> bs;
+    std::bitset<8> bs;
     if (param.is_cnch_merge_tree)
         bs.set(0);
     if (param.is_cnch_kafka)
@@ -1228,7 +1234,8 @@ StorageTrait::StorageTrait(StorageTrait::Param param)
         bs.set(2);
     if (param.is_cnch_refresh_materialized_view)
         bs.set(3);
-
+    if (param.is_cnch_table_with_manifest)
+        bs.set(4);
     data = bs;
 }
 
@@ -1239,7 +1246,8 @@ StorageTrait constructStorageTrait(StoragePtr storage)
                 .is_cnch_merge_tree = false,
                 .is_cnch_kafka = true,
                 .is_cnch_unique = false,
-                .is_cnch_refresh_materialized_view = false
+                .is_cnch_refresh_materialized_view = false,
+                .is_cnch_table_with_manifest = false
             }};
 
     StorageCnchMergeTree * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
@@ -1251,16 +1259,28 @@ StorageTrait constructStorageTrait(StoragePtr storage)
                     .is_cnch_merge_tree = true,
                     .is_cnch_kafka = false,
                     .is_cnch_unique = true,
-                    .is_cnch_refresh_materialized_view = false
+                    .is_cnch_refresh_materialized_view = false,
+                    .is_cnch_table_with_manifest = false
                 }};
         }
         else
         {
+            if (cnch_storage->getSettings()->enable_publish_version_on_commit)
+            {
+                return StorageTrait{StorageTrait::Param {
+                    .is_cnch_merge_tree = true,
+                    .is_cnch_kafka = false,
+                    .is_cnch_unique = false,
+                    .is_cnch_refresh_materialized_view = false,
+                    .is_cnch_table_with_manifest = true
+                }};
+            }
             return StorageTrait{StorageTrait::Param {
                     .is_cnch_merge_tree = true,
                     .is_cnch_kafka = false,
                     .is_cnch_unique = false,
-                    .is_cnch_refresh_materialized_view = false
+                    .is_cnch_refresh_materialized_view = false,
+                    .is_cnch_table_with_manifest = false
                 }};
         }
     }
@@ -1274,7 +1294,8 @@ StorageTrait constructStorageTrait(StoragePtr storage)
                     .is_cnch_merge_tree = false,
                     .is_cnch_kafka = false,
                     .is_cnch_unique = false,
-                    .is_cnch_refresh_materialized_view = true
+                    .is_cnch_refresh_materialized_view = true,
+                    .is_cnch_table_with_manifest = false
                 }};
         }
     }
@@ -1283,7 +1304,8 @@ StorageTrait constructStorageTrait(StoragePtr storage)
             .is_cnch_merge_tree = false,
             .is_cnch_kafka = false,
             .is_cnch_unique = false,
-            .is_cnch_refresh_materialized_view = false
+            .is_cnch_refresh_materialized_view = false,
+            .is_cnch_table_with_manifest = false
         }};
 }
 

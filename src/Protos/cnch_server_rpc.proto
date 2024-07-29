@@ -69,6 +69,16 @@ message CommitTransactionResp {
   optional uint64 commit_ts = 2;
 };
 
+message RedirectCommitTransactionReq
+{
+  required TransactionMetadata txn_meta = 1;
+}
+
+message RedirectCommitTransactionResp
+{
+  optional string exception = 1;
+}
+
 message PrecommitTransactionReq {
   required uint64 txn_id = 1;
   required UUID main_table_uuid = 2;
@@ -521,6 +531,8 @@ service CnchServerService {
   rpc finishTransaction(FinishTransactionReq) returns(FinishTransactionResp);
 
   rpc commitTransaction(CommitTransactionReq) returns(CommitTransactionResp);
+
+  rpc redirectCommitTransaction(RedirectCommitTransactionReq) returns(RedirectCommitTransactionResp); 
 
   rpc precommitTransaction(PrecommitTransactionReq)
       returns(PrecommitTransactionResp);
