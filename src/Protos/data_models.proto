@@ -169,6 +169,12 @@ message DataModelPart {
   optional uint64 row_exists_count = 41;
 };
 
+message DataModelVirtualPart
+{
+  required DataModelPart part = 1;
+  repeated uint64 mark_ranges = 2;
+}
+
 message CnchFilePartInfo { required string name = 1; }
 
 message CnchFilePartModel { required CnchFilePartInfo part_info = 1; }

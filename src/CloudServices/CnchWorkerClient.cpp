@@ -457,6 +457,19 @@ brpc::CallId CnchWorkerClient::sendResources(
                 *table_data_parts.mutable_server_part_bitmaps());
         }
 
+        if (!resource.virtual_parts.empty())
+        {
+            fillPartsModelForSend(*resource.storage, resource.virtual_parts, *table_data_parts.mutable_virtual_parts());
+            auto * bitmaps_model = table_data_parts.mutable_virtual_part_bitmaps();
+            for (const auto & virtual_part : resource.virtual_parts)
+            {
+                for (auto & bitmap_meta : virtual_part->part->delete_bitmap_metas)
+                {
+                    bitmaps_model->Add()->CopyFrom(*bitmap_meta);
+                }
+            }
+        }
+
         if (!resource.hive_parts.empty())
         {
             auto * mutable_hive_parts = table_data_parts.mutable_hive_parts();

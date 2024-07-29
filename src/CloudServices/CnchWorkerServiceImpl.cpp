@@ -802,6 +802,35 @@ void CnchWorkerServiceImpl::sendResources(
                         request->txn_id(), request->disk_cache_mode());
                 }
 
+                if (!data.virtual_parts().empty())
+                {
+                    MergeTreeMutableDataPartsVector virtual_parts;
+                    if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
+                        virtual_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
+                            *cloud_merge_tree, data.virtual_parts(), data.virtual_part_bitmaps());
+                    else
+                        virtual_parts
+                            = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.virtual_parts());
+
+                    if (request->has_disk_cache_mode())
+                    {
+                        auto disk_cache_mode = SettingFieldDiskCacheModeTraits::fromString(request->disk_cache_mode());
+                        if (disk_cache_mode != DiskCacheMode::AUTO)
+                        {
+                            for (auto & part : virtual_parts)
+                                part->disk_cache_mode = disk_cache_mode;
+                        }
+                    }
+
+                    cloud_merge_tree->loadDataParts(virtual_parts);
+
+                    LOG_DEBUG(
+                        log,
+                        "Received and loaded {} virtual server parts for table {}",
+                        virtual_parts.size(),
+                        cloud_merge_tree->getStorageID().getNameForLogs());
+                }
+
                 std::set<Int64> required_bucket_numbers;
                 for (const auto & bucket_number : data.bucket_numbers())
                     required_bucket_numbers.insert(bucket_number);

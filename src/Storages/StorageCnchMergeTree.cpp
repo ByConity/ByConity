@@ -1077,7 +1077,7 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
     std::mutex mutex;
     CheckResults results;
 
-    auto assignment = assignCnchParts(worker_group, parts);
+    auto assignment = assignCnchParts(worker_group, parts, local_context);
 
     ThreadPool allocate_pool(std::min<UInt64>(local_context->getSettingsRef().parts_preallocate_pool_size, num_of_workers));
 
@@ -2262,6 +2262,10 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "gc_remove_part_thread_pool_size",
         "gc_remove_part_batch_size",
         "cluster_by_hint",
+
+        "enable_hybrid_allocation",
+        "min_rows_per_virtual_part",
+        "part_to_vw_size_ratio"
     };
 
     /// Check whether the value is legal for Setting.

@@ -66,15 +66,21 @@ inline void reportStats(const M & map, const String & name, size_t num_workers)
 }
 
 /// explicit instantiation for server part and cnch data part.
-template ServerAssignmentMap assignCnchParts<ServerDataPartsVector>(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts);
-template AssignmentMap assignCnchParts<MergeTreeDataPartsCNCHVector>(const WorkerGroupHandle & worker_group, const MergeTreeDataPartsCNCHVector & parts);
-template std::unordered_map<String, DataModelPartWrapperVector> assignCnchParts<DataModelPartWrapperVector>(const WorkerGroupHandle & worker_group, const DataModelPartWrapperVector &);
-template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<DeleteBitmapMetaPtrVector>(const WorkerGroupHandle & worker_group, const DeleteBitmapMetaPtrVector &);
+template ServerAssignmentMap assignCnchParts<ServerDataPartsVector>(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, const ContextPtr & query_context);
+template AssignmentMap assignCnchParts<MergeTreeDataPartsCNCHVector>(const WorkerGroupHandle & worker_group, const MergeTreeDataPartsCNCHVector & parts, const ContextPtr & query_context);
+template std::unordered_map<String, DataModelPartWrapperVector> assignCnchParts<DataModelPartWrapperVector>(const WorkerGroupHandle & worker_group, const DataModelPartWrapperVector &, const ContextPtr & query_context);
+template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<DeleteBitmapMetaPtrVector>(const WorkerGroupHandle & worker_group, const DeleteBitmapMetaPtrVector &, const ContextPtr & query_context);
 
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts)
+std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & query_context)
 {
-    switch (worker_group->getContext()->getPartAllocationAlgo())
+    Context::PartAllocator part_allocation_algorithm;
+    if (query_context->getSettingsRef().cnch_part_allocation_algorithm.changed)
+        part_allocation_algorithm = query_context->getPartAllocationAlgo();
+    else
+        part_allocation_algorithm = worker_group->getContext()->getPartAllocationAlgo();
+
+    switch (part_allocation_algorithm)
     {
         case Context::PartAllocator::JUMP_CONSISTENT_HASH:
         {
@@ -323,7 +329,6 @@ void moveBucketTablePartsToAssignedParts(
     }
 }
 
-
 BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(
     const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers, bool replicated)
 {
@@ -367,4 +372,425 @@ bool satisfyBucketWorkerRelation(const StoragePtr & storage, const Context & que
     return false;
 }
 
+/////////////////////////////////////////////////
+////////       Hybrid allocation related methods
+/////////////////////////////////////////////////
+
+// virtual part size(marks) = virtual part rows / rows per mark
+size_t computeVirtualPartSize(size_t min_rows_per_vp, size_t index_granularity)
+{
+    /// TODO: handle index_granularity_bytes
+    return min_rows_per_vp % index_granularity ? min_rows_per_vp / index_granularity + 1 : min_rows_per_vp / index_granularity;
+}
+
+std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
+    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */, const ContextPtr & query_context)
+{
+    // If part_allocation_algorithm is specified in SQL Level, use it with high priority
+    Context::HybridPartAllocator part_allocation_algorithm;
+    if (query_context->getSettingsRef().cnch_hybrid_part_allocation_algorithm.changed)
+        part_allocation_algorithm = query_context->getHybridPartAllocationAlgo();
+    else
+        part_allocation_algorithm = worker_group->getContext()->getHybridPartAllocationAlgo();
+
+    switch (part_allocation_algorithm)
+    {
+        case Context::HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH: {
+            auto res = assignCnchHybridPartsWithMod(worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Modular Hashing)");
+            return res;
+        }
+        case Context::HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH: {
+            auto res = assignCnchHybridPartsWithConsistentHash(worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Ring Consistent Hashing)");
+            return res;
+        }
+        case Context::HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH: {
+            auto res = assignCnchHybridPartsWithBoundedHash(worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Bounded Ring Consistent Hashing)");
+            return res;
+        }
+        case Context::HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH_ONE_STAGE: {
+            auto res = assignCnchHybridPartsWithStrictBoundedHash(worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (One Stage Bounded Consistent Hashing)");
+            return res;
+        }
+        case Context::HybridPartAllocator::HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE: {
+            auto res = assignCnchHybridPartsWithStrictBoundedHash(worker_group, parts, virtual_part_size, true);
+            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Strict One Stage Bounded Consistent Hashing)");
+            return res;
+        }
+        default: {
+            auto res = assignCnchHybridPartsWithBoundedHash(worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Bounded Ring Consistent Hashing)");
+            return res;
+        }
+    }
+}
+
+std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithMod(
+    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
+{
+    std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
+    auto & physical_assignment = res.first;
+    auto & virtual_assignment = res.second;
+    const auto & shard_infos = worker_group->getShardsInfo();
+    auto hasher = std::hash<String>{};
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        const auto & part = parts[i];
+        UInt64 marks_cnt = part->marksCount();
+        // For little parts, we don't split it as virtual parts any more.
+        if (marks_cnt <= virtual_part_size || part->isPartial())
+        {
+            auto index = hasher(part->info().getBasicPartName()) % shard_infos.size();
+            String hostname = shard_infos[index].worker_id;
+            physical_assignment[hostname].emplace_back(part);
+        }
+        else
+        {
+            // First virtual part, [0, virtual_part_size)
+            size_t begin = 0, end = virtual_part_size;
+            String base_name = part->info().getBasicPartName();
+            auto * logger = &Poco::Logger::get("assignCnchHybridPartsWithMod");
+            while (begin < end)
+            {
+                /// TODO: control number of virtual parts
+                String key = fmt::format("{}{}_{}", base_name, begin, end);
+                auto index = hasher(key) % shard_infos.size();
+                String hostname = shard_infos[index].worker_id;
+                LOG_TRACE(logger, "virtual part key {} assign to worker {}", key, hostname);
+
+                auto insert_entry = virtual_assignment.try_emplace(hostname).first;
+                auto & virtual_parts = insert_entry->second;
+                auto & mark_ranges = virtual_parts[i];
+                if (mark_ranges == nullptr)
+                {
+                    mark_ranges = std::make_unique<MarkRanges>();
+                }
+                /// Try to merge consecutive ranges
+                if (mark_ranges->empty() || mark_ranges->back().end < begin)
+                    mark_ranges->emplace_back(begin, end);
+                else
+                    mark_ranges->back().end = end;
+                /// Next virtual part
+                begin = end;
+                end = std::min(marks_cnt, end + virtual_part_size);
+            }
+        }
+    }
+    return res;
+}
+
+std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithBoundedHash(
+    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
+{
+    std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
+    auto & physical_assignment = res.first;
+    auto & virtual_assignment = res.second;
+    std::vector<HybridPart> hybrid_parts;
+
+    // break part to virtual parts if needed
+    splitHybridParts(parts, virtual_part_size, hybrid_parts);
+
+    // sort by marks count
+    sortByMarksCount(hybrid_parts);
+
+    // start allocate
+    const auto & ring = worker_group->getRing();
+    auto cap_limit = ring.getCapLimit(hybrid_parts.size());
+    std::vector<HybridPart> exceed_hybrid_parts;
+    std::unordered_map<String, UInt64> stats;
+
+    // first round allocation
+    for (const auto & hybrid_part : hybrid_parts)
+    {
+        if (hybrid_part.is_virtual)
+        {
+            if (auto hostname = ring.tryFind(hybrid_part.key, cap_limit, stats); !hostname.empty())
+            {
+                auto insert_entry = virtual_assignment.try_emplace(hostname).first;
+                auto & virtual_parts = insert_entry->second;
+                auto & mark_ranges = virtual_parts[hybrid_part.index];
+                if (mark_ranges == nullptr)
+                {
+                    mark_ranges = std::make_unique<MarkRanges>();
+                }
+                mark_ranges->emplace_back(hybrid_part.begin, hybrid_part.end);
+            }
+            else
+                exceed_hybrid_parts.emplace_back(hybrid_part);
+        }
+        else
+        {
+            if (auto hostname = ring.tryFind(hybrid_part.key, cap_limit, stats); !hostname.empty())
+                physical_assignment[hostname].emplace_back(parts[hybrid_part.index]);
+            else
+                exceed_hybrid_parts.emplace_back(hybrid_part);
+        }
+    }
+
+    // second round allocation
+    for (const auto & hybrid_part : exceed_hybrid_parts)
+    {
+        auto hostname = ring.findAndRebalance(hybrid_part.key, cap_limit, stats);
+        if (hybrid_part.is_virtual)
+        {
+            auto insert_entry = virtual_assignment.try_emplace(hostname).first;
+            auto & virtual_parts = insert_entry->second;
+            auto & mark_ranges = virtual_parts[hybrid_part.index];
+            if (mark_ranges == nullptr)
+            {
+                mark_ranges = std::make_unique<MarkRanges>();
+            }
+            mark_ranges->emplace_back(hybrid_part.begin, hybrid_part.end);
+        }
+        else
+            physical_assignment[hostname].emplace_back(parts[hybrid_part.index]);
+    }
+
+    // try to merge consecutive ranges
+    mergeConsecutiveRanges(virtual_assignment);
+
+    return res;
+}
+
+std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithStrictBoundedHash(
+    const WorkerGroupHandle & worker_group,
+    const ServerDataPartsVector & parts,
+    size_t virtual_part_size /* unit = num marks */,
+    bool strict)
+{
+    LOG_INFO(
+        &Poco::Logger::get("Strict Bounded Consistent Hash for Hybrid Allocation"),
+        "Start to allocate part with strict bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
+
+    std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
+    auto & physical_assignment = res.first;
+    auto & virtual_assignment = res.second;
+    std::vector<HybridPart> hybrid_parts;
+
+    // break part to virtual parts if needed
+    splitHybridParts(parts, virtual_part_size, hybrid_parts);
+
+    // sort by marks count
+    sortByMarksCount(hybrid_parts);
+
+    // Start allocate, allocate with bounded consistent hash in one round
+    const auto & ring = worker_group->getRing();
+    size_t cap_limit = 0;
+    std::unordered_map<String, UInt64> stats;
+
+    for (size_t i = 0; i < hybrid_parts.size(); ++i)
+    {
+        const auto & hybrid_part = hybrid_parts[i];
+        // STRICT only decides if the cap limit can use load_factor
+        cap_limit = ring.getCapLimit(i + 1, strict);
+        auto hostname = ring.findAndRebalance(hybrid_part.key, cap_limit, stats);
+        LOG_TRACE(
+            &Poco::Logger::get("Strict bounded consistent hash"),
+            "Allocate hybrid part " + hybrid_part.toString() + " to host " + hostname);
+        if (hybrid_part.is_virtual)
+        {
+            auto insert_entry = virtual_assignment.try_emplace(hostname).first;
+            auto & virtual_parts = insert_entry->second;
+            auto & mark_ranges = virtual_parts[hybrid_part.index];
+            if (mark_ranges == nullptr)
+            {
+                mark_ranges = std::make_unique<MarkRanges>();
+            }
+            mark_ranges->emplace_back(hybrid_part.begin, hybrid_part.end);
+        }
+        else
+            physical_assignment[hostname].emplace_back(parts[hybrid_part.index]);
+    }
+
+    // try to merge consecutive ranges
+    mergeConsecutiveRanges(virtual_assignment);
+
+    LOG_INFO(
+        &Poco::Logger::get("Strict Bounded Consistent Hash for Hybrid Allocation"),
+        "Finish allocate part with strict bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
+    return res;
+}
+
+std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithConsistentHash(
+    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
+{
+    const auto & ring = worker_group->getRing();
+    std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
+    auto & physical_assignment = res.first;
+    auto & virtual_assignment = res.second;
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        const auto & part = parts[i];
+        UInt64 marks_cnt = part->marksCount();
+        if (marks_cnt <= virtual_part_size || part->isPartial())
+        {
+            /// only 1 single parts
+            String hostname = ring.find(part->info().getBasicPartName());
+            physical_assignment[hostname].emplace_back(part);
+        }
+        else
+        {
+            size_t begin = 0, end = std::min(marks_cnt, virtual_part_size);
+            String base_name = part->info().getBasicPartName();
+            const auto * logger = &Poco::Logger::get("assignCnchHybridPartsWithConsistentHash");
+            while (begin < end)
+            {
+                /// TODO: control number of virtual parts
+                String key = fmt::format("{}{}_{}", base_name, begin, end);
+                String hostname = ring.find(key);
+                auto insert_entry = virtual_assignment.try_emplace(hostname).first;
+
+                LOG_TRACE(logger, "virtual part key {} assign to worker {}", key, hostname);
+                auto & virtual_parts = insert_entry->second;
+                auto & mark_ranges = virtual_parts[i];
+                if (mark_ranges == nullptr)
+                {
+                    mark_ranges = std::make_unique<MarkRanges>();
+                }
+                /// Try to merge consecutive ranges
+                if (mark_ranges->empty() || mark_ranges->back().end < begin)
+                    mark_ranges->emplace_back(begin, end);
+                else
+                    mark_ranges->back().end = end;
+                /// Next virtual part
+                begin = end;
+                end = std::min(marks_cnt, end + virtual_part_size);
+            }
+        }
+    }
+    return res;
+}
+
+void sortByMarksCount(std::vector<HybridPart> & hybrid_parts)
+{
+    std::sort(hybrid_parts.begin(), hybrid_parts.end(), [](const auto & lhs, const auto & rhs) {
+        if (lhs.marks_count == rhs.marks_count)
+            // the key is unique
+            return lhs.key < rhs.key;
+        else
+            return lhs.marks_count > rhs.marks_count;
+    });
+}
+
+void splitHybridParts(const ServerDataPartsVector & parts, size_t virtual_part_size, std::vector<HybridPart> & hybrid_parts)
+{
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        const auto & part = parts[i];
+        UInt64 marks_cnt = part->marksCount();
+        String base_name = part->info().getBasicPartName();
+        if (marks_cnt <= virtual_part_size || part->isPartial())
+        {
+            // physical part
+            hybrid_parts.emplace_back(base_name, false, i, marks_cnt, 0, marks_cnt);
+        }
+        else
+        {
+            // virtual part
+            size_t begin = 0, end = virtual_part_size;
+            while (begin < end)
+            {
+                String key = fmt::format("{}{}_{}", base_name, begin, end);
+                hybrid_parts.emplace_back(key, true, i, end - begin, begin, end);
+                /// Next virtual part
+                begin = end;
+                end = std::min(marks_cnt, end + virtual_part_size);
+            }
+        }
+    }
+}
+
+void mergeConsecutiveRanges(VirtualPartAssignmentMap & virtual_part_assignment)
+{
+    for (const auto & items_per_host : virtual_part_assignment)
+        for (const auto & items_per_part : items_per_host.second)
+        {
+            auto & marks = *items_per_part.second;
+            // sort by begin marks
+            std::sort(marks.begin(), marks.end(), [](const auto & lhs, const auto & rhs) { return lhs.begin < rhs.begin; });
+
+            size_t current = 0;
+            for (size_t next = current + 1; next < marks.size(); ++next)
+            {
+                if (marks[current].end == marks[next].begin)
+                    marks[current].end = marks[next].end;
+                else
+                {
+                    ++current;
+                    if (current < next)
+                        marks[current] = marks[next];
+                }
+            }
+            marks.erase(marks.begin() + current + 1, marks.end());
+        }
+}
+
+void reportHybridAllocStats(ServerAssignmentMap & physical_parts, VirtualPartAssignmentMap & virtual_parts, const String & name)
+{
+    std::unordered_map<String, size_t> allocated_marks;
+    for (const auto & physical_part : physical_parts)
+    {
+        const auto & key = physical_part.first;
+        const auto & parts = physical_part.second;
+        size_t total_marks
+            = std::accumulate(parts.begin(), parts.end(), std::size_t(0), [](std::size_t result, const ServerDataPartPtr & part) {
+                  return result + part->marksCount();
+              });
+        allocated_marks[key] += total_marks;
+    }
+
+    for (const auto & virtual_part : virtual_parts)
+    {
+        const auto & key = virtual_part.first;
+        const auto & marks_map = virtual_part.second;
+        for (const auto & part_marks : marks_map)
+        {
+            auto & marks = *(part_marks.second);
+            size_t total_marks
+                = std::accumulate(marks.begin(), marks.end(), std::size_t(0), [](std::size_t result, const MarkRange & mark) {
+                      return result + (mark.end - mark.begin);
+                  });
+            allocated_marks[key] += total_marks;
+        }
+    }
+
+    double sum = 0;
+    double max_load = 0;
+    size_t sz = allocated_marks.size();
+    std::stringstream ss;
+    for (const auto & [host, mark_count] : allocated_marks)
+    {
+        sum += mark_count;
+        max_load = std::max(max_load, static_cast<double>(mark_count));
+        ss << host << " -> " << mark_count << "; ";
+    }
+    /// calculate coefficient of variance of the distribution
+    double mean = sum / sz;
+    double sum_of_squares = 0;
+    for (const auto & v : allocated_marks)
+    {
+        double diff = v.second - mean;
+        sum_of_squares += diff * diff;
+    }
+    /// coefficient of variance, lower is better
+    double co_var = std::sqrt(sum_of_squares / sz) / mean;
+    /// peak over average ratio, lower is better and must not exceed the load factor if use bounded load balancing
+    double peak_over_avg = max_load / mean;
+    ss << "; stats: " << co_var << " " << peak_over_avg << std::endl;
+    LOG_DEBUG(&Poco::Logger::get(name), ss.str());
+}
+
+ServerVirtualPartVector getVirtualPartVector(const ServerDataPartsVector & parts, std::map<int, std::unique_ptr<MarkRanges>> & parts_entry)
+{
+    ServerVirtualPartVector res;
+    res.reserve(parts_entry.size());
+    for (auto & [index, mark_ranges] : parts_entry)
+    {
+        res.emplace_back(std::make_shared<ServerVirtualPart>(parts[index], std::move(mark_ranges)));
+    }
+    return res;
+}
 }

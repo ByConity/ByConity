@@ -83,6 +83,18 @@ void AssignedResource::addDataParts(const ServerDataPartsVector & parts)
     }
 }
 
+void AssignedResource::addDataParts(ServerVirtualPartVector parts)
+{
+    for (auto & virtual_part : parts)
+    {
+        if (!part_names.count(virtual_part->part->name()))
+        {
+            part_names.emplace(virtual_part->part->name());
+            virtual_parts.emplace_back(std::move(virtual_part));
+        }
+    }
+}
+
 void AssignedResource::addDataParts(const HiveFiles & parts)
 {
     for (const auto & part : parts)
@@ -400,6 +412,7 @@ void CnchServerResource::allocateResource(
             const auto & server_parts = resource.server_parts;
             const auto & required_bucket_numbers = resource.bucket_numbers;
             ServerAssignmentMap assigned_map;
+            VirtualPartAssignmentMap virtual_part_assigned_map;
             HivePartsAssignMap assigned_hive_map;
             FilePartsAssignMap assigned_file_map;
             ServerDataPartsVector bucket_parts;
@@ -421,8 +434,28 @@ void CnchServerResource::allocateResource(
                         leftover_server_parts.size());
                     ProfileEvents::increment(ProfileEvents::CnchPartAllocationSplits);
                 }
-                assigned_map = assignCnchParts(worker_group, leftover_server_parts);
-                moveBucketTablePartsToAssignedParts(assigned_map, bucket_parts, worker_group->getWorkerIDVec(), required_bucket_numbers);
+
+                // If the # of parts over vw size is not zero,
+                // only go through hybrid allocation logic when that is smaller than a configurable ratio
+                if ((context->getSettingsRef().enable_hybrid_allocation || cnch_table->getSettings()->enable_hybrid_allocation)
+                    && (cnch_table->getSettings()->part_to_vw_size_ratio == 0
+                        || (static_cast<float>(leftover_server_parts.size()) / worker_group->getReadWorkers().size()
+                            < cnch_table->getSettings()->part_to_vw_size_ratio)))
+                {
+                    UInt64 min_rows_per_virtual_part = context->getSettingsRef().min_rows_per_virtual_part; /// 2M per virtual part
+                    if (min_rows_per_virtual_part == 0)
+                        min_rows_per_virtual_part = cnch_table->getSettings()->min_rows_per_virtual_part;
+                    auto virtual_part_size
+                        = computeVirtualPartSize(min_rows_per_virtual_part, cnch_table->getSettings()->index_granularity);
+                    std::tie(assigned_map, virtual_part_assigned_map)
+                        = assignCnchHybridParts(worker_group, leftover_server_parts, virtual_part_size, context);
+                }
+                else
+                {
+                    assigned_map = assignCnchParts(worker_group, leftover_server_parts, context);
+                }
+                moveBucketTablePartsToAssignedParts(
+                    assigned_map, bucket_parts, worker_group->getWorkerIDVec(), required_bucket_numbers, replicated);
             }
             else if (auto * cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
             {
@@ -452,6 +485,7 @@ void CnchServerResource::allocateResource(
             for (const auto & host_ports : host_ports_vec)
             {
                 ServerDataPartsVector assigned_parts;
+                ServerVirtualPartVector assigned_virtual_parts;
                 HiveFiles assigned_hive_parts;
                 FileDataPartsCNCHVector assigned_file_parts;
                 bool has_parts = false;
@@ -469,6 +503,18 @@ void CnchServerResource::allocateResource(
                         host_ports.toDebugString());
 
                     CnchPartsHelper::flattenPartsVector(assigned_parts);
+                }
+
+                if (auto it = virtual_part_assigned_map.find(host_ports.id); it != virtual_part_assigned_map.end())
+                {
+                    assigned_virtual_parts = getVirtualPartVector(leftover_server_parts, it->second);
+                    assigned_storage_worker_indexs.insert(host_ports);
+                    LOG_TRACE(
+                        log,
+                        "Send {} virtual data part (hybrid_allocation) to worker {} for table {}",
+                        assigned_parts.size(),
+                        host_ports.toDebugString(),
+                        storage->getStorageID().getNameForLogs());
                 }
 
                 if (auto it = assigned_hive_map.find(host_ports.id); it != assigned_hive_map.end())
@@ -529,6 +575,7 @@ void CnchServerResource::allocateResource(
                 auto & worker_resource = it->second.back();
 
                 worker_resource.addDataParts(assigned_parts);
+                worker_resource.addDataParts(std::move(assigned_virtual_parts));
                 worker_resource.addDataParts(assigned_hive_parts);
                 worker_resource.addDataParts(assigned_file_parts);
                 worker_resource.sent_create_query = resource.sent_create_query;

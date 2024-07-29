@@ -424,6 +424,46 @@ void fillPartsModelForSend(
     }
 }
 
+void fillPartsModelForSend(
+    const IStorage & storage, const ServerVirtualPartVector & parts, pb::RepeatedPtrField<Protos::DataModelVirtualPart> & parts_model)
+{
+    std::set<UInt64> sent_columns_commit_time;
+    for (const auto & part_with_ranges : parts)
+    {
+        const auto & part = part_with_ranges->part;
+        const auto & ranges = part_with_ranges->mark_ranges;
+        auto & model = *parts_model.Add();
+        auto * part_model = model.mutable_part();
+        *part_model = part->part_model();
+
+        part_model->set_commit_time(part->getCommitTime());
+        part_model->set_virtual_part_size(part->getVirtualPartSize());
+
+        auto * ranges_model = model.mutable_mark_ranges();
+        ranges_model->Reserve(2 * ranges->size());
+        for (const auto & range : *ranges)
+        {
+            ranges_model->Add(range.begin);
+            ranges_model->Add(range.end);
+        }
+
+        auto table_has_dynamic_subcolumns = hasDynamicSubcolumns(storage.getInMemoryMetadataPtr()->columns);
+        if (table_has_dynamic_subcolumns)
+        {
+            if (part_model->has_columns())
+            {
+                continue;
+            }
+        }
+
+        if (part_model->has_columns_commit_time() && sent_columns_commit_time.count(part_model->columns_commit_time()) == 0)
+        {
+            part_model->set_columns(storage.getPartColumns(part_model->columns_commit_time())->toString());
+            sent_columns_commit_time.insert(part_model->columns_commit_time());
+        }
+    }
+}
+
 std::shared_ptr<MergeTreePartition> createPartitionFromMetaModel(const MergeTreeMetaBase & storage, const Protos::PartitionMeta & meta)
 {
     std::shared_ptr<MergeTreePartition> partition_ptr = std::make_shared<MergeTreePartition>();

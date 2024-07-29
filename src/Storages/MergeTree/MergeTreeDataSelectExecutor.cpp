@@ -123,7 +123,11 @@ size_t MergeTreeDataSelectExecutor::getApproximateTotalRowsToRead(
 
     for (const auto & part : parts)
     {
-        MarkRanges ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, settings, log);
+        MarkRanges ranges;
+        if (!key_condition.alwaysUnknownOrTrue())
+            ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, settings, log);
+        else
+            ranges.emplace_back(0, part->getMarksCount());
 
         /** In order to get a lower bound on the number of rows that match the condition on PK,
           *  consider only guaranteed full marks.
@@ -971,8 +975,11 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
             size_t total_marks_count = part->index_granularity.getMarksCountWithoutFinal();
 
-            if (metadata_snapshot->hasPrimaryKey())
+            // Make sure that part->getIndex() is called only if they're needed.
+            if (metadata_snapshot->hasPrimaryKey() && !key_condition.alwaysUnknownOrTrue())
                 ranges.ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, settings, log_);
+            else if (part->mark_ranges_for_virtual_part != nullptr)
+                ranges.ranges = *part->mark_ranges_for_virtual_part;
             else if (total_marks_count)
                 ranges.ranges = MarkRanges{MarkRange{0, total_marks_count}};
 
@@ -1582,11 +1589,14 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     if (marks_count == 0)
         return res;
 
+    const auto & ranges_hint = part->mark_ranges_for_virtual_part;
     bool has_final_mark = part->index_granularity.hasFinalMark();
 
     if (key_condition.alwaysUnknownOrTrue())
     {
-        if (has_final_mark)
+        if (ranges_hint)
+            res = *ranges_hint;
+        else if (has_final_mark)
             res.push_back(MarkRange(0, marks_count - 1));
         else
             res.push_back(MarkRange(0, marks_count));
@@ -1594,6 +1604,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         return res;
     }
 
+    /// TODO: apply virtual part index here to avoid mark range filter on the whole part
     /// Here, index is needed and we try to load it
     const auto & index = *(part->getIndex());
 
@@ -1673,7 +1684,14 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         * If fits, split it into smaller ones and put them on the stack. If not, discard it.
         * If the segment is already of one mark length, add it to may_trueponse and discard it.
         */
-        std::vector<MarkRange> ranges_stack = { {0, marks_count} };
+        std::deque<MarkRange> ranges_stack;
+        if (ranges_hint)
+        {
+            ranges_stack = *ranges_hint;
+            std::reverse(ranges_stack.begin(), ranges_stack.end()); /// TODO: check if we can do this while receiving parts
+        }
+        else
+            ranges_stack.emplace_back(0, marks_count);
 
         size_t steps = 0;
 
@@ -1756,6 +1774,22 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
             res.emplace_back(std::move(result_range));
 
         LOG_TRACE(log, "Found {} range in {} steps", res.empty() ? "empty" : "continuous", steps);
+
+        if (ranges_hint && !res.empty())
+        {
+            /// For each element in ranges_hint, find the overlap with res[0]
+            MarkRanges tmp;
+            auto & res_range = res[0];
+            for (auto & range : *ranges_hint)
+            {
+                auto new_begin = std::max(res_range.begin, range.begin);
+                auto new_end = std::min(res_range.end, range.end);
+                /// No need to merge because range_hints are disjoint already
+                if (new_begin < new_end)
+                    tmp.emplace_back(new_begin, new_end);
+            }
+            res = std::move(tmp);
+        }
     }
 
     return res;

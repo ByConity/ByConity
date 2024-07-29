@@ -84,8 +84,9 @@ struct AssignedResource
 
     /// parts info
     ServerDataPartsVector server_parts;
-    FileDataPartsCNCHVector file_parts;
+    ServerVirtualPartVector virtual_parts;
     HiveFiles hive_parts;
+    FileDataPartsCNCHVector file_parts;
     std::set<Int64> bucket_numbers;
 
     std::unordered_set<String> part_names;
@@ -93,8 +94,9 @@ struct AssignedResource
     ColumnsDescription object_columns;
 
     void addDataParts(const ServerDataPartsVector & parts);
-    void addDataParts(const FileDataPartsCNCHVector & parts);
+    void addDataParts(ServerVirtualPartVector parts);
     void addDataParts(const HiveFiles & parts);
+    void addDataParts(const FileDataPartsCNCHVector & parts);
 
     bool empty() const { return sent_create_query && server_parts.empty() && hive_parts.empty() && file_parts.empty(); }
 };

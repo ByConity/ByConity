@@ -143,6 +143,7 @@ void ServerDataPart::serializeDeleteBitmapMetas([[maybe_unused]] const MergeTree
 }
 
 UInt64 ServerDataPart::rowsCount() const { return part_model_wrapper->part_model->rows_count(); }
+UInt64 ServerDataPart::marksCount() const { return part_model_wrapper->part_model->marks_count(); }
 UInt64 ServerDataPart::rowExistsCount() const
 {
     return part_model_wrapper->part_model->has_row_exists_count() ? part_model_wrapper->part_model->row_exists_count() : rowsCount();

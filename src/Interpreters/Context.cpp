@@ -5757,6 +5757,19 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
     }
 }
 
+Context::HybridPartAllocator Context::getHybridPartAllocationAlgo() const
+{
+    switch (settings.cnch_hybrid_part_allocation_algorithm)
+    {
+        case 0: return HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH;
+        case 1: return HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH;
+        case 2: return HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH;
+        case 3: return HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH_ONE_STAGE;
+        case 4: return HybridPartAllocator::HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE;
+        default: return HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH;
+    }
+}
+
 void Context::createPlanNodeIdAllocator(int max_id)
 {
     id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id);

@@ -550,9 +550,10 @@ enum StealingCacheMode : UInt64
     M(Bool, bitengine_use_key_string, false, "BitEngine support String key", 0) \
     M(Bool, bitengine_use_key_int, true, "BitEngine support UInt64 key, default way", 0) \
     M(String, underlying_dictionary_tables, "{}", "To specify a table to store BitEngine dictionary data, only in Cnch", 0) \
+    /** Hybrid allocation related settings */ \
     M(Bool, enable_hybrid_allocation, false, "Whether or not enable hybrid allocation, default disabled", 0) \
-    M(UInt64, min_rows_per_vp, 2000000, "Minimum size of a virtual part", 0) \
-    M(Float, part_to_vw_size_ratio, 0.1, "Part to vw worker size's ration", 0) \
+    M(UInt64, min_rows_per_virtual_part, 2000000, "Minimum size of a virtual part", 0) \
+    M(Float, part_to_vw_size_ratio, 0, "Part to vw worker size's ration", 0) \
     \
     /** MYSQL related settings */ \
     M(DialectType, storage_dialect_type, DialectType::CLICKHOUSE, "If the storage's dialect_type is not CLICKHOUSE, need to persist the information for creating/running queries on worker", 0) \

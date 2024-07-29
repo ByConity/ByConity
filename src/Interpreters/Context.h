@@ -1650,6 +1650,17 @@ public:
 
     PartAllocator getPartAllocationAlgo() const;
 
+    /// Consistent hash algorithm for hybrid part allocation
+    enum HybridPartAllocator : int
+    {
+        HYBRID_MODULO_CONSISTENT_HASH = 0,
+        HYBRID_RING_CONSISTENT_HASH = 1,
+        HYBRID_BOUNDED_LOAD_CONSISTENT_HASH = 2,
+        HYBRID_RING_CONSISTENT_HASH_ONE_STAGE = 3,
+        HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE = 4
+    };
+    HybridPartAllocator getHybridPartAllocationAlgo() const;
+
     String getDefaultCnchPolicyName() const;
     String getCnchAuxilityPolicyName() const;
 

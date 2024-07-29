@@ -472,7 +472,9 @@ message TableDataParts
   repeated CnchFilePartModel file_parts = 7;
   /// mutations: CloudMergeTree need this to find the actual column name in storage.
   repeated string cnch_mutation_entries = 8;
-  optional uint64 table_version = 9;
+  repeated DataModelVirtualPart virtual_parts = 9;
+  repeated DataModelDeleteBitmap virtual_part_bitmaps = 10;
+  optional uint64 table_version = 11;
 }
 
 message SendResourcesReq

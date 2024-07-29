@@ -115,6 +115,7 @@ public:
 
     bool isEmpty() const;
     UInt64 rowsCount() const;
+    UInt64 marksCount() const;
     UInt64 rowExistsCount() const;
     UInt64 size() const;
     bool isPartial() const;
@@ -166,6 +167,15 @@ private:
     mutable UInt64 virtual_part_size = 0;
     mutable ImmutableDeleteBitmapPtr delete_bitmap;
 
+};
+
+struct ServerVirtualPart
+{
+    const ServerDataPartPtr part;
+    std::unique_ptr<MarkRanges> mark_ranges;
+    explicit ServerVirtualPart(const ServerDataPartPtr & part_, std::unique_ptr<MarkRanges> mark_ranges_)
+        : part(part_), mark_ranges(std::move(mark_ranges_))
+    {}
 };
 
 }

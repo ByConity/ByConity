@@ -1868,7 +1868,6 @@ enum PreloadLevelSettings : UInt64
 
 #define OBSOLETE_SETTINGS(M) \
     /** Obsolete settings that do nothing now but left for compatibility reasons. Remove them or implement them when you have free time. */ \
-    MAKE_OBSOLETE(M, Bool, enable_hybrid_allocation, false) \
     MAKE_OBSOLETE(M, Bool, make_partition_by_todate_monotonic, false) \
     MAKE_OBSOLETE(M, Bool, enable_query_cache, false) \
     MAKE_OBSOLETE(M, Bool, enable_parallel_input_generator, false) \
@@ -2058,9 +2057,14 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
     M(Bool, enable_select_query_forwarding, false, "Auto forward select query to target server when having multiple servers", 0) \
     \
-    M(Bool, merge_partition_stats,false, "merge all partition stats", 0) \
+    M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
     M(String, default_catalog, "", "current catalog", 0) \
+    \
+    /** Hybrid allocation related settings */ \
+    M(Bool, enable_hybrid_allocation, false, "Enalbe hybrid physical parts - virutal parts allocation", 0) \
+    M(UInt64, min_rows_per_virtual_part, 0, "Minimum size of a virtual part", 0) \
+    M(UInt64, cnch_hybrid_part_allocation_algorithm, 2, "Hybrid Part allocation algorithm, 0: modulo hashing, 1: ring consistent hash, 2: bounded load consistent hashing, 3: bounded consistent hashing in one stage, 4: strict bounded consistent hashing in one stage.", 0) \
     \
     /** BitEngine related settings */ \
     M(Bool, use_encoded_bitmap, true, "Whether to read the encoded bitmap column", 0) \

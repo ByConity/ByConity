@@ -576,6 +576,9 @@ public:
 
     mutable UInt64 virtual_part_size = 0;
 
+    /// Mark ranges, if we divide parts into virtual parts in server side 
+    std::unique_ptr<MarkRanges> mark_ranges_for_virtual_part;
+
     /// secondary_txn_id > 0 mean this parts belong to an explicit transaction
     mutable TxnTimestamp secondary_txn_id {0};
 
