@@ -1430,13 +1430,9 @@ void StorageCnchMergeTree::collectResourceWithTableVersion(
         const StorageSnapshotPtr & storage_snapshot,
         WorkerEngineType engine_type)
 {
-    std::optional<BitEngineDictionaryTableMapping> underlying_dictionary_table_cloud = std::nullopt;
-    if (isBitEngineTable())
-        underlying_dictionary_table_cloud = generateDictSettingForCloud(local_context);
-
     auto cnch_resource = local_context->getCnchServerResource();
     auto create_table_query = getCreateQueryForCloudTable(
-        getCreateTableSql(), local_table_name, local_context, false, std::nullopt, {}, {}, engine_type, underlying_dictionary_table_cloud);
+        getCreateTableSql(), local_table_name, local_context, false, std::nullopt, {}, {}, engine_type);
 
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name, false);
 

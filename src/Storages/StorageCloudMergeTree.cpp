@@ -28,7 +28,6 @@
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
-#include <Storages/BitEngineEncodePartitionHelper.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
@@ -756,12 +755,6 @@ bool StorageCloudMergeTree::getQueryProcessingStageWithAggregateProjection(
 std::unique_ptr<MergeTreeSettings> StorageCloudMergeTree::getDefaultSettings() const
 {
     return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
-}
-
-Pipe StorageCloudMergeTree::preattachPartition(const PartitionCommand & command, [[maybe_unused]] ContextPtr local_context)
-{
-    BlockInputStreamPtr in = std::make_shared<BitEngineEncodePartitionStream>(*this, command, local_context);
-    return Pipe{std::make_shared<SourceFromInputStream>(std::move(in))};
 }
 
 void StorageCloudMergeTree::prepareDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names)

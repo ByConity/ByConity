@@ -3174,7 +3174,7 @@ namespace Catalog
 
         BatchCommitRequest batch_write;
         /// build extra metadata that need to be commit with transaction
-        // commit kafka offsets 
+        // commit kafka offsets
         if (!txn->consumer_group.empty())
         {
             for (const auto & tp : txn->tpl)
@@ -3187,16 +3187,10 @@ namespace Catalog
             throw Exception("Commit transaction with new table version does not support MaterializeMysql now.", ErrorCodes::LOGICAL_ERROR);
         }
 
-        if (!std::get<0>(txn->getBitEngineDictTableMeta()).empty())
-        {
-            /// TODO: support materialize mysql
-            throw Exception("Commit transaction with new table version does not support bitengine now.", ErrorCodes::LOGICAL_ERROR);
-        }
-
         /// add new transaction record. CAS operation
         batch_write.AddPut(SinglePutRequest(MetastoreProxy::transactionRecordKey(name_space, target_record.txnID().toUInt64()),
             target_record.serialize(), txn->getTransactionRecord().serialize()));
-        
+
         /// build manifest list
         Protos::ManifestListModel manifest_list;
         manifest_list.set_version(table_version);

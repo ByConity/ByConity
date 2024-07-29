@@ -128,7 +128,8 @@ public:
         bool enable_staging_area = false,
         const std::optional<StorageID> & cnch_storage_id = std::nullopt,
         const Strings & engine_args = {},
-        const String & local_database_name = {}) const;
+        const String & local_database_name = {},
+        WorkerEngineType engine_type = WorkerEngineType::CLOUD) const;
 
     static void rewritePlanSegmentQueryImpl(ASTPtr & query, const std::string & database, const std::string & table);
 

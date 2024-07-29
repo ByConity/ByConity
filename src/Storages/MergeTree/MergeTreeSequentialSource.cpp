@@ -88,6 +88,7 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     bool take_column_types_from_storage,
     bool quiet,
     CnchMergePrefetcher::PartFutureFiles * future_files,
+    BitEngineReadType bitengine_read_type,
     size_t block_preferred_size_bytes_,
     MergeTreeSequentialSource::RuntimeContextPtr rt_ctx_)
     : MergeTreeSequentialSource(
@@ -100,6 +101,7 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
         take_column_types_from_storage,
         quiet,
         future_files,
+        bitengine_read_type,
         block_preferred_size_bytes_,
         rt_ctx_)
 {

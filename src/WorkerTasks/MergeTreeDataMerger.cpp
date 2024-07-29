@@ -674,7 +674,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             context->getSettingsRef().optimize_map_column_serialization,
             /* enable_disk_based_key_index_ = */ false);
 
-        auto gather_column = [&](const String & column_name) {
+        auto gather_column = [&](const String & column_name, BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) {
             Float64 progress_before = manipulation_entry->progress.load(std::memory_order_relaxed);
             Float64 column_weight = column_sizes->columnWeight(column_name);
             MergeStageProgress column_progress(progress_before, column_weight);
@@ -695,9 +695,11 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                     source_data_parts[part_num],
                     Names{column_name},
                     read_with_direct_io,
-                    /*take_column_types_from_storage*/ true, /// default is true, in bitengine may set false,
+                    /*take_column_types_from_storage*/ bitengine_read_type
+                        == BitEngineReadType::ONLY_SOURCE, /// default is true, in bitengine may set false,
                     /*quiet*/ false,
                     future_files,
+                    bitengine_read_type,
                     /*block_preferred_size_bytes_*/ data_settings->merge_max_block_size_bytes,
                     rt_ctx);
 

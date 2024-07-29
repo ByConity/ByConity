@@ -411,6 +411,7 @@ void CnchServerResource::allocateResource(
             const auto & storage = resource.storage;
             const auto & server_parts = resource.server_parts;
             const auto & required_bucket_numbers = resource.bucket_numbers;
+            bool replicated = resource.replicated;
             ServerAssignmentMap assigned_map;
             VirtualPartAssignmentMap virtual_part_assigned_map;
             HivePartsAssignMap assigned_hive_map;
@@ -421,8 +422,6 @@ void CnchServerResource::allocateResource(
 
             if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
             {
-                // For function : arrayToBitmapWithEncode/EncodeBitmap
-                bitengine_related_table = cnch_table->isBitEngineDictTable() || cnch_table->isBitEngineTable();
                 // NOTE: server_parts maybe moved due to splitCnchParts and cannot be used again
                 std::tie(bucket_parts, leftover_server_parts) = splitCnchParts(context, *storage, server_parts);
                 if (!bucket_parts.empty() && !leftover_server_parts.empty())
