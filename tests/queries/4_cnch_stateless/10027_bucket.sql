@@ -88,7 +88,7 @@ SELECT * FROM bucket_attach ORDER BY name FORMAT CSV;
 SELECT * FROM bucket_attach_2 ORDER BY name FORMAT CSV; -- empty results returned as part has been dropped from this table during attach
 SELECT count(DISTINCT table_definition_hash) FROM system.cnch_parts where database = currentDatabase(1) and table = 'bucket_attach' and active FORMAT CSV;
 SELECT sleep(3) FORMAT Null; -- wait for cluster_status to be changed
-SELECT cluster_status FROM system.cnch_table_info where database = currentDatabase() and table = 'bucket_attach' FORMAT CSV;
+SELECT cluster_status FROM system.cnch_table_info where database = currentDatabase(0) and table = 'bucket_attach' FORMAT CSV;
 
 -- Ensure bucket number is assigned using user defined cluster by expression
 INSERT INTO test_user_defined_expr VALUES (1, 1, 'r1'), (2, 2, '');
@@ -139,5 +139,5 @@ DROP TABLE test_user_defined_expr;
 CREATE TABLE bucket (d UInt32, n UInt32) Engine = CnchMergeTree PARTITION BY d ORDER BY n;
 INSERT INTO bucket VALUES (1, 1), (2, 2);
 ALTER TABLE bucket MODIFY CLUSTER BY n INTO 2 BUCKETS;
-SELECT cluster_status FROM system.cnch_table_info WHERE database = currentDatabase() AND table = 'bucket';
+SELECT cluster_status FROM system.cnch_table_info WHERE database = currentDatabase(0) AND table = 'bucket';
 DROP TABLE bucket;

@@ -15,7 +15,7 @@ SELECT id, data.k1, data.k2.k3, data.k2.k4, data.k5 FROM t_json ORDER BY id;
 
 -- SELECT name, column, type
 -- FROM system.parts_columns
--- WHERE table = 't_json' AND database = currentDatabase() AND active AND column = 'data'
+-- WHERE table = 't_json' AND database = currentDatabase(0) AND active AND column = 'data'
 -- ORDER BY name;
 
 -- SYSTEM START MERGES t_json;
@@ -24,7 +24,7 @@ SELECT id, data.k1, data.k2.k3, data.k2.k4, data.k5 FROM t_json ORDER BY id;
 
 -- SELECT name, column, type
 -- FROM system.parts_columns
--- WHERE table = 't_json' AND database = currentDatabase() AND active AND column = 'data'
+-- WHERE table = 't_json' AND database = currentDatabase(0) AND active AND column = 'data'
 -- ORDER BY name;
 
 -- SELECT '============';
@@ -35,7 +35,7 @@ SELECT id, data.k1, data.k2.k3, data.k2.k4, data.k5 FROM t_json ORDER BY id;
 
 -- SELECT name, column, type
 -- FROM system.parts_columns
--- WHERE table = 't_json' AND database = currentDatabase() AND active AND column = 'data'
+-- WHERE table = 't_json' AND database = currentDatabase(0) AND active AND column = 'data'
 -- ORDER BY name;
 
 -- SELECT '============';
@@ -50,7 +50,7 @@ SELECT id, data.k1, data.k2.k3, data.k2.k4, data.k5 FROM t_json ORDER BY id;
 
 -- SELECT name, column, type
 -- FROM system.parts_columns
--- WHERE table = 't_json' AND database = currentDatabase() AND active AND column = 'data'
+-- WHERE table = 't_json' AND database = currentDatabase(0) AND active AND column = 'data'
 -- ORDER BY name;
 
 -- INSERT INTO t_json FORMAT JSONEachRow {"id": 3, "data": {"name": "a", "value": 42.123 }};
@@ -59,7 +59,7 @@ SELECT id, data.k1, data.k2.k3, data.k2.k4, data.k5 FROM t_json ORDER BY id;
 
 -- SELECT name, column, type
 -- FROM system.parts_columns
--- WHERE table = 't_json' AND database = currentDatabase() AND active AND column = 'data'
+-- WHERE table = 't_json' AND database = currentDatabase(0) AND active AND column = 'data'
 -- ORDER BY name;
 
 -- INSERT INTO t_json FORMAT JSONEachRow {"id": 4, "data": {"name": "a", "value": "some" }};
@@ -68,7 +68,7 @@ SELECT id, data.k1, data.k2.k3, data.k2.k4, data.k5 FROM t_json ORDER BY id;
 
 -- SELECT name, column, type
 -- FROM system.parts_columns
--- WHERE table = 't_json' AND database = currentDatabase() AND active AND column = 'data'
+-- WHERE table = 't_json' AND database = currentDatabase(0) AND active AND column = 'data'
 -- ORDER BY name;
 
 -- SYSTEM START MERGES t_json;
@@ -76,7 +76,7 @@ SELECT id, data.k1, data.k2.k3, data.k2.k4, data.k5 FROM t_json ORDER BY id;
 
 -- SELECT name, column, type
 -- FROM system.parts_columns
--- WHERE table = 't_json' AND database = currentDatabase() AND active AND column = 'data'
+-- WHERE table = 't_json' AND database = currentDatabase(0) AND active AND column = 'data'
 -- ORDER BY name;
 
 DROP TABLE IF EXISTS t_json;

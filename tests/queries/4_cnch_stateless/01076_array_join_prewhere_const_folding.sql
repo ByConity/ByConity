@@ -3,6 +3,6 @@ SELECT 1 LIMIT 0;
 SYSTEM FLUSH LOGS;
 
 SELECT * FROM system.query_log
-PREWHERE ProfileEvents['Query'] > 0 and current_database = currentDatabase() 
+PREWHERE ProfileEvents['Query'] > 0 and current_database = currentDatabase(0) 
 
 LIMIT 0;

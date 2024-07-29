@@ -42,7 +42,7 @@ select mapValues(string_map), mapValues(string_array_map), mapValues(fixed_strin
 
 select '';
 select 'select getMapKeys :';
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'string_map'); -- { serverError 36 }
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'string_map'); -- { serverError 36 }
 
 DROP TABLE 00745_merge_tree_map_data_type;
 
@@ -88,16 +88,16 @@ select mapValues(string_map), mapValues(string_array_map), mapValues(fixed_strin
 
 select '';
 select 'select getMapKeys :';
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'string_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'string_array_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'fixed_string_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'int_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'lowcardinality_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'float_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'date_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'datetime_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'uuid_map');
-select getMapKeys(currentDatabase(), '00745_merge_tree_map_data_type', 'enums_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'string_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'string_array_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'fixed_string_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'int_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'lowcardinality_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'float_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'date_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'datetime_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'uuid_map');
+select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'enums_map');
 
 DROP TABLE 00745_merge_tree_map_data_type;
 

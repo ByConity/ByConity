@@ -16,8 +16,8 @@ SELECT '-- test system.cnch_parts --';
 SELECT count() from system.cnch_parts where database = currentDatabase(1) and table = 'test'; 
 SELECT count() from system.cnch_parts where database = currentDatabase(1) and table = 'test' and partition_id = '20190101'; 
 SELECT '-- test system.cnch_table_host --'; 
-SELECT count() from system.cnch_table_host where database = currentDatabase() and name = 'test'; 
-SELECT count() from system.cnch_table_host where database = currentDatabase(); 
+SELECT count() from system.cnch_table_host where database = currentDatabase(0) and name = 'test'; 
+SELECT count() from system.cnch_table_host where database = currentDatabase(0); 
 
 DROP TABLE test;
 
@@ -31,6 +31,6 @@ CREATE TABLE test_unique (d Date, id UInt64, uniq_id UInt64, a String)
     ORDER BY `id`
     SAMPLE BY `id`
     UNIQUE KEY `uniq_id`;
-SELECT count() from system.cnch_staged_parts where database = currentDatabase() and table = 'test_unique'; 
-SELECT count() from system.cnch_staged_parts where database = currentDatabase();  -- { serverError 80 }
+SELECT count() from system.cnch_staged_parts where database = currentDatabase(0) and table = 'test_unique'; 
+SELECT count() from system.cnch_staged_parts where database = currentDatabase(0);  -- { serverError 80 }
 DROP TABLE test_unique;

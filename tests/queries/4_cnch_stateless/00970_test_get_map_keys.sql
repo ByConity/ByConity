@@ -4,13 +4,13 @@ CREATE TABLE test_map (`event_date` Date, `int_map` Map(UInt32, String), `string
 
 insert into test_map values('2001-01-01', {1:'1'}, {'1':'1'},{1.1:'1'},{'2001-01-01':'1'},{'2001-01-01 00:00:00':'1'});
 
-select getMapKeys(currentDatabase(), 'test_map', 'int_map');
-select getMapKeys(currentDatabase(), 'test_map', 'string_map');
-select getMapKeys(currentDatabase(), 'test_map', 'float_map');
-select getMapKeys(currentDatabase(), 'test_map', 'date_map');
-select getMapKeys(currentDatabase(), 'test_map', 'date_time_map');
+select getMapKeys(currentDatabase(0), 'test_map', 'int_map');
+select getMapKeys(currentDatabase(0), 'test_map', 'string_map');
+select getMapKeys(currentDatabase(0), 'test_map', 'float_map');
+select getMapKeys(currentDatabase(0), 'test_map', 'date_map');
+select getMapKeys(currentDatabase(0), 'test_map', 'date_time_map');
 
-select getMapKeys(currentDatabase(), 'test_map', 'int_map', '2001.*01.*01');
-select getMapKeys(currentDatabase(), 'test_map', 'int_map', '2001.*01.*02');
+select getMapKeys(currentDatabase(0), 'test_map', 'int_map', '2001.*01.*01');
+select getMapKeys(currentDatabase(0), 'test_map', 'int_map', '2001.*01.*02');
 
 drop table test_map;

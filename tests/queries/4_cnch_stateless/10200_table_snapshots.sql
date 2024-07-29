@@ -24,7 +24,7 @@ system start merges t2;
 select 'create s1';
 create snapshot s1 to t1 ttl 1 days;
 create snapshot if not exists s1 to t1 ttl 1 days; -- no op
-select name, table_uuid is not null, ttl_in_days from system.cnch_snapshots where database = currentDatabase() and name = 's1';
+select name, table_uuid is not null, ttl_in_days from system.cnch_snapshots where database = currentDatabase(0) and name = 's1';
 
 create snapshot s1 to t1 ttl 1 days; -- { serverError 1150 }
 create snapshot bad to unknown_table ttl 1 days; -- { serverError 60 }

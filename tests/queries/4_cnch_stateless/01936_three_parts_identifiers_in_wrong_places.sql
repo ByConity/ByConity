@@ -1,4 +1,4 @@
-SELECT dictGet(t.nest.a, concat(currentDatabase(), '.dict.dict'), 's', number) FROM numbers(5); -- { serverError 47 }
+SELECT dictGet(t.nest.a, concat(currentDatabase(0), '.dict.dict'), 's', number) FROM numbers(5); -- { serverError 47 }
 
 SELECT dictGetFloat64(t.b.s, 'database_for_dict.dict1', dictGetFloat64('Ta\0', toUInt64('databas\0_for_dict.dict1databas\0_for_dict.dict1', dictGetFloat64('', '', toUInt64(1048577), toDate(NULL)), NULL), toDate(dictGetFloat64(257, 'database_for_dict.dict1database_for_dict.dict1', '', toUInt64(NULL), 2, toDate(NULL)), '2019-05-2\0')), NULL, toUInt64(dictGetFloat64('', '', toUInt64(-9223372036854775808), toDate(NULL)), NULL)); -- { serverError 47 }
 
