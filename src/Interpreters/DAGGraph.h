@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 class CnchServerResource;
 
 struct PlanSegmentsStatus
@@ -34,21 +33,37 @@ using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
 using Source = std::unordered_set<size_t>;
 using WorkerInfoSet = std::unordered_set<HostWithPorts, std::hash<HostWithPorts>, HostWithPorts::IsSameEndpoint>;
 using PlanSegmentId = size_t;
-struct SourcePruneInfo
+using StorageUnions = std::vector<std::unordered_set<UUID>>;
+using StorageUnionsPtr = std::shared_ptr<StorageUnions>;
+struct SourcePruner
 {
+    SourcePruner(PlanSegmentTree * plan_segments_ptr_, Poco::Logger * log_)
+        : plan_segments_ptr(plan_segments_ptr_), log(log_)
+    {
+    }
+    
+    void pruneSource(
+        CnchServerResource * server_resource,
+        std::unordered_map<size_t, PlanSegment *> & id_to_segment);
+
+    void prepare();
+    
     std::unordered_set<PlanSegmentId> unprunable_plan_segments;
-    std::unordered_map<PlanSegmentId, std::vector<UUID>> plan_segment_storages_map;
+    std::unordered_map<PlanSegmentId, std::unordered_set<UUID>> plan_segment_storages_map;
     std::unordered_map<PlanSegmentId, WorkerInfoSet> plan_segment_workers_map;
+
+private:
+    void generateUnprunableSegments();
+    void generateSegmentStorageMap();
+    PlanSegmentTree * plan_segments_ptr;
+    Poco::Logger * log;
 };
 
-using SourcePruneInfoPtr = std::shared_ptr<SourcePruneInfo>;
+using SourcePrunerPtr = std::shared_ptr<SourcePruner>;
 
 struct DAGGraph
 {
-    DAGGraph() : log(&Poco::Logger::get("DAGGraph"))
-    {
-        async_context = std::make_shared<AsyncContext>();
-    }
+    DAGGraph() : log(&Poco::Logger::get("DAGGraph")) { async_context = std::make_shared<AsyncContext>(); }
     void joinAsyncRpcWithThrow();
     void joinAsyncRpcPerStage();
     void joinAsyncRpcAtLast();
@@ -56,6 +71,12 @@ struct DAGGraph
 
     PlanSegment * getPlanSegmentPtr(size_t id);
 
+    SourcePrunerPtr makeSourcePruner(PlanSegmentTree * plan_segments_ptr)
+    {
+        source_pruner = std::make_shared<SourcePruner>(plan_segments_ptr, log);
+        return source_pruner;
+    }
+    
     /// all segments containing only table scan
     Source sources;
     /// all segments containing at least one table scan
@@ -78,9 +99,8 @@ struct DAGGraph
     std::unordered_map<size_t, UInt64> segment_parallel_size_map;
     butil::IOBuf query_common_buf;
     butil::IOBuf query_settings_buf;
-    SourcePruneInfoPtr source_prune_info;
+    SourcePrunerPtr source_pruner;
 
-    void generateSourcePruneInfo(PlanSegmentTree * plan_segments_ptr, CnchServerResource * server_resource);
     Poco::Logger * log;
 };
 
@@ -89,9 +109,7 @@ using DAGGraphPtr = std::shared_ptr<DAGGraph>;
 class AdaptiveScheduler
 {
 public:
-    explicit AdaptiveScheduler(const ContextPtr & context) : query_context(context), log(&Poco::Logger::get("AdaptiveScheduler"))
-    {
-    }
+    explicit AdaptiveScheduler(const ContextPtr & context) : query_context(context), log(&Poco::Logger::get("AdaptiveScheduler")) { }
     std::vector<size_t> getRandomWorkerRank();
     std::vector<size_t> getHealthyWorkerRank();
 

@@ -96,7 +96,7 @@ struct AssignedResource
     void addDataParts(const FileDataPartsCNCHVector & parts);
     void addDataParts(const HiveFiles & parts);
 
-    bool empty() const { return sent_create_query && server_parts.empty(); }
+    bool empty() const { return sent_create_query && server_parts.empty() && hive_parts.empty() && file_parts.empty(); }
 };
 
 // Send resources separately by UUID

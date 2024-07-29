@@ -82,10 +82,17 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     if (server_resource && !query_context->getSettingsRef().bsp_mode)
     {
         server_resource->setSendMutations(true);
-        /// TODO: we can skip some worker
-        server_resource->sendResources(query_context);
         if (query_context->getSettingsRef().enable_prune_source_plan_segment)
-            dag_ptr->generateSourcePruneInfo(plan_segments_ptr, server_resource.get());
+        {
+            auto source_pruner = dag_ptr->makeSourcePruner(plan_segments_ptr);
+            server_resource->sendResources(query_context);
+            source_pruner->pruneSource(server_resource.get(), dag_ptr->id_to_segment);
+        }
+        else
+        {
+            server_resource->sendResources(query_context);
+        }
+            
     }
 
     auto * final_segment = plan_segments_ptr->getRoot()->getPlanSegment();

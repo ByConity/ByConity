@@ -166,6 +166,16 @@ void StorageID::toProto(Protos::StorageID & proto) const
     RPCHelpers::fillStorageID(*this, proto);
 }
 
+StorageID StorageID::tryFromProto(const Protos::StorageID & proto, ContextPtr context)
+{
+    try {
+        return fromProto(proto, context);
+    } catch (Exception &) {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        return StorageID{};
+    }
+}
+
 StorageID StorageID::fromProto(const Protos::StorageID & proto, ContextPtr context)
 {
     auto storage_id = RPCHelpers::createStorageID(proto);

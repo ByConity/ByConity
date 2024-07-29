@@ -140,7 +140,7 @@ public:
         const WorkerId & worker_id,
         bool with_mutations = false);
 
-    void removeWorkerResource(TxnTimestamp txn_id);
+    brpc::CallId removeWorkerResource(TxnTimestamp txn_id, ExceptionHandlerPtr handler);
 
     void createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports, const size_t & deduper_index);
     void assignHighPriorityDedupPartition(const StorageID & storage_id, const Names & high_priority_partition);

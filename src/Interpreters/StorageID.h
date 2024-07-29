@@ -143,6 +143,7 @@ struct StorageID
 
     void toProto(Protos::StorageID & proto) const;
     static StorageID fromProto(const Protos::StorageID & proto, ContextPtr context);
+    static StorageID tryFromProto(const Protos::StorageID & proto, ContextPtr context);
 
     UInt64 hash() const
     {

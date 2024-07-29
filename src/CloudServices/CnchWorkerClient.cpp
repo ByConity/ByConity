@@ -32,6 +32,7 @@
 #include <WorkerTasks/ManipulationTaskParams.h>
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 
+#include <brpc/callback.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <common/logger_useful.h>
@@ -489,6 +490,7 @@ brpc::CallId CnchWorkerClient::sendResources(
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
+    LOG_TRACE(&Poco::Logger::get("CnchWorkerClient"), "request : {}", request.ShortDebugString());
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms
@@ -501,17 +503,17 @@ brpc::CallId CnchWorkerClient::sendResources(
     return call_id;
 }
 
-void CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id)
+brpc::CallId CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id, ExceptionHandlerPtr handler)
 {
-    brpc::Controller cntl;
+    brpc::Controller * cntl = new brpc::Controller;
     Protos::RemoveWorkerResourceReq request;
-    Protos::RemoveWorkerResourceResp response;
+    auto * response = new Protos::RemoveWorkerResourceResp;
+    auto call_id = cntl->call_id();
 
     request.set_txn_id(txn_id);
-    stub->removeWorkerResource(&cntl, &request, &response, nullptr);
+    stub->removeWorkerResource(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
 
-    assertController(cntl);
-    RPCHelpers::checkResponse(response);
+    return call_id;
 }
 
 void CnchWorkerClient::createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports_, const size_t & deduper_index)

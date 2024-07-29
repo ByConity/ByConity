@@ -88,6 +88,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_SIMULTANEOUS_TASKS;
     extern const int PREALLOCATE_TOPOLOGY_ERROR;
     extern const int PREALLOCATE_QUERY_INTENT_NOT_FOUND;
+    extern const int SESSION_NOT_FOUND;
 }
 
 CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
@@ -847,7 +848,12 @@ void CnchWorkerServiceImpl::removeWorkerResource(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
+        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true, true);
+        if (!session)
+        {
+            // Return success if can't find session.
+            return;
+        }
         /// remove resource in worker
         session->release();
     }

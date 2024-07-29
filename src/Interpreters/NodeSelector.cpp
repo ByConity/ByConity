@@ -182,8 +182,8 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
     else
     {
         auto local_address = getLocalAddress(*query_context);
-        if (dag_graph_ptr->source_prune_info
-            && dag_graph_ptr->source_prune_info->plan_segment_workers_map.contains(plan_segment_ptr->getPlanSegmentId()))
+        if (dag_graph_ptr->source_pruner
+            && dag_graph_ptr->source_pruner->plan_segment_workers_map.contains(plan_segment_ptr->getPlanSegmentId()))
         {
             selectPrunedWorkers(dag_graph_ptr, plan_segment_ptr, result, local_address);
         }
@@ -208,8 +208,8 @@ NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr, C
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
 
-    if (dag_graph_ptr->source_prune_info && query_context->getSettingsRef().enable_prune_compute_plan_segment
-        && dag_graph_ptr->source_prune_info->plan_segment_workers_map.contains(plan_segment_ptr->getPlanSegmentId()))
+    if (dag_graph_ptr->source_pruner && query_context->getSettingsRef().enable_prune_compute_plan_segment
+        && dag_graph_ptr->source_pruner->plan_segment_workers_map.contains(plan_segment_ptr->getPlanSegmentId()))
     {
         auto local_address = getLocalAddress(*query_context);
         selectPrunedWorkers(dag_graph_ptr, plan_segment_ptr, result, local_address);

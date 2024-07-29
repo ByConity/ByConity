@@ -1027,12 +1027,12 @@ Context::acquireNamedSession(const String & session_id, std::chrono::steady_cloc
 }
 
 std::shared_ptr<NamedCnchSession>
-Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const
+Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check, bool return_null_if_not_found) const
 {
     if (!shared->named_cnch_sessions)
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
     LOG_DEBUG(&Poco::Logger::get("acquireNamedCnchSession"), "Trying to acquire session for {}\n", txn_id);
-    return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check);
+    return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check, return_null_if_not_found);
 }
 
 void Context::initCnchServerResource(const TxnTimestamp & txn_id)

@@ -13,7 +13,9 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 #include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <CloudServices/CnchPartsHelper.h>
@@ -148,17 +150,24 @@ void CnchServerResource::cleanResourceInWorker()
 
     auto worker_clients = worker_group->getWorkerClients();
 
+    auto handler = std::make_shared<ExceptionHandler>();
+    std::vector<brpc::CallId> call_ids;
+    call_ids.reserve(worker_clients.size());
     for (auto & worker_client : worker_clients)
     {
-        try
-        {
-            worker_client->removeWorkerResource(txn_id);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(
-                log, "Error occurs when remove WorkerResource{" + txn_id.toString() + "} in worker " + worker_client->getRPCAddress());
-        }
+        LOG_TRACE(log, "Send finish to worker {}", worker_client->getRPCAddress());
+        call_ids.emplace_back(worker_client->removeWorkerResource(txn_id, handler));
+    }
+
+    for (auto & call_id : call_ids)
+        brpc::Join(call_id);
+    try
+    {
+        handler->throwIfException();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log);
     }
 }
 
@@ -270,22 +279,21 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
     computeResourceSize(resource_option, all_resources);
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
     std::vector<brpc::CallId> call_ids;
-    call_ids.resize(all_resources.size());
-    auto worker_send_resources = [&](const HostWithPorts & host_ports, const std::vector<AssignedResource> & resources_to_send, size_t i)
+    call_ids.reserve(all_resources.size());
+    auto worker_send_resources = [&](const HostWithPorts & host_ports, const std::vector<AssignedResource> & resources_to_send)
     {
         auto worker_client = worker_group->getWorkerClient(host_ports);
         auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), host_ports.id);
-        call_ids[i] = worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations);
+        LOG_TRACE(log, "Send resource to {}", host_ports.toDebugString());
+        call_ids.emplace_back(worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations));
     };
 
     size_t max_threads = Catalog::getMaxThreads();
-    size_t i = 0;
     if (max_threads < 2 || all_resources.size() < 2)
     {
         for (auto & [host_ports_, resources_] : all_resources)
         {
-            worker_send_resources(host_ports_, resources_, i);
-            i++;
+            worker_send_resources(host_ports_, resources_);
         }
     }
     else
@@ -296,12 +304,10 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
         for (auto it = all_resources.begin(); it != all_resources.end(); it++)
         {
             thread_pool.scheduleOrThrowOnError(createExceptionHandledJob(
-                [&, i, it]()
-                    {
-                        worker_send_resources(it->first, it->second, i);
-                    },
+                [&, it]() {
+                    worker_send_resources(it->first, it->second);
+                },
                 exception_handler));
-            i++;
         }
         thread_pool.wait();
         exception_handler.throwIfException();
@@ -361,7 +367,9 @@ void CnchServerResource::sendResources(const ContextPtr & context, WorkerAction 
 }
 
 void CnchServerResource::allocateResource(
-    const ContextPtr & context, std::lock_guard<std::mutex> &, std::optional<ResourceOption> resource_option)
+    const ContextPtr & context,
+    std::lock_guard<std::mutex> &,
+    std::optional<ResourceOption> resource_option)
 {
     std::vector<AssignedResource> resource_to_allocate;
 
@@ -396,9 +404,12 @@ void CnchServerResource::allocateResource(
             FilePartsAssignMap assigned_file_map;
             ServerDataPartsVector bucket_parts;
             ServerDataPartsVector leftover_server_parts;
+            bool bitengine_related_table = false;
 
-            if (dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+            if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
             {
+                // For function : arrayToBitmapWithEncode/EncodeBitmap
+                bitengine_related_table = cnch_table->isBitEngineDictTable() || cnch_table->isBitEngineTable();
                 // NOTE: server_parts maybe moved due to splitCnchParts and cannot be used again
                 std::tie(bucket_parts, leftover_server_parts) = splitCnchParts(context, *storage, server_parts);
                 if (!bucket_parts.empty() && !leftover_server_parts.empty())
@@ -441,12 +452,14 @@ void CnchServerResource::allocateResource(
             for (const auto & host_ports : host_ports_vec)
             {
                 ServerDataPartsVector assigned_parts;
-                FileDataPartsCNCHVector assigned_file_parts;
                 HiveFiles assigned_hive_parts;
+                FileDataPartsCNCHVector assigned_file_parts;
+                bool has_parts = false;
                 if (auto it = assigned_map.find(host_ports.id); it != assigned_map.end())
                 {
                     assigned_parts = std::move(it->second);
                     assigned_storage_worker_indexs.insert(host_ports);
+                    has_parts = true;
                     LOG_TRACE(
                         log,
                         "SourcePrune Send {}.{} {}'s data part to worker {}",
@@ -462,6 +475,7 @@ void CnchServerResource::allocateResource(
                 {
                     assigned_hive_parts = std::move(it->second);
                     assigned_storage_worker_indexs.insert(host_ports);
+                    has_parts = true;
                     LOG_TRACE(
                         log,
                         "SourcePrune Send Hive {}.{} {}'s data part to worker {}",
@@ -476,6 +490,7 @@ void CnchServerResource::allocateResource(
                 {
                     assigned_file_parts = std::move(it->second);
                     assigned_storage_worker_indexs.insert(host_ports);
+                    has_parts = true;
                     LOG_TRACE(
                         log,
                         "SourcePrune Send File {}.{} {} data parts to works {}, size = {}",
@@ -484,6 +499,24 @@ void CnchServerResource::allocateResource(
                         toString(storage->getStorageUUID()),
                         host_ports.toDebugString(),
                         assigned_file_parts.size());
+                }
+                LOG_TRACE(
+                    log,
+                    "Storage {} host {} prune_table {} has_parts {}",
+                    storage->getStorageID().getNameForLogs(),
+                    host_ports.toDebugString(),
+                    context->getSettingsRef().enable_prune_empty_resource,
+                    has_parts);
+
+                if (!context->getSettingsRef().bsp_mode && context->getSettingsRef().enable_optimizer
+                    && context->getSettingsRef().enable_prune_empty_resource && !has_parts && !bitengine_related_table)
+                {
+                    LOG_TRACE(
+                        log,
+                        "SourcePrune skip stroage {} for host {}",
+                        storage->getStorageID().getNameForLogs(),
+                        host_ports.toDebugString());
+                    continue;
                 }
 
                 auto it = assigned_worker_resource.find(host_ports);

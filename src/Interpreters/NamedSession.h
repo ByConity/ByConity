@@ -46,7 +46,8 @@ public:
         const Key & session_id,
         ContextPtr context,
         std::chrono::steady_clock::duration timeout,
-        bool throw_if_not_found);
+        bool throw_if_not_found,
+        bool return_null_if_not_found = false);
 
     void releaseSession(NamedSession & session)
     {

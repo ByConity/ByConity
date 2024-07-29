@@ -14,6 +14,7 @@
  */
 
 #include <memory>
+#include <optional>
 #include <QueryPlan/TableScanStep.h>
 #include <QueryPlan/ExecutePlanElement.h>
 
@@ -781,7 +782,8 @@ TableScanStep::TableScanStep(
     Assignments inline_expressions_,
     std::shared_ptr<AggregatingStep> aggregation_,
     std::shared_ptr<ProjectionStep> projection_,
-    std::shared_ptr<FilterStep> filter_)
+    std::shared_ptr<FilterStep> filter_,
+    std::optional<DataStream> output_stream_)
     : ISourceStep(DataStream{}, hints_)
     , storage_id(storage_id_)
     , column_alias(column_alias_)
@@ -794,16 +796,27 @@ TableScanStep::TableScanStep(
     , log(&Poco::Logger::get("TableScanStep"))
     , alias(alias_)
 {
+    bool need_create_output_stream = true;
     const auto & table_expression = getTableExpression(*query_info.getSelectQuery(), 0);
     if (table_expression && table_expression->table_function)
         storage = context->getQueryContext()->executeTableFunction(table_expression->table_function);
     else
     {
-        storage = DatabaseCatalog::instance().getTable(storage_id, context);
-        storage_id.uuid = storage->getStorageUUID();
+        if (storage_id.empty() && context->getSettingsRef().enable_prune_empty_resource)
+        {
+            LOG_DEBUG(log, "Create tableScanStep without storage");
+            need_create_output_stream = false;
+            output_stream = output_stream_;
+            is_null_source = true;
+        }
+        else
+        {
+            storage = DatabaseCatalog::instance().getTable(storage_id, context);
+            storage_id.uuid = storage->getStorageUUID();
+        }
     }
-        
-    formatOutputStream(context);
+    if (need_create_output_stream)
+        formatOutputStream(context);
 }
 
 void TableScanStep::formatOutputStream(ContextPtr context)
@@ -1132,6 +1145,12 @@ void TableScanStep::rewriteDynamicFilter(SelectQueryInfo & select_query, const B
 
 void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
 {
+    if (is_null_source)
+    {
+        LOG_DEBUG(log, "Create NullSource from TableScanStep without storage");
+        pipeline.init(Pipe(std::make_shared<NullSource>(output_stream->header))); 
+        return;
+    }
     auto * query = query_info.query->as<ASTSelectQuery>();
     bool use_expand_pipe = build_context.is_expand;
     if (!build_context.is_expand && (query->getWhere() || query->getPrewhere() || query_info.partition_filter)
@@ -1618,11 +1637,16 @@ void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
     {
         pushdown_filter->toProto(*proto.mutable_pushdown_filter());
     }
+    if (output_stream)
+    {
+        output_stream->toProto(*proto.mutable_output_stream());
+    }
 }
 
 std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanStep & proto, ContextPtr context)
 {
-    auto storage_id = StorageID::fromProto(proto.storage_id(), context);
+    auto storage_id = context->getSettingsRef().enable_prune_empty_resource ? StorageID::tryFromProto(proto.storage_id(), context) 
+                                                                            : StorageID::fromProto(proto.storage_id(), context);
     NamesWithAliases column_alias;
     for (const auto & proto_element : proto.column_alias())
     {
@@ -1638,6 +1662,7 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
     std::shared_ptr<AggregatingStep> pushdown_aggregation;
     std::shared_ptr<ProjectionStep> pushdown_projection;
     std::shared_ptr<FilterStep> pushdown_filter;
+    std::optional<DataStream> output_stream;
     if (proto.has_pushdown_aggregation())
         pushdown_aggregation = AggregatingStep::fromProto(proto.pushdown_aggregation(), context);
 
@@ -1645,6 +1670,11 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         pushdown_projection = ProjectionStep::fromProto(proto.pushdown_projection(), context);
     if (proto.has_pushdown_filter())
         pushdown_filter = FilterStep::fromProto(proto.pushdown_filter(), context);
+    if (proto.has_output_stream())
+    {
+        output_stream = std::make_optional<DataStream>();
+        output_stream->fillFromProto(proto.output_stream());
+    }
     auto step = std::make_shared<TableScanStep>(
         context,
         storage_id,
@@ -1656,7 +1686,9 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         inline_expressions,
         pushdown_aggregation,
         pushdown_projection,
-        pushdown_filter);
+        pushdown_filter,
+        output_stream);
+    
     return step;
 }
 
