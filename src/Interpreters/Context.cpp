@@ -1556,15 +1556,13 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
         client_info.current_password = basic_credentials->getPassword();
     //#endif
 
-    String tenant = getTenantId();
     /// Find a user with such name and check the credentials.
     /// NOTE: getAccessControlManager().login and other AccessControl's functions may require some IO work,
     /// so Context::getLock() must be unlocked while we're doing this.
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
     auto new_access = getAccessControlManager().getContextAccess(
         new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
-        tenant,
-        has_tenant_id_in_username,
+        has_tenant_id_in_username ? tenant_id : "",
         getServerType() != ServerType::cnch_server);
 
     auto lock = getLock();
@@ -1677,9 +1675,7 @@ void Context::calculateAccessRights()
     if (user_id)
         access = getAccessControlManager().getContextAccess(
             *user_id, current_roles, use_default_roles, settings, current_database, client_info,
-            tenant_id,
-            has_tenant_id_in_username,
-            false);
+            has_tenant_id_in_username ? tenant_id : "", false);
 }
 
 

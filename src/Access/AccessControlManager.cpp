@@ -445,7 +445,6 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
     const String & current_database,
     const ClientInfo & client_info,
     const String & tenant,
-    bool has_tenant_id_in_username,
     bool load_roles) const
 {
     ContextAccessParams params;

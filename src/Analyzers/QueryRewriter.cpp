@@ -548,9 +548,6 @@ namespace
 
 ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enable_materialized_view)
 {
-    auto rewrite_span = startCommonSpan("CnchServer", __func__, SpanHierarchy::DEBUG);
-    OpentelemetryScope scope{rewrite_span};
-
     const auto * logger = &Poco::Logger::get("QueryRewriter");
 
     (void) enable_materialized_view;
