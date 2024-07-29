@@ -31,7 +31,7 @@
 #include <Poco/Exception.h>
 
 #include <Common/StackTrace.h>
-#include <Common/WorkerId.h>
+#include <Common/HostWithPorts.h>
 
 #include <fmt/format.h>
 
