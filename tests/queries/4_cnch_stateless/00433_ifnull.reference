@@ -33,3 +33,16 @@ x	Nullable(String)
 2	Nullable(String)
 3	Nullable(String)
 4	Nullable(String)
+x	Nullable(String)
+1	0
+N	N	N	N	N	N	N	N	N	N
+0	N	1	N	0	1	1	N	N	N
+1	N	0	N	N	N	N	1	0	0
+N	0	N	1	0	1	1	N	N	N
+N	1	N	0	N	N	N	1	0	0
+0	0	1	1	0	1	1	0	1	1
+0	1	1	0	0	1	1	1	0	0
+1	0	0	1	0	1	1	1	0	0
+1	1	0	0	1	0	0	1	0	0
+ok
+144.54
