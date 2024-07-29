@@ -2455,6 +2455,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 
     {
         String create_table_query = getCreateTableSql();
+        alter_act.setOldSchema(create_table_query);
         ParserCreateQuery p_create_query;
         ASTPtr ast = parseQuery(
             p_create_query,

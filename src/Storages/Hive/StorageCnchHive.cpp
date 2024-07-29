@@ -587,6 +587,7 @@ void StorageCnchHive::alter(const AlterCommands & params, ContextPtr local_conte
     /// replace table schema in catalog
     {
         String create_table_query = getCreateTableSql();
+        alter_act.setOldSchema(create_table_query);
         ParserCreateQuery parser;
         ASTPtr ast = parseQuery(
             parser, create_table_query, local_context->getSettingsRef().max_query_size,

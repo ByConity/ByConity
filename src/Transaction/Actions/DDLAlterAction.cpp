@@ -28,9 +28,14 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-void DDLAlterAction::setNewSchema(String schema_)
+void DDLAlterAction::setNewSchema(const String & schema_)
 {
     new_schema = schema_;
+}
+
+void DDLAlterAction::setOldSchema(const String & schema_)
+{
+    old_schema = schema_;
 }
 
 void DDLAlterAction::setMutationCommands(MutationCommands commands)
@@ -82,10 +87,15 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         // table->checkMaskingPolicy(*cache);
 
         // updateTsCache(table->getStorageUUID(), commit_time);
-        if (!new_schema.empty())
+        if (!new_schema.empty() && new_schema!=old_schema)
         {
             catalog->alterTable(global_context, query_settings, table, new_schema, table->commit_time, txn_id, commit_time, is_modify_cluster_by);
             LOG_DEBUG(log, "Successfully change schema in catalog.");
+        }
+        else
+        {
+            LOG_DEBUG(log, "Skip change table schema because {}",
+                new_schema.empty() ? "new shema is empty." : ("new shema is the same as old one : " + old_schema));
         }
     }
     catch (...)
