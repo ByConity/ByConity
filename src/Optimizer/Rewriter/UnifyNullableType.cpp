@@ -154,6 +154,11 @@ PlanNodePtr UnifyNullableVisitor::visitIntersectOrExceptNode(IntersectOrExceptNo
     return visitPlanNode(node, context);
 }
 
+PlanNodePtr UnifyNullableVisitor::visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
 PlanNodePtr UnifyNullableVisitor::visitLocalExchangeNode(LocalExchangeNode & node, ContextMutablePtr & context)
 {
     return visitPlanNode(node, context);
@@ -427,6 +432,7 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, C
         step.needOverflowRow(),
         step.shouldProduceResultsInOrderOfBucketNumber(),
         step.isNoShuffle(),
+        step.isStreamingForCache(),
         step.getHints());
     auto agg_node_set_null
         = AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step_set_null), PlanNodes{child}, node.getStatistics());

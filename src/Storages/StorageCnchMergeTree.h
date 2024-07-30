@@ -51,6 +51,10 @@ public:
     bool supportsMapImplicitColumn() const override { return true; }
     bool supportsDynamicSubcolumns() const override { return true; }
     bool supportsTrivialCount() const override { return true; }
+    bool supportIntermedicateResultCache() const override
+    {
+        return !getInMemoryMetadataPtr()->hasUniqueKey();
+    }
 
     /// Whether support DELETE FROM. We only support for Unique MergeTree for now.
     bool supportsLightweightDelete() const override { return getInMemoryMetadataPtr()->hasUniqueKey(); }

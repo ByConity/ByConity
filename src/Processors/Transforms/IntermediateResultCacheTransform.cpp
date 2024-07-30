@@ -1,0 +1,95 @@
+#include <Processors/IntermediateResult/CacheManager.h>
+#include <Processors/Transforms/IntermediateResultCacheTransform.h>
+#include <common/logger_useful.h>
+
+using namespace DB::IntermediateResult;
+
+namespace DB
+{
+
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
+
+IntermediateResultCacheTransform::IntermediateResultCacheTransform(
+    const Block & header_,
+    IntermediateResultCachePtr cache_,
+    CacheParam & cache_param_,
+    UInt64 cache_max_bytes_,
+    UInt64 cache_max_rows_,
+    bool all_part_in_cache_)
+    : ISimpleTransform(header_, header_, false)
+    , cache(std::move(cache_))
+    , cache_param(cache_param_)
+    , cache_max_bytes(cache_max_bytes_)
+    , cache_max_rows(cache_max_rows_)
+    , all_part_in_cache(all_part_in_cache_)
+    , log(&Poco::Logger::get("IntermediateResultCacheTransform"))
+{
+}
+
+IProcessor::Status IntermediateResultCacheTransform::prepare()
+{
+    if (all_part_in_cache)
+        stopReading();
+
+    return ISimpleTransform::prepare();
+}
+
+void IntermediateResultCacheTransform::work()
+{
+    ISimpleTransform::work();
+}
+
+void IntermediateResultCacheTransform::transform(DB::Chunk & chunk)
+{
+    if (chunk.empty())
+        return;
+
+    const auto & owner_info = chunk.getOwnerInfo();
+    CacheValuePtr value;
+    if (!owner_info.empty())
+    {
+        CacheKey key{cache_param.digest, cache_param.cached_table.getFullTableName(), owner_info};
+        auto it = uncompleted_cache.find(key);
+        if (it != uncompleted_cache.end())
+            value = it->second;
+        else
+        {
+            value = cache->tryGetUncompletedCache(key);
+            uncompleted_cache.emplace(key, value);
+        }
+
+        if (!value)
+            return;
+
+        if ((cache_max_bytes < value->getBytes() + chunk.bytes()) || (cache_max_rows < value->getRows() + chunk.getNumRows()))
+        {
+            cache->modifyKeyStateToRefused(key);
+            uncompleted_cache.emplace(key, nullptr);
+            LOG_INFO(
+                log,
+                "Key:{} was refused because it was too large. (bytes,rows)->({},{})",
+                key.toString(),
+                value->getBytes() + chunk.bytes(),
+                value->getRows() + chunk.getNumRows());
+        }
+    }
+
+    auto cache_chunk = chunk.clone();
+    size_t num_columns = cache_chunk.getNumColumns();
+    auto columns = cache_chunk.detachColumns();
+    for (size_t i = 0; i < num_columns; ++i)
+        cache_chunk.addColumn(std::move(columns[cache_param.output_pos_to_cache_pos[i]]));
+
+    if (value)
+        value->addChunk(cache_chunk);
+    else
+    {
+        CacheKey key{cache_param.digest, cache_param.cached_table.getFullTableName()};
+        cache->emplaceCacheForEmptyResult(key, cache_chunk);
+    }
+}
+
+}

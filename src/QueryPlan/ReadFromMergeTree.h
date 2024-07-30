@@ -39,6 +39,9 @@ struct MergeTreeDataSelectSamplingData
 struct MergeTreeDataSelectAnalysisResult;
 using MergeTreeDataSelectAnalysisResultPtr = std::shared_ptr<MergeTreeDataSelectAnalysisResult>;
 
+namespace IntermediateResult { struct CacheHolder; }
+using CacheHolderPtr = std::shared_ptr<IntermediateResult::CacheHolder>;
+
 /// This step is created to read from MergeTree* table.
 /// For now, it takes a list of parts and creates source from it.
 class ReadFromMergeTree final : public ISourceStep
@@ -88,6 +91,7 @@ public:
     struct AnalysisResult
     {
         RangesInDataParts parts_with_ranges;
+        CacheHolderPtr part_cache_holder;
         MergeTreeDataSelectSamplingData sampling;
         IndexStats index_stats;
         Names column_names_to_read;

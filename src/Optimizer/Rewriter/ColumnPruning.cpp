@@ -657,6 +657,7 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, C
         step->needOverflowRow(),
         step->shouldProduceResultsInOrderOfBucketNumber(),
         step->isNoShuffle(),
+        step->isStreamingForCache(),
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
         step->getHints());
@@ -1100,6 +1101,19 @@ PlanNodePtr ColumnPruningVisitor::visitExplainAnalyzeNode(ExplainAnalyzeNode & n
     return node.shared_from_this();
 }
 
+PlanNodePtr ColumnPruningVisitor::visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, ColumnPruningContext &)
+{
+    NameSet require;
+    PlanNodePtr child = node.getChildren()[0];
+    for (const auto & item : child->getCurrentDataStream().header)
+        require.insert(item.name);
+
+    ColumnPruningContext column_pruning_context{.name_set = require};
+    PlanNodePtr new_child = VisitorUtil::accept(*child, *this, column_pruning_context);
+    node.replaceChildren({new_child});
+    return node.shared_from_this();
+}
+
 PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & node, ColumnPruningContext & column_pruning_context)
 {
     auto & step_ptr = node.getStep();
@@ -1129,7 +1143,6 @@ PlanNodePtr ColumnPruningVisitor::visitFillingNode(FillingNode & node, ColumnPru
     auto fill_step = std::make_shared<FillingStep>(child->getStep()->getOutputStream(), step->getSortDescription());
     return FillingNode::createPlanNode(context->nextNodeId(), std::move(fill_step), PlanNodes{child}, node.getStatistics());
 }
-
 
 PlanNodePtr ColumnPruningVisitor::visitTableWriteNode(TableWriteNode & node, ColumnPruningContext &)
 {

@@ -84,7 +84,6 @@ namespace zkutil
 class ZooKeeper;
 }
 
-
 namespace DB
 {
 
@@ -92,6 +91,11 @@ namespace IndexFile
 {
     class Cache;
     class RemoteFileCache;
+}
+
+namespace IntermediateResult
+{
+class CacheManager;
 }
 
 struct ContextSharedPart;
@@ -1214,6 +1218,11 @@ public:
     void updateQueryCacheConfiguration(const Poco::Util::AbstractConfiguration & config);
     std::shared_ptr<QueryCache> getQueryCache() const;
     void dropQueryCache() const;
+
+    /// Create a part level cache of queries of specified size. This can be done only once.
+    void setIntermediateResultCache(size_t cache_size_in_bytes);
+    std::shared_ptr<IntermediateResult::CacheManager> getIntermediateResultCache() const;
+    void dropIntermediateResultCache() const;
 
     /** Clear the caches of the uncompressed blocks and marks.
       * This is usually done when renaming tables, changing the type of columns, deleting a table.

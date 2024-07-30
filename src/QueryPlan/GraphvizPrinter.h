@@ -95,6 +95,7 @@ public:
     Void visitTopNFilteringNode(TopNFilteringNode & node, PrinterContext & context) override;
     Void visitFillingNode(FillingNode & node, PrinterContext & context) override;
     Void visitIntersectOrExceptNode(IntersectOrExceptNode & node, PrinterContext & context) override;
+    Void visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, PrinterContext & context) override;
 
 private:
     void printCTEDefNode(CTEId cte_id);
@@ -172,6 +173,7 @@ public:
     Void visitTopNFilteringNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitFillingNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitIntersectOrExceptNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitIntermediateResultCacheNode(QueryPlan::Node * node, PrinterContext & context) override;
 
 private:
     std::stringstream & out;
@@ -237,6 +239,7 @@ public:
     static String printIntersectOrExceptStep(const IntersectOrExceptStep & step);
     static String printTotalsHavingStep(const TotalsHavingStep & step);
     static String printExtremesStep(const ExtremesStep & step);
+    static String printIntermediateResultCacheStep(const IntermediateResultCacheStep & step);
 
 private:
     static String printFilter(const ConstASTPtr & filter);

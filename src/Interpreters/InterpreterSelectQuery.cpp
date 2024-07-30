@@ -338,6 +338,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     query_info.ignore_projections = options.ignore_projections;
     query_info.is_projection_query = options.is_projection_query;
+    query_info.cache_info = options.cache_info;
     query_for_perfect_shard = query_ptr->clone();
 
     initSettings();

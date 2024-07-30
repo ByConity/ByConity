@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include <memory>
 #include <Core/Names.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/AggregateDescription.h>
@@ -29,9 +28,12 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/PreparedSets.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Processors/IntermediateResult/TableScanCacheInfo.h>
 #include <Storages/IStorage_fwd.h>
-#include <Storages/ProjectionsDescription.h>
 #include <Storages/MergeTree/Index/MergeTreeIndexHelper.h>
+#include <sstream>
+#include <Storages/ProjectionsDescription.h>
+#include <memory>
 #include <vector>
 
 namespace DB
@@ -235,6 +237,9 @@ struct SelectQueryInfo
     /// atomic predicate, may > predicate ast
     std::deque<AtomicPredicatePtr> atomic_predicates;
 
+    /// cache digest, used for matching with cache when enable query cache
+    TableScanCacheInfo cache_info;
+
     void serialize(WriteBuffer &) const;
     void deserialize(ReadBuffer &);
     /// Read from index
@@ -277,4 +282,5 @@ const std::deque<AtomicPredicatePtr> & getAtomicPredicates(const SelectQueryInfo
 
 MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info);
 
+TableScanCacheInfo getTableScanCacheInfo(const SelectQueryInfo & query_info);
 }

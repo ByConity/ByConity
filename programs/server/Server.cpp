@@ -1250,6 +1250,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getServerType() == ServerType::cnch_server)
         global_context->setQueryCache(config());
 
+    /// Size of cache for intermediate_result. It is not necessary.
+    size_t intermediate_result_cache_size = config().getUInt64("intermediate_result_cache_size", 1000000000);
+    if (intermediate_result_cache_size)
+        global_context->setIntermediateResultCache(intermediate_result_cache_size);
+
     /// Size of delete bitmap for HaMergeTree engine to be cached in memory; default is 1GB
     size_t delete_bitmap_cache_size = config().getUInt64("delete_bitmap_cache_size", 1073741824);
     global_context->setDeleteBitmapCache(delete_bitmap_cache_size);

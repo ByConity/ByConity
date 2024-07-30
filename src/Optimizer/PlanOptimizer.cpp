@@ -19,6 +19,7 @@
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/PlanCheck.h>
 #include <Optimizer/Rewriter/AddBufferForDeadlockCTE.h>
+#include <Optimizer/Rewriter/AddCache.h>
 #include <Optimizer/Rewriter/AddExchange.h>
 #include <Optimizer/Rewriter/AddRuntimeFilters.h>
 #include <Optimizer/Rewriter/BitmapIndexSplitter.h>
@@ -134,6 +135,8 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
                                                   e.g. use a non-nullable column ptr for a nullable column */
         std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
+        std::make_shared<AddCache>(),
+
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };
     return simple_rewrites;
@@ -310,6 +313,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<ImplementJoinAlgorithmHints>(),
+        std::make_shared<AddCache>(),
+        
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };
 

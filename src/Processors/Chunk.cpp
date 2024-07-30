@@ -43,6 +43,37 @@ Chunk::Chunk(Columns columns_, UInt64 num_rows_, ChunkInfoPtr chunk_info_)
     checkNumRowsIsConsistent();
 }
 
+Chunk & Chunk::operator=(Chunk && other) noexcept
+{
+    columns = std::move(other.columns);
+    chunk_info = std::move(other.chunk_info);
+    if (other.owned_side_block && other.owned_side_block->columns() > 0)
+        owned_side_block = std::move(other.owned_side_block);
+    num_rows = other.num_rows;
+    other.num_rows = 0;
+    owner_info = other.owner_info;
+    other.owner_info.reset();
+    return *this;
+}
+
+void Chunk::swap(Chunk & other)
+{
+    columns.swap(other.columns);
+    chunk_info.swap(other.chunk_info);
+    owned_side_block.swap(other.owned_side_block);
+    std::swap(num_rows, other.num_rows);
+    std::swap(owner_info, other.owner_info);
+}
+
+void Chunk::clear()
+{
+    num_rows = 0;
+    columns.clear();
+    chunk_info.reset();
+    owned_side_block.reset();
+    owner_info.reset();
+}
+
 static Columns unmuteColumns(MutableColumns && mut_columns)
 {
     Columns columns;
@@ -71,6 +102,7 @@ Chunk Chunk::clone() const
     if (owned_side_block && owned_side_block->columns() > 0)
     for (auto column : *owned_side_block)
         res.addColumnToSideBlock(std::move(column));
+    res.owner_info = owner_info;
     return res;
 }
 
@@ -234,4 +266,13 @@ void Chunk::addColumnToSideBlock(ColumnWithTypeAndName && col)
         owned_side_block->insert(std::move(col));
 }
 
+const OwnerInfo & Chunk::getOwnerInfo() const
+{
+    return owner_info;
+}
+
+void Chunk::setOwnerInfo(OwnerInfo owner_info_)
+{
+    owner_info = std::move(owner_info_);
+}
 }

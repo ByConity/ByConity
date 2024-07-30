@@ -110,6 +110,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::MarkDistinct, "violet"},
     {IQueryPlanStep::Type::OutfileWrite, "green"},
     {IQueryPlanStep::Type::OutfileFinish, "greenyellow"},
+    {IQueryPlanStep::Type::IntermediateResultCache, "darkolivegreen4"},
 };
 
 static auto escapeSpecialCharacters = [](String content) {
@@ -537,6 +538,15 @@ Void PlanNodePrinter::visitTopNFilteringNode(TopNFilteringNode & node, PrinterCo
     String color{NODE_COLORS[step.getType()]};
     String label{"TopNFilteringNode"};
     printNode(node, label, StepPrinter::printTopNFilteringStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"IntermediateResultCacheNode"};
+    printNode(node, label, StepPrinter::printIntermediateResultCacheStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1141,6 +1151,16 @@ Void PlanSegmentNodePrinter::visitTopNFilteringNode(QueryPlan::Node * node, Prin
     return visitChildren(node, context);
 }
 
+Void PlanSegmentNodePrinter::visitIntermediateResultCacheNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const IntermediateResultCacheStep &>(*step_ptr);
+    String label{"IntermediateResultCacheNode"};
+    String color{NODE_COLORS.at(step_ptr->getType())};
+    printNode(node, label, StepPrinter::printIntermediateResultCacheStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 void PlanSegmentNodePrinter::printNode(
     QueryPlan::Node * node, const String & label, const String & details, const String & color, PrinterContext & context)
 {
@@ -1587,6 +1607,11 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
         details << "results in order of bucket number";
     }
 
+    if (step.isStreamingForCache())
+    {
+        details << "|";
+        details << "streaming for cache";
+    }
     //    if (step.isTotals())
     //        details << "|"
     //                << "totals";
@@ -1981,12 +2006,12 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     //
     //    details << "Block Size : \\n" << step.getMaxBlockSize() << "|";
     //
-    //    details << "Alias: \\n";
-    //    for (const auto & assigment : step.getColumnAlias())
-    //    {
-    //        details << assigment.second << ": " << assigment.first << "\\n";
-    //    }
-    //    details << "|";
+    details << "Alias: \\n";
+    for (const auto & assigment : step.getColumnAlias())
+    {
+        details << assigment.second << ": " << assigment.first << "\\n";
+    }
+    details << "|";
 
     details << "Inline Expressions: \\n";
     for (const auto & assigment : step.getInlineExpressions())
@@ -2601,6 +2626,54 @@ String StepPrinter::printExtremesStep(const ExtremesStep & step)
         details << column.name << ":";
         details << column.type->getName() << "\\n";
     }
+    return details.str();
+}
+
+String StepPrinter::printIntermediateResultCacheStep(const IntermediateResultCacheStep & step)
+{
+    std::stringstream details;
+    auto cache_param = step.getCacheParam();
+    details << "CacheParam\\n";
+    details << "Digest: " << cache_param.digest << "\\n";
+    details << "Slot Mapping:\\n";
+    for (const auto & pair : cache_param.output_pos_to_cache_pos)
+    {
+        details << "output#" << pair.first << ":"
+                << "cache#" << pair.second << "\\n";
+    }
+    details << "Cached Table: " << cache_param.cached_table.getFullNameNotQuoted() << "\\n";
+    details << "Dependent Tables:\\n";
+    for (const auto & table : cache_param.dependent_tables)
+    {
+        details << table.getFullNameNotQuoted() << "\\n";
+    }
+    details << "| Cache Order \\n";
+    for (const auto & column : step.getCacheOrder())
+    {
+        details << column.name << "\\n";
+    }
+    details << "| Runtime Filters \\n";
+    if (const auto & filters = step.getIgnoredRuntimeFilters(); !filters.empty())
+    {
+        details << "ignored runtime filters:";
+        for (const auto & id : filters)
+            details << " " << id;
+        details << "\\n";
+    }
+    if (const auto & filters = step.getIncludedRuntimeFilters(); !filters.empty())
+    {
+        details << "included runtime filters:";
+        for (const auto & id : filters)
+            details << " " << id;
+        details << "\\n";
+    }
+    details << "| Output \\n";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+
     return details.str();
 }
 

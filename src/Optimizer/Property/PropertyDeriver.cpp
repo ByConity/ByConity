@@ -228,6 +228,11 @@ Property DeriverVisitor::visitLocalExchangeStep(const LocalExchangeStep & step, 
     return output.clearSorting();
 }
 
+Property DeriverVisitor::visitIntermediateResultCacheStep(const IntermediateResultCacheStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
 Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, DeriverContext & context)
 {
     auto assignments = step.getAssignments();

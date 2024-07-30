@@ -589,4 +589,9 @@ PropertySets DeterminerVisitor::visitExpandStep(const ExpandStep &, DeterminerCo
     return {{require}};
 }
 
+PropertySets DeterminerVisitor::visitIntermediateResultCacheStep(const IntermediateResultCacheStep & step, DeterminerContext & ctx)
+{
+    return visitStep(step, ctx);
+}
+
 }

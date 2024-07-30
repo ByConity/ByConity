@@ -45,6 +45,7 @@
 #include "Core/SettingsEnums.h"
 #include <DataStreams/IBlockInputStream.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 
 namespace DB
 {
@@ -296,6 +297,7 @@ AggregatingStep::AggregatingStep(
     bool,
     bool should_produce_results_in_order_of_bucket_number_,
     bool no_shuffle_,
+    bool streaming_for_cache_,
     PlanHints hints_)
     : ITransformingStep(
         input_stream_,
@@ -316,7 +318,9 @@ AggregatingStep::AggregatingStep(
     , group_by_sort_description(std::move(group_by_sort_description_))
     , groupings(groupings_)
     , should_produce_results_in_order_of_bucket_number(should_produce_results_in_order_of_bucket_number_)
+    , streaming_for_cache(streaming_for_cache_)
     , no_shuffle(no_shuffle_)
+
 {
     //    final = final && !totals && !cube & !rollup;
     setInputStreams(input_streams);
@@ -331,6 +335,10 @@ void AggregatingStep::setInputStreams(const DataStreams & input_streams_)
 
 void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_settings)
 {
+    auto cache_holder = pipeline.getCacheHolder();
+    if (!cache_holder || cache_holder->all_part_in_storage)
+        streaming_for_cache = false;
+
     QueryPipelineProcessorsCollector collector(pipeline, this);
     const auto & settings = build_settings.context->getSettingsRef();
     this->max_block_size = settings.max_block_size;
@@ -651,6 +659,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
             return;
         }
     }
+    bool can_streaming_agg = streaming_for_cache && !transform_params->only_merge;
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)
@@ -658,25 +667,54 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
         /// Add resize transform to uniformly distribute data between aggregating streams.
         if (!storage_has_evenly_distributed_read)
             pipeline.resize(pipeline.getNumStreams(), true, true);
+        if (can_streaming_agg)
+        {
+            pipeline.addSimpleTransform([&](const Block & header) {
+                return std::make_shared<AggregatingStreamingTransform>(
+                    header,
+                    transform_params,
+                    settings.streaming_agg_local_ratio,
+                    false,
+                    settings.enable_intermediate_result_cache_streaming,
+                    streaming_for_cache,
+                    false,
+                    final);
+            });
+        }
+        else
+        {
+            auto many_data = std::make_shared<ManyAggregatedData>(pipeline.getNumStreams());
 
-        auto many_data = std::make_shared<ManyAggregatedData>(pipeline.getNumStreams());
-
-        size_t counter = 0;
-        pipeline.addSimpleTransform([&](const Block & header) {
-            return std::make_shared<AggregatingTransform>(
-                header, transform_params, many_data, counter++, merge_max_threads, temporary_data_merge_threads);
-        });
-
-        /// We add the explicit resize here, but not in case of aggregating in order, since AIO don't use two-level hash tables and thus returns only buckets with bucket_number = -1.
-        pipeline.resize(should_produce_results_in_order_of_bucket_number ? 1 : pipeline.getNumStreams(), true /* force */);
-
+            size_t counter = 0;
+            pipeline.addSimpleTransform([&](const Block & header) {
+                return std::make_shared<AggregatingTransform>(
+                    header, transform_params, many_data, counter++, merge_max_threads, temporary_data_merge_threads);
+            });
+        }
+        /// Streaming agg no need resize here
+        if (!can_streaming_agg)
+        {
+            /// We add the explicit resize here, but not in case of aggregating in order, since AIO don't use two-level hash tables and thus returns only buckets with bucket_number = -1.
+            pipeline.resize(should_produce_results_in_order_of_bucket_number ? 1 : pipeline.getNumStreams(), true /* force */);
+        }
         aggregating = collector.detachProcessors(0);
     }
     else
     {
         pipeline.resize(1);
 
-        pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<AggregatingTransform>(header, transform_params); });
+        if (can_streaming_agg)
+            pipeline.addSimpleTransform([&](const Block & header) {
+                return std::make_shared<AggregatingStreamingTransform>(
+                    header,
+                    transform_params,
+                    settings.streaming_agg_local_ratio,
+                    false,
+                    settings.enable_intermediate_result_cache_streaming,
+                    streaming_for_cache);
+            });
+        else
+            pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<AggregatingTransform>(header, transform_params); });
 
         aggregating = collector.detachProcessors(0);
     }
@@ -722,6 +760,7 @@ std::shared_ptr<IQueryPlanStep> AggregatingStep::copy(ContextPtr) const
         needOverflowRow(),
         should_produce_results_in_order_of_bucket_number,
         no_shuffle,
+        streaming_for_cache,
         hints);
 }
 
@@ -786,6 +825,8 @@ void AggregatingStep::toProto(Protos::AggregatingStep & proto, bool) const
     for (const auto & element : groupings)
         element.toProto(*proto.add_groupings());
     proto.set_should_produce_results_in_order_of_bucket_number(should_produce_results_in_order_of_bucket_number);
+    proto.set_streaming_for_cache(streaming_for_cache);
+
 }
 
 std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::AggregatingStep & proto, ContextPtr context)
@@ -829,6 +870,8 @@ std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::Aggreg
         groupings.emplace_back(std::move(element));
     }
     auto should_produce_results_in_order_of_bucket_number = proto.should_produce_results_in_order_of_bucket_number();
+    auto streaming_for_cache = proto.streaming_for_cache();
+
     auto step = std::make_shared<AggregatingStep>(
         base_input_stream,
         keys,
@@ -844,7 +887,9 @@ std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::Aggreg
         group_by_sort_description,
         groupings,
         false,
-        should_produce_results_in_order_of_bucket_number);
+        should_produce_results_in_order_of_bucket_number,
+        false,
+        streaming_for_cache);
     step->setStepDescription(step_description);
     return step;
 }

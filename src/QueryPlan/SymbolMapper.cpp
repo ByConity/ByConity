@@ -428,6 +428,7 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
         agg.needOverflowRow(),
         agg.shouldProduceResultsInOrderOfBucketNumber(),
         agg.isNoShuffle(),
+        agg.isStreamingForCache(),        
         agg.getHints());
 }
 
@@ -790,6 +791,11 @@ std::shared_ptr<BufferStep> SymbolMapper::map(const BufferStep & step)
 std::shared_ptr<TableFinishStep> SymbolMapper::map(const TableFinishStep & step)
 {
     return std::make_shared<TableFinishStep>(map(step.getInputStreams()[0]), step.getTarget(), step.getOutputAffectedRowCountSymbol(), step.getQuery());
+}
+
+std::shared_ptr<IntermediateResultCacheStep> SymbolMapper::map(const IntermediateResultCacheStep & step)
+{
+    return std::make_shared<IntermediateResultCacheStep>(map(step.getInputStreams()[0]), step.getCacheParam(), step.getAggregatorParams());
 }
 
 std::shared_ptr<MultiJoinStep> SymbolMapper::map(const MultiJoinStep & step)

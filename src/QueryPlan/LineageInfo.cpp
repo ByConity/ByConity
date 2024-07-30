@@ -301,6 +301,11 @@ void LineageInfoVisitor::visitExplainAnalyzeNode(ExplainAnalyzeNode &, LineageIn
     throw Exception("Not impl LineageInfo", ErrorCodes::NOT_IMPLEMENTED);
 }
 
+void LineageInfoVisitor::visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, LineageInfoContext & lineage_info_context)
+{
+    VisitorUtil::accept(node.getChildren()[0], *this, lineage_info_context);
+}
+
 void LineageInfoVisitor::visitTopNFilteringNode(TopNFilteringNode & node, LineageInfoContext & lineage_info_context)
 {
     VisitorUtil::accept(node.getChildren()[0], *this, lineage_info_context);

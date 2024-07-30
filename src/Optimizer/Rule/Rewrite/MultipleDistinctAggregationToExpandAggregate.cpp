@@ -318,6 +318,7 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
         step.needOverflowRow(),
         step.shouldProduceResultsInOrderOfBucketNumber(),
         step.isNoShuffle(),
+        step.isStreamingForCache(),
         step.getHints());
     auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {mask_node});
 

@@ -342,6 +342,10 @@ void PlanSegmentExecutor::doExecute()
 
     QueryPipelinePtr pipeline;
     BroadcastSenderPtrs senders;
+    SCOPE_EXIT({
+        if (pipeline)
+            pipeline->clearUncompletedCache(context);
+    });
     buildPipeline(pipeline, senders);
 
     pipeline->setProcessListElement(query_status);
@@ -385,6 +389,8 @@ void PlanSegmentExecutor::doExecute()
         }
         pipeline_executor = async_pipeline_executor.getPipelineExecutor();
     }
+
+    pipeline->setWriteCacheComplete(context);
 
     if (CurrentThread::getGroup())
     {

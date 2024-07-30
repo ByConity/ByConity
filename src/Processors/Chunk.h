@@ -24,6 +24,7 @@
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <unordered_map>
+#include <Processors/IntermediateResult/OwnerInfo.h>
 
 namespace DB
 {
@@ -108,8 +109,11 @@ public:
         , num_rows(other.num_rows)
         , chunk_info(std::move(other.chunk_info))
         , owned_side_block(std::move(other.owned_side_block))
+        , owner_info(other.owner_info)
+
     {
         other.num_rows = 0;
+        other.owner_info.reset();
     }
 
     Chunk(Columns columns_, UInt64 num_rows_);
@@ -118,34 +122,13 @@ public:
     Chunk(MutableColumns columns_, UInt64 num_rows_, ChunkInfoPtr chunk_info_);
 
     Chunk & operator=(const Chunk & other) = delete;
-    Chunk & operator=(Chunk && other) noexcept
-    {
-        columns = std::move(other.columns);
-        chunk_info = std::move(other.chunk_info);
-        if (other.owned_side_block && other.owned_side_block->columns() > 0)
-            owned_side_block = std::move(other.owned_side_block);
-        num_rows = other.num_rows;
-        other.num_rows = 0;
-        return *this;
-    }
+    Chunk & operator=(Chunk && other) noexcept;
+
+    void swap(Chunk & other);
+
+    void clear();
 
     Chunk clone() const;
-
-    void swap(Chunk & other)
-    {
-        columns.swap(other.columns);
-        chunk_info.swap(other.chunk_info);
-        owned_side_block.swap(other.owned_side_block);
-        std::swap(num_rows, other.num_rows);
-    }
-
-    void clear()
-    {
-        num_rows = 0;
-        columns.clear();
-        chunk_info.reset();
-        owned_side_block.reset();
-    }
 
     const Columns & getColumns() const { return columns; }
     void setColumns(Columns columns_, UInt64 num_rows_);
@@ -177,6 +160,9 @@ public:
 
     std::string dumpStructure() const;
 
+    const OwnerInfo & getOwnerInfo() const;
+    void setOwnerInfo(OwnerInfo owner_info_);
+
     void append(const Chunk & chunk);
     void append(const Chunk & chunk, size_t from, size_t length); // append rows [from, from+length) of chunk
 
@@ -185,6 +171,7 @@ private:
     UInt64 num_rows = 0;
     ChunkInfoPtr chunk_info;
     std::unique_ptr<Block> owned_side_block;
+    OwnerInfo owner_info;
 
     void checkNumRowsIsConsistent();
 };

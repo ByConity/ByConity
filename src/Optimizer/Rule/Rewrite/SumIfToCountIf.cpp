@@ -147,6 +147,7 @@ TransformResult SumIfToCountIf::transformImpl(PlanNodePtr node, const Captures &
         agg_step.needOverflowRow(),
         agg_step.shouldProduceResultsInOrderOfBucketNumber(),
         agg_step.isNoShuffle(),
+        agg_step.isStreamingForCache(),
         agg_step.getHints());
 
     return PlanNodeBase::createPlanNode(node->getId(), std::move(new_agg_step), {new_projection_node}, node->getStatistics());

@@ -111,6 +111,11 @@ struct StorageID
         return uuid != UUIDHelpers::Nil;
     }
 
+    void clearUUID()
+    { 
+        uuid = UUIDHelpers::Nil;
+    }
+
     bool isDatabase() const
     {
         return table_name == TABLE_PLACEHOLDER_FOR_ONLY_DATABASE;

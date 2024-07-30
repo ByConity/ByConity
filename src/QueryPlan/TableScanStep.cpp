@@ -1233,6 +1233,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     // enable_partition_filter_push_down = 1 to do the stuff
     if (mutable_context->getSettingsRef().remove_partition_filter_on_worker)
         mutable_context->setSetting("enable_partition_filter_push_down", 1U);
+
+    options.cache_info = query_info.cache_info;
     auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, mutable_context, options);
     interpreter->execute(true);
     auto backup_input_order_info = query_info.input_order_info;
@@ -1320,6 +1322,9 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         // flag = Output
         auto pipe = storage->read(
             interpreter->getRequiredColumns(), storage_snapshot, query_info, build_context.context, QueryProcessingStage::Enum::FetchColumns, max_block_size, max_streams);
+
+        if (pipe.getCacheHolder())
+            pipeline.addCacheHolder(pipe.getCacheHolder());
 
         QueryPlanStepPtr step;
         if (pipe.empty())

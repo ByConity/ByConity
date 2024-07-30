@@ -19,9 +19,41 @@ using PlanNodeToSignatures = std::unordered_map<std::shared_ptr<const PlanNodeBa
 class PlanSignatureProvider
 {
 public:
-    explicit PlanSignatureProvider(const QueryPlan & _query_plan, ContextPtr _context): query_plan(_query_plan), context(_context) {}
-    PlanSignature computeSignature(std::shared_ptr<const PlanNodeBase> node);
-    PlanNodeToSignatures computeSignatures();
+    virtual ~PlanSignatureProvider() = default;
+    PlanSignatureProvider(PlanSignatureProvider &&) = default;
+    PlanSignatureProvider(const PlanSignatureProvider &) = default;
+
+    explicit PlanSignatureProvider(const CTEInfo & _cte_info, ContextPtr context): normalizer(_cte_info, context), cte_info(_cte_info)
+    {
+    }
+    static PlanSignatureProvider from(const QueryPlan & plan, ContextPtr _context)
+    {
+        return PlanSignatureProvider(plan.getCTEInfo(), _context);
+    }
+
+    PlanSignature computeSignature(PlanNodePtr node);
+
+    static PlanSignature combineSettings(PlanSignature signature, const SettingsChanges & settings);
+
+    PlanNodeToSignatures computeSignatures(PlanNodePtr node);
+    Block computeNormalOutputOrder(PlanNodePtr node)
+    {
+        return normalizer.computeNormalOutputOrder(node);
+    }
+    PlanNodePtr computeNormalPlan(PlanNodePtr node)
+    {
+        return normalizer.buildNormalPlan(node);
+    }
+
+protected:
+    virtual PlanSignature computeStepHash(PlanNodePtr node)
+    {
+        return normalizer.computeNormalStep(node)->hash();
+    }
+
+    static size_t combine(const std::vector<size_t> & hashes);
+
+    PlanNormalizer normalizer;
 private:
     const QueryPlan & query_plan;
     ContextPtr context;

@@ -165,7 +165,7 @@ StepAndOutputOrder StepNormalizer::visitStep(const IQueryPlanStep & step, StepsA
 StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step, StepsAndOutputOrders & /*inputs*/)
 {
     // phase 1: skipped because there is no input stream
-    // phase 2: reorder column_names, column_alias, and table_output_header
+    // phase 2: reorder column_names, column_alias, table_output_header and filters in select_query_info
     Names column_names_sorted = step.getColumnNames();
     ExpressionReorderNormalizer::reorder(column_names_sorted);
     NamesWithAliases column_alias_sorted = step.getColumnAlias();
@@ -179,8 +179,11 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         header_sorted.insert(column);
     }
 
-    if (step.hasInlineExpressions())
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "TableScan with inline expression is not supported yet");
+    for (const auto & assignment : step.getInlineExpressions())
+    {
+        const auto & column = step.getTableOutputStream().header.getByName(assignment.first);
+        header_sorted.insert(column);
+    }
 
     // phase 3: normalize output symbols, the order is from reordered table_output_header
     SymbolMapping symbol_mapping{};
@@ -190,6 +193,21 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
     DataStream mapped_table_output_stream = symbol_mapper.map(DataStream{header_sorted});
     column_alias_sorted = symbol_mapper.map(std::move(column_alias_sorted));
 
+    Assignments inline_assignments;
+    for (const auto & assignment : step.getInlineExpressions())
+        inline_assignments.emplace(symbol_mapper.map(assignment.first), assignment.second);
+
+    auto reordered_query_info = step.getQueryInfo();
+    if (auto query = dynamic_pointer_cast<ASTSelectQuery>(reordered_query_info.query))
+    {
+        auto new_query = static_pointer_cast<ASTSelectQuery>(query->clone());
+        if (new_query->where())
+            ExpressionReorderNormalizer::reorder(new_query->refWhere());
+        if (new_query->prewhere())
+            ExpressionReorderNormalizer::reorder(new_query->refPrewhere());
+        reordered_query_info.query = new_query;
+    }
+
     auto normal_table_scan = std::make_shared<TableScanStep>(
         mapped_table_output_stream,
         step.getStorage(),
@@ -197,11 +215,11 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         step.getOriginalTable(),
         std::move(column_names_sorted),
         std::move(column_alias_sorted),
-        step.getQueryInfo(), // prewhere info
+        reordered_query_info, // prewhere info
         step.getMaxBlockSize(),
         step.getTableAlias(), // alias
         PlanHints{}, // hints set later
-        Assignments{}, // TODO: support inline expression
+        inline_assignments,
         nullptr, // push down agg
         nullptr, // push down projection
         nullptr, // push down filter
@@ -354,6 +372,7 @@ StepAndOutputOrder StepNormalizer::visitAggregatingStep(const AggregatingStep & 
         false,
         step.shouldProduceResultsInOrderOfBucketNumber(),
         step.isNoShuffle(),
+        step.isStreamingForCache(),
         step.getHints());
 
     Block output_order = getOutputOrder(step, *normal_agg, symbol_mapper);

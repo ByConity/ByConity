@@ -323,6 +323,7 @@ TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, 
         agg_step->needOverflowRow(),
         false,
         agg_step->isNoShuffle(),
+        agg_step->isStreamingForCache(),
         agg_step->getHints());
     auto rewritten_agg_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(rewritten_aggregation), {inner_table});
 
@@ -489,6 +490,7 @@ TransformResult PushAggThroughInnerJoin::transformImpl(PlanNodePtr aggregation, 
         agg_step->needOverflowRow(),
         false,
         agg_step->isNoShuffle(),
+        agg_step->isStreamingForCache(),
         agg_step->getHints());
     auto left_agg_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(left_aggregation), {left_table});
 
@@ -504,6 +506,7 @@ TransformResult PushAggThroughInnerJoin::transformImpl(PlanNodePtr aggregation, 
         agg_step->needOverflowRow(),
         false,
         agg_step->isNoShuffle(),
+        agg_step->isStreamingForCache(),
         agg_step->getHints());
     auto right_agg_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(right_aggregation), {right_table});
 

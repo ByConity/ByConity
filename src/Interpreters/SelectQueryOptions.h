@@ -22,6 +22,7 @@
 #pragma once
 
 #include <Core/QueryProcessingStage.h>
+#include <Processors/IntermediateResult/TableScanCacheInfo.h>
 
 namespace DB
 {
@@ -66,6 +67,9 @@ struct SelectQueryOptions
     bool is_subquery = false; // non-subquery can also have subquery_depth > 0, e.g. insert select
     bool with_all_cols = false; /// asterisk include materialized and aliased columns
     bool without_extended_objects = false;
+
+    /// cache info, used for matching with cache when enable query cache
+    TableScanCacheInfo cache_info;
 
     /**
      * if true, it means we should generate plans being compatible with distributed plansegments.

@@ -405,6 +405,12 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitFillingStep(const FillingStep & ,
     return child_stats;
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitIntermediateResultCacheStep(const IntermediateResultCacheStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
 PlanNodeStatisticsPtr PlanCardinalityVisitor::visitPlanNode(PlanNodeBase & node, CardinalityContext & context)
 {
     static CardinalityVisitor visitor;

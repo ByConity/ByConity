@@ -1129,6 +1129,13 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         if (totals_having->getHavingFilter())
             out << intent.detailIntent() << "Having: " << totals_having->getHavingFilter()->formatForErrorMessage();
     }
+
+    // if (plan->getType() == IQueryPlanStep::Type::IntermediateResultCache)
+    // {
+    //     const auto * cache = dynamic_cast<IntermediateResultCacheStep *>(plan.get());
+    //     out << intent.detailIntent() << "Digest: " << cache->getCacheParam().digest;
+    // }
+
     return out.str();
 }
 

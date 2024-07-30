@@ -1141,6 +1141,10 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
         #undef M
     }
 
+    // for streaming, we suppose no memory bounding here
+    if (is_agg_streaming)
+        return true;
+
     size_t result_size = result.sizeWithoutOverflowRow();
     Int64 current_memory_usage = 0;
     if (auto * memory_tracker_child = CurrentThread::getMemoryTracker())
@@ -1454,9 +1458,12 @@ void Aggregator::convertToBlockImpl(
         convertToBlockImplNotFinal(method, data, std::move(raw_key_columns), aggregate_columns);
     }
     /// In order to release memory early.
-    data.clearAndShrink();
+    /// For agg streaming need to reuse the memory
+    if (is_agg_streaming || is_agg_converting_for_cache)
+        data.clear();
+    else
+        data.clearAndShrink();
 }
-
 
 template <typename Mapped>
 inline void Aggregator::insertAggregatesIntoColumns(
@@ -2505,6 +2512,9 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
     else if (result.type != AggregatedDataVariants::Type::without_key)
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
+    if (is_agg_streaming)
+        return true;
+
     size_t result_size = result.sizeWithoutOverflowRow();
     Int64 current_memory_usage = 0;
     if (auto * memory_tracker_child = CurrentThread::getMemoryTracker())
@@ -2631,22 +2641,41 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
             if (thread_group)
                 CurrentThread::attachToIfDetached(thread_group);
 
-            for (Block & block : bucket_to_blocks[bucket])
+            if (is_agg_streaming)
             {
-            #define M(NAME) \
+                for (Block & block : bucket_to_blocks[bucket])
+                {
+#define M(NAME, IS_TWO_LEVEL) \
+    else if (result.type == AggregatedDataVariants::Type::NAME) \
+        mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data, nullptr, false);
+                    if (false)
+                    {
+                    } // NOLINT
+                    APPLY_FOR_AGGREGATED_VARIANTS(M)
+#undef M
+                    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+                }
+            }
+            else
+            {
+                for (Block & block : bucket_to_blocks[bucket])
+                {
+#define M(NAME) \
                 else if (result.type == AggregatedDataVariants::Type::NAME) \
                     mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data.impls[bucket], nullptr, false);
 
-                if (false) {} // NOLINT
+                    if (false) {} // NOLINT
                     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
-            #undef M
-                else
-                    throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+#undef M
+                    else
+                        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+                }
+
             }
         };
 
         std::unique_ptr<ThreadPool> thread_pool;
-        if (max_threads > 1 && total_input_rows > 100000)    /// TODO Make a custom threshold.
+        if (!is_agg_streaming && max_threads > 1 && total_input_rows > 100000)    /// TODO Make a custom threshold.
             thread_pool = std::make_unique<ThreadPool>(max_threads);
 
         for (const auto & bucket_blocks : bucket_to_blocks)

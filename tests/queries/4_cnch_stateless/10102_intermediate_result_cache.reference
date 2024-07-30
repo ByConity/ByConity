@@ -1,0 +1,169 @@
+Projection Est. ? rows
+│     Expressions: [c1]
+└─ Sorting Est. ? rows
+   │     Order by: {c1 ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {c1 ASC NULLS LAST}
+         └─ MergingAggregated Est. ? rows
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {c1}
+               └─ IntermediateResultCache Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {c1}
+                     └─ TableScan 1234.default.cache_table_all Est. ? rows
+                              Outputs: [c1]
+1
+2
+1
+2
+1
+2
+3
+1
+2
+3
+0
+1
+2
+3
+1
+2
+3
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+a
+b
+c
+d
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+a
+b
+c
+d
+0	1
+1	1
+0	1
+1	1
+0	1
+1	1
+0	1
+1	1
+Projection Est. ? rows
+│     Expressions: [c1], count(c2):=`expr#count(c2)`
+└─ Sorting Est. ? rows
+   │     Order by: {c1 ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {c1 ASC NULLS LAST}
+         └─ MergingAggregated Est. ? rows
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {c1}
+               └─ IntermediateResultCache Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {c1}
+                     │     Aggregates: expr#count(c2):=AggNull(count)(c2)
+                     └─ TableScan 1234.default.cache_table_sharding_all Est. ? rows
+                              Outputs: [c1, c2]
+1	1
+2	1
+1	1
+2	1
+Projection Est. ? rows
+│     Expressions: [c2], count(c1):=`expr#count(c1)`
+└─ Sorting Est. ? rows
+   │     Order by: {c2 ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {c2 ASC NULLS LAST}
+         └─ MergingAggregated Est. ? rows
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {c2}
+               └─ IntermediateResultCache Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {c2}
+                     │     Aggregates: expr#count(c1):=AggNull(count)(c1)
+                     └─ TableScan 1234.default.cache_table_sharding_all Est. ? rows
+                              Partition filter: c1 = 1
+                              Outputs: [c1, c2]
+Projection Est. ? rows
+│     Expressions: [c2], count(c1):=`expr#count(c1)`
+└─ Sorting Est. ? rows
+   │     Order by: {c2 ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {c2 ASC NULLS LAST}
+         └─ MergingAggregated Est. ? rows
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {c2}
+               └─ IntermediateResultCache Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {c2}
+                     │     Aggregates: expr#count(c1):=AggNull(count)(c1)
+                     └─ TableScan 1234.default.cache_table_sharding_all Est. ? rows
+                              Outputs: [c1, c2]
+Projection Est. ? rows
+│     Expressions: [c2], count(c1):=`expr#count(c1)`
+└─ Sorting Est. ? rows
+   │     Order by: {c2 ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {c2 ASC NULLS LAST}
+         └─ MergingAggregated Est. ? rows
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {c2}
+               └─ IntermediateResultCache Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {c2}
+                     │     Aggregates: expr#count(c1):=AggNull(count)(c1)
+                     └─ TableScan 1234.default.cache_table_sharding_all Est. ? rows
+                              Partition filter: c1 >= 1
+                              Outputs: [c1, c2]
+a	1
+a	1
+b	1
+a	1
+b	1
+a	1
+a	1
+b	1
+a	1
+b	1
+0
+0
+0
+0
+0
+test_metric_a	0	2	0	0	0	0	16
+test_metric_b	2	0	0	0	0	16	0
+test_metric_d	4	0	0	0	0	32	0
+test_metric_e	2	1	0	0	0	16	8
+test_metric_f	3	0	0	0	0	24	0
+test_metric_g	0	4	1	0	0	0	40
+test_metric_h	3	0	1	0	0	40	0
+test_metric_i	0	2	0	0	0	0	32
+test_metric_j	2	0	0	0	0	32	0
+test_metric_k	2	0	0	0	0	32	0
+test_metric_l	2	0	0	0	0	32	0
+test_metric_m	1	1	0	0	0	18	18
+test_metric_n	2	0	0	0	0	36	0
+test_metric_o	1	0	0	0	0	18	0
+test_metric_p	2	0	0	0	0	36	0
+test_metric_q	2	0	0	0	0	36	0

@@ -22,12 +22,14 @@
 #include <Processors/QueryPipeline.h>
 
 #include <IO/WriteHelpers.h>
+#include <Interpreters/ConcurrentHashJoin.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IJoin.h>
 #include <Processors/DelayedPortsProcessor.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/Formats/IOutputFormat.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 #include <Processors/LimitTransform.h>
 #include <Processors/ReadProgressCallback.h>
 #include <Processors/ResizeProcessor.h>
@@ -47,7 +49,6 @@
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <Common/CurrentThread.h>
 #include <Common/typeid_cast.h>
-#include <Interpreters/ConcurrentHashJoin.h>
 
 #include <sys/eventfd.h>
 
@@ -768,6 +769,33 @@ void QueryPipeline::setCollectedProcessors(Processors * processors)
     pipe.collected_processors = processors;
 }
 
+const CacheHolderPtr QueryPipeline::getCacheHolder() const
+{
+    return pipe.holder.cache_holder;
+}
+
+void QueryPipeline::setWriteCacheComplete(const ContextPtr & context)
+{
+    if (!pipe.holder.cache_holder)
+        return;
+
+    auto cache = context->getIntermediateResultCache();
+    auto & write_cache = pipe.holder.cache_holder->write_cache;
+    for (auto cache_key : write_cache)
+        cache->setComplete(cache_key);
+    write_cache.clear();
+}
+
+void QueryPipeline::clearUncompletedCache(const ContextPtr & context)
+{
+    if (!pipe.holder.cache_holder)
+        return;
+
+    auto cache = context->getIntermediateResultCache();
+    auto & write_cache = pipe.holder.cache_holder->write_cache;
+    for (auto cache_key : write_cache)
+        cache->eraseUncompletedCache(cache_key);
+}
 
 QueryPipelineProcessorsCollector::QueryPipelineProcessorsCollector(QueryPipeline & pipeline_, IQueryPlanStep * step_)
     : pipeline(pipeline_), step(step_)

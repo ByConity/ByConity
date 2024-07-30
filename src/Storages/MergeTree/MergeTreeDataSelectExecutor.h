@@ -217,6 +217,14 @@ public:
         bool use_sampling,
         RelativeSize relative_sample_size);
 
+    static RangesInDataParts filterPartsByIntermediateResultCache(
+        const StorageID & storage_id,
+        const SelectQueryInfo & query_info,
+        const ContextPtr & context,
+        Poco::Logger * log,
+        RangesInDataParts & parts_with_ranges,
+        CacheHolderPtr & part_cache_holder);
+
     /// Create expression for sampling.
     /// Also, calculate _sample_factor if needed.
     /// Also, update key condition with selected sampling range.

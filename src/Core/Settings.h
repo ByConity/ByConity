@@ -678,7 +678,8 @@ enum PreloadLevelSettings : UInt64
     \
     M(UInt64, max_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
     M(UInt64, max_distributed_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a distribute query can consume.", 0) \
-\
+    M(Float, streaming_agg_local_ratio, 0.25, "The ratio of local streaming agg, 0-all streaming, 1-all local merged", 0) \
+    \
     M(UInt64, max_rows_to_group_by, 0, "", 0) \
     M(OverflowModeGroupBy, group_by_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
     M(UInt64, max_bytes_before_external_group_by, 0, "", 0) \
@@ -1984,6 +1985,15 @@ enum PreloadLevelSettings : UInt64
     M(Bool, schema_inference_use_cache_for_s3, true, "Use cache in schema inference while using s3 table function", 0) \
     M(UInt64, input_format_max_rows_to_read_for_schema_inference, 25000, "The maximum rows of data to read for automatic schema inference", 0) \
     M(UInt64, input_format_max_bytes_to_read_for_schema_inference, 32 * 1024 * 1024, "The maximum bytes of data to read for automatic schema inference", 0) \
+    \
+    /** Settings for intermediate result cache */ \
+    M(Bool, enable_intermediate_result_cache, false, "Whether to enable intermediate result cache.", 0) \
+    M(Bool, enable_join_intermediate_result_cache, false, "Whether to enable join intermediate result cache.", 0) \
+    M(Bool, enable_intermediate_result_cache_ignore_partition_filter, true, "Whether to ignore parition filter in intermediate result cache.", 0) \
+    M(Bool, enable_intermediate_result_cache_streaming, false, "Whether to enable streaming agg for intermediate result cache.", 0) \
+    M(Seconds, wait_intermediate_result_cache, 60, "Time to wait for enable intermediate result cache per part, 0 means disable.", 0) \
+    M(UInt64, intermediate_result_cache_max_bytes, 100000000, "Intermediate result cache entry max bytes, 0 means disable.", 0) \
+    M(UInt64, intermediate_result_cache_max_rows, 100000, "Intermediate result cache entry max rows, 0 means disable.", 0) \
     \
     /** Settings for Map */ \
     M(Bool, input_format_parse_null_map_as_empty, true, "Parse null map as empty map. Throw exception if set false.", 0) \

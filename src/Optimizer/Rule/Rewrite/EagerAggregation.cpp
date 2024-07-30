@@ -457,6 +457,7 @@ PlanNodePtr insertLocalAggregate(
                 agg_step.needOverflowRow(),
                 agg_step.shouldProduceResultsInOrderOfBucketNumber(),
                 agg_step.isNoShuffle(),
+                agg_step.isStreamingForCache(),
                 agg_step.getHints());
 
             return AggregatingNode::createPlanNode(aggregation->getId(), std::move(new_global_agg_step), {child_node});

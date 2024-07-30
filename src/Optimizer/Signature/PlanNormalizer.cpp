@@ -44,6 +44,7 @@ protected:
     }
 
 private:
+    const CTEInfo & cte_info;
     StepNormalizer step_normalizer;
     const CTEInfo & cte_info;
     std::unordered_map<CTEId, StepAndOutputOrder> cte_cache;
@@ -82,19 +83,9 @@ PlanNodePtr PlanNormalizeResult::buildNormalizedPlanImpl(std::shared_ptr<const P
 
     PlanNodes new_children;
     for (const auto & child : node->getChildren())
-        new_children.emplace_back(buildNormalizedPlanImpl(child, context));
-
-    auto it = normal_steps.find(node);
-    QueryPlanStepPtr new_step = it != normal_steps.end() ? it->second : node->getStep()->copy(context);
-    return PlanNodeBase::createPlanNode(node->getId(), new_step, std::move(new_children));
-}
-
-PlanNormalizeResult PlanNormalizer::normalize(const QueryPlan & plan, ContextPtr context)
-{
-    PlanNormalizeResult res;
-    NormalizeVisitor visitor(context, plan.getCTEInfo());
-    VisitorUtil::accept(plan.getPlanNode(), visitor, res);
-    return res;
+        new_children.emplace_back(buildNormalPlanImpl(child));
+    QueryPlanStepPtr normal_step = computeNormalStepImpl(node).normal_step;
+    return PlanNodeBase::createPlanNode(node->getId(), normal_step, std::move(new_children));
 }
 
 }

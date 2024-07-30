@@ -79,6 +79,13 @@
     M(MarkCacheMisses, "") \
     M(QueryCacheHits, "") \
     M(QueryCacheMisses, "") \
+    M(IntermediateResultCacheHits, "") \
+    M(IntermediateResultCacheMisses, "") \
+    M(IntermediateResultCacheRefuses, "") \
+    M(IntermediateResultCacheWait, "") \
+    M(IntermediateResultCacheUncompleted, "") \
+    M(IntermediateResultCacheReadBytes, "") \
+    M(IntermediateResultCacheWriteBytes, "") \
     M(PrimaryIndexCacheHits, "") \
     M(PrimaryIndexCacheMisses, "") \
     M(PrimaryIndexDiskCacheHits, "") \

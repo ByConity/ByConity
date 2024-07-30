@@ -79,6 +79,7 @@ TransformResult split(const PlanNodePtr & node, RuleContext & context)
         step->needOverflowRow(),
         false,
         step->isNoShuffle(),
+        step->isStreamingForCache(),
         step->getHints());
 
     auto partial_agg_node

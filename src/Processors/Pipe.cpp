@@ -19,11 +19,10 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <Processors/Pipe.h>
+#include <Columns/ColumnConst.h>
 #include <IO/WriteHelpers.h>
-#include <Processors/Sources/SourceFromInputStream.h>
-#include <Processors/ResizeProcessor.h>
 #include <Processors/ConcatProcessor.h>
+#include <Processors/Formats/IOutputFormat.h>
 #include <Processors/LimitTransform.h>
 #include <Processors/NullSink.h>
 #include <Processors/Transforms/ExtremesTransform.h>
@@ -133,6 +132,21 @@ Pipe::Holder & Pipe::Holder::operator=(Holder && rhs)
         query_plans.emplace_back(std::move(plan));
 
     query_id_holder = std::move(rhs.query_id_holder);
+
+    if (rhs.cache_holder)
+    {
+        if (!cache_holder)
+            cache_holder = std::move(rhs.cache_holder);
+        else
+        {
+            cache_holder->write_cache.insert(rhs.cache_holder->write_cache.begin(), rhs.cache_holder->write_cache.end());
+            cache_holder->read_cache.insert(rhs.cache_holder->read_cache.begin(), rhs.cache_holder->read_cache.end());
+            if (!rhs.cache_holder->all_part_in_cache)
+                cache_holder->all_part_in_cache = false;
+            if (rhs.cache_holder->all_part_in_storage)
+                cache_holder->all_part_in_storage = true;
+        }
+    }
 
     return *this;
 }

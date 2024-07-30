@@ -1120,6 +1120,14 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             result.sampling.use_sampling,
             result.sampling.relative_sample_size);
 
+        result.parts_with_ranges = MergeTreeDataSelectExecutor::filterPartsByIntermediateResultCache(
+            data.getStorageID(),
+            query_info,
+            context,
+            log,
+            result.parts_with_ranges,
+            result.part_cache_holder);
+
         auto cost_micro_seconds = stopwatch.elapsedMicroseconds();
         LOG_DEBUG(log, "Filtering parts by primiry key and skip indexes used: {} micro seconds", cost_micro_seconds);
     }
@@ -1202,6 +1210,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
     ProfileEvents::increment(ProfileEvents::SelectedMarks, result.selected_marks);
 
     auto query_id_holder = MergeTreeDataSelectExecutor::checkLimits(data, result.parts_with_ranges, context);
+
+    if (result.part_cache_holder)
+        pipeline.addCacheHolder(std::move(result.part_cache_holder));
 
     if (result.parts_with_ranges.empty())
     {

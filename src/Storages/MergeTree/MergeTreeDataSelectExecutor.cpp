@@ -30,31 +30,32 @@
 #include <unordered_set>
 #include <utility>
 
-#include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
-#include <Storages/MergeTree/MergeTreeReadPool.h>
-#include <Storages/MergeTree/MergeTreeIndices.h>
-#include <Storages/MergeTree/MergeTreeIndexReader.h>
-#include <Storages/MergeTree/KeyCondition.h>
-#include <Storages/MergeTree/MergeTreeDataPartUUID.h>
-#include <Storages/MergeTree/GinIndexDataPartHelper.h>
-#include <Storages/MergeTree/GinIndexStore.h>
-#include <Storages/MergeTree/MergeTreeIndexInverted.h>
-#include <Storages/DiskCache/DiskCacheFactory.h>
-#include <Storages/ReadInOrderOptimizer.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSampleRatio.h>
 #include <Parsers/parseIdentifierOrStringLiteral.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/Context.h>
 #include <Processors/ConcatProcessor.h>
-#include <QueryPlan/QueryPlan.h>
-#include <QueryPlan/FilterStep.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 #include <QueryPlan/ExpressionStep.h>
-#include <QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/ReadFromMergeTree.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <QueryPlan/UnionStep.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Storages/MergeTree/GinIndexDataPartHelper.h>
+#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/KeyCondition.h>
+#include <Storages/MergeTree/MergeTreeDataPartUUID.h>
+#include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
+#include <Storages/MergeTree/MergeTreeIndexInverted.h>
+#include <Storages/MergeTree/MergeTreeIndexReader.h>
+#include <Storages/MergeTree/MergeTreeIndices.h>
+#include <Storages/MergeTree/MergeTreeReadPool.h>
+#include <Storages/ReadInOrderOptimizer.h>
 
 #include <Core/UUID.h>
 #include <DataTypes/DataTypeDate.h>
@@ -73,6 +74,7 @@
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
 #include <roaring.hh>
+#include <Processors/IntermediateResult/TableScanCacheInfo.h>
 
 namespace ProfileEvents
 {
@@ -1141,6 +1143,38 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     }
 
     return parts_with_ranges;
+}
+
+RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByIntermediateResultCache(
+    const StorageID & storage_id,
+    const SelectQueryInfo & query_info,
+    const ContextPtr & context,
+    Poco::Logger * /*log*/,
+    RangesInDataParts & parts_with_ranges,
+    CacheHolderPtr & part_cache_holder)
+{
+    auto cache = context->getIntermediateResultCache();
+    if (!cache)
+        return parts_with_ranges;
+
+    TableScanCacheInfo cache_info = getTableScanCacheInfo(query_info);
+
+    // check enable result cache
+    if (cache_info.getStatus() == TableScanCacheInfo::Status::NO_CACHE)
+        return parts_with_ranges;
+
+    if (cache_info.getStatus() == TableScanCacheInfo::Status::CACHE_DEPENDENT_TABLE)
+    {
+        // todo should send parts info to CACHE_TABLE
+        // const auto & cache_dependent_info = cache_info.getDependentInfo();
+        return parts_with_ranges;
+    }
+
+    assert(cache_info.getStatus() == TableScanCacheInfo::Status::CACHE_TABLE);
+    RangesInDataParts new_parts_with_ranges;
+    part_cache_holder = cache->createCacheHolder(context, cache_info.getDigest(), storage_id, parts_with_ranges, new_parts_with_ranges);
+
+    return new_parts_with_ranges;
 }
 
 // high quality uniform sampling is required by sample algorithm of statistics

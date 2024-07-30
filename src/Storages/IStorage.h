@@ -283,6 +283,9 @@ public:
     /// Prepare storeage write in plan segment and return allocated table storage id, used in optimizer
     virtual StorageID prepareTableWrite(ContextPtr /*context*/) { return getStorageID(); }
 
+        /// Supports part-level intermedicate result cache for aggregating
+    virtual bool supportIntermedicateResultCache() const { return false; }
+
 protected:
     /// Returns whether the column is virtual - by default all columns are real.
     /// Initially reserved virtual column name may be shadowed by real column.

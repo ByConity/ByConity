@@ -199,6 +199,7 @@
 #include <Statistics/AutoStatisticsManager.h>
 #include <fmt/core.h>
 #include <Disks/IO/ThreadPoolRemoteFSReader.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 
 namespace fs = std::filesystem;
 
@@ -354,6 +355,7 @@ struct ContextSharedPart
     mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable QueryCachePtr query_cache;         /// Cache of query results.
+    mutable IntermediateResultCachePtr intermediate_result_cache; /// part cache of queries' results.
     mutable MMappedFileCachePtr
         mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list; /// Executing queries at the moment.
@@ -2845,6 +2847,29 @@ void Context::dropQueryCache() const
     auto lock = getLock();
     if (shared->query_cache)
         shared->query_cache->reset();
+}
+
+void Context::setIntermediateResultCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    if (shared->intermediate_result_cache)
+        throw Exception("Intermediate result cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->intermediate_result_cache = std::make_shared<IntermediateResult::CacheManager>(cache_size_in_bytes);
+}
+
+IntermediateResultCachePtr Context::getIntermediateResultCache() const
+{
+    auto lock = getLock();
+    return shared->intermediate_result_cache;
+}
+
+void Context::dropIntermediateResultCache() const
+{
+    auto lock = getLock();
+    if (shared->intermediate_result_cache)
+        shared->intermediate_result_cache->reset();
 }
 
 void Context::setMMappedFileCache(size_t cache_size_in_num_entries)
