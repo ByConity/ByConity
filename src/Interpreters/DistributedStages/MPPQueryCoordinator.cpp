@@ -284,7 +284,7 @@ SummarizedQueryStatus MPPQueryCoordinator::waitUntilFinish(int error_code, const
         .summarized_error_msg = std::move(summarized_error_msg)};
 }
 
-void MPPQueryCoordinator::updateSegmentInstanceStatus(const RuntimeSegmentsStatus & status)
+void MPPQueryCoordinator::updateSegmentInstanceStatus(const RuntimeSegmentStatus & status)
 {
     LOG_TRACE(
         log,

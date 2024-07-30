@@ -407,6 +407,7 @@ WorkerNodeResourceData ResourceMonitor::createResourceData(bool init)
     data.last_status_create_time = time(nullptr);
     data.manipulation_num = getManipulationTaskCount();
     data.consumer_num = getConsumerCount();
+    data.register_time = start_time;
 
     if (init)
     {

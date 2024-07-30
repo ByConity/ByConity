@@ -59,19 +59,23 @@ String toString(BroadcastStatusCode code);
 
 struct BroadcastStatus
 {
-    explicit BroadcastStatus(BroadcastStatusCode status_code_) : code(status_code_), is_modifer(false){ }
+    explicit BroadcastStatus(BroadcastStatusCode status_code_) : code(status_code_), is_modified_by_operator(false)
+    {
+    }
 
-    explicit BroadcastStatus(BroadcastStatusCode status_code_, bool is_modifer_) : code(status_code_), is_modifer(is_modifer_) { }
+    explicit BroadcastStatus(BroadcastStatusCode status_code_, bool is_modifer_) : code(status_code_), is_modified_by_operator(is_modifer_)
+    {
+    }
 
     explicit BroadcastStatus(BroadcastStatusCode status_code_, bool is_modifer_, String message_)
-        : code(status_code_), is_modifer(is_modifer_), message(std::move(message_))
+        : code(status_code_), is_modified_by_operator(is_modifer_), message(std::move(message_))
     {
     }
 
     BroadcastStatusCode code;
 
     /// Is this operation modified the status
-    mutable bool is_modifer;
+    mutable bool is_modified_by_operator;
 
     /// message about why changed to this status
     String message;

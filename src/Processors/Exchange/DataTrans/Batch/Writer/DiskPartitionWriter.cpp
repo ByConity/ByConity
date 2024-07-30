@@ -29,7 +29,6 @@ namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
     extern const int TIMEOUT_EXCEEDED;
-    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
 DiskPartitionWriter::DiskPartitionWriter(

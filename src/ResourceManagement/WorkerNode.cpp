@@ -95,19 +95,12 @@ void WorkerNode::reserveResourceQuotas(const ResourceRequirement & requirement, 
 String WorkerNode::toDebugString() const
 {
     std::stringstream ss;
-    ss << "{id:" << id
-       << " worker_group_id:" << worker_group_id
-       << " vw:" << vw_name
-       << " host:" << host.toDebugString()
-       << " cpu_limit:" << cpu_limit
-       << " cpu_usage:" << cpu_usage.load(std::memory_order_relaxed)
-       << " reserved_cpu_cores:" << reserved_cpu_cores.load(std::memory_order_relaxed)
-       << " memory_limit:" << memory_limit
-       << " memory_usage:" << memory_usage
-       << " memory_available:" << memory_available.load(std::memory_order_relaxed)
+    ss << "{id:" << id << " worker_group_id:" << worker_group_id << " vw:" << vw_name << " host:" << host.toDebugString()
+       << " register_time:" << register_time << " cpu_limit:" << cpu_limit << " cpu_usage:" << cpu_usage.load(std::memory_order_relaxed)
+       << " reserved_cpu_cores:" << reserved_cpu_cores.load(std::memory_order_relaxed) << " memory_limit:" << memory_limit
+       << " memory_usage:" << memory_usage << " memory_available:" << memory_available.load(std::memory_order_relaxed)
        << " reserved_memory_bytes:" << reserved_memory_bytes.load(std::memory_order_relaxed)
-       << " disk_space:" << disk_space.load(std::memory_order_relaxed)
-       << " query_num:" << query_num.load(std::memory_order_relaxed)
+       << " disk_space:" << disk_space.load(std::memory_order_relaxed) << " query_num:" << query_num.load(std::memory_order_relaxed)
        << " manipulation_num:" << manipulation_num.load(std::memory_order_relaxed)
        << " consumer_num:" << consumer_num.load(std::memory_order_relaxed);
     return ss.str();
@@ -199,7 +192,7 @@ WorkerNodeResourceData WorkerNode::getResourceData() const
 
 void WorkerNode::init(const WorkerNodeResourceData & data, [[maybe_unused]] const bool set_running)
 {
-    register_time = time(nullptr);
+    register_time = data.register_time;
 
     /// NOTE: if we set a worker node's state to WorkerState::Registering, the worker node will be invisible in the worker group. 
     /// This is conflict to the design of checking registered from worker side. so for now we set worker's state to Running directly.

@@ -120,7 +120,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendImpl(Chunk chunk)
     for (size_t i = 0; i < sender_stream_ids.size(); ++i)
     {
         BroadcastStatus ret_status = sendIOBuffer(buf, sender_stream_ids[i], *trans_keys[i]);
-        if (ret_status.is_modifer && ret_status.code != BroadcastStatusCode::RUNNING)
+        if (ret_status.is_modified_by_operator && ret_status.code != BroadcastStatusCode::RUNNING)
         {
             finish(
                 BroadcastStatusCode::SEND_CANCELLED,

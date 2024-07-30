@@ -36,7 +36,7 @@ struct RuntimeSegmentsMetrics
     }
 };
 
-struct RuntimeSegmentsStatus
+struct RuntimeSegmentStatus
 {
     String query_id;
     int32_t segment_id{0};

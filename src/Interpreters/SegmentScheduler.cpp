@@ -75,7 +75,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     {
         std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
         segment_status_map[query_id];
-        query_status_map.emplace(query_id, std::make_shared<RuntimeSegmentsStatus>());
+        query_status_map.emplace(query_id, std::make_shared<RuntimeSegmentStatus>());
     }
     /// send resource to worker before scheduler
     auto server_resource = query_context->tryGetCnchServerResource();
@@ -288,7 +288,7 @@ AddressInfos SegmentScheduler::getWorkerAddress(const String & query_id, size_t 
         return {};
 }
 
-void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_status)
+void SegmentScheduler::updateQueryStatus(const RuntimeSegmentStatus & segment_status)
 {
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto query_iter = query_status_map.find(segment_status.query_id);
@@ -300,7 +300,7 @@ void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_s
     status->metrics.cpu_micros += segment_status.metrics.cpu_micros;
 }
 
-void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment_status)
+void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentStatus & segment_status)
 {
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto segment_status_iter = segment_status_map.find(segment_status.query_id);
@@ -309,7 +309,7 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
 
     auto segment_iter = segment_status_iter->second.find(segment_status.segment_id);
     if (segment_iter == segment_status_iter->second.end())
-        segment_status_iter->second[segment_status.segment_id] = std::make_shared<RuntimeSegmentsStatus>();
+        segment_status_iter->second[segment_status.segment_id] = std::make_shared<RuntimeSegmentStatus>();
 
     RuntimeSegmentsStatusPtr status = segment_status_iter->second[segment_status.segment_id];
 
@@ -376,7 +376,7 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
 }
 
 void SegmentScheduler::updateReceivedSegmentStatusCounter(
-    const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentsStatus & status)
+    const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentStatus & status)
 {
     std::shared_ptr<DAGGraph> dag_ptr;
     {
@@ -435,7 +435,7 @@ void SegmentScheduler::updateReceivedSegmentStatusCounter(
     }
 }
 
-void SegmentScheduler::onSegmentFinished(const RuntimeSegmentsStatus & status)
+void SegmentScheduler::onSegmentFinished(const RuntimeSegmentStatus & status)
 {
     std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
     if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(status.query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
@@ -669,5 +669,20 @@ PlanSegmentSet SegmentScheduler::getIOPlanSegmentInstanceIDs(const String & quer
     }
 
     return res;
+}
+
+void SegmentScheduler::workerRestarted(const WorkerId & id)
+{
+    // Is there any better solution than iteration?
+    LOG_TRACE(log, "Worker {} restarted, notify schedulers who care.", id.ToString());
+    std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
+    for (auto & iter : bsp_scheduler_map)
+    {
+        const auto & [vw_name, wg_name] = iter.second->tryGetWorkerGroupName();
+        if (!wg_name.empty() && wg_name == id.wg_name && vw_name == id.vw_name)
+        {
+            iter.second->onWorkerRestarted(id);
+        }
+    }
 }
 }

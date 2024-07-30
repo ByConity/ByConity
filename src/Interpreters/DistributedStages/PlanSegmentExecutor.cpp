@@ -94,6 +94,7 @@ namespace ErrorCodes
     extern const int MEMORY_LIMIT_EXCEEDED;
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int BSP_CLEANUP_PREVIOUS_SEGMENT_INSTANCE_FAILED;
+    extern const int BSP_WRITE_DATA_FAILED;
 }
 
 void PlanSegmentExecutor::prepareSegmentInfo() const
@@ -404,8 +405,8 @@ void PlanSegmentExecutor::doExecute()
         /// bsp mode will fsync data in finish, so we need to check if exception is thrown here.
         if (context->getSettingsRef().bsp_mode && status.code != BroadcastStatusCode::ALL_SENDERS_DONE)
             throw Exception(
-                ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION,
-                "finish senders failed status.code:{} status.message:{}",
+                ErrorCodes::BSP_WRITE_DATA_FAILED,
+                "Write data into disk failed in bsp mode, code {}, error message: {}",
                 status.code,
                 status.message);
     }

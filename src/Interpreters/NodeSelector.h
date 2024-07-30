@@ -203,6 +203,7 @@ public:
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };
 
+// TODO: More elegant: NodeSelector should be a super class and the rests should be its sub classes.
 class NodeSelector
 {
 public:

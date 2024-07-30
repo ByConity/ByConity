@@ -57,7 +57,7 @@ public:
     struct ExecutionResult
     {
         AddressInfo coordinator_address;
-        RuntimeSegmentsStatus runtime_segment_status;
+        RuntimeSegmentStatus runtime_segment_status;
         Protos::SenderMetrics sender_metrics;
     };
     std::optional<ExecutionResult> execute();
