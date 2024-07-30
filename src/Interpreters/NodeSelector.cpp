@@ -6,6 +6,8 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/NodeSelector.h>
 #include <bthread/mutex.h>
+#include <Common/Exception.h>
+#include <common/defines.h>
 #include <Common/HostWithPorts.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -119,10 +121,11 @@ NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_con
 NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr)
 {
     checkClusterInfo(plan_segment_ptr);
+    bool need_stable_schedule = needStableSchedule(plan_segment_ptr);
     NodeSelectorResult result;
     // The one worker excluded is server itself.
-    const auto worker_number = cluster_nodes.rank_workers.size() - 1;
-    if (plan_segment_ptr->getParallelSize() > worker_number && !query_context->getSettingsRef().bsp_mode)
+    const auto worker_number = cluster_nodes.all_workers.size() - 1;
+    if (plan_segment_ptr->getParallelSize() > worker_number && (!query_context->getSettingsRef().bsp_mode || need_stable_schedule))
     {
         throw Exception(
             ErrorCodes::BAD_QUERY_PARAMETER,
@@ -130,6 +133,7 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
             plan_segment_ptr->getParallelSize(),
             worker_number);
     }
+
     // If parallelism is greater than the worker number, we split the parts according to the input size.
     if (plan_segment_ptr->getParallelSize() > worker_number)
     {
@@ -218,14 +222,28 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
         }
         else
         {
-            size_t parallel_index = 0;
-            for (const auto & worker : cluster_nodes.rank_workers)
+            if (need_stable_schedule)
             {
-                parallel_index++;
-                if (parallel_index > plan_segment_ptr->getParallelSize())
-                    break;
-                if (worker.address != local_address)
-                    result.worker_nodes.emplace_back(worker);
+                LOG_TRACE(log, "use stable schedule for segment:{} with {} nodes", plan_segment_ptr->getPlanSegmentId(), worker_number);
+                if (plan_segment_ptr->getParallelSize() != worker_number)
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        " Source plan segment parallel size {} is not equal to worker number {}.",
+                        plan_segment_ptr->getParallelSize(),
+                        worker_number);
+                for (size_t parallel_index = 0; parallel_index < worker_number; parallel_index++)
+                {
+                    result.worker_nodes.emplace_back(cluster_nodes.all_workers[parallel_index]);
+                }
+            }
+            else
+            {
+                for (size_t parallel_index = 0; parallel_index < plan_segment_ptr->getParallelSize(); parallel_index++)
+                {
+                    if (parallel_index > plan_segment_ptr->getParallelSize())
+                        break;
+                    result.worker_nodes.emplace_back(cluster_nodes.all_workers[cluster_nodes.rank_worker_ids[parallel_index]]);
+                }
             }
         }
     }
@@ -245,17 +263,33 @@ NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr, C
     }
     else
     {
-        size_t parallel_index = 0;
-        for (const auto & worker : cluster_nodes.rank_workers)
+        bool need_stable_schedule = needStableSchedule(plan_segment_ptr);
+        if (need_stable_schedule)
         {
-            parallel_index++;
-            if (parallel_index > plan_segment_ptr->getParallelSize())
-                break;
-            if (worker.address != local_address)
-                result.worker_nodes.emplace_back(worker);
+            const auto worker_number = cluster_nodes.all_workers.size() - 1;
+            LOG_TRACE(log, "use stable schedule for segment:{} with {} nodes", plan_segment_ptr->getPlanSegmentId(), worker_number);
+            if (plan_segment_ptr->getParallelSize() != worker_number)
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Plan segment {} need stable schedule, but parallel size {} is not equal to worker number {}.",
+                    plan_segment_ptr->getPlanSegmentId(),
+                    plan_segment_ptr->getParallelSize(),
+                    worker_number);
+            for (size_t parallel_index = 0; parallel_index < worker_number; parallel_index++)
+            {
+                result.worker_nodes.emplace_back(cluster_nodes.all_workers[parallel_index]);
+            }
+        }
+        else
+        {
+            for (size_t parallel_index = 0; parallel_index < plan_segment_ptr->getParallelSize(); parallel_index++)
+            {
+                if (parallel_index > plan_segment_ptr->getParallelSize())
+                    break;
+                result.worker_nodes.emplace_back(cluster_nodes.all_workers[cluster_nodes.rank_worker_ids[parallel_index]]);
+            }
         }
     }
-
     return result;
 }
 

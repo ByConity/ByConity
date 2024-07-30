@@ -1,0 +1,108 @@
+enable bucket shuffle
+dtspartition
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_1	5	\N	\N
+cdw_3	25	n3	25
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+\N	\N	n3	7
+cdw_3	25	n3	25
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_1	5	\N	\N
+cdw_1	6	\N	\N
+cdw_1	7	n3	7
+cdw_3	25	n3	25
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_1	7	n3	7
+cdw_3	25	n3	25
+toUInt64
+cdw_1	0	\N	\N
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_3	3	\N	\N
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+\N	\N	n3	7
+\N	\N	n3	25
+sipHash
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+cdw_1	5	n5	\N	\N
+cdw_3	25	n1	\N	\N
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+\N	\N	\N	n3	7
+\N	\N	\N	n3	25
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+cdw_1	5	n5	\N	\N
+cdw_3	25	n1	\N	\N
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+\N	\N	\N	n3	7
+\N	\N	\N	n3	25
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+cdw_1	5	n5	\N	\N
+cdw_3	25	n1	\N	\N
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+\N	\N	\N	n3	7
+\N	\N	\N	n3	25
+disable bucket shuffle
+dtspartition
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_1	5	\N	\N
+cdw_3	25	n3	25
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+\N	\N	n3	7
+cdw_3	25	n3	25
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_1	5	\N	\N
+cdw_1	6	\N	\N
+cdw_1	7	n3	7
+cdw_3	25	n3	25
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_1	7	n3	7
+cdw_3	25	n3	25
+toUInt64
+cdw_1	0	\N	\N
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_3	3	\N	\N
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+\N	\N	n3	7
+\N	\N	n3	25
+sipHash
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+cdw_1	5	n5	\N	\N
+cdw_3	25	n1	\N	\N
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+\N	\N	\N	n3	7
+\N	\N	\N	n3	25
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+cdw_1	5	n5	\N	\N
+cdw_3	25	n1	\N	\N
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+\N	\N	\N	n3	7
+\N	\N	\N	n3	25
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+cdw_1	5	n5	\N	\N
+cdw_3	25	n1	\N	\N
+cdw_1	1	n1	n1	1
+cdw_2	2	n2	n2	2
+\N	\N	\N	n3	7
+\N	\N	\N	n3	25

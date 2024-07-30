@@ -193,6 +193,7 @@ struct PlanSegmentDescription
         size_t exchange_id;
         size_t exchange_parallel_size;
         bool keep_order;
+        bool stable;
     };
     size_t segment_id;
     String segment_type;

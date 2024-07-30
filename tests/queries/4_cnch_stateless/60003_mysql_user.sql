@@ -40,6 +40,10 @@ SELECT '<global>' as Db,Host,User,Select_priv,Insert_priv,Update_priv,Delete_pri
 SELECT '<global>' as scope,user,host FROM mysql.user where user = 'hello';
 SELECT user, host, ssl_type, ssl_cipher, x509_issuer, x509_subject, max_questions, max_updates, max_connections, super_priv, max_user_connections FROM mysql.user where user = 'hello';
 
+drop role 'r1';
+drop role 'r2';
 drop user hello;
+drop table userpriv.xx;
 drop database userpriv;
+drop table dbpriv.yy;
 drop database dbpriv;

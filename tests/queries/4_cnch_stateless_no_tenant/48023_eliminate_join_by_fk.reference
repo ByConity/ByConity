@@ -63,24 +63,24 @@ Projection Est. 10 rows, cost 2.500000e+00
 2000.3
 3003.5
 not OK: fk right outer join pk
-Projection Est. 10 rows, cost 3.140000e+00
+Projection Est. 10 rows, cost 2.980000e+00
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 2.400000e+00
+└─ Limit Est. 10 rows, cost 2.240000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 2.400000e+00
+   └─ Sorting Est. 10 rows, cost 2.240000e+00
       │     Order by: {price ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 2.400000e+00
-         └─ Sorting Est. 10 rows, cost 6.400000e-01
+      └─ Gather Exchange Est. 10 rows, cost 2.240000e+00
+         └─ Sorting Est. 10 rows, cost 4.800000e-01
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
-            └─ Right Join Est. ? rows, cost 6.400000e-01
+            └─ Right Join Est. ? rows, cost 4.800000e-01
                │     Condition: sk == expr#cast(sk_1, \'Nullable(Int64)\')
-               ├─ Repartition Exchange Est. ? rows, cost 3.200000e-01
+               ├─ Repartition Exchange Est. ? rows, cost 2.400000e-01
                │  │     Partition by: {sk}
                │  └─ TableScan test.web Est. ? rows, cost 0.000000e+00
                │           Outputs: [sk, price]
-               └─ Repartition Exchange Est. ? rows, cost 3.200000e-01
+               └─ Repartition Exchange Est. ? rows, cost 2.400000e-01
                   │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
                   └─ Projection Est. ? rows, cost 0.000000e+00
                      │     Expressions: expr#cast(sk_1, \'Nullable(Int64)\'):=cast(sk_1, \'Nullable(Int64)\')

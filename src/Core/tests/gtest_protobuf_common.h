@@ -44,11 +44,12 @@
 #include <Poco/Util/MapConfiguration.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
-#include "Core/NamesAndTypes.h"
-#include "DataTypes/DataTypeMap.h"
-#include "DataTypes/DataTypeNullable.h"
-#include "IO/WriteBuffer.h"
-#include "Interpreters/Context.h"
+#include <Core/NamesAndTypes.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <IO/WriteBuffer.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 
 namespace DB::UnitTest
 {
@@ -334,7 +335,7 @@ public:
         auto buckets = eng() % 1000;
         auto enforce_round_robin = eng() % 2 == 1;
         auto component = static_cast<Partitioning::Component>(eng() % 3);
-        auto result = Partitioning(handle, columns, require_handle, buckets, enforce_round_robin, component);
+        auto result = Partitioning(handle, columns, require_handle, buckets, nullptr, enforce_round_robin, component);
         return result;
     }
 
@@ -526,7 +527,6 @@ public:
     {
         Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
         AddressInfo local_address("localhost", 0, "test", "123456");
-        PlanSegmentInputs inputs;
 
         auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
         input->setExchangeParallelSize(2);
@@ -534,6 +534,22 @@ public:
         input->setPlanSegmentId(4);
         input->insertSourceAddress(local_address);
         return input;
+    }
+
+    static std::shared_ptr<PlanSegmentOutput> generatePlanSegmentOutput(std::default_random_engine & eng)
+    {
+        Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
+        auto output = std::make_shared<PlanSegmentOutput>(header, PlanSegmentType::EXCHANGE);
+        output->setExchangeParallelSize(2);
+        output->setExchangeId(3);
+        output->setPlanSegmentId(4);
+        output->setKeepOrder(true);
+        output->setShuffleFunctionName("bucket");
+        Array params;
+        params.emplace_back(generateField(eng));
+        params.emplace_back(generateField(eng));
+        output->setShuffleFunctionParams(params);
+        return output;
     }
 
     static WindowFrame generateWindowFrame(std::default_random_engine & eng)

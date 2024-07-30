@@ -197,13 +197,13 @@ REGISTER_FUNCTION(ModuloLegacy)
     factory.registerFunction<FunctionModuloLegacy>();
 }
 
-struct NameBucket {static constexpr auto name = "bucket"; };
-using FunctionBucket = BinaryArithmeticOverloadResolver<ModuloImpl, NameBucket, false>;
+// struct NameBucket {static constexpr auto name = "bucket"; };
+// using FunctionBucket = BinaryArithmeticOverloadResolver<ModuloImpl, NameBucket, false>;
 
-REGISTER_FUNCTION(Bucket)
-{
-    factory.registerFunction<FunctionBucket>();
-}
+// REGISTER_FUNCTION(Bucket)
+// {
+//     factory.registerFunction<FunctionBucket>();
+// }
 
 struct NamePositiveModulo
 {

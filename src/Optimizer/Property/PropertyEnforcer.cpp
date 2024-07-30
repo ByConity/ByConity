@@ -86,8 +86,6 @@ QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
     {
         case Partitioning::Handle::SINGLE:
             return std::make_unique<ExchangeStep>(streams, ExchangeMode::GATHER, partitioning, keep_order);
-        case Partitioning::Handle::FIXED_HASH:
-            return std::make_unique<ExchangeStep>(streams, ExchangeMode::REPARTITION, partitioning, keep_order);
         case Partitioning::Handle::FIXED_BROADCAST:
             return std::make_unique<ExchangeStep>(streams, ExchangeMode::BROADCAST, partitioning, keep_order);
         case Partitioning::Handle::FIXED_ARBITRARY:
@@ -99,7 +97,9 @@ QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
             return std::make_unique<ExchangeStep>(streams, ExchangeMode::LOCAL_NO_NEED_REPARTITION, partitioning, keep_order);
         case Partitioning::Handle::ARBITRARY:
             return nullptr;
+        case Partitioning::Handle::FIXED_HASH:
         case Partitioning::Handle::BUCKET_TABLE:
+            return std::make_unique<ExchangeStep>(streams, ExchangeMode::REPARTITION, partitioning, keep_order);
         default:
             throw Exception("Property Enforce error", ErrorCodes::ILLEGAL_ENFORCE);
     }
