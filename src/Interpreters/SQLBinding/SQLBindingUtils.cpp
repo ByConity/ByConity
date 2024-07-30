@@ -31,10 +31,11 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
     const char * new_begin = begin;
     const char * new_end = end;
 
+    const auto & tenant_id = context->getTenantId();
     // get query hash
     UUID query_hash = UUIDHelpers::Nil;
     if (ast && has_sql_binding)
-        query_hash = getQueryASTHash(ast);
+        query_hash = getQueryASTHash(ast, tenant_id);
 
     String query;
     // normalize query remove meaningless symbols
@@ -58,7 +59,8 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
               for (auto it = re_keys.rbegin(); it != re_keys.rend(); ++it)
               {
                   auto session_re_binding_ptr = re_cache.get(*it);
-                  if (session_re_binding_ptr && session_re_binding_ptr->settings
+                  if (session_re_binding_ptr->tenant_id == tenant_id
+                      && session_re_binding_ptr && session_re_binding_ptr->settings
                       && isMatchBinding(query.data(), query.data() + query.size(), *session_re_binding_ptr))
                   {
                       InterpreterSetQuery(session_re_binding_ptr->settings->clone(), context).executeForCurrentContext();
@@ -114,22 +116,24 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
     return nullptr;
 }
 
-UUID SQLBindingUtils::getQueryASTHash(ASTPtr query)
+UUID SQLBindingUtils::getQueryASTHash(ASTPtr query, String tenant_id)
 {
     SipHash hash;
     WriteBufferFromOwnString buf;
     query->serialize(buf);
     UInt128 key{};
     hash.update(buf.str());
+    hash.update(tenant_id);
     hash.get128(key);
     return UUID(key);
 }
 
-UUID SQLBindingUtils::getReExpressionHash(const char * begin, const char * end)
+UUID SQLBindingUtils::getReExpressionHash(const char * begin, const char * end, String tenant_id)
 {
     SipHash hash;
     UInt128 key{};
     hash.update(begin, end - begin);
+    hash.update(tenant_id);
     hash.get128(key);
     return UUID(key);
 }

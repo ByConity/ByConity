@@ -20,9 +20,9 @@ public:
 
     SQLBindings getReSQLBindings();
 
-    SQLBindingItemPtr getSQLBinding(const UUID & uuid, const bool & is_re_expression);
+    SQLBindingItemPtr getSQLBinding(const UUID & uuid, const String & tenant_id, const bool & is_re_expression);
 
-    void removeSQLBinding(const UUID & uuid, const bool & is_re_expression);
+    void removeSQLBinding(const UUID & uuid, const String & tenant_id, const bool & is_re_expression);
 
     static void updateGlobalBindingCache(const ContextPtr & context);
 

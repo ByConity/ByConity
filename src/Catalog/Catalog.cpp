@@ -6600,20 +6600,20 @@ namespace Catalog
         return res;
     }
 
-    SQLBindingItemPtr Catalog::getSQLBinding(const String & uuid, const bool & is_re_expression)
+    SQLBindingItemPtr Catalog::getSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression)
     {
         SQLBindingItemPtr res;
         runWithMetricSupport(
-            [&] { res = meta_proxy->getSQLBinding(name_space, uuid, is_re_expression); },
+            [&] { res = meta_proxy->getSQLBinding(name_space, uuid, tenant_id, is_re_expression); },
             ProfileEvents::GetSQLBindingSuccess,
             ProfileEvents::GetSQLBindingFailed);
         return res;
     }
 
-    void Catalog::removeSQLBinding(const String & uuid, const bool & is_re_expression)
+    void Catalog::removeSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression)
     {
         runWithMetricSupport(
-            [&] { meta_proxy->removeSQLBinding(name_space, uuid, is_re_expression); },
+            [&] { meta_proxy->removeSQLBinding(name_space, uuid, tenant_id, is_re_expression); },
             ProfileEvents::RemoveSQLBindingSuccess,
             ProfileEvents::RemoveSQLBindingFailed);
     }

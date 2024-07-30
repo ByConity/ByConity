@@ -135,9 +135,9 @@ public:
 
     SQLBindings getReSQLBindings(const bool & is_re_expression);
 
-    SQLBindingItemPtr getSQLBinding(const String & uuid, const bool & is_re_expression);
+    SQLBindingItemPtr getSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression);
 
-    void removeSQLBinding(const String & uuid, const bool & is_re_expression);
+    void removeSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression);
 
     /////////////////////////////
     /// Database related API

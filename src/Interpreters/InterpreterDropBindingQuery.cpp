@@ -1,4 +1,5 @@
 #include <Catalog/Catalog.h>
+#include <Access/ContextAccess.h>
 #include <Interpreters/InterpreterDropBindingQuery.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Interpreters/SQLBinding/SQLBindingCatalog.h>
@@ -14,8 +15,17 @@ BlockIO InterpreterDropBindingQuery::execute()
         throw Exception("Drop SQL Binding logical error", ErrorCodes::LOGICAL_ERROR);
     bool is_re_binding = false;
     UUID pattern_uuid;
-    bool drop_success = true;
 
+    if (drop->level == BindingLevel::GLOBAL)
+    {
+        AccessRightsElements access_rights_elements;
+        access_rights_elements.emplace_back(AccessType::DROP_BINDING);
+        context->checkAccess(access_rights_elements);
+    }
+
+    const auto & current_tenant_id = context->getTenantId();
+
+    String binding_tenant_id;
     auto process_binding_cache = [&](std::shared_ptr<BindingCacheManager> & binding_cache_manager) {
         if (!binding_cache_manager)
             throw Exception("Can not get binding cache manager", ErrorCodes::LOGICAL_ERROR);
@@ -23,6 +33,7 @@ BlockIO InterpreterDropBindingQuery::execute()
         if (!drop->uuid.empty())
         {
             pattern_uuid = UUIDHelpers::toUUID(drop->uuid);
+            binding_tenant_id = binding_cache_manager->getTenantID(pattern_uuid);
             if (binding_cache_manager->hasSqlBinding(pattern_uuid))
                 binding_cache_manager->removeSqlBinding(pattern_uuid);
             else if (binding_cache_manager->hasReBinding(pattern_uuid))
@@ -34,34 +45,19 @@ BlockIO InterpreterDropBindingQuery::execute()
             {
                 if (!drop->if_exists)
                     throw Exception("Can not find binding uuid in bindings cache", ErrorCodes::LOGICAL_ERROR);
-                drop_success = false;
             }
                 
         }
         else if (!drop->pattern.empty())
         {
-            pattern_uuid = SQLBindingUtils::getQueryASTHash(drop->pattern_ast);
-            if (binding_cache_manager->hasSqlBinding(pattern_uuid))
-                binding_cache_manager->removeSqlBinding(pattern_uuid);
-            else
-            {
-                if (!drop->if_exists)
-                    throw Exception("Can not find sql binding in bindings cache", ErrorCodes::LOGICAL_ERROR);
-                drop_success = false;
-            }
+            pattern_uuid = SQLBindingUtils::getQueryASTHash(drop->pattern_ast, current_tenant_id);
+            binding_cache_manager->removeSqlBinding(pattern_uuid, !drop->if_exists);
         }
         else if (!drop->re_expression.empty())
         {
             pattern_uuid
-                = SQLBindingUtils::getReExpressionHash(drop->re_expression.data(), drop->re_expression.data() + drop->re_expression.size());
-            if (binding_cache_manager->hasReBinding(pattern_uuid))
-                binding_cache_manager->removeReBinding(pattern_uuid);
-            else
-            {
-                if (!drop->if_exists)
-                    throw Exception("Can not find re_expression binding in bindings cache", ErrorCodes::LOGICAL_ERROR);
-                drop_success = false;
-            }
+                = SQLBindingUtils::getReExpressionHash(drop->re_expression.data(), drop->re_expression.data() + drop->re_expression.size(), current_tenant_id);
+            binding_cache_manager->removeReBinding(pattern_uuid, !drop->if_exists);
             is_re_binding = true;
         }
         else
@@ -81,10 +77,11 @@ BlockIO InterpreterDropBindingQuery::execute()
     }
 
     // Update the cache of all servers
-    if (drop->level == BindingLevel::GLOBAL && drop_success)
+    if (drop->level == BindingLevel::GLOBAL)
     {
         BindingCatalogManager catalog(context);
-        catalog.removeSQLBinding(pattern_uuid, is_re_binding);
+        binding_tenant_id = current_tenant_id.empty() ? binding_tenant_id : current_tenant_id;
+        catalog.removeSQLBinding(pattern_uuid, binding_tenant_id, is_re_binding);
         try
         {
             catalog.updateGlobalBindingCache(context);
