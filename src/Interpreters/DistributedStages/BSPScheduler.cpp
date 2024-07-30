@@ -282,7 +282,7 @@ void BSPScheduler::onWorkerRestarted(const WorkerId & id)
     // TODO(wangtao.vip): it could be more than 1 segment running on this worker.
     size_t segment_id_on_restarted_worker;
     // TODO(wangtao.vip): better iteration to find if the worker contains our task.
-    for (auto worker_iter = cluster_nodes.rank_workers.begin(); !contains && worker_iter != cluster_nodes.rank_workers.end(); worker_iter++)
+    for (auto worker_iter = cluster_nodes.all_workers.begin(); !contains && worker_iter != cluster_nodes.all_workers.end(); worker_iter++)
     {
         if (worker_iter->id == id.id)
         {

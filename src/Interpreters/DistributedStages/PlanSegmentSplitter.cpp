@@ -30,7 +30,6 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageMemory.h>
 #include <common/defines.h>
-#include <Common/Trace/TracerCommon.h>
 
 namespace DB
 {
