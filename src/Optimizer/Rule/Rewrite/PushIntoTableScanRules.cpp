@@ -43,9 +43,9 @@ namespace
     }
 }
 
-PatternPtr PushStorageFilter::getPattern() const
+ConstRefPatternPtr PushStorageFilter::getPattern() const
 {
-    return Patterns::filter()
+    static auto pattern = Patterns::filter()
         .withSingle(Patterns::tableScan().matchingStep<TableScanStep>([](const auto & step) {
             // check repeat calls
             const auto & query_info = step.getQueryInfo();
@@ -53,6 +53,7 @@ PatternPtr PushStorageFilter::getPattern() const
             return !(query_info.partition_filter || select_query->where());
         }))
         .result();
+    return pattern;
 }
 
 TransformResult PushStorageFilter::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -135,12 +136,13 @@ ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr q
     return PredicateUtils::combineConjuncts(non_pushable_conjuncts);
 }
 
-PatternPtr PushLimitIntoTableScan::getPattern() const
+ConstRefPatternPtr PushLimitIntoTableScan::getPattern() const
 {
-    return Patterns::limit()
+    static auto pattern = Patterns::limit()
         .matchingStep<LimitStep>([](auto const & limit_step) { return !limit_step.isAlwaysReadTillEnd(); })
         .withSingle(Patterns::tableScan())
         .result();
+    return pattern;
 }
 
 TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -164,12 +166,13 @@ TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Ca
 }
 
 
-PatternPtr PushAggregationIntoTableScan::getPattern() const
+ConstRefPatternPtr PushAggregationIntoTableScan::getPattern() const
 {
-    return Patterns::aggregating()
+    static auto pattern = Patterns::aggregating()
         .matchingStep<AggregatingStep>([](auto & step) { return !step.isGroupingSet(); })
         .withSingle(Patterns::tableScan())
         .result();
+    return pattern;
 }
 
 TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -191,11 +194,12 @@ TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, co
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
-PatternPtr PushProjectionIntoTableScan::getPattern() const
+ConstRefPatternPtr PushProjectionIntoTableScan::getPattern() const
 {
-    return Patterns::project().withSingle(
-               Patterns::tableScan().matchingStep<TableScanStep>(
-                   [](const auto & step) { return !step.getPushdownAggregation(); })).result();
+    static auto pattern = Patterns::project()
+        .withSingle(Patterns::tableScan().matchingStep<TableScanStep>([](const auto & step) { return !step.getPushdownAggregation(); }))
+        .result();
+    return pattern;
 }
 
 TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -217,11 +221,12 @@ TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, con
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
-PatternPtr PushFilterIntoTableScan::getPattern() const
+ConstRefPatternPtr PushFilterIntoTableScan::getPattern() const
 {
-    return Patterns::filter().withSingle(
+    static auto pattern = Patterns::filter().withSingle(
                Patterns::tableScan().matchingStep<TableScanStep>(
                    [](const auto & step) { return !step.getPushdownProjection() && !step.getPushdownAggregation(); })).result();
+    return pattern;
 }
 
 TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -254,11 +259,12 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
-PatternPtr PushIndexProjectionIntoTableScan::getPattern() const
+ConstRefPatternPtr PushIndexProjectionIntoTableScan::getPattern() const
 {
-    return Patterns::project().withSingle(
+    static auto pattern = Patterns::project().withSingle(
                Patterns::tableScan().matchingStep<TableScanStep>(
                    [](const auto & step) { return !step.getPushdownAggregation() ; })).result();
+    return pattern;
 }
 
 TransformResult PushIndexProjectionIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

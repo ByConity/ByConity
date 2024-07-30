@@ -16,9 +16,10 @@
 namespace DB
 {
 
-PatternPtr PushProjectionThroughFilter::getPattern() const
+ConstRefPatternPtr PushProjectionThroughFilter::getPattern() const
 {
-    return Patterns::project().withSingle(Patterns::filter()).result();
+    static auto pattern = Patterns::project().withSingle(Patterns::filter()).result();
+    return pattern;
 }
 
 TransformResult PushProjectionThroughFilter::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -35,8 +36,6 @@ TransformResult PushProjectionThroughFilter::transformImpl(PlanNodePtr node, con
 
     if (!func_count)
         return {};
-
-    Assignments new_assignments = projection->getAssignments();
 
     auto output_names = projection->getOutputStream().header.getNameSet();
     auto output_header = node->getCurrentDataStream().header;
@@ -107,9 +106,10 @@ TransformResult PushProjectionThroughFilter::transformImpl(PlanNodePtr node, con
     }
 }
 
-PatternPtr PushProjectionThroughProjection::getPattern() const
+ConstRefPatternPtr PushProjectionThroughProjection::getPattern() const
 {
-    return Patterns::project().withSingle(Patterns::project()).result();
+    static auto pattern = Patterns::project().withSingle(Patterns::project()).result();
+    return pattern;
 }
 
 TransformResult PushProjectionThroughProjection::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

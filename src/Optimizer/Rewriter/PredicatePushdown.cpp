@@ -99,7 +99,7 @@ PlanNodePtr PredicateVisitor::visitPlanNode(PlanNodeBase & node, PredicateContex
 PlanNodePtr PredicateVisitor::visitProjectionNode(ProjectionNode & node, PredicateContext & predicate_context)
 {
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::set<String> deterministic_symbols = ExpressionDeterminism::getDeterministicSymbols(assignments, context);
 
     // Push down conjuncts from the inherited predicate that only

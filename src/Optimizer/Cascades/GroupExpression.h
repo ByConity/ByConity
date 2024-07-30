@@ -155,8 +155,7 @@ public:
     bool operator==(const GroupExpression & r) const
     {
         // Having an undefined group id is considered equal to any group id
-        return (*step == *r.step) && (child_groups == r.child_groups)
-            && ((group_id == UNDEFINED_GROUP) || (r.group_id == UNDEFINED_GROUP) || (r.group_id == group_id));
+        return (child_groups == r.child_groups) && ((group_id == UNDEFINED_GROUP) || (r.group_id == UNDEFINED_GROUP) || (r.group_id == group_id)) && (*step == *r.step);
     }
 
 private:

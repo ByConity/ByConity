@@ -32,9 +32,10 @@ static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
     return !limit.hasPreparedParam() && range.upperBound > limit.getLimitValue() + limit.getOffsetValue();
 }
 
-PatternPtr PushLimitIntoDistinct::getPattern() const
+ConstRefPatternPtr PushLimitIntoDistinct::getPattern() const
 {
-    return Patterns::limit().withSingle(Patterns::distinct()).result();
+    static auto pattern = Patterns::limit().withSingle(Patterns::distinct()).result();
+    return pattern;
 }
 
 TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -64,9 +65,10 @@ TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Cap
     return TransformResult{node};
 }
 
-PatternPtr PushLimitThroughProjection::getPattern() const
+ConstRefPatternPtr PushLimitThroughProjection::getPattern() const
 {
-    return Patterns::limit().withSingle(Patterns::project()).result();
+    static auto pattern = Patterns::limit().withSingle(Patterns::project()).result();
+    return pattern;
 }
 
 TransformResult PushLimitThroughProjection::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_ctx)
@@ -96,9 +98,10 @@ TransformResult PushLimitThroughProjection::transformImpl(PlanNodePtr node, cons
     return TransformResult{projection, true};
 }
 
-PatternPtr PushLimitThroughExtremesStep::getPattern() const
+ConstRefPatternPtr PushLimitThroughExtremesStep::getPattern() const
 {
-    return Patterns::limit().withSingle(Patterns::extremes()).result();
+    static auto pattern = Patterns::limit().withSingle(Patterns::extremes()).result();
+    return pattern;
 }
 
 TransformResult PushLimitThroughExtremesStep::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -111,9 +114,10 @@ TransformResult PushLimitThroughExtremesStep::transformImpl(PlanNodePtr node, co
     return TransformResult{extremes, true};
 }
 
-PatternPtr PushLimitThroughUnion::getPattern() const
+ConstRefPatternPtr PushLimitThroughUnion::getPattern() const
 {
-    return Patterns::limit().withSingle(Patterns::unionn()).result();
+    static auto pattern = Patterns::limit().withSingle(Patterns::unionn()).result();
+    return pattern;
 }
 
 TransformResult PushLimitThroughUnion::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -154,11 +158,12 @@ TransformResult PushLimitThroughUnion::transformImpl(PlanNodePtr node, const Cap
     return node;
 }
 
-PatternPtr PushLimitThroughOuterJoin::getPattern() const
+ConstRefPatternPtr PushLimitThroughOuterJoin::getPattern() const
 {
-    return Patterns::limit()
+    static auto pattern = Patterns::limit()
         .withSingle(Patterns::join().matchingStep<JoinStep>([](const auto & join_step) { return join_step.isLeftOrRightOuterJoin(); }))
         .result();
+    return pattern;
 }
 
 TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -206,11 +211,12 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
     return {};
 }
 
-PatternPtr LimitZeroToReadNothing::getPattern() const
+ConstRefPatternPtr LimitZeroToReadNothing::getPattern() const
 {
-    return Patterns::limit()
+    static auto pattern = Patterns::limit()
         .matchingStep<LimitStep>([](const LimitStep & step) { return !step.hasPreparedParam() && step.getLimitValue() == 0; })
         .result();
+    return pattern;
 }
 
 TransformResult LimitZeroToReadNothing::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -232,9 +238,9 @@ TransformResult LimitZeroToReadNothing::transformImpl(PlanNodePtr node, const Ca
     return {};
 }
 
-PatternPtr PushdownLimitIntoWindow::getPattern() const
+ConstRefPatternPtr PushdownLimitIntoWindow::getPattern() const
 {
-    return Patterns::limit().withSingle(Patterns::window().matchingStep<WindowStep>([](const WindowStep & window_step) {
+    static auto pattern = Patterns::limit().withSingle(Patterns::window().matchingStep<WindowStep>([](const WindowStep & window_step) {
         bool all_row_number = true;
         for (const auto & func : window_step.getFunctions())
         {
@@ -242,6 +248,7 @@ PatternPtr PushdownLimitIntoWindow::getPattern() const
         }
         return all_row_number && !window_step.getWindow().order_by.empty();
     })).result();
+    return pattern;
 }
 
 TransformResult PushdownLimitIntoWindow::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -283,13 +290,14 @@ TransformResult PushdownLimitIntoWindow::transformImpl(PlanNodePtr node, const C
     return {node};
 }
 
-PatternPtr PushLimitIntoSorting::getPattern() const
+ConstRefPatternPtr PushLimitIntoSorting::getPattern() const
 {
-    return Patterns::limit()
+    static auto pattern = Patterns::limit()
         .matchingStep<LimitStep>([](const LimitStep & step) { return !step.hasPreparedParam() && step.getLimitValue() != 0; })
         .withSingle(Patterns::sorting().matchingStep<SortingStep>(
             [](const auto & sorting_step) { return !sorting_step.hasPreparedParam() && sorting_step.getLimitValue() == 0; }))
         .result();
+    return pattern;
 }
 
 TransformResult PushLimitIntoSorting::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -320,5 +328,19 @@ TransformResult PushLimitIntoSorting::transformImpl(PlanNodePtr node, const Capt
         sorting->getChildren());
     node->replaceChildren({new_sorting});
     return TransformResult{node};
+}
+
+ConstRefPatternPtr PushLimitThroughBuffer::getPattern() const
+{
+    static auto pattern = Patterns::limit().withSingle(Patterns::buffer()).result();
+    return pattern;
+}
+
+TransformResult PushLimitThroughBuffer::transformImpl(PlanNodePtr node, const Captures & /*captures*/, RuleContext & /*context*/)
+{
+    auto buffer = node->getChildren()[0];
+    node->replaceChildren({buffer->getChildren()[0]});
+    buffer->replaceChildren({node});
+    return buffer;
 }
 }

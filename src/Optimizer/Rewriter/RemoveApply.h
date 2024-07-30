@@ -345,7 +345,7 @@ class UnnestingWithWindow : public Rule
 public:
     RuleType getType() const override { return RuleType::UNNESTING_WITH_WINDOW; }
     String getName() const override { return "UNNESTING_WITH_WINDOW"; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_unnesting_subquery_with_window; }
 
 protected:
@@ -358,7 +358,7 @@ public:
     RuleType getType() const override { return RuleType::UNNESTING_WITH_PROJECTION_WINDOW; }
     String getName() const override { return "UNNESTING_WITH_PROJECTION_WINDOW"; }
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_unnesting_subquery_with_window; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 };
 
 class ExistsToSemiJoin : public Rule
@@ -367,7 +367,7 @@ public:
     RuleType getType() const override { return RuleType::EXISTS_TO_SEMI_JOIN; }
     String getName() const override { return "EXISTS_TO_SEMI_JOIN"; }
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_unnesting_subquery_with_semi_anti_join; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -379,7 +379,7 @@ public:
     RuleType getType() const override { return RuleType::IN_TO_SEMI_JOIN; }
     String getName() const override { return "IN_TO_SEMI_JOIN"; }
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_unnesting_subquery_with_semi_anti_join; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

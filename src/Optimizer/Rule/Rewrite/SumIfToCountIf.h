@@ -12,7 +12,7 @@ public:
     RuleType getType() const override { return RuleType::SUM_IF_TO_COUNT_IF; }
     String getName() const override { return "SumIfToCountIf"; }
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_sum_if_to_count_if; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
     virtual bool excludeIfTransformSuccess() const override { return true; }
     virtual bool excludeIfTransformFailure() const override { return true; }
 

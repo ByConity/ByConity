@@ -20,18 +20,19 @@ const std::vector<RuleType> & InnerJoinAssociate::blockRules() const
     return rules;
 }
 
-PatternPtr InnerJoinAssociate::getPattern() const
+ConstRefPatternPtr InnerJoinAssociate::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) {
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) {
             return supportSwap(s) && !s.isOrdered() && s.getFilter() && !PredicateUtils::isTruePredicate(s.getFilter());
         })
         .with(
             Patterns::join()
-                .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
-                .with(Patterns::tree(), Patterns::tree()),
-            Patterns::tree())
+                .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered() && (!s.getFilter() || PredicateUtils::isTruePredicate(s.getFilter())); })
+                .with(Patterns::tree(), Patterns::tableScan()),
+            Patterns::tableScan())
         .result();
+    return pattern;
 }
 
 /*

@@ -126,14 +126,19 @@ public:
         if (++visitor.level > visitor.max_level)
             throw Exception(ErrorCodes::TOO_DEEP_RECURSION, "Too deep recursion");
         SCOPE_EXIT({ --visitor.level; });
+
+        switch(node->getType())
+        {
 #define VISITOR_DEF(TYPE) \
-       if (node->getType() == ASTType::TYPE) \
-       { \
-           return visitor.visit##TYPE(node, context); \
-       }
-       APPLY_AST_TYPES(VISITOR_DEF)
+        case ASTType::TYPE: \
+        { \
+            return visitor.visit##TYPE(node, context); \
+        }
+        APPLY_AST_TYPES(VISITOR_DEF)
 #undef VISITOR_DEF
-       return visitor.visitNode(node, context);
+            default:
+                return visitor.visitNode(node, context);
+        }
     }
 
     template <typename R, typename C>
@@ -142,14 +147,19 @@ public:
         if (++visitor.level > visitor.max_level)
             throw Exception(ErrorCodes::TOO_DEEP_RECURSION, "Too deep recursion");
         SCOPE_EXIT({ --visitor.level; });
+        
+        switch(node->getType())
+        {
 #define VISITOR_DEF(TYPE) \
-       if (node->getType() == ASTType::TYPE) \
-       { \
-           return visitor.visit##TYPE(node, context); \
-       }
+        case ASTType::TYPE: \
+        { \
+            return visitor.visit##TYPE(node, context); \
+        }
         APPLY_AST_TYPES(VISITOR_DEF)
 #undef VISITOR_DEF
-        return visitor.visitNode(node, context);
+            default:
+                return visitor.visitNode(node, context);
+        }
     }
 };
 

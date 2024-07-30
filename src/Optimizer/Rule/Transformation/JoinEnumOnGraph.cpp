@@ -30,7 +30,7 @@
 
 namespace DB
 {
-PatternPtr JoinEnumOnGraph::getPattern() const
+ConstRefPatternPtr JoinEnumOnGraph::getPattern() const
 {
     (void)support_filter;
     // return Patterns::join()
@@ -38,7 +38,9 @@ PatternPtr JoinEnumOnGraph::getPattern() const
     //         [&](const JoinStep & s) { return s.supportReorder(support_filter) && !s.isSimpleReordered() && !s.isOrdered(); })
     //     .with(Patterns::tree(), Patterns::tree())
     //     .result();
-    return Patterns::multiJoin().result();
+    static auto pattern = Patterns::multiJoin()
+        .result();
+    return pattern;
 }
 
 static std::pair<Names, Names>

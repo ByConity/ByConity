@@ -17,6 +17,7 @@
 
 #include <Optimizer/Rule/Pattern.h>
 #include <QueryPlan/IQueryPlanStep.h>
+#include "QueryPlan/QueryPlan.h"
 
 #include <boost/hana.hpp>
 
@@ -67,8 +68,8 @@ public:
     {
         static_assert(std::is_base_of<const IQueryPlanStep, T>::value, "T must inherit from const IQueryPlanStep");
 
-        PatternPredicate predicate = [step_predicate = std::move(step_predicate)](const PlanNodePtr & node, Captures & captures) -> bool {
-            auto * step = dynamic_cast<const T *>(node->getStep().get());
+        PatternPredicate predicate = [step_predicate = std::move(step_predicate)](const QueryPlanStepPtr & istep, Captures & captures) -> bool {
+            auto * step = dynamic_cast<const T *>(istep.get());
 
             if (!step)
                 throw Exception("Unexpected plan step found in pattern matching", ErrorCodes::LOGICAL_ERROR);
@@ -161,7 +162,7 @@ PatternBuilder oneOf(const T &... sub_builders)
 // miscellaneous
 inline PatternPredicate predicateNot(const PatternPredicate & predicate)
 {
-    return [=](const PlanNodePtr & node, Captures & captures) -> bool { return !predicate(node, captures); };
+    return [=](const QueryPlanStepPtr & node, Captures & captures) -> bool {return !predicate(node, captures);};
 }
 
 }

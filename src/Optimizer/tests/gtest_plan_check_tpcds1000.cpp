@@ -58,6 +58,36 @@ std::shared_ptr<DB::BaseTpcdsPlanTest> PlanCheckTpcds1000::tester;
 
 DECLARE_GENERATE_TEST(PlanCheckTpcds1000)
 
+
+TEST_F(PlanCheckTpcds1000, DISABLED_benchmark)
+{
+    std::map<size_t, std::string> costs;
+    size_t total_cost = 0;
+
+    for (int i = 1; i <= 99; i++)
+    {
+        size_t min_cost = -1;
+        for (int j = 0; j < 5; j++)
+        {
+            Stopwatch total_watch{CLOCK_THREAD_CPUTIME_ID};
+            total_watch.start();
+            explain("q" + std::to_string(i));
+            UInt64 elapsed = total_watch.elapsedMilliseconds();
+            min_cost = std::min(min_cost, elapsed);
+        }
+
+        costs.emplace(min_cost, "q" + std::to_string(i));
+        total_cost += min_cost;
+    }
+    
+    for (const auto & [cost, query] : costs)
+    {
+        std::cout << "Query " + query + " cost " + std::to_string(cost) + "ms" << '\n';
+    }
+    std::cout << "Total optimizer time: " + std::to_string(total_cost) << std::endl;
+}
+
+
 TEST_F(PlanCheckTpcds1000, q1)
 {
     EXPECT_TRUE(equals(explain("q1"), expected("q1")));

@@ -67,7 +67,7 @@ ExchangeResult ExchangeVisitor::visitPlanNode(PlanNodeBase & node, ExchangeConte
 ExchangeResult ExchangeVisitor::visitProjectionNode(ProjectionNode & node, ExchangeContext & cxt)
 {
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
     Property translated = cxt.getRequired().translate(identities);
     ExchangeContext child_cxt{cxt.getContext(), translated};

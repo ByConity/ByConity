@@ -26,9 +26,10 @@
 
 namespace DB
 {
-PatternPtr InlineProjections::getPattern() const
+ConstRefPatternPtr InlineProjections::getPattern() const
 {
-    return Patterns::project().withSingle(Patterns::project()).result();
+    static auto pattern = Patterns::project().withSingle(Patterns::project()).result();
+    return pattern;
 }
 
 TransformResult InlineProjections::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -274,9 +275,10 @@ ASTPtr InlineProjections::inlineReferences(const ConstASTPtr & expression, Assig
     return ExpressionInliner::inlineSymbols(expression, assignments);
 }
 
-PatternPtr InlineProjectionIntoJoin::getPattern() const
+ConstRefPatternPtr InlineProjectionIntoJoin::getPattern() const
 {
-    return Patterns::join().result();
+    static auto pattern = Patterns::join().result();
+    return pattern;
 }
 
 TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -336,11 +338,13 @@ TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const 
     return new_join_node;
 }
 
-PatternPtr InlineProjectionOnJoinIntoJoin::getPattern() const
+ConstRefPatternPtr InlineProjectionOnJoinIntoJoin::getPattern() const
 {
-    return Patterns::project()
+    static auto pattern = Patterns::project()
         .matchingStep<ProjectionStep>([](const auto & step) { return Utils::isIdentity(step); })
-        .withSingle(Patterns::join()).result();
+        .withSingle(Patterns::join())
+        .result();
+    return pattern;
 }
 
 TransformResult InlineProjectionOnJoinIntoJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)

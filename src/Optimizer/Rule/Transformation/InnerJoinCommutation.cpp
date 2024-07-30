@@ -20,11 +20,12 @@
 
 namespace DB
 {
-PatternPtr InnerJoinCommutation::getPattern() const
+ConstRefPatternPtr InnerJoinCommutation::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
         .with(Patterns::any(), Patterns::any()).result();
+    return pattern;
 }
 
 TransformResult InnerJoinCommutation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

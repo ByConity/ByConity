@@ -25,11 +25,10 @@ const std::vector<RuleType> & SelectivityBasedJoinReorder::blockRules() const
     return block;
 }
 
-PatternPtr SelectivityBasedJoinReorder::getPattern() const
+ConstRefPatternPtr SelectivityBasedJoinReorder::getPattern() const
 {
-    return Patterns::multiJoin()
-        .matchingStep<MultiJoinStep>([&](const MultiJoinStep & s) { return s.getGraph().getNodes().size() > max_join_size; })
-        .result();
+    /* can't make static lambda with capture */
+    return pattern;
 }
 
 TransformResult SelectivityBasedJoinReorder::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

@@ -44,7 +44,7 @@ std::set<std::string> SymbolsExtractor::extract(PlanNodePtr & node)
     std::vector<ConstASTPtr> expressions;
     for (ConstASTPtr expr : ExpressionExtractor::extract(node))
     {
-        expressions.emplace_back(expr);
+        expressions.emplace_back(std::move(expr));
     }
     return extract(expressions);
 }
@@ -72,7 +72,7 @@ Void SymbolVisitor::visitNode(const ConstASTPtr & node, SymbolVisitorContext & c
 Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, SymbolVisitorContext & context)
 {
     const auto & identifier = node->as<ASTIdentifier &>();
-    if (!context.exclude_symbols.count(identifier.name()))
+    if (context.exclude_symbols.empty() || !context.exclude_symbols.count(identifier.name()))
     {
         context.result.emplace_back(identifier.name());
     }
@@ -82,7 +82,7 @@ Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, SymbolVisitorCo
 Void SymbolVisitor::visitASTFunction(const ConstASTPtr & node, SymbolVisitorContext & context)
 {
     const auto & ast_func = node->as<const ASTFunction &>();
-    if (ast_func.name == "lambda")
+    if (unlikely(ast_func.name == "lambda"))
     {
         auto exclude_symbols = RequiredSourceColumnsMatcher::extractNamesFromLambda(ast_func);
         for (auto & es : exclude_symbols)

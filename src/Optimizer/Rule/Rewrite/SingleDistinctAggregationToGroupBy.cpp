@@ -8,10 +8,10 @@
 namespace DB
 {
 
-PatternPtr SingleDistinctAggregationToGroupBy::getPattern() const
+ConstRefPatternPtr SingleDistinctAggregationToGroupBy::getPattern() const
 {
-    return Patterns::aggregating()
-        .matchingStep<AggregatingStep>([&](const AggregatingStep & s) {
+    static auto pattern = Patterns::aggregating()
+        .matchingStep<AggregatingStep>([](const AggregatingStep & s) {
             if (!s.isNormal())
             {
                 return false;
@@ -19,6 +19,7 @@ PatternPtr SingleDistinctAggregationToGroupBy::getPattern() const
             return allDistinctAggregates(s) && hasSingleDistinctInput(s) && noMasks(s) && allCountHasAtMostOneArguments(s);
         })
         .result();
+    return pattern;
 }
 
 const std::set<String> SingleDistinctAggregationToGroupBy::distinct_func{

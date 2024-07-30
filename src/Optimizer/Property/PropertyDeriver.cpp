@@ -235,7 +235,7 @@ Property DeriverVisitor::visitIntermediateResultCacheStep(const IntermediateResu
 
 Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, DeriverContext & context)
 {
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
 
     if (!context.getInput()[0].getNodePartitioning().getColumns().empty()
         && context.getContext()->getSettingsRef().enable_injective_in_property)

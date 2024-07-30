@@ -125,15 +125,7 @@ EqualityInference::rewrite(const ConstASTPtr & expression, const std::set<String
     ConstASTSet sub_expressions = SubExpressionExtractor::extract(expression);
     if (!allow_full_replacement)
     {
-        ConstASTSet sub_expressions_remove_itself;
-        for (const auto & sub_expression : sub_expressions)
-        {
-            if (!ASTEquality::compareTree(sub_expression, expression))
-            {
-                sub_expressions_remove_itself.emplace(sub_expression);
-            }
-        }
-        sub_expressions = sub_expressions_remove_itself;
+        sub_expressions.erase(expression);
     }
     ConstASTMap expression_remap;
     for (const auto & sub_expression : sub_expressions)

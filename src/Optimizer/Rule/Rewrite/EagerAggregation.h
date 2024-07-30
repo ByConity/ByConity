@@ -11,8 +11,7 @@ public:
     RuleType getType() const override { return RuleType::EAGER_AGGREGATION; }
     String getName() const override { return "EAGER_AGGREGATION"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_eager_aggregation; }    
-    PatternPtr getPattern() const override;
-
+    ConstRefPatternPtr getPattern() const override;
 
     bool excludeIfTransformSuccess() const override { return true; }
     bool excludeIfTransformFailure() const override { return true; }

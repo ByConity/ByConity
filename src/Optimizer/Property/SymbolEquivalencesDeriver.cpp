@@ -67,7 +67,7 @@ SymbolEquivalencesPtr SymbolEquivalencesDeriverVisitor::visitFilterStep(const Fi
 SymbolEquivalencesPtr
 SymbolEquivalencesDeriverVisitor::visitProjectionStep(const ProjectionStep & step, std::vector<SymbolEquivalencesPtr> & context)
 {
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
     std::unordered_map<String, String> revert_identifies;
 

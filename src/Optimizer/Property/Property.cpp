@@ -33,13 +33,11 @@ size_t Partitioning::hash() const
 {
     size_t hash = IntHash64Impl::apply(static_cast<UInt8>(handle));
     hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(preferred));
-    hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(columns.size()));
     for (const auto & column : columns)
         hash = MurmurHash3Impl64::combineHashes(hash, MurmurHash3Impl64::apply(column.c_str(), column.size()));
 
     hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(require_handle));
     hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(buckets));
-    hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(enforce_round_robin));
     return hash;
 }
 
@@ -311,7 +309,7 @@ size_t CTEDescriptions::hash() const
     for (const auto & item : *this)
     {
         hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(item.first));
-        hash = MurmurHash3Impl64::combineHashes(hash, item.second.hash());
+        hash = MurmurHash3Impl64::combineHashes(hash, item.second.hash()); 
     }
     return hash;
 }

@@ -37,7 +37,7 @@ class MagicSetRule : public Rule
 {
 public:
     RuleType getType() const override = 0;
-    PatternPtr getPattern() const override = 0;
+    ConstRefPatternPtr getPattern() const override = 0;
     const std::vector<RuleType> & blockRules() const override;
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_magic_set; }
 
@@ -91,7 +91,7 @@ class MagicSetForAggregation : public MagicSetRule
 public:
     RuleType getType() const override { return RuleType::MAGIC_SET_FOR_AGGREGATION; }
     String getName() const override { return "MAGIC_SET_FOR_AGGREGATION"; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -125,7 +125,7 @@ class MagicSetForProjectionAggregation : public MagicSetRule
 public:
     RuleType getType() const override { return RuleType::MAGIC_SET_FOR_PROJECTION_AGGREGATION; }
     String getName() const override { return "MAGIC_SET_FOR_PROJECTION_AGGREGATION"; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

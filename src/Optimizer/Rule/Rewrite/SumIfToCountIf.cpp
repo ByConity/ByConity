@@ -13,9 +13,10 @@
 namespace DB
 {
 
-PatternPtr SumIfToCountIf::getPattern() const
+ConstRefPatternPtr SumIfToCountIf::getPattern() const
 {
-    return Patterns::aggregating().withSingle(Patterns::project()).result();
+    static auto pattern = Patterns::aggregating().withSingle(Patterns::project()).result();
+    return pattern;
 }
 
 TransformResult SumIfToCountIf::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

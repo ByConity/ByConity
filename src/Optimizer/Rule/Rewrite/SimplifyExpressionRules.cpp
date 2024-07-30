@@ -29,9 +29,10 @@
 
 namespace DB
 {
-PatternPtr CommonPredicateRewriteRule::getPattern() const
+ConstRefPatternPtr CommonPredicateRewriteRule::getPattern() const
 {
-    return Patterns::filter().result();
+    static auto pattern = Patterns::filter().result();
+    return pattern;
 }
 
 TransformResult CommonPredicateRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -57,9 +58,10 @@ TransformResult CommonPredicateRewriteRule::transformImpl(PlanNodePtr node, cons
     return filter_node;
 }
 
-PatternPtr CommonJoinFilterRewriteRule::getPattern() const
+ConstRefPatternPtr CommonJoinFilterRewriteRule::getPattern() const
 {
-    return Patterns::join().matchingStep<JoinStep>([&](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); }).result();
+    static auto pattern = Patterns::join().matchingStep<JoinStep>([&](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); }).result();
+    return pattern;
 }
 
 TransformResult CommonJoinFilterRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -101,9 +103,10 @@ TransformResult CommonJoinFilterRewriteRule::transformImpl(PlanNodePtr node, con
     return join_node;
 }
 
-PatternPtr SwapPredicateRewriteRule::getPattern() const
+ConstRefPatternPtr SwapPredicateRewriteRule::getPattern() const
 {
-    return Patterns::filter().result();
+    static auto pattern = Patterns::filter().result();
+    return pattern;
 }
 
 TransformResult SwapPredicateRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -133,9 +136,10 @@ TransformResult SwapPredicateRewriteRule::transformImpl(PlanNodePtr node, const 
     return filter_node;
 }
 
-PatternPtr SimplifyPredicateRewriteRule::getPattern() const
+ConstRefPatternPtr SimplifyPredicateRewriteRule::getPattern() const
 {
-    return Patterns::filter().result();
+    static auto pattern = Patterns::filter().result();
+    return pattern;
 }
 
 TransformResult SimplifyPredicateRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -163,9 +167,10 @@ TransformResult SimplifyPredicateRewriteRule::transformImpl(PlanNodePtr node, co
     return filter_node;
 }
 
-PatternPtr UnWarpCastInPredicateRewriteRule::getPattern() const
+ConstRefPatternPtr UnWarpCastInPredicateRewriteRule::getPattern() const
 {
-    return Patterns::filter().result();
+    static auto pattern = Patterns::filter().result();
+    return pattern;
 }
 
 TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -197,11 +202,12 @@ TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node
     return filter_node;
 }
 
-PatternPtr SimplifyJoinFilterRewriteRule::getPattern() const
+ConstRefPatternPtr SimplifyJoinFilterRewriteRule::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); })
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); })
         .result();
+    return pattern;
 }
 
 TransformResult SimplifyJoinFilterRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -281,9 +287,10 @@ TransformResult SimplifyJoinFilterRewriteRule::transformImpl(PlanNodePtr node, c
     return join_node;
 }
 
-PatternPtr SimplifyExpressionRewriteRule::getPattern() const
+ConstRefPatternPtr SimplifyExpressionRewriteRule::getPattern() const
 {
-    return Patterns::project().result();
+    static auto pattern = Patterns::project().result();
+    return pattern;
 }
 
 TransformResult SimplifyExpressionRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -298,7 +305,7 @@ TransformResult SimplifyExpressionRewriteRule::transformImpl(PlanNodePtr node, c
     NameToType name_to_type;
     auto column_types = node->getChildren()[0]->getCurrentDataStream().header.getNamesToTypes();
 
-    auto interpreter = rule_context.context->getSettings().enable_simplify_predicate_in_projection
+    auto interpreter = rule_context.context->getSettingsRef().enable_simplify_predicate_in_projection
         ? ExpressionInterpreter::optimizedInterpreter(std::move(column_types), {}, context)
         : ExpressionInterpreter::basicInterpreter(std::move(column_types), context);
     bool rewrite = false;
@@ -326,9 +333,10 @@ TransformResult SimplifyExpressionRewriteRule::transformImpl(PlanNodePtr node, c
         PlanNodes{node->getChildren()[0]});
 }
 
-PatternPtr MergePredicatesUsingDomainTranslator::getPattern() const
+ConstRefPatternPtr MergePredicatesUsingDomainTranslator::getPattern() const
 {
-    return Patterns::filter().result();
+    static auto pattern = Patterns::filter().result();
+    return pattern;
 }
 
 TransformResult MergePredicatesUsingDomainTranslator::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

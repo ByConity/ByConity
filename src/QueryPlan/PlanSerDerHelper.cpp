@@ -349,7 +349,7 @@ bool isPlanStepEqualImpl(const IQueryPlanStep & a, const IQueryPlanStep & b)
 bool isPlanStepEqual(const IQueryPlanStep & a, const IQueryPlanStep & b)
 {
     if (a.getType() != b.getType())
-        return true;
+        return false;
 
     switch (a.getType())
     {
@@ -361,7 +361,7 @@ bool isPlanStepEqual(const IQueryPlanStep & a, const IQueryPlanStep & b)
         APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(CASE_DEF)
 
         default:
-            throw Exception("unsupported step", ErrorCodes::PROTOBUF_BAD_CAST);
+            throw Exception("unsupported step " + a.getName(), ErrorCodes::PROTOBUF_BAD_CAST);
 #undef CASE_DEF
     }
 }

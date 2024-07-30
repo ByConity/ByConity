@@ -132,7 +132,7 @@ JoinPtr JoinStep::makeJoin(
     }
 
     table_join->setAsofInequality(asof_inequality);
-    if (context->getSettings().enforce_all_join_to_any_join)
+    if (context->getSettingsRef().enforce_all_join_to_any_join)
     {
         strictness = ASTTableJoin::Strictness::RightAny;
     }

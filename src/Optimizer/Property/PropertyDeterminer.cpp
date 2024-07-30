@@ -94,7 +94,7 @@ PropertySets DeterminerVisitor::visitProjectionStep(const ProjectionStep & step,
 {
     if (step.isFinalProject() && (ctx.getRequired().getNodePartitioning().getComponent() != Partitioning::Component::WORKER))
         return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
     auto translated = ctx.getRequired().translate(identities);
     if (!step.getInputStreams()[0].header)
@@ -120,8 +120,8 @@ PropertySets DeterminerVisitor::visitFilterStep(const FilterStep &, DeterminerCo
 // TODO property expand @jingpeng
 PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerContext & context)
 {
-    Names left_keys = step.getLeftKeys();
-    Names right_keys = step.getRightKeys();
+    const Names & left_keys = step.getLeftKeys();
+    const Names & right_keys = step.getRightKeys();
 
     auto enforce_round_robine = context.getContext().getSettingsRef().enforce_round_robin;
     // process ASOF join, it is different with normal join.
@@ -170,7 +170,7 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
     }
 
     PropertySets result;
-    if (join_key_pairs.size() <= context.getContext().getSettings().max_expand_join_key_size)
+    if (join_key_pairs.size() <= context.getContext().getSettingsRef().max_expand_join_key_size)
     {
         for (auto & set : Utils::powerSet(join_key_pairs))
         {
@@ -265,7 +265,7 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
                 PropertySet{Property{context.getRequired().getNodePartitioning(), context.getRequired().getStreamPartitioning()}});
     }
 
-    if (keys.size() <= context.getContext().getSettings().max_expand_agg_key_size)
+    if (keys.size() <= context.getContext().getSettingsRef().max_expand_agg_key_size)
     {
         for (const auto & sub_keys : Utils::powerSet(keys))
         {
@@ -492,7 +492,7 @@ PropertySets DeterminerVisitor::visitWindowStep(const WindowStep & step, Determi
         group_bys.emplace_back(key.column_name);
     }
     PropertySets sets;
-    if (keys.size() <= context.getContext().getSettings().max_expand_agg_key_size)
+    if (keys.size() <= context.getContext().getSettingsRef().max_expand_agg_key_size)
     {
         for (const auto & sub_keys : Utils::powerSet(group_bys))
         {

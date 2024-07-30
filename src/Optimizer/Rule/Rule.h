@@ -194,7 +194,7 @@ public:
     virtual String getName() const = 0;
     // enable/disable rule by settings, every rule must implement this function.
     virtual bool isEnabled(ContextPtr) const = 0;
-    virtual PatternPtr getPattern() const = 0;
+    virtual ConstRefPatternPtr getPattern() const = 0;
     // exclude this rule for a specific plan node after a successful `Rule::transform` call happens,
     // this effectively prevent a plan node being rewritten by a rule multiple times
     virtual bool excludeIfTransformSuccess() const { return false; }
@@ -207,7 +207,7 @@ public:
         return empty;
     }
 
-    std::unordered_set<IQueryPlanStep::Type> getTargetTypes()
+    const std::unordered_set<IQueryPlanStep::Type> & getTargetTypes()
     {
         if (target_types.empty())
         {

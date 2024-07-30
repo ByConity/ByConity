@@ -112,15 +112,16 @@ void MagicSetRule::recordCTERefIntoGroup(PlanNodePtr plan_node, CascadesContext 
     group_expr->setRuleExplored(RuleType::INLINE_CTE);
 }
 
-PatternPtr MagicSetForProjectionAggregation::getPattern() const
+ConstRefPatternPtr MagicSetForProjectionAggregation::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) {
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) {
             return (s.getKind() == ASTTableJoin::Kind::Inner || s.getKind() == ASTTableJoin::Kind::Right)
                 && s.getStrictness() == ASTTableJoin::Strictness::All;
         })
         .with(Patterns::project().withSingle(Patterns::aggregating().withSingle(Patterns::any())), Patterns::any())
         .result();
+    return pattern;
 }
 
 TransformResult MagicSetForProjectionAggregation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -212,15 +213,16 @@ TransformResult MagicSetForProjectionAggregation::transformImpl(PlanNodePtr node
             node->getChildren()[1]});
 }
 
-PatternPtr MagicSetForAggregation::getPattern() const
+ConstRefPatternPtr MagicSetForAggregation::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) {
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) {
             return (s.getKind() == ASTTableJoin::Kind::Inner || s.getKind() == ASTTableJoin::Kind::Right)
                 && s.getStrictness() == ASTTableJoin::Strictness::All;
         })
         .with(Patterns::aggregating().withSingle(Patterns::any()), Patterns::any())
         .result();
+    return pattern;
 }
 
 TransformResult MagicSetForAggregation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

@@ -56,7 +56,7 @@ public:
     RuleType getType() const override { return RuleType::CROSS_JOIN_TO_UNION; }
     String getName() const override { return "CrossJoinToUnion"; }
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_cross_join_to_union; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

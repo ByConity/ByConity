@@ -35,11 +35,12 @@
 namespace DB
 {
 
-PatternPtr EagerAggregation::getPattern() const
+ConstRefPatternPtr EagerAggregation::getPattern() const
 {
-    return Patterns::aggregating()
+    static auto pattern = Patterns::aggregating()
         .matchingStep<AggregatingStep>([](const AggregatingStep & s) { return s.isNormal() && !s.getKeys().empty(); })
         .result();
+    return pattern;
 }
 
 enum class AggFuncClass

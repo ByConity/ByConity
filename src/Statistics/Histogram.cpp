@@ -22,7 +22,11 @@
 
 namespace DB::Statistics
 {
-Histogram::Histogram(Buckets buckets_) : buckets(std::move(buckets_))
+Histogram::Histogram(const Buckets & buckets_) : buckets(buckets_)
+{
+}
+
+Histogram::Histogram(Buckets && buckets_) : buckets(std::move(buckets_))
 {
 }
 
@@ -550,6 +554,7 @@ void Histogram::addBuckets(const Buckets & src_buckets, Buckets & dest_buckets, 
 Histogram Histogram::applySelectivity(double rowcount_selectivity, double ndv_selectivity) const
 {
     Buckets new_buckets;
+    new_buckets.reserve(buckets.size());
     for (const auto & bucket : buckets)
     {
         new_buckets.emplace_back(bucket.applySelectivity(rowcount_selectivity, ndv_selectivity));

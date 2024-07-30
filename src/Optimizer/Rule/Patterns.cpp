@@ -32,9 +32,30 @@ PatternBuilder & PatternBuilder::matching(PatternPredicate predicate)
     return matching(std::move(predicate), "unknown");
 }
 
-PatternBuilder & PatternBuilder::matching(PatternPredicate predicate, const std::string & name)
+PatternBuilder & PatternBuilder::matching(PatternPredicate predicate, const std::string &)
 {
-    current = std::make_unique<FilterPattern>(name, std::move(predicate), std::move(current));
+    if (auto * type_pattern = dynamic_cast<TypeOfPattern *>(current.get()))
+    {
+        if (type_pattern->attaching_predicate)
+           throw Exception(
+                "TypeOfPattern already has an attaching_predicate", ErrorCodes::LOGICAL_ERROR);
+        else
+            type_pattern->attaching_predicate = predicate;
+    }
+    else if (auto * capture_pattern = dynamic_cast<CapturePattern *>(current.get()))
+    {
+        if (capture_pattern->attaching_predicate)
+           throw Exception(
+                "CapturePattern already has an attaching_predicate", ErrorCodes::LOGICAL_ERROR);
+        else
+            capture_pattern->attaching_predicate = predicate;
+    }
+    else
+    {
+        throw Exception(
+            "Previous pattern of FilterPattern must be a TypeOfPattern/CapturePattern", ErrorCodes::LOGICAL_ERROR);
+    }
+
     return *this;
 }
 

@@ -23,11 +23,12 @@
 namespace DB
 {
 
-PatternPtr MergeAggregatings::getPattern() const
+ConstRefPatternPtr MergeAggregatings::getPattern() const
 {
-    return Patterns::aggregating()
+    static auto pattern = Patterns::aggregating()
         .matchingStep<AggregatingStep>([](const AggregatingStep & step) { return step.getAggregates().empty(); })
         .withSingle(Patterns::aggregating()).result();
+    return pattern;
 }
 
 TransformResult MergeAggregatings::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

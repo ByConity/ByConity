@@ -157,12 +157,12 @@ NameToNameMap extractIdentities(const ProjectionStep & project)
     return result;
 }
 
-std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments)
+std::unordered_map<String, String> computeIdentityTranslations(const Assignments & assignments)
 {
     std::unordered_map<String, String> output_to_input;
-    for (auto & assignment : assignments)
+    for (const auto & assignment : assignments)
     {
-        if (auto identifier = assignment.second->as<ASTIdentifier>())
+        if (const auto * identifier = assignment.second->as<ASTIdentifier>())
         {
             output_to_input[assignment.first] = identifier->name();
         }

@@ -158,13 +158,14 @@ static bool isProjectionWithJoin(const PlanNodePtr & node)
         && node->getChildren()[0]->getStep()->getType() == IQueryPlanStep::Type::Join;
 }
 
-PatternPtr PullProjectionOnJoinThroughJoin::getPattern() const
+ConstRefPatternPtr PullProjectionOnJoinThroughJoin::getPattern() const
 {
-    return Patterns::join().withAny(
+    static auto pattern = Patterns::join().withAny(
         Patterns::project()
             // identity projection will be inlined into join
             .matchingStep<ProjectionStep>([](const auto & step) { return !Utils::isIdentity(step.getAssignments()); })
             .withSingle(Patterns::join())).result();
+    return pattern;
 }
 
 TransformResult PullProjectionOnJoinThroughJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)

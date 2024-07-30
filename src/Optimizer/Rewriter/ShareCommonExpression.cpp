@@ -560,7 +560,7 @@ PlanNodePtr ShareCommonExpression::rewriteImpl(PlanNodePtr root, ContextMutableP
                 VisitorUtil::accept(*stack.at(idx).node, find_sharable_expr_visitor, {});
             LOG_TRACE(logger, "collected expression infos: {}", expression_infos.toString());
             pruneSharableExpressions(
-                expression_infos, std::max(context->getSettings().common_expression_sharing_threshold.value, UInt64{1}));
+                expression_infos, std::max(context->getSettingsRef().common_expression_sharing_threshold.value, UInt64{1}));
             LOG_TRACE(logger, "sharable expression infos: {}", expression_infos.toString());
         } while (false);
 

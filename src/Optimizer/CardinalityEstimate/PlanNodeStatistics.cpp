@@ -24,7 +24,7 @@ PlanNodeStatistics::PlanNodeStatistics(UInt64 row_count_, std::unordered_map<Str
 {
 }
 
-SymbolStatisticsPtr PlanNodeStatistics::getSymbolStatistics(const String & symbol)
+const SymbolStatisticsPtr & PlanNodeStatistics::getSymbolStatistics(const String & symbol)
 {
     if (symbol_statistics.contains(symbol))
     {

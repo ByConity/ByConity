@@ -29,9 +29,10 @@
 
 namespace DB
 {
-PatternPtr InlineCTE::getPattern() const
+ConstRefPatternPtr InlineCTE::getPattern() const
 {
-    return Patterns::cte().result();
+    static auto pattern = Patterns::cte().result();
+    return pattern;
 }
 
 TransformResult InlineCTE::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -44,9 +45,10 @@ TransformResult InlineCTE::transformImpl(PlanNodePtr node, const Captures &, Rul
     return InlineCTE::reoptimize(cte_step->getId(), inlined_plan, context.cte_info, context.context);
 }
 
-PatternPtr InlineCTEWithFilter::getPattern() const
+ConstRefPatternPtr InlineCTEWithFilter::getPattern() const
 {
-    return Patterns::filter().withSingle(Patterns::cte()).result();
+    static auto pattern = Patterns::filter().withSingle(Patterns::cte()).result();
+    return pattern;
 }
 
 TransformResult InlineCTEWithFilter::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)

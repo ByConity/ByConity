@@ -29,6 +29,7 @@
 #include <Optimizer/Rule/Rule.h>
 #include <QueryPlan/JoinStep.h>
 #include <common/logger_useful.h>
+#include "QueryPlan/IQueryPlanStep.h"
 
 #include <algorithm>
 
@@ -107,7 +108,7 @@ void OptimizeExpression::execute()
     {
         pushTask(std::make_shared<ApplyRule>(group_expr, r, context));
         int child_group_idx = 0;
-        auto pattern = r->getPattern();
+        const auto & pattern = r->getPattern();
         for (const auto * child_pattern : pattern->getChildrenPatterns())
         {
             // If child_pattern has any more children (i.e non-leaf), then we will explore the
@@ -161,7 +162,7 @@ void ExploreExpression::execute()
     {
         pushTask(std::make_shared<ApplyRule>(group_expr, r, context, true));
         int child_group_idx = 0;
-        auto pattern = r->getPattern();
+        const auto & pattern = r->getPattern();
         for (const auto * child_pattern : pattern->getChildrenPatterns())
         {
             // Only need to explore non-leaf children before applying rule to the
@@ -183,25 +184,28 @@ void ExploreExpression::execute()
 void ApplyRule::execute()
 {
     // LOG_TRACE(log, "Apply GroupExpr {}", group_expr->getGroupId());
-    Stopwatch stop_watch;
-    stop_watch.start();
+    Stopwatch stop_watch{CLOCK_THREAD_CPUTIME_ID};
+    
+    if (context->getOptimizerContext().isEnableTrace())
+        stop_watch.start();
 
     if (group_expr->hasRuleExplored(rule->getType()))
         return;
 
-    auto pattern = rule->getPattern();
+    const auto & pattern = rule->getPattern();
     GroupExprBindingIterator iterator(context->getMemo(), group_expr, pattern.get(), context);
+
+    bool matched = false;
 
     RuleContext rule_context{
         context->getOptimizerContext().getContext(), context->getOptimizerContext().getCTEInfo(), context, group_expr->getGroupId()};
+    
     while (iterator.hasNext())
     {
         auto before = iterator.next();
-        if (!rule->getPattern()->matches(before))
-        {
-            continue;
-        }
+        assert(rule->getPattern()->matches(before));
 
+        matched = true;
         // Caller frees after
         TransformResult result = rule->transform(before, rule_context);
 
@@ -254,9 +258,15 @@ void ApplyRule::execute()
 
     group_expr->setRuleExplored(rule->getType());
 
-    stop_watch.stop();
+
     if (context->getOptimizerContext().isEnableTrace())
-        context->getOptimizerContext().trace("ApplyRule", group_expr->getGroupId(), rule->getType(), stop_watch.elapsedNanoseconds());
+    {
+        stop_watch.stop();
+        if (matched)
+            context->getOptimizerContext().trace("ApplyRule", group_expr->getGroupId(), rule->getType(), stop_watch.elapsedNanoseconds());
+        else
+            context->getOptimizerContext().trace("ApplyRule-Unmatched", group_expr->getGroupId(), rule->getType(), stop_watch.elapsedNanoseconds());
+    }
 }
 
 void OptimizeInput::execute()

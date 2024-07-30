@@ -16,12 +16,13 @@
 
 namespace DB
 {
-PatternPtr PushDownApplyThroughJoin::getPattern() const
+ConstRefPatternPtr PushDownApplyThroughJoin::getPattern() const
 {
-    return Patterns::apply()
+    static auto pattern = Patterns::apply()
         .matchingStep<ApplyStep>([](const ApplyStep & step) { return !step.getOuterColumns().empty() && step.getCorrelation().empty(); })
         .with(Patterns::join(), Patterns::any())
         .result();
+    return pattern;
 }
 
 TransformResult PushDownApplyThroughJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)

@@ -19,20 +19,21 @@
 
 namespace DB
 {
-PatternPtr SemiJoinPushDown::getPattern() const
+ConstRefPatternPtr SemiJoinPushDown::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) {
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) {
             return s.getKind() == ASTTableJoin::Kind::Left
                 && (s.getStrictness() == ASTTableJoin::Strictness::Semi || s.getStrictness() == ASTTableJoin::Strictness::Anti)
                 && !s.isOrdered();
-        })
+        }, "semijoin-matchingstep")
         .with(
             Patterns::join()
-                .matchingStep<JoinStep>([&](const JoinStep & s) { return !s.isOuterJoin() && !s.isOrdered(); })
+                .matchingStep<JoinStep>([](const JoinStep & s) { return !s.isOuterJoin() && !s.isOrdered(); })
                 .with(Patterns::any(), Patterns::any()),
             Patterns::any())
         .result();
+    return pattern;
 }
 
 TransformResult SemiJoinPushDown::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -122,15 +123,16 @@ TransformResult SemiJoinPushDown::transformImpl(PlanNodePtr node, const Captures
         rule_context.context->nextNodeId(), output_step, PlanNodes{new_semi_node, join_node->getChildren()[1]});
 }
 
-PatternPtr SemiJoinPushDownProjection::getPattern() const
+ConstRefPatternPtr SemiJoinPushDownProjection::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) {
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) {
             return s.getKind() == ASTTableJoin::Kind::Left
                 && (s.getStrictness() == ASTTableJoin::Strictness::Semi || s.getStrictness() == ASTTableJoin::Strictness::Anti);
         })
         .with(Patterns::project().with(Patterns::any()), Patterns::any())
         .result();
+    return pattern;
 }
 
 TransformResult SemiJoinPushDownProjection::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -214,15 +216,16 @@ TransformResult SemiJoinPushDownProjection::transformImpl(PlanNodePtr node, cons
         true};
 }
 
-PatternPtr SemiJoinPushDownAggregate::getPattern() const
+ConstRefPatternPtr SemiJoinPushDownAggregate::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) {
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) {
             return s.getKind() == ASTTableJoin::Kind::Left
                 && (s.getStrictness() == ASTTableJoin::Strictness::Semi || s.getStrictness() == ASTTableJoin::Strictness::Anti);
         })
         .with(Patterns::aggregating().with(Patterns::any()), Patterns::any())
         .result();
+    return pattern;
 }
 
 TransformResult SemiJoinPushDownAggregate::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

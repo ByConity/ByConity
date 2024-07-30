@@ -55,11 +55,12 @@ bool MultipleDistinctAggregationToMarkDistinct::hasMixedDistinctAndNonDistincts(
     return distinct_aggs > 0 && distinct_aggs < agg_descs.size();
 }
 
-PatternPtr MultipleDistinctAggregationToMarkDistinct::getPattern() const
+ConstRefPatternPtr MultipleDistinctAggregationToMarkDistinct::getPattern() const
 {
-    return Patterns::aggregating().matchingStep<AggregatingStep>([&](const AggregatingStep & s) {
+    static auto pattern = Patterns::aggregating().matchingStep<AggregatingStep>([](const AggregatingStep & s) {
         return hasNoDistinctWithFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s));
     }).result();
+    return pattern;
 }
 
 TransformResult MultipleDistinctAggregationToMarkDistinct::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

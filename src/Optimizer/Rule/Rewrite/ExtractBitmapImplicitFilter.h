@@ -29,7 +29,7 @@ public:
     {
         return true;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 
 private:

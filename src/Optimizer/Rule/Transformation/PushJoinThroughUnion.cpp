@@ -26,9 +26,10 @@
 
 namespace DB
 {
-PatternPtr PushJoinThroughUnion::getPattern() const
+ConstRefPatternPtr PushJoinThroughUnion::getPattern() const
 {
-    return Patterns::join().with(Patterns::unionn(), Patterns::any()).result();
+    static auto pattern = Patterns::join().with(Patterns::unionn(), Patterns::any()).result();
+    return pattern;
 }
 
 const std::vector<RuleType> & PushJoinThroughUnion::blockRules() const

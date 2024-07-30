@@ -90,12 +90,12 @@ TEST(OptimizerPatternTest, FilterPattern)
         = typeOf(IQueryPlanStep::Type::TableScan).matchingStep<MockedTableScanStep>([](const auto & s) { return s.table == "t1"; }).result();
 
     PatternPtr t2Pattern
-        = typeOf(IQueryPlanStep::Type::TableScan).matching([](const auto & node, const auto &) { return !node->getChildren().empty(); }).result();
+        = typeOf(IQueryPlanStep::Type::TableScan).withEmpty().result();
 
     ASSERT_TRUE(t1Pattern->matches(readNodeT1));
     ASSERT_TRUE(!t1Pattern->matches(readNodeT2));
-    ASSERT_TRUE(!t2Pattern->matches(readNodeT1));
-    ASSERT_TRUE(t2Pattern->matches(readNodeT2));
+    ASSERT_TRUE(t2Pattern->matches(readNodeT1));
+    ASSERT_TRUE(!t2Pattern->matches(readNodeT2));
 }
 
 TEST(OptimizerPatternTest, FilterPatternFilterByCaptures)
@@ -203,12 +203,12 @@ TEST(OptimizerPatternTest, WithPatternsOuterPatternCanUseSubCaptures)
                              .capturedStepAs<MockedTableScanStep>(read1DbCap, dbProperty)
                              .capturedStepAs<MockedTableScanStep>(read1TableCap, tableProperty)
                              .withSingle(tableScan()
-                                              .capturedStepAs<MockedTableScanStep>(read2DbCap, dbProperty)
-                                              .capturedStepAs<MockedTableScanStep>(read2TableCap, tableProperty))
-                             .matchingCapture([&](const Captures & caps) {
-                                 return caps.at<std::string>(read1DbCap) == caps.at<std::string>(read2DbCap)
-                                     && caps.at<std::string>(read1TableCap) != caps.at<std::string>(read2TableCap);
-                             }).result();
+                                            .capturedStepAs<MockedTableScanStep>(read2DbCap, dbProperty)
+                                            .capturedStepAs<MockedTableScanStep>(read2TableCap, tableProperty)
+                                            .matchingCapture([&](const Captures & caps) {
+                                                return caps.at<std::string>(read1DbCap) == caps.at<std::string>(read2DbCap)
+                                                    && caps.at<std::string>(read1TableCap) != caps.at<std::string>(read2TableCap);
+                             })).result();
 
     ASSERT_TRUE(pattern->matches(node));
 }

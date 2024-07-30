@@ -9,6 +9,7 @@
 #include <Optimizer/Rule/Rule.h>
 #include <Optimizer/Rule/Transformation/JoinReorderUtils.h>
 
+#include <Optimizer/Rule/Patterns.h>
 #include <utility>
 
 namespace DB
@@ -16,13 +17,17 @@ namespace DB
 class SelectivityBasedJoinReorder : public Rule
 {
 public:
-    explicit SelectivityBasedJoinReorder(size_t max_join_size_): max_join_size(max_join_size_) {}
+    explicit SelectivityBasedJoinReorder(size_t max_join_size_): max_join_size(max_join_size_) {
+        pattern = Patterns::multiJoin()
+            .matchingStep<MultiJoinStep>([&](const MultiJoinStep & s) { return s.getGraph().getNodes().size() > max_join_size; })
+            .result();
+    }
     RuleType getType() const override { return RuleType::SELECTIVITY_BASED_JOIN_REORDER; }
     String getName() const override { return "SELECTIVITY_BASED_JOIN_REORDER"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_selectivity_based_join_reorder; }
 
     const std::vector<RuleType> & blockRules() const override;
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -30,7 +35,9 @@ protected:
 private:
     static PlanNodePtr createNewJoin(GroupId left_id, GroupId right_id, const GroupIdToIds & group_id_map, const Graph & graph, RuleContext & rule_context);
     PlanNodePtr getJoinOrder(const Graph & graph, RuleContext & rule_context);
+
     size_t max_join_size;
+    PatternPtr pattern;
 };
 
 struct EdgeSelectivity

@@ -278,7 +278,7 @@ PlanNodePtr UnifyNullableVisitor::visitProjectionNode(ProjectionNode & node, Con
 {
     PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, context);
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     NameToType set_nullable;
     const auto & input_header = child->getStep()->getOutputStream().header;
     auto type_analyzer = TypeAnalyzer::create(context, input_header.getNamesAndTypes());

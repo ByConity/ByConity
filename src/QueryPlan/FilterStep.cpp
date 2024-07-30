@@ -184,11 +184,11 @@ ConstASTPtr FilterStep::rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPi
     if (filters.first.empty())
         return filter;
 
-    bool only_bf = build_context.context->getSettings().enable_rewrite_bf_into_prewhere;
+    bool only_bf = build_context.context->getSettingsRef().enable_rewrite_bf_into_prewhere;
 
     std::vector<ConstASTPtr> predicates = std::move(filters.second);
 
-    if (build_context.context->getSettings().enable_two_stages_prewhere)
+    if (build_context.context->getSettingsRef().enable_two_stages_prewhere)
     {
         //skip all runtime_filters in FilterStep, since all runtime_filters has been moved into TableScanStep.
     }

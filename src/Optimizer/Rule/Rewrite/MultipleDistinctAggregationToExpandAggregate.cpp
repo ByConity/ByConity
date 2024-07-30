@@ -124,13 +124,14 @@ bool MultipleDistinctAggregationToExpandAggregate::allCountHasAtMostOneArguments
     return true;
 }
 
-PatternPtr MultipleDistinctAggregationToExpandAggregate::getPattern() const
+ConstRefPatternPtr MultipleDistinctAggregationToExpandAggregate::getPattern() const
 {
-    return Patterns::aggregating()
-        .matchingStep<AggregatingStep>([&](const AggregatingStep & s) {
+    static auto pattern = Patterns::aggregating()
+        .matchingStep<AggregatingStep>([](const AggregatingStep & s) {
             return hasNoDistinctWithFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s)) && hasUniqueArgument(s) && allCountHasAtMostOneArguments(s);
         })
         .result();
+    return pattern;
 }
 
 TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

@@ -55,7 +55,7 @@ namespace Utils
     ConstASTPtr tryUnwrapCast(const ConstASTPtr & expression, ContextMutablePtr context, const NamesAndTypes & names_and_types);
     
     NameToNameMap extractIdentities(const ProjectionStep & project);
-    std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);
+    std::unordered_map<String, String> computeIdentityTranslations(const Assignments & assignments);
     ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);
     bool containsAggregateFunction(const ASTPtr & ast);
 

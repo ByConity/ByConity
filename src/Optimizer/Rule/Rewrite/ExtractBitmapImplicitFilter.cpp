@@ -64,9 +64,9 @@ namespace
     }
 }
 
-PatternPtr ExtractBitmapImplicitFilter::getPattern() const
+ConstRefPatternPtr ExtractBitmapImplicitFilter::getPattern() const
 {
-    return Patterns::aggregating()
+    static auto pattern = Patterns::aggregating()
         .matchingStep<AggregatingStep>([](const AggregatingStep & step, Captures & captures) {
             std::vector<const AggregateDescription *> target_aggregates;
 
@@ -79,6 +79,7 @@ PatternPtr ExtractBitmapImplicitFilter::getPattern() const
             return matched;
         })
         .result();
+    return pattern;
 }
 
 TransformResult ExtractBitmapImplicitFilter::transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & rule_context)
