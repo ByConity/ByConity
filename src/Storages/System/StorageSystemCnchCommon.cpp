@@ -57,7 +57,7 @@ std::vector<std::tuple<String, String, String>> DB::filterTables(const ContextPt
             continue;
         const String & database_name = table_model.database();
         std::optional<String> stripped_database_name = filterAndStripDatabaseNameIfTenanted(tenant_id, database_name);
-        if (not stripped_database_name)
+        if (!stripped_database_name.has_value())
             continue;
         database_fullname_column->insert(database_name);
         database_column->insert(std::move(*stripped_database_name));

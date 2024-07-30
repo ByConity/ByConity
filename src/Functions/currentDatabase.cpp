@@ -84,6 +84,7 @@ REGISTER_FUNCTION(CurrentDatabase)
 {
     factory.registerFunction<FunctionCurrentDatabase>();
     factory.registerFunction<FunctionCurrentDatabase>("DATABASE", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("schema", FunctionCurrentDatabase::name, FunctionFactory::CaseInsensitive);
 }
 
 }

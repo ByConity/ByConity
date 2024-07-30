@@ -362,6 +362,7 @@ void AccessControlManager::setUpFromMainConfig(const Poco::Util::AbstractConfigu
     /// The default values are false because we need to be compatible with earlier access configurations
     setSelectFromSystemDatabaseRequiresGrant(config_.getBool("access_control_improvements.select_from_system_db_requires_grant", false));
     setSelectFromInformationSchemaRequiresGrant(config_.getBool("access_control_improvements.select_from_information_schema_requires_grant", false));
+    setSelectFromMySQLRequiresGrant(config_.getBool("access_control_improvements.select_from_mysql_requires_grant", false));
 
     addStoragesFromMainConfig(config_, config_path_, get_zookeeper_function_);
 

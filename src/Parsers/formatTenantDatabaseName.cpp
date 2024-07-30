@@ -49,7 +49,7 @@ String getCurrentCatalog()
 }
 
 static constexpr std::string_view internal_databases[]
-    = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::INFORMATION_SCHEMA, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, DatabaseCatalog::TEMPORARY_DATABASE, CNCH_SYSTEM_LOG_DB_NAME, "default"};
+    = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::INFORMATION_SCHEMA, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, DatabaseCatalog::MYSQL, DatabaseCatalog::MYSQL_UPPERCASE, DatabaseCatalog::TEMPORARY_DATABASE, CNCH_SYSTEM_LOG_DB_NAME, "default"};
 
 static bool isInternalDatabaseName(const String & database_name)
 {

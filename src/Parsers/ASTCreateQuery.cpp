@@ -485,7 +485,8 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     if (columns_list && !columns_list->empty() && !as_table_function)
     {
-        settings.ostr << (settings.one_line ? " (" : "\n(");
+        /// replace "\n(" to "(\n" for MYSQL as navicat (duplicate table action) requires
+        settings.ostr << ((settings.one_line || settings.dialect_type == DialectType::MYSQL) ? " (" : "\n(");
         FormatStateStacked frame_nested = frame;
         columns_list->formatImpl(settings, state, frame_nested);
         settings.ostr << (settings.one_line ? ")" : "\n)");

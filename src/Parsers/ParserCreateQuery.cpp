@@ -452,7 +452,8 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     {
         // mysql table_constraints
         if (s_index.checkWithoutMoving(pos, expected) || s_key.checkWithoutMoving(pos, expected) ||
-            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected) || s_unique.checkWithoutMoving(pos, expected))
+            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected) ||
+            s_unique.checkWithoutMoving(pos, expected))
         {
             MySQLParser::ParserDeclareIndex index_p_mysql;
             if (index_p_mysql.parse(pos, new_node, expected))
@@ -482,7 +483,19 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     {
         if (!foreign_key_p.parse(pos, new_node, expected) && !constraint_p.parse(pos, new_node, expected)
             && !unique_p.parse(pos, new_node, expected))
-            return false;
+        {
+            /// mysql case: constraint primary key
+            MySQLParser::ParserDeclareIndex index_p_mysql;
+            if (dt.parse_mysql_ddl && index_p_mysql.parse(pos, new_node, expected))
+            {
+                node = new_node;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
     else if (s_foreign_key.checkWithoutMoving(pos, expected))
     {
@@ -750,6 +763,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
     ParserKeyword s_broadcast("BROADCAST");
     ParserKeyword s_partition_by("PARTITION BY");
+    ParserKeyword s_partitions("PARTITIONS");
     ParserKeyword s_value("VALUE");
     ParserKeyword s_lifecycle("LIFECYCLE");
     ParserKeyword s_storage_policy("STORAGE_POLICY");
@@ -839,6 +853,8 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
         if (!mysql_partition_by && s_partition_by.ignore(pos, expected))
         {
+            ParserKeyword("KEY").ignore(pos, expected);
+
             if (s_value.ignore(pos, expected) && expression_p.parse(pos, mysql_partition_by, expected))
             {
                 // partition by value(expr) life cycle n
@@ -850,6 +866,12 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             else if (expression_p.parse(pos, mysql_partition_by, expected))
                 continue;
             else
+                return false;
+        }
+
+        if (dt.parse_mysql_ddl && s_partitions.ignore(pos, expected))
+        {
+            if (!number_parser.ignore(pos, expected))
                 return false;
         }
 

@@ -8,6 +8,7 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ${CLICKHOUSE_CLIENT} --query "create database if not exists db1"
 ${CLICKHOUSE_CLIENT} --query "create table if not exists db1.tb(x int, y int) engine=CnchMergeTree() order by x"
+${CLICKHOUSE_CLIENT} --query "alter table db1.tb add index vix y TYPE SET(100) granularity 2"
 ${CLICKHOUSE_CLIENT} --query "insert into db1.tb select number, 2 * number from numbers(10)"
 
 ${CLICKHOUSE_CLIENT} --query "select name from system.cnch_databases where name = 'db1'"
@@ -39,6 +40,15 @@ helper() {
     ${CLICKHOUSE_CLIENT} --user "$TENANTED_USER"  --password 'password'  --query "select database, name, sorting_key from system.cnch_tables where database = 'db1' and name = 'tb'"
     ${CLICKHOUSE_CLIENT} --user "$TENANTED_USER"  --password 'password'  --query "select database, table, name from system.cnch_columns where database = 'db1' and table = 'tb'"
     ${CLICKHOUSE_CLIENT} --user "$TENANTED_USER"  --password 'password'  --query "select distinct database, table from system.cnch_parts where database = 'db1' and table = 'tb' and visible=1 settings enable_multiple_tables_for_cnch_parts=1"
+    ${CLICKHOUSE_CLIENT} --user "$TENANTED_USER"  --password 'password'  --query "select name from system.data_skipping_indices"
+
+    if [ "$USER_NUM" -lt 5 ]
+    then
+      ${CLICKHOUSE_CLIENT} --user "$TENANTED_USER"  --password 'password'  --query "show users" 2>&1 | grep -c -m 1 "Code: 497"
+    else 
+      ${CLICKHOUSE_CLIENT} --user "$TENANTED_USER"  --password 'password'  --query "show users" | grep -c -m 1 "65007_user"
+    fi
+
     ${CLICKHOUSE_CLIENT} --query "DROP USER IF EXISTS $NEW_USER"
 }
 
@@ -46,5 +56,6 @@ helper 'no grant'
 helper 'show databases grant' 'SHOW DATABASES ON db1.*'
 helper 'show tables grant' 'SHOW TABLES ON db1.*'
 helper 'show columns grant' 'SHOW COLUMNS ON db1.*'
+helper 'show users grant' 'SHOW USERS ON *.*'
 
 ${CLICKHOUSE_CLIENT} --query "DROP DATABASE db1"

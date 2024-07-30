@@ -20,6 +20,7 @@
  */
 
 #include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTColumnDeclaration.h>
 #include <IO/Operators.h>
 #include <iomanip>
 #include <Common/quoteString.h>
@@ -520,7 +521,7 @@ void ASTAlterCommand::formatImpl(
     else if (type == ASTAlterCommand::FAST_DELETE)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FASTDELETE " << (settings.hilite ? hilite_none : "");
-        
+
         if (partition)
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " IN PARTITION " << (settings.hilite ? hilite_none : "");

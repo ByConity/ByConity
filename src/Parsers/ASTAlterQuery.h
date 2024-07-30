@@ -133,7 +133,6 @@ public:
         RENAME_TABLE,
 
         PARTITION_BY,
-
     };
 
     Type type = NO_TYPE;

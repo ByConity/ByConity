@@ -148,7 +148,12 @@ String InterpreterShowTablesQuery::getRewrittenQueryImpl()
     }
 
     WriteBufferFromOwnString rewritten_query;
-    rewritten_query << "SELECT name";
+    bool is_mysql = getContext()->getSettingsRef().dialect_type == DialectType::MYSQL;
+    if (is_mysql)
+        rewritten_query << "SELECT Tables_in_" << getOriginalDatabaseName(database);
+    else
+        rewritten_query << "SELECT name";
+
     if (query.full)
     {
         if (query.dictionaries)
@@ -157,12 +162,17 @@ String InterpreterShowTablesQuery::getRewrittenQueryImpl()
             throw Exception("FULL is not allowed for snapshots.", ErrorCodes::SYNTAX_ERROR);
         if (query.history)
             throw Exception("FULL TABLE is not compatible with HISTORY.", ErrorCodes::SYNTAX_ERROR);
-        rewritten_query << 
+        rewritten_query <<
             ", multiIf("
-                "database = 'INFORMATION_SCHEMA' OR database = 'information_schema', 'SYSTEM VIEW',"
+                "database = 'INFORMATION_SCHEMA' OR database = 'information_schema' OR database = 'mysql' OR database = 'MYSQL', 'SYSTEM VIEW',"
                 "engine = 'View', 'VIEW',"
                 "'BASE TABLE'"
-            ") AS table_type";
+            ") AS ";
+
+        if (is_mysql)
+            rewritten_query << "Table_type";
+        else
+            rewritten_query << "table_type";
     }
 
     rewritten_query << " FROM ";
@@ -183,7 +193,7 @@ String InterpreterShowTablesQuery::getRewrittenQueryImpl()
         }
         else
         {
-            String tables_in_db = "Tables_in_" + database;
+            String tables_in_db = "Tables_in_" + getOriginalDatabaseName(database);
             rewritten_query << "(SELECT *, name AS " << backQuote(tables_in_db) << " FROM system.tables) ";
         }
     }

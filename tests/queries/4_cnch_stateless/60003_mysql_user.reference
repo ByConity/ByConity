@@ -1,0 +1,13 @@
+::/0	hello	Y	N	N	N	Y	N	N	N	N	N	N	N	N	N	N	N	Y	N	N	N	N	Y	N	N	N	N	N	N	N					0	0	0	0			
+::/0	hello	Y	N	N	N	Y	N	N	N	N	N	N	N	N	N	N	N	Y	N	N	N	N	Y	N	N	N	N	N	N	N					0	0	0	0				::/0	hello	Y	N	N	N	Y	N	N	N	N	N	N	N	N	N	N	N	Y	N	N	N	N	Y	N	N	N	N	N	N	N					0	0	0	0				::/0	hello	Y	N	N	N	Y	N	N	N	N	N	N	N	N	N	N	N	Y	N	N	N	N	Y	N	N	N	N	N	N	N
+::/0	userpriv	hello	Y	N	Y	Y	Y	N	N	N	Y	Y	Y	N	Y	N	N	N	N	N	N
+::/0	dbpriv	hello	Y	N	N	N	Y	N	N	N	N	N	Y	N	Y	Y	N	N	N	N	N
+::/0	userpriv	hello	Y	N	Y	Y	Y	N	N	N	Y	Y	Y	N	Y	N	N	N	N	N	N	::/0	userpriv	hello	Y	N	Y	Y	Y	N	N	N	Y	Y	Y	N	Y	N	N	N	N	N	N	::/0	userpriv	hello	Y	N	Y	Y	Y	N	N	N	Y	Y	Y	N	Y	N	N	N	N	N	N
+::/0	dbpriv	hello	Y	N	N	N	Y	N	N	N	N	N	Y	N	Y	Y	N	N	N	N	N	::/0	dbpriv	hello	Y	N	N	N	Y	N	N	N	N	N	Y	N	Y	Y	N	N	N	N	N	::/0	dbpriv	hello	Y	N	N	N	Y	N	N	N	N	N	Y	N	Y	Y	N	N	N	N	N
+userpriv	::/0	hello	Y	N	Y	Y	Y	N	N	N	Y	Y	Y	N	Y	N	N	N	N	N
+dbpriv	::/0	hello	Y	N	N	N	Y	N	N	N	N	N	Y	N	Y	N	N	N	N	N
+userpriv	hello	::/0
+dbpriv	hello	::/0
+<global>	::/0	hello	Y	N	N	N	Y	N	N	N	N	N	Y	N	Y	N	N	N	N	N
+<global>	hello	::/0
+hello	::/0					0	0	0	N	0

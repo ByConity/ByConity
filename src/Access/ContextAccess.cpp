@@ -67,6 +67,7 @@ namespace
         "tables",
         "columns",
         "mutations",
+        "users",
 
         /// Specific to the current session
         "settings",
@@ -79,7 +80,8 @@ namespace
         "cnch_databases",
         "cnch_tables",
         "cnch_columns",
-        "cnch_parts"
+        "cnch_parts",
+        "data_skipping_indices"
     };
 
     AccessRights mixAccessRightsFromUserAndRoles(const User & user, const EnabledRolesInfo & roles_info)
@@ -216,9 +218,17 @@ namespace
             res.grant(AccessType::SELECT, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
         }
 
+        if (!manager.doesSelectFromMySQLRequireGrant())
+        {
+            res.grant(AccessType::SELECT, DatabaseCatalog::MYSQL);
+            res.grant(AccessType::SELECT, DatabaseCatalog::MYSQL_UPPERCASE);
+        }
         // information_schema is always visible
         res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA);
         res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
+
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::MYSQL);
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::MYSQL_UPPERCASE);
 
         return res;
     }

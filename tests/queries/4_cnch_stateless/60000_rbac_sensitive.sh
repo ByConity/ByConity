@@ -81,7 +81,7 @@ $CLICKHOUSE_CLIENT --query "GRANT SELECT ON db.tb TO my_user"
 $CLICKHOUSE_CLIENT --user=$NEW_USER --query "SELECT * FROM db.tb" 2>&1| grep -Fo "Not enough privileges" | uniq
 
 # select from system table
-$CLICKHOUSE_CLIENT --query "SELECT * FROM system.sensitive_grants FORMAT CSV"
+$CLICKHOUSE_CLIENT --query "SELECT * FROM system.sensitive_grants where user_name like '%my_user' FORMAT CSV"
 
 $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS db.tb;"
 $CLICKHOUSE_CLIENT --query "DROP DATABASE IF EXISTS db;"

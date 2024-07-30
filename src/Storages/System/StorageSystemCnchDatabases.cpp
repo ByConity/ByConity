@@ -55,12 +55,14 @@ void StorageSystemCnchDatabases::fillData(MutableColumns & res_columns, ContextP
         {
             if (!Status::isDeleted(res[i].status()))
             {
-                if (check_access_for_databases && !access->isGranted(AccessType::SHOW_DATABASES, res[i].name()))
-                    continue;
                 size_t col_num = 0;
                 std::optional<String> stripped_database_name = filterAndStripDatabaseNameIfTenanted(tenant_id, res[i].name());
-                if (not stripped_database_name)
+                if (!stripped_database_name.has_value())
                     continue;
+
+                if (check_access_for_databases && !access->isGranted(AccessType::SHOW_DATABASES, res[i].name()))
+                    continue;
+
                 res_columns[col_num++]->insert(*std::move(stripped_database_name));
                 /// fill database uuid if it exists, otherwise the field will be NULL
                 if (res[i].has_uuid())

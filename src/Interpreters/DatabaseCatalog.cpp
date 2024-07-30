@@ -1153,7 +1153,9 @@ bool DatabaseCatalog::isDefaultVisibleSystemDatabase(const String & database_nam
 {
     return database_name == SYSTEM_DATABASE
         || database_name == INFORMATION_SCHEMA
-        || database_name == INFORMATION_SCHEMA_UPPERCASE;
+        || database_name == INFORMATION_SCHEMA_UPPERCASE
+        || database_name == MYSQL
+        || database_name == MYSQL_UPPERCASE;
 }
 
 static DatabasePtr

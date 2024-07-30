@@ -82,6 +82,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
+#include <Storages/System/attachMySQLTables.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Functions/registerFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -1484,6 +1485,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         attachSystemTablesServer(*database_catalog.getSystemDatabase(), has_zookeeper);
         attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA, global_context));
         attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, global_context));
+        attachMySQL(global_context, *database_catalog.getDatabase(DatabaseCatalog::MYSQL, global_context));
+        attachMySQL(global_context, *database_catalog.getDatabase(DatabaseCatalog::MYSQL_UPPERCASE, global_context));
         /// We load temporary database first, because projections need it.
         database_catalog.initializeAndLoadTemporaryDatabase();
         /// Then, load remaining databases

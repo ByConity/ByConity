@@ -12,6 +12,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int CANNOT_ASSIGN_ALTER;
+}
+
 namespace MySQLInterpreter
 {
     struct InterpreterAlterAnalyticalMySQLImpl
