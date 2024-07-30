@@ -25,7 +25,7 @@ namespace
     }
 
 
-    void formatAuthentication(const Authentication & authentication, bool show_password, const IAST::FormatSettings & settings)
+    void formatAuthentication(const Authentication & authentication, const IAST::FormatSettings & settings)
     {
         auto authentication_type = authentication.getType();
         if (authentication_type == Authentication::NO_PASSWORD)
@@ -40,7 +40,7 @@ namespace
         std::optional<String> by_value;
 
         if (
-            show_password ||
+            settings.show_secrets ||
             authentication_type == Authentication::LDAP ||
             authentication_type == Authentication::KERBEROS
         )
@@ -255,7 +255,7 @@ void ASTCreateUserQuery::formatImpl(const FormatSettings & format, FormatState &
         formatRenameTo(new_name, format);
 
     if (authentication)
-        formatAuthentication(*authentication, show_password, format);
+        formatAuthentication(*authentication, format);
 
     // if (hosts)
     //     formatHosts(nullptr, *hosts, format);
@@ -309,6 +309,19 @@ void ASTCreateUserQuery::rewriteUserNameWithTenant(const Context *)
 
         tenant_rewritten = true;
     }  
+}
+
+bool ASTCreateUserQuery::hasSecretParts() const
+{
+    if (authentication)
+    {
+        auto auth_type = authentication->getType();
+        if ((auth_type == Authentication::PLAINTEXT_PASSWORD)
+            || (auth_type == Authentication::SHA256_PASSWORD)
+            || (auth_type == Authentication::DOUBLE_SHA1_PASSWORD))
+            return true;
+    }
+    return childrenHaveSecretParts();
 }
 
 }

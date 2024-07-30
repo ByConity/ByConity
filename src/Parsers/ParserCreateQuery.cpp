@@ -737,6 +737,20 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         break;
     }
 
+    if (engine)
+    {
+        switch (engine_kind)
+        {
+            case EngineKind::TABLE_ENGINE:
+                engine->as<ASTFunction &>().kind = ASTFunction::Kind::TABLE_ENGINE;
+                break;
+
+            case EngineKind::DATABASE_ENGINE:
+                engine->as<ASTFunction &>().kind = ASTFunction::Kind::DATABASE_ENGINE;
+                break;
+        }
+    }
+
     auto storage = std::make_shared<ASTStorage>();
     storage->set(storage->engine, engine);
     storage->set(storage->partition_by, partition_by);
@@ -1095,7 +1109,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserStorage storage_p(dt);
+    ParserStorage storage_p(ParserStorage::TABLE_ENGINE, dt);
     ParserIdentifier name_p;
     ParserTablePropertiesDeclarationList table_properties_p(dt);
     ParserSelectWithUnionQuery select_p(dt);
@@ -1840,7 +1854,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserKeyword s_attach("ATTACH");
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserStorage storage_p(dt);
+    ParserStorage storage_p(ParserStorage::DATABASE_ENGINE, dt);
     ParserIdentifier name_p;
     ParserTableOverridesDeclarationList table_overrides_p;
     ParserIdentifier id_p;
@@ -2001,7 +2015,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserStorage storage_p(dt);
+    ParserStorage storage_p(ParserStorage::TABLE_ENGINE, dt);
     ParserIdentifier name_p;
     ParserTablePropertiesDeclarationList table_properties_p(dt);
     ParserSelectWithUnionQuery select_p(dt);

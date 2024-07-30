@@ -143,9 +143,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
         create.to_inner_uuid = UUIDHelpers::Nil;
     }
 
-    WriteBufferFromOwnString buf;
-    formatAST(*create_query, buf, false, false, false, getContext()->getSettingsRef().dialect_type);
-    String res = buf.str();
+    String res = create_query->formatWithHiddenSecrets(/* max_length= */ 0, /* one_line= */ false, /*no_alias*/ false, getContext()->getSettingsRef().dialect_type);
 
     MutableColumnPtr column = ColumnString::create();
     column->insert(res);

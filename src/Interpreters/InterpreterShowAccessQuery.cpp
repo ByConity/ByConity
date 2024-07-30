@@ -43,9 +43,7 @@ BlockInputStreamPtr InterpreterShowAccessQuery::executeImpl() const
             if (auto * to_rewrite_grant_query = query->as<ASTGrantQuery>())
                 to_rewrite_grant_query->rewriteNamesWithoutTenant(getContext().get());
         }
-        buf.restart();
-        formatAST(*query, buf, false, true);
-        column->insert(buf.str());
+        column->insert(query->formatWithHiddenSecrets());
     }
 
     String desc = "ACCESS";

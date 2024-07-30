@@ -61,7 +61,6 @@ public:
     String new_name;
 
     std::optional<Authentication> authentication;
-    bool show_password = true; /// formatImpl() will show the password or hash.
     bool tenant_rewritten = false;
 
     // std::optional<AllowedClientHosts> hosts;
@@ -79,6 +78,7 @@ public:
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
     void rewriteUserNameWithTenant(const Context *);
+    bool hasSecretParts() const override;
     // ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateUserQuery>(clone()); }
 };
 }
