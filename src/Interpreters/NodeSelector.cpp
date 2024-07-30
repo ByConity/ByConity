@@ -157,25 +157,54 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
             sum += current_size;
         }
         size_t avg = sum / plan_segment_ptr->getParallelSize();
-        for (const auto & [h, s] : size_per_worker)
+        if (sum < plan_segment_ptr->getParallelSize())
+            sum = 0;
+        if (sum > 0)
         {
-            size_t p = 0;
-            if (avg == 0)
+            // Assign parallelism accroding to regular average size.
+            for (auto & [h, s] : size_per_worker)
             {
-                p = 1;
-            }
-            else
-            {
-                p = s / avg;
-                if (s % avg * 5 > avg)
-                    p++;
+                size_t p = s / avg;
+                if (p > 0)
+                {
+                    s = s % avg;
+                }
                 if (p == 0 && s > 0)
+                {
                     p = 1;
+                    s = 0;
+                }
+                for (size_t i = 0; i < p; i++)
+                {
+                    auto worker_address = getRemoteAddress(h, query_context);
+                    result.worker_nodes.emplace_back(worker_address, NodeType::Remote, h.id);
+                }
             }
-            for (size_t i = 0; i < p; i++)
+        }
+        // Assign parallelism according to major part(>0.5) of average size, if needed.
+        if (result.worker_nodes.size() < plan_segment_ptr->getParallelSize())
+        {
+            for (auto & [h, s] : size_per_worker)
+            {
+                if (s * 2 > avg)
+                {
+                    auto worker_address = getRemoteAddress(h, query_context);
+                    result.worker_nodes.emplace_back(worker_address, NodeType::Remote, h.id);
+                    s = 0;
+                }
+                if (result.worker_nodes.size() == plan_segment_ptr->getParallelSize())
+                    break;
+            }
+        }
+        // Assign parallelism to each worker until no one left.
+        while (result.worker_nodes.size() < plan_segment_ptr->getParallelSize())
+        {
+            for (const auto & [h, _] : size_per_worker)
             {
                 auto worker_address = getRemoteAddress(h, query_context);
                 result.worker_nodes.emplace_back(worker_address, NodeType::Remote, h.id);
+                if (result.worker_nodes.size() == plan_segment_ptr->getParallelSize())
+                    break;
             }
         }
     }
@@ -208,10 +237,10 @@ NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr, C
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
 
+    auto local_address = getLocalAddress(*query_context);
     if (dag_graph_ptr->source_pruner && query_context->getSettingsRef().enable_prune_compute_plan_segment
         && dag_graph_ptr->source_pruner->plan_segment_workers_map.contains(plan_segment_ptr->getPlanSegmentId()))
     {
-        auto local_address = getLocalAddress(*query_context);
         selectPrunedWorkers(dag_graph_ptr, plan_segment_ptr, result, local_address);
     }
     else
@@ -222,7 +251,8 @@ NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr, C
             parallel_index++;
             if (parallel_index > plan_segment_ptr->getParallelSize())
                 break;
-            result.worker_nodes.emplace_back(worker);
+            if (worker.address != local_address)
+                result.worker_nodes.emplace_back(worker);
         }
     }
 
@@ -267,7 +297,7 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
     {
         if (addr == local_address)
             return result;
-        // TODO(WangTao): fill worker id.
+        // TODO(WangTao): fill worker :id.
         result.worker_nodes.emplace_back(addr);
     }
 
@@ -294,13 +324,25 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
             result = locality_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
             if (result.worker_nodes.empty() || result.worker_nodes.size() != plan_segment_ptr->getParallelSize())
             {
-                LOG_WARNING(
-                    log,
-                    "Select result size {} of plansegment {} doesn't equal to parallel size {}, fallback to compute selector",
-                    result.worker_nodes.size(),
-                    segment_id,
-                    plan_segment_ptr->getParallelSize());
-                result = compute_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
+                if (query_context->getSettingsRef().enable_bsp_selector_fallback)
+                {
+                    LOG_WARNING(
+                        log,
+                        "Select result size {} of plansegment {} doesn't equal to parallel size {}, fallback to compute selector",
+                        result.worker_nodes.size(),
+                        segment_id,
+                        plan_segment_ptr->getParallelSize());
+                    result = compute_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
+                }
+                else
+                {
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "Select result size {} of plansegment {} doesn't equal to parallel size {}, fallback to compute selector",
+                        result.worker_nodes.size(),
+                        segment_id,
+                        plan_segment_ptr->getParallelSize());
+                }
             }
         }
         else
