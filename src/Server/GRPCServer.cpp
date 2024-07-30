@@ -180,21 +180,21 @@ namespace
 
 
     /// Gets session's timeout from query info or from the server config.
-    std::chrono::steady_clock::duration getSessionTimeout(const GRPCQueryInfo & query_info, const Poco::Util::AbstractConfiguration & config)
+    size_t getSessionTimeout(const GRPCQueryInfo & query_info, const Poco::Util::AbstractConfiguration & config)
     {
         auto session_timeout = query_info.session_timeout();
         if (session_timeout)
         {
             auto max_session_timeout = config.getUInt("max_session_timeout", 3600);
             if (session_timeout > max_session_timeout)
-                throw Exception(
-                    "Session timeout '" + std::to_string(session_timeout) + "' is larger than max_session_timeout: "
-                        + std::to_string(max_session_timeout) + ". Maximum session timeout could be modified in configuration file.",
-                    ErrorCodes::INVALID_SESSION_TIMEOUT);
+                throw Exception(ErrorCodes::INVALID_SESSION_TIMEOUT,
+                    "Session timeout '{}' is larger than max_session_timeout: {}. Maximum session timeout could be modified in configuration file.",
+                    session_timeout, max_session_timeout);
         }
         else
             session_timeout = config.getInt("default_session_timeout", 60);
-        return std::chrono::seconds(session_timeout);
+
+        return session_timeout;
     }
 
     /// Generates a description of a query by a specified query info.

@@ -410,7 +410,7 @@ brpc::CallId CnchWorkerClient::sendResources(
     request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID());
     /// recycle_timeout refers to the time when the session is recycled under abnormal case,
     /// so it should be larger than max_execution_time to make sure the session is not to be destroyed in advance.
-    auto recycle_timeout = max_execution_time ? max_execution_time + 60 : 3600;
+    UInt64 recycle_timeout = max_execution_time > 0 ? max_execution_time + 60UL : 3600;
     request.set_timeout(recycle_timeout);
 
     bool require_worker_info = false;

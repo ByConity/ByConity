@@ -443,8 +443,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
         /// set client_info.
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
-        auto timeout = std::chrono::seconds(request->timeout());
-        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false);
+        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), request->timeout(), false);
         auto & query_context = session->context;
         // session->context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
 
@@ -726,8 +725,7 @@ void CnchWorkerServiceImpl::sendResources(
         Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
-        auto timeout = std::chrono::seconds(request->timeout());
-        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false);
+        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), request->timeout(), false);
         auto query_context = session->context;
         query_context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
         auto worker_resource = query_context->getCnchWorkerResource();

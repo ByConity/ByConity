@@ -1028,10 +1028,8 @@ public:
 
     void enableNamedCnchSessions();
 
-    std::shared_ptr<NamedSession>
-    acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
-    std::shared_ptr<NamedCnchSession>
-    acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check, bool return_null_if_not_found = false) const;
+    std::shared_ptr<NamedSession> acquireNamedSession(const String & session_id, size_t timeout, bool session_check) const;
+    std::shared_ptr<NamedCnchSession> acquireNamedCnchSession(const UInt64 & txn_id, size_t timeout, bool session_check, bool return_null_if_not_found = false) const;
 
     void initCnchServerResource(const TxnTimestamp & txn_id);
     CnchServerResourcePtr getCnchServerResource() const;

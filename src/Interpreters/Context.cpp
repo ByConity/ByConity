@@ -1007,8 +1007,7 @@ void Context::enableNamedCnchSessions()
     shared->named_cnch_sessions.emplace();
 }
 
-std::shared_ptr<NamedSession>
-Context::acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const
+std::shared_ptr<NamedSession> Context::acquireNamedSession(const String & session_id, size_t timeout, bool session_check) const
 {
     if (!shared->named_sessions)
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
@@ -1026,12 +1025,11 @@ Context::acquireNamedSession(const String & session_id, std::chrono::steady_cloc
     return res;
 }
 
-std::shared_ptr<NamedCnchSession>
-Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check, bool return_null_if_not_found) const
+std::shared_ptr<NamedCnchSession> Context::acquireNamedCnchSession(const UInt64 & txn_id, size_t timeout, bool session_check, bool return_null_if_not_found) const
 {
     if (!shared->named_cnch_sessions)
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
-    LOG_DEBUG(&Poco::Logger::get("acquireNamedCnchSession"), "Trying to acquire session for {}\n", txn_id);
+    LOG_TRACE(&Poco::Logger::get("acquireNamedCnchSession"), "Trying to acquire session for {}", txn_id);
     return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check, return_null_if_not_found);
 }
 
