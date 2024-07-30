@@ -70,6 +70,7 @@ private:
     ContextMutablePtr context;
     CTEInfo & cte_info;
     SimpleCTEVisitHelper<PlanPropEquivalences> cte_helper;
+    Poco::Logger * logger = &Poco::Logger::get("AddRuntimeFilters");
 };
 
 struct RuntimeFilterContext
@@ -164,6 +165,7 @@ protected:
     PlanNodePtr visitFilterNode(FilterNode & node, std::unordered_set<RuntimeFilterId> &) override;
     PlanNodePtr visitJoinNode(JoinNode & node, std::unordered_set<RuntimeFilterId> &) override;
     PlanNodePtr visitCTERefNode(CTERefNode & node, std::unordered_set<RuntimeFilterId> &) override;
+    PlanNodePtr visitBufferNode(BufferNode & node, std::unordered_set<RuntimeFilterId> &) override;
 };
 
 }

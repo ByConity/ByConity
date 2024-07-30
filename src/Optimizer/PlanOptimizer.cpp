@@ -121,6 +121,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // add exchange
         std::make_shared<CascadesOptimizer>(false),
 
+        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
         std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),
         std::make_shared<RemoveRedundantDistinct>(),
@@ -138,7 +139,6 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
-        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<AddCache>(),
 
@@ -280,6 +280,10 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // Cost-based optimizer
         std::make_shared<CascadesOptimizer>(),
 
+        // remove not inlined CTEs
+        std::make_shared<RemoveUnusedCTE>(),
+        std::make_shared<AddBufferForDeadlockCTE>(),
+
         // add runtime filters
         std::make_shared<AddRuntimeFilters>(),
 
@@ -313,7 +317,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
-        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<ImplementJoinAlgorithmHints>(),
         std::make_shared<AddCache>(),

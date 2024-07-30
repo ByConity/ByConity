@@ -106,60 +106,6 @@ public:
 
     bool isEqual(T first, T second) const { return union_find.isConnected(first, second); }
 
-    Ptr translate(std::unordered_map<T, T> & identities) const
-    {
-        auto result = std::make_shared<EquivalencesType>();
-        TMap<std::unordered_set<T>> str_to_set;
-        for (auto & item : union_find.parent)
-        {
-            if (identities.contains(item.first))
-            {
-                str_to_set[item.second].insert(identities[item.first]);
-            }
-        }
-
-        for (auto & item : str_to_set)
-        {
-            auto & set = item.second;
-            if (set.size() > 1)
-            {
-                auto first = *set.begin();
-                for (auto iter = set.begin()++; iter != set.end(); iter++)
-                {
-                    result->add(first, *iter);
-                }
-            }
-        }
-        return result;
-    }
-
-    Ptr translate(std::unordered_set<T> & identities) const
-    {
-        auto result = std::make_shared<EquivalencesType>();
-        std::unordered_map<T, std::unordered_set<T>> str_to_set;
-        for (auto & item : union_find.parent)
-        {
-            if (identities.contains(item.first))
-            {
-                str_to_set[item.second].insert(item.first);
-            }
-        }
-
-        for (auto & item : str_to_set)
-        {
-            auto & set = item.second;
-            if (set.size() > 1)
-            {
-                auto first = *set.begin();
-                for (auto iter = set.begin()++; iter != set.end(); iter++)
-                {
-                    result->add(first, *iter);
-                }
-            }
-        }
-        return result;
-    }
-
     Map representMap() const
     {
         if (map)

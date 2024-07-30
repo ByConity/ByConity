@@ -55,7 +55,8 @@ Projection
                   │           │           │     └─ TableScan tpcds1000.item
                   │           │           │              Where: Runtime Filters: {i_item_id}
                   │           │           │              Outputs: [i_item_sk, i_item_id]
-                  │           │           └─ CTERef[1]
+                  │           │           └─ Buffer
+                  │           │              └─ CTERef[1]
                   │           └─ Repartition Exchange
                   │              │     Partition by: {ca_address_sk}
                   │              └─ Projection
@@ -106,7 +107,8 @@ Projection
                   │           │           │     └─ TableScan tpcds1000.item
                   │           │           │              Where: Runtime Filters: {i_item_id}
                   │           │           │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
-                  │           │           └─ CTERef[1]
+                  │           │           └─ Buffer
+                  │           │              └─ CTERef[1]
                   │           └─ Repartition Exchange
                   │              │     Partition by: {ca_address_sk_1}
                   │              └─ Projection
@@ -157,7 +159,8 @@ Projection
                               │           │     └─ TableScan tpcds1000.item
                               │           │              Where: Runtime Filters: {i_item_id}
                               │           │              Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
-                              │           └─ CTERef[1]
+                              │           └─ Buffer
+                              │              └─ CTERef[1]
                               └─ Repartition Exchange
                                  │     Partition by: {ca_address_sk_2}
                                  └─ Projection

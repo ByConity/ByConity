@@ -42,6 +42,8 @@ ExpandStep::ExpandStep(
     {
         if (unlikely(!name_to_type[item.first]))
             throw Exception(ErrorCodes::LOGICAL_ERROR, "ExpandStep miss type info for column " + item.first);
+        if (unlikely(!input_stream_.header.has(item.first)))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "ExpandStep miss input column " + item.first);
         output_stream->header.insert(ColumnWithTypeAndName{name_to_type[item.first], item.first});
     }
     auto group_id_symbol_type = std::make_shared<DataTypeInt32>();
@@ -54,9 +56,7 @@ void ExpandStep::setInputStreams(const DataStreams & input_streams_)
 
     Block block;
     for (auto & input : input_streams[0].header)
-    {
-        block.insert(ColumnWithTypeAndName{JoinCommon::tryConvertTypeToNullable(input.type), input.name});
-    }
+        block.insert(ColumnWithTypeAndName{input.type, input.name});
     output_stream->header = block;
     auto group_id_symbol_type = std::make_shared<DataTypeInt32>();
     output_stream->header.insert(ColumnWithTypeAndName{group_id_symbol_type, group_id_symbol});
