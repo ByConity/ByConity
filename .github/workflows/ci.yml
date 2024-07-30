@@ -14,7 +14,7 @@ jobs:
   scm_build:
     name: Build binary and run stateless tests
     # Use digest instead of tag to avoid network issue, original image byconity/byconity-ci:24Jan16
-    container: byconity/byconity-ci:24Jan16
+    container: byconity/byconity-ci:llvm16
     runs-on: self-hosted
     steps:
       - name: Preload docker images

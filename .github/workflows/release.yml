@@ -5,7 +5,7 @@ on:
 jobs:
   build:
     name: Build & Uploads Binaries & Images
-    container: byconity/byconity-ci:24Jan08
+    container: byconity/byconity-ci:llvm16
     runs-on: self-hosted
     steps:
       - name: Setup Git Proxy.

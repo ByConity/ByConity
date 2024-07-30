@@ -1,4 +1,4 @@
-FROM byconity/byconity-builder
+FROM byconity/byconity-builder:llvm16
 RUN pip install requests packaging && apt-get install -y gdb 
 # Install docker dependencies
 RUN apt-get install -y apparmor libltdl7 pigz
