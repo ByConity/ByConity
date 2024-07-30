@@ -72,7 +72,7 @@ private:
         AccessEntityModel entity_model;
     };
 
-    UUID updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications & notifications, const AccessEntityPtr & entity = nullptr) const;
+    UUID updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications * notifications, const AccessEntityPtr & entity = nullptr) const;
     UUID updateCache(EntityType type, const AccessEntityModel & entity_model, const AccessEntityPtr & entity = nullptr) const;
 
     void prepareNotifications(const UUID & id, const Entry & entry, bool remove, Notifications & notifications) const;

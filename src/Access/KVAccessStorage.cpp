@@ -328,10 +328,10 @@ UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & ent
     Notifications notifications;
     SCOPE_EXIT({ notify(notifications); });
 
-    return updateCache(type, entity_model, notifications, entity);
+    return updateCache(type, entity_model, &notifications, entity);
 }
 
-UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications & notifications, const AccessEntityPtr & entity_) const
+UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & entity_model, Notifications * notifications, const AccessEntityPtr & entity_) const
 {
     UUID uuid = RPCHelpers::createUUID(entity_model.uuid());
     auto id_shard = getShard(uuid);
@@ -364,7 +364,8 @@ UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & ent
     auto entry_copy = entry;
     lock.unlock();
 
-    prepareNotifications(uuid, entry_copy, false, notifications);
+    if (notifications)
+        prepareNotifications(uuid, entry_copy, false, *notifications);
     return uuid;
 }
 
@@ -384,20 +385,18 @@ std::optional<UUID> KVAccessStorage::findImpl(EntityType type, const String & na
         return std::nullopt;
     }
 
-    return updateCache(type, *entity_model);
+    return updateCache(type, *entity_model, nullptr);
 }
 
 
 std::vector<UUID> KVAccessStorage::findAllImpl(EntityType type) const
 {
-    Notifications notifications;
-    SCOPE_EXIT({ notify(notifications); });
     auto entity_models = catalog->getAllAccessEntities(type);
     std::vector<UUID> res;
     res.reserve(entity_models.size());
 
     for (const auto & entity_model : entity_models)
-        res.emplace_back(updateCache(type, entity_model, notifications));
+        res.emplace_back(updateCache(type, entity_model, nullptr));
 
     return res;
 }
@@ -670,7 +669,7 @@ void KVAccessStorage::loadEntities(EntityType type, const std::unordered_set<UUI
     auto entity_models = catalog->getEntities(type, ids);
 
     for (const auto & entity_model : entity_models)
-        updateCache(type, entity_model, notifications);
+        updateCache(type, entity_model, &notifications);
 }
 
 }
