@@ -127,6 +127,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_freeze("FREEZE");
     ParserKeyword s_unfreeze("UNFREEZE");
     ParserKeyword s_partition("PARTITION");
+    ParserKeyword s_preattach_partition("PREATTACH PARTITION");
 
     ParserKeyword s_truncate_partition("TRUNCATE PARTITION");
     ParserKeyword s_all("ALL");
