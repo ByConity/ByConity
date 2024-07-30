@@ -126,51 +126,9 @@ void StorageSystemCnchUserPriv::fillData(MutableColumns & res_columns, ContextPt
     auto & column_password_expired = assert_cast<ColumnString &>(*res_columns[index++]);
 
     auto add_row = [&](const String & name,
-            const User & user,
-            const AllowedClientHosts & allowed_hosts)
+            const User & user)
     {
-
-        if (allowed_hosts.containsAnyHost())
-        {
-            static constexpr std::string_view str{"::/0"};
-            column_host.insertData(str.data(), str.length());
-        }
-        else
-        {
-            if (allowed_hosts.containsLocalHost())
-            {
-                static constexpr std::string_view str{"localhost"};
-                column_host.insertData(str.data(), str.length());
-            }
-            else if (auto ips = allowed_hosts.getAddresses(); ips.size())
-            {
-                String ipstr;
-                for (const auto & ip : ips)
-                    ipstr = ipstr + ", " + ip.toString();
-                column_host.insertData(ipstr.data(), ipstr.length());
-            }
-            else if (auto nets = allowed_hosts.getSubnets(); nets.size())
-            {
-                String ipstr;
-                for (const auto & ip : ips)
-                    ipstr = ipstr + ", " + ip.toString();
-                column_host.insertData(ipstr.data(), ipstr.length());
-            }
-            else
-            {
-                std::vector<String> names = allowed_hosts.getNames();
-                const auto regex = allowed_hosts.getNameRegexps();
-                names.insert(names.end(), regex.begin(), regex.end());
-                const auto pattern = allowed_hosts.getLikePatterns();
-                names.insert(names.end(), pattern.begin(), pattern.end());
-
-                String all_name;
-                for (const auto & hname : names)
-                    all_name = all_name + ", " + hname;
-                column_host.insertData(all_name.data(), all_name.length());
-            }
-        }
-
+        column_host.insertDefault();
         column_user.insertData(name.data(), name.length());
 
         const String yes = "Y";
@@ -243,7 +201,7 @@ void StorageSystemCnchUserPriv::fillData(MutableColumns & res_columns, ContextPt
         if (!storage)
             continue;
 
-        add_row(user_name, *user, user->allowed_client_hosts);
+        add_row(user_name, *user);
     }
 }
 

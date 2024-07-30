@@ -86,44 +86,8 @@ void StorageSystemCnchDBPriv::fillData(MutableColumns & res_columns, ContextPtr 
     auto & column_trigger = assert_cast<ColumnString &>(*res_columns[index++]);
 
     auto add_row = [&](const String & name,
-            const User & user,
-            const AllowedClientHosts & allowed_hosts)
+            const User & user)
     {
-
-        String host;
-        if (allowed_hosts.containsAnyHost())
-        {
-            host = "::/0";
-        }
-        else
-        {
-            if (allowed_hosts.containsLocalHost())
-            {
-                host = "localhost";
-            }
-            else if (auto ips = allowed_hosts.getAddresses(); ips.size())
-            {
-                for (const auto & ip : ips)
-                    host = host + ", " + ip.toString();
-            }
-            else if (auto nets = allowed_hosts.getSubnets(); nets.size())
-            {
-                for (const auto & ip : ips)
-                    host = host + ", " + ip.toString();
-            }
-            else
-            {
-                std::vector<String> names = allowed_hosts.getNames();
-                const auto regex = allowed_hosts.getNameRegexps();
-                names.insert(names.end(), regex.begin(), regex.end());
-                const auto pattern = allowed_hosts.getLikePatterns();
-                names.insert(names.end(), pattern.begin(), pattern.end());
-
-                for (const auto & hname : names)
-                    host = host + ", " + hname;
-            }
-        }
-
         const String yes = "Y";
         const String no = "N";
         AccessRights access = user.access;
@@ -139,7 +103,7 @@ void StorageSystemCnchDBPriv::fillData(MutableColumns & res_columns, ContextPtr 
 
         for (const auto & db : dbs)
         {
-            column_host.insertData(host.data(), host.length());
+            column_host.insertDefault();
             column_user.insertData(name.data(), name.length());
             auto stripped_db = !tenant_id.empty() ? getOriginalDatabaseName(db, tenant_id) : db;
             column_db.insertData(stripped_db.data(), stripped_db.length());
@@ -186,7 +150,7 @@ void StorageSystemCnchDBPriv::fillData(MutableColumns & res_columns, ContextPtr 
         if (!storage)
             continue;
 
-        add_row(user_name, *user, user->allowed_client_hosts);
+        add_row(user_name, *user);
     }
 }
 
