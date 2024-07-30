@@ -195,6 +195,7 @@ enum PreloadLevelSettings : UInt64
     M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
     M(UInt64, s3_max_list_nums, 1000, "Sets the maximum number of keys returned in the response, now it is just for CnchS3", 0) \
     M(UInt64, s3_max_request_ms, 30000, "Request max timeout ms , now it is just for CnchS3", 0) \
+    M(Bool, s3_skip_empty_files, false, "Allow to skip empty files in s3 table engine", 0) \
     M(Bool, overwrite_current_file, false, "Enable overwrite current file, now it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, insert_new_file, true, "Create new file when write data into the file, now it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, extremes, false, "Calculate minimums and maximums of the result columns. They can be output in JSON-formats.", IMPORTANT) \
@@ -1976,6 +1977,12 @@ enum PreloadLevelSettings : UInt64
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
     M(String, output_format_tsv_null_representation, "\\N", "Custom NULL representation in TSV format", 0) \
     M(Bool, output_format_decimal_trailing_zeros, false, "Output trailing zeros when printing Decimal values. E.g. 1.230000 instead of 1.23.", 0) \
+    M(Bool, input_format_parquet_skip_columns_with_unsupported_types_in_schema_inference, false, "Skip columns with unsupported types while schema inference for format Parquet", 0) \
+    M(SchemaInferenceMode, schema_inference_mode, "default", "Mode of schema inference. 'default' - assume that all files have the same schema and schema can be inferred from any file, 'union' - files can have different schemas and the resulting schema should be the a union of schemas of all files", 0) \
+    M(Bool, schema_inference_make_columns_nullable, true, "If set to true, all inferred types will be Nullable in schema inference for formats without information about nullability.", 0) \
+    M(Bool, schema_inference_use_cache_for_s3, true, "Use cache in schema inference while using s3 table function", 0) \
+    M(UInt64, input_format_max_rows_to_read_for_schema_inference, 25000, "The maximum rows of data to read for automatic schema inference", 0) \
+    M(UInt64, input_format_max_bytes_to_read_for_schema_inference, 32 * 1024 * 1024, "The maximum bytes of data to read for automatic schema inference", 0) \
     \
     /** Settings for Map */ \
     M(Bool, input_format_parse_null_map_as_empty, true, "Parse null map as empty map. Throw exception if set false.", 0) \

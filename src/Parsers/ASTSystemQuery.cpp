@@ -240,6 +240,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP VIEW META";
         case Type::RELEASE_MEMORY_LOCK:
             return "RELEASE MEMORY LOCK";
+        case Type::DROP_SCHEMA_CACHE:
+            return "DROP SCHEMA CACHE";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");
@@ -429,6 +431,11 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             settings.ostr << " OF TXN " << txn_id;
         else
             print_database_table();
+    }
+    else if (type == Type::DROP_SCHEMA_CACHE)
+    {
+        if (!schema_cache_storage.empty())
+            settings.ostr << " FOR " << schema_cache_storage;
     }
 }
 

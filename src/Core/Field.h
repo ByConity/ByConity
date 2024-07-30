@@ -1189,6 +1189,8 @@ void writeFieldBinary(const Field & field, WriteBuffer & buf);
 
 String toString(const Field & x);
 
+String fieldTypeToString(Field::Types::Which type);
+
 }
 
 template <>

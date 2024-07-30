@@ -27,6 +27,7 @@
 #include <Processors/Formats/Impl/ParallelDecodingBlockInputFormat.h>
 #include <Formats/FormatSettings.h>
 #include <Common/ThreadPool.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Storages/MergeTree/KeyCondition.h>
 
 #include <future>
@@ -225,6 +226,18 @@ private:
 
     Poco::Logger * log {&Poco::Logger::get("ParquetBlockInputFormat")};
 };
+
+class ParquetSchemaReader : public ISchemaReader
+{
+public:
+    ParquetSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings_);
+
+    NamesAndTypesList readSchema() override;
+
+private:
+    const FormatSettings format_settings;
+};
+
 
 }
 

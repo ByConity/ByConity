@@ -104,6 +104,9 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.orc.case_insensitive_column_matching = settings.input_format_orc_case_insensitive_column_matching;
     format_settings.orc.use_footer_cache = settings.input_format_orc_use_footer_cache;
     format_settings.seekable_read = settings.input_format_allow_seeks;
+    format_settings.max_rows_to_read_for_schema_inference = settings.input_format_max_rows_to_read_for_schema_inference;
+    format_settings.max_bytes_to_read_for_schema_inference = settings.input_format_max_rows_to_read_for_schema_inference;
+    format_settings.schema_inference_make_columns_nullable = settings.schema_inference_make_columns_nullable;
     format_settings.avoid_buffering = settings.input_format_arrow_avoid_buffering;
     format_settings.null_as_default = settings.input_format_null_as_default;
     format_settings.parquet.row_group_size = settings.output_format_parquet_row_group_size;
@@ -427,6 +430,49 @@ OutputFormatPtr FormatFactory::getOutputFormat(
     return format;
 }
 
+void FormatFactory::registerAdditionalInfoForSchemaCacheGetter(
+    const String & name, AdditionalInfoForSchemaCacheGetter additional_info_for_schema_cache_getter)
+{
+    auto & target = dict[name].additional_info_for_schema_cache_getter;
+    if (target)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: additional info for schema cache getter {} is already registered", name);
+    target = std::move(additional_info_for_schema_cache_getter);
+}
+
+String FormatFactory::getAdditionalInfoForSchemaCache(const String & name, ContextPtr context, const std::optional<FormatSettings> & format_settings_)
+{
+    const auto & additional_info_getter = getCreators(name).additional_info_for_schema_cache_getter;
+    if (!additional_info_getter)
+        return "";
+
+    auto format_settings = format_settings_ ? *format_settings_ : getFormatSettings(context);
+    return additional_info_getter(format_settings);
+}
+
+SchemaReaderPtr FormatFactory::getSchemaReader(
+    const String & name,
+    ReadBuffer & buf,
+    const ContextPtr & context,
+    const std::optional<FormatSettings> & _format_settings) const
+{
+    const auto & schema_reader_creator = getCreators(name).schema_reader_creator;
+    if (!schema_reader_creator)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Format {} doesn't support schema inference.", name);
+
+    auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
+    auto schema_reader = schema_reader_creator(buf, format_settings);
+    // if (schema_reader->needContext())
+    //     schema_reader->setContext(context);
+    return schema_reader;
+}
+
+void FormatFactory::registerSchemaReader(const String & name, SchemaReaderCreator schema_reader_creator)
+{
+    auto & target = dict[name].schema_reader_creator;
+    if (target)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Schema reader {} is already registered", name);
+    target = std::move(schema_reader_creator);
+}
 
 void FormatFactory::registerInputFormat(const String & name, InputCreator input_creator)
 {
@@ -515,6 +561,10 @@ void FormatFactory::checkFormatName(const String & name) const
         throw Exception("Unknown format " + name, ErrorCodes::UNKNOWN_FORMAT);
 }
 
+bool FormatFactory::exists(const String & name) const
+{
+    return dict.find(name) != dict.end();
+}
 
 void FormatFactory::registerInputFormatProcessor(const String & name, InputProcessorCreator input_creator)
 {
@@ -566,6 +616,19 @@ bool FormatFactory::checkIfFormatIsColumnOriented(const String & name)
     const auto & target = getCreators(name);
     return target.is_column_oriented;
 }
+
+bool FormatFactory::checkIfFormatHasSchemaReader(const String & name) const
+{
+    const auto & target = getCreators(name);
+    return bool(target.schema_reader_creator);
+}
+
+
+// bool FormatFactory::checkIfFormatHasExternalSchemaReader(const String & name) const
+// {
+//     const auto & target = getCreators(name);
+//     return bool(target.external_schema_reader_creator);
+// }
 
 FormatFactory & FormatFactory::instance()
 {

@@ -364,6 +364,15 @@
     M(DiskS3PutObject, "Number of DiskS3 API PutObject calls.") \
     M(DiskS3GetObject, "Number of DiskS3 API GetObject calls.") \
 \
+    M(SchemaInferenceCacheHits, "Number of times the requested source is found in schema cache") \
+    M(SchemaInferenceCacheSchemaHits, "Number of times the schema is found in schema cache during schema inference") \
+    M(SchemaInferenceCacheNumRowsHits, "Number of times the number of rows is found in schema cache during count from files") \
+    M(SchemaInferenceCacheMisses, "Number of times the requested source is not in schema cache") \
+    M(SchemaInferenceCacheSchemaMisses, "Number of times the requested source is in cache but the schema is not in cache during schema inference") \
+    M(SchemaInferenceCacheNumRowsMisses, "Number of times the requested source is in cache but the number of rows is not in cache while count from files") \
+    M(SchemaInferenceCacheEvictions, "Number of times a schema from cache was evicted due to overflow") \
+    M(SchemaInferenceCacheInvalidations, "Number of times a schema in cache became invalid due to changes in data") \
+    \
     M(QueryMemoryLimitExceeded, "Number of times when memory limit exceeded for query.") \
     M(MarkBitmapIndexReadMicroseconds, "Total time spent in reading mark bitmap index.") \
     M(RemoteFSReadMicroseconds, "Time of reading from remote filesystem.") \

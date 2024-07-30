@@ -21,10 +21,15 @@
 
 #pragma once
 
-#include <map>
-#include <unordered_set>
-#include <vector>
 #include <common/types.h>
+#include <unordered_set>
+#include <map>
+#include <vector>
+#include <Core/Defines.h>
+
+#if !defined(ARCADIA_BUILD)
+#    include <Common/config.h>
+#endif
 
 namespace DB
 {
@@ -55,6 +60,9 @@ struct FormatSettings
     bool check_data_overflow = false;
 
     bool seekable_read = true;
+    UInt64 max_rows_to_read_for_schema_inference = 100;
+    UInt64 max_bytes_to_read_for_schema_inference = 32 * 1024 * 1024;
+
     bool avoid_buffering = true;
     enum class DateTimeInputFormat
     {
@@ -76,6 +84,10 @@ struct FormatSettings
 
     UInt64 input_allow_errors_num = 0;
     Float32 input_allow_errors_ratio = 0;
+
+    bool schema_inference_make_columns_nullable = true;
+
+    UInt64 max_parser_depth = DBMS_DEFAULT_MAX_PARSER_DEPTH;
 
     struct
     {
@@ -135,8 +147,11 @@ struct FormatSettings
         bool defaults_for_missing_elements_in_named_tuple = false;
         bool serialize_as_strings = false;
         bool read_bools_as_numbers = true;
+        bool read_numbers_as_strings = true;
         bool quota_json_string = true;
         bool read_objects_as_strings = false;
+        bool allow_object_type = false;
+        bool try_infer_numbers_from_strings = false;
     } json;
 
     struct
@@ -144,6 +159,7 @@ struct FormatSettings
         UInt64 row_group_size = 1000000;
         bool import_nested = false;
         bool allow_missing_columns = false;
+        bool skip_columns_with_unsupported_types_in_schema_inference = false;
         std::unordered_set<int> skip_row_groups;
         bool output_string_as_string = false;
         bool output_fixed_string_as_fixed_byte_array = true;

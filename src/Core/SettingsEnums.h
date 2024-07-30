@@ -404,4 +404,12 @@ enum class RefreshViewTaskType : int8_t
 
 DECLARE_SETTING_ENUM(RefreshViewTaskType);
 
+enum class SchemaInferenceMode
+{
+    DEFAULT,
+    UNION,
+};
+
+DECLARE_SETTING_ENUM(SchemaInferenceMode)
+
 }

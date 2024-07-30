@@ -112,6 +112,7 @@ struct URI
 
     bool is_virtual_hosted_style;
 
+    URI() = default;
     explicit URI(const Poco::URI & uri_, bool parse_region_ = false);
     explicit URI(const std::string & uri_, bool parse_region_ = false) : URI(Poco::URI(uri_), parse_region_) { }
 
@@ -309,6 +310,7 @@ struct AuthSettings
 
     std::string access_key_id;
     std::string access_key_secret;
+    std::string session_token;
     std::string region;
     std::string server_side_encryption_customer_key_base64;
 

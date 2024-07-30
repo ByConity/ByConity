@@ -474,6 +474,18 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::DROP_SCHEMA_CACHE:
+        {
+            if (ParserKeyword{"FOR"}.ignore(pos, expected))
+            {
+                if (ParserKeyword{"S3"}.ignore(pos, expected))
+                    res->schema_cache_storage = "S3";
+                else
+                    return false;
+            }
+            break;
+        }
+
         default:
             /// There are no [db.table] after COMMAND NAME
             break;

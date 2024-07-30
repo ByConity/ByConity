@@ -71,9 +71,9 @@ public:
     SerializationPtr doGetDefaultSerialization() const override;
 
     void checkValidity() const;
+    void checkKeyType() const;
 
 private:
-    void checkKeyType() const;
     bool isMapKVStore() const { return flags & TYPE_MAP_KV_STORE_FLAG;}
     bool isMapByteStore() const { return flags & TYPE_MAP_BYTE_STORE_FLAG; }
 };

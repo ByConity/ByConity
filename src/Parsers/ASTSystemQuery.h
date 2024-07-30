@@ -148,6 +148,7 @@ public:
         STOP_VIEW,
         DROP_VIEW_META,
         RELEASE_MEMORY_LOCK, /// RELEASE MEMORY LOCK [db.tb]/[OF TXN xxx]
+        DROP_SCHEMA_CACHE,
         END
     };
 
@@ -191,6 +192,8 @@ public:
     /// for CLEAN TRANSACTION txn_id
     bool specify_txn = false;
     UInt64 txn_id;
+
+    String schema_cache_storage;
 
     String getID(char) const override { return "SYSTEM query"; }
 

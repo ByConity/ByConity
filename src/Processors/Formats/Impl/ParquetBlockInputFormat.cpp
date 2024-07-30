@@ -661,6 +661,29 @@ IStorage::ColumnSizeByName ParquetBlockInputFormat::getColumnSizes()
     return column_size_by_name;
 }
 
+ParquetSchemaReader::ParquetSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings_)
+    : ISchemaReader(in_), format_settings(format_settings_)
+{
+}
+
+NamesAndTypesList ParquetSchemaReader::readSchema()
+{
+    LOG_TRACE(&Poco::Logger::get("ParquetSchemaReader"), "start readSchema");
+    std::atomic<int> is_stopped{0};
+    auto file = asArrowFile(in, format_settings, is_stopped, "Parquet", PARQUET_MAGIC_BYTES);
+
+    auto metadata = parquet::ReadMetaData(file);
+
+    std::shared_ptr<arrow::Schema> schema;
+    THROW_ARROW_NOT_OK(parquet::arrow::FromParquetSchema(metadata->schema(), &schema));
+
+    auto header = ArrowColumnToCHColumn::arrowSchemaToCHHeader(
+        *schema, "Parquet", format_settings.parquet.skip_columns_with_unsupported_types_in_schema_inference);
+    // if (format_settings.schema_inference_make_columns_nullable)
+    //     return getNamesAndRecursivelyNullableTypes(header);
+    return header.getNamesAndTypesList();
+}
+
 void registerInputFormatProcessorParquet(FormatFactory & factory)
 {
     factory.registerInputFormatProcessor(
@@ -670,6 +693,23 @@ void registerInputFormatProcessorParquet(FormatFactory & factory)
         });
     factory.markFormatAsColumnOriented("Parquet");
 }
+
+void registerParquetSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader(
+        "Parquet",
+        [](ReadBuffer & buf, const FormatSettings & settings)
+        {
+            return std::make_shared<ParquetSchemaReader>(buf, settings);
+        }
+        );
+
+    factory.registerAdditionalInfoForSchemaCacheGetter("Parquet", [](const FormatSettings & settings)
+    {
+        return fmt::format("schema_inference_make_columns_nullable={}", settings.schema_inference_make_columns_nullable);
+    });
+}
+
 }
 
 #else
@@ -680,6 +720,7 @@ class FormatFactory;
 void registerInputFormatProcessorParquet(FormatFactory &)
 {
 }
+void registerParquetSchemaReader(FormatFactory &) {}
 }
 
 #endif

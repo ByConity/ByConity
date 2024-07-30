@@ -197,6 +197,10 @@
     M(SystemCnchPartsInfoRecalculationTasksSize, "Number of background threads in recalculate cnch_parts_info system table.") \
     M(SystemCnchTrashItemsInfoRecalculationTasksSize, "Number of background threads in recalculate cnch_trash_items_info system table.") \
 \
+    M(StorageS3Threads, "Number of threads in the StorageS3 thread pool.") \
+    M(StorageS3ThreadsActive, "Number of threads in the StorageS3 thread pool running a task.") \
+    M(StorageS3ThreadsScheduled, "Number of queued or active jobs in the StorageS3 thread pool.") \
+\
     M(BigHashItemCount, "BigHash item count") \
     M(BigHashUsedSizeBytes, "BigHash used size in bytes") \
 \

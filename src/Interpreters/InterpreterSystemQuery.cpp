@@ -72,6 +72,7 @@
 #include <Disks/DiskRestartProxy.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/StorageS3.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
@@ -347,6 +348,20 @@ BlockIO InterpreterSystemQuery::execute()
             getContext()->checkAccess(AccessType::SYSTEM_DROP_NVM_CACHE);
             system_context->dropNvmCache();
             break;
+        case Type::DROP_SCHEMA_CACHE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_DROP_SCHEMA_CACHE);
+            std::unordered_set<String> caches_to_drop;
+            if (query.schema_cache_storage.empty())
+                caches_to_drop = {"S3"};
+            else
+                caches_to_drop = {query.schema_cache_storage};
+#if USE_AWS_S3
+            if (caches_to_drop.contains("S3"))
+                StorageS3::getSchemaCache(getContext()).clear();
+#endif
+            break;
+        }
         case Type::DROP_MMAP_CACHE:
             getContext()->checkAccess(AccessType::SYSTEM_DROP_MMAP_CACHE);
             system_context->dropMMappedFileCache();
@@ -1378,6 +1393,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::DROP_COMPILED_EXPRESSION_CACHE: [[fallthrough]];
 #endif
         case Type::DROP_NVM_CACHE: [[fallthrough]];
+        case Type::DROP_SCHEMA_CACHE: [[fallthrough]];
         case Type::DROP_UNCOMPRESSED_CACHE:
         {
             required_access.emplace_back(AccessType::SYSTEM_DROP_CACHE);

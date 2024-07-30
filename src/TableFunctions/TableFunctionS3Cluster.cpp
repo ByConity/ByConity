@@ -104,40 +104,60 @@ StoragePtr TableFunctionS3Cluster::executeImpl(
     const std::string & table_name, ColumnsDescription /*cached_columns*/) const
 {
     StoragePtr storage;
+    ColumnsDescription columns;
+    Poco::URI uri (filename);
+    S3::URI s3_uri (uri);
+    StorageS3::Configuration configuration;
+    {
+        configuration.url = s3_uri;
+        configuration.format = format;
+        configuration.compression_method = compression_method;
+        configuration.auth_settings.access_key_id = access_key_id;
+        configuration.auth_settings.access_key_secret = secret_access_key;
+        configuration.auth_settings.no_sign_request = true;
+        configuration.static_configuration = !configuration.auth_settings.access_key_id.empty();
+        configuration.keys = {configuration.url.key};
+    }
+
     if (context->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
     {
-        /// On worker node this filename won't contains globs
-        Poco::URI uri (filename);
-        S3::URI s3_uri (uri);
         /// Actually this parameters are not used
-        UInt64 max_single_read_retries = context->getSettingsRef().s3_max_single_read_retries;
-        UInt64 min_upload_part_size = context->getSettingsRef().s3_min_upload_part_size;
-        UInt64 max_single_part_upload_size = context->getSettingsRef().s3_max_single_part_upload_size;
-        UInt64 max_connections = context->getSettingsRef().s3_max_connections;
+        // UInt64 max_single_read_retries = context->getSettingsRef().s3_max_single_read_retries;
+        // UInt64 min_upload_part_size = context->getSettingsRef().s3_min_upload_part_size;
+        // UInt64 max_single_part_upload_size = context->getSettingsRef().s3_max_single_part_upload_size;
+        // UInt64 max_connections = context->getSettingsRef().s3_max_connections;
+
+        // bool structure_argument_was_provided = configuration.structure != "auto";
+
+        // if (structure_argument_was_provided)
+        // {
+        //     columns = parseColumnsListFromString(configuration.structure, context);
+        // }
+        // else if (!structure_hint.empty())
+        // {
+        //     columns = structure_hint;
+        // }
+
+
         storage = StorageS3::create(
-            s3_uri,
-            access_key_id,
-            secret_access_key,
-            StorageID(getDatabaseName(), table_name),
-            format,
-            max_single_read_retries,
-            min_upload_part_size,
-            max_single_part_upload_size,
-            max_connections,
-            getActualTableStructure(context),
-            ConstraintsDescription{},
-            String{},
+            configuration,
             context,
-            compression_method,
+            StorageID(getDatabaseName(), table_name),
+            columns,
+            ConstraintsDescription{},
+            /* comment */String{},
+            /* format_settings */std::nullopt, /// No format_settings for S3Cluster
             /*distributed_processing=*/true);
     }
     else
     {
-        storage = StorageS3Cluster::create(
-            filename, access_key_id, secret_access_key, StorageID(getDatabaseName(), table_name),
-            cluster_name, format, context->getSettingsRef().s3_max_connections,
-            getActualTableStructure(context), ConstraintsDescription{},
-            context, compression_method);
+        storage = StorageS3Cluster::create( 
+            cluster_name,
+            configuration,
+            StorageID(getDatabaseName(), table_name),
+            columns,
+            ConstraintsDescription{},
+            context);
     }
 
     storage->startup();
