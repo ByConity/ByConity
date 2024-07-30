@@ -54,6 +54,12 @@ public:
         return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, bitmap, bucket_number);
     }
 
+    static std::shared_ptr<LocalDeleteBitmap>
+    createDelta(const MergeTreePartInfo & part_info, const DeleteBitmapPtr & bitmap, UInt64 txn_id, int64_t bucket_number)
+    {
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Delta, txn_id, bitmap, bucket_number);
+    }
+
     /// If the delta part is small, just create a delta bitmap.
     /// Otherwise union `base_bitmap` and `delta_bitmap` to create a new version of base bitmap.
     /// NOTE: `delta_bitmap` will be modified to be the new base bitmap in the latter case.

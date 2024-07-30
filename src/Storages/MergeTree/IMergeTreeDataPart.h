@@ -623,6 +623,14 @@ public:
         return std::distance(delete_bitmap_metas.begin(), delete_bitmap_metas.end());
     }
 
+    UInt64 getDeleteBitmapVersion() const
+    {
+        DeleteBitmapReadLock rlock(delete_bitmap_mutex);
+        if (delete_bitmap_metas.empty())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap meta is empty for part {}", name);
+        return delete_bitmap_metas.front()->commit_time();
+    }
+
     /// Return null if the part doesn't have delete bitmap.
     /// Otherwise load the bitmap on demand and return.
     virtual ImmutableDeleteBitmapPtr getDeleteBitmap([[maybe_unused]] bool allow_null = false) const
