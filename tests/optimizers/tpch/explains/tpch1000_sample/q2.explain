@@ -1,21 +1,21 @@
 Projection Est. 100 rows
-│     Expressions: [n_name, p_mfgr, p_partkey, s_acctbal, s_address, s_comment, s_name, s_phone]
+│     Expressions: [n_name, p_mfgr, s_acctbal, s_address, s_comment, s_name, s_phone], p_partkey:=ps_partkey
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, p_partkey ASC NULLS LAST}
+      │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, ps_partkey ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 119752 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, p_partkey ASC NULLS LAST}
+            │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, ps_partkey ASC NULLS LAST}
             │     Limit: 100
             └─ Projection Est. 119752 rows
-               │     Expressions: [n_name, p_mfgr, p_partkey, s_acctbal, s_address, s_comment, s_name, s_phone]
+               │     Expressions: [n_name, p_mfgr, ps_partkey, s_acctbal, s_address, s_comment, s_name, s_phone]
                └─ Filter Est. 119752 rows
                   │     Condition: ps_supplycost = cast(`expr#min(ps_supplycost)`, 'Nullable(Decimal(15, 2))')
                   └─ Window Est. 479011 rows
                      └─ Repartition Exchange Est. 479011 rows
-                        │     Partition by: {p_partkey}
+                        │     Partition by: {ps_partkey}
                         └─ Inner Join Est. 479011 rows
                            │     Condition: ps_suppkey == s_suppkey
                            │     Runtime Filters Builder: {s_suppkey}

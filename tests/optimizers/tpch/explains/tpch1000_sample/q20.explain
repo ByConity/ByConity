@@ -6,15 +6,15 @@ Projection Est. 400000 rows
       └─ Sorting Est. 400000 rows
          │     Order by: {s_name ASC NULLS LAST}
          └─ Right Semi Join Est. 400000 rows
-            │     Condition: ps_suppkey == s_suppkey
+            │     Condition: l_suppkey == s_suppkey
             │     Runtime Filters Builder: {s_suppkey}
             ├─ Repartition Exchange Est. 552265967 rows
-            │  │     Partition by: {ps_suppkey}
+            │  │     Partition by: {l_suppkey}
             │  └─ Left Semi (PARALLEL_HASH) Join Est. 552265967 rows
-            │     │     Condition: ps_partkey == p_partkey
+            │     │     Condition: l_partkey == p_partkey
             │     │     Runtime Filters Builder: {p_partkey}
             │     ├─ Repartition Exchange Est. 922491458 rows
-            │     │  │     Partition by: {ps_partkey}
+            │     │  │     Partition by: {l_partkey}
             │     │  └─ Inner (PARALLEL_HASH) Join Est. 3689965835 rows
             │     │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
             │     │     │     Filter: ps_availqty > cast('0.5' * `expr#sum(l_quantity)_1`, 'Nullable(Decimal(38, 3))')

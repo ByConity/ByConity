@@ -36,6 +36,7 @@
 #include <Poco/JSON/Object.h>
 
 #include <utility>
+#include <vector>
 
 namespace DB
 {

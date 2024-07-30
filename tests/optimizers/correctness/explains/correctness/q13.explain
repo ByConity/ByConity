@@ -1,5 +1,5 @@
 Projection Est. ? rows
-│     Expressions: [a, a_1, a_2, a_3, a_4, b, c, d, e, f]
+│     Expressions: [a, b, c, d, e, f], a_1:=a, a_2:=a, a_3:=a, a_4:=a
 └─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: a == a_4

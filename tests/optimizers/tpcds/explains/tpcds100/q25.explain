@@ -20,8 +20,8 @@ Projection Est. 100 rows
                         ├─ Inner Join Est. 3745074 rows
                         │  │     Condition: ss_store_sk == s_store_sk
                         │  ├─ Inner Join Est. 3745074 rows
-                        │  │  │     Condition: cs_bill_customer_sk == sr_customer_sk, cs_item_sk == sr_item_sk
-                        │  │  │     Runtime Filters Builder: {sr_customer_sk}
+                        │  │  │     Condition: cs_bill_customer_sk == ss_customer_sk, cs_item_sk == ss_item_sk
+                        │  │  │     Runtime Filters Builder: {ss_customer_sk}
                         │  │  ├─ Inner Join Est. 16705541 rows
                         │  │  │  │     Condition: cs_sold_date_sk == d_date_sk_2
                         │  │  │  │     Runtime Filters Builder: {d_date_sk_2}

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Advisor/AdvisorContext.h>
+#include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Advisor/SignatureUsage.h>
 #include <Analyzers/ASTEquals.h>
 #include <Core/Names.h>
@@ -11,10 +11,10 @@
 #include <Optimizer/EqualityASTMap.h>
 #include <Optimizer/SymbolTransformMap.h>
 #include <Parsers/IAST_fwd.h>
-#include <Poco/Logger.h>
-#include <QueryPlan/Void.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/PlanVisitor.h>
+#include <QueryPlan/Void.h>
+#include <Poco/Logger.h>
 
 #include <memory>
 #include <optional>
@@ -22,87 +22,110 @@
 
 namespace DB
 {
-
-class MaterializedViewCandidate;
-using MaterializedViewCandidateWithBenefit = std::pair<MaterializedViewCandidate, double>;
-
 class MaterializedViewAdvisor : public IWorkloadAdvisor
 {
 public:
-    explicit MaterializedViewAdvisor(bool _agg_only): agg_only(_agg_only) {}
+    enum OutputType
+    {
+        PROJECTION,
+        MATERIALIZED_VIEW
+    };
+
+    explicit MaterializedViewAdvisor(
+        OutputType output_type_ = OutputType::MATERIALIZED_VIEW, bool only_aggregate_ = true, bool ignore_filter_ = true)
+        : output_type(output_type_), only_aggregate(only_aggregate_), ignore_filter(ignore_filter_)
+    {
+    }
 
     String getName() const override { return "MaterializedViewAdvisor"; }
 
     WorkloadAdvises analyze(AdvisorContext & context) const override;
 
-protected:
-    // MV size is very important because it also consumes storage, so we give more importance to the MV size
-    float MV_SCAN_COST_SCALE_UP = 3.0;
-    // max size of mv to be recommended
-    size_t ADVISE_MAX_MV_SIZE = 100000;
-    // min size of table for its mv to be recommended
-    size_t ADVISE_MIN_TABLE_SIZE = 100000;
-
 private:
-    const bool agg_only;
+        // compute the benefit of materializing a node, which is original_cost - SCALE_UP * scan_output_cost
+    static std::optional<double> calculateMaterializeBenefit(const PlanNodePtr & node, const WorkloadQueryPtr & query, ContextPtr context);
+
+    static void
+    addChildrenToBlacklist(PlanNodePtr node, const PlanNodeToSignatures & signatures, std::unordered_set<PlanSignature> & blacklist);
+
+    static std::vector<String> getRelatedQueries(const std::vector<String> & related_query_ids, AdvisorContext & context);
+
+    const OutputType output_type;
+    const bool only_aggregate;
+    const bool ignore_filter;
     Poco::Logger * log = &Poco::Logger::get("MaterializedViewAdvisor");
-    std::optional<MaterializedViewCandidateWithBenefit> buildCandidate(const SignatureUsageInfo & usage_info, ContextPtr context) const;
-    // compute the benefit of materializing a node, which is original_cost - SCALE_UP * scan_output_cost
-    std::optional<double> getMaterializeBenefit(std::shared_ptr<const PlanNodeBase> node,
-                                                std::optional<double> original_cost,
-                                                ContextPtr context) const;
 };
 
 /**
  * @class MaterializedViewCandidate a candidate that can be converted to MV sql
  *
  */
-class MaterializedViewCandidate
+struct MaterializedViewCandidate
 {
 public:
-    class EqASTBySerialize
+    PlanSignature plan_signature;
+    QualifiedTableName table_name;
+    double total_cost;
+    bool contains_aggregate;
+    EqualityASTSet wheres;
+    EqualityASTSet group_bys;
+    EqualityASTSet outputs;
+    std::vector<String> related_queries;
+
+    static std::optional<MaterializedViewCandidate> from(
+        PlanNodePtr plan,
+        const std::vector<String> & related_queries,
+        PlanSignature plan_signature,
+        double total_cost,
+        bool only_aggregate,
+        bool ignore_filter);
+    bool tryMerge(const MaterializedViewCandidate & other);
+    std::string toSql(MaterializedViewAdvisor::OutputType output_type) const;
+    std::string toQuery() const;
+    std::string toProjection() const;
+};
+
+class MaterializedViewAdvise : public IWorkloadAdvise
     {
     public:
-        explicit EqASTBySerialize(ASTPtr _ast);
-        ASTPtr getAST() const { return ast; }
-        bool operator<(const EqASTBySerialize & other) const { return hash < other.hash; }
-        bool operator==(const EqASTBySerialize & other) const { return hash == other.hash; }
-    private:
-        ASTPtr ast;
-        UInt64 hash;
-    };
-
-    using EqASTBySerializeSet = std::set<EqASTBySerialize>;
-
-    explicit MaterializedViewCandidate(
-        QualifiedTableName table_name_,
-        bool contains_aggregate_,
-        EqASTBySerializeSet wheres_,
-        EqASTBySerializeSet group_bys_,
-        EqASTBySerializeSet outputs_)
-        : table_name(std::move(table_name_))
-        , contains_aggregate(contains_aggregate_)
-        , wheres(std::move(wheres_))
-        , group_bys(std::move(group_bys_))
-        , outputs(std::move(outputs_))
-    {
+        explicit MaterializedViewAdvise(QualifiedTableName table_, String sql_, std::vector<String> related_queries_, double benefit_)
+            : table(std::move(table_)), sql(std::move(sql_)), benefit(benefit_), related_queries(std::move(related_queries_))
+        {
     }
 
-    static std::optional<MaterializedViewCandidate> from(PlanNodePtr plan);
+    String apply(WorkloadTables &) override
+    {
+        return "";
+    }
+    QualifiedTableName getTable() override
+    {
+        return table;
+    }
+    String getAdviseType() override
+    {
+        return "MaterializedView";
+    }
+    String getOriginalValue() override
+    {
+        return "";
+    }
+    String getOptimizedValue() override
+    {
+        return sql;
+    }
+    double getBenefit() override
+    {
+        return benefit;
+    }
+    std::vector<String> getRelatedQueries() override
+    {
+        return related_queries;
+    }
 
-    bool tryMerge(const MaterializedViewCandidate & other);
-    std::string toSQL();
-
-    QualifiedTableName getTableName() const { return table_name; }
-    bool containsAggregate() const { return contains_aggregate; }
-
-
-private: // for test
-    QualifiedTableName table_name;
-    bool contains_aggregate;
-    EqASTBySerializeSet wheres;
-    EqASTBySerializeSet group_bys;
-    EqASTBySerializeSet outputs;
+    QualifiedTableName table;
+    String sql;
+    double benefit;
+    std::vector<String> related_queries;
 };
 
 }

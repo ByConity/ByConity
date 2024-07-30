@@ -15,8 +15,8 @@ namespace DB
 
 const std::vector<RuleType> & InnerJoinAssociate::blockRules() const
 {
-    static std::vector<RuleType> rules{RuleType::INNER_JOIN_COMMUTATION, RuleType::INNER_JOIN_ASSOCIATE};
-    // static std::vector<RuleType> rules{};
+    // static std::vector<RuleType> rules{RuleType::INNER_JOIN_COMMUTATION, RuleType::INNER_JOIN_ASSOCIATE};
+    static std::vector<RuleType> rules{};
     return rules;
 }
 

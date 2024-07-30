@@ -270,7 +270,6 @@ CascadesContext::CascadesContext(
         transformation_rules.emplace_back(std::make_shared<LeftJoinToRightJoin>());
         transformation_rules.emplace_back(std::make_shared<MagicSetForAggregation>());
         transformation_rules.emplace_back(std::make_shared<MagicSetForProjectionAggregation>());
-
         transformation_rules.emplace_back(std::make_shared<SemiJoinPushDownProjection>());
         transformation_rules.emplace_back(std::make_shared<SemiJoinPushDownAggregate>());
 

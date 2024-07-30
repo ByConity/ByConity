@@ -24,11 +24,11 @@
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/SimpleExpressionRewriter.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include <QueryPlan/ExpandStep.h>
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <Common/Exception.h>
-#include <QueryPlan/ExpandStep.h>
 
 namespace DB
 {

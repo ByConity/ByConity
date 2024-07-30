@@ -1,21 +1,26 @@
-#include <memory>
-#include <unordered_set>
+#include <Optimizer/Rule/Transformation/SemiJoinPushDown.h>
+
 #include <Core/Names.h>
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Patterns.h>
-#include <Optimizer/Rule/Transformation/SemiJoinPushDown.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
+#include <Parsers/ASTIdentifier.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/AnyStep.h>
+#include <QueryPlan/Assignment.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/PlanNode.h>
+#include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/SymbolAllocator.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <Parsers/ASTIdentifier.h>
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/ProjectionStep.h>
+
+#include <memory>
+#include <unordered_set>
 
 namespace DB
 {
@@ -66,7 +71,7 @@ TransformResult SemiJoinPushDown::transformImpl(PlanNodePtr node, const Captures
     {
         // any inner join cotains symbols from right
         if (node->getCurrentDataStream().header.has(col.name))
-        output_stream.header.insert(col);
+            output_stream.header.insert(col);
     }
 
     auto step = *semi_join_node->getStep();
