@@ -39,7 +39,7 @@
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/StorageSnapshot.h>
-#include <Transaction/TransactionCommon.h>
+#include <Transaction/CnchServerTransaction.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
 #include "common/types.h"
@@ -325,7 +325,8 @@ public:
         const DataPartsVector & parts,
         const DeleteBitmapMetaPtrVector & delete_bitmaps = {},
         const bool is_merged_parts = false,
-        const bool preallocate_mode = false);
+        const bool preallocate_mode = false,
+        const bool write_manifest = false);
 
     /// APIs for CncnKafka
     void getKafkaOffsets(const String & consumer_group, cppkafka::TopicPartitionList & tpl);
@@ -386,6 +387,8 @@ public:
     bool setTransactionRecord(const TransactionRecord & expected_record, TransactionRecord & record);
 
     /// CAS operation
+    bool commitTransactionWithNewTableVersion(const TransactionCnchPtr & txn, const UInt64 & table_version);
+
     /// Similiar to setTransactionRecord, but we want to pack addition requests (e.g. create a insertion label)
     bool setTransactionRecordWithRequests(
         const TransactionRecord & expected_record, TransactionRecord & record, BatchCommitRequest & request, BatchCommitResponse & response);
@@ -439,7 +442,8 @@ public:
         const TxnTimestamp & txnID,
         const CommitItems & commit_data,
         const bool is_merged_parts = false,
-        const bool preallocate_mode = false);
+        const bool preallocate_mode = false,
+        const bool write_manifest = false);
 
     /// set commit time for parts and delete bitmaps
     void setCommitTime(
@@ -874,6 +878,17 @@ public:
     std::vector<AccessEntityModel> getEntities(EntityType type, const std::unordered_set<UUID> & ids);
 
 
+    /////////////////////////////
+    /// New metadata API
+    /////////////////////////////
+    std::vector<std::shared_ptr<DB::Protos::ManifestListModel>> getAllTableVersions(const UUID & uuid);
+    UInt64 getCurrentTableVersion(const UUID & uuid, const TxnTimestamp & ts);
+    // note that will be multiple rpc calls if txn_list size is bigger than 1. consider to use thread pool to fetch concurrently
+    DataModelPartWrapperVector getCommittedPartsFromManifest(const MergeTreeMetaBase & storage, const std::vector<UInt64> & txn_list);
+    DeleteBitmapMetaPtrVector getDeleteBitmapsFromManifest(const MergeTreeMetaBase & storage, const std::vector<UInt64> & txn_list);
+    void commitCheckpointVersion(const UUID & uuid, std::shared_ptr<DB::Protos::ManifestListModel> checkpoint_version);
+    void cleanTableVersions(const UUID & uuid, std::vector<std::shared_ptr<DB::Protos::ManifestListModel>> versions_to_clean);
+
 private:
     Poco::Logger * log = &Poco::Logger::get("Catalog");
     Context & context;
@@ -925,6 +940,7 @@ private:
         const DeleteBitmapMetaPtrVector & delete_bitmaps,
         const Protos::DataModelPartVector & staged_parts,
         const bool preallocate_mode,
+        const bool write_manifest,
         const std::vector<String> & expected_parts,
         const std::vector<String> & expected_bitmaps,
         const std::vector<String> & expected_staged_parts);
@@ -936,6 +952,7 @@ private:
         const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & staged_parts,
         const UInt64 & txnid,
         const bool preallocate_mode,
+        const bool write_manifest,
         const std::vector<String> & expected_parts,
         const std::vector<String> & expected_bitmaps,
         const std::vector<String> & expected_staged_parts);

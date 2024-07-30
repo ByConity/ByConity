@@ -120,8 +120,6 @@ public:
     /// TODO: some code in this duplicate with filterPartitionByTTL, refine it later
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
-    void filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context) const;
-
     /**
      * @param snapshot_ts If not zero, specify the snapshot to use
      */
@@ -136,14 +134,6 @@ public:
     /// if partitions != null, ignore staged parts not belong to `partitions`.
     MergeTreeDataPartsCNCHVector
     getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool skip_delete_bitmap = false);
-
-    /**
-     * @param parts input parts, must be sorted in PartComparator order
-     */
-    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas) const;
-    void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
-    void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
-    void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
 
     /// Used by the "SYSTEM DEDUP" command to repair unique table by removing duplicate keys in visible parts.
     void executeDedupForRepair(const ASTSystemQuery & query, ContextPtr context);
@@ -262,12 +252,6 @@ private:
         UInt64 snapshot_ts = 0,
         bool staging_area = false) const;
 
-    Strings selectPartitionsByPredicate(
-        const SelectQueryInfo & query_info,
-        std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
-        const Names & column_names_to_return,
-        ContextPtr local_context) const;
-
     void filterPartsByPartition(
         ServerDataPartsVector & parts,
         ContextPtr local_context,
@@ -290,6 +274,14 @@ private:
         const StorageSnapshotPtr & storage_snapshot = nullptr,
         WorkerEngineType engine_type = WorkerEngineType::CLOUD,
         bool replicated = false);
+
+    void collectResourceWithTableVersion(
+        ContextPtr local_context,
+        const UInt64 & table_version,
+        const String & local_table_name,
+        const StorageSnapshotPtr & storage_snapshot,
+        WorkerEngineType engine_type = WorkerEngineType::CLOUD
+    );
 
     /// NOTE: No need to implement this for CnchMergeTree as data processing is on CloudMergeTree.
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }

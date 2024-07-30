@@ -82,10 +82,17 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     if (server_resource && !query_context->getSettingsRef().bsp_mode)
     {
         server_resource->setSendMutations(true);
-        /// TODO: we can skip some worker
-        server_resource->sendResources(query_context);
         if (query_context->getSettingsRef().enable_prune_source_plan_segment)
-            dag_ptr->generateSourcePruneInfo(plan_segments_ptr, server_resource.get());
+        {
+            auto source_pruner = dag_ptr->makeSourcePruner(plan_segments_ptr);
+            server_resource->sendResources(query_context);
+            source_pruner->pruneSource(server_resource.get(), dag_ptr->id_to_segment);
+        }
+        else
+        {
+            server_resource->sendResources(query_context);
+        }
+            
     }
 
     auto * final_segment = plan_segments_ptr->getRoot()->getPlanSegment();
@@ -98,7 +105,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     }
     prepareQueryCommonBuf(dag_ptr->query_common_buf, *final_segment, query_context);
     WriteBufferFromBrpcBuf settings_write_buf;
-    query_context->getSettingsRef().write(settings_write_buf, SettingsWriteFormat::BINARY);
+    query_context->getSettingsRef().write(settings_write_buf, SettingsWriteFormat::STRINGS_WITH_FLAGS);
     dag_ptr->query_settings_buf.append(settings_write_buf.getFinishedBuf().movable());
 
     if (!dag_ptr->plan_segment_status_ptr->is_final_stage_start)

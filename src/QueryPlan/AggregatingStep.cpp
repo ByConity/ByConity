@@ -415,7 +415,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
         settings.spill_mode == SpillMode::AUTO,
         settings.spill_buffer_bytes_before_external_group_by,
         params.empty_result_for_aggregation_by_empty_set || settings.empty_result_for_aggregation_by_empty_set,
-        params.tmp_volume,
+        build_settings.context->getTemporaryVolume(),
         settings.max_threads,
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,

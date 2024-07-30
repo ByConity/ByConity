@@ -2328,7 +2328,8 @@ namespace Catalog
         const DataPartsVector & parts,
         const DeleteBitmapMetaPtrVector & delete_bitmaps,
         const bool is_merged_parts,
-        const bool preallocate_mode)
+        const bool preallocate_mode,
+        const bool write_manifest)
     {
         runWithMetricSupport(
             [&] {
@@ -2395,6 +2396,7 @@ namespace Catalog
                     /*staged_parts*/ {},
                     txnID.toUInt64(),
                     preallocate_mode,
+                    write_manifest,
                     std::vector<String>(commit_parts.parts().size()),
                     std::vector<String>(delete_bitmaps.size()),
                     /*expected_staged_parts*/ {});
@@ -2426,6 +2428,7 @@ namespace Catalog
         const DeleteBitmapMetaPtrVector & delete_bitmaps,
         const Protos::DataModelPartVector & staged_parts,
         const bool preallocate_mode,
+        const bool write_manifest,
         const std::vector<String> & expected_parts,
         const std::vector<String> & expected_bitmaps,
         const std::vector<String> & expected_staged_parts)
@@ -2453,6 +2456,7 @@ namespace Catalog
                     staged_parts.parts().begin() + commit_index.staged_begin, staged_parts.parts().begin() + commit_index.staged_end},
                 txnID.toUInt64(),
                 preallocate_mode,
+                write_manifest,
                 std::vector<String>{
                     expected_parts.begin() + commit_index.expected_parts_begin, expected_parts.begin() + commit_index.expected_parts_end},
                 std::vector<String>{
@@ -2582,6 +2586,7 @@ namespace Catalog
         const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & staged_parts,
         const UInt64 & txnid,
         const bool preallocate_mode,
+        const bool write_manifest,
         const std::vector<String> & expected_parts,
         const std::vector<String> & expected_bitmaps,
         const std::vector<String> & expected_staged_parts)
@@ -2603,7 +2608,9 @@ namespace Catalog
                 parts,
                 batch_writes,
                 expected_parts,
-                preallocate_mode);
+                txnid,
+                preallocate_mode,
+                write_manifest);
 
             // reset partition GC status if new data inserted into the deleting partition
             if (!deleting_partitions.empty())
@@ -2613,7 +2620,13 @@ namespace Catalog
             }
         }
         meta_proxy->prepareAddDeleteBitmaps(
-            name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), delete_bitmaps, batch_writes, expected_bitmaps);
+            name_space,
+            UUIDHelpers::UUIDToString(storage->getStorageID().uuid),
+            delete_bitmaps,
+            batch_writes,
+            txnid,
+            expected_bitmaps,
+            write_manifest);
         if (!staged_parts.empty())
         {
             Strings current_partitions = getPartitionIDs(storage, nullptr);
@@ -3152,6 +3165,45 @@ namespace Catalog
         return res;
     }
 
+    bool Catalog::commitTransactionWithNewTableVersion(const TransactionCnchPtr & txn, const UInt64 & table_version)
+    {
+        TransactionRecord target_record = txn->getTransactionRecord();
+        target_record.setStatus(CnchTransactionStatus::Finished)
+            .setCommitTs(txn->commit_time)
+            .setMainTableUUID(txn->getMainTableUUID());
+
+        BatchCommitRequest batch_write;
+        /// build extra metadata that need to be commit with transaction
+        // commit kafka offsets
+        if (!txn->consumer_group.empty())
+        {
+            for (const auto & tp : txn->tpl)
+                batch_write.AddPut(SinglePutRequest(MetastoreProxy::kafkaOffsetsKey(name_space, txn->consumer_group, tp.get_topic(), tp.get_partition()), std::to_string(tp.get_offset())));
+        }
+        // commit binlog meta
+        if (!txn->binlog.binlog_file.empty())
+        {
+            /// TODO: support materialize mysql
+            throw Exception("Commit transaction with new table version does not support MaterializeMysql now.", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        /// add new transaction record. CAS operation
+        batch_write.AddPut(SinglePutRequest(MetastoreProxy::transactionRecordKey(name_space, target_record.txnID().toUInt64()),
+            target_record.serialize(), txn->getTransactionRecord().serialize()));
+
+        /// build manifest list
+        Protos::ManifestListModel manifest_list;
+        manifest_list.set_version(table_version);
+        manifest_list.mutable_txn_ids()->Add(target_record.txnID().toUInt64());
+        batch_write.AddPut(SinglePutRequest(MetastoreProxy::manifestListKey(name_space, UUIDHelpers::UUIDToString(txn->getMainTableUUID()), table_version), manifest_list.SerializeAsString()));
+
+        BatchCommitResponse resp;
+        ///TODO: how to deal with commit failure. Should we directly throw exception here?
+        meta_proxy->batchWrite(batch_write, resp);
+
+        return true;
+    }
+
     bool Catalog::setTransactionRecordWithRequests(
         const TransactionRecord & expected_record, TransactionRecord & target_record, BatchCommitRequest & additional_requests, BatchCommitResponse & response)
     {
@@ -3323,7 +3375,8 @@ namespace Catalog
         const TxnTimestamp & txnID,
         const CommitItems & commit_data,
         const bool is_merged_parts,
-        const bool preallocate_mode)
+        const bool preallocate_mode,
+        const bool write_manifest)
     {
         runWithMetricSupport(
             [&] {
@@ -3423,6 +3476,7 @@ namespace Catalog
                     commit_data.delete_bitmaps,
                     staged_part_models,
                     preallocate_mode,
+                    write_manifest,
                     std::vector<String>(part_models.parts().size()),
                     std::vector<String>(commit_data.delete_bitmaps.size()),
                     std::vector<String>(staged_part_models.parts().size()));
@@ -3565,6 +3619,7 @@ namespace Catalog
                         commit_data.delete_bitmaps,
                         staged_part_models,
                         false,
+                        false,
                         expected_parts,
                         expected_bitmap,
                         expected_staged_parts);
@@ -3604,6 +3659,7 @@ namespace Catalog
                         part_models,
                         bitmap_to_write,
                         staged_part_models,
+                        false,
                         false,
                         expected_parts,
                         expected_bitmap,
@@ -4682,6 +4738,11 @@ namespace Catalog
                 Strings dependencies;
                 if (table)
                     dependencies = tryGetDependency(parseCreateQuery(table->definition()));
+
+                // clean all manifest data before delete table metadata
+                auto manifests = getAllTableVersions(UUIDHelpers::toUUID(table_uuid));
+                if (!manifests.empty())
+                    cleanTableVersions(UUIDHelpers::toUUID(table_uuid), manifests);
 
                 meta_proxy->clearTableMeta(name_space, target_database, name, table_uuid, dependencies, ts);
 
@@ -7593,6 +7654,114 @@ namespace Catalog
         auto res = getDataModelsByPartitions<DataModelDeleteBitmapPtr>(
             storage, meta_prefix, required_partitions, full_partitions, create_func, ts);
         return res;
+    }
+
+    std::vector<std::shared_ptr<Protos::ManifestListModel>> Catalog::getAllTableVersions(const UUID & uuid)
+    {
+        std::vector<std::shared_ptr<Protos::ManifestListModel>> res;
+
+        auto it = meta_proxy->getByPrefix(MetastoreProxy::manifestListPrefix(name_space, UUIDHelpers::UUIDToString(uuid)));
+        while (it->next())
+        {
+            std::shared_ptr<Protos::ManifestListModel> manifest_model_ptr = std::make_shared<Protos::ManifestListModel>();
+            manifest_model_ptr->ParseFromString(it->value());
+            res.push_back(manifest_model_ptr);
+        }
+        return res;
+    }
+
+    UInt64 Catalog::getCurrentTableVersion(const UUID & uuid, const TxnTimestamp & ts)
+    {
+        String target_version_str;
+        auto it = meta_proxy->getByPrefix(MetastoreProxy::manifestListPrefix(name_space, UUIDHelpers::UUIDToString(uuid)));
+        while (it->next())
+        {
+            const String & key = it->key();
+            // manifest list key has the format `{prefix}_{tableversion}`
+            UInt64 table_version = std::stoul(key.substr(key.find_last_of('_') + 1));
+            if (table_version <= ts)
+                target_version_str = it->value();
+        }
+
+        if (!target_version_str.empty())
+        {
+            Protos::ManifestListModel data_model;
+            data_model.ParseFromString(target_version_str);
+            return data_model.version();
+        }
+        return 0;
+    }
+
+    DataModelPartWrapperVector Catalog::getCommittedPartsFromManifest(const MergeTreeMetaBase & storage, const std::vector<UInt64> & txn_list)
+    {
+        DataModelPartWrapperVector res;
+        String uuid_str = UUIDHelpers::UUIDToString(storage.getStorageUUID());
+
+        for (const auto & txn : txn_list)
+        {
+            String manifest_part_prefix = MetastoreProxy::manifestDataPrefix(name_space, uuid_str, txn) + PART_STORE_PREFIX;
+            auto it = meta_proxy->getByPrefix(manifest_part_prefix);
+            while (it->next())
+            {
+                Protos::DataModelPart part_model;
+                part_model.ParseFromString(it->value());
+                String part_name = it->key().substr(manifest_part_prefix.size(), std::string::npos);
+                auto part_model_wrapper = createPartWrapperFromModel(storage, std::move(part_model), std::move(part_name));
+                res.push_back(part_model_wrapper);
+            }
+        }
+        return res;
+    }
+
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsFromManifest(const MergeTreeMetaBase & storage, const std::vector<UInt64> & txn_list)
+    {
+        DeleteBitmapMetaPtrVector res;
+        String uuid_str = UUIDHelpers::UUIDToString(storage.getStorageUUID());
+
+        for (const auto & txn : txn_list)
+        {
+            String manifest_dbm_prefix = MetastoreProxy::manifestDataPrefix(name_space, uuid_str, txn) + DELETE_BITMAP_PREFIX;
+            auto it = meta_proxy->getByPrefix(manifest_dbm_prefix);
+            while (it->next())
+            {
+                auto dbm_model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
+                dbm_model_ptr->ParseFromString(it->value());
+                ///NOTE: work around for no commit time when table version committed. Do we need commit time if txns committed linearly?
+                dbm_model_ptr->set_commit_time(txn);
+                res.push_back(std::make_shared<DeleteBitmapMeta>(storage, dbm_model_ptr));
+            }
+        }
+        return res;
+    }
+
+    void Catalog::commitCheckpointVersion(const UUID & uuid, std::shared_ptr<DB::Protos::ManifestListModel> checkpoint_version)
+    {
+        meta_proxy->getMetastore()->put(MetastoreProxy::manifestListKey(name_space, UUIDHelpers::UUIDToString(uuid), checkpoint_version->version()), checkpoint_version->SerializeAsString());
+    }
+
+    void Catalog::cleanTableVersions(const UUID & uuid, std::vector<std::shared_ptr<DB::Protos::ManifestListModel>> versions_to_clean)
+    {
+        BatchCommitRequest clear_manifest_data_request, clear_manifest_list_request;
+        for (const auto & version : versions_to_clean)
+        {
+            // remove committed data in this version
+            auto txn_ids = version->txn_ids();
+            for (auto & txn_id : txn_ids)
+            {
+                auto it = meta_proxy->getByPrefix(MetastoreProxy::manifestDataPrefix(name_space, UUIDHelpers::UUIDToString(uuid), txn_id));
+                while (it->next())
+                    clear_manifest_data_request.AddDelete(it->key());
+            }
+
+            // remove manifest list
+            clear_manifest_list_request.AddDelete(MetastoreProxy::manifestListKey(name_space, UUIDHelpers::UUIDToString(uuid), version->version()));
+        }
+
+        // firstly, clear manifest data info(including parts and delete bitmap) from kv.
+        meta_proxy->getMetastore()->adaptiveBatchWrite(clear_manifest_data_request);
+
+        // then, clear manifest list metadata from kv.
+        meta_proxy->getMetastore()->adaptiveBatchWrite(clear_manifest_list_request);
     }
 }
 }

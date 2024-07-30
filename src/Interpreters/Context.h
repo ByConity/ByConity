@@ -319,6 +319,12 @@ using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
 class GinIndexStoreFactory;
 struct GinIndexStoreCacheSettings;
 
+class GlobalTxnCommitter;
+using GlobalTxnCommitterPtr = std::shared_ptr<GlobalTxnCommitter>;
+class GlobalDataManager;
+using GlobalDataManagerPtr = std::shared_ptr<GlobalDataManager>;
+
+
 enum class ServerType
 {
     standalone,
@@ -780,6 +786,8 @@ public:
     void grantAllAccess();
     std::shared_ptr<const ContextAccess> getAccess() const;
 
+    void checkAeolusTableAccess(const String & database_name, const String & table_name) const;
+
     WorkerGroupStatusPtr & getWorkerGroupStatusPtr() { return worker_group_status; }
     const WorkerGroupStatusPtr & getWorkerGroupStatusPtr() const { return worker_group_status; }
 
@@ -1023,7 +1031,7 @@ public:
     std::shared_ptr<NamedSession>
     acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
     std::shared_ptr<NamedCnchSession>
-    acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
+    acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check, bool return_null_if_not_found = false) const;
 
     void initCnchServerResource(const TxnTimestamp & txn_id);
     CnchServerResourcePtr getCnchServerResource() const;
@@ -1553,6 +1561,11 @@ public:
     void setCnchTopologyMaster();
     std::shared_ptr<CnchTopologyMaster> getCnchTopologyMaster() const;
 
+    GlobalTxnCommitterPtr getGlobalTxnCommitter() const;
+
+    void initGlobalDataManager() const;
+    GlobalDataManagerPtr getGlobalDataManager() const;
+
     void updateQueueManagerConfig() const;
     void setServerType(const String & type_str);
     ServerType getServerType() const;
@@ -1636,6 +1649,17 @@ public:
     };
 
     PartAllocator getPartAllocationAlgo() const;
+
+    /// Consistent hash algorithm for hybrid part allocation
+    enum HybridPartAllocator : int
+    {
+        HYBRID_MODULO_CONSISTENT_HASH = 0,
+        HYBRID_RING_CONSISTENT_HASH = 1,
+        HYBRID_BOUNDED_LOAD_CONSISTENT_HASH = 2,
+        HYBRID_RING_CONSISTENT_HASH_ONE_STAGE = 3,
+        HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE = 4
+    };
+    HybridPartAllocator getHybridPartAllocationAlgo() const;
 
     String getDefaultCnchPolicyName() const;
     String getCnchAuxilityPolicyName() const;

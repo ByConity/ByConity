@@ -1,6 +1,7 @@
 #include "DAGGraph.h"
 #include <iterator>
 #include <memory>
+#include <unordered_set>
 
 #include <CloudServices/CnchServerResource.h>
 #include <Interpreters/Context.h>
@@ -70,29 +71,10 @@ AddressInfos DAGGraph::getAddressInfos(size_t segment_id)
     }
 }
 
-void DAGGraph::generateSourcePruneInfo(PlanSegmentTree * plan_segments_ptr, CnchServerResource * server_resource)
+void SourcePruner::generateSegmentStorageMap()
 {
-    source_prune_info = std::make_shared<SourcePruneInfo>();
     for (auto & node : plan_segments_ptr->getNodes())
     {
-        for (auto & segment_output : node.getPlanSegment()->getPlanSegmentOutputs())
-        {
-            if (segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION
-                || segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION)
-            {
-                source_prune_info->unprunable_plan_segments.insert(node.getPlanSegment()->getPlanSegmentId());
-                source_prune_info->unprunable_plan_segments.insert(segment_output->getPlanSegmentId());
-            }
-        }
-    }
-
-    for (auto & node : plan_segments_ptr->getNodes())
-    {
-        auto plan_segment_id = node.getPlanSegment()->getPlanSegmentId();
-        if (source_prune_info->unprunable_plan_segments.contains(plan_segment_id))
-            continue;
-
-        bool has_storage = false;
         for (auto & segment_input : node.getPlanSegment()->getPlanSegmentInputs())
         {
             if (segment_input->getStorageID())
@@ -100,33 +82,69 @@ void DAGGraph::generateSourcePruneInfo(PlanSegmentTree * plan_segments_ptr, Cnch
                 auto uuid = segment_input->getStorageID()->uuid;
                 LOG_TRACE(
                     log,
-                    "SourcePrune plan segment : {} storage id : {}",
+                    "SourcePrune plan segment {} storage id : {}",
                     node.getPlanSegment()->getPlanSegmentId(),
                     segment_input->getStorageID()->getNameForLogs());
-                has_storage = true;
-                source_prune_info->plan_segment_storages_map[plan_segment_id].emplace_back(uuid);
+                if (segment_input->getStorageID()->hasUUID())
+                {
+                    plan_segment_storages_map[node.getPlanSegment()->getPlanSegmentId()].insert(uuid);
+                }
             }
         }
-        if (has_storage)
+    }
+}
+
+void SourcePruner::generateUnprunableSegments()
+{
+    for (auto & node : plan_segments_ptr->getNodes())
+    {
+        for (auto & segment_output : node.getPlanSegment()->getPlanSegmentOutputs())
         {
-            for (auto & uuid : source_prune_info->plan_segment_storages_map[plan_segment_id])
+            if (segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION
+                || segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION)
+            {
+                unprunable_plan_segments.insert(node.getPlanSegment()->getPlanSegmentId());
+                unprunable_plan_segments.insert(segment_output->getPlanSegmentId());
+            }
+        }
+    }
+}
+
+void SourcePruner::prepare()
+{
+    generateSegmentStorageMap();
+    generateUnprunableSegments();
+}
+
+void SourcePruner::pruneSource(CnchServerResource * server_resource, std::unordered_map<size_t, PlanSegment *> & id_to_segment)
+{
+    prepare();
+    for (auto & node : plan_segments_ptr->getNodes())
+    {
+        auto plan_segment_id = node.getPlanSegment()->getPlanSegmentId();
+        if (unprunable_plan_segments.contains(plan_segment_id))
+            continue;
+
+        if (!plan_segment_storages_map[plan_segment_id].empty())
+        {
+            for (const auto & uuid : plan_segment_storages_map[plan_segment_id])
             {
                 const auto & target_workers = server_resource->getAssignedWorkers(uuid);
-                source_prune_info->plan_segment_workers_map[plan_segment_id].insert(target_workers.begin(), target_workers.end());
+                plan_segment_workers_map[plan_segment_id].insert(target_workers.begin(), target_workers.end());
             }
-            source_prune_info->plan_segment_workers_map[plan_segment_id];
+            plan_segment_workers_map[plan_segment_id];
             LOG_TRACE(
                 log,
                 "SourcePrune plan segment : {} worker size {}",
                 plan_segment_id,
-                source_prune_info->plan_segment_workers_map[plan_segment_id].size());
+                plan_segment_workers_map[plan_segment_id].size());
         }
     }
     for (auto & node : plan_segments_ptr->getNodes())
     {
         auto plan_segment_id = node.getPlanSegment()->getPlanSegmentId();
-        auto iter = source_prune_info->plan_segment_workers_map.find(plan_segment_id);
-        if (iter != source_prune_info->plan_segment_workers_map.end())
+        auto iter = plan_segment_workers_map.find(plan_segment_id);
+        if (iter != plan_segment_workers_map.end())
         {
             auto parallel_size = iter->second.empty() ? 1 : iter->second.size();
             // Adjust the parallel size of pruned plan segment.

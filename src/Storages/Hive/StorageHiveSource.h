@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/config.h"
+#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 #include "Storages/StorageInMemoryMetadata.h"
 #if USE_HIVE
 
@@ -33,29 +34,16 @@ public:
     };
     using BlockInfoPtr = std::shared_ptr<BlockInfo>;
 
-    struct FileSlice
-    {
-        int file {-1};
-        int slice {0};
-
-        bool empty() const { return file == -1; }
-        void reset() { file = -1; }
-    };
     struct Allocator
     {
         explicit Allocator(HiveFiles files_);
-        size_t size() const { return files.size(); }
 
         /// next file slice to read from
-        void next(FileSlice & file_slice) const;
+        HiveFilePtr next() const;
 
-        HiveFiles files;
-        bool allow_allocate_by_slice = true;
-
+        HiveFiles hive_files;
     private:
-        mutable std::atomic_int unallocated = 0;
-        bool nextSlice(FileSlice & file_slice) const;
-        mutable std::vector<std::atomic_int> slice_progress;
+        mutable std::atomic_size_t unallocated = 0;
     };
 
     using AllocatorPtr = std::shared_ptr<Allocator>;
@@ -70,10 +58,10 @@ public:
 private:
     Chunk buildResultChunk(Chunk & chunk) const;
 
-    FileSlice current_file_slice;
     std::shared_ptr<const BlockInfo> block_info;
     std::shared_ptr<const Allocator> allocator;
 
+    HiveFilePtr hive_file;
     SourcePtr data_source;
     std::shared_ptr<IHiveFile::ReadParams> read_params;
     std::unique_ptr<QueryPipeline> pipeline;

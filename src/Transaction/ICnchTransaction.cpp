@@ -130,4 +130,16 @@ void ICnchTransaction::tryCleanMergeTagger()
     merge_mutate_thread->tryRemoveTask(txn_record.txnID().toString());
 }
 
+void ICnchTransaction::serialize(Protos::TransactionMetadata & txn_meta)  const
+{
+    txn_meta.mutable_txn_record()->CopyFrom(txn_record.pb_model);
+    txn_meta.set_commit_time(commit_time.toUInt64());
+    RPCHelpers::fillUUID(main_table_uuid, *(txn_meta.mutable_main_table()));
+    if (!consumer_group.empty())
+    {
+        txn_meta.set_consumer_group(consumer_group);
+        RPCHelpers::fillKafkaTPL(tpl, *(txn_meta.mutable_tpl()));
+    }
+}
+
 }

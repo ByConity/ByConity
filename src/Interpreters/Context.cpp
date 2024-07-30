@@ -99,6 +99,7 @@
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <MergeTreeCommon/GlobalDataManager.h>
 #include <Optimizer/OptimizerMetrics.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -180,6 +181,8 @@
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Common/HostWithPorts.h>
+#include <Transaction/GlobalTxnCommitter.h>
+#include <Statistics/StatisticsMemoryStore.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
@@ -259,6 +262,7 @@ namespace ErrorCodes
     extern const int CATALOG_SERVICE_INTERNAL_ERROR;
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
+    extern const int DATABASE_ACCESS_DENIED;
 }
 
 /** Set of known objects (environment), that could be used in query.
@@ -403,6 +407,8 @@ struct ContextSharedPart
     mutable CnchTopologyMasterPtr topology_master;
     mutable ResourceManagerClientPtr rm_client;
     mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
+    mutable GlobalTxnCommitterPtr global_txn_committer;
+    mutable GlobalDataManagerPtr global_data_manager;
 
     bool enable_ssl = false;
 
@@ -1021,12 +1027,12 @@ Context::acquireNamedSession(const String & session_id, std::chrono::steady_cloc
 }
 
 std::shared_ptr<NamedCnchSession>
-Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const
+Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check, bool return_null_if_not_found) const
 {
     if (!shared->named_cnch_sessions)
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
     LOG_DEBUG(&Poco::Logger::get("acquireNamedCnchSession"), "Trying to acquire session for {}\n", txn_id);
-    return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check);
+    return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check, return_null_if_not_found);
 }
 
 void Context::initCnchServerResource(const TxnTimestamp & txn_id)
@@ -1755,6 +1761,24 @@ std::shared_ptr<const ContextAccess> Context::getAccess() const
     if (getServerType() == ServerType::cnch_worker && !getSettingsRef().prefer_cnch_catalog)
         return ContextAccess::getFullAccess();
     return access ? access : ContextAccess::getFullAccess();
+}
+
+void Context::checkAeolusTableAccess(const String & database_name, const String & table_name) const
+{
+    String table_names = this->getSettingsRef().access_table_names;
+    if (table_names.empty())
+        return;
+    std::vector<String> tables;
+    boost::split(tables, table_names, boost::is_any_of(" ,"));
+    /// avoid check temporary table.
+    if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
+        return;
+
+    String full_table_name = database_name.empty() ? table_name : database_name+"."+table_name;
+    if (std::find(tables.begin(), tables.end(), full_table_name) == tables.end())
+    {
+        throw Exception("Access denied to " + full_table_name , ErrorCodes::DATABASE_ACCESS_DENIED);
+    }
 }
 
 ASTPtr Context::getRowPolicyCondition(const String & database, const String & table_name, RowPolicy::ConditionType type) const
@@ -5138,6 +5162,27 @@ std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const
     return shared->topology_master;
 }
 
+GlobalTxnCommitterPtr Context::getGlobalTxnCommitter() const
+{
+    auto lock = getLock();
+    if (!shared->global_txn_committer)
+        shared->global_txn_committer = std::make_shared<GlobalTxnCommitter>(shared_from_this());
+    return shared->global_txn_committer;
+}
+
+void Context::initGlobalDataManager() const
+{
+    shared->global_data_manager = std::make_shared<GlobalDataManager>(shared_from_this());
+}
+
+GlobalDataManagerPtr Context::getGlobalDataManager() const
+{
+    if (!shared->global_data_manager)
+        throw Exception("GlobalDataManager is not initialized", ErrorCodes::LOGICAL_ERROR);
+
+    return shared->global_data_manager;
+}
+
 UInt16 Context::getRPCPort() const
 {
     if (auto env_port = getPortFromEnvForConsul("PORT1"))
@@ -5709,6 +5754,19 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
             return PartAllocator::SIMPLE_HASH;
         default:
             return PartAllocator::JUMP_CONSISTENT_HASH;
+    }
+}
+
+Context::HybridPartAllocator Context::getHybridPartAllocationAlgo() const
+{
+    switch (settings.cnch_hybrid_part_allocation_algorithm)
+    {
+        case 0: return HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH;
+        case 1: return HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH;
+        case 2: return HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH;
+        case 3: return HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH_ONE_STAGE;
+        case 4: return HybridPartAllocator::HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE;
+        default: return HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH;
     }
 }
 

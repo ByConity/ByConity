@@ -33,7 +33,8 @@ class Context;
 enum class DiskCacheType {
     File, // for generic file disk cache
     MergeTree,
-    Hive
+    Hive,
+    Manifest
 };
 
 std::string diskCacheTypeToString(DiskCacheType type);
@@ -66,6 +67,7 @@ public:
     }
 
 private:
+    void addNewCache(Context & context, const std::string & cache_name, bool create_default);
     std::unordered_map<DiskCacheType, IDiskCachePtr> caches;
 };
 }

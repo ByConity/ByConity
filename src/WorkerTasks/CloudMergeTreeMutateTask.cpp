@@ -53,7 +53,16 @@ void CloudMergeTreeMutateTask::executeImpl()
     if (isCancelled())
         throw Exception("Merge task " + params.task_id + " is cancelled", ErrorCodes::ABORTED);
 
-    CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Mutate, params.task_id);
+    UInt64 peak_memory_usage = 0;
+
+    ManipulationListElement * manipulation_list_element = getManipulationListElement();
+    if (manipulation_list_element)
+    {
+        peak_memory_usage = manipulation_list_element->getMemoryTracker().getPeak();
+    }
+
+    CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Mutate, params.task_id,
+        /*consumer_group_*/ {}, /*tpl_*/ {}, /*binlog*/ {}, peak_memory_usage);
     auto res = cnch_writer.dumpAndCommitCnchParts(data_parts);
     getContext()->getCurrentTransaction()->commitV2();
     if (params.parts_preload_level)

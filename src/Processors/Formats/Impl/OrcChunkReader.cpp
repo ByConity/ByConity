@@ -607,7 +607,7 @@ Status OrcChunkReader::readNext(orc::RowReader::ReadPosition & read_position)
     }
     catch (std::exception & e)
     {
-        LOG_INFO(logger, "orc read {} failed, error: ", e.what());
+        LOG_ERROR(logger, "orc read {} failed, error: ", e.what());
         return Status::IOError(fmt::format("orc read {} failed, error: ", e.what()));
     }
 

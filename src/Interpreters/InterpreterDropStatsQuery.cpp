@@ -21,6 +21,8 @@
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/DropHelper.h>
 #include <Statistics/StatsTableBasic.h>
+#include <Statistics/ASTHelpers.h>
+
 namespace DB
 {
 using namespace Statistics;
@@ -77,32 +79,22 @@ BlockIO InterpreterDropStatsQuery::execute()
         throw Exception(msg, ErrorCodes::UNKNOWN_DATABASE);
     }
 
-    if (query->target_all)
+    auto tables = getTablesFromAST(context, query);
+
+
+    if (tables.size() == 1 && !query->columns.empty())
     {
-        dropStatsDatabase(context, db, cache_policy, false);
+        auto table = tables[0];
+        dropStatsColumns(context, table, query->columns, cache_policy, true);
     }
     else
     {
-        auto table_info_opt = catalog->getTableIdByName(db, query->table);
-        if (!table_info_opt)
-        {
-            auto msg = "Unknown Table (" + query->table + ") in database (" + db + ")";
-            throw Exception(msg, ErrorCodes::UNKNOWN_TABLE);
-        }
-        auto table = table_info_opt.value();
-
-        if (!query->columns.empty())
-        {
-            dropStatsColumns(context, table, query->columns, cache_policy, true);
-        }
-        else
+        for (auto table : tables)
         {
             dropStatsTable(context, table, cache_policy, true);
         }
     }
 
-
     return {};
 }
-
 }

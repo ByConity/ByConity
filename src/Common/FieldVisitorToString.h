@@ -56,4 +56,14 @@ public:
     String operator() (const Object & x) const;
 };
 
+class DecimalFieldVisitorToString : public FieldVisitorToString
+{
+public:
+    using FieldVisitorToString::operator();
+    String operator() (const DecimalField<Decimal32> & x) const;
+    String operator() (const DecimalField<Decimal64> & x) const;
+    String operator() (const DecimalField<Decimal128> & x) const;
+    String operator() (const DecimalField<Decimal256> & x) const;
+};
+
 }

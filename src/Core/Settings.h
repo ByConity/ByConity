@@ -273,7 +273,7 @@ enum PreloadLevelSettings : UInt64
     M(Float, totals_auto_threshold, 0.5, "The threshold for totals_mode = 'auto'.", 0) \
     M(Bool, allow_suspicious_low_cardinality_types, true, "In CREATE TABLE statement allows specifying LowCardinality modifier for types of small fixed size (8 or less). Enabling this may increase merge times and memory consumption.", 0) \
     M(Bool, allow_suspicious_fixed_string_types, false, "In CREATE TABLE statement allows creating columns of type FixedString(n) with n > 256. FixedString with length >= 256 is suspicious and most likely indicates misusage", 0) \
-    M(Bool, compile_expressions, true, "Compile some scalar functions and operators to native code.", 0) \
+    M(Bool, compile_expressions, false, "Compile some scalar functions and operators to native code.", 0) \
     M(UInt64, min_count_to_compile_expression, 3, "The number of identical expressions before they are JIT-compiled", 0) \
     M(Bool, compile_aggregate_expressions, true, "Compile aggregate functions to native code.", 0) \
     M(UInt64, min_count_to_compile_aggregate_expression, 3, "The number of identical aggregate expressions before they are JIT-compiled", 0) \
@@ -615,6 +615,7 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, enable_partition_prune, true, "prune partition based on where expression analysis.", 0) \
     M(Bool, restore_table_expression_in_distributed, 1, "restore table expressions in distributed query to pass current database to remote query.", 0) \
+    M(Bool, query_with_linear_table_version, 1, "Distribute table version instead of data parts to workers if set to true. Only has effect for table which set `enable_publish_version_on_commit`", 0) \
     \
     /**  settings about bitmap index */\
     M(Bool, enable_ab_index_optimization, true, "Optimize ab version by reading Bitmap", 0)\
@@ -1260,6 +1261,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, create_view_check_column_names, true, "When executing CREATE VIEW queries, whether check column names are consistent with select query", 0) \
     M(Bool, rewrite_unknown_left_join_identifier, true, "Whether to rewrite unknown left join identifier, this is a deprecated feature but Aeolus SQL depends on it", 0) \
     M(Bool, allow_mysql_having_name_resolution, false, "Whether to use MySQL special name resolution rules for HAVING clauses ", 0) \
+    M(String, access_table_names, "", "Session level restricted tables query can access", 0) \
     \
     /** settings in cnch **/ \
     M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
@@ -1305,6 +1307,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_materialized_mysql_log_profiling, false, "Enable query profiling for cnch_materialized_mysql_log table", 0) \
+    M(Bool, enable_unique_log_profiling, false, "Enable query profiling for cnch_unique_table_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
     M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
     M(Bool, enable_local_disk_cache, 1, "enable global local disk cache", 0) \
@@ -1422,8 +1425,9 @@ enum PreloadLevelSettings : UInt64
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, true, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
-    M(Bool, enable_prune_source_plan_segment, true, "Whether prune source plan segment", 0) \
-    M(Bool, enable_prune_compute_plan_segment, true, "Whether prune compute plan segment", 0) \
+    M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
+    M(Bool, enable_prune_empty_resource, false, "Whether prune resource sending", 0) \
+    M(Bool, enable_prune_compute_plan_segment, false, "Whether prune compute plan segment", 0) \
     M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
@@ -1599,6 +1603,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
+    M(Bool, statistics_expand_to_current, false, "Expand Date/Date32/DateTime/DateTime64 columns stats to current timestamp", 0) \
+    M(UInt64, statistics_current_timestamp, 0, "Timestamp used for statistics_expand_to_current, 0 to use now(), for testing purpose", 0) \
+    M(UInt64, statistics_expand_to_current_threshold_days, 31, "If abs(stats_timestamp - stats_column_max) is within this threshold, we will expand this column", 0) \
     M(StatisticsCachePolicy, statistics_cache_policy, StatisticsCachePolicy::Default, "Cache policy for stats command and SQLs: (default|cache|catalog)", 0) \
     M(Bool, statistics_query_cnch_parts_for_row_count, true, "Use cnch parts instead of count(*) for row count to speed up test", 0) \
     /** Optimizer relative settings, cost model and estimation */ \
@@ -1693,7 +1700,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_parquert_orc_split, false, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \
     \
     /** Exchange settings */ \
-    M(UInt64, min_compatible_brpc_minor_version, 2, "Min compatble version of inter server BRPC protocol", 0) \
+    M(UInt64, min_compatible_brpc_minor_version, 4, "Min compatble version of inter server BRPC protocol", 0) \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
@@ -1829,7 +1836,7 @@ enum PreloadLevelSettings : UInt64
     /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(String, disk_shuffle_files_codec, "LZ4", "Set compression codec for disk shuffle files. I.e. LZ4, NONE.", 0) \
-    M(Bool, bsp_shuffle_reduce_locality_enabled, true, "Whether to compute locality preferences for reduce tasks", 0) \
+    M(Bool, bsp_shuffle_reduce_locality_enabled, false, "Whether to compute locality preferences for reduce tasks", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
     M(UInt64, bsp_max_retry_num, 3, "max retry number for a task(plan segment instance) in bsp mode, does not include first execution(i.e. normal execution without retry)",0) \
     /*end of bulk synchronous parallel section*/ \
@@ -1861,7 +1868,6 @@ enum PreloadLevelSettings : UInt64
 
 #define OBSOLETE_SETTINGS(M) \
     /** Obsolete settings that do nothing now but left for compatibility reasons. Remove them or implement them when you have free time. */ \
-    MAKE_OBSOLETE(M, Bool, enable_hybrid_allocation, false) \
     MAKE_OBSOLETE(M, Bool, make_partition_by_todate_monotonic, false) \
     MAKE_OBSOLETE(M, Bool, enable_query_cache, false) \
     MAKE_OBSOLETE(M, Bool, enable_parallel_input_generator, false) \
@@ -2051,9 +2057,14 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
     M(Bool, enable_select_query_forwarding, false, "Auto forward select query to target server when having multiple servers", 0) \
     \
-    M(Bool, merge_partition_stats,false, "merge all partition stats", 0) \
+    M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
     M(String, default_catalog, "", "current catalog", 0) \
+    \
+    /** Hybrid allocation related settings */ \
+    M(Bool, enable_hybrid_allocation, false, "Enalbe hybrid physical parts - virutal parts allocation", 0) \
+    M(UInt64, min_rows_per_virtual_part, 0, "Minimum size of a virtual part", 0) \
+    M(UInt64, cnch_hybrid_part_allocation_algorithm, 2, "Hybrid Part allocation algorithm, 0: modulo hashing, 1: ring consistent hash, 2: bounded load consistent hashing, 3: bounded consistent hashing in one stage, 4: strict bounded consistent hashing in one stage.", 0) \
     \
     /** BitEngine related settings */ \
     M(Bool, use_encoded_bitmap, true, "Whether to read the encoded bitmap column", 0) \

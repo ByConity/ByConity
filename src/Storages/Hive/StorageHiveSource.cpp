@@ -58,49 +58,6 @@ StorageHiveSource::BlockInfo::BlockInfo(const Block & header_, bool need_path_co
     }
 }
 
-StorageHiveSource::Allocator::Allocator(HiveFiles files_)
-    : files(std::move(files_)), slice_progress(files.size())
-{
-}
-
-void StorageHiveSource::Allocator::next(FileSlice & file_slice) const
-{
-    if (files.empty())
-        return;
-
-    /// the first file to start searching an available slice to read
-    int start = file_slice.empty() ? unallocated.fetch_add(1) % files.size() : file_slice.file;
-
-    for (size_t i = 0; i < files.size(); ++i)
-    {
-        file_slice.file = (start + i) % files.size();
-        if (nextSlice(file_slice))
-            return;
-    }
-
-    // can not find a file to read from
-    file_slice.reset();
-}
-
-bool StorageHiveSource::Allocator::nextSlice(FileSlice & file_slice) const
-{
-    const auto & file = files[file_slice.file];
-
-    /// if read by slice is not supported, we consider the file only has one slice
-    size_t max_slice_num = allow_allocate_by_slice ? file->numSlices() : 1;
-    for (size_t slice = slice_progress[file_slice.file].fetch_add(1); slice < max_slice_num;
-         slice = slice_progress[file_slice.file].fetch_add(1))
-    {
-        if (!file->canSkipSplit(slice))
-        {
-            file_slice.slice = slice;
-            return true;
-        }
-    }
-
-    return false;
-}
-
 Block StorageHiveSource::BlockInfo::getHeader() const
 {
     Block sample_block = header;
@@ -110,6 +67,20 @@ Block StorageHiveSource::BlockInfo::getHeader() const
         sample_block.insert({DataTypeString().createColumn(), std::make_shared<DataTypeString>(), "_file"});
 
     return sample_block;
+}
+
+StorageHiveSource::Allocator::Allocator(HiveFiles files_)
+    : hive_files(std::move(files_))
+{
+}
+
+HiveFilePtr StorageHiveSource::Allocator::next() const
+{
+    size_t idx = unallocated.fetch_add(1);
+    if (idx >= hive_files.size())
+        return nullptr;
+
+    return hive_files[idx];
 }
 
 StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_, const std::shared_ptr<SelectQueryInfo> &query_info_)
@@ -134,38 +105,29 @@ StorageHiveSource::~StorageHiveSource() = default;
 
 void StorageHiveSource::prepareReader()
 {
-    int previous_file = current_file_slice.file;
-    allocator->next(current_file_slice);
-    /// no next file to read from
-
-    if (current_file_slice.empty())
+    hive_file = allocator->next();
+    if (!hive_file)
         return;
-
-    bool continue_reading = (previous_file == static_cast<int>(current_file_slice.file));
-    const auto & hive_file = allocator->files[current_file_slice.file];
-
-    LOG_TRACE(log, "Read from file {}, slice {}, continue_reading {}",
-        current_file_slice.file, current_file_slice.slice, continue_reading);
 
     /// all blocks are 'virtual' i.e. all columns are partition column
-    if (auto num_rows = hive_file->numRows(); block_info->all_partition_column && num_rows)
+    if (block_info->all_partition_column)
     {
-        Columns columns;
-        auto types = block_info->to_read.getDataTypes();
-        for (const auto & type : types)
-            columns.push_back(type->createColumnConstWithDefaultValue(*num_rows));
+        std::optional<size_t> num_rows = hive_file->numRows();
+        if (num_rows)
+        {
+            Columns columns;
+            auto types = block_info->to_read.getDataTypes();
+            for (const auto & type : types)
+                columns.push_back(type->createColumnConstWithDefaultValue(*num_rows));
 
-        Chunk chunk(std::move(columns), *num_rows);
-        pipeline = std::make_unique<QueryPipeline>();
-        pipeline->init(Pipe(std::make_shared<SourceFromSingleChunk>(block_info->header, std::move(chunk))));
-        reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
-        return;
+            Chunk chunk(std::move(columns), *num_rows);
+            pipeline = std::make_unique<QueryPipeline>();
+            pipeline->init(Pipe(std::make_shared<SourceFromSingleChunk>(block_info->header, std::move(chunk))));
+            reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
+            return;
+        }
     }
 
-    if (!continue_reading)
-        read_params->read_buf.reset();
-
-    read_params->slice = current_file_slice.slice;
     pipeline = std::make_unique<QueryPipeline>();
     data_source = hive_file->getReader(block_info->to_read, read_params);
     pipeline->init(Pipe(data_source));
@@ -237,14 +199,13 @@ Chunk StorageHiveSource::generate()
 
 Chunk StorageHiveSource::buildResultChunk(Chunk & chunk) const
 {
-    if (current_file_slice.empty())
+    if (!hive_file)
         return {};
 
     auto num_rows = chunk.getNumRows();
     const auto & read_block = block_info->to_read;
     Columns read_columns = chunk.detachColumns();
 
-    const auto & hive_file = allocator->files[current_file_slice.file];
     const auto & output_header = getPort().getHeader();
     Columns result_columns;
     result_columns.reserve(output_header.columns());

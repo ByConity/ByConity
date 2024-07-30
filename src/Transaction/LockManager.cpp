@@ -347,15 +347,15 @@ void LockManager::unlock(const LockInfoPtr & info)
     /// XXX: If a topo switch occurs during the commit phase, it may lead to parallel lock holding.
     /// While this problem is difficult to solve because committed transactions are not supported to be rolled back. Temporarily use the time window of topo switching to avoid this problem
     /// Potential logs need to be printed
-    auto current_topology_server = global_context->getCnchTopologyMaster()->getTargetServer(info->table_uuid_with_prefix, DEFAULT_SERVER_VW_NAME, false);
+    auto current_topology_server = global_context->getCnchTopologyMaster()->getTargetServer(stored_info->table_uuid_with_prefix, DEFAULT_SERVER_VW_NAME, false);
     auto record = global_context->getCnchCatalog()->tryGetTransactionRecord(txn_id);
     if (record && record->status() == CnchTransactionStatus::Finished)
     {
-        if (current_topology_server.topology_version != PairInt64{0, 0} && info->topology_version != current_topology_server.topology_version)
+        if (current_topology_server.topology_version != PairInt64{0, 0} && stored_info->topology_version != current_topology_server.topology_version)
         {
             bool is_local_server = isLocalServer(current_topology_server.getRPCAddress(), std::to_string(global_context->getRPCPort()));
-            if (!is_local_server || info->topology_version.high + 1 != current_topology_server.topology_version.high)
-                LOG_WARNING(log, "Txn {} of table {} has been committed, but topo check is failed, reason {}, it may cause parallel lock holding", txn_id, info->table_uuid_with_prefix,
+            if (!is_local_server || stored_info->topology_version.high + 1 != current_topology_server.topology_version.high)
+                LOG_WARNING(log, "Txn {} of table {} has been committed, but topo check is failed, reason {}, it may cause parallel lock holding", txn_id, stored_info->table_uuid_with_prefix,
                     !is_local_server ? "host server switched" : "topology_version can not be used");
         }
     }

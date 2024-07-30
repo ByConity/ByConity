@@ -46,7 +46,7 @@ std::string DataTypeAggregateFunction::doGetName() const
         {
             if (i)
                 stream << ", ";
-            stream << applyVisitor(FieldVisitorToString(), parameters[i]);
+            stream << applyVisitor(DecimalFieldVisitorToString(), parameters[i]);
         }
         stream << ')';
     }

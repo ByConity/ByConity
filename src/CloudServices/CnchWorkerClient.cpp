@@ -32,6 +32,7 @@
 #include <WorkerTasks/ManipulationTaskParams.h>
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 
+#include <brpc/callback.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <common/logger_useful.h>
@@ -412,7 +413,8 @@ brpc::CallId CnchWorkerClient::sendResources(
     auto recycle_timeout = max_execution_time ? max_execution_time + 60 : 3600;
     request.set_timeout(recycle_timeout);
 
-    for (const auto & resource : resources_to_send)
+    bool require_worker_info = false;
+    for (const auto & resource: resources_to_send)
     {
         if (!resource.sent_create_query)
         {
@@ -439,6 +441,11 @@ brpc::CallId CnchWorkerClient::sendResources(
 
         table_data_parts.set_database(resource.storage->getDatabaseName());
         table_data_parts.set_table(resource.worker_table_name);
+        if (resource.table_version)
+        {
+            require_worker_info = true;
+            table_data_parts.set_table_version(resource.table_version);
+        }
 
         if (!resource.server_parts.empty())
         {
@@ -448,6 +455,19 @@ brpc::CallId CnchWorkerClient::sendResources(
                 resource.server_parts,
                 *table_data_parts.mutable_server_parts(),
                 *table_data_parts.mutable_server_part_bitmaps());
+        }
+
+        if (!resource.virtual_parts.empty())
+        {
+            fillPartsModelForSend(*resource.storage, resource.virtual_parts, *table_data_parts.mutable_virtual_parts());
+            auto * bitmaps_model = table_data_parts.mutable_virtual_part_bitmaps();
+            for (const auto & virtual_part : resource.virtual_parts)
+            {
+                for (auto & bitmap_meta : virtual_part->part->delete_bitmap_metas)
+                {
+                    bitmaps_model->Add()->CopyFrom(*bitmap_meta);
+                }
+            }
         }
 
         if (!resource.hive_parts.empty())
@@ -467,8 +487,23 @@ brpc::CallId CnchWorkerClient::sendResources(
             *table_data_parts.mutable_bucket_numbers()->Add() = bucket_num;
     }
 
+    // need add worker info if query by table version
+    if (require_worker_info)
+    {
+        auto current_wg = context->getCurrentWorkerGroup();
+        auto * worker_info = request.mutable_worker_info();
+        // TODO: resource manager should gurantee the worker number and worker index are consistent
+        RPCHelpers::fillWorkerInfo(*worker_info, worker_id.id, current_wg->workerNum());
+
+        // worker info validation
+        if (worker_info->num_workers() <= worker_info->index())
+            throw Exception("Invailid worker index " + toString(worker_info->index()) + " for worker group " +
+                current_wg->getVWName() + ", which contains " + toString(current_wg->workerNum()) + " workers.", ErrorCodes::LOGICAL_ERROR);
+    }
+
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
+    LOG_TRACE(&Poco::Logger::get("CnchWorkerClient"), "request : {}", request.ShortDebugString());
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms
@@ -481,17 +516,17 @@ brpc::CallId CnchWorkerClient::sendResources(
     return call_id;
 }
 
-void CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id)
+brpc::CallId CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id, ExceptionHandlerPtr handler)
 {
-    brpc::Controller cntl;
+    brpc::Controller * cntl = new brpc::Controller;
     Protos::RemoveWorkerResourceReq request;
-    Protos::RemoveWorkerResourceResp response;
+    auto * response = new Protos::RemoveWorkerResourceResp;
+    auto call_id = cntl->call_id();
 
     request.set_txn_id(txn_id);
-    stub->removeWorkerResource(&cntl, &request, &response, nullptr);
+    stub->removeWorkerResource(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
 
-    assertController(cntl);
-    RPCHelpers::checkResponse(response);
+    return call_id;
 }
 
 void CnchWorkerClient::createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports_, const size_t & deduper_index)

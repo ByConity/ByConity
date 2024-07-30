@@ -34,6 +34,18 @@ namespace DB
 class MergeTreeSequentialSource : public SourceWithProgress
 {
 public:
+    struct RuntimeContext
+    {
+        std::atomic<size_t> total_rows = 0;
+        std::atomic<size_t> total_bytes = 0;
+        std::atomic<size_t> update_count = 0;
+
+        virtual ~RuntimeContext();
+
+        void update(size_t rows_read_, const Columns & columns);
+    };
+    using RuntimeContextPtr = std::shared_ptr<RuntimeContext>;
+
     /// NOTE: in case you want to read part with row id included, please add extra `_part_row_number` to
     /// the columns you want to read.
     MergeTreeSequentialSource(
@@ -44,7 +56,10 @@ public:
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
         bool quiet = false,
-        CnchMergePrefetcher::PartFutureFiles* future_files = nullptr);
+        CnchMergePrefetcher::PartFutureFiles * future_files = nullptr,
+        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE,
+        size_t block_preferred_size_bytes_ = 0, /// 0 means unlimited, will read single granule each time
+        RuntimeContextPtr rt_ctx_ = nullptr);
 
     MergeTreeSequentialSource(
         const MergeTreeMetaBase & storage_,
@@ -56,7 +71,9 @@ public:
         bool take_column_types_from_storage,
         bool quiet = false,
         CnchMergePrefetcher::PartFutureFiles* future_files = nullptr,
-        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE);
+        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE,
+        size_t block_preferred_size_bytes_ = 0, /// 0 means unlimited, will read single granule each time
+        RuntimeContextPtr rt_ctx_ = nullptr);
 
     ~MergeTreeSequentialSource() override;
 
@@ -95,6 +112,10 @@ private:
 
     /// current row at which we stop reading
     size_t current_row = 0;
+
+    size_t block_preferred_size_bytes = 0;
+
+    RuntimeContextPtr rt_ctx = nullptr;
 
 private:
     /// Closes readers and unlock part locks

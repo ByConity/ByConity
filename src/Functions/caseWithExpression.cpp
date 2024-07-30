@@ -77,7 +77,7 @@ public:
             types_of_conditions.emplace_back(arg);
         });
 
-        auto condition_super_type = getLeastSupertype(types_of_conditions);
+        auto condition_super_type = getLeastSupertypeOrString(types_of_conditions);
 
         DataTypes types_of_branches;
         types_of_branches.reserve(args.size() / 2);
@@ -86,7 +86,7 @@ public:
             types_of_branches.emplace_back(arg);
         });
 
-        return getLeastSupertype(types_of_branches);
+        return getLeastSupertypeOrString(types_of_branches);
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count) const override

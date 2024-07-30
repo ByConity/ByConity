@@ -302,6 +302,8 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         }
     }
 
+    if (context_->getServerType() == ServerType::cnch_server)
+        context_->checkAeolusTableAccess(table_id.database_name, table_id.table_name);
 
     if (table_id.hasUUID() && table_id.database_name == TEMPORARY_DATABASE)
     {

@@ -35,6 +35,7 @@ enum class WrapperKind
     StringToHash64 = 2, // apply "cityHash64" in sql
     DecimalToFloat64 = 3, // apply "toFloat64" in sql
     FixedStringToHash64 = 4, // apply "cityHash64 . toString" in sql
+    UUIDToUInt128 = 5, // apply "toUInt128" in sql
 };
 
 
@@ -73,6 +74,10 @@ inline ColumnCollectConfig getColumnConfig(const CollectorSettings & settings, c
     {
         // Note: DateTime64 is a Decimal, convert it to float64
         config.wrapper_kind = WrapperKind::DecimalToFloat64;
+    }
+    else if (isUUID(type))
+    {
+        config.wrapper_kind = WrapperKind::UUIDToUInt128;
     }
     else
     {
@@ -138,6 +143,8 @@ inline String getWrappedColumnName(const ColumnCollectConfig & config, const Str
             return fmt::format(FMT_STRING("cityHash64(toString({}))"), col_name);
         case WrapperKind::DecimalToFloat64:
             return fmt::format(FMT_STRING("toFloat64({})"), col_name);
+        case WrapperKind::UUIDToUInt128:
+            return fmt::format(FMT_STRING("reinterpret({}, 'UInt128')"), col_name);
         default:
             throw Exception("Unknown wrapper mode", ErrorCodes::LOGICAL_ERROR);
     }

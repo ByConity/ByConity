@@ -145,7 +145,7 @@ public:
     void
     selectPrunedWorkers(DAGGraph * dag_graph_ptr, PlanSegment * plan_segment_ptr, NodeSelectorResult & result, AddressInfo & local_address)
     {
-        const auto & target_hosts = dag_graph_ptr->source_prune_info->plan_segment_workers_map[plan_segment_ptr->getPlanSegmentId()];
+        const auto & target_hosts = dag_graph_ptr->source_pruner->plan_segment_workers_map[plan_segment_ptr->getPlanSegmentId()];
         if (target_hosts.empty())
         {
             LOG_DEBUG(log, "SourcePrune plan segment {} select first worker.", plan_segment_ptr->getPlanSegmentId());

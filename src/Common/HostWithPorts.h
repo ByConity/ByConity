@@ -243,6 +243,24 @@ public:
 };
 
 std::ostream & operator<<(std::ostream & os, const HostWithPorts & host_ports);
+
+struct WGWorkerInfo
+{
+    WGWorkerInfo(const String & worker_id_, size_t num_workers_, size_t index_)
+        : worker_id(worker_id_), num_workers(num_workers_), index(index_) {}
+
+    bool operator==(const WGWorkerInfo & other) const
+    {
+        return (worker_id == other.worker_id) && (num_workers == other.num_workers) && (index == other.index);
+    }
+
+    String worker_id;
+    UInt64 num_workers;
+    UInt64 index;
+};
+
+using WGWorkerInfoPtr = std::shared_ptr<WGWorkerInfo>;
+
 }
 
 namespace std

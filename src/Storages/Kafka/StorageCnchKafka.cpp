@@ -178,6 +178,7 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     /// Apply alter commands to create-sql
     {
         String create_table_query = getCreateTableSql();
+        alter_act.setOldSchema(create_table_query);
         ParserCreateQuery parser;
         ASTPtr ast = parseQuery(parser, create_table_query, local_context->getSettingsRef().max_query_size
             , local_context->getSettingsRef().max_parser_depth);

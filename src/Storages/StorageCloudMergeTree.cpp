@@ -23,8 +23,12 @@
 #include <Interpreters/TreeRewriter.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <Processors/Pipe.h>
+#include <Processors/Sources/SourceFromInputStream.h>
+#include <Processors/Sources/NullSource.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <Storages/IStorage.h>
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
@@ -39,6 +43,12 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+
+namespace ProfileEvents
+{
+    extern const Event PrunedPartitions;
+    extern const Event PreparePartsForReadMilliseconds;
+}
 
 namespace DB
 {
@@ -115,6 +125,9 @@ void StorageCloudMergeTree::read(
     size_t max_block_size,
     unsigned num_streams)
 {
+    // need create IMergeTreeDataPart from loaded server parts when query with table version
+    prepareDataPartsForRead(local_context, query_info, column_names);
+
     if (auto plan = MergeTreeDataSelectExecutor(*this).read(
             column_names, storage_snapshot, query_info, local_context, max_block_size, num_streams, processed_stage))
         query_plan = std::move(*plan);
@@ -129,6 +142,9 @@ Pipe StorageCloudMergeTree::read(
     const size_t max_block_size,
     const unsigned num_streams)
 {
+    // need create IMergeTreeDataPart from loaded server parts when query with table version
+    prepareDataPartsForRead(local_context, query_info, column_names);
+
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
@@ -739,6 +755,38 @@ bool StorageCloudMergeTree::getQueryProcessingStageWithAggregateProjection(
 std::unique_ptr<MergeTreeSettings> StorageCloudMergeTree::getDefaultSettings() const
 {
     return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+}
+
+void StorageCloudMergeTree::prepareDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names)
+{
+    Stopwatch watch;
+
+    std::lock_guard<std::mutex> lock(server_data_mutex);
+
+    if (!has_server_part_to_load)
+        return;
+
+    auto partition_list = getAllPartitions();
+
+    if (partition_list.empty())
+        return;
+
+    Strings required_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names, local_context);
+
+    SCOPE_EXIT({
+        ProfileEvents::increment(ProfileEvents::PrunedPartitions, required_partitions.size());
+        ProfileEvents::increment(ProfileEvents::PreparePartsForReadMilliseconds, watch.elapsedMilliseconds());
+    });
+
+    size_t loaded_parts_count = loadFromServerPartsInPartition(required_partitions);
+
+    /// data part only need to be loaded once
+    has_server_part_to_load = false;
+
+    LOG_TRACE(log, "Loaded {} data parts in {} partitions elapsed {}ms.",
+        loaded_parts_count,
+        required_partitions.size(),
+        watch.elapsedMilliseconds());
 }
 
 }

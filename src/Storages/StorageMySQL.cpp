@@ -315,6 +315,7 @@ void StorageMySQL::alter(const AlterCommands & params, ContextPtr query_context,
     auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef(), query_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
 
+    alter_act.setOldSchema(table_definition);
     auto new_schema = queryToString(new_ast_create);
     alter_act.setNewSchema(new_schema);
 

@@ -38,9 +38,10 @@ namespace CnchBGThread
         ObjectSchemaAssemble = 8,
         CnchRefreshMaterializedView = 9,
         PartMover = 10,
+        ManifestCheckpoint = 11,
 
         ServerMinType = PartGC,
-        ServerMaxType = PartMover,
+        ServerMaxType = ManifestCheckpoint,
 
         GlobalGC = 20, /// reserve several entries
         TxnGC = 21,
@@ -109,6 +110,8 @@ constexpr auto toString(CnchBGThreadType type)
             return "CnchRefreshMaterializedView";
         case CnchBGThreadType::PartMover:
             return "PartMoverThread";
+        case CnchBGThreadType::ManifestCheckpoint:
+            return "ManifestCheckpoint";
     }
     __builtin_unreachable();
 }

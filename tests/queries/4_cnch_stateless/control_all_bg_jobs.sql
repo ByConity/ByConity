@@ -10,30 +10,30 @@ SELECT sleepEachRow(3) FROM numbers(2) Format Null;
 SYSTEM SUSPEND_ALL MERGES;
 SYSTEM SUSPEND_ALL GC;
 SELECT sleepEachRow(3) FROM numbers(6) Format Null;
-SELECT count() FROM system.dm_bg_jobs WHERE type = 'MergeMutateThread' and database = currentDatabase() and table = 't';
-SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'MergeMutateThread' and database = currentDatabase() and table = 't';
-SELECT count() FROM system.dm_bg_jobs WHERE type = 'MergeMutateThread' and database = currentDatabase() and table = 't2';
-SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'MergeMutateThread' and database = currentDatabase() and table = 't2';
+SELECT count() FROM system.dm_bg_jobs WHERE type = 'MergeMutateThread' and database = currentDatabase(0) and table = 't';
+SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'MergeMutateThread' and database = currentDatabase(0) and table = 't';
+SELECT count() FROM system.dm_bg_jobs WHERE type = 'MergeMutateThread' and database = currentDatabase(0) and table = 't2';
+SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'MergeMutateThread' and database = currentDatabase(0) and table = 't2';
 
-SELECT count() FROM system.dm_bg_jobs WHERE type = 'PartGCThread' and database = currentDatabase() and table = 't';
-SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'PartGCThread' and database = currentDatabase() and table = 't';
-SELECT count() FROM system.dm_bg_jobs WHERE type = 'PartGCThread' and database = currentDatabase() and table = 't2';
-SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'PartGCThread' and database = currentDatabase() and table = 't2';
+SELECT count() FROM system.dm_bg_jobs WHERE type = 'PartGCThread' and database = currentDatabase(0) and table = 't';
+SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'PartGCThread' and database = currentDatabase(0) and table = 't';
+SELECT count() FROM system.dm_bg_jobs WHERE type = 'PartGCThread' and database = currentDatabase(0) and table = 't2';
+SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'PartGCThread' and database = currentDatabase(0) and table = 't2';
 
 SYSTEM RESUME_ALL MERGES;
 SYSTEM RESUME_ALL GC;
 
 SELECT sleepEachRow(3) FROM numbers(6) Format Null;
 
-SELECT count() FROM system.dm_bg_jobs WHERE type = 'MergeMutateThread' and database = currentDatabase() and table = 't';
-SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'MergeMutateThread' and database = currentDatabase() and table = 't';
-SELECT count() FROM system.dm_bg_jobs WHERE type = 'MergeMutateThread' and database = currentDatabase() and table = 't2';
-SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'MergeMutateThread' and database = currentDatabase() and table = 't2';
+SELECT count() FROM system.dm_bg_jobs WHERE type = 'MergeMutateThread' and database = currentDatabase(0) and table = 't';
+SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'MergeMutateThread' and database = currentDatabase(0) and table = 't';
+SELECT count() FROM system.dm_bg_jobs WHERE type = 'MergeMutateThread' and database = currentDatabase(0) and table = 't2';
+SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'MergeMutateThread' and database = currentDatabase(0) and table = 't2';
 
-SELECT count() FROM system.dm_bg_jobs WHERE type = 'PartGCThread' and database = currentDatabase() and table = 't';
-SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'PartGCThread' and database = currentDatabase() and table = 't';
-SELECT count() FROM system.dm_bg_jobs WHERE type = 'PartGCThread' and database = currentDatabase() and table = 't2';
-SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'PartGCThread' and database = currentDatabase() and table = 't2';
+SELECT count() FROM system.dm_bg_jobs WHERE type = 'PartGCThread' and database = currentDatabase(0) and table = 't';
+SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'PartGCThread' and database = currentDatabase(0) and table = 't';
+SELECT count() FROM system.dm_bg_jobs WHERE type = 'PartGCThread' and database = currentDatabase(0) and table = 't2';
+SELECT count() FROM cnch(server, system.bg_threads) WHERE type = 'PartGCThread' and database = currentDatabase(0) and table = 't2';
 
 DROP TABLE IF EXISTS t;
 DROP TABLE IF EXISTS t2;

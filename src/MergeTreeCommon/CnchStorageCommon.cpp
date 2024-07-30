@@ -307,7 +307,8 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     bool enable_staging_area,
     const std::optional<StorageID> & cnch_storage_id,
     const Strings & engine_args,
-    const String & local_database_name) const
+    const String & local_database_name,
+    WorkerEngineType engine_type) const
 {
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);

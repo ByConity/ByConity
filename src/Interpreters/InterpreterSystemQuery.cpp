@@ -36,6 +36,7 @@
 #include <MergeTreeCommon/GlobalGCManager.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <CloudServices/CnchPartGCThread.h>
+#include <CloudServices/CnchManifestCheckpointThread.h>
 #include <CloudServices/CnchServerClientPool.h>
 #include <DaemonManager/DaemonManagerClient.h>
 #include <Interpreters/Context.h>
@@ -521,6 +522,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::GC:
             executeGc(query);
+            break;
+        case Type::MANIFEST_CHECKPOINT:
+            executeCheckpoint(query);
             break;
         case Type::DEDUP_WITH_HIGH_PRIORITY:
             dedupWithHighPriority(query);
@@ -1233,6 +1237,17 @@ void InterpreterSystemQuery::executeGc(const ASTSystemQuery & query)
     gc_thread.executeManually(query.partition, local_context);
 }
 
+void InterpreterSystemQuery::executeCheckpoint(const ASTSystemQuery & )
+{
+    auto local_context = getContext();
+    if (auto server_type = local_context->getServerType(); server_type != ServerType::cnch_server)
+        throw Exception("SYSTEM CHECKPOINT is only available on CNCH server", ErrorCodes::NOT_IMPLEMENTED);
+    
+    auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
+    CnchManifestCheckpointThread checkpoint_thread(local_context, storage->getStorageID());
+    checkpoint_thread.executeManually();
+}
+
 void InterpreterSystemQuery::dedupWithHighPriority(const ASTSystemQuery & query)
 {
     if (getContext()->getServerType() != ServerType::cnch_server)
@@ -1637,16 +1652,19 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
         executeActionOnCNCHLogImpl(getContext()->getCloudKafkaLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getCloudMaterializedMySQLLog(), type, table_name, log);
+    else if (table_name == CNCH_SYSTEM_LOG_UNIQUE_TABLE_LOG_TABLE_NAME)
+        executeActionOnCNCHLogImpl(getContext()->getCloudUniqueTableLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getCnchQueryLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getViewRefreshTaskLog(), type, table_name, log);
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "there is no log corresponding to table name {}, available names are {}, {}, {}, {}",
+            "there is no log corresponding to table name {}, available names are {}, {}, {}, {}, {}",
             table_name,
             CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME,
+            CNCH_SYSTEM_LOG_UNIQUE_TABLE_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME);
 }

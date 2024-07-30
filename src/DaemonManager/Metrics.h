@@ -21,6 +21,8 @@ namespace DB::DaemonManager::BRPCMetrics
 {
     extern bvar::Adder< int > g_executeImpl_PartGC_error;
     extern bvar::Adder< int > g_executeImpl_PartGC;
+    extern bvar::Adder< int > g_executeImpl_ManifestCheckpoint_error;
+    extern bvar::Adder< int > g_executeImpl_ManifestCheckpoint;
     extern bvar::Adder< int > g_executeImpl_MergeMutate_error;
     extern bvar::Adder< int > g_executeImpl_MergeMutate;
     extern bvar::Adder< int > g_executeImpl_Consumer_error;

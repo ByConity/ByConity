@@ -169,6 +169,12 @@ message DataModelPart {
   optional uint64 row_exists_count = 41;
 };
 
+message DataModelVirtualPart
+{
+  required DataModelPart part = 1;
+  repeated uint64 mark_ranges = 2;
+}
+
 message CnchFilePartInfo { required string name = 1; }
 
 message CnchFilePartModel { required CnchFilePartInfo part_info = 1; }
@@ -215,7 +221,16 @@ message DataModelDeleteBitmap {
   optional int64 bucket_number = 12;
 }
 
+message DataModelDeleteBitmapVector {repeated DataModelDeleteBitmap delete_bitmaps = 1;}
+
 message DataModelPartVector { repeated DataModelPart parts = 1; }
+
+// for checkpoint
+message DataModelManifestData
+{
+  repeated DataModelPart parts = 1;
+  repeated DataModelDeleteBitmap delete_bitmaps = 2;
+}
 
 message TopicPartitionModel {
   required string topic = 1;
@@ -778,4 +793,20 @@ message DataModelSnapshot {
 message LastModificationTimeHint {
   required bytes partition_id = 1;
   optional uint64 last_modification_time = 2;
+}
+
+message TransactionMetadata 
+{
+  required DataModelTransactionRecord txn_record = 1;
+  required uint64 commit_time = 2;
+  required UUID main_table = 3;
+  optional string consumer_group = 4;
+  repeated TopicPartitionModel tpl = 5;
+}
+
+message ManifestListModel
+{
+  required uint64 version = 1;
+  repeated uint64 txn_ids = 2;
+  optional bool checkpoint = 3;
 }

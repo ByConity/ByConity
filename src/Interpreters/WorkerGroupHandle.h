@@ -90,6 +90,7 @@ public:
     auto & getHostWithPortsVec() const { return hosts; }
     auto empty() const { return hosts.empty(); }
     auto size() const { return hosts.size(); }
+    auto workerNum() const { return worker_num; }
 
     /// TODO: (zuochuang.zema) consider reduce the size of WorkerGroupMetrics.
     auto getMetrics() const
@@ -136,6 +137,8 @@ public:
 
     std::unordered_map<String, HostWithPorts> getIdHostPortsMap() const;
 
+    static WorkerGroupHandle mockWorkerGroupHandle(const String & worker_id_prefix_, UInt64 worker_number_, const ContextPtr & context_);
+
 private:
     /// Note: updating mutable fields (like `metrics`) should be guarded with lock.
     mutable std::mutex state_mutex;
@@ -146,6 +149,8 @@ private:
     String vw_name;
     HostWithPortsVec hosts;
     WorkerGroupMetrics metrics;
+    /// the specified number of workers in current worker group.
+    UInt64 worker_num;
 
     /// Description of the cluster shards.
     ShardsInfo shards_info;

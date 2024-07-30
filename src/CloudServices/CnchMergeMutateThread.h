@@ -54,6 +54,8 @@ struct ManipulationTaskRecord
     String task_id;
     TransactionCnchPtr transaction;
 
+    UInt64 submit_time_ns{0};
+
     /// Set task_record's commit_start_time once it go into txn commit stage.
     /// There are some other operations may be conflict with merge.
     /// 1. DROP PARTITION - get the current max block id and generate a DropRange part. 
@@ -187,7 +189,7 @@ public:
 
 
     void tryRemoveTask(const String & task_id);
-    void finishTask(const String & task_id, std::function<void(const Strings &)> && precommit_parts);
+    void finishTask(const String & task_id, std::function<void(const Strings &, UInt64)> && precommit_parts);
     bool removeTasksOnPartitions(const std::unordered_set<String> & partitions);
 
     String triggerPartMerge(StoragePtr & istorage, const String & partition_id, bool final, bool try_select, bool try_execute);

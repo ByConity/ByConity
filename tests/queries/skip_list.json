@@ -650,6 +650,9 @@
         "10200_table_snapshots",
         "50010_parts_info",
         "50011_parts_info_for_unique_table",
+        /// Need flush system logs on host server
+        "02981_vertical_merges_memory_usage",
+        "02981_vertical_merges_lc_memory_usage",
         /// Code: 57 -- Table xxx already exists.
         "45005_memory_stats",
         "45004_stats_star",

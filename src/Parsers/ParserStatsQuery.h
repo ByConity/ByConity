@@ -71,25 +71,20 @@ protected:
                 query->if_not_exists = true;
         }
 
-        query->target_all = s_all.ignore(pos, expected);
-
-        if (!query->target_all)
+        if (s_all.ignore(pos, expected))
         {
-            bool any_database = false;
-            bool any_table = false;
+            // only for compatibility
+            query->any_database = false;
+            query->any_table = true;
+        }
+        else if (!parseDatabaseAndTableNameOrAsterisks(pos, expected, query->database, query->any_database, query->table, query->any_table))
+        {
+            return false;
+        }
 
-            if (!parseDatabaseAndTableNameOrAsterisks(pos, expected, query->database, any_database, query->table, any_table))
-                return false;
-
-            // collect on any database is not implemented
-            if (any_database)
-                return false;
-
-            if (any_table)
-            {
-                query->target_all = true;
-            }
-            else if (open.ignore(pos, expected))
+        if (!query->any_table)
+        {
+            if (open.ignore(pos, expected))
             {
                 // parse columns when given table
                 auto parse_id = [&query, &pos, &expected] {
@@ -174,5 +169,4 @@ class ParserCreateStatsQuery : public ParserStatsQueryBase<CreateStatsParserName
 protected:
     bool parseSuffix(Pos & pos, QueryAst & node, Expected & expected) override;
 };
-
 }

@@ -954,6 +954,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
         {
             std::lock_guard lock(task_records_mutex);
             task_records[params.task_id] = future_task.moveRecord();
+            task_records[params.task_id]->submit_time_ns = clock_gettime_ns(CLOCK_MONOTONIC_COARSE);
 
             if (ManipulationType::Merge == type)
                 ++running_merge_tasks;
@@ -1159,7 +1160,7 @@ void CnchMergeMutateThread::removeTaskImpl(const String & task_id, std::lock_gua
 }
 
 /// Merge txn's phase-1 commit.
-void CnchMergeMutateThread::finishTask(const String & task_id, std::function<void(const Strings &)> && precommit_parts)
+void CnchMergeMutateThread::finishTask(const String & task_id, std::function<void(const Strings &, UInt64)> && precommit_parts)
 {
     auto local_context = getContext();
     UInt64 current_ts = local_context->getPhysicalTimestamp();
@@ -1174,6 +1175,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, std::function<voi
     String partition_id;
     Strings source_part_names;
     bool try_execute;
+    UInt64 manipulation_submit_time_ns;
 
     {
         std::lock_guard lock(task_records_mutex);
@@ -1185,6 +1187,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, std::function<voi
         partition_id = it->second->parts.front()->info().partition_id;
         source_part_names = it->second->getSourcePartNames();
         try_execute = it->second->try_execute;
+        manipulation_submit_time_ns = it->second->submit_time_ns;
     }
 
     if (local_context->getRootConfig().debug_disable_merge_commit.safeGet())
@@ -1208,7 +1211,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, std::function<voi
                 task_id, storage_id.getFullTableName());
     }
 
-    precommit_parts(source_part_names);
+    precommit_parts(source_part_names, manipulation_submit_time_ns);
 
     if(auto gc_thread = getContext()->tryGetCnchBGThread(CnchBGThreadType::PartGC, storage_id))
         gc_thread->addCandidatePartition(partition_id);

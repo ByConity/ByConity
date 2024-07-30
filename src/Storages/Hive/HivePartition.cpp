@@ -38,9 +38,24 @@ namespace ErrorCodes
 
 void HivePartition::load(const Apache::Hadoop::Hive::Partition & apache_partition, const KeyDescription & description)
 {
-    partition_id = fmt::format("{}\n", fmt::join(apache_partition.values, ","));
-    ReadBufferFromString rb(partition_id);
-    load(rb, description);
+    {
+        WriteBufferFromString write_buf(partition_id);
+        bool is_first = true;
+        for (const auto & key : apache_partition.values)
+        {
+            if (!std::exchange(is_first, false))
+                writeString(",", write_buf);
+
+            if (key != "__HIVE_DEFAULT_PARTITION__")
+                writeString(key, write_buf);
+            else
+                writeString("\\N", write_buf);
+        }
+        writeString("\n", write_buf);
+    }
+
+    ReadBufferFromString read_buf(partition_id);
+    load(read_buf, description);
 
     file_format = apache_partition.sd.inputFormat;
     location = apache_partition.sd.location;

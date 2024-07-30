@@ -87,7 +87,7 @@ INSERT INTO u10108_pl SELECT '2021-01-02', 1, number, number FROM system.numbers
 INSERT INTO u10108_pl SELECT '2021-01-02', 2, number, number FROM system.numbers LIMIT 100;
 INSERT INTO u10108_pl SELECT '2021-01-03', 1, number, number FROM system.numbers LIMIT 100;
 INSERT INTO u10108_pl SELECT '2021-01-03', 2, number, number FROM system.numbers LIMIT 100;
-SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase() and table = 'u10108_pl' and to_publish group by partition order by partition;
+SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase(0) and table = 'u10108_pl' and to_publish group by partition order by partition;
 SELECT d, k1, count(1), sum(v1) FROM u10108_pl GROUP BY d, k1 ORDER BY d, k1;
 
 SYSTEM STOP DEDUP WORKER u10108_pl;
@@ -98,19 +98,19 @@ ALTER TABLE u10108_pl ATTACH PARTITION ID '20210101';
 ALTER TABLE u10108_pl ATTACH PARTITION ID '20210102';
 ALTER TABLE u10108_pl ATTACH PARTITION ID '20210103';
 SELECT d, k1, count(1), sum(v1) FROM u10108_pl GROUP BY d, k1 ORDER BY d, k1;
-SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase() and table = 'u10108_pl' and to_publish group by partition order by partition;
+SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase(0) and table = 'u10108_pl' and to_publish group by partition order by partition;
 
 SELECT 'test detach staged partition: ';
 ALTER TABLE u10108_pl DETACH STAGED PARTITION ID '20210101';
-SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase() and table = 'u10108_pl' and to_publish group by partition order by partition;
+SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase(0) and table = 'u10108_pl' and to_publish group by partition order by partition;
 ALTER TABLE u10108_pl ATTACH PARTITION ID '20210101';
-SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase() and table = 'u10108_pl' and to_publish group by partition order by partition;
+SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase(0) and table = 'u10108_pl' and to_publish group by partition order by partition;
 
 SELECT 'test drop staged partition: ';
 ALTER TABLE u10108_pl DROP STAGED PARTITION ID '20210101';
-SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase() and table = 'u10108_pl' and to_publish group by partition order by partition;
+SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase(0) and table = 'u10108_pl' and to_publish group by partition order by partition;
 ALTER TABLE u10108_pl ATTACH PARTITION ID '20210101';
-SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase() and table = 'u10108_pl' and to_publish group by partition order by partition;
+SELECT partition, count() FROM system.cnch_staged_parts where database = currentDatabase(0) and table = 'u10108_pl' and to_publish group by partition order by partition;
 
 SELECT 'start dedup worker and all staged parts to be visible';
 SYSTEM START DEDUP WORKER u10108_pl;

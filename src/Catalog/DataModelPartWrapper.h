@@ -41,7 +41,7 @@ public:
     std::shared_ptr<Protos::DataModelPart> part_model;
     String name;
 
-    MergeTreePartition partition;
+    std::shared_ptr<MergeTreePartition> partition = std::make_shared<MergeTreePartition>();
     std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> minmax_idx;
 
     std::shared_ptr<MergeTreePartInfo> info;
@@ -53,6 +53,21 @@ public:
     /// To handle this case, we need to set txnID and part_info::mutation separately, see DataModelHelpers::fillPartsModel.
     /// And when getting txnID, use DataModelPart::txnID by default, and use mutation as fallback.
     inline UInt64 txnID() const { return part_model->txnid() ? part_model->txnid() : part_model->part_info().mutation(); }
+
+    Int64 bucketNumber() const { return part_model->bucket_number(); }
+
+    // used in `assignCnchParts` when distrubuting parts into workers.
+    const String getNameForAllocation() const { return info->getBasicPartName(); }
+
+    // No actual use. Just required in assignParts
+    void setHostPort(const String & disk_cache_host_port_, const String & assign_compute_host_port_) const
+    {
+        disk_cache_host_port = disk_cache_host_port_;
+        assign_compute_host_port = assign_compute_host_port_;
+    }
+
+    mutable String disk_cache_host_port;
+    mutable String assign_compute_host_port;
 };
 
 class DataPartInterface
@@ -100,6 +115,7 @@ public:
 
     bool isEmpty() const;
     UInt64 rowsCount() const;
+    UInt64 marksCount() const;
     UInt64 rowExistsCount() const;
     UInt64 size() const;
     bool isPartial() const;
@@ -120,6 +136,9 @@ public:
     decltype(auto) get_deleted() const { return deleted(); }
     decltype(auto) get_commit_time() const { return getCommitTime(); }
     UUID get_uuid() const;
+
+    // used in `assignCnchParts` when distrubuting parts into workers.
+    String getNameForAllocation() const { return part_model_wrapper->getNameForAllocation(); }
 
     void serializePartitionAndMinMaxIndex(const MergeTreeMetaBase & storage, WriteBuffer & buf) const;
     void serializeDeleteBitmapMetas(const MergeTreeMetaBase & storage, WriteBuffer & buffer) const;
@@ -148,6 +167,15 @@ private:
     mutable UInt64 virtual_part_size = 0;
     mutable ImmutableDeleteBitmapPtr delete_bitmap;
 
+};
+
+struct ServerVirtualPart
+{
+    const ServerDataPartPtr part;
+    std::unique_ptr<MarkRanges> mark_ranges;
+    explicit ServerVirtualPart(const ServerDataPartPtr & part_, std::unique_ptr<MarkRanges> mark_ranges_)
+        : part(part_), mark_ranges(std::move(mark_ranges_))
+    {}
 };
 
 }

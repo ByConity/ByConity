@@ -76,6 +76,7 @@ struct AssignedResource
     AssignedResource(AssignedResource && resource);
 
     StoragePtr storage;
+    UInt64 table_version{0};  //send table version instead of parts if set
     String worker_table_name;
     String create_table_query;
     bool sent_create_query{false};
@@ -83,8 +84,9 @@ struct AssignedResource
 
     /// parts info
     ServerDataPartsVector server_parts;
-    FileDataPartsCNCHVector file_parts;
+    ServerVirtualPartVector virtual_parts;
     HiveFiles hive_parts;
+    FileDataPartsCNCHVector file_parts;
     std::set<Int64> bucket_numbers;
 
     std::unordered_set<String> part_names;
@@ -92,10 +94,11 @@ struct AssignedResource
     ColumnsDescription object_columns;
 
     void addDataParts(const ServerDataPartsVector & parts);
-    void addDataParts(const FileDataPartsCNCHVector & parts);
+    void addDataParts(ServerVirtualPartVector parts);
     void addDataParts(const HiveFiles & parts);
+    void addDataParts(const FileDataPartsCNCHVector & parts);
 
-    bool empty() const { return sent_create_query && server_parts.empty(); }
+    bool empty() const { return sent_create_query && server_parts.empty() && hive_parts.empty() && file_parts.empty(); }
 };
 
 // Send resources separately by UUID
@@ -127,6 +130,9 @@ public:
         const String & create_query,
         const String & worker_table_name,
         bool create_local_table = true);
+
+    void setTableVersion(const UUID & storage_uuid, const UInt64 table_version);
+
     void setAggregateWorker(HostWithPorts aggregate_worker_) { aggregate_worker = std::move(aggregate_worker_); }
 
     void setWorkerGroup(WorkerGroupHandle worker_group_)

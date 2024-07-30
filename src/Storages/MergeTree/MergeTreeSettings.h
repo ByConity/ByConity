@@ -92,7 +92,8 @@ enum StealingCacheMode : UInt64
     M(UInt64, write_ahead_log_max_bytes, 1024 * 1024 * 1024, "Rotate WAL, if it exceeds that amount of bytes", 0) \
 \
     /** Merge settings. */ \
-    M(UInt64, merge_max_block_size, DEFAULT_MERGE_BLOCK_SIZE, "How many rows in blocks should be formed for merge operations.", 0) \
+    M(UInt64, merge_max_block_size, DEFAULT_MERGE_BLOCK_SIZE, "How many rows in blocks should be formed for merge operations, By default has the same value as `index_granularity`.", 0) \
+    M(UInt64, merge_max_block_size_bytes, 10 * 1024 * 1024, "How many bytes in blocks should be formed for merge operations. By default has the same value as `index_granularity_bytes`.", 0) \
     M(UInt64, max_bytes_to_merge_at_max_space_in_pool, 150ULL * 1024 * 1024 * 1024, "Maximum in total size of parts to merge, when there are maximum free threads in background pool (or entries in replication queue).", 0) \
     M(UInt64, max_bytes_to_merge_at_min_space_in_pool, 1024 * 1024, "Maximum in total size of parts to merge, when there are minimum free threads in background pool (or entries in replication queue).", 0) \
     M(UInt64, max_replicated_merges_in_queue, 16, "How many tasks of merging and mutating parts are allowed simultaneously in ReplicatedMergeTree queue.", 0) \
@@ -410,6 +411,10 @@ enum StealingCacheMode : UInt64
     M(UInt64, max_parallel_threads_for_bitmap, 16, "", 0) \
     M(Bool, enable_run_optimization, true, "", 0) \
     M(UInt64, delta_merge_interval, 60, "", 0) \
+    M(Bool, enable_publish_version_on_commit, false, "Experimental. New table version is published sequentially when commit happens. ", 0) \
+    M(Seconds, checkpoint_delay_period, 120, "Interval between two rounds of checkpoint tasks in Checkpoint BG thread", 0) \
+    M(Seconds, manifest_list_lifetime, 1800, "Lifetime of the manifest list. Oudated manifests can be cleaned by Checkpoint GC thread", 0) \
+    M(UInt64, max_active_manifest_list, 10, "Max number of new manifest list before trigger one checkpoint task.", 0) \
     /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */                                 \
     \
     /** If true, replicated tables would prefer to merge locally rather than                                  |\
@@ -545,9 +550,10 @@ enum StealingCacheMode : UInt64
     M(Bool, bitengine_use_key_string, false, "BitEngine support String key", 0) \
     M(Bool, bitengine_use_key_int, true, "BitEngine support UInt64 key, default way", 0) \
     M(String, underlying_dictionary_tables, "{}", "To specify a table to store BitEngine dictionary data, only in Cnch", 0) \
+    /** Hybrid allocation related settings */ \
     M(Bool, enable_hybrid_allocation, false, "Whether or not enable hybrid allocation, default disabled", 0) \
-    M(UInt64, min_rows_per_vp, 2000000, "Minimum size of a virtual part", 0) \
-    M(Float, part_to_vw_size_ratio, 0.1, "Part to vw worker size's ration", 0) \
+    M(UInt64, min_rows_per_virtual_part, 2000000, "Minimum size of a virtual part", 0) \
+    M(Float, part_to_vw_size_ratio, 0, "Part to vw worker size's ration", 0) \
     \
     /** MYSQL related settings */ \
     M(DialectType, storage_dialect_type, DialectType::CLICKHOUSE, "If the storage's dialect_type is not CLICKHOUSE, need to persist the information for creating/running queries on worker", 0) \

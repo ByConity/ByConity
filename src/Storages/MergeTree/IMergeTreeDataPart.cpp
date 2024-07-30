@@ -797,15 +797,10 @@ IMergeTreeDataPartPtr IMergeTreeDataPart::getMvccDataPart(const String & file_na
                 "File {} with  {} not found in delta chain of part {}: no more part",
                 file_name, file_mutation, relative_path);
 
+        LOG_TRACE(storage.log, "Checking part {} [{}] for file {} [{}]", part->name, part->info.mutation, file_name, file_mutation);
+
         if (file_mutation == part->info.mutation)
             return part;
-        else if (file_mutation > part->info.mutation)
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "File {} with {} not found in delta chain of part {}: already got smaller part",
-                file_name, file_mutation, relative_path);
-
-        LOG_TRACE(&Poco::Logger::get(__func__), "Checked {} for {} with {}", part->name, file_name, file_mutation);
     }
 }
 

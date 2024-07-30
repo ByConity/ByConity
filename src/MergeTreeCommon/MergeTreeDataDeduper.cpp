@@ -143,8 +143,10 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
         if (duplicate_part_index != -1)
         {
             found_duplicate = true;
+            LOG_TRACE(log, "found duplication in txn {}, dedup task info {}", dedup_task->txn_id, dedup_task->getDedupLevelInfo());
             if (auto unique_table_log = context->getCloudUniqueTableLog())
             {
+                LOG_TRACE(log, "try to add cnch_unique_table log(found duplication) in txn {}, dedup task info {}", dedup_task->txn_id, dedup_task->getDedupLevelInfo());
                 auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, data.getCnchStorageID());
                 current_log.txn_id = dedup_task->txn_id;
                 current_log.metric = ErrorCodes::UNIQUE_TABLE_DUPLICATE_KEY_FOUND;

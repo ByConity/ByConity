@@ -407,6 +407,12 @@ struct TransactionRecord
     bool isInactive() const { return pb_model.status() == CnchTransactionStatus::Inactive; }
 };
 
+enum class TransactionCommitMode
+{
+    INDEPENDENT = 0, // transactions of one table are commit independently on all servers
+    SEQUENTIAL = 1, // transactions of one table are commit sequentialy on host server.
+};
+
 using TransactionRecords = std::vector<TransactionRecord>;
 
 }

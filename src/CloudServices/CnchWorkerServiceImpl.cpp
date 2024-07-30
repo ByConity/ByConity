@@ -53,6 +53,7 @@
 #include <Common/Configurations.h>
 #include <Storages/ColumnsDescription.h>
 #include <Common/Exception.h>
+#include <MergeTreeCommon/GlobalDataManager.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -87,6 +88,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_SIMULTANEOUS_TASKS;
     extern const int PREALLOCATE_TOPOLOGY_ERROR;
     extern const int PREALLOCATE_QUERY_INTENT_NOT_FOUND;
+    extern const int SESSION_NOT_FOUND;
 }
 
 CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
@@ -721,7 +723,7 @@ void CnchWorkerServiceImpl::sendResources(
 {
     SUBMIT_THREADPOOL({
         LOG_TRACE(log, "Receiving resources for Session: {}", request->txn_id());
-
+        Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
         auto timeout = std::chrono::seconds(request->timeout());
@@ -752,7 +754,25 @@ void CnchWorkerServiceImpl::sendResources(
 
             if (auto * cloud_merge_tree = dynamic_cast<StorageCloudMergeTree *>(storage.get()))
             {
-                if (!data.server_parts().empty())
+                if (data.has_table_version())
+                {
+                    WGWorkerInfoPtr worker_info = RPCHelpers::createWorkerInfo(request->worker_info());
+                    UInt64 version = data.table_version();
+                    ServerDataPartsWithDBM server_parts_with_dbms;
+                    query_context->getGlobalDataManager()->loadDataPartsWithDBM(*cloud_merge_tree, cloud_merge_tree->getStorageUUID(), version, worker_info, server_parts_with_dbms);
+                    size_t server_part_size = server_parts_with_dbms.first.size();
+                    size_t delete_bitmap_size = server_parts_with_dbms.second.size();
+                    cloud_merge_tree->loadServerDataPartsWithDBM(std::move(server_parts_with_dbms));
+
+                    LOG_DEBUG(
+                        log,
+                        "Loaded {} server parts and {} delete bitmap for table {} with version {}",
+                        server_part_size,
+                        delete_bitmap_size,
+                        cloud_merge_tree->getStorageID().getNameForLogs(),
+                        version);
+                }
+                else if (!data.server_parts().empty())
                 {
                     MergeTreeMutableDataPartsVector server_parts;
                     if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
@@ -780,6 +800,35 @@ void CnchWorkerServiceImpl::sendResources(
                         data.server_parts_size(),
                         cloud_merge_tree->getStorageID().getNameForLogs(),
                         request->txn_id(), request->disk_cache_mode());
+                }
+
+                if (!data.virtual_parts().empty())
+                {
+                    MergeTreeMutableDataPartsVector virtual_parts;
+                    if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
+                        virtual_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
+                            *cloud_merge_tree, data.virtual_parts(), data.virtual_part_bitmaps());
+                    else
+                        virtual_parts
+                            = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.virtual_parts());
+
+                    if (request->has_disk_cache_mode())
+                    {
+                        auto disk_cache_mode = SettingFieldDiskCacheModeTraits::fromString(request->disk_cache_mode());
+                        if (disk_cache_mode != DiskCacheMode::AUTO)
+                        {
+                            for (auto & part : virtual_parts)
+                                part->disk_cache_mode = disk_cache_mode;
+                        }
+                    }
+
+                    cloud_merge_tree->loadDataParts(virtual_parts);
+
+                    LOG_DEBUG(
+                        log,
+                        "Received and loaded {} virtual server parts for table {}",
+                        virtual_parts.size(),
+                        cloud_merge_tree->getStorageID().getNameForLogs());
                 }
 
                 std::set<Int64> required_bucket_numbers;
@@ -815,7 +864,7 @@ void CnchWorkerServiceImpl::sendResources(
                 throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);
         }
 
-        LOG_TRACE(log, "Received all resource for session: {}", request->txn_id());
+        LOG_TRACE(log, "Received all resource for session: {}, elapsed: {}ms.", request->txn_id(), watch.elapsedMilliseconds());
     })
 }
 
@@ -828,7 +877,12 @@ void CnchWorkerServiceImpl::removeWorkerResource(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
+        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true, true);
+        if (!session)
+        {
+            // Return success if can't find session.
+            return;
+        }
         /// remove resource in worker
         session->release();
     }

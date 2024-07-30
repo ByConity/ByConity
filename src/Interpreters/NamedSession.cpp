@@ -55,13 +55,20 @@ std::shared_ptr<NamedSession> NamedSessionsImpl<NamedSession>::acquireSession(
     const Key & session_id,
     ContextPtr context,
     std::chrono::steady_clock::duration timeout,
-    bool throw_if_not_found)
+    bool throw_if_not_found,
+    bool return_null_if_not_found)
 {
     std::unique_lock lock(mutex);
 
     auto it = sessions.find(session_id);
     if (it == sessions.end())
     {
+        if (return_null_if_not_found)
+        {
+            LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "Session not found, return nullptr");
+            return nullptr;
+        }
+
         if (throw_if_not_found)
             throw Exception("Session not found.", ErrorCodes::SESSION_NOT_FOUND);
         else

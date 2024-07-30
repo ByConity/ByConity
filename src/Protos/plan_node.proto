@@ -336,6 +336,7 @@ message TableScanStep {
   optional ProjectionStep pushdown_projection = 6;
   optional FilterStep pushdown_filter = 7;
   optional Assignments inline_expressions = 14;
+  optional DataStream output_stream = 15;
 }
 
 message RemoteExchangeSourceStep {

@@ -56,7 +56,8 @@ public:
     ~DDLAlterAction() override = default;
 
     /// TODO: versions
-    void setNewSchema(String schema_);
+    void setOldSchema(const String & shcema_);
+    void setNewSchema(const String & schema_);
     String getNewSchema() const { return new_schema; }
     std::optional<CnchMergeTreeMutationEntry> getMutationEntry() const { return final_mutation_entry; }
 
@@ -73,6 +74,7 @@ private:
     Poco::Logger * log;
     const StoragePtr table;
 
+    String old_schema;
     String new_schema;
     MutationCommands mutation_commands;
     std::optional<CnchMergeTreeMutationEntry> final_mutation_entry;

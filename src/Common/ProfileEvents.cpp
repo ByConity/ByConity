@@ -1095,7 +1095,8 @@
     M(OrcIOSharedCount, "") \
     M(OrcIOSharedBytes, "") \
     M(OrcIODirectCount, "") \
-    M(OrcIODirectBytes, "")
+    M(OrcIODirectBytes, "") \
+    M(PreparePartsForReadMilliseconds, "The time spend on loading CNCH part from ServerPart on worker when query with table version")
 
 namespace ProfileEvents
 {

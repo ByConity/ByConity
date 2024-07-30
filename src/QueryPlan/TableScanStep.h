@@ -27,7 +27,6 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Parsers/IAST_fwd.h>
 
-
 namespace DB
 {
 
@@ -45,7 +44,8 @@ public:
         Assignments inline_expressions_ = {},
         std::shared_ptr<AggregatingStep> aggregation_ = nullptr,
         std::shared_ptr<ProjectionStep> projection_ = nullptr,
-        std::shared_ptr<FilterStep> filter_ = nullptr);
+        std::shared_ptr<FilterStep> filter_ = nullptr,
+        std::optional<DataStream> output_stream_ = std::nullopt);
 
     TableScanStep(
         DataStream output,
@@ -214,6 +214,9 @@ private:
     Int32 unique_id{0};
     Poco::Logger * log;
     String alias;
+
+    // Only for worker.
+    bool is_null_source{false};
 
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;

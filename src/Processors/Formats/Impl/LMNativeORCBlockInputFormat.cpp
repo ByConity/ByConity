@@ -149,7 +149,7 @@ void LMNativeORCBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_gr
         auto status = scanner->init();
         if (!status.ok())
         {
-            throw DB::Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "cannot initialize OrcScanner, error: ", status.ToString());
+            throw DB::Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "cannot initialize OrcScanner, error: {}", status.ToString());
         }
         scanners[row_group_idx] = std::move(scanner);
     });
@@ -166,7 +166,7 @@ std::optional<ParallelDecodingBlockInputFormat::PendingChunk> LMNativeORCBlockIn
     }
     if (!status.ok())
     {
-        throw DB::Exception(ErrorCodes::SYSTEM_ERROR, "cannot read orc file, err: ", status.ToString());
+        throw DB::Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "cannot read orc file, err: {}", status.ToString());
     }
     ParallelDecodingBlockInputFormat::PendingChunk chunk{
         .chunk = Chunk(block.getColumns(), block.rows()),

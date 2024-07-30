@@ -25,6 +25,7 @@
 #include <Parsers/ASTStatsQuery.h>
 #include <Statistics/AutoStatisticsHelper.h>
 #include <Statistics/CachedStatsProxy.h>
+#include <Statistics/ASTHelpers.h>
 #include <Statistics/FormattedOutput.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsColumnBasic.h>
@@ -246,56 +247,13 @@ void readDbStatsFromJson(ContextPtr context, const String & json_file)
     stats_loader.loadStats(/*load_all=*/true);
 }
 
-static std::vector<StatsTableIdentifier> getTables(ContextPtr context, const ASTShowStatsQuery * query)
-{
-    std::vector<StatsTableIdentifier> tables;
-    auto catalog = createCatalogAdaptor(context);
-    auto db = context->resolveDatabase(query->database);
-    if (query->target_all)
-    {
-        tables = catalog->getAllTablesID(db);
-    }
-    else
-    {
-        auto table_info_opt = catalog->getTableIdByName(db, query->table);
-        if (!table_info_opt)
-        {
-            auto msg = "Unknown Table (" + query->table + ") in database (" + db + ")";
-            throw Exception(msg, ErrorCodes::UNKNOWN_TABLE);
-        }
-        tables.emplace_back(table_info_opt.value());
-    }
-    // show materialized view as target table
-    for (auto & table : tables)
-    {
-        auto storage = catalog->getStorageByTableId(table);
-        if (const auto * mv = dynamic_cast<const StorageMaterializedView *>(storage.get()))
-        {
-            auto table_opt = catalog->getTableIdByName(mv->getTargetDatabaseName(), mv->getTargetTableName());
-            if (!table_opt.has_value())
-            {
-                auto err_msg = fmt::format(
-                    FMT_STRING("mv {}.{} has invalid target table {}.{}"),
-                    mv->getDatabaseName(),
-                    mv->getTableName(),
-                    mv->getTargetDatabaseName(),
-                    mv->getTargetTableName());
-                LOG_WARNING(&Poco::Logger::get("ShowStats"), err_msg);
-                continue;
-            }
-            table = table_opt.value();
-        }
-    }
-    return tables;
-}
-
 BlockIO InterpreterShowStatsQuery::executeAll()
 {
     auto query = query_ptr->as<const ASTShowStatsQuery>();
     // Block sample_block = getSampleBlock();
     // MutableColumns res_columns = sample_block.cloneEmptyColumns();
     auto context = getContext();
-    auto tables = getTables(context, query);
+    auto tables = getTablesFromAST(context, query);
     auto catalog = createCatalogAdaptor(context);
 
     BlocksList blocks;
@@ -418,7 +376,7 @@ BlockIO InterpreterShowStatsQuery::executeColumn()
     auto context = getContext();
     // Block sample_block = getSampleBlock();
     // MutableColumns res_columns = sample_block.cloneEmptyColumns();
-    auto tables = getTables(context, query);
+    auto tables = getTablesFromAST(context, query);
     auto catalog = Statistics::createCatalogAdaptor(context);
 
     BlocksList blocks;
@@ -529,7 +487,7 @@ BlockIO InterpreterShowStatsQuery::executeTable()
     auto query = query_ptr->as<const ASTShowStatsQuery>();
     auto context = getContext();
     auto catalog = Statistics::createCatalogAdaptor(context);
-    auto tables = getTables(context, query);
+    auto tables = getTablesFromAST(context, query);
     std::vector<FormattedOutputData> result;
     for (auto & table : tables)
     {

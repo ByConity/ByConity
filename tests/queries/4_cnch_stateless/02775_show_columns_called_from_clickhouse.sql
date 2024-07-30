@@ -1,6 +1,6 @@
 -- Tags: no-fasttest, no-parallel
 -- no-fasttest: json type needs rapidjson library, geo types need s2 geometry
--- no-parallel: can't provide currentDatabase() to SHOW COLUMNS
+-- no-parallel: can't provide currentDatabase(0) to SHOW COLUMNS
 
 -- Tests the output of SHOW COLUMNS when called through the ClickHouse protocol.
 

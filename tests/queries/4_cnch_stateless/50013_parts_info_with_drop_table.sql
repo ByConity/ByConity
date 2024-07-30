@@ -10,10 +10,15 @@ ORDER BY id;
 
 INSERT INTO pi VALUES (1, 'a'), (2, 'b');
 
-SELECT table, total_rows_count
-FROM system.cnch_parts_info
-WHERE database = currentDatabase() AND table = 'pi'
-;
+SELECT lessOrEquals (
+  (
+    SELECT count()
+    FROM system.cnch_parts_info
+    WHERE database = currentDatabase(0) AND table = 'pi'
+  )
+  ,
+  1
+);
 
 DROP TABLE IF EXISTS pi;
 
@@ -27,10 +32,15 @@ ORDER BY id;
 
 INSERT INTO pi VALUES (1, 'a'), (2, 'b');
 
-SELECT table, total_rows_count
-FROM system.cnch_parts_info
-WHERE database = currentDatabase() AND table = 'pi'
-;
+SELECT lessOrEquals (
+  (
+    SELECT count()
+    FROM system.cnch_parts_info
+    WHERE database = currentDatabase(0) AND table = 'pi'
+  )
+  ,
+  1
+);
 
 DROP TABLE IF EXISTS pi;
 
@@ -44,7 +54,12 @@ ORDER BY id;
 
 INSERT INTO pi VALUES (1, 'a'), (2, 'b');
 
-SELECT table, total_rows_count
-FROM system.cnch_parts_info
-WHERE database = currentDatabase() AND table = 'pi'
-;
+SELECT lessOrEquals (
+  (
+    SELECT count()
+    FROM system.cnch_parts_info
+    WHERE database = currentDatabase(0) AND table = 'pi'
+  )
+  ,
+  1
+);

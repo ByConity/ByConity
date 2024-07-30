@@ -18,10 +18,11 @@ namespace
 {
 
 // Get current database name. Parameter decides if the return db name contains tenantID.
-// currentDatabase(0)/currentDatabase() returns `tenantid.dbname`. currentDatabase(1) returns `dbname`
+// currentDatabase(0) returns `tenantid.dbname`. others returns `dbname`
 class FunctionCurrentDatabase : public IFunction
 {
     const String db_name;
+    const String db_name_without_tenant_id;
 
 public:
     static constexpr auto name = "currentDatabase";
@@ -30,7 +31,8 @@ public:
         return std::make_shared<FunctionCurrentDatabase>(context->getCurrentDatabase());
     }
 
-    explicit FunctionCurrentDatabase(const String & db_name_) : db_name{db_name_}
+    explicit FunctionCurrentDatabase(const String & db_name_) :
+        db_name{db_name_}, db_name_without_tenant_id{getOriginalDatabaseName(db_name_)}
     {
     }
 
@@ -63,14 +65,16 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        String current_db_name = db_name;
-        if (arguments.size() == 1)
-        {
-            const ColumnPtr col = arguments[0].column;
-            if (col->size() && col->getUInt(0) != 0)
-                current_db_name = getOriginalDatabaseName(db_name);
-        }
-        return DataTypeString().createColumnConst(input_rows_count, current_db_name);
+        return DataTypeString().createColumnConst(input_rows_count, has_argument_0(arguments) ? db_name : db_name_without_tenant_id);
+    }
+
+private:
+    static bool has_argument_0(const ColumnsWithTypeAndName & arguments)
+    {
+        if (arguments.size() != 1)
+            return false;
+        const ColumnPtr & col = arguments[0].column;
+        return col->size() && col->getUInt(0) == 0;
     }
 };
 

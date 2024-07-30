@@ -139,6 +139,7 @@
 #include <Storages/System/StorageSystemCnchViewTables.h>
 #include <Storages/System/StorageSystemCnchTablesHistory.h>
 #include <Storages/System/StorageSystemCnchTrashItems.h>
+#include <Storages/System/StorageSystemCnchManifestList.h>
 #include <Storages/System/StorageSystemDMBGJobs.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemLockMap.h>
@@ -293,6 +294,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchAsyncQueries>(system_database, "cnch_async_queries");
     attach<StorageSystemCnchTrashItems>(system_database, "cnch_trash_items");
     attach<StorageSystemCnchDetachedParts>(system_database, "cnch_detached_parts");
+    attach<StorageSystemCnchManifestList>(system_database, "cnch_manifest_list");
 #if USE_HIVE
     attach<StorageSystemExternalCatalogs>(system_database, "external_catalogs");
     attach<StorageSystemExternalDatabases>(system_database, "external_databases");
