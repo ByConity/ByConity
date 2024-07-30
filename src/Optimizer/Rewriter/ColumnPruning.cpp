@@ -1271,6 +1271,19 @@ PlanNodePtr ColumnPruningVisitor::addProjection(PlanNodePtr node, NameSet & requ
     return node;
 }
 
+static std::vector<String> makeDistinct(const std::vector<String>& src) {  
+    std::unordered_set<String> tmp;  
+    std::vector<String> result;  
+  
+    for (const auto& str : src) {  
+        if (tmp.insert(str).second) {  
+            result.push_back(str);  
+        }  
+    }  
+  
+    return result;  
+}
+
 PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node)
 {
     auto * distinct_node = dynamic_cast<DistinctNode *>(node.get());
@@ -1314,8 +1327,12 @@ PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node)
             aggregate_desc.function = AggregateFunctionFactory::instance().get("any", {name_and_type.type}, parameters, properties);
             descriptions.emplace_back(aggregate_desc);
         }
+        // distinct keys
+        auto streams = node->getStep()->getOutputStream();
+        auto columns = makeDistinct(step.getColumns());
+
         auto group_agg_step = std::make_shared<AggregatingStep>(
-            node->getStep()->getOutputStream(), step.getColumns(), NameSet{}, descriptions, GroupingSetsParamsList{}, true);
+            streams, columns, NameSet{}, descriptions, GroupingSetsParamsList{}, true);
         auto group_agg_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(group_agg_step), node->getChildren());
         return group_agg_node;
     }
