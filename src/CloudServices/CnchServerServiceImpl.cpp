@@ -567,39 +567,40 @@ void CnchServerServiceImpl::reportTaskHeartbeat(
 }
 
 void CnchServerServiceImpl::reportDeduperHeartbeat(
-    google::protobuf::RpcController * cntl,
+    google::protobuf::RpcController *,
     const Protos::ReportDeduperHeartbeatReq * request,
     Protos::ReportDeduperHeartbeatResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
-        auto cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
-
-        if (auto bg_thread = getContext()->tryGetDedupWorkerManager(cnch_storage_id))
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
         {
-            auto worker_table_name = request->worker_table_name();
-            auto & manager = static_cast<DedupWorkerManager &>(*bg_thread);
+            auto cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
 
-            auto ret = manager.reportHeartbeat(worker_table_name);
+            if (auto bg_thread = gc->tryGetDedupWorkerManager(cnch_storage_id))
+            {
+                const auto & worker_table_name = request->worker_table_name();
+                auto & manager = static_cast<DedupWorkerManager &>(*bg_thread);
 
-            // NOTE: here we send a response back to let the worker know the result.
-            response->set_code(static_cast<UInt32>(ret));
-            return;
+                auto ret = manager.reportHeartbeat(worker_table_name);
+
+                // NOTE: here we send a response back to let the worker know the result.
+                response->set_code(static_cast<UInt32>(ret));
+                return;
+            }
+            else
+            {
+                LOG_WARNING(log, "Failed to get background thread");
+            }
         }
-        else
+        catch (...)
         {
-            LOG_WARNING(log, "Failed to get background thread");
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
         }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
-    response->set_code(static_cast<UInt32>(DedupWorkerHeartbeatResult::Kill));
+        response->set_code(static_cast<UInt32>(DedupWorkerHeartbeatResult::Kill));
+    });
 }
 
 void CnchServerServiceImpl::fetchDataParts(
