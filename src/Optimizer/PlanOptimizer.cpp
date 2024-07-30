@@ -255,6 +255,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // prepare for cascades
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        std::make_shared<IterativeRewriter>(Rules::pushUnionThroughJoin(), "PushUnionThroughJoin"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<UnifyJoinOutputs>(),

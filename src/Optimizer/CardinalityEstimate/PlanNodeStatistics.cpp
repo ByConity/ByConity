@@ -55,6 +55,7 @@ String PlanNodeStatistics::toString() const
     for (const auto & symbol : symbol_statistics)
     {
         details << symbol.first << " NDV:" << std::to_string(symbol.second->getNdv()) << ", Min:" << std::to_string(symbol.second->getMin()) << ", Max:" << std::to_string(symbol.second->getMax())
+                << (symbol.second->getDbTableColumn().empty() ? "" :", from:") << symbol.second->getDbTableColumn()
                 << ", Hist:" << symbol.second->getHistogram().getBuckets().size() << "\\n";
     }
     return details.str();

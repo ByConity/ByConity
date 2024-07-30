@@ -1519,6 +1519,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_implement_except, true, "Whether to enable ImplementExceptRule rule", 0) \
     M(Bool, enable_implement_intersect, true, "Whether to enable ImplementIntersectRule rule", 0) \
     M(Bool, enable_inline_projection, true, "Whether to enable InlineProjections rule", 0) \
+    M(Bool, enable_inline_projection_into_join, true, "Whether to enable InlineProjections rule", 0) \
+    M(Bool, enable_inline_projection_on_join_into_join, true, "Whether to enable InlineProjections rule", 0) \
     M(Bool, enable_merge_aggregate, true, "Whether to enable MergeAggregatings rule", 0) \
     M(Bool, enable_merge_union, true, "Whether to enable MergeUnionRule rule", 0) \
     M(Bool, enable_merge_except, true, "Whether to enable MergeExceptRule rule", 0) \
@@ -1542,6 +1544,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_projection_into_table_scan, true, "Whether to enable PushProjectionIntoTableScan rule", 0) \
     M(Bool, enable_push_index_projection_into_table_scan, true, "Whether to enable PushIndexProjectionIntoTableScan rule", 0) \
     M(Bool, enable_push_filter_into_table_scan, true, "Whether to enable PushFilterIntoTableScan rule", 0) \
+    M(Bool, enable_push_union_through_join, true, "Whether to enable PushUnionThroughJoin rule", 0) \
+    M(Bool, enable_push_union_through_projection, true, "Whether to enable PushUnionThroughProjection rule", 0) \
+    M(Bool, enable_push_union_through_agg, false, "Whether to enable PushUnionThroughAgg rule", 0) \
     M(Bool, enable_inner_join_associate, true, "Whether to enable InnerJoinAssociate rule", 0) \
     M(Bool, enable_inner_join_commutation, true, "Whether to enable InnerJoinCommutation rule", 0) \
     M(Bool, enable_join_enum_on_graph, true, "Whether to enable JoinEnumOnGraph rule", 0) \
