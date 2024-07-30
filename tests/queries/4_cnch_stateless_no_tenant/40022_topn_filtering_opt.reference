@@ -88,7 +88,7 @@ Projection Est. 10 rows, cost 2.820000e+00
                         └─ TopNFiltering Est. ? rows, cost 0.000000e+00
                            │     Order by: {block_number ASC NULLS LAST}
                            │     Size: 10
-                           │     Algorithm: Unspecified
+                           │     Algorithm: Limit
                            └─ Filter Est. ? rows, cost 0.000000e+00
                               │     Condition: (block_number > 10000000) AND (block_number < 20000000)
                               └─ TableScan test.polygon_tx_v87 Est. ? rows, cost 0.000000e+00
