@@ -1,6 +1,8 @@
 #pragma once
 
+#include <Core/Block.h>
 #include <Interpreters/Context_fwd.h>
+#include <Optimizer/Signature/StepNormalizer.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/QueryPlan.h>
 
