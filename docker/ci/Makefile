@@ -1,5 +1,5 @@
 pull:
-	docker pull byconity/byconity-ci
+	docker pull byconity/byconity-ci:llvm16
 
 image:
 	test -f fdbmonitor || curl -L -o fdbmonitor https://github.com/apple/foundationdb/releases/download/7.1.0/fdbmonitor.x86_64
@@ -20,9 +20,9 @@ image:
 	test -f preload_byconity-debian_buster_runit_fdb7_1_27.tar || docker image save --output preload_byconity-debian_buster_runit_fdb7_1_27.tar byconity/debian:buster-runit-fdb7.1.27
 	test -f preload_minio-minio_RELEASE.2024-01-11T07-46-16Z.tar || docker image save --output preload_minio-minio_RELEASE.2024-01-11T07-46-16Z.tar minio/minio:RELEASE.2024-01-11T07-46-16Z
 	test -f preload_minio-mc_RELEASE.2024-01-11T05-49-32Z.tar || docker image save --output preload_minio-mc_RELEASE.2024-01-11T05-49-32Z.tar minio/mc:RELEASE.2024-01-11T05-49-32Z
-	docker build --network=host -t byconity/byconity-ci .
+	docker build --network=host -t byconity/byconity-ci:llvm16 .
 
 image_push:
-	docker push byconity/byconity-ci
+	docker push byconity/byconity-ci:llvm16
 image_test:
-	docker run --rm -it byconity/byconity-ci /bin/bash
+	docker run --rm -it byconity/byconity-ci:llvm16 /bin/bash
