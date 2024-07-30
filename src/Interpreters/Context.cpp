@@ -553,7 +553,11 @@ struct ContextSharedPart
             cnch_bg_threads_array->shutdown();
 
         if (cnch_txn_coordinator)
+        {
             cnch_txn_coordinator->shutdown();
+            /// Need to reset cnch_txn_coordinator before schedule_pool reset, otherwise it may core.
+            cnch_txn_coordinator.reset();
+        }
 
         if (server_manager)
             server_manager->shutDown();
