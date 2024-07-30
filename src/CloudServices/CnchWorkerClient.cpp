@@ -560,6 +560,22 @@ void CnchWorkerClient::assignHighPriorityDedupPartition(const StorageID & storag
     RPCHelpers::checkResponse(response);
 }
 
+void CnchWorkerClient::assignRepairGran(const StorageID & storage_id, const String & partition_id, const Int64 & bucket_number, const UInt64 & max_event_time)
+{
+    brpc::Controller cntl;
+    Protos::AssignRepairGranReq request;
+    Protos::AssignRepairGranResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_table());
+    request.set_partition_id(partition_id);
+    request.set_bucket_number(bucket_number);
+    request.set_max_event_time(max_event_time);
+
+    stub->assignRepairGran(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 void CnchWorkerClient::dropDedupWorker(const StorageID & storage_id)
 {
     brpc::Controller cntl;

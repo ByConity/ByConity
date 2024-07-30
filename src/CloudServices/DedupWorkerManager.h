@@ -18,6 +18,7 @@
 #include <CloudServices/ICnchBGThread.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/DedupScheduler.h>
+#include <CloudServices/DedupDataChecker.h>
 #include <CloudServices/DedupWorkerStatus.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/VirtualWarehousePool.h>
@@ -91,6 +92,7 @@ private:
 
     static void assignHighPriorityDedupPartition(DeduperInfoPtr & info, const Names & high_priority_partition, std::unique_lock<std::mutex> & info_lock);
     static void unsetWorkerClient(DeduperInfoPtr & info, std::unique_lock<std::mutex> & info_lock);
+    static void assignRepairGran(DeduperInfoPtr & info, const DedupGran & dedup_gran, const UInt64 & max_event_time, std::unique_lock<std::mutex> & info_lock);
     static String getDedupWorkerDebugInfo(DeduperInfoPtr & info, std::unique_lock<std::mutex> & info_lock);
 
     mutable bthread::Mutex deduper_infos_mutex;
@@ -98,6 +100,8 @@ private:
     std::vector<DeduperInfoPtr> deduper_infos;
     std::shared_ptr<DedupScheduler> dedup_scheduler;
 
+    /// Check if data duplication in background.
+    std::shared_ptr<DedupDataChecker> data_checker;
 };
 
 }

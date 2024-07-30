@@ -107,6 +107,8 @@ private:
 
     void executeSyncDedupWorker(ContextMutablePtr & system_context) const;
 
+    void executeSyncRepairTask(ContextMutablePtr & system_context) const;
+
     // clear Broken Table infos
     void clearBrokenTables(ContextMutablePtr & system_context) const;
 

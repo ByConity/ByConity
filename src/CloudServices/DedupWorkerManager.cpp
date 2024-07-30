@@ -68,6 +68,8 @@ void DedupWorkerManager::clearData()
     for (auto & info : deduper_infos)
         stopDeduperWorker(info);
     deduper_infos.clear();
+    if (data_checker)
+        data_checker->stop();
     initialized = false;
 }
 
@@ -75,6 +77,10 @@ void DedupWorkerManager::iterate(StoragePtr & storage, StorageCnchMergeTree & cn
 {
     if (!initialized)
         initialize(storage, cnch_table);
+
+    /// If initialized failed, return and wait for next iterate
+    if (!initialized)
+        return;
 
     /// Make a copy of `deduper_infos` for each iteration to avoid hold the lock for a long time
     std::vector<DeduperInfoPtr> current_dedup_infos;
@@ -110,6 +116,22 @@ void DedupWorkerManager::iterate(StoragePtr & storage, StorageCnchMergeTree & cn
 
         assignHighPriorityDedupPartition(info, high_priority_partition, info_lock);
     }
+
+    if (cnch_table.getSettings()->duplicate_auto_repair)
+    {
+        DedupGranTimeMap dedup_gran_time_map = data_checker->getNeedRepairGrans(cnch_table);
+        for (const auto & dedup_gran_entry : dedup_gran_time_map)
+        {
+            auto dedup_gran = dedup_gran_entry.first;
+            auto dedup_worker_index = (dedup_gran.hash() % cnch_table.getSettings()->max_dedup_worker_number) % current_dedup_infos.size();
+
+            auto info = current_dedup_infos.at(dedup_worker_index);
+            std::unique_lock info_lock(info->mutex);
+            LOG_TRACE(log, "Assigning a repair gran {} to worker, max event time: {}, worker info: {}", dedup_gran.getDedupGranDebugInfo(), dedup_gran_entry.second, getDedupWorkerDebugInfo(info, info_lock));
+            assignRepairGran(info, dedup_gran, dedup_gran_entry.second, info_lock);
+            LOG_DEBUG(log, "Assigned a repair gran {} to worker, max event time: {}, worker info: {}", dedup_gran.getDedupGranDebugInfo(), dedup_gran_entry.second, getDedupWorkerDebugInfo(info, info_lock));
+        }
+    }
 }
 
 void DedupWorkerManager::initialize(StoragePtr & storage, StorageCnchMergeTree & cnch_table)
@@ -123,12 +145,20 @@ void DedupWorkerManager::initialize(StoragePtr & storage, StorageCnchMergeTree &
             auto & info = deduper_infos.back();
             info = std::make_shared<DeduperInfo>(i, storage->getStorageID());
         }
+        if (cnch_table.getSettings()->check_duplicate_key || cnch_table.getSettings()->duplicate_auto_repair)
+        {
+            data_checker = std::make_shared<DedupDataChecker>(getContext(), storage->getCnchStorageID().getNameForLogs() + "(data_checker)", cnch_table);
+            if (cnch_table.getSettings()->check_duplicate_key)
+                data_checker->start();
+        }
         initialized = true;
     }
     catch (...)
     {
         LOG_ERROR(log, "Failed to init deduper_infos due to {}", getCurrentExceptionMessage(false));
         deduper_infos.clear();
+        if (data_checker)
+            data_checker->stop();
         initialized = false;
     }
 }
@@ -204,6 +234,14 @@ void DedupWorkerManager::unsetWorkerClient(DeduperInfoPtr & info, std::unique_lo
 {
     info->worker_client = nullptr;
     info->is_running = false;
+}
+
+void DedupWorkerManager::assignRepairGran(DeduperInfoPtr & info, const DedupGran & dedup_gran, const UInt64 & max_event_time, std::unique_lock<std::mutex> & /*info_lock*/)
+{
+    if (!info->worker_client)
+        return;
+
+    info->worker_client->assignRepairGran(info->worker_storage_id, dedup_gran.partition_id, dedup_gran.bucket_number, max_event_time);
 }
 
 void DedupWorkerManager::stopDeduperWorker(DeduperInfoPtr & info)

@@ -547,6 +547,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::SYNC_DEDUP_WORKER:
             executeSyncDedupWorker(system_context);
             break;
+        case Type::SYNC_REPAIR_TASK:
+            executeSyncRepairTask(system_context);
+            break;
         case Type::CLEAN_TRANSACTION:
             cleanTransaction(query.txn_id);
             break;
@@ -761,11 +764,26 @@ void InterpreterSystemQuery::executeSyncDedupWorker(ContextMutablePtr & system_c
 
     auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
 
-        auto cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    auto cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
     if (!cnch_storage)
         throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
     cnch_storage->waitForStagedPartsToPublish(system_context);
+}
+
+void InterpreterSystemQuery::executeSyncRepairTask(ContextMutablePtr & system_context) const
+{
+    if (table_id.empty())
+        throw Exception("Table name should be specified for control background task", ErrorCodes::BAD_ARGUMENTS);
+
+    auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
+
+    auto * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    if (!cnch_storage)
+        throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+
+    auto data_checker = std::make_shared<DedupDataChecker>(getContext(), storage->getCnchStorageID().getNameForLogs() + "(data_checker)", *cnch_storage);
+    data_checker->waitForNoDuplication(system_context);
 }
 
 void InterpreterSystemQuery::controlConsume(ASTSystemQuery::Type type)

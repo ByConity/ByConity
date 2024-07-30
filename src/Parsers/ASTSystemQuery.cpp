@@ -202,6 +202,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DEDUP";
         case Type::SYNC_DEDUP_WORKER:
             return "SYNC DEDUP WORKER";
+        case Type::SYNC_REPAIR_TASK:
+            return "SYNC REPAIR TASK";
         case Type::START_DEDUP_WORKER:
             return "START DEDUP WORKER";
         case Type::STOP_DEDUP_WORKER:
@@ -344,6 +346,7 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::RESTART_CONSUME
             || type == Type::RESYNC_MATERIALIZEDMYSQL_TABLE
             || type == Type::SYNC_DEDUP_WORKER
+            || type == Type::SYNC_REPAIR_TASK
             || type == Type::DROP_CNCH_META_CACHE
             || type == Type::DROP_CNCH_PART_CACHE
             || type == Type::DROP_CNCH_DELETE_BITMAP_CACHE

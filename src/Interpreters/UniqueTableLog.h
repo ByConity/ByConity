@@ -5,9 +5,26 @@
 #include <Core/NamesAndTypes.h>
 #include <Columns/IColumn.h>
 #include <Interpreters/Context.h>
+#include <CloudServices/DedupGran.h>
 
 namespace DB
 {
+struct TaskInfo
+{
+    enum TaskType
+    {
+        UNKNOWN_TASK = 0,
+        DEDUP_TASK = 1,
+        MERGE_TASK = 2,
+        DATA_CHECKER_TASK = 3,
+    };
+
+    TaskType task_type;
+    DedupGran dedup_gran;
+
+    Names getTaskInfoDetail() const;
+};
+
 /** Allows to log information about unique table execution:
   * - info about errors of query execution.
   */
@@ -27,7 +44,8 @@ struct UniqueTableLogElement
     Type type;
     time_t event_time{};
     UInt64 txn_id = 0;
-    String dedup_task_info;
+    /// For dedup task, merge task, data checker task to indicate where duplicate data occurs
+    TaskInfo task_info;
     String event_info;
 
     /// some reserved fields(duration_ms), currently not used

@@ -965,29 +965,28 @@ void CnchWorkerServiceImpl::createDedupWorker(
         rpc_context->setSessionContext(rpc_context);
         rpc_context->setCurrentQueryId(toString(UUIDHelpers::generateV4()));
 
-        ThreadFromGlobalPool([log = this->log, storage_id, query, host_ports = std::move(host_ports), deduper_index, context = std::move(rpc_context)] {
-            try
-            {
-                // CurrentThread::attachQueryContext(*context);
-                context->setSetting("default_database_engine", String("Memory"));
-                executeQuery(query, context, true);
-                LOG_INFO(log, "Created local table {}", storage_id.getFullTableName());
+        /// XXX: We modify asynchronous creation to synchronous one because possible assignHighPriorityDedupPartition/assignRepairGran rpc relies on it
+        try
+        {
+            // CurrentThread::attachQueryContext(*context);
+            rpc_context->setSetting("default_database_engine", String("Memory"));
+            executeQuery(query, rpc_context, true);
+            LOG_INFO(log, "Created local table {}", storage_id.getFullTableName());
 
-                auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-                auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
-                if (!cloud_table)
-                    throw Exception(
-                        "convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+            auto storage = DatabaseCatalog::instance().getTable(storage_id, rpc_context);
+            auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+            if (!cloud_table)
+                throw Exception(
+                    "convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
 
-                auto * deduper = cloud_table->getDedupWorker();
-                deduper->setServerIndexAndHostPorts(deduper_index, host_ports);
-                LOG_DEBUG(log, "Success to create deduper table: {}", storage->getStorageID().getNameForLogs());
-            }
-            catch (...)
-            {
-                tryLogCurrentException(__PRETTY_FUNCTION__);
-            }
-        }).detach();
+            auto * deduper = cloud_table->getDedupWorker();
+            deduper->setServerIndexAndHostPorts(deduper_index, host_ports);
+            LOG_DEBUG(log, "Success to create deduper table: {}", storage->getStorageID().getNameForLogs());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
     })
 }
 
@@ -1010,6 +1009,25 @@ void CnchWorkerServiceImpl::assignHighPriorityDedupPartition(
         for (const auto & entry : request->partition_id())
             high_priority_dedup_partition.emplace(entry);
         deduper->assignHighPriorityDedupPartition(high_priority_dedup_partition);
+    })
+}
+
+void CnchWorkerServiceImpl::assignRepairGran(
+    [[maybe_unused]] google::protobuf::RpcController * ,
+    [[maybe_unused]] const Protos::AssignRepairGranReq * request,
+    [[maybe_unused]] Protos::AssignRepairGranResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
+{
+    SUBMIT_THREADPOOL({
+        auto storage_id = RPCHelpers::createStorageID(request->table());
+        auto storage = DatabaseCatalog::instance().getTable(storage_id, getContext());
+
+        auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+        if (!cloud_table)
+            throw Exception("convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+
+        auto * deduper = cloud_table->getDedupWorker();
+        deduper->assignRepairGran(request->partition_id(), request->bucket_number(), request->max_event_time());
     })
 }
 

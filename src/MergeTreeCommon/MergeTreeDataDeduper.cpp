@@ -153,7 +153,11 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
                 current_log.event_msg = "Dedup task " + dedup_task->getDedupLevelInfo() + " found duplication";
                 current_log.event_info = "Duplicate key: " + UniqueTable::formatUniqueKey(keys->CurrentKey(), data.getInMemoryMetadataPtr()) +
                     ", part names: [" + parts[potential_duplicate_part_index]->get_name() + ", " + parts[duplicate_part_index]->get_name() + "]";
-                current_log.dedup_task_info = dedup_task->getDedupLevelInfo();
+                TaskInfo log_entry_task_info;
+                log_entry_task_info.task_type = TaskInfo::DEDUP_TASK;
+                log_entry_task_info.dedup_gran.partition_id = dedup_task->partition_id.empty() ? ALL_DEDUP_GRAN_PARTITION_ID : dedup_task->partition_id;
+                log_entry_task_info.dedup_gran.bucket_number = dedup_task->bucket_valid ? dedup_task->bucket_number : -1;
+                current_log.task_info = std::move(log_entry_task_info);
                 unique_table_log->add(current_log);
             }
         }

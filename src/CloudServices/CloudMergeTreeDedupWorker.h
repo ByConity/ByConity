@@ -16,6 +16,7 @@
 #pragma once
 
 #include <CloudServices/DedupWorkerStatus.h>
+#include <CloudServices/DedupGran.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/Types.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
@@ -36,8 +37,10 @@ public:
 
     void start()
     {
-        is_stopped = false;
         task->activateAndSchedule();
+        if (data_repairer && !data_repairer->taskIsActive())
+            data_repairer->activateAndSchedule();
+        is_stopped = false;
     }
 
     void stop()
@@ -48,6 +51,8 @@ public:
             cancelDedupTasks();
             task->deactivate();
         }
+        if (data_repairer && data_repairer->taskIsActive())
+            data_repairer->deactivate();
         is_stopped = true;
         if (!server_host_ports.empty() && heartbeat_task)
             heartbeat_task->deactivate();
@@ -60,6 +65,8 @@ public:
     HostWithPorts getServerHostWithPorts();
 
     void assignHighPriorityDedupPartition(const NameSet & high_priority_dedup_partition_);
+
+    void assignRepairGran(const String & partition_id, const Int64 & bucket_number, const UInt64 & max_event_time);
 
     DedupWorkerStatus getDedupWorkerStatus();
 
@@ -138,6 +145,11 @@ private:
     void run();
     void iterate();
 
+    /**
+     * @brief Task to repair data duplication data executed by `data_repairer`.
+     */
+    void runDataRepairTask();
+
     StorageCloudMergeTree & storage;
     std::atomic<size_t> index{0};
     ContextMutablePtr context;
@@ -155,6 +167,14 @@ private:
     /// Protect high_priority_dedup_partition
     mutable std::mutex high_priority_dedup_partition_mutex;
     NameSet high_priority_dedup_partition;
+
+    /// Protect current_repair_grans & history_repair_gran_expiration_time
+    mutable std::mutex repair_grans_mutex;
+    DedupGranList current_repair_grans;
+    DedupGranTimeMap history_repair_gran_expiration_time;
+
+    /// Repair data duplication in background.
+    BackgroundSchedulePool::TaskHolder data_repairer;
 
     mutable std::mutex status_mutex;
     DedupWorkerStatus status;

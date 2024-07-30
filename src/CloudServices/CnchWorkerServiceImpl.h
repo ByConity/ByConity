@@ -115,6 +115,12 @@ public:
         Protos::AssignHighPriorityDedupPartitionResp * response,
         google::protobuf::Closure * done) override;
 
+    void assignRepairGran(
+        google::protobuf::RpcController * ,
+        const Protos::AssignRepairGranReq * request,
+        Protos::AssignRepairGranResp * response,
+        google::protobuf::Closure * done) override;
+
     void dropDedupWorker(
         google::protobuf::RpcController *,
         const Protos::DropDedupWorkerReq * request,

@@ -129,6 +129,7 @@ public:
         DEDUP_WITH_HIGH_PRIORITY, // dedup with high priority db.table [partition partition_expr]
         DEDUP, // dedup db.table [partition partition_expr] for repair
         SYNC_DEDUP_WORKER,
+        SYNC_REPAIR_TASK, // sync repair task db.table
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
         START_CLUSTER,
