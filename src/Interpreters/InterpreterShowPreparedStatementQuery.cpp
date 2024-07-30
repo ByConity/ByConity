@@ -7,6 +7,7 @@
 #include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/PlanPrinter.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 namespace DB
 {
@@ -26,7 +27,22 @@ BlockIO InterpreterShowPreparedStatementQuery::execute()
     if (show_prepared->show_create)
     {
         auto prepared_object = prepared_manager->getObject(show_prepared->name);
-        out << prepared_object.query;
+        if (!prepared_object.query)
+            out << "Null";
+        if (auto * create_prep_stat = prepared_object.query->as<ASTCreatePreparedStatementQuery>())
+        {
+            
+            if (context->getTenantId().empty())
+                out << create_prep_stat->formatForErrorMessage();
+            else
+            {
+                ASTPtr ast = create_prep_stat->clone();
+                auto * new_create = ast->as<ASTCreatePreparedStatementQuery>();
+                new_create->rewriteNamesWithoutTenant();
+                out << new_create->formatForErrorMessage();    
+            }
+        }
+            
         result_column_name = "Create Statement";
     }
     else if (show_prepared->show_explain)
@@ -58,7 +74,10 @@ BlockIO InterpreterShowPreparedStatementQuery::execute()
     {
         auto name_list = prepared_manager->getNames();
         for (auto & name : name_list)
-            out << name << "\n";
+        {
+            if (context->getTenantId().empty() || isTenantMatchedEntityName(name))
+                out << getOriginalEntityName(name) << "\n";
+        }
         result_column_name = "Prepared Statement List";
     }
 

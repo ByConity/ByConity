@@ -124,6 +124,7 @@ enum class AccessType
                                                      implicitly enabled by the grant CREATE_TABLE on any table */ \
     M(CREATE_FUNCTION, "", GLOBAL, CREATE) /* allows to execute CREATE FUNCTION */ \
     M(CREATE_BINDING, "", GLOBAL, CREATE) /* allows to execute CREATE BINDING */ \
+    M(CREATE_PREPARED_STATEMENT, "", GLOBAL, CREATE) /* allows to execute CREATE PREPARED STATEMENT */ \
     M(CREATE, "", GROUP, ALL) /* allows to execute {CREATE|ATTACH} */ \
 \
     M(DROP_DATABASE, "", DATABASE, DROP) /* allows to execute {DROP|DETACH} DATABASE */ \
@@ -133,6 +134,7 @@ enum class AccessType
     M(DROP_DICTIONARY, "", DICTIONARY, DROP) /* allows to execute {DROP|DETACH} DICTIONARY */ \
     M(DROP_FUNCTION, "", GLOBAL, DROP) /* allows to execute DROP FUNCTION */\
     M(DROP_BINDING, "", GLOBAL, DROP) /* allows to execute DROP BINDING */\
+    M(DROP_PREPARED_STATEMENT, "", GLOBAL, DROP) /* allows to execute DROP PREPARED STATEMENT */ \
     M(DROP, "", GROUP, ALL) /* allows to execute {DROP|DETACH} */ \
 \
     M(TRUNCATE, "TRUNCATE TABLE", TABLE, ALL) \
