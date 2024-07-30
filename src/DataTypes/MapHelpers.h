@@ -16,6 +16,7 @@
 #pragma once
 #include <string_view>
 #include <common/types.h>
+#include <Common/escapeForFileName.h>
 #include <DataTypes/IDataType.h>
 
 namespace DB
@@ -135,20 +136,28 @@ bool isMapImplicitFileNameOfSpecialMapName(const String file_name, const String 
 // i.e. __col__%271%27.bin, col -> true
 bool isMapImplicitDataFileNameOfSpecialMapName(const String & file_name, const String map_col);
 
+/// Get range of files from ordered files (e.g. std::map) with a hacking solution.
+template <class V>
+std::pair<typename std::map<String, V>::const_iterator, typename std::map<String, V>::const_iterator>
+getFileRangeFromOrderedFilesByPrefix(const String & prefix, const std::map<String, V> & m)
+{
+    constexpr auto char_max = std::numeric_limits<String::value_type>::max();
+    auto beg = m.lower_bound(prefix);
+    /// Adding char_max to the end to speed up finding upper bound
+    auto end = m.upper_bound(prefix + char_max);
+    /// Maybe some files with prefix `prefix + char_max` exists
+    while (end != m.end() && startsWith(end->first, prefix))
+        end++;
+    return {beg, end};
+}
+
 /// Get range of implicit column files from ordered files (e.g. std::map) with a hacking solution
 template <class V>
 std::pair<typename std::map<String, V>::const_iterator, typename std::map<String, V>::const_iterator>
 getMapColumnRangeFromOrderedFiles(const String & map_column, const std::map<String, V> & m)
 {
-    constexpr auto char_max = std::numeric_limits<String::value_type>::max();
-    String map_prefix = getMapSeparator() + map_column + getMapSeparator();
-    auto beg = m.lower_bound(map_prefix);
-    /// adding char_max to the end to speed up finding first key behind all the implicit column files
-    auto end = m.upper_bound(map_prefix + char_max);
-    /// a file with prefix `map_prefix + char_max` exists
-    while (end != m.end() && startsWith(end->first, map_prefix))
-        end++;
-    return {beg, end};
+    String map_prefix = escapeForFileName(getMapKeyPrefix(map_column));
+    return getFileRangeFromOrderedFilesByPrefix(map_prefix, m);
 }
 
 }

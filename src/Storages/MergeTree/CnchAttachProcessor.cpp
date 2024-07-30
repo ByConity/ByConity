@@ -561,6 +561,12 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
 
     filter.checkFilterResult(chained_parts_from_sources, query_ctx->getSettingsRef().cnch_part_attach_limit);
 
+    for (MutableMergeTreeDataPartsCNCHVector & visible_parts : chained_parts_from_sources)
+    {
+        for (MutableMergeTreeDataPartCNCHPtr & part : visible_parts)
+            part->restoreMvccColumns();
+    }
+
     return {std::move(filter), std::move(chained_parts_from_sources)};
 }
 

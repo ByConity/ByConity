@@ -1,6 +1,7 @@
 #include <Storages/StorageSnapshot.h>
 #include <Storages/IStorage.h>
 #include <DataTypes/ObjectUtils.h>
+#include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
 #include <Storages/StorageView.h>
 #include <sparsehash/dense_hash_set>

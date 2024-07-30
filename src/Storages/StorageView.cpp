@@ -23,6 +23,7 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/MapHelpers.h>
 
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSubquery.h>

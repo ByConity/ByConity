@@ -2,8 +2,9 @@
 #include <memory>
 
 #include <Common/escapeForFileName.h>
-#include <DataTypes/ObjectUtils.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
+#include <DataTypes/ObjectUtils.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
@@ -56,7 +57,7 @@ MergeTreePrefetchedReaderCNCH::MergeTreePrefetchedReaderCNCH(
                 auto implicit_value_type = typeid_cast<const DataTypeMap &>(*column_in_part.type.get()).getValueTypeForImplicitColumn();
                 auto serialization = implicit_value_type->getDefaultSerialization();
 
-                auto [curr, end] = getMapColumnRangeFromOrderedFiles(escapeForFileName(column_in_part.name), checksums->files);
+                auto [curr, end] = getMapColumnRangeFromOrderedFiles(column_in_part.name, checksums->files);
                 for (; curr != end; ++curr)
                 {
                     if (curr->second.is_deleted || !isMapImplicitDataFileNameNotBaseOfSpecialMapName(curr->first, column_in_part.name))

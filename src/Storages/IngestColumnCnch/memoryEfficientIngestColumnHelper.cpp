@@ -3,6 +3,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <common/range.h>
 
 namespace DB

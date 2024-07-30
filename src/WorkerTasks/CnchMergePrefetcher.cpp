@@ -2,6 +2,7 @@
 
 #include <Common/escapeForFileName.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/copyData.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -280,7 +281,7 @@ void CnchMergePrefetcher::submitDataPart(
             auto implicit_value_type = typeid_cast<const DataTypeMap &>(*column_type.get()).getValueTypeForImplicitColumn();
             auto serialization = implicit_value_type->getDefaultSerialization();
 
-            auto [curr, end] = getMapColumnRangeFromOrderedFiles(escapeForFileName(column_name), checksums_files);
+            auto [curr, end] = getMapColumnRangeFromOrderedFiles(column_name, checksums_files);
             for (; curr != end; ++curr)
             {
                 if (curr->second.is_deleted || !isMapImplicitDataFileNameNotBaseOfSpecialMapName(curr->first, column_name))

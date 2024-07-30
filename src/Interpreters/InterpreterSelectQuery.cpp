@@ -23,6 +23,7 @@
 #include <DataStreams/materializeBlock.h>
 
 #include <DataTypes/DataTypeAggregateFunction.h>
+#include <DataTypes/MapHelpers.h>
 
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>

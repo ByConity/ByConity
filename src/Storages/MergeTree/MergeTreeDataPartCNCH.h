@@ -111,6 +111,7 @@ public:
     void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
 
     void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr) override {columns_ptr = new_columns_ptr;}
+
 private:
     /// See #getDeleteBitmap
     ImmutableDeleteBitmapPtr getCombinedDeleteBitmapForUniqueTable(bool allow_null = false) const;

@@ -1363,7 +1363,6 @@ namespace Catalog
                     cnch_merge_tree->loadMutations();
                 }
 
-
                 /// Try insert the storage into cache.
                 if (res && is_host_server && cache_manager)
                     cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), host_server.topology_version);
@@ -1427,6 +1426,12 @@ namespace Catalog
                 res = createTableFromDataModel(query_context, *table);
 
                 initStorageObjectSchema(res);
+
+                /// TODO: (zuochuang.zema, guanzhe.andy) handle TimeTravel
+                if (auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(res.get()))
+                {
+                    cnch_merge_tree->loadMutations();
+                }
 
                 /// Try insert the storage into cache.
                 if (res && cache_manager)

@@ -437,6 +437,9 @@ public:
 
     IMergeTreeDataPartPtr getMvccDataPart(const String & file_name) const;
 
+    /// Restore MVCC columns from prev parts. All undeleted columns in prev part chain will be added to columns_ptr.
+    void restoreMvccColumns();
+
     // collect all the visible projection parts' and corresponding checksums from the historical parts into the current visible part (head part)
     // this function must be called when finishing the loading parts
     void gatherProjections();
